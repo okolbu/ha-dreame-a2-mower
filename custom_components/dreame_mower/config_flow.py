@@ -52,6 +52,7 @@ DREAME_MODELS = [
 ]
 
 DREAMEHOME: Final = "Dreamehome Account"
+MOVAHOME: Final = "Mova Account"
 LOCAL: Final = "Manual Connection (Without map)"
 
 
@@ -63,7 +64,7 @@ class DreameMowerOptionsFlowHandler(OptionsFlow):
         self.config_entry = config_entry
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Manage Dreame Mower options."""
+        """Manage Dreame/Mova Mower options."""
         errors = {}
         data = self.config_entry.data
         options = self.config_entry.options
@@ -158,12 +159,14 @@ class DreameMowerFlowHandler(ConfigFlow, domain=DOMAIN):
             config_type = user_input.get(CONF_TYPE, DREAMEHOME)
             if config_type == DREAMEHOME:
                 return await self.async_step_dreame()
+            if config_type == MOVAHOME:
+                return await self.async_step_mova()
             return await self.async_step_local()
 
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
-                {vol.Required(CONF_TYPE, default=DREAMEHOME): vol.In([DREAMEHOME, LOCAL])}),
+                {vol.Required(CONF_TYPE, default=DREAMEHOME): vol.In([DREAMEHOME,MOVAHOME, LOCAL])}),
             errors={},
         )
 
@@ -186,28 +189,28 @@ class DreameMowerFlowHandler(ConfigFlow, domain=DOMAIN):
         return self.async_show_form(step_id="reauth_confirm")
 
     async def async_step_connect(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Connect to a Dreame Mower device."""
+        """Connect to a Dreame/Mova Mower device."""
         errors: dict[str, str] = {}
         if self.prefer_cloud or (self.token and len(self.token) == 32):
             try:
                 if self.protocol is None:
-                    self.protocol = DreameMowerProtocol(
-                        self.host,
-                        self.token,
-                        self.username,
-                        self.password,
-                        self.country,
-                        self.prefer_cloud,
-                        self.account_type,
-                    )
+                    if self.account_type == "dreame":
+                        self.protocol = DreameMowerProtocol(
+                            self.host,
+                            self.token,
+                            self.username,
+                            self.password,
+                            self.country,
+                            self.prefer_cloud,
+                            self.account_type,
+                        )
                 else:
-                    self.protocol.set_credentials(
-                        self.host, self.token, account_type=self.account_type)
+                    self.protocol.set_credentials(self.host, self.token, account_type=self.account_type)
 
                 if self.protocol.device_cloud:
                     self.protocol.device_cloud._did = self.device_id
 
-                if self.account_type != "dreame" or self.mac is None or self.model is None:
+                if (self.account_type != "dreame" and self.account_type != "mova")  or self.mac is None or self.model is None:
                     info = await self.hass.async_add_executor_job(self.protocol.connect, 5)
                     if info:
                         self.mac = info["mac"]
@@ -236,6 +239,8 @@ class DreameMowerFlowHandler(ConfigFlow, domain=DOMAIN):
             if self.username and self.password:
                 if self.account_type == "mi":
                     return await self.async_step_mi(errors=errors)
+                elif self.account_type == "mova":
+                    return await self.async_step_mova(errors=errors)
                 else:
                     return await self.async_step_dreame(errors=errors)
         else:
@@ -273,7 +278,7 @@ class DreameMowerFlowHandler(ConfigFlow, domain=DOMAIN):
         user_input: dict[str, Any] | None = None,
         errors: dict[str, Any] | None = {},
     ) -> FlowResult:
-        """Configure a dreame mower device through the Miio Cloud."""
+        """Configure a mi mower device through the Miio Cloud."""
         placeholders = {}
         if user_input is not None:
             self.account_type = "mi"
@@ -441,8 +446,87 @@ class DreameMowerFlowHandler(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    async def async_step_mova(
+        self,
+        user_input: dict[str, Any] | None = None,
+        errors: dict[str, Any] | None = {},
+    ) -> FlowResult:
+        """Configure a mova mower device through the Miio Cloud."""
+        placeholders = {}
+        if user_input is not None:
+            self.account_type = "mova"
+            username = user_input.get(CONF_USERNAME)
+            password = user_input.get(CONF_PASSWORD)
+            country = user_input.get(CONF_COUNTRY)
+
+            if username and password and country:
+                self.username = username
+                self.password = password
+                self.country = country
+                self.prefer_cloud = True
+
+                self.protocol = DreameMowerProtocol(
+                    username=self.username,
+                    password=self.password,
+                    country=self.country,
+                    prefer_cloud=self.prefer_cloud,
+                    account_type="mova",
+                )
+                await self.hass.async_add_executor_job(self.protocol.cloud.login)
+
+                if self.protocol.cloud.logged_in is False:
+                    errors["base"] = "login_error"
+                elif self.protocol.cloud.logged_in:
+                    persistent_notification.dismiss(
+                        self.hass, f"{DOMAIN}_{NOTIFICATION_ID_2FA_LOGIN}")
+
+                    devices = await self.hass.async_add_executor_job(self.protocol.cloud.get_devices)
+                    if devices:
+                        found = list(
+                            filter(
+                                lambda d: any(str(d["model"]).startswith(
+                                    prefix) for prefix in DREAME_MODELS),
+                                devices["page"]["records"],
+                            )
+                        )
+
+                        self.devices = {}
+                        for device in found:
+                            name = (
+                                device["customName"]
+                                if device["customName"] and len(device["customName"]) > 0
+                                else device["deviceInfo"]["displayName"]
+                            )
+                            model = device["model"]
+                            list_name = f"{name} - {model}"
+                            self.devices[list_name] = device
+
+                        if self.devices:
+                            if len(self.devices) == 1:
+                                self.extract_info(
+                                    list(self.devices.values())[0])
+                                return await self.async_step_connect()
+                            return await self.async_step_devices()
+
+                    errors["base"] = "no_devices"
+            else:
+                errors["base"] = "credentials_incomplete"
+
+        return self.async_show_form(
+            step_id="mova",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_USERNAME, default=self.username): str,
+                    vol.Required(CONF_PASSWORD, default=self.password): str,
+                    vol.Required(CONF_COUNTRY, default=self.country): vol.In(["cn", "eu", "us", "ru", "sg"]),
+                }
+            ),
+            description_placeholders=placeholders,
+            errors=errors,
+        )
+
     async def async_step_devices(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle multiple Dreame Mower devices found."""
+        """Handle multiple Dreame/Mova Mower devices found."""
         errors: dict[str, str] = {}
         if user_input is not None:
             self.extract_info(self.devices[user_input["devices"]])
@@ -456,7 +540,7 @@ class DreameMowerFlowHandler(ConfigFlow, domain=DOMAIN):
         )
 
     async def async_step_options(self, user_input: dict[str, Any] | None = None) -> FlowResult:
-        """Handle Dreame Mower options step."""
+        """Handle Dreame/Mova Mower options step."""
         errors = {}
 
         if user_input is not None:
@@ -530,6 +614,21 @@ class DreameMowerFlowHandler(ConfigFlow, domain=DOMAIN):
             self.token = device_info["token"]
             self.device_id = device_info["did"]
         elif self.account_type == "dreame":
+            if self.token is None:
+                self.token = " "  # device_info["token"]
+            if self.host is None:
+                self.host = device_info["bindDomain"]
+            if self.mac is None:
+                self.mac = device_info["mac"]
+            if self.model is None:
+                self.model = device_info["model"]
+            if self.name is None:
+                self.name = (
+                    device_info["customName"]
+                    if device_info["customName"] and len(device_info["customName"]) > 0
+                    else device_info["deviceInfo"]["displayName"]
+                )
+        elif self.account_type == "mova":
             if self.token is None:
                 self.token = " "  # device_info["token"]
             if self.host is None:
