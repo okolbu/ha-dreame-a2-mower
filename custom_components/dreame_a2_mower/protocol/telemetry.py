@@ -15,9 +15,14 @@ class InvalidS1P4Frame(ValueError):
 
 
 class Phase(IntEnum):
-    EDGE_OR_REPOSITION = 0
+    # Phase-byte semantics learned from live observation — note earlier RE
+    # notes labelled 0 as "edge_or_reposition" and 2 as "active mowing", but
+    # a g2408 doing a plain straight-pass mow was observed at byte value 0
+    # during active cutting, so 0 is the main mow phase. Value 2 has not
+    # been confirmed in isolation; kept as PHASE_2 until verified.
+    MOWING = 0
     TRANSIT = 1
-    MOWING = 2
+    PHASE_2 = 2
     RETURNING = 3
     UNKNOWN = -1
 
@@ -26,18 +31,34 @@ class Phase(IntEnum):
 class MowingTelemetry:
     """Decoded s1p4 frame.
 
-    Position is charger-relative millimetres, fixed to map north.
+    Position is charger-relative centimetres, fixed to map north. (Earlier
+    reverse-engineering notes labelled this as millimetres, but live testing
+    on a 378m² lawn made clear the raw int16 values are centimetres — a
+    raw -1562 corresponds to ~15.6m from charger, not 1.5m.)
+
+    Expose both raw cm (for integer arithmetic) and derived metres (float,
+    cm / 100) so consumers can pick the unit that suits their context.
     Distance and area counters reset at the start of each mowing session.
     """
 
-    x_mm: int
-    y_mm: int
+    x_cm: int
+    y_cm: int
     sequence: int
     phase: Phase
     phase_raw: int
     distance_m: float
     total_area_m2: float
     area_mowed_m2: float
+
+    @property
+    def x_m(self) -> float:
+        """X position in metres (charger-relative, east-positive)."""
+        return self.x_cm / 100.0
+
+    @property
+    def y_m(self) -> float:
+        """Y position in metres (charger-relative, north-positive)."""
+        return self.y_cm / 100.0
 
 
 def decode_s1p4(data: bytes) -> MowingTelemetry:
@@ -49,7 +70,7 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
         raise InvalidS1P4Frame(
             f"expected 0x{FRAME_DELIMITER:02X} delimiters at [0] and [32]"
         )
-    x_mm, y_mm = struct.unpack_from("<hh", data, 1)
+    x_cm, y_cm = struct.unpack_from("<hh", data, 1)
     seq = struct.unpack_from("<H", data, 6)[0]
     phase_raw = data[8]
     phase = Phase(phase_raw) if phase_raw in Phase._value2member_map_ else Phase.UNKNOWN
@@ -57,8 +78,8 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
     total_area_cent = struct.unpack_from("<H", data, 26)[0]
     area_mowed_cent = struct.unpack_from("<H", data, 29)[0]
     return MowingTelemetry(
-        x_mm=x_mm,
-        y_mm=y_mm,
+        x_cm=x_cm,
+        y_cm=y_cm,
         sequence=seq,
         phase=phase,
         phase_raw=phase_raw,

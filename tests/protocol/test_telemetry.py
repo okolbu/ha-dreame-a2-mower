@@ -12,8 +12,8 @@ from protocol.telemetry import (
 )
 
 
-# Verified frame: x=-1562mm, y=2847mm, phase=2, area_mowed=12.50m²,
-# total_area=321.00m², distance=45.4m, seq=1094.
+# Verified frame: x=-1562cm (-15.62m), y=2847cm (28.47m), phase=2,
+# area_mowed=12.50m², total_area=321.00m², distance=45.4m, seq=1094.
 ACTIVE_MOW_FRAME = bytes([
     0xCE,                                     # [0] delimiter
     0xE6, 0xF9,                               # [1-2] x = -1562 (int16_le, 0xF9E6)
@@ -40,10 +40,16 @@ def test_decode_s1p4_valid_frame_returns_telemetry_dataclass():
     assert isinstance(t, MowingTelemetry)
 
 
-def test_decode_s1p4_position_is_charger_relative_mm():
+def test_decode_s1p4_position_is_charger_relative_cm():
     t = decode_s1p4(ACTIVE_MOW_FRAME)
-    assert t.x_mm == -1562
-    assert t.y_mm == 2847
+    assert t.x_cm == -1562
+    assert t.y_cm == 2847
+
+
+def test_decode_s1p4_position_also_exposed_in_metres():
+    t = decode_s1p4(ACTIVE_MOW_FRAME)
+    assert t.x_m == pytest.approx(-15.62)
+    assert t.y_m == pytest.approx(28.47)
 
 
 def test_decode_s1p4_rejects_wrong_length():
@@ -69,16 +75,17 @@ def test_decode_s1p4_exposes_sequence_counter():
 
 
 def test_decode_s1p4_exposes_phase_enum_for_active_mow():
+    # ACTIVE_MOW_FRAME has phase byte = 2 (PHASE_2 per current labelling).
     t = decode_s1p4(ACTIVE_MOW_FRAME)
-    assert t.phase is Phase.MOWING
+    assert t.phase is Phase.PHASE_2
 
 
 @pytest.mark.parametrize(
     ("phase_byte", "expected"),
     [
-        (0, Phase.EDGE_OR_REPOSITION),
+        (0, Phase.MOWING),
         (1, Phase.TRANSIT),
-        (2, Phase.MOWING),
+        (2, Phase.PHASE_2),
         (3, Phase.RETURNING),
     ],
 )
