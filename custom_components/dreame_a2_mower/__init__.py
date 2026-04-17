@@ -14,6 +14,7 @@ PLATFORMS = (
     Platform.LAWN_MOWER,
     Platform.CAMERA,
     Platform.SENSOR,
+    Platform.BINARY_SENSOR,
     Platform.SWITCH,
     Platform.BUTTON,
     Platform.NUMBER,
