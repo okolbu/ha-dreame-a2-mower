@@ -4623,6 +4623,27 @@ class DreameMowerDeviceStatus:
     def state(self) -> DreameMowerState:
         """Return state of the device."""
         value = self._get_property(DreameMowerProperty.STATE)
+
+        # g2408 emits state codes (27/48/50/54/70) that aren't in
+        # DreameMowerState. Map them to the closest enum member before
+        # the generic translation path so the lawn_mower entity and other
+        # consumers show meaningful activity.
+        if (
+            value is not None
+            and self._device.info is not None
+            and self._device.info.model == "dreame.mower.g2408"
+        ):
+            _G2408_STATE_MAP = {
+                27: DreameMowerState.IDLE,
+                48: DreameMowerState.CHARGING_COMPLETED,
+                50: DreameMowerState.IDLE,  # session-start transient
+                54: DreameMowerState.RETURNING,
+                70: DreameMowerState.MOWING,
+            }
+            mapped = _G2408_STATE_MAP.get(int(value))
+            if mapped is not None:
+                value = mapped.value
+
         if (
             value is not None
             and int(value) > 18
