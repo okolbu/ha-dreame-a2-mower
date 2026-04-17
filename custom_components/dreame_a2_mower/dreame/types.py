@@ -635,6 +635,13 @@ class DreameMowerProperty(IntEnum):
     STREAM_RESET_CODE = 182
     STREAM_SPACE = 183
 
+    # g2408-specific blob properties (values chosen to avoid collision with
+    # upstream enum members; mnemonic uses siid*10000 + piid).
+    MOWING_TELEMETRY = 10004   # s1p4, 33-byte mowing telemetry blob
+    HEARTBEAT = 10001          # s1p1, 20-byte heartbeat blob
+    OBSTACLE_FLAG = 10053      # s1p53, boolean obstacle-near flag
+    MULTIPLEXED_CONFIG = 20051  # s2p51, multiplexed config dict payloads
+
 
 class DreameMowerAutoSwitchProperty(str, Enum):
     """Dreame Mower Auto Switch properties"""
@@ -713,13 +720,6 @@ class DreameMowerAction(IntEnum):
     STREAM_PROPERTY = 32
     STREAM_CODE = 33
     PULL_STATUS = 34
-
-    # g2408-specific blob properties (values chosen to avoid collision with
-    # upstream enum members; mnemonic uses siid*10000 + piid).
-    MOWING_TELEMETRY = 10004  # s1p4, 33-byte mowing telemetry blob
-    HEARTBEAT = 10001         # s1p1, 20-byte heartbeat blob
-    OBSTACLE_FLAG = 10053     # s1p53, boolean obstacle-near flag
-    MULTIPLEXED_CONFIG = 20051  # s2p51, multiplexed config dict payloads
 
 
 # Dreame Mower property mapping
