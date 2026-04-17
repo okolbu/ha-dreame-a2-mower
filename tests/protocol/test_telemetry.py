@@ -8,6 +8,7 @@ from protocol.telemetry import (
     MowingTelemetry,
     decode_s1p4,
     InvalidS1P4Frame,
+    Phase,
 )
 
 
@@ -60,3 +61,54 @@ def test_decode_s1p4_rejects_missing_end_delimiter():
     bad = ACTIVE_MOW_FRAME[:-1] + bytes([0x00])
     with pytest.raises(InvalidS1P4Frame, match="delimiter"):
         decode_s1p4(bad)
+
+
+def test_decode_s1p4_exposes_sequence_counter():
+    t = decode_s1p4(ACTIVE_MOW_FRAME)
+    assert t.sequence == 1094
+
+
+def test_decode_s1p4_exposes_phase_enum_for_active_mow():
+    t = decode_s1p4(ACTIVE_MOW_FRAME)
+    assert t.phase is Phase.MOWING
+
+
+@pytest.mark.parametrize(
+    ("phase_byte", "expected"),
+    [
+        (0, Phase.EDGE_OR_REPOSITION),
+        (1, Phase.TRANSIT),
+        (2, Phase.MOWING),
+        (3, Phase.RETURNING),
+    ],
+)
+def test_decode_s1p4_phase_byte_mapping(phase_byte, expected):
+    frame = bytearray(ACTIVE_MOW_FRAME)
+    frame[8] = phase_byte
+    assert decode_s1p4(bytes(frame)).phase is expected
+
+
+def test_decode_s1p4_unknown_phase_byte_is_preserved_raw():
+    frame = bytearray(ACTIVE_MOW_FRAME)
+    frame[8] = 9
+    t = decode_s1p4(bytes(frame))
+    assert t.phase is Phase.UNKNOWN
+    assert t.phase_raw == 9
+
+
+def test_decode_s1p4_distance_meters_from_deci_units():
+    t = decode_s1p4(ACTIVE_MOW_FRAME)
+    # raw = 454 → 45.4m
+    assert t.distance_m == pytest.approx(45.4)
+
+
+def test_decode_s1p4_total_area_from_centiares():
+    t = decode_s1p4(ACTIVE_MOW_FRAME)
+    # raw = 32100 → 321.00m²
+    assert t.total_area_m2 == pytest.approx(321.00)
+
+
+def test_decode_s1p4_mowed_area_from_centiares():
+    t = decode_s1p4(ACTIVE_MOW_FRAME)
+    # raw = 1250 → 12.50m²
+    assert t.area_mowed_m2 == pytest.approx(12.50)
