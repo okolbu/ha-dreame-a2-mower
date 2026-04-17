@@ -4636,7 +4636,7 @@ class DreameMowerDeviceStatus:
             _G2408_STATE_MAP = {
                 27: DreameMowerState.IDLE,
                 48: DreameMowerState.CHARGING_COMPLETED,
-                50: DreameMowerState.IDLE,  # session-start transient
+                50: DreameMowerState.MOWING,  # session start — treat as active mow
                 54: DreameMowerState.RETURNING,
                 70: DreameMowerState.MOWING,
             }
