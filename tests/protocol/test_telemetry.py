@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.dreame_a2_mower.protocol.telemetry import (
+from protocol.telemetry import (
     MowingTelemetry,
     decode_s1p4,
     InvalidS1P4Frame,

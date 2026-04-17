@@ -5,11 +5,12 @@ description = "Home Assistant integration for the Dreame A2 robotic lawn mower"
 requires-python = ">=3.14"
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "homeassistant>=2024.1"]
+dev = ["pytest>=8.0"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+pythonpath = ["custom_components/dreame_a2_mower"]
 addopts = "-ra -q"
 
 [tool.setuptools.packages.find]

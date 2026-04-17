@@ -23,6 +23,8 @@ Every decoder gets TDD treatment: write a failing unit test with known-good inpu
 
 Representative byte arrays for `s1p4` and `s1p1` are taken from the probe logs. For `s2p51` payload shapes, sample payloads are copied verbatim from log entries where each setting was toggled during reverse engineering.
 
+**Import path convention:** `pyproject.toml` sets `pythonpath = ["custom_components/dreame_a2_mower"]`, so pytest resolves `protocol` as a top-level package. Tests therefore import `from protocol.telemetry import ...` rather than `from custom_components.dreame_a2_mower.protocol.telemetry import ...`. This skips the HA parent `__init__.py` entirely (which imports from `homeassistant.*` and is not available in the test environment). At HA runtime, the coordinator uses relative imports inside the package (`from .protocol import decode_s1p4`), so both paths coexist cleanly — no changes to any production decoder file are required.
+
 ---
 
 ## File structure
@@ -83,6 +85,7 @@ dev = ["pytest>=8.0"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
+pythonpath = ["custom_components/dreame_a2_mower"]
 addopts = "-ra -q"
 
 [tool.setuptools.packages.find]
@@ -236,7 +239,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.dreame_a2_mower.protocol.telemetry import (
+from protocol.telemetry import (
     MowingTelemetry,
     decode_s1p4,
     InvalidS1P4Frame,
@@ -385,7 +388,7 @@ git commit -m "feat(protocol): s1p4 telemetry decoder with position + frame vali
 Append to `tests/protocol/test_telemetry.py`:
 
 ```python
-from custom_components.dreame_a2_mower.protocol.telemetry import Phase
+from protocol.telemetry import Phase
 
 
 def test_decode_s1p4_exposes_sequence_counter():
@@ -557,7 +560,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.dreame_a2_mower.protocol.heartbeat import (
+from protocol.heartbeat import (
     Heartbeat,
     decode_s1p1,
     InvalidS1P1Frame,
@@ -703,7 +706,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.dreame_a2_mower.protocol.properties_g2408 import (
+from protocol.properties_g2408 import (
     Property,
     PROPERTY_MAP,
     StateCode,
@@ -926,7 +929,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.dreame_a2_mower.protocol.config_s2p51 import (
+from protocol.config_s2p51 import (
     Setting,
     S2P51Event,
     decode_s2p51,
@@ -1363,7 +1366,7 @@ git commit -m "feat(protocol): s2p51 — Anti-Theft, Charging, LED Period, Human
 Append to `tests/protocol/test_config_s2p51.py`:
 
 ```python
-from custom_components.dreame_a2_mower.protocol.config_s2p51 import encode_s2p51
+from protocol.config_s2p51 import encode_s2p51
 
 
 @pytest.mark.parametrize(
@@ -1516,7 +1519,7 @@ from pathlib import Path
 
 import pytest
 
-from custom_components.dreame_a2_mower.protocol.replay import (
+from protocol.replay import (
     ProbeLogEvent,
     iter_probe_log,
 )
@@ -1652,13 +1655,13 @@ git commit -m "feat(protocol): probe-log replay iterator"
 Append to `tests/protocol/test_replay.py`:
 
 ```python
-from custom_components.dreame_a2_mower.protocol.config_s2p51 import decode_s2p51
-from custom_components.dreame_a2_mower.protocol.heartbeat import decode_s1p1
-from custom_components.dreame_a2_mower.protocol.properties_g2408 import (
+from protocol.config_s2p51 import decode_s2p51
+from protocol.heartbeat import decode_s1p1
+from protocol.properties_g2408 import (
     Property,
     property_for,
 )
-from custom_components.dreame_a2_mower.protocol.telemetry import decode_s1p4
+from protocol.telemetry import decode_s1p4
 
 
 def test_replay_full_session_routes_to_correct_decoder_without_errors(
@@ -1807,7 +1810,7 @@ __all__ = [
 - [ ] **Step 2: Verify public imports work**
 
 ```bash
-python3 -c "from custom_components.dreame_a2_mower.protocol import decode_s1p4, decode_s2p51, iter_probe_log, Property; print('OK')"
+python3 -c "from protocol import decode_s1p4, decode_s2p51, iter_probe_log, Property; print('OK')"
 ```
 
 Expected: `OK`.
