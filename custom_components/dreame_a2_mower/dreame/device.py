@@ -401,6 +401,7 @@ class DreameMowerDevice:
                 if len(map_params) and self._map_manager:
                     self._map_manager.handle_properties(map_params)
 
+                self._decode_blob_properties(params)
                 self._handle_properties(params)
 
     def _handle_properties(self, properties) -> bool:
@@ -511,6 +512,41 @@ class DreameMowerDevice:
                         _LOGGER.info("Capability %s", p.upper())
 
         return changed
+
+    def _decode_blob_properties(self, params: list[dict]) -> None:
+        """Decode g2408 blob properties in-place into structured objects.
+
+        Blob properties (s1p4 telemetry, s1p1 heartbeat, s2p51 config) arrive
+        as raw lists of bytes or dicts. We replace param['value'] with the
+        decoded dataclass/object so downstream entities can read structured
+        fields instead of raw bytes. Malformed blobs are logged and dropped
+        (the param's value is set to None) so they don't poison entity state.
+        """
+        from ..protocol.telemetry import InvalidS1P4Frame, decode_s1p4
+        from ..protocol.heartbeat import InvalidS1P1Frame, decode_s1p1
+        from ..protocol.config_s2p51 import S2P51DecodeError, decode_s2p51
+
+        telemetry_did = DreameMowerProperty.MOWING_TELEMETRY.value
+        heartbeat_did = DreameMowerProperty.HEARTBEAT.value
+        config_did = DreameMowerProperty.MULTIPLEXED_CONFIG.value
+
+        for param in params:
+            if not isinstance(param, dict):
+                continue
+            did = int(param.get("did", 0))
+            value = param.get("value")
+            try:
+                if did == telemetry_did and isinstance(value, list):
+                    param["value"] = decode_s1p4(bytes(value))
+                elif did == heartbeat_did and isinstance(value, list):
+                    param["value"] = decode_s1p1(bytes(value))
+                elif did == config_did and isinstance(value, dict):
+                    param["value"] = decode_s2p51(value)
+            except (InvalidS1P4Frame, InvalidS1P1Frame, S2P51DecodeError) as e:
+                _LOGGER.warning(
+                    "Discarding malformed g2408 blob (did=%d): %s", did, e
+                )
+                param["value"] = None
 
     def _request_properties(self, properties: list[DreameMowerProperty] = None) -> bool:
         """Request properties from the device."""

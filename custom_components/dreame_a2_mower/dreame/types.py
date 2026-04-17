@@ -714,6 +714,13 @@ class DreameMowerAction(IntEnum):
     STREAM_CODE = 33
     PULL_STATUS = 34
 
+    # g2408-specific blob properties (values chosen to avoid collision with
+    # upstream enum members; mnemonic uses siid*10000 + piid).
+    MOWING_TELEMETRY = 10004  # s1p4, 33-byte mowing telemetry blob
+    HEARTBEAT = 10001         # s1p1, 20-byte heartbeat blob
+    OBSTACLE_FLAG = 10053     # s1p53, boolean obstacle-near flag
+    MULTIPLEXED_CONFIG = 20051  # s2p51, multiplexed config dict payloads
+
 
 # Dreame Mower property mapping
 DreameMowerPropertyMapping = {
@@ -1047,6 +1054,11 @@ _G2408_OVERLAY: dict[DreameMowerProperty, dict[str, int]] = {
     # Upstream maps STATE to 2.1 and ERROR to 2.2 — swap them for g2408.
     DreameMowerProperty.STATE: {siid: 2, piid: 2},
     DreameMowerProperty.ERROR: {siid: 2, piid: 1},
+    # g2408-specific blob properties, decoded via the protocol/ package.
+    DreameMowerProperty.MOWING_TELEMETRY: {siid: 1, piid: 4},
+    DreameMowerProperty.HEARTBEAT: {siid: 1, piid: 1},
+    DreameMowerProperty.OBSTACLE_FLAG: {siid: 1, piid: 53},
+    DreameMowerProperty.MULTIPLEXED_CONFIG: {siid: 2, piid: 51},
 }
 
 
