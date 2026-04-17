@@ -4441,6 +4441,27 @@ class DreameMowerDevice:
             and (not self._protocol.prefer_cloud or self.device_connected)
         )
 
+    @property
+    def mowing_telemetry(self):
+        """Return the most recently decoded s1p4 telemetry (MowingTelemetry or None)."""
+        return self.data.get(DreameMowerProperty.MOWING_TELEMETRY.value)
+
+    @property
+    def heartbeat(self):
+        """Return the most recently decoded s1p1 heartbeat (Heartbeat or None)."""
+        return self.data.get(DreameMowerProperty.HEARTBEAT.value)
+
+    @property
+    def last_config_event(self):
+        """Return the most recently decoded s2p51 config event (S2P51Event or None)."""
+        return self.data.get(DreameMowerProperty.MULTIPLEXED_CONFIG.value)
+
+    @property
+    def obstacle_detected(self) -> bool | None:
+        """Return the s1p53 obstacle flag, or None if never seen."""
+        value = self.data.get(DreameMowerProperty.OBSTACLE_FLAG.value)
+        return bool(value) if value is not None else None
+
 
 class DreameMowerDeviceStatus:
     """Helper class for device status and int enum type properties.
