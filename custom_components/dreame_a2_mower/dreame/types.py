@@ -1051,9 +1051,13 @@ def DIID(property: DreameMowerProperty, mapping=DreameMowerPropertyMapping) -> s
 
 _G2408_OVERLAY: dict[DreameMowerProperty, dict[str, int]] = {
     # g2408 emits state codes (48/54/70/50/27) at siid=2, piid=2.
-    # Upstream maps STATE to 2.1 and ERROR to 2.2 — swap them for g2408.
+    # Upstream maps STATE to 2.1 — redirect it to 2.2 for g2408.
     DreameMowerProperty.STATE: {siid: 2, piid: 2},
-    DreameMowerProperty.ERROR: {siid: 2, piid: 1},
+    # Upstream's ERROR is at 2.2, which on g2408 carries state codes —
+    # upstream's error-code translator would misread these as errors
+    # (e.g. "The side brush wrapped"). Disable the ERROR entity for g2408
+    # by pointing it at a siid/piid the mower never emits.
+    DreameMowerProperty.ERROR: {siid: 999, piid: 999},
     # g2408-specific blob properties, decoded via the protocol/ package.
     DreameMowerProperty.MOWING_TELEMETRY: {siid: 1, piid: 4},
     DreameMowerProperty.HEARTBEAT: {siid: 1, piid: 1},
