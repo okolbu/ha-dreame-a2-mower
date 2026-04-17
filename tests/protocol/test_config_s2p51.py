@@ -124,3 +124,35 @@ def test_decode_human_presence_nine_element_list():
         "photos": False,
         "push_min": 3,
     }
+
+
+from protocol.config_s2p51 import encode_s2p51
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"time": "1776415722", "tz": "UTC"},
+        # skip AMBIGUOUS_TOGGLE — no round trip without naming the setting
+        {"end": 420, "start": 1320, "value": 1},
+        {"value": [1, 1260, 360]},       # low-speed-night
+        {"value": [1, 0, 1]},            # anti-theft
+        {"value": [1, 3]},               # rain-protection
+        {"value": [15, 95, 0, 0, 0, 0]}, # charging
+        {"value": [1, 360, 1320, 1, 1, 1, 1, 0]},  # led-period
+        {"value": [0, 1, 1, 1, 1, 1, 1, 0, 3]},    # human-presence
+    ],
+)
+def test_encode_decode_roundtrip_for_identifiable_shapes(payload):
+    ev = decode_s2p51(payload)
+    reconstructed = encode_s2p51(ev)
+    # Re-decode to normalize both sides (key order / bool vs int for value).
+    assert decode_s2p51(reconstructed) == ev
+
+
+def test_encode_rejects_ambiguous_toggle_without_specific_setting():
+    # The caller must first promote AMBIGUOUS_TOGGLE to a concrete setting
+    # using external context before encoding it back.
+    ev = S2P51Event(setting=Setting.AMBIGUOUS_TOGGLE, values={"value": 1})
+    with pytest.raises(S2P51DecodeError, match="ambiguous"):
+        encode_s2p51(ev)

@@ -139,3 +139,74 @@ def _decode_list_payload(value: list[int]) -> S2P51Event:
             },
         )
     raise S2P51DecodeError(f"unknown list payload shape (len={n}): {value!r}")
+
+
+def encode_s2p51(event: S2P51Event) -> dict[str, Any]:
+    """Encode an S2P51Event back into a wire-format payload dict.
+
+    AMBIGUOUS_TOGGLE events cannot be round-tripped because the decoder cannot
+    name the specific setting; callers must first replace the setting with a
+    concrete toggle using external context (i.e. the app action that fired).
+    """
+    setting = event.setting
+    v = event.values
+
+    if setting is Setting.TIMESTAMP:
+        return {"time": str(v["time"]), "tz": v["tz"]}
+    if setting is Setting.DND:
+        return {
+            "end": int(v["end_min"]),
+            "start": int(v["start_min"]),
+            "value": int(bool(v["enabled"])),
+        }
+    if setting is Setting.LOW_SPEED_NIGHT:
+        return {"value": [
+            int(bool(v["enabled"])), int(v["start_min"]), int(v["end_min"])
+        ]}
+    if setting is Setting.ANTI_THEFT:
+        return {"value": [
+            int(bool(v["lift_alarm"])),
+            int(bool(v["offmap_alarm"])),
+            int(bool(v["realtime_location"])),
+        ]}
+    if setting is Setting.RAIN_PROTECTION:
+        return {"value": [
+            int(bool(v["enabled"])), int(v["resume_hours"])
+        ]}
+    if setting is Setting.CHARGING:
+        return {"value": [
+            int(v["recharge_pct"]),
+            int(v["resume_pct"]),
+            int(v["unknown_flag"]),
+            int(bool(v["custom_charging"])),
+            int(v["start_min"]),
+            int(v["end_min"]),
+        ]}
+    if setting is Setting.LED_PERIOD:
+        return {"value": [
+            int(bool(v["enabled"])),
+            int(v["start_min"]),
+            int(v["end_min"]),
+            int(bool(v["standby"])),
+            int(bool(v["working"])),
+            int(bool(v["charging"])),
+            int(bool(v["error"])),
+            int(v["reserved"]),
+        ]}
+    if setting is Setting.HUMAN_PRESENCE_ALERT:
+        return {"value": [
+            int(bool(v["enabled"])),
+            int(v["sensitivity"]),
+            int(bool(v["standby"])),
+            int(bool(v["mowing"])),
+            int(bool(v["recharge"])),
+            int(bool(v["patrol"])),
+            int(bool(v["alert"])),
+            int(bool(v["photos"])),
+            int(v["push_min"]),
+        ]}
+    if setting is Setting.AMBIGUOUS_TOGGLE:
+        raise S2P51DecodeError(
+            "ambiguous toggle cannot be encoded — resolve to a concrete setting first"
+        )
+    raise S2P51DecodeError(f"unknown setting: {setting!r}")
