@@ -301,18 +301,30 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         value_fn=lambda value, device: round(value.x_m, 2) if value is not None else None,
     ),
-    # Y at bytes [3-4] has position-like behaviour over short windows
-    # (stable during passes, steps ~17 cm at turns) but drifts heavily
-    # vs true position over longer sessions — confirmed by live map
-    # check showing Y=+12 m raw while mower was physically ~5 m from
-    # dock. Treat as a drifting proxy, NOT as reliable position.
-    # Expose under Diagnostic with raw mm value until real Y position
-    # is located elsewhere in the frame (bytes [10-17] candidates,
-    # Plan E investigation).
+    # Position Y (calibrated): raw Y value × 0.625 → metres.
+    # Raw Y at bytes [3-4] systematically over-reads by ~60% compared to
+    # tape-measured physical position. Two independent data points agree
+    # (raw 15855 ≈ 10 m, raw 16624 = 10.3 m tape-measured) → factor 0.625.
+    # Likely a mower-firmware calibration constant (wheel circumference
+    # or encoder pulses/rev slightly off). Apply the factor so the Y
+    # sensor shows physically meaningful metres. If future data shows
+    # the factor drifting with session length / grass height / pattern,
+    # revisit and make per-device configurable.
+    DreameMowerSensorEntityDescription(
+        key="mowing_position_y",
+        property_key=DreameMowerProperty.MOWING_TELEMETRY,
+        name="Position Y",
+        icon="mdi:axis-y-arrow",
+        native_unit_of_measurement="m",
+        exists_fn=lambda description, device: True,
+        value_fn=lambda value, device: round(value.y_mm * 0.000625, 2) if value is not None else None,
+    ),
+    # Raw Y for diagnostics — preserved alongside the calibrated sensor so
+    # future work can re-derive the calibration factor from fresh data.
     DreameMowerSensorEntityDescription(
         key="mowing_y_raw",
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
-        name="Y (drift-proxy, mm)",
+        name="Y (raw, mm)",
         icon="mdi:help-circle",
         entity_category=EntityCategory.DIAGNOSTIC,
         native_unit_of_measurement="mm",
