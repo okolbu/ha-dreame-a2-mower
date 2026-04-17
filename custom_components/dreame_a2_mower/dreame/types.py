@@ -1030,6 +1030,41 @@ def DIID(property: DreameMowerProperty, mapping=DreameMowerPropertyMapping) -> s
         return f"{mapping[property][siid]}.{mapping[property][piid]}"
 
 
+# ---------------------------------------------------------------------------
+# g2408-specific property-mapping overlay.
+#
+# Upstream's DreameMowerPropertyMapping was built for A1 Pro and earlier
+# vacuum-derived mowers. The Dreame A2 (dreame.mower.g2408) uses different
+# siid/piid assignments for some properties. This overlay corrects those
+# differences while leaving matches untouched.
+#
+# Divergences derived from probe-log analysis — see
+# docs/research/2026-04-17-g2408-property-divergences.md for the full catalog.
+# ---------------------------------------------------------------------------
+
+_G2408_OVERLAY: dict[DreameMowerProperty, dict[str, int]] = {
+    # g2408 emits state codes (48/54/70/50/27) at siid=2, piid=2.
+    # Upstream maps STATE to 2.1 and ERROR to 2.2 — swap them for g2408.
+    DreameMowerProperty.STATE: {siid: 2, piid: 2},
+    DreameMowerProperty.ERROR: {siid: 2, piid: 1},
+}
+
+
+def property_mapping_for_model(model: str) -> dict[DreameMowerProperty, dict[str, int]]:
+    """Return a property_mapping tailored for the device model.
+
+    For known-divergent models (currently only dreame.mower.g2408) this returns
+    a shallow copy of the upstream mapping with model-specific entries overlaid.
+    For unknown models, returns the upstream mapping unchanged so behaviour
+    matches pre-overlay code.
+    """
+    if model == "dreame.mower.g2408":
+        merged = dict(DreameMowerPropertyMapping)
+        merged.update(_G2408_OVERLAY)
+        return merged
+    return DreameMowerPropertyMapping
+
+
 class RobotType(IntEnum):
     LIDAR = 0
     VSLAM = 1
