@@ -48,6 +48,17 @@ def decode_s2p51(payload: dict[str, Any]) -> S2P51Event:
             values={"time": int(payload["time"]), "tz": payload["tz"]},
         )
 
+    # DnD sends three keys and is unambiguous.
+    if set(payload.keys()) == {"end", "start", "value"}:
+        return S2P51Event(
+            setting=Setting.DND,
+            values={
+                "start_min": int(payload["start"]),
+                "end_min": int(payload["end"]),
+                "enabled": bool(payload["value"]),
+            },
+        )
+
     if set(payload.keys()) == {"value"}:
         value = payload["value"]
         if isinstance(value, int):
@@ -55,5 +66,30 @@ def decode_s2p51(payload: dict[str, Any]) -> S2P51Event:
                 setting=Setting.AMBIGUOUS_TOGGLE,
                 values={"value": value},
             )
+        if isinstance(value, list):
+            return _decode_list_payload(value)
 
     raise S2P51DecodeError(f"unknown payload shape: {payload!r}")
+
+
+def _decode_list_payload(value: list[int]) -> S2P51Event:
+    n = len(value)
+    if n == 2:
+        return S2P51Event(
+            setting=Setting.RAIN_PROTECTION,
+            values={"enabled": bool(value[0]), "resume_hours": int(value[1])},
+        )
+    if n == 3:
+        # Low-Speed Nighttime: [enabled, start_min, end_min]; times are 0..1440.
+        # Anti-Theft: [lift, offmap, realtime]; all three are 0/1. Distinguish
+        # by checking whether any value exceeds 1.
+        if any(v > 1 for v in value):
+            return S2P51Event(
+                setting=Setting.LOW_SPEED_NIGHT,
+                values={
+                    "enabled": bool(value[0]),
+                    "start_min": int(value[1]),
+                    "end_min": int(value[2]),
+                },
+            )
+    raise S2P51DecodeError(f"unknown list payload shape (len={n}): {value!r}")
