@@ -31,11 +31,13 @@ def test_overlay_exports_function():
     assert callable(types.property_mapping_for_model)
 
 
-def test_g2408_mapping_swaps_state_and_error_piid():
+def test_g2408_mapping_keeps_state_at_upstream_default_and_disables_error():
     types = _import_types()
     mapping = types.property_mapping_for_model("dreame.mower.g2408")
-    assert mapping[types.DreameMowerProperty.STATE] == {"siid": 2, "piid": 2}
-    assert mapping[types.DreameMowerProperty.ERROR] == {"siid": 2, "piid": 1}
+    # STATE stays at upstream default (s2p1) — g2408 emits standard values there.
+    assert mapping[types.DreameMowerProperty.STATE] == {"siid": 2, "piid": 1}
+    # ERROR is disabled for g2408 (points at a siid/piid the mower never emits).
+    assert mapping[types.DreameMowerProperty.ERROR] == {"siid": 999, "piid": 999}
 
 
 def test_g2408_mapping_preserves_battery_mapping():

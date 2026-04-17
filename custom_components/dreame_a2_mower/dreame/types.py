@@ -1050,13 +1050,18 @@ def DIID(property: DreameMowerProperty, mapping=DreameMowerPropertyMapping) -> s
 # ---------------------------------------------------------------------------
 
 _G2408_OVERLAY: dict[DreameMowerProperty, dict[str, int]] = {
-    # g2408 emits state codes (48/54/70/50/27) at siid=2, piid=2.
-    # Upstream maps STATE to 2.1 — redirect it to 2.2 for g2408.
-    DreameMowerProperty.STATE: {siid: 2, piid: 2},
-    # Upstream's ERROR is at 2.2, which on g2408 carries state codes —
-    # upstream's error-code translator would misread these as errors
-    # (e.g. "The side brush wrapped"). Disable the ERROR entity for g2408
-    # by pointing it at a siid/piid the mower never emits.
+    # STATE stays at upstream default s2p1 — g2408 emits standard
+    # DreameMowerState values (1=MOWING, 3=PAUSED, 5=RETURNING,
+    # 6=CHARGING etc.) there. An earlier attempt moved STATE to s2p2
+    # based on observed codes 48/54/70, but live testing showed those
+    # are secondary phase codes while s2p1 is the authoritative state
+    # channel that carries pause/resume/return/charge transitions.
+    #
+    # ERROR is disabled: upstream maps it to s2p2 where g2408 broadcasts
+    # the secondary phase codes (48/54/70), which upstream's error
+    # translator misreads as specific errors (e.g. "The side brush
+    # wrapped"). Point ERROR at a siid/piid the mower never emits to
+    # keep the entity silent.
     DreameMowerProperty.ERROR: {siid: 999, piid: 999},
     # g2408-specific blob properties, decoded via the protocol/ package.
     DreameMowerProperty.MOWING_TELEMETRY: {siid: 1, piid: 4},
