@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import pytest
 
+import json
+
 from protocol.config_s2p51 import (
     Setting,
     S2P51Event,
-    decode_s2p51,
     S2P51DecodeError,
+    decode_s2p51,
+    encode_s2p51,
 )
 
 
@@ -126,9 +129,6 @@ def test_decode_human_presence_nine_element_list():
     }
 
 
-from protocol.config_s2p51 import encode_s2p51
-
-
 @pytest.mark.parametrize(
     "payload",
     [
@@ -156,3 +156,25 @@ def test_encode_rejects_ambiguous_toggle_without_specific_setting():
     ev = S2P51Event(setting=Setting.AMBIGUOUS_TOGGLE, values={"value": 1})
     with pytest.raises(S2P51DecodeError, match="ambiguous"):
         encode_s2p51(ev)
+
+
+def test_decode_rejects_malformed_list_element_as_s2p51_error():
+    # A non-numeric string where an int is expected should surface as
+    # S2P51DecodeError, not raw ValueError.
+    with pytest.raises(S2P51DecodeError, match="malformed"):
+        decode_s2p51({"value": ["not", "a", "list"]})
+
+
+def _load_s2p51_samples(fixtures_dir):
+    with (fixtures_dir / "s2p51_samples.json").open() as fh:
+        return json.load(fh)
+
+
+def test_all_s2p51_samples_decode_without_error(fixtures_dir):
+    """Every real payload collected from the RE session must decode cleanly."""
+    samples = _load_s2p51_samples(fixtures_dir)
+    assert len(samples) > 0, "expected at least one sample payload"
+    for sample in samples:
+        ev = decode_s2p51(sample)
+        # Every sample must route to a concrete Setting value.
+        assert ev.setting in Setting, f"decoded unknown setting for {sample!r}"

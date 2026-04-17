@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterator, Union
+from typing import Any, Iterator
 
 
 @dataclass(frozen=True)
@@ -26,7 +26,7 @@ class ProbeLogEvent:
     value: Any
 
 
-def iter_probe_log(path: Union[str, Path]) -> Iterator[ProbeLogEvent]:
+def iter_probe_log(path: str | Path) -> Iterator[ProbeLogEvent]:
     """Yield ProbeLogEvent for each properties_changed message in a probe log."""
     p = Path(path)
     with p.open("r", encoding="utf-8") as fh:

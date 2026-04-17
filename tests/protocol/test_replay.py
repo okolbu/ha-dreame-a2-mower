@@ -6,10 +6,18 @@ from pathlib import Path
 
 import pytest
 
+from protocol.config_s2p51 import decode_s2p51
+from protocol.heartbeat import decode_s1p1
+from protocol.properties_g2408 import (
+    Property,
+    property_for,
+    state_label,
+)
 from protocol.replay import (
     ProbeLogEvent,
     iter_probe_log,
 )
+from protocol.telemetry import decode_s1p4
 
 
 def test_iter_probe_log_yields_mqtt_messages_only(fixtures_dir: Path):
@@ -41,16 +49,6 @@ def test_iter_probe_log_raises_on_missing_file(tmp_path: Path):
         list(iter_probe_log(tmp_path / "does_not_exist.jsonl"))
 
 
-# New test for end-to-end decoder pipeline
-from protocol.config_s2p51 import decode_s2p51
-from protocol.heartbeat import decode_s1p1
-from protocol.properties_g2408 import (
-    Property,
-    property_for,
-)
-from protocol.telemetry import decode_s1p4
-
-
 def test_replay_full_session_routes_to_correct_decoder_without_errors(
     fixtures_dir: Path,
 ):
@@ -71,6 +69,12 @@ def test_replay_full_session_routes_to_correct_decoder_without_errors(
         if prop is Property.BATTERY_LEVEL:
             assert isinstance(ev.value, int)
             batteries.append(ev.value)
+        elif prop is Property.STATE:
+            assert isinstance(ev.value, int)
+            label = state_label(ev.value)
+            assert not label.startswith("unknown_"), (
+                f"unrecognised STATE code {ev.value} at {ev.timestamp}: {label}"
+            )
         elif prop is Property.HEARTBEAT:
             hb = decode_s1p1(bytes(ev.value))
             heartbeat_counters.append(hb.counter)
