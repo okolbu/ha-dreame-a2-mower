@@ -31,18 +31,18 @@ class Phase(IntEnum):
 class MowingTelemetry:
     """Decoded s1p4 frame.
 
-    Position is charger-relative millimetres, fixed to map cardinal
-    directions (no per-session rotation). Verified on a 378m² lawn —
-    values like Y=5855 correspond to 5.85m from the charger, which
-    matches live observations. An earlier attempt interpreted these as
-    centimetres but that contradicted the growth rate across passes.
+    Position is charger-relative, fixed to map cardinal directions
+    (no per-session rotation). **X and Y use different raw scales:**
+    X is centimetres, Y is millimetres. Verified live: max observed
+    X=900 → 9 m matches physical 9 m; Y=6976 at the same moment is
+    6.98 m (not 69.76 m — confirmed by lawn dimensions ≤ 25 m).
 
-    x_mm / y_mm are the raw integer fields; x_m / y_m are derived
-    metre-scale properties for display convenience.
-    Distance and area counters reset at the start of each mowing session.
+    Consumers should prefer the `x_m` / `y_m` metre properties to avoid
+    the unit asymmetry. Distance and area counters reset at the start
+    of each mowing session.
     """
 
-    x_mm: int
+    x_cm: int
     y_mm: int
     sequence: int
     phase: Phase
@@ -54,7 +54,7 @@ class MowingTelemetry:
     @property
     def x_m(self) -> float:
         """X position in metres (charger-relative)."""
-        return self.x_mm / 1000.0
+        return self.x_cm / 100.0
 
     @property
     def y_m(self) -> float:
@@ -71,7 +71,7 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
         raise InvalidS1P4Frame(
             f"expected 0x{FRAME_DELIMITER:02X} delimiters at [0] and [32]"
         )
-    x_mm, y_mm = struct.unpack_from("<hh", data, 1)
+    x_cm, y_mm = struct.unpack_from("<hh", data, 1)
     seq = struct.unpack_from("<H", data, 6)[0]
     phase_raw = data[8]
     phase = Phase(phase_raw) if phase_raw in Phase._value2member_map_ else Phase.UNKNOWN
@@ -79,7 +79,7 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
     total_area_cent = struct.unpack_from("<H", data, 26)[0]
     area_mowed_cent = struct.unpack_from("<H", data, 29)[0]
     return MowingTelemetry(
-        x_mm=x_mm,
+        x_cm=x_cm,
         y_mm=y_mm,
         sequence=seq,
         phase=phase,

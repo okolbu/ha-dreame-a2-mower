@@ -299,7 +299,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         icon="mdi:axis-x-arrow",
         native_unit_of_measurement="m",
         exists_fn=lambda description, device: True,
-        value_fn=lambda value, device: round(value.x_mm / 1000.0, 2) if value is not None else None,
+        value_fn=lambda value, device: round(value.x_m, 2) if value is not None else None,
     ),
     DreameMowerSensorEntityDescription(
         key="mowing_position_y",
@@ -308,7 +308,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         icon="mdi:axis-y-arrow",
         native_unit_of_measurement="m",
         exists_fn=lambda description, device: True,
-        value_fn=lambda value, device: round(value.y_mm / 1000.0, 2) if value is not None else None,
+        value_fn=lambda value, device: round(value.y_m, 2) if value is not None else None,
     ),
     DreameMowerSensorEntityDescription(
         key="mowing_phase",

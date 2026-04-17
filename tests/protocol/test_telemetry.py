@@ -12,7 +12,7 @@ from protocol.telemetry import (
 )
 
 
-# Verified frame: x=-1562mm (-1.56m), y=2847mm (2.85m), phase=2,
+# Fixture frame: raw x=-1562 (cm → -15.62m), y=2847 (mm → 2.85m), phase=2,
 # area_mowed=12.50m², total_area=321.00m², distance=45.4m, seq=1094.
 ACTIVE_MOW_FRAME = bytes([
     0xCE,                                     # [0] delimiter
@@ -40,15 +40,16 @@ def test_decode_s1p4_valid_frame_returns_telemetry_dataclass():
     assert isinstance(t, MowingTelemetry)
 
 
-def test_decode_s1p4_position_is_charger_relative_mm():
+def test_decode_s1p4_position_raw_scales_are_cm_for_x_and_mm_for_y():
     t = decode_s1p4(ACTIVE_MOW_FRAME)
-    assert t.x_mm == -1562
+    assert t.x_cm == -1562
     assert t.y_mm == 2847
 
 
-def test_decode_s1p4_position_also_exposed_in_metres():
+def test_decode_s1p4_position_exposed_in_metres_uses_per_axis_scale():
     t = decode_s1p4(ACTIVE_MOW_FRAME)
-    assert t.x_m == pytest.approx(-1.562)
+    # X divides raw by 100 (cm → m); Y divides raw by 1000 (mm → m).
+    assert t.x_m == pytest.approx(-15.62)
     assert t.y_m == pytest.approx(2.847)
 
 
