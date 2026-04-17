@@ -65,3 +65,62 @@ def test_decode_rain_protection_two_element_list():
     ev = decode_s2p51({"value": [1, 3]})
     assert ev.setting is Setting.RAIN_PROTECTION
     assert ev.values == {"enabled": True, "resume_hours": 3}
+
+
+def test_decode_anti_theft_three_element_all_binary():
+    # [lift_alarm, offmap_alarm, realtime_location] — all 0 or 1
+    ev = decode_s2p51({"value": [1, 0, 1]})
+    assert ev.setting is Setting.ANTI_THEFT
+    assert ev.values == {
+        "lift_alarm": True,
+        "offmap_alarm": False,
+        "realtime_location": True,
+    }
+
+
+def test_decode_charging_six_element_list():
+    # [recharge_pct, resume_pct, unknown_flag, custom_charging, start_min, end_min]
+    ev = decode_s2p51({"value": [15, 95, 0, 0, 0, 0]})
+    assert ev.setting is Setting.CHARGING
+    assert ev.values == {
+        "recharge_pct": 15,
+        "resume_pct": 95,
+        "unknown_flag": 0,
+        "custom_charging": False,
+        "start_min": 0,
+        "end_min": 0,
+    }
+
+
+def test_decode_led_period_eight_element_list():
+    # [enabled, start_min, end_min, standby, working, charging, error, reserved]
+    ev = decode_s2p51({"value": [1, 360, 1320, 1, 1, 1, 1, 0]})
+    assert ev.setting is Setting.LED_PERIOD
+    assert ev.values == {
+        "enabled": True,
+        "start_min": 360,
+        "end_min": 1320,
+        "standby": True,
+        "working": True,
+        "charging": True,
+        "error": True,
+        "reserved": 0,
+    }
+
+
+def test_decode_human_presence_nine_element_list():
+    # [enabled, sensitivity, standby, mowing, recharge, patrol, alert, photos, push_min]
+    # Example from probe log at 2026-04-17 11:13:57: [0,1,1,1,1,1,1,0,3]
+    ev = decode_s2p51({"value": [0, 1, 1, 1, 1, 1, 1, 0, 3]})
+    assert ev.setting is Setting.HUMAN_PRESENCE_ALERT
+    assert ev.values == {
+        "enabled": False,
+        "sensitivity": 1,
+        "standby": True,
+        "mowing": True,
+        "recharge": True,
+        "patrol": True,
+        "alert": True,
+        "photos": False,
+        "push_min": 3,
+    }

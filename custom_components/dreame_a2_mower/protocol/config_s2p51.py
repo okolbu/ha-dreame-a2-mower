@@ -80,9 +80,6 @@ def _decode_list_payload(value: list[int]) -> S2P51Event:
             values={"enabled": bool(value[0]), "resume_hours": int(value[1])},
         )
     if n == 3:
-        # Low-Speed Nighttime: [enabled, start_min, end_min]; times are 0..1440.
-        # Anti-Theft: [lift, offmap, realtime]; all three are 0/1. Distinguish
-        # by checking whether any value exceeds 1.
         if any(v > 1 for v in value):
             return S2P51Event(
                 setting=Setting.LOW_SPEED_NIGHT,
@@ -92,4 +89,53 @@ def _decode_list_payload(value: list[int]) -> S2P51Event:
                     "end_min": int(value[2]),
                 },
             )
+        return S2P51Event(
+            setting=Setting.ANTI_THEFT,
+            values={
+                "lift_alarm": bool(value[0]),
+                "offmap_alarm": bool(value[1]),
+                "realtime_location": bool(value[2]),
+            },
+        )
+    if n == 6:
+        return S2P51Event(
+            setting=Setting.CHARGING,
+            values={
+                "recharge_pct": int(value[0]),
+                "resume_pct": int(value[1]),
+                "unknown_flag": int(value[2]),
+                "custom_charging": bool(value[3]),
+                "start_min": int(value[4]),
+                "end_min": int(value[5]),
+            },
+        )
+    if n == 8:
+        return S2P51Event(
+            setting=Setting.LED_PERIOD,
+            values={
+                "enabled": bool(value[0]),
+                "start_min": int(value[1]),
+                "end_min": int(value[2]),
+                "standby": bool(value[3]),
+                "working": bool(value[4]),
+                "charging": bool(value[5]),
+                "error": bool(value[6]),
+                "reserved": int(value[7]),
+            },
+        )
+    if n == 9:
+        return S2P51Event(
+            setting=Setting.HUMAN_PRESENCE_ALERT,
+            values={
+                "enabled": bool(value[0]),
+                "sensitivity": int(value[1]),
+                "standby": bool(value[2]),
+                "mowing": bool(value[3]),
+                "recharge": bool(value[4]),
+                "patrol": bool(value[5]),
+                "alert": bool(value[6]),
+                "photos": bool(value[7]),
+                "push_min": int(value[8]),
+            },
+        )
     raise S2P51DecodeError(f"unknown list payload shape (len={n}): {value!r}")
