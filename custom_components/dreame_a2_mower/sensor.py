@@ -287,6 +287,46 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         value_fn=lambda value, device: device.info.version,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
+    # --- g2408 mowing telemetry sensors (decoded from s1p4 blob) ---
+    DreameMowerSensorEntityDescription(
+        key="mowing_position_x",
+        property_key=DreameMowerProperty.MOWING_TELEMETRY,
+        name="Position X",
+        icon="mdi:axis-x-arrow",
+        native_unit_of_measurement="mm",
+        value_fn=lambda value, device: value.x_mm if value is not None else None,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="mowing_position_y",
+        property_key=DreameMowerProperty.MOWING_TELEMETRY,
+        name="Position Y",
+        icon="mdi:axis-y-arrow",
+        native_unit_of_measurement="mm",
+        value_fn=lambda value, device: value.y_mm if value is not None else None,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="mowing_phase",
+        property_key=DreameMowerProperty.MOWING_TELEMETRY,
+        name="Mowing Phase",
+        icon="mdi:state-machine",
+        value_fn=lambda value, device: value.phase.name.lower() if value is not None else None,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="session_area_mowed",
+        property_key=DreameMowerProperty.MOWING_TELEMETRY,
+        name="Session Area Mowed",
+        icon="mdi:texture-box",
+        native_unit_of_measurement=UNIT_AREA,
+        value_fn=lambda value, device: value.area_mowed_m2 if value is not None else None,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="session_distance",
+        property_key=DreameMowerProperty.MOWING_TELEMETRY,
+        name="Session Distance",
+        icon="mdi:map-marker-distance",
+        native_unit_of_measurement="m",
+        value_fn=lambda value, device: value.distance_m if value is not None else None,
+    ),
 )
 
 
