@@ -301,20 +301,20 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         value_fn=lambda value, device: round(value.x_m, 2) if value is not None else None,
     ),
-    # Y semantics unresolved — live observations show rapid flapping
-    # (7000→9000 in seconds) inconsistent with a linear position, and the
-    # raw/physical ratio doesn't match mm or cm cleanly. Expose raw value
-    # as a DIAGNOSTIC sensor until bytes [3-4] are properly interpreted.
-    # Real Y position may live in bytes [10-17] (labelled "motion vectors"
-    # in memory) — Plan E will revisit.
+    # Y IS a position in mm — confirmed via byte analysis of live session:
+    # during long E-W X-passes, Y stays within ±32 mm; at each turn Y
+    # steps by ~176 mm (≈ blade width). Bigger jumps correspond to the
+    # mower repositioning around obstacles (e.g. house in lawn centre).
+    # User's earlier "flapping" observation correlated with obstacle
+    # navigation, not a bad decoder.
     DreameMowerSensorEntityDescription(
-        key="mowing_y_raw",
+        key="mowing_position_y",
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
-        name="Y (raw, unresolved)",
-        icon="mdi:help-circle",
-        entity_category=EntityCategory.DIAGNOSTIC,
+        name="Position Y",
+        icon="mdi:axis-y-arrow",
+        native_unit_of_measurement="m",
         exists_fn=lambda description, device: True,
-        value_fn=lambda value, device: value.y_mm if value is not None else None,
+        value_fn=lambda value, device: round(value.y_m, 2) if value is not None else None,
     ),
     DreameMowerSensorEntityDescription(
         key="mowing_phase",
