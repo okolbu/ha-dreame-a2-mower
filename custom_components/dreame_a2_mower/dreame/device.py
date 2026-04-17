@@ -1585,6 +1585,14 @@ class DreameMowerDevice:
             self.info = DreameMowerDeviceInfo(info)
             if self.mac is None:
                 self.mac = self.info.mac_address
+
+            # Apply model-specific property-mapping overlay. For g2408 this
+            # corrects siid/piid divergences from upstream's A1-Pro-centric
+            # mapping (most notably STATE<->ERROR swap at siid=2). For other
+            # models the overlay is a no-op and the class-level default
+            # remains in effect.
+            from .types import property_mapping_for_model
+            self.property_mapping = property_mapping_for_model(self.info.model)
             _LOGGER.info(
                 "Connected to device: %s %s",
                 self.info.model,
