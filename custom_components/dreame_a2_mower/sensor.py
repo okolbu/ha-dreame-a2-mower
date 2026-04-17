@@ -288,12 +288,17 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     # --- g2408 mowing telemetry sensors (decoded from s1p4 blob) ---
+    # exists_fn=always-True: s1p4 is only broadcast during active mowing, so
+    # device.data[MOWING_TELEMETRY] is empty when the entity setup runs after
+    # HA restart on a docked mower. Without this override the telemetry
+    # sensors never register and never appear in the UI.
     DreameMowerSensorEntityDescription(
         key="mowing_position_x",
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
         name="Position X",
         icon="mdi:axis-x-arrow",
         native_unit_of_measurement="mm",
+        exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.x_mm if value is not None else None,
     ),
     DreameMowerSensorEntityDescription(
@@ -302,6 +307,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         name="Position Y",
         icon="mdi:axis-y-arrow",
         native_unit_of_measurement="mm",
+        exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.y_mm if value is not None else None,
     ),
     DreameMowerSensorEntityDescription(
@@ -309,6 +315,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
         name="Mowing Phase",
         icon="mdi:state-machine",
+        exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.phase.name.lower() if value is not None else None,
     ),
     DreameMowerSensorEntityDescription(
@@ -317,6 +324,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         name="Session Area Mowed",
         icon="mdi:texture-box",
         native_unit_of_measurement=UNIT_AREA,
+        exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.area_mowed_m2 if value is not None else None,
     ),
     DreameMowerSensorEntityDescription(
@@ -325,6 +333,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         name="Session Distance",
         icon="mdi:map-marker-distance",
         native_unit_of_measurement="m",
+        exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.distance_m if value is not None else None,
     ),
 )
