@@ -135,3 +135,19 @@ todo.txt
 NOTES.md
 debug-config.yaml
 scripts/
+
+# Credentials and secrets (never commit these)
+ha-credentials.txt
+*credentials*.txt
+*credentials*.json
+secrets.yaml
+.secrets
+*.pem
+*.key
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+*.token
+.env.local
+.env.*.local
