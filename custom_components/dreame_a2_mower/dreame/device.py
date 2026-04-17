@@ -4660,6 +4660,19 @@ class DreameMowerDeviceStatus:
     @property
     def state_name(self) -> str:
         """Return state as string for translation."""
+        # For g2408 the raw s2p2 codes (48/54/70/50/27) aren't in
+        # DreameMowerState — translate via the protocol.properties_g2408
+        # label table instead of falling through to "unknown".
+        if (
+            self._device.info is not None
+            and self._device.info.model == "dreame.mower.g2408"
+        ):
+            raw = self._get_property(DreameMowerProperty.STATE)
+            if raw is not None:
+                from ..protocol.properties_g2408 import state_label
+                label = state_label(int(raw))
+                if not label.startswith("unknown_"):
+                    return label
         return STATE_CODE_TO_STATE.get(self.state, STATE_UNKNOWN)
 
     @property
