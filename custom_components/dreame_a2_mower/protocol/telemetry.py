@@ -17,18 +17,22 @@ class InvalidS1P4Frame(ValueError):
 
 
 class Phase(IntEnum):
-    # Byte [8] of the s1p4 frame is the **zone ID** the firmware is currently
-    # mowing in, not a routing mode. Observed 2026-04-18: four phase values
-    # each occupied a distinct non-overlapping X region with a single
-    # transition at each zone boundary. The labels below are historical and
-    # carried over from an earlier (incorrect) interpretation — treat them
-    # as opaque zone identifiers. See docs/research/g2408-protocol.md
-    # §"Phase byte semantics" for the confirmed zone-ID behaviour.
+    # Byte [8] of the s1p4 frame is the mower firmware's **task-phase index**:
+    # the current position in the pre-planned sub-task list for this mowing
+    # job. Values advance monotonically (never revisited) and carry meaning
+    # bound to the task plan itself (per-zone area-fills, then edges, …).
+    # The labels below are historical placeholders from earlier incorrect
+    # interpretations; keep them around only so existing references compile.
+    # New code should read `phase_raw` directly. See
+    # docs/research/g2408-protocol.md §"Phase byte semantics".
     MOWING = 0
     TRANSIT = 1
     PHASE_2 = 2
     RETURNING = 3
     ZONE_4 = 4
+    ZONE_5 = 5
+    ZONE_6 = 6
+    ZONE_7 = 7
     UNKNOWN = -1
 
 

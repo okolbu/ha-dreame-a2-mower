@@ -153,56 +153,68 @@ Cross-tested 2026-04-17 under both X-axis and Y-axis mowing patterns: the 0.625
 constant applies to Y regardless of which axis is sweeping, so it's firmware /
 encoder — not turn-drift accumulation.
 
-#### Phase byte semantics — **byte [8] is a zone-ID, not a routing mode**
+#### Phase byte semantics — **byte [8] is a task-phase index**
 
 Byte `[8]` drives the `Phase` enum. Current labels (`MOWING / TRANSIT / PHASE_2 /
 RETURNING`) reflect an **earlier, incorrect interpretation** — they should be
-considered placeholders. The real semantic, confirmed 2026-04-18:
+considered placeholders. The real semantic, confirmed 2026-04-18 via live
+trajectory observation across a 3-hour session:
 
-Session 2 trajectory analysis showed the four observed phase values occupying
-**four non-overlapping X regions** with exactly one transition at each boundary:
+**`phase_raw` is the index into the mower firmware's pre-planned job sequence.**
+The firmware decomposes each mowing task into an ordered list of sub-tasks
+(area-fill of each zone, edge passes, …), and the byte reports which sub-task
+the mower is currently on. Phase advances monotonically through the plan; once
+a value is done the mower never returns to it in the same session.
 
-| phase_raw | X range | Y range (calibrated) | Notes |
-|---|---|---|---|
-| 1 | -10.3 .. -9.0 m | -5.7 .. 6.8 m | Tiny — just the transit corridor out of the dock |
-| 2 | -10.4 .. 2.9 m | -9.8 .. 15.0 m | Main area west of X ≈ 2.86 m |
-| 3 | 0.2 .. 14.4 m | -9.8 .. 4.5 m | Middle strip between X ≈ 2.86 m and X ≈ 14.35 m |
-| 4 | 14.3 .. 20.1 m | -0.2 .. 6.7 m | Area east of X ≈ 14.35 m — newly-added-and-merged zone on user's lawn |
+Session 2 observations by phase:
 
-Three transitions observed in one session, each at a crisp X coordinate:
+| phase_raw | Samples | X range | Y range (cal) | Likely role |
+|---|---|---|---|---|
+| 1 | 33 | -10.3..-9.0 m | -5.7..6.8 m | Dock transit corridor |
+| 2 | 329 | -10.4..2.9 m | -9.8..15.0 m | Zone area-fill (west) |
+| 3 | 293 | 0.2..14.4 m | -9.8..4.5 m | Zone area-fill (middle strip) |
+| 4 | 234+ | 12.1..20.5 m | -1.5..6.7 m | Zone area-fill (east / the user's newly-added-and-merged zone) |
+| 5 | 22+ | 7.3..20.7 m | -5.1..1.5 m | **Edge mow** — narrow Y spread, spans multiple zones in X |
+| 6 | 29+ | -6.6..8.6 m | -14.0..-6.2 m | Next edge/zone |
+| 7 | 3+ | -9.6..-8.7 m | -8.4..-6.3 m | Just starting — semantic TBD |
+
+Transitions (monotonic, non-repeating, each at a crisp coordinate):
 
 ```
-19:08:01  ph 1 → 2    at x = -10.21 m   (dock exit → main area)
+19:08:01  ph 1 → 2    at x = -10.21 m   (dock exit)
 19:35:56  ph 2 → 3    at x =   2.86 m   (zone boundary)
-20:56:01  ph 3 → 4    at x =  14.35 m   (zone boundary into user's new merged area)
+20:56:01  ph 3 → 4    at x =  14.35 m   (into user's merged zone)
+21:15:41  ph 4 → 5    at x =  20.22 m   (far east — area-fill done, edge mow starts)
+21:17:31  ph 5 → 6    at x =   8.18 m   (next edge/zone)
+21:20:06  ph 6 → 7    at x =  -8.70 m
 ```
 
-No flip-flopping, no mid-zone phase changes, no correlation with micro-turns or
-battery thresholds. Each phase value is stable over hundreds of samples while
-the mower is inside its corresponding zone.
+The **first group** (low phase values) look like per-zone area-fills: each
+occupies a distinct non-overlapping X region and is stable over hundreds of
+samples inside it. The **later group** (higher values, starting around 5) have
+different spatial shapes — narrow Y spread and crossing several zone
+boundaries in X — consistent with perimeter / edge-mow passes once all the
+bulk area-fill is done.
 
-**Conclusion: `phase_raw` is the zone-ID the firmware is currently mowing in.**
-This explains a user observation that the firmware still treats a *merged* zone
-(one that was added in-app, which overlapped an existing zone and thus got
-consolidated on close) as two zones internally — the mower stops and turns at
-the former boundary (an "invisible line" to the app map), which is exactly where
-`phase_raw` flips.
+**User-visible artefact confirming the zone-indexed plan:** the user added a
+new in-app zone that auto-merged with an existing one on close (area overlap
+triggers auto-merge). The firmware still plans two separate area-fill phases
+for the two components — mower stops and turns at the former-now-invisible
+boundary at X=14.35 m, which is exactly where `phase_raw` flips 3→4. The
+in-app merge collapsed the display but not the internal task plan.
 
 **Practical implications:**
-- The `Phase` enum labels (`MOWING=0, TRANSIT=1, PHASE_2=2, RETURNING=3`) should
-  be retired and replaced with something like `ZONE_0, ZONE_1, …`, or dropped
-  entirely in favour of exposing the raw integer as a `zone_id` sensor.
-- The earlier "ph=1 = pre-return narrow turning" table in the session-handoff
-  was wrong: narrow turning is a micro-behaviour, not a zone change.
-- Value `4` (currently decoded as `Phase.UNKNOWN` because it's not in the enum)
-  is not a bug — it's a real zone the user has. Decoder should accept it.
-- `RETURNING=3` is a particularly misleading label: in session 2 the mower
-  mowed ph=3 for 28 minutes in the middle of the lawn and then dock-approached
-  from within ph=3 when battery hit 38%. "Returning" is orthogonal to the zone;
-  it's the dock-approach behaviour, not a phase value.
-
-Follow-up data collection would pin down zone polygons (these X boundaries are
-1D projections — the real zones are 2D polygons on the map).
+- The `Phase` enum labels `MOWING/TRANSIT/PHASE_2/RETURNING` should be retired.
+  They carry meaning the byte does not have.
+- Expose the raw integer as a `task_phase` or `mowing_zone` diagnostic sensor
+  rather than translating through the misleading enum.
+- Multiple values per session is expected — we saw 6 distinct values in one
+  session here. Decoder should accept any small positive int.
+- Different mowing jobs (all-zones vs single-zone vs edge-only) will likely
+  expose different subsets of phase values.
+- No single value is "edge mode" or "transit" universally — the meaning of a
+  phase value is bound to the current task plan, which is itself determined by
+  the zone layout. Cross-user portability of exact values is unlikely.
 
 ### 3.2 `s1p4` — 8-byte beacon variant
 
