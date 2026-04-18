@@ -25,6 +25,7 @@ class LiveMapState:
     obstacles: list[list[float]] = field(default_factory=list)
     session_id: int = 0
     session_start: str | None = None
+    _pending: list[list[float]] = field(default_factory=list)
 
     def append_point(self, x_m: float, y_m: float) -> None:
         """Append a position to the path unless it's within PATH_DEDUPE_METRES of the last point."""
@@ -70,3 +71,15 @@ class LiveMapState:
             "session_start": self.session_start,
             "calibration": {"x_factor": x_factor, "y_factor": y_factor},
         }
+
+    def buffer_pending_point(self, x_m: float, y_m: float) -> None:
+        """Buffer a point until a session has started. Keeps most recent 20 only."""
+        self._pending.append([round(x_m, 3), round(y_m, 3)])
+        if len(self._pending) > 20:
+            self._pending = self._pending[-20:]
+
+    def flush_pending(self) -> None:
+        """Apply buffered points to the current session path (subject to dedupe)."""
+        for pt in self._pending:
+            self.append_point(pt[0], pt[1])
+        self._pending = []

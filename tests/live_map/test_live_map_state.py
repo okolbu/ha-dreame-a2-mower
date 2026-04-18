@@ -139,3 +139,41 @@ def test_to_attributes_includes_current_state():
     assert attrs["session_id"] == 1
     assert attrs["session_start"] == "2026-04-18T12:00:00"
     assert attrs["calibration"] == {"x_factor": 1.0, "y_factor": 0.625}
+
+
+def test_pending_point_is_buffered_before_session_starts():
+    s = LiveMapState()
+    # No session started yet — these should NOT go into path directly.
+    s.buffer_pending_point(1.0, 2.0)
+    s.buffer_pending_point(1.5, 2.5)
+    assert s.path == []
+
+    s.start_session("2026-04-18T12:00:00")
+    s.flush_pending()
+
+    assert s.path == [[1.0, 2.0], [1.5, 2.5]]
+
+
+def test_buffer_limited_to_max_20_frames():
+    s = LiveMapState()
+    for i in range(30):
+        s.buffer_pending_point(i * 1.0, 0.0)
+
+    s.start_session("t1")
+    s.flush_pending()
+
+    # Should have at most 20 points from the buffered 30.
+    assert len(s.path) == 20
+    # The OLDEST frames are dropped; newest 20 retained.
+    assert s.path[0] == [10.0, 0.0]
+    assert s.path[-1] == [29.0, 0.0]
+
+
+def test_flush_pending_clears_buffer():
+    s = LiveMapState()
+    s.buffer_pending_point(1.0, 2.0)
+    s.start_session("t1")
+    s.flush_pending()
+    # Further flush has no effect.
+    s.flush_pending()
+    assert s.path == [[1.0, 2.0]]
