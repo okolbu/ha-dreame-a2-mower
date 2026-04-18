@@ -71,6 +71,11 @@ data:
 
 See [`docs/superpowers/specs/`](docs/superpowers/specs/) for design documents and [`docs/superpowers/plans/`](docs/superpowers/plans/) for implementation plans.
 
+Protocol research:
+
+- [`docs/research/g2408-protocol.md`](docs/research/g2408-protocol.md) — full MQTT property catalog, `s1p4` frame layout, state machine, `s2p51` config-write map, and the map-push / OSS fetch flow.
+- [`docs/research/2026-04-17-g2408-property-divergences.md`](docs/research/2026-04-17-g2408-property-divergences.md) — g2408 siid/piid differences vs upstream `dreame-mova-mower`.
+
 ## License
 
 MIT — see [LICENSE](LICENSE).
