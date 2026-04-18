@@ -41,6 +41,9 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
         name="Stop Mowing",
         icon="mdi:stop",
         action_fn=lambda device: device.stop(),
+        # Always-visible button entity — gate availability on `started` so it
+        # greys out when there's no task to stop. Press is a no-op otherwise.
+        available_fn=lambda device: bool(device.status.started),
     ),
     DreameMowerButtonEntityDescription(
         action_key=DreameMowerAction.RESET_BLADES,
