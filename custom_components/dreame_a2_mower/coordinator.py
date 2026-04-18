@@ -110,10 +110,6 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
             entry.data.get(CONF_DID),
         )
 
-        from .live_map import DreameA2LiveMap
-        self.live_map = DreameA2LiveMap(hass, entry, self)
-        self.live_map.async_setup()
-
         self._device.listen(self._error_changed, DreameMowerProperty.ERROR)
         self._device.listen(self._state_changed, DreameMowerProperty.STATE)
         self._device.listen(self._task_status_changed, DreameMowerProperty.TASK_STATUS)
@@ -122,6 +118,10 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
         self._device.listen_error(self.set_update_error)
 
         super().__init__(hass, LOGGER, name=DOMAIN)
+
+        from .live_map import DreameA2LiveMap
+        self.live_map = DreameA2LiveMap(hass, entry, self)
+        self.live_map.async_setup()
 
         async_dispatcher_connect(
             hass,
