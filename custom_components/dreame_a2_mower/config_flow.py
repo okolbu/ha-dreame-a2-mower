@@ -96,10 +96,13 @@ class DreameMowerOptionsFlowHandler(OptionsFlow):
             {vol.Required(CONF_NOTIFY, default=notify): cv.multi_select(NOTIFICATION)}
         )
         if data.get(CONF_USERNAME):
+            stored_scheme = options.get(CONF_COLOR_SCHEME, next(iter(MAP_COLOR_SCHEME_LIST)))
+            if stored_scheme not in MAP_COLOR_SCHEME_LIST:
+                stored_scheme = next(iter(MAP_COLOR_SCHEME_LIST))
             data_schema = data_schema.extend(
                 {
                     vol.Required(
-                        CONF_COLOR_SCHEME, default=options.get(CONF_COLOR_SCHEME, next(iter(MAP_COLOR_SCHEME_LIST)))
+                        CONF_COLOR_SCHEME, default=stored_scheme
                     ): vol.In(list(MAP_COLOR_SCHEME_LIST.keys())),
                     vol.Required(
                         CONF_MAP_OBJECTS,
