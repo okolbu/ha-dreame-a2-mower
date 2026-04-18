@@ -27,6 +27,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_platform, entity_registry
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from .recorder import CAMERA_UNRECORDED_ATTRIBUTES
 
 from .const import (
@@ -42,6 +43,7 @@ from .const import (
 
 from .coordinator import DreameMowerDataUpdateCoordinator
 from .entity import DreameMowerEntity, DreameMowerEntityDescription
+from .live_map import LIVE_MAP_UPDATE_SIGNAL
 from .dreame.const import (
     STATE_UNKNOWN,
     STATUS_CODE_TO_NAME,
@@ -444,6 +446,7 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         self._access_token_update_counter = 0
         self.access_tokens = collections.deque([], 2)
         super().__init__(coordinator, description)
+        self._live_map_attrs: dict = {}
         Camera.__init__(self)
         self._generate_entity_id(ENTITY_ID_FORMAT)
         self.content_type = PNG_CONTENT_TYPE
@@ -619,6 +622,21 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         self._frame_id = None
         self._last_updated = None
         self.update()
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            async_dispatcher_connect(
+                self.hass,
+                LIVE_MAP_UPDATE_SIGNAL,
+                self._on_live_map_update,
+            )
+        )
+
+    @callback
+    def _on_live_map_update(self, attrs: dict) -> None:
+        self._live_map_attrs = attrs
+        self.async_write_ha_state()
 
     def __del__(self):
         if self._renderer:
@@ -985,4 +1003,4 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
                         token,
                         int(wifi_map_data.last_updated if wifi_map_data.last_updated else map_data.last_updated),
                     )
-            return attributes
+            return {**attributes, **self._live_map_attrs}
