@@ -14,6 +14,7 @@ import math
 from dataclasses import dataclass, field
 
 PATH_DEDUPE_METRES = 0.2
+OBSTACLE_DEDUPE_METRES = 0.5
 
 
 @dataclass
@@ -35,3 +36,13 @@ class LiveMapState:
             if math.hypot(dx, dy) < PATH_DEDUPE_METRES:
                 return
         self.path.append(point)
+
+    def append_obstacle(self, x_m: float, y_m: float) -> None:
+        """Append an obstacle position unless any existing marker is within OBSTACLE_DEDUPE_METRES."""
+        point = [round(x_m, 3), round(y_m, 3)]
+        for existing in self.obstacles:
+            dx = point[0] - existing[0]
+            dy = point[1] - existing[1]
+            if math.hypot(dx, dy) <= OBSTACLE_DEDUPE_METRES:
+                return
+        self.obstacles.append(point)

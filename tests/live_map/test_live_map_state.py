@@ -40,3 +40,37 @@ def test_append_point_rounds_to_3_decimals():
     s = LiveMapState()
     s.append_point(1.2345678, 2.9876543)
     assert s.path == [[1.235, 2.988]]
+
+
+def test_append_obstacle_stores_tuple():
+    s = LiveMapState()
+    s.append_obstacle(1.0, 2.0)
+    assert s.obstacles == [[1.0, 2.0]]
+
+
+def test_append_obstacle_dedupes_by_proximity():
+    s = LiveMapState()
+    s.append_obstacle(0.0, 0.0)
+    # Within 0.5 m of existing — skip.
+    s.append_obstacle(0.3, 0.3)
+    # Exactly at 0.5 m — boundary is skip.
+    s.append_obstacle(0.5, 0.0)
+    # Beyond 0.5 m — accept.
+    s.append_obstacle(0.6, 0.0)
+    assert s.obstacles == [[0.0, 0.0], [0.6, 0.0]]
+
+
+def test_append_obstacle_rounds_to_3_decimals():
+    s = LiveMapState()
+    s.append_obstacle(1.2345678, 2.9876543)
+    assert s.obstacles == [[1.235, 2.988]]
+
+
+def test_append_obstacle_checks_all_existing_not_just_last():
+    """Dedupe considers ALL existing obstacles, not just the last one."""
+    s = LiveMapState()
+    s.append_obstacle(0.0, 0.0)
+    s.append_obstacle(5.0, 5.0)
+    # Close to first obstacle (not last) — should still dedupe.
+    s.append_obstacle(0.1, 0.0)
+    assert s.obstacles == [[0.0, 0.0], [5.0, 5.0]]
