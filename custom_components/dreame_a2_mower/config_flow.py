@@ -48,6 +48,8 @@ from .const import (
     NOTIFICATION_2FA_LOGIN,
 )
 
+from .live_map import OPT_X_FACTOR, OPT_Y_FACTOR, DEFAULT_X_FACTOR, DEFAULT_Y_FACTOR
+
 DREAME_MODELS = [
     "dreame.mower.",
     "mova.mower.",
@@ -126,6 +128,14 @@ class DreameMowerOptionsFlowHandler(OptionsFlow):
                             CONF_PREFER_CLOUD,
                             default=options.get(CONF_PREFER_CLOUD, False),
                         ): bool,
+                        vol.Optional(
+                            OPT_X_FACTOR,
+                            default=options.get(OPT_X_FACTOR, DEFAULT_X_FACTOR),
+                        ): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=10.0)),
+                        vol.Optional(
+                            OPT_Y_FACTOR,
+                            default=options.get(OPT_Y_FACTOR, DEFAULT_Y_FACTOR),
+                        ): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=10.0)),
                     }
                 )
 
