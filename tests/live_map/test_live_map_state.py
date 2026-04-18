@@ -99,3 +99,43 @@ def test_start_session_increments_id_on_each_call():
     s.start_session("t3")
     assert s.session_id == 3
     assert s.session_start == "t3"
+
+
+def test_to_attributes_matches_schema_when_empty():
+    s = LiveMapState()
+    attrs = s.to_attributes(
+        position=None,
+        x_factor=1.0,
+        y_factor=0.625,
+    )
+    assert attrs == {
+        "position": None,
+        "path": [],
+        "obstacles": [],
+        "charger_position": [0.0, 0.0],
+        "session_id": 0,
+        "session_start": None,
+        "calibration": {"x_factor": 1.0, "y_factor": 0.625},
+    }
+
+
+def test_to_attributes_includes_current_state():
+    s = LiveMapState()
+    s.start_session("2026-04-18T12:00:00")
+    s.append_point(1.0, 2.0)
+    s.append_point(1.5, 2.5)
+    s.append_obstacle(3.0, 4.0)
+
+    attrs = s.to_attributes(
+        position=[1.5, 2.5],
+        x_factor=1.0,
+        y_factor=0.625,
+    )
+
+    assert attrs["position"] == [1.5, 2.5]
+    assert attrs["path"] == [[1.0, 2.0], [1.5, 2.5]]
+    assert attrs["obstacles"] == [[3.0, 4.0]]
+    assert attrs["charger_position"] == [0.0, 0.0]
+    assert attrs["session_id"] == 1
+    assert attrs["session_start"] == "2026-04-18T12:00:00"
+    assert attrs["calibration"] == {"x_factor": 1.0, "y_factor": 0.625}

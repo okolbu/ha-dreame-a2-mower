@@ -53,3 +53,20 @@ class LiveMapState:
         self.obstacles = []
         self.session_id += 1
         self.session_start = session_start_iso
+
+    def to_attributes(
+        self,
+        position: list[float] | None,
+        x_factor: float,
+        y_factor: float,
+    ) -> dict:
+        """Produce the extra_state_attributes dict consumable by a Lovelace map card."""
+        return {
+            "position": position,
+            "path": list(self.path),
+            "obstacles": list(self.obstacles),
+            "charger_position": [0.0, 0.0],
+            "session_id": self.session_id,
+            "session_start": self.session_start,
+            "calibration": {"x_factor": x_factor, "y_factor": y_factor},
+        }
