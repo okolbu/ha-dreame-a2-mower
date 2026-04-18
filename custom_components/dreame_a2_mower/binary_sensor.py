@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 from homeassistant.components.binary_sensor import (
@@ -17,6 +18,15 @@ from .const import DOMAIN
 from .coordinator import DreameMowerDataUpdateCoordinator
 from .dreame import DreameMowerProperty
 from .entity import DreameMowerEntity, DreameMowerEntityDescription
+
+
+# Seconds after which a "True" reading is auto-cleared if the mower stops
+# re-asserting it. Keyed by entity description.key. The mower's s1p53
+# obstacle flag latches at True on detection but does not always send a
+# matching False when the obstacle clears, so we guard with a timeout.
+AUTO_CLEAR_TIMEOUT: dict[str, float] = {
+    "obstacle_detected": 30.0,
+}
 
 
 @dataclass
@@ -76,11 +86,40 @@ class DreameMowerBinarySensorEntity(DreameMowerEntity, BinarySensorEntity):
 
     @property
     def is_on(self) -> bool | None:
-        """Return True when the underlying flag is truthy, None when unseen."""
+        """Return True when the underlying flag is truthy, None when unseen.
+
+        Supports auto-clear via AUTO_CLEAR_TIMEOUT for entities whose source
+        flag latches without an explicit off event (e.g. s1p53 obstacle).
+        If the flag has been True but no re-assertion event arrived for
+        longer than the configured timeout, report False.
+        """
         # If the description provides a value_fn, use it directly — this
         # supports entities whose source is a device method rather than a
         # raw property in device.data.
         if self.entity_description.value_fn is not None:
-            return self.entity_description.value_fn(None, self.device)
-        value = self.device.get_property(self.entity_description.property_key)
-        return bool(value) if value is not None else None
+            raw = self.entity_description.value_fn(None, self.device)
+        else:
+            value = self.device.get_property(self.entity_description.property_key)
+            raw = bool(value) if value is not None else None
+
+        if raw is None or raw is False:
+            return raw
+
+        # raw is True — check auto-clear staleness if configured.
+        timeout = AUTO_CLEAR_TIMEOUT.get(self.entity_description.key)
+        if timeout is None:
+            return True
+
+        prop_key = self.entity_description.property_key
+        if prop_key is None:
+            return True
+
+        last_seen = getattr(
+            self.device, "_property_last_seen_at", {}
+        ).get(int(prop_key.value))
+        if last_seen is None:
+            return True
+
+        if (time.monotonic() - last_seen) > timeout:
+            return False
+        return True

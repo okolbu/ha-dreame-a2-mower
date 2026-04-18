@@ -204,6 +204,11 @@ class DreameMowerDevice:
         self._dirty_data: dict[DreameMowerProperty, DirtyData] = {}
         self._dirty_auto_switch_data: dict[DreameMowerAutoSwitchProperty, DirtyData] = {}
         self._dirty_ai_data: dict[DreameMowerStrAIProperty | DreameMowerAIProperty, Any] = None
+        # Per-property monotonic timestamp of last MQTT event arrival, updated
+        # even when value is unchanged (re-assertions). Used by sensors that
+        # need to auto-clear after a timeout when the mower stops re-asserting
+        # a latched boolean (e.g. s1p53 obstacle flag — no "all-clear" event).
+        self._property_last_seen_at: dict[int, float] = {}
         self._discard_timeout = 5
         self._restore_timeout = 15
 
@@ -405,6 +410,17 @@ class DreameMowerDevice:
                 self._handle_properties(params)
 
     def _handle_properties(self, properties) -> bool:
+        # Timestamp every incoming property event (even re-assertions that
+        # don't change the value) so auto-clearing sensors can detect when
+        # the mower has stopped re-asserting a latched flag.
+        _now_monotonic = time.monotonic()
+        for _prop in properties:
+            if isinstance(_prop, dict):
+                try:
+                    self._property_last_seen_at[int(_prop.get("did", 0))] = _now_monotonic
+                except (TypeError, ValueError):
+                    pass
+
         changed = False
         callbacks = []
         for prop in properties:
