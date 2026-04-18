@@ -340,13 +340,19 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.y_mm if value is not None else None,
     ),
+    # Exposed as "Mowing Zone" because byte [8] of s1p4 is the internal
+    # zone-ID the mower firmware is currently mowing in — each distinct
+    # value corresponds to a distinct non-overlapping X/Y region on the
+    # lawn. The entity key stays `mowing_phase` so existing automations
+    # keep working. Enum labels (`mowing`, `transit`, etc.) are historical
+    # placeholders; see docs/research/g2408-protocol.md.
     DreameMowerSensorEntityDescription(
         key="mowing_phase",
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
-        name="Mowing Phase",
-        icon="mdi:state-machine",
+        name="Mowing Zone",
+        icon="mdi:vector-square",
         exists_fn=lambda description, device: True,
-        value_fn=lambda value, device: value.phase.name.lower() if value is not None else None,
+        value_fn=lambda value, device: value.phase_raw if value is not None else None,
     ),
     DreameMowerSensorEntityDescription(
         key="session_area_mowed",

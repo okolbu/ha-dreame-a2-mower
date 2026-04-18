@@ -153,29 +153,56 @@ Cross-tested 2026-04-17 under both X-axis and Y-axis mowing patterns: the 0.625
 constant applies to Y regardless of which axis is sweeping, so it's firmware /
 encoder — not turn-drift accumulation.
 
-#### Phase byte semantics
+#### Phase byte semantics — **byte [8] is a zone-ID, not a routing mode**
 
-Byte `[8]` drives the `Phase` enum. Current understanding:
+Byte `[8]` drives the `Phase` enum. Current labels (`MOWING / TRANSIT / PHASE_2 /
+RETURNING`) reflect an **earlier, incorrect interpretation** — they should be
+considered placeholders. The real semantic, confirmed 2026-04-18:
 
-| Value | Label | Evidence | Confidence |
+Session 2 trajectory analysis showed the four observed phase values occupying
+**four non-overlapping X regions** with exactly one transition at each boundary:
+
+| phase_raw | X range | Y range (calibrated) | Notes |
 |---|---|---|---|
-| 0 | `MOWING` | Session 1 (2026-04-18 16:27): straight open-area passes, 100% at byte=0 | High |
-| 1 | `TRANSIT` | Session 2 start (2026-04-18 19:05): 3 min continuous run during dock→mow transit | High |
-| 2 | `PHASE_2` | Session 2 main bulk (19:08-19:35): 28 min systematic strip-mowing, battery 67%→38% | Observed, semantic TBD |
-| 3 | `RETURNING` | Session 2 tail (19:35-19:55): 17+ min starting exactly at 38% battery; mower continued substantial mowing motion while heading dock-ward | Observed — note "returning" includes continued mowing |
-| 4 | (new, not yet in enum) | Session 2 post-recharge (2026-04-18 20:55-21:07+): 153 samples, dominant from 21:00 onwards while mower was actively mowing | Observed — enum needs an entry; semantic TBD |
+| 1 | -10.3 .. -9.0 m | -5.7 .. 6.8 m | Tiny — just the transit corridor out of the dock |
+| 2 | -10.4 .. 2.9 m | -9.8 .. 15.0 m | Main area west of X ≈ 2.86 m |
+| 3 | 0.2 .. 14.4 m | -9.8 .. 4.5 m | Middle strip between X ≈ 2.86 m and X ≈ 14.35 m |
+| 4 | 14.3 .. 20.1 m | -0.2 .. 6.7 m | Area east of X ≈ 14.35 m — newly-added-and-merged zone on user's lawn |
 
-Phase is STATE, not EVENT: session 2 showed only 3 runs (1→2→3) in 48 minutes with
-clean direction-flips in X AND Y at each boundary. Micro-turns inside a narrow
-passage do **not** change the phase byte — phase reflects high-level routing policy,
-not turn-by-turn behaviour.
+Three transitions observed in one session, each at a crisp X coordinate:
 
-**Task #65 note:** earlier RE claimed "phase=1 = turning" based on session 1 ratios
-(0% at start, 65% in pre-return narrow turning). Session 2 disproves that: the
-pre-dock narrow-turning period was entirely phase=3 (not phase=1), and phase=1 is
-demonstrably a long transit state. The session-1 statistic was likely measuring a
-different byte or was tainted by a simpler decoder. Needs re-audit before the enum
-labels are finalized.
+```
+19:08:01  ph 1 → 2    at x = -10.21 m   (dock exit → main area)
+19:35:56  ph 2 → 3    at x =   2.86 m   (zone boundary)
+20:56:01  ph 3 → 4    at x =  14.35 m   (zone boundary into user's new merged area)
+```
+
+No flip-flopping, no mid-zone phase changes, no correlation with micro-turns or
+battery thresholds. Each phase value is stable over hundreds of samples while
+the mower is inside its corresponding zone.
+
+**Conclusion: `phase_raw` is the zone-ID the firmware is currently mowing in.**
+This explains a user observation that the firmware still treats a *merged* zone
+(one that was added in-app, which overlapped an existing zone and thus got
+consolidated on close) as two zones internally — the mower stops and turns at
+the former boundary (an "invisible line" to the app map), which is exactly where
+`phase_raw` flips.
+
+**Practical implications:**
+- The `Phase` enum labels (`MOWING=0, TRANSIT=1, PHASE_2=2, RETURNING=3`) should
+  be retired and replaced with something like `ZONE_0, ZONE_1, …`, or dropped
+  entirely in favour of exposing the raw integer as a `zone_id` sensor.
+- The earlier "ph=1 = pre-return narrow turning" table in the session-handoff
+  was wrong: narrow turning is a micro-behaviour, not a zone change.
+- Value `4` (currently decoded as `Phase.UNKNOWN` because it's not in the enum)
+  is not a bug — it's a real zone the user has. Decoder should accept it.
+- `RETURNING=3` is a particularly misleading label: in session 2 the mower
+  mowed ph=3 for 28 minutes in the middle of the lawn and then dock-approached
+  from within ph=3 when battery hit 38%. "Returning" is orthogonal to the zone;
+  it's the dock-approach behaviour, not a phase value.
+
+Follow-up data collection would pin down zone polygons (these X boundaries are
+1D projections — the real zones are 2D polygons on the map).
 
 ### 3.2 `s1p4` — 8-byte beacon variant
 

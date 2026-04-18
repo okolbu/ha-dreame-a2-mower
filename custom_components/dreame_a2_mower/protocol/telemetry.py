@@ -17,15 +17,18 @@ class InvalidS1P4Frame(ValueError):
 
 
 class Phase(IntEnum):
-    # Phase-byte semantics learned from live observation — note earlier RE
-    # notes labelled 0 as "edge_or_reposition" and 2 as "active mowing", but
-    # a g2408 doing a plain straight-pass mow was observed at byte value 0
-    # during active cutting, so 0 is the main mow phase. Value 2 has not
-    # been confirmed in isolation; kept as PHASE_2 until verified.
+    # Byte [8] of the s1p4 frame is the **zone ID** the firmware is currently
+    # mowing in, not a routing mode. Observed 2026-04-18: four phase values
+    # each occupied a distinct non-overlapping X region with a single
+    # transition at each zone boundary. The labels below are historical and
+    # carried over from an earlier (incorrect) interpretation — treat them
+    # as opaque zone identifiers. See docs/research/g2408-protocol.md
+    # §"Phase byte semantics" for the confirmed zone-ID behaviour.
     MOWING = 0
     TRANSIT = 1
     PHASE_2 = 2
     RETURNING = 3
+    ZONE_4 = 4
     UNKNOWN = -1
 
 
