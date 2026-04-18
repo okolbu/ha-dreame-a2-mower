@@ -128,16 +128,22 @@ class DreameMowerOptionsFlowHandler(OptionsFlow):
                             CONF_PREFER_CLOUD,
                             default=options.get(CONF_PREFER_CLOUD, False),
                         ): bool,
-                        vol.Optional(
-                            OPT_X_FACTOR,
-                            default=options.get(OPT_X_FACTOR, DEFAULT_X_FACTOR),
-                        ): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=10.0)),
-                        vol.Optional(
-                            OPT_Y_FACTOR,
-                            default=options.get(OPT_Y_FACTOR, DEFAULT_Y_FACTOR),
-                        ): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=10.0)),
                     }
                 )
+
+            # Calibration factors apply to all account types (g2408 live map).
+            data_schema = data_schema.extend(
+                {
+                    vol.Optional(
+                        OPT_X_FACTOR,
+                        default=options.get(OPT_X_FACTOR, DEFAULT_X_FACTOR),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=10.0)),
+                    vol.Optional(
+                        OPT_Y_FACTOR,
+                        default=options.get(OPT_Y_FACTOR, DEFAULT_Y_FACTOR),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=10.0)),
+                }
+            )
 
         return self.async_show_form(
             step_id="init",
