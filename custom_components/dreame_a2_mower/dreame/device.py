@@ -218,6 +218,9 @@ class DreameMowerDevice:
         # Holds lawn boundary + mow path + obstacles from the last completed
         # session. Exposed to consumers as `device.latest_session_summary`.
         self._latest_session_summary = None
+        # Raw JSON dict of the same summary, retained so the coordinator can
+        # archive the authentic wire payload instead of a lossy rebuild.
+        self._latest_session_raw = None
         self._discard_timeout = 5
         self._restore_timeout = 15
 
@@ -527,6 +530,7 @@ class DreameMowerDevice:
 
             summary = parse_session_summary(data)
             self._latest_session_summary = summary
+            self._latest_session_raw = data
             _LOGGER.info(
                 "[EVENT] session-summary fetched: %.1f/%d m² mowed in %d min; "
                 "%d boundary pts, %d track segments, %d obstacles, %d exclusions",
@@ -4639,6 +4643,16 @@ class DreameMowerDevice:
         metres relative to the charger. See `protocol.session_summary`.
         """
         return self._latest_session_summary
+
+    @property
+    def latest_session_raw(self):
+        """Return the raw JSON dict for the most recently fetched session.
+
+        Kept alongside the parsed `latest_session_summary` so archivers can
+        write the authentic wire payload to disk. `None` when no session
+        has been fetched yet.
+        """
+        return self._latest_session_raw
 
     @property
     def heartbeat(self):

@@ -123,6 +123,27 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
         self.live_map = DreameA2LiveMap(hass, entry, self)
         self.live_map.async_setup()
 
+        # Persistent archive of every session-summary JSON the mower uploads.
+        # Lives alongside HA's config dir under `dreame_a2_mower/sessions/`.
+        # The coordinator polls `device.latest_session_summary` on every
+        # update tick and writes new (unseen md5) summaries through.
+        from pathlib import Path
+        from .session_archive import SessionArchive
+
+        archive_root = Path(hass.config.path(DOMAIN, "sessions"))
+        try:
+            self.session_archive = SessionArchive(archive_root)
+        except OSError as ex:
+            LOGGER.warning(
+                "SessionArchive: could not initialise at %s: %s — archival disabled",
+                archive_root,
+                ex,
+            )
+            self.session_archive = None
+        self._last_archived_md5: str | None = (
+            self.session_archive.latest().md5 if self.session_archive and self.session_archive.latest() else None
+        )
+
         async_dispatcher_connect(
             hass,
             persistent_notification.SIGNAL_PERSISTENT_NOTIFICATIONS_UPDATED,
@@ -419,6 +440,25 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
 
     @callback
     def async_set_updated_data(self, device=None) -> None:
+        # Archive any newly-fetched session summary. Cheap check:
+        # compare md5 against the last archived one.
+        if self.session_archive is not None:
+            summary = getattr(self._device, "latest_session_summary", None)
+            if summary is not None:
+                md5 = getattr(summary, "md5", None)
+                if md5 and md5 != self._last_archived_md5:
+                    raw = getattr(self._device, "latest_session_raw", None)
+                    entry = self.session_archive.archive(summary, raw_json=raw)
+                    if entry is not None:
+                        self._last_archived_md5 = md5
+                        LOGGER.info(
+                            "SessionArchive: stored %s (%.1f m² in %d min), total=%d",
+                            entry.filename,
+                            entry.area_mowed_m2,
+                            entry.duration_min,
+                            self.session_archive.count,
+                        )
+
         if self._has_temporary_map != self._device.status.has_temporary_map:
             self._has_temporary_map_changed(self._has_temporary_map)
             self._has_temporary_map = self._device.status.has_temporary_map
