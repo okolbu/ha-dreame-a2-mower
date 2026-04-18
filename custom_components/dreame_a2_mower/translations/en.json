@@ -72,13 +72,16 @@
       "init": {
         "data": {
           "color_scheme": "Map color scheme",
-          "icon_set": "Map icon set",
           "notify": "Notification",
           "map_objects": "Map objects",
-          "low_resolution": "Low resolution map",
-          "square": "Square map",
           "configuration_type": "Configuration type",
-          "prefer_cloud": "Prefer cloud connection"
+          "prefer_cloud": "Prefer cloud connection",
+          "live_map_x_factor": "X calibration factor",
+          "live_map_y_factor": "Y calibration factor"
+        },
+        "data_description": {
+          "live_map_x_factor": "Scaling factor for X-axis telemetry reported by the mower. Raise or lower to match your lawn's physical dimensions. Default 1.0 matches the mower's cm-based X reporting. Changes apply only to new points; the existing session path is not rewritten.",
+          "live_map_y_factor": "Scaling factor for Y-axis telemetry. The A2's wheel-encoder reports a systematic ~1.6× over-read on Y; default 0.625 compensates. Tweak if your measured distances still don't match the rendered map."
         }
       }
     },
