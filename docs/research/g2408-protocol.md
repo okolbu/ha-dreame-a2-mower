@@ -567,16 +567,29 @@ constant here).
 
 | Piece | Status |
 |---|---|
-| Subscribe to `event_occured` | ✅ wired 2026-04-19 (device.py `_handle_event_occured`) |
-| Log object key at INFO | ✅ as `[EVENT] event_occured … object_name=…` |
-| Fetch + download the JSON | ❌ not yet — auto-fetch requires plumbing |
-| Decode JSON → `MapData` / `live_map` attributes | ❌ not yet — upstream decoder expects encrypted binary blob |
-| Render lawn boundary + mow path on camera | ❌ not yet |
+| Subscribe to `event_occured` | ✅ `device.py::_handle_event_occured` |
+| Log object key at INFO | ✅ `[EVENT] event_occured siid=4 eiid=1 object_name=… area_mowed_m2=… total_lawn_m2=…` |
+| Fetch + download the JSON | ✅ `device.py::_fetch_session_summary` — uses `cloud.get_interim_file_url` (the `getDownloadUrl` variant; the persistent `getOss1dDownloadUrl` 404s) |
+| Decode JSON → typed dataclasses | ✅ `protocol/session_summary.py::parse_session_summary`, 18 unit tests |
+| Expose overlay to camera/live-map | ✅ `live_map.LiveMapState.load_from_session_summary` — lawn polygon, exclusion zones, completed track segments, obstacle polygons, dock position all flow into `extra_state_attributes` automatically |
+| Persist to disk | ✅ `session_archive.SessionArchive` — one JSON per session under `<ha_config>/dreame_a2_mower/sessions/`, content-addressed by `summary.md5`, idempotent re-archival |
+| Expose archive as HA entity | ✅ `Archived Mowing Sessions` diagnostic sensor (state=count, attrs list recent 20 sessions) |
+| Binary-blob map decoder (upstream-style encrypted) | ❌ not applicable to g2408 — superseded by the JSON path |
 
-The immediate user-facing gain from 2026-04-19's work is that you can now see
-the object name show up in HA logs the moment a session completes. To pull the
-actual JSON for inspection, use `/data/claude/homeassistant` (off-repo) script
-`fetch_oss.py` with the object key.
+**Implementation is complete end-to-end.** Every time the mower finishes a session:
+
+1. `event_occured` arrives on MQTT → `_handle_event_occured` parses the event
+2. Inline fetch pulls the JSON from the Dreame cloud (signed OSS URL, ~1s)
+3. `parse_session_summary` converts it to a `SessionSummary` dataclass
+4. `device.latest_session_summary` / `.latest_session_raw` populated
+5. `DreameA2LiveMap` picks it up on the next update tick and loads the overlay
+6. Camera's `extra_state_attributes` gains `lawn_polygon`, `exclusion_zones`,
+   `completed_track`, `obstacle_polygons`, `dock_position`
+7. `SessionArchive` writes the raw JSON to disk and updates the index
+8. `Archived Mowing Sessions` diagnostic sensor state increments
+
+Off-repo helper `/data/claude/homeassistant/fetch_oss.py` can retrieve any
+object key on demand for ad-hoc inspection.
 
 ### 7.4 Diagnostic logging currently enabled
 

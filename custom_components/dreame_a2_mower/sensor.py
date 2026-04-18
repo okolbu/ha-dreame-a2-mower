@@ -387,6 +387,10 @@ async def async_setup_entry(
         for description in SENSORS
         if description.exists_fn(description, coordinator.device)
     )
+    # Standalone diagnostic: archived-sessions counter. Only shows up on
+    # devices that actually have an archive (g2408 path).
+    if getattr(coordinator, "session_archive", None) is not None:
+        async_add_entities([DreameArchivedSessionsSensor(coordinator)])
 
 
 class DreameMowerSensorEntity(DreameMowerEntity, SensorEntity):
@@ -408,3 +412,55 @@ class DreameMowerSensorEntity(DreameMowerEntity, SensorEntity):
 
         super().__init__(coordinator, description)
         self._generate_entity_id(ENTITY_ID_FORMAT)
+
+
+class DreameArchivedSessionsSensor(SensorEntity):
+    """Diagnostic sensor: count of archived session summaries.
+
+    State is the integer count. `extra_state_attributes` surfaces the
+    latest archived session's metadata plus a list of the N most recent
+    entries (trimmed to keep the attrs dict small).
+    """
+
+    MAX_LISTED = 20
+
+    def __init__(self, coordinator: DreameMowerDataUpdateCoordinator) -> None:
+        self._coordinator = coordinator
+        self._attr_has_entity_name = True
+        self._attr_name = "Archived Mowing Sessions"
+        self._attr_unique_id = f"{coordinator.device.mac}_archived_sessions"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._attr_icon = "mdi:archive-outline"
+        self._attr_native_unit_of_measurement = UNIT_TIMES
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_should_poll = False
+
+    @property
+    def available(self) -> bool:
+        return self._coordinator.session_archive is not None
+
+    @property
+    def native_value(self) -> int:
+        archive = self._coordinator.session_archive
+        return archive.count if archive else 0
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        archive = self._coordinator.session_archive
+        if not archive:
+            return {}
+        latest = archive.latest()
+        sessions = archive.list_sessions()[: self.MAX_LISTED]
+        return {
+            "archive_root": str(archive.root),
+            "latest": latest.to_dict() if latest else None,
+            "recent_sessions": [s.to_dict() for s in sessions],
+        }
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(
+            self._coordinator.async_add_listener(self._handle_coordinator_update)
+        )
+
+    def _handle_coordinator_update(self) -> None:
+        self.async_write_ha_state()
