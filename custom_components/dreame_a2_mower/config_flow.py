@@ -71,9 +71,8 @@ LOCAL: Final = "Manual Connection (Without map)"
 class DreameMowerOptionsFlowHandler(OptionsFlow):
     """Handle Dreame Mower options."""
 
-    def __init__(self, config_entry: ConfigEntry) -> None:
-        """Initialize Dreame Mower options flow."""
-        self.config_entry = config_entry
+    # config_entry is auto-set by HA's OptionsFlowHandler base class after
+    # async_get_options_flow constructs us; don't assign it here.
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
