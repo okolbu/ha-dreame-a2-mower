@@ -22,7 +22,7 @@ from homeassistant.components.camera import (
     TOKEN_CHANGE_INTERVAL,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_UNAVAILABLE, CONTENT_TYPE_MULTIPART
+from homeassistant.const import STATE_IDLE, CONTENT_TYPE_MULTIPART
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -487,7 +487,7 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         self._default_map = True
         self._proxy_images = {}
         self.map_index = map_index
-        self._state = STATE_UNAVAILABLE
+        self._state = STATE_IDLE
         if self.map_index == 0 and not self.map_data_json:
             self._image = self._renderer.default_map_image
 
@@ -560,7 +560,9 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
             self._error = self.device.status.error
         else:
             self.update()
-            self._state = STATE_UNAVAILABLE
+            # Keep the entity available with the default placeholder image
+            # so Lovelace map cards can still overlay live_map attributes.
+            self._state = STATE_IDLE
         self.async_write_ha_state()
 
     async def async_camera_image(self, width: int | None = None, height: int | None = None) -> bytes | None:
@@ -679,7 +681,7 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
                     )
                 )
         elif not self._default_map:
-            self._state = STATE_UNAVAILABLE
+            self._state = STATE_IDLE
             self._image = self._default_map_image
             self._default_map = True
             self._frame_id = -1
