@@ -181,7 +181,7 @@ class DreameMowerFlowHandler(ConfigFlow, domain=DOMAIN):
         config_entry: ConfigEntry,
     ) -> DreameMowerOptionsFlowHandler:
         """Get the options flow for this handler."""
-        return DreameMowerOptionsFlowHandler(config_entry)
+        return DreameMowerOptionsFlowHandler()
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
