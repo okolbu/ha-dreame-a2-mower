@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from enum import IntEnum
 
 FRAME_LENGTH = 33
+FRAME_LENGTH_BEACON = 8
 FRAME_DELIMITER = 0xCE
 
 
@@ -60,6 +61,45 @@ class MowingTelemetry:
     def y_m(self) -> float:
         """Y position in metres (charger-relative)."""
         return self.y_mm / 1000.0
+
+
+@dataclass(frozen=True)
+class PositionBeacon:
+    """Minimal 8-byte s1p4 beacon emitted while the mower is idle/docked
+    or under remote control. Only X/Y are included — phase, session counters,
+    and area/distance are not transmitted in this variant.
+    """
+
+    x_cm: int
+    y_mm: int
+
+    @property
+    def x_m(self) -> float:
+        return self.x_cm / 100.0
+
+    @property
+    def y_m(self) -> float:
+        return self.y_mm / 1000.0
+
+
+def decode_s1p4_position(data: bytes) -> PositionBeacon:
+    """Extract X/Y from either an 8-byte beacon or a 33-byte full frame.
+
+    Use this when the caller only needs the current position (e.g. live
+    map overlay). For phase, session, area, or distance, call decode_s1p4
+    instead — it only accepts the 33-byte form.
+    """
+    if len(data) not in (FRAME_LENGTH_BEACON, FRAME_LENGTH):
+        raise InvalidS1P4Frame(
+            f"expected frame length {FRAME_LENGTH_BEACON} or {FRAME_LENGTH}, "
+            f"got {len(data)}"
+        )
+    if data[0] != FRAME_DELIMITER or data[-1] != FRAME_DELIMITER:
+        raise InvalidS1P4Frame(
+            f"expected 0x{FRAME_DELIMITER:02X} delimiters at first and last byte"
+        )
+    x_cm, y_mm = struct.unpack_from("<hh", data, 1)
+    return PositionBeacon(x_cm=x_cm, y_mm=y_mm)
 
 
 def decode_s1p4(data: bytes) -> MowingTelemetry:

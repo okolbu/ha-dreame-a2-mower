@@ -6,7 +6,9 @@ import pytest
 
 from protocol.telemetry import (
     MowingTelemetry,
+    PositionBeacon,
     decode_s1p4,
+    decode_s1p4_position,
     InvalidS1P4Frame,
     Phase,
 )
@@ -120,3 +122,59 @@ def test_decode_s1p4_mowed_area_from_centiares():
     t = decode_s1p4(ACTIVE_MOW_FRAME)
     # raw = 1250 → 12.50m²
     assert t.area_mowed_m2 == pytest.approx(12.50)
+
+
+# --- 8-byte idle/beacon frame tests -----------------------------------
+
+# Captured live: X=737cm, Y=-5040mm, docked mower emitting minimal beacon.
+BEACON_DOCKED = bytes([0xCE, 0xE1, 0x02, 0x50, 0xEC, 0xFF, 0x06, 0xCE])
+
+# Captured live during user remote-drive: X=1986cm, Y=2480mm.
+BEACON_DRIVE = bytes([0xCE, 0xC2, 0x07, 0xB0, 0x09, 0x00, 0xE9, 0xCE])
+
+# Captured live, near dock: X=25cm, Y=-112mm.
+BEACON_NEAR_DOCK = bytes([0xCE, 0x19, 0x00, 0x90, 0xFF, 0xFF, 0xFD, 0xCE])
+
+
+def test_decode_s1p4_position_from_beacon_returns_position():
+    p = decode_s1p4_position(BEACON_DOCKED)
+    assert isinstance(p, PositionBeacon)
+    assert p.x_cm == 737
+    assert p.y_mm == -5040
+
+
+def test_decode_s1p4_position_handles_positive_y():
+    p = decode_s1p4_position(BEACON_DRIVE)
+    assert p.x_cm == 1986
+    assert p.y_mm == 2480
+
+
+def test_decode_s1p4_position_handles_small_negative_y():
+    p = decode_s1p4_position(BEACON_NEAR_DOCK)
+    assert p.x_cm == 25
+    assert p.y_mm == -112
+
+
+def test_decode_s1p4_position_accepts_full_frame_too():
+    # The convenience decoder should work on 33-byte frames, returning
+    # a PositionBeacon with just X/Y (callers who want full telemetry
+    # should call decode_s1p4 directly).
+    p = decode_s1p4_position(ACTIVE_MOW_FRAME)
+    assert p.x_cm == -1562
+    assert p.y_mm == 2847
+
+
+def test_decode_s1p4_position_rejects_unexpected_length():
+    with pytest.raises(InvalidS1P4Frame):
+        decode_s1p4_position(bytes([0xCE, 0x00, 0x00, 0xCE]))  # 4 bytes
+
+
+def test_decode_s1p4_position_rejects_missing_delimiters():
+    with pytest.raises(InvalidS1P4Frame):
+        decode_s1p4_position(bytes([0x00, 0xE1, 0x02, 0x50, 0xEC, 0xFF, 0x06, 0x00]))
+
+
+def test_position_beacon_x_m_and_y_m_helpers():
+    p = decode_s1p4_position(BEACON_DRIVE)
+    assert p.x_m == pytest.approx(19.86)
+    assert p.y_m == pytest.approx(2.48)

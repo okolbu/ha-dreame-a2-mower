@@ -209,6 +209,11 @@ class DreameMowerDevice:
         # need to auto-clear after a timeout when the mower stops re-asserting
         # a latched boolean (e.g. s1p53 obstacle flag — no "all-clear" event).
         self._property_last_seen_at: dict[int, float] = {}
+        # Latest decoded position (x_cm, y_mm) from either the 33-byte full
+        # telemetry frame or the 8-byte idle beacon. Updated on every s1p4
+        # arrival; independent of `mowing_telemetry` (which is only set for
+        # full-shape frames so phase/area/distance sensors don't flicker).
+        self._latest_position: tuple[int, int] | None = None
         self._discard_timeout = 5
         self._restore_timeout = 15
 
@@ -538,7 +543,12 @@ class DreameMowerDevice:
         fields instead of raw bytes. Malformed blobs are logged and dropped
         (the param's value is set to None) so they don't poison entity state.
         """
-        from ..protocol.telemetry import InvalidS1P4Frame, decode_s1p4
+        from ..protocol.telemetry import (
+            FRAME_LENGTH_BEACON,
+            InvalidS1P4Frame,
+            decode_s1p4,
+            decode_s1p4_position,
+        )
         from ..protocol.heartbeat import InvalidS1P1Frame, decode_s1p1
         from ..protocol.config_s2p51 import S2P51DecodeError, decode_s2p51
 
@@ -553,7 +563,18 @@ class DreameMowerDevice:
             value = param.get("value")
             try:
                 if did == telemetry_did and isinstance(value, list):
-                    param["value"] = decode_s1p4(bytes(value))
+                    raw = bytes(value)
+                    # Always extract position — works on 8-byte beacons too.
+                    beacon = decode_s1p4_position(raw)
+                    self._latest_position = (beacon.x_cm, beacon.y_mm)
+                    if len(raw) == FRAME_LENGTH_BEACON:
+                        # Idle/docked beacon — no phase/area/distance payload.
+                        # Drop the value so _handle_properties doesn't overwrite
+                        # the last good MowingTelemetry (keeps phase/area
+                        # sensors from flickering between real data and None).
+                        param["code"] = 1
+                    else:
+                        param["value"] = decode_s1p4(raw)
                 elif did == heartbeat_did and isinstance(value, list):
                     param["value"] = decode_s1p1(bytes(value))
                 elif did == config_did and isinstance(value, dict):
@@ -4461,6 +4482,18 @@ class DreameMowerDevice:
     def mowing_telemetry(self):
         """Return the most recently decoded s1p4 telemetry (MowingTelemetry or None)."""
         return self.data.get(DreameMowerProperty.MOWING_TELEMETRY.value)
+
+    @property
+    def latest_position(self) -> tuple[int, int] | None:
+        """Return the most recently observed (x_cm, y_mm) position.
+
+        Sourced from either a 33-byte s1p4 full telemetry frame (active mow) or
+        the 8-byte s1p4 beacon (docked / remote-drive / idle). Independent of
+        `mowing_telemetry` which stays at its last full-shape value so
+        phase/area/distance sensors don't flicker when the mower drops back to
+        beacon-only output.
+        """
+        return self._latest_position
 
     @property
     def heartbeat(self):

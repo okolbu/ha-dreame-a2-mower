@@ -187,12 +187,22 @@ class DreameA2LiveMap:
             self._state.flush_pending()
         self._prev_session_active = active
 
-        # 2) Position from telemetry.
-        telem = getattr(device, "mowing_telemetry", None)
+        # 2) Position from telemetry. Prefer `latest_position` (tuple set by
+        # the blob decoder on every s1p4 arrival, including the 8-byte idle
+        # beacon) so the map overlay moves during remote-drive / learn
+        # modes, not just active mow sessions. Fall back to `mowing_telemetry`
+        # when that's all we have.
+        pos_source = getattr(device, "latest_position", None)
+        if pos_source is None:
+            telem = getattr(device, "mowing_telemetry", None)
+            if telem is not None:
+                pos_source = (telem.x_cm, telem.y_mm)
+
         position = None
-        if telem is not None:
-            x_m = (telem.x_cm / 100.0) * self.x_factor
-            y_m = (telem.y_mm / 1000.0) * self.y_factor
+        if pos_source is not None:
+            x_cm, y_mm = pos_source
+            x_m = (x_cm / 100.0) * self.x_factor
+            y_m = (y_mm / 1000.0) * self.y_factor
             position = [round(x_m, 3), round(y_m, 3)]
 
             if active:
