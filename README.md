@@ -25,6 +25,48 @@ Forked from [nicolasglg/dreame-mova-mower](https://github.com/nicolasglg/dreame-
 4. Restart Home Assistant.
 5. Settings → Devices & Services → Add Integration → "Dreame A2 Mower".
 
+## Map card configuration
+
+The integration exposes the active mowing session's position, path trail, and detected obstacles as attributes on the `camera.dreame_a2_map` entity. Use [lovelace-xiaomi-vacuum-map-card](https://github.com/PiotrMachowski/lovelace-xiaomi-vacuum-map-card) or a similar Lovelace map card to render them on top of the base map image.
+
+Published attributes:
+
+- `position` — `[x_m, y_m]` current calibrated mower position (charger is origin)
+- `path` — list of `[x_m, y_m]` points for the current session (deduped at 0.2 m)
+- `obstacles` — list of `[x_m, y_m]` obstacle markers (deduped at 0.5 m)
+- `charger_position` — always `[0.0, 0.0]`
+- `session_id` / `session_start` — increments / ISO timestamp on each mow session
+- `calibration` — active `x_factor` and `y_factor` from Options Flow
+
+Calibration factors are editable per-installation via **Settings → Devices & Services → Dreame A2 Mower → Configure** (defaults: X=1.0, Y=0.625 per current firmware's wheel-encoder constant).
+
+Example card configuration:
+
+```yaml
+type: custom:xiaomi-vacuum-map-card
+map_source:
+  camera: camera.dreame_a2_map
+calibration_source:
+  camera: true
+map_locked: true
+entities:
+  - path: path
+    icon: mdi:robot-mower
+```
+
+You will need to add `calibration_points` specific to your lawn by dragging three points on the card's setup UI — the integration cannot infer them.
+
+### Dev tool: seed the map from a probe log
+
+Service `dreame_a2_mower.import_path_from_probe_log` replays a past session from a probe-log JSONL file onto the map attributes. Useful for validating card configuration without waiting for a live run:
+
+```yaml
+service: dreame_a2_mower.import_path_from_probe_log
+data:
+  file: /config/probe_log_sample.jsonl
+  session_index: 4    # optional; default picks the most recent session
+```
+
 ## Development
 
 See [`docs/superpowers/specs/`](docs/superpowers/specs/) for design documents and [`docs/superpowers/plans/`](docs/superpowers/plans/) for implementation plans.
