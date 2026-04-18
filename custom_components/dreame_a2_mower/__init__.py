@@ -45,7 +45,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Set up all platforms for this device/entry.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    entry.async_on_unload(entry.add_update_listener(update_listener))
+    # Options-update listener re-broadcasts current state with new calibration.
+    async def _options_updated(hass_arg, entry_arg):
+        coord = hass_arg.data[DOMAIN].get(entry_arg.entry_id)
+        if coord and hasattr(coord, "live_map"):
+            coord.live_map.handle_options_update()
+
+    entry.async_on_unload(entry.add_update_listener(_options_updated))
+
+    # Import-from-probe-log service (dev tool).
+    async def _handle_import(call):
+        coord = next(iter(hass.data[DOMAIN].values()), None)
+        if coord is None:
+            raise ValueError("No Dreame A2 coordinator loaded")
+        path = call.data.get("file")
+        session_index = int(call.data.get("session_index", -1))
+        if not path:
+            raise ValueError("file is required")
+        return coord.live_map.import_from_probe_log(path, session_index)
+
+    if not hass.services.has_service(DOMAIN, "import_path_from_probe_log"):
+        hass.services.async_register(DOMAIN, "import_path_from_probe_log", _handle_import)
+
     return True
 
 
@@ -62,6 +83,3 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return unload_ok
 
 
-async def update_listener(hass: HomeAssistant, config_entry: ConfigEntry) -> None:
-    """Handle options update."""
-    await hass.config_entries.async_reload(config_entry.entry_id)

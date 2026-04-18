@@ -518,3 +518,25 @@ select_select_next:
       default: true
       selector:
         boolean:
+
+import_path_from_probe_log:
+  target:
+    entity:
+      integration: dreame_a2_mower
+      domain: camera
+  fields:
+    file:
+      example: "/data/claude/homeassistant/probe_log_20260417_095500.jsonl"
+      required: true
+      selector:
+        text:
+    session_index:
+      example: 4
+      required: false
+      default: -1
+      selector:
+        number:
+          min: -1
+          max: 20
+          step: 1
+          mode: box
