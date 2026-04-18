@@ -413,6 +413,74 @@ class DreameMowerDevice:
 
                 self._decode_blob_properties(params)
                 self._handle_properties(params)
+            elif message["method"] == "event_occured" and "params" in message:
+                # Dreame A2 (g2408) fires this at session-complete with the
+                # OSS object key for the session-summary JSON in piid=9.
+                # Upstream never read this message class, so integrations
+                # derived from the vacuum path silently ignored the only
+                # signal that carries the map object name on this device.
+                # See docs/research/g2408-protocol.md §"event_occured".
+                self._handle_event_occured(message["params"])
+
+    def _handle_event_occured(self, params) -> None:
+        """Handle an `event_occured` MQTT message.
+
+        Observed on g2408 exactly once per completed mowing session, carrying
+        the OSS object key for that session's summary JSON in `piid=9`. The
+        JSON contains the full mow path, lawn boundary polygon, obstacle
+        polygons, area/time counters, and dock coordinates.
+
+        Format (from 2026-04-18 captures):
+        ```
+        {
+          "id": <corr-id>, "method": "event_occured",
+          "params": {
+            "did": "<did>", "siid": 4, "eiid": 1,
+            "arguments": [
+              {"piid": 1,  "value": <int>},
+              {"piid": 2,  "value": <int>},           # end-reason-ish
+              {"piid": 3,  "value": <area_centiares>},
+              {"piid": 7,  "value": <int>},
+              {"piid": 8,  "value": <unix_ts>},
+              {"piid": 9,  "value": "ali_dreame/…json"},   # OSS object key
+              {"piid": 11, "value": <int>},
+              ...
+            ]
+          }
+        }
+        ```
+
+        For now we just log the object key at INFO so users / future devs
+        can see the trigger firing. A follow-up will wire an A2-specific
+        JSON decoder and populate the camera entity from this file — the
+        existing map-manager decoder expects an encrypted binary blob that
+        g2408 does not emit.
+        """
+        try:
+            args = params.get("arguments") if isinstance(params, dict) else None
+            siid = params.get("siid") if isinstance(params, dict) else None
+            eiid = params.get("eiid") if isinstance(params, dict) else None
+            if not isinstance(args, list):
+                return
+            fields = {}
+            for a in args:
+                if isinstance(a, dict) and "piid" in a:
+                    fields[a["piid"]] = a.get("value")
+            object_name = fields.get(9)
+            area_centiares = fields.get(3)
+            unix_ts = fields.get(8)
+            _LOGGER.info(
+                "[EVENT] event_occured siid=%s eiid=%s: object_name=%r "
+                "area_centiares=%s unix_ts=%s (other fields: %s)",
+                siid,
+                eiid,
+                object_name,
+                area_centiares,
+                unix_ts,
+                {k: v for k, v in fields.items() if k not in (3, 8, 9)},
+            )
+        except Exception as ex:  # pragma: no cover — defensive
+            _LOGGER.warning("_handle_event_occured parse failed: %s", ex)
 
     def _handle_properties(self, properties) -> bool:
         # Timestamp every incoming property event (even re-assertions that

@@ -451,8 +451,132 @@ enough new map data to be worth uploading" rather than to session lifecycle.
 - Mid-task recharge does **not** trigger a fresh map push; only actual session
   completion does.
 - Historical 2026-04-17 data shows the upstream A1 Pro client DID fetch our A2's
-  map successfully (file `map_live.png`), so the OSS side of the flow works —
-  our fork just hasn't caught an `s6p3` push yet.
+  map successfully (file `map_live.png`), so the OSS side of the flow works.
+- **2026-04-19 discovery**: the session-summary OSS object key arrives not as
+  an `s6p3` property-change but inside an `event_occured` MQTT message that the
+  integration was never listening for. See §7.5.
+
+### 7.4 `event_occured` at session completion — the missing trigger
+
+Exactly once per completed mowing session, the mower posts a second MQTT method
+(`event_occured`, vs. the usual `properties_changed`) with service-id 4,
+event-id 1. Four of these have been captured across 2026-04-17 / 2026-04-18:
+
+```json
+{
+  "id": 2376, "method": "event_occured",
+  "params": {
+    "did": "-112293549", "siid": 4, "eiid": 1,
+    "arguments": [
+      {"piid": 1,  "value": 100},
+      {"piid": 2,  "value": 195},
+      {"piid": 3,  "value": 31133},            ← area mowed in centiares (311.33 m²)
+      {"piid": 7,  "value": 1},
+      {"piid": 8,  "value": 1776522523},       ← unix timestamp
+      {"piid": 9,  "value": "ali_dreame/2026/04/18/BM169439/-112293549_193738455.0550.json"},
+      {"piid": 11, "value": 0}, {"piid": 60, "value": -1},
+      {"piid": 13, "value": []}, {"piid": 14, "value": 384}, {"piid": 15, "value": 0}
+    ]
+  }
+}
+```
+
+The `piid=9` value is the OSS object key for the session-summary JSON.
+
+Decoded fields across the four captures:
+
+| piid | guess | observed values |
+|---|---|---|
+| 1 | constant / flag | always 100 |
+| 2 | end-code / reason | 31, 69, 128, 195 |
+| 3 | area mowed × 100 (m² × 100) | 5232, 10759, 19613, 31133 |
+| 7 | stop-reason-ish | 1 or 3 |
+| 8 | unix timestamp | variable |
+| 9 | **OSS object key (`.json`)** | `ali_dreame/YYYY/MM/DD/<master-uid>/<did>_HHMMSSmmm.MMMM.json` |
+| 11 | ? | 0 or 1 |
+| 60 | ? | 101 or -1 |
+| 13 | empty list | `[]` |
+| 14 | hw/protocol version marker? | 379 or 384 |
+| 15 | ? | 0 |
+
+### 7.5 Fetching the session-summary JSON
+
+Two distinct signed-URL endpoints on the Dreame cloud; the one that works for
+this object key is the **interim** endpoint:
+
+```
+POST https://eu.iot.dreame.tech:13267/dreame-user-iot/iotfile/getDownloadUrl
+body: {"did":"<did>","model":"dreame.mower.g2408","filename":"<obj-key>","region":"eu"}
+→ {"code":0, "data":"https://dreame-eu.oss-eu-central-1.aliyuncs.com/iot/tmp/…?Expires=…&Signature=…", "expires_time":"…"}
+```
+
+The signed URL is valid for ~1 hour (no auth on the URL itself). `GET` it to
+retrieve the full summary JSON (~56 KB for a 3-hour session).
+
+The alternative endpoint `getOss1dDownloadUrl` (also signed) returned 404 —
+that bucket is empty; it's for a different object class.
+
+### 7.6 Session-summary JSON schema (as observed 2026-04-18)
+
+```
+{
+  "start":        <unix>,                 mowing started
+  "end":          <unix>,                 mowing ended
+  "time":         <int>,                  duration in minutes
+  "mode":         <int>,                  mode code (100 seen)
+  "areas":        <float>,                m² mowed this session
+  "map_area":     <int>,                  m² total mowable (383 on user's lawn)
+  "result":       <int>,                  1 = success-ish
+  "stop_reason":  <int>,                  -1 = normal end
+  "start_mode":   <int>,
+  "pre_type":     <int>,
+  "md5":          <hex>,                  content hash
+  "region_status": [[zone_id, status]...]
+  "dock":         [<x>, <y>, <heading>],  dock coords in mower frame (cm)
+  "pref":         [<int>...],
+  "faults":       [],                     empty on normal completion
+  "spot":         [],
+  "ai_obstacle":  [],
+  "obstacle":     [                        physical obstacles encountered
+    {"id": <int>, "type": <int>,
+     "data": [[x_cm, y_mm]...]}           polygon vertices
+  ],
+  "map":          [
+    {  id: 1, type: 0, name: "",
+       area: <float>, etime: <int>, time: <int>,
+       data: [[x, y]...],                  lawn boundary polygon
+       track: [[x, y] | [2147483647, 2147483647]...]   mow path; max-int = segment break
+    },
+    {  id: 101, type: 2,
+       description: { type: 2, points: [[x,y]...] }   exclusion zone (4-point polygon)
+    }
+  ],
+  "trajectory":   [
+    {  id: [<int>, <int>],
+       data: [[x, y]...]                   high-level planning path
+    }
+  ]
+}
+```
+
+Coordinates are in the same mower frame as `s1p4` (x in cm, y in mm × some
+scale — TBD whether it matches the 0.625 Y-calibration or needs a different
+constant here).
+
+### 7.7 Wiring state
+
+| Piece | Status |
+|---|---|
+| Subscribe to `event_occured` | ✅ wired 2026-04-19 (device.py `_handle_event_occured`) |
+| Log object key at INFO | ✅ as `[EVENT] event_occured … object_name=…` |
+| Fetch + download the JSON | ❌ not yet — auto-fetch requires plumbing |
+| Decode JSON → `MapData` / `live_map` attributes | ❌ not yet — upstream decoder expects encrypted binary blob |
+| Render lawn boundary + mow path on camera | ❌ not yet |
+
+The immediate user-facing gain from 2026-04-19's work is that you can now see
+the object name show up in HA logs the moment a session completes. To pull the
+actual JSON for inspection, use `/data/claude/homeassistant` (off-repo) script
+`fetch_oss.py` with the object key.
 
 ### 7.4 Diagnostic logging currently enabled
 
