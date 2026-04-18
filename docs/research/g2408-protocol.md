@@ -163,6 +163,7 @@ Byte `[8]` drives the `Phase` enum. Current understanding:
 | 1 | `TRANSIT` | Session 2 start (2026-04-18 19:05): 3 min continuous run during dock→mow transit | High |
 | 2 | `PHASE_2` | Session 2 main bulk (19:08-19:35): 28 min systematic strip-mowing, battery 67%→38% | Observed, semantic TBD |
 | 3 | `RETURNING` | Session 2 tail (19:35-19:55): 17+ min starting exactly at 38% battery; mower continued substantial mowing motion while heading dock-ward | Observed — note "returning" includes continued mowing |
+| 4 | (new, not yet in enum) | Session 2 post-recharge (2026-04-18 20:55-21:07+): 153 samples, dominant from 21:00 onwards while mower was actively mowing | Observed — enum needs an entry; semantic TBD |
 
 Phase is STATE, not EVENT: session 2 showed only 3 runs (1→2→3) in 48 minutes with
 clean direction-flips in X AND Y at each boundary. Micro-turns inside a narrow
@@ -211,10 +212,21 @@ Sent every ~45 seconds regardless of state. `0xCE` delimiters at the ends.
 
 | bytes | meaning |
 |---|---|
+| [4] | pulse `0x00 → 0x08 → 0x00` lasting ~0.8 s during a **human-presence-detection event**. Evidence: session 2 (2026-04-18) showed byte[4]=0x08 exactly twice at 21:04:39.580 and 21:04:40.210; the user confirmed the Dreame app raised a human-in-mapped-area alert at that same moment. Byte is `0x00` at all other times across the whole session. Single-event datapoint — reproduce before relying on it. |
 | [7] | 0=idle, 1 or 4 = state transitions |
 | [9] | 0/64 pulse at mow start |
 | [11-12] | monotonic counter |
 | [14] | state machine during startup: 0 → 64 → 68 → 4 → 5 → 7 → 135 |
+
+Related coincident MQTT events at the same human-presence moment (21:04:39):
+- `s2p2 = 27` (IDLE) emitted **twice** in a single second while the mower was
+  demonstrably still moving (MOWING_TELEMETRY position continued changing through
+  the window). So `s2p2 = 27` at runtime is not literal "idle" — it may be a
+  query-response or alert-acknowledgement token.
+- `s1p53` (OBSTACLE_FLAG) went `True → False` 7 s later at 21:04:46 — but it had
+  been latched True since 20:43:16 (an earlier obstacle, ~21 min prior), so the
+  clear is not directly tied to the human event; more likely a side-effect of
+  whatever state transition happened.
 
 ### 3.5 `s1p53` — OBSTACLE_FLAG
 
