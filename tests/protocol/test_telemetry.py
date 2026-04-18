@@ -99,11 +99,15 @@ def test_decode_s1p4_phase_byte_mapping(phase_byte, expected):
 
 
 def test_decode_s1p4_unknown_phase_byte_is_preserved_raw():
+    # Use a value well beyond the enumerated range (which covers 0..15 for
+    # observed task-phase indices on a multi-zone lawn). The decoder must
+    # still preserve the raw integer on the dataclass and fall back to
+    # Phase.UNKNOWN for values outside the enum.
     frame = bytearray(ACTIVE_MOW_FRAME)
-    frame[8] = 9
+    frame[8] = 99
     t = decode_s1p4(bytes(frame))
     assert t.phase is Phase.UNKNOWN
-    assert t.phase_raw == 9
+    assert t.phase_raw == 99
 
 
 def test_decode_s1p4_distance_meters_from_deci_units():

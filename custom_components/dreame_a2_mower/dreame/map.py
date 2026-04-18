@@ -1011,11 +1011,39 @@ class DreameMapMowerMapManager:
             if value != "":
                 piid = prop["piid"]
                 if piid == PIID(DreameMowerProperty.OBJECT_NAME):
-                    has_map = True
-                    object_name = value
+                    # OBJECT_NAME is an OSS object-key string. Guard against
+                    # non-string pushes (observed: firmware variants can send
+                    # ints as signals on related piids). Empty string already
+                    # filtered by the outer `if value != ""`.
+                    if isinstance(value, str):
+                        _LOGGER.info("[MAP_TRACE] handle_properties: OBJECT_NAME = %s", value)
+                        has_map = True
+                        object_name = value
+                    else:
+                        _LOGGER.warning(
+                            "[MAP_TRACE] handle_properties: OBJECT_NAME non-string %r, ignoring",
+                            value,
+                        )
                 elif piid == PIID(DreameMowerProperty.MAP_DATA):
-                    has_map = True
-                    raw_map_data = value
+                    # Upstream devices push a map-blob string here. g2408 is
+                    # known to emit a small-int signal (e.g. 200 = map cleared,
+                    # 300 = new map ready) instead of a blob. If we try to
+                    # decode an int as raw map data we crash deep in the
+                    # decoder, so split the two cases explicitly.
+                    if isinstance(value, (int, float)):
+                        _LOGGER.info(
+                            "[MAP_TRACE] handle_properties: MAP_DATA signal=%r "
+                            "(no blob decode, awaiting OBJECT_NAME push)",
+                            value,
+                        )
+                        # Mark "map ready" but don't set raw_map_data — the
+                        # real object name will arrive on a separate s6p3 push.
+                        # Setting has_map=True clears _map_request_time so the
+                        # next update cycle re-attempts a fetch promptly.
+                        has_map = True
+                    else:
+                        has_map = True
+                        raw_map_data = value
                 elif piid == PIID(DreameMowerProperty.OLD_MAP_DATA):
                     if not has_map:
                         values = value.split(",")

@@ -5163,11 +5163,24 @@ class DreameMowerDeviceStatus:
         Used for preventing updates on settings that relates to currently performing task.
         """
         status = self.status
+        task_status = self.task_status
+        # Devices that do not emit TASK_STATUS at all (e.g. dreame.mower.g2408,
+        # where the property upstream expects at siid=4,piid=7 is never pushed)
+        # make task_status permanently UNKNOWN. The original condition
+        # `task_status is not COMPLETED and task_status is not DOCKING_PAUSED`
+        # then latches True forever, leaving binary sensors like
+        # `mowing_session_active` stuck on while the mower is docked and
+        # charging after a completed run. Treat UNKNOWN the same as COMPLETED
+        # for the purposes of this check — the `or` chain below still flips to
+        # True when the device reports an actively-mowing status, so this only
+        # affects the no-evidence case.
+        task_active_by_status = (
+            task_status is not DreameMowerTaskStatus.COMPLETED
+            and task_status is not DreameMowerTaskStatus.DOCKING_PAUSED
+            and task_status is not DreameMowerTaskStatus.UNKNOWN
+        )
         return bool(
-            (
-                self.task_status is not DreameMowerTaskStatus.COMPLETED
-                and self.task_status is not DreameMowerTaskStatus.DOCKING_PAUSED
-            )
+            task_active_by_status
             or self.cleaning_paused
             or status is DreameMowerStatus.CLEANING
             or status is DreameMowerStatus.SEGMENT_CLEANING

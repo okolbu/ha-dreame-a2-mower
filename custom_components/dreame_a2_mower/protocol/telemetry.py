@@ -25,6 +25,11 @@ class Phase(IntEnum):
     # interpretations; keep them around only so existing references compile.
     # New code should read `phase_raw` directly. See
     # docs/research/g2408-protocol.md §"Phase byte semantics".
+    #
+    # Observed maximum so far: 15 (lawn with four zones + multi-pass edges).
+    # Lawns with more zones or more-segmented plans will hit higher values;
+    # extend this range if needed. `phase_raw` is always preserved on the
+    # MowingTelemetry dataclass even when the value is outside this range.
     MOWING = 0
     TRANSIT = 1
     PHASE_2 = 2
@@ -33,6 +38,14 @@ class Phase(IntEnum):
     ZONE_5 = 5
     ZONE_6 = 6
     ZONE_7 = 7
+    ZONE_8 = 8
+    ZONE_9 = 9
+    ZONE_10 = 10
+    ZONE_11 = 11
+    ZONE_12 = 12
+    ZONE_13 = 13
+    ZONE_14 = 14
+    ZONE_15 = 15
     UNKNOWN = -1
 
 
