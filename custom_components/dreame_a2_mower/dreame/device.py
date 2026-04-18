@@ -544,7 +544,9 @@ class DreameMowerDevice:
         (the param's value is set to None) so they don't poison entity state.
         """
         from ..protocol.telemetry import (
+            FRAME_LENGTH,
             FRAME_LENGTH_BEACON,
+            FRAME_LENGTH_BUILDING,
             InvalidS1P4Frame,
             decode_s1p4,
             decode_s1p4_position,
@@ -564,17 +566,19 @@ class DreameMowerDevice:
             try:
                 if did == telemetry_did and isinstance(value, list):
                     raw = bytes(value)
-                    # Always extract position — works on 8-byte beacons too.
+                    # Always extract position — works on 8/10-byte variants too.
                     beacon = decode_s1p4_position(raw)
                     self._latest_position = (beacon.x_cm, beacon.y_mm)
-                    if len(raw) == FRAME_LENGTH_BEACON:
-                        # Idle/docked beacon — no phase/area/distance payload.
-                        # Drop the value so _handle_properties doesn't overwrite
-                        # the last good MowingTelemetry (keeps phase/area
-                        # sensors from flickering between real data and None).
-                        param["code"] = 1
-                    else:
+                    if len(raw) == FRAME_LENGTH:
                         param["value"] = decode_s1p4(raw)
+                    else:
+                        # 8-byte idle beacon or 10-byte BUILDING frame:
+                        # position-only. Drop the value so _handle_properties
+                        # doesn't overwrite the last good MowingTelemetry
+                        # (keeps phase/area/distance sensors from flickering
+                        # between real data and None when no full frame has
+                        # arrived yet).
+                        param["code"] = 1
                 elif did == heartbeat_did and isinstance(value, list):
                     param["value"] = decode_s1p1(bytes(value))
                 elif did == config_did and isinstance(value, dict):

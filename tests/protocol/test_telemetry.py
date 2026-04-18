@@ -178,3 +178,31 @@ def test_position_beacon_x_m_and_y_m_helpers():
     p = decode_s1p4_position(BEACON_DRIVE)
     assert p.x_m == pytest.approx(19.86)
     assert p.y_m == pytest.approx(2.48)
+
+
+# --- 10-byte BUILDING frame tests --------------------------------------
+
+# Captured live during user's map-build zone-expansion (s2p1=11):
+# X=1915cm (19.15m), Y=3408mm (3.41m).
+BUILD_FRAME_1 = bytes([0xCE, 0x7B, 0x07, 0x50, 0x0D, 0x00, 0x0B, 0x08, 0x00, 0xCE])
+
+# Second build-frame capture: X=1158cm, Y=-4864mm.
+BUILD_FRAME_2 = bytes([0xCE, 0x86, 0x04, 0x00, 0xED, 0xFF, 0x4B, 0x1B, 0x00, 0xCE])
+
+
+def test_decode_s1p4_position_accepts_10_byte_building_frame():
+    p = decode_s1p4_position(BUILD_FRAME_1)
+    assert p.x_cm == 1915
+    assert p.y_mm == 3408
+
+
+def test_decode_s1p4_position_10_byte_handles_negative_y():
+    p = decode_s1p4_position(BUILD_FRAME_2)
+    assert p.x_cm == 1158
+    assert p.y_mm == -4864
+
+
+def test_decode_s1p4_position_rejects_9_byte_frame():
+    # Defensive: 9 bytes is not a recognized variant.
+    with pytest.raises(InvalidS1P4Frame):
+        decode_s1p4_position(bytes([0xCE] + [0] * 7 + [0xCE]))

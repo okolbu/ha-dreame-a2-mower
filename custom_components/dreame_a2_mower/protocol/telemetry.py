@@ -8,6 +8,7 @@ from enum import IntEnum
 
 FRAME_LENGTH = 33
 FRAME_LENGTH_BEACON = 8
+FRAME_LENGTH_BUILDING = 10
 FRAME_DELIMITER = 0xCE
 
 
@@ -83,15 +84,21 @@ class PositionBeacon:
 
 
 def decode_s1p4_position(data: bytes) -> PositionBeacon:
-    """Extract X/Y from either an 8-byte beacon or a 33-byte full frame.
+    """Extract X/Y from an 8-byte beacon, a 10-byte BUILDING variant,
+    or a 33-byte full frame.
 
     Use this when the caller only needs the current position (e.g. live
     map overlay). For phase, session, area, or distance, call decode_s1p4
     instead — it only accepts the 33-byte form.
+
+    10-byte variants appear while the mower is in BUILDING state (map-learn /
+    zone-expand). They carry the same X/Y at the same offsets as the beacon
+    plus two additional bytes at offsets [6-7] (purpose not yet decoded).
     """
-    if len(data) not in (FRAME_LENGTH_BEACON, FRAME_LENGTH):
+    if len(data) not in (FRAME_LENGTH_BEACON, FRAME_LENGTH_BUILDING, FRAME_LENGTH):
         raise InvalidS1P4Frame(
-            f"expected frame length {FRAME_LENGTH_BEACON} or {FRAME_LENGTH}, "
+            f"expected frame length {FRAME_LENGTH_BEACON}, "
+            f"{FRAME_LENGTH_BUILDING}, or {FRAME_LENGTH}, "
             f"got {len(data)}"
         )
     if data[0] != FRAME_DELIMITER or data[-1] != FRAME_DELIMITER:
