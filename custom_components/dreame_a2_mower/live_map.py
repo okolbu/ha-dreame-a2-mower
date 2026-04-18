@@ -46,3 +46,10 @@ class LiveMapState:
             if math.hypot(dx, dy) <= OBSTACLE_DEDUPE_METRES:
                 return
         self.obstacles.append(point)
+
+    def start_session(self, session_start_iso: str) -> None:
+        """Reset per-session state and bump session_id."""
+        self.path = []
+        self.obstacles = []
+        self.session_id += 1
+        self.session_start = session_start_iso

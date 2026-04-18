@@ -74,3 +74,28 @@ def test_append_obstacle_checks_all_existing_not_just_last():
     # Close to first obstacle (not last) — should still dedupe.
     s.append_obstacle(0.1, 0.0)
     assert s.obstacles == [[0.0, 0.0], [5.0, 5.0]]
+
+
+def test_start_session_resets_path_and_obstacles_increments_id():
+    s = LiveMapState()
+    s.append_point(1.0, 2.0)
+    s.append_obstacle(3.0, 4.0)
+    assert s.path != []
+    assert s.obstacles != []
+    assert s.session_id == 0
+
+    s.start_session("2026-04-18T12:00:00")
+
+    assert s.path == []
+    assert s.obstacles == []
+    assert s.session_id == 1
+    assert s.session_start == "2026-04-18T12:00:00"
+
+
+def test_start_session_increments_id_on_each_call():
+    s = LiveMapState()
+    s.start_session("t1")
+    s.start_session("t2")
+    s.start_session("t3")
+    assert s.session_id == 3
+    assert s.session_start == "t3"
