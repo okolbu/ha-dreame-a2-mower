@@ -319,8 +319,19 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         value_fn=lambda value, device: round(value.y_mm * 0.000625, 2) if value is not None else None,
     ),
-    # Raw Y for diagnostics — preserved alongside the calibrated sensor so
-    # future work can re-derive the calibration factor from fresh data.
+    # Raw axis values for diagnostics — preserved alongside the calibrated
+    # sensors so future work can re-derive calibration factors from fresh
+    # data. X is reported by the firmware in cm, Y in mm.
+    DreameMowerSensorEntityDescription(
+        key="mowing_x_raw",
+        property_key=DreameMowerProperty.MOWING_TELEMETRY,
+        name="X (raw, cm)",
+        icon="mdi:help-circle",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        native_unit_of_measurement="cm",
+        exists_fn=lambda description, device: True,
+        value_fn=lambda value, device: value.x_cm if value is not None else None,
+    ),
     DreameMowerSensorEntityDescription(
         key="mowing_y_raw",
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
