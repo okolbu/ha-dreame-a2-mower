@@ -1198,17 +1198,36 @@ class DreameMapMowerMapManager:
 
         self._update_running = True
 
-        _LOGGER.debug("Map update: %s", self._update_interval)
+        _LOGGER.info(
+            "[MAP_TRACE] update() entry: interval=%s dreame_cloud=%s device_running=%s "
+            "map_data_is_none=%s need_map_request=%s map_request_time=%s "
+            "map_list_object_name=%s need_map_list_request=%s cloud_connected=%s",
+            self._update_interval,
+            bool(getattr(self._protocol, "dreame_cloud", False)),
+            self._device_running,
+            self._map_data is None,
+            self._need_map_request,
+            self._map_request_time,
+            self._map_list_object_name,
+            self._need_map_list_request,
+            getattr(self._protocol.cloud, "connected", None),
+        )
         try:
             if (self._map_list_object_name and self._need_map_list_request is None) or (
                 self._need_map_list_request and not self._device_running
             ):
+                _LOGGER.info("[MAP_TRACE] -> request_map_list()")
                 self.request_map_list()
 
             if self._recovery_map_list_object_name and self._need_recovery_map_list_request:
+                _LOGGER.info("[MAP_TRACE] -> request_recovery_map_list()")
                 self.request_recovery_map_list()
 
             if self._map_request_time is not None or self._need_map_request:
+                _LOGGER.info(
+                    "[MAP_TRACE] branch=explicit_request count=%s",
+                    self._map_request_count,
+                )
                 self._updated_frame_id = None
                 self._map_request_count = self._map_request_count + 1
                 if self._map_request_count >= 6:
@@ -1220,8 +1239,11 @@ class DreameMapMowerMapManager:
                     and self._map_request_count == 2
                     and self._map_data is None
                 ):
+                    _LOGGER.info("[MAP_TRACE] -> get_properties(OBJECT_NAME) for dreame_cloud fallback")
                     object_name_result = self._protocol.cloud.get_properties(DIID(DreameMowerProperty.OBJECT_NAME))
+                    _LOGGER.info("[MAP_TRACE] OBJECT_NAME result = %r", object_name_result)
                     if object_name_result and MAP_PARAMETER_VALUE in object_name_result[0]:
+                        _LOGGER.info("[MAP_TRACE] -> _add_cloud_map_data(object_name=%r)", object_name_result[0].get(MAP_PARAMETER_VALUE))
                         self._add_cloud_map_data(
                             None, object_name_result[0][MAP_PARAMETER_VALUE], object_name_result[0].get("updateDate")
                         )
@@ -1245,6 +1267,7 @@ class DreameMapMowerMapManager:
                         self.schedule_update(1)
                         _LOGGER.debug("No new map data received on second try")
             elif self._protocol.cloud.connected:
+                _LOGGER.info("[MAP_TRACE] branch=dreame_cloud_connected")
                 if not self._connected:
                     self._connected = True
                     self._map_data_changed()
@@ -1258,12 +1281,20 @@ class DreameMapMowerMapManager:
                 ):
                     if self._map_data and not self._map_data.empty_map:
                         _LOGGER.info(
-                            "Need map request: %.2f",
+                            "[MAP_TRACE] Need map request, age=%.2fs -> _request_map()",
                             time.time() - (self._map_data.last_updated),
                         )
                         self._request_map()
                     else:
+                        _LOGGER.info(
+                            "[MAP_TRACE] map_data empty/None -> _request_current_map()"
+                        )
                         self._request_current_map()
+                else:
+                    _LOGGER.info("[MAP_TRACE] dreame_cloud_connected: no fetch conditions met (device_running=%s map_data_age=%s)",
+                        self._device_running,
+                        (time.time() - self._map_data.last_updated) if (self._map_data and self._map_data.last_updated) else None,
+                    )
             elif self._connected:
                 self._connected = False
                 self._map_data_changed()
