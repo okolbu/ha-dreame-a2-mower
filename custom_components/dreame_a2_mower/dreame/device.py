@@ -468,16 +468,18 @@ class DreameMowerDevice:
                     fields[a["piid"]] = a.get("value")
             object_name = fields.get(9)
             area_centiares = fields.get(3)
+            total_lawn_m2 = fields.get(14)
             unix_ts = fields.get(8)
             _LOGGER.info(
                 "[EVENT] event_occured siid=%s eiid=%s: object_name=%r "
-                "area_centiares=%s unix_ts=%s (other fields: %s)",
+                "area_mowed_m2=%s total_lawn_m2=%s unix_ts=%s (other fields: %s)",
                 siid,
                 eiid,
                 object_name,
-                area_centiares,
+                None if area_centiares is None else area_centiares / 100.0,
+                total_lawn_m2,
                 unix_ts,
-                {k: v for k, v in fields.items() if k not in (3, 8, 9)},
+                {k: v for k, v in fields.items() if k not in (3, 8, 9, 14)},
             )
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("_handle_event_occured parse failed: %s", ex)

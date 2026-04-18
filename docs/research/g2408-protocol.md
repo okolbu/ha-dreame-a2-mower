@@ -496,7 +496,7 @@ Decoded fields across the four captures:
 | 11 | ? | 0 or 1 |
 | 60 | ? | 101 or -1 |
 | 13 | empty list | `[]` |
-| 14 | hw/protocol version marker? | 379 or 384 |
+| 14 | **total mowable lawn area (m², rounded int)** | 379 pre-2026-04-18, 384 after user added a zone in-app. Matches `map_area` and rounded `map[0].area` in the session-summary JSON — user-confirmed that the lawn grew by ~5 m² when the new zone was added. |
 | 15 | ? | 0 |
 
 ### 7.5 Fetching the session-summary JSON
