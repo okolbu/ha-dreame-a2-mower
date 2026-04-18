@@ -214,6 +214,10 @@ class DreameMowerDevice:
         # arrival; independent of `mowing_telemetry` (which is only set for
         # full-shape frames so phase/area/distance sensors don't flicker).
         self._latest_position: tuple[int, int] | None = None
+        # Latest SessionSummary (populated on event_occured → JSON fetch).
+        # Holds lawn boundary + mow path + obstacles from the last completed
+        # session. Exposed to consumers as `device.latest_session_summary`.
+        self._latest_session_summary = None
         self._discard_timeout = 5
         self._restore_timeout = 15
 
@@ -481,8 +485,63 @@ class DreameMowerDevice:
                 unix_ts,
                 {k: v for k, v in fields.items() if k not in (3, 8, 9, 14)},
             )
+            if isinstance(object_name, str) and object_name:
+                self._fetch_session_summary(object_name)
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("_handle_event_occured parse failed: %s", ex)
+
+    def _fetch_session_summary(self, object_name: str) -> None:
+        """Download + parse the session-summary JSON referenced by `object_name`.
+
+        Happens inline on the MQTT callback thread — the request is small
+        (~60 KB) and the fetch typically completes in under a second. Any
+        failure is logged and swallowed so a cloud hiccup never interrupts
+        the property pipeline.
+        """
+        cloud = getattr(self._protocol, "cloud", None)
+        if cloud is None or not getattr(cloud, "logged_in", False):
+            _LOGGER.info(
+                "[EVENT] session-summary fetch skipped (no cloud login): %s",
+                object_name,
+            )
+            return
+        try:
+            url = cloud.get_interim_file_url(object_name)
+            if not url:
+                _LOGGER.warning(
+                    "[EVENT] session-summary: getDownloadUrl returned None for %s",
+                    object_name,
+                )
+                return
+            raw = cloud.get_file(url)
+            if not raw:
+                _LOGGER.warning(
+                    "[EVENT] session-summary: download returned None for %s",
+                    object_name,
+                )
+                return
+            data = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
+            # Local import keeps the heavy protocol package out of the hot
+            # property-dispatch path for non-g2408 devices.
+            from ..protocol.session_summary import parse_session_summary
+
+            summary = parse_session_summary(data)
+            self._latest_session_summary = summary
+            _LOGGER.info(
+                "[EVENT] session-summary fetched: %.1f/%d m² mowed in %d min; "
+                "%d boundary pts, %d track segments, %d obstacles, %d exclusions",
+                summary.area_mowed_m2,
+                summary.map_area_m2,
+                summary.duration_min,
+                len(summary.lawn_polygon),
+                len(summary.track_segments),
+                len(summary.obstacles),
+                len(summary.exclusions),
+            )
+        except Exception as ex:
+            _LOGGER.warning(
+                "[EVENT] session-summary fetch failed for %s: %s", object_name, ex
+            )
 
     def _handle_properties(self, properties) -> bool:
         # Timestamp every incoming property event (even re-assertions that
@@ -4568,6 +4627,18 @@ class DreameMowerDevice:
         beacon-only output.
         """
         return self._latest_position
+
+    @property
+    def latest_session_summary(self):
+        """Return the most recently fetched SessionSummary, or None.
+
+        Populated by `_fetch_session_summary` on every `event_occured` MQTT
+        message (once per completed mowing session on g2408). Contains the
+        lawn boundary polygon, full mow path (as segments), obstacle
+        polygons, exclusion zones, dock coordinates, and timing — all in
+        metres relative to the charger. See `protocol.session_summary`.
+        """
+        return self._latest_session_summary
 
     @property
     def heartbeat(self):

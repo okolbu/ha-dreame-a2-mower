@@ -19,13 +19,34 @@ OBSTACLE_DEDUPE_METRES = 0.5
 
 @dataclass
 class LiveMapState:
-    """Pure state machine tracking the current session's map data."""
+    """Pure state machine tracking the current session's map data.
+
+    Two layers of data coexist:
+
+    - **Live stream** (during an active session): `path` accumulates s1p4
+      positions with dedupe; `obstacles` accumulates s1p53 trigger points.
+    - **Session-summary overlay** (populated once per completed session from
+      the OSS JSON): `lawn_polygon`, `exclusion_zones`, `completed_track`,
+      and `obstacle_polygons` persist the mower's authoritative map so the
+      card has a stable underlay even while docked.
+    """
 
     path: list[list[float]] = field(default_factory=list)
     obstacles: list[list[float]] = field(default_factory=list)
     session_id: int = 0
     session_start: str | None = None
     _pending: list[list[float]] = field(default_factory=list)
+
+    # Fields sourced from the session-summary JSON. All coordinates are
+    # metres in the mower / charger-relative frame (no calibration needed —
+    # the JSON emits cm on both axes and the parser converts).
+    lawn_polygon: list[list[float]] = field(default_factory=list)
+    exclusion_zones: list[list[list[float]]] = field(default_factory=list)
+    completed_track: list[list[list[float]]] = field(default_factory=list)
+    obstacle_polygons: list[list[list[float]]] = field(default_factory=list)
+    dock_position: list[float] | None = None
+    summary_md5: str | None = None
+    summary_end_ts: int | None = None
 
     def append_point(self, x_m: float, y_m: float) -> None:
         """Append a position to the path unless it's within PATH_DEDUPE_METRES of the last point."""
@@ -55,6 +76,36 @@ class LiveMapState:
         self.session_id += 1
         self.session_start = session_start_iso
 
+    def load_from_session_summary(self, summary) -> bool:
+        """Populate overlay fields from a `protocol.session_summary.SessionSummary`.
+
+        Returns `True` if the state actually changed (new summary arrived),
+        `False` if the given summary matches what we already have. Idempotent
+        so the caller can invoke this unconditionally on every update tick
+        without churning the snapshot dispatcher.
+        """
+        if summary is None:
+            return False
+        new_md5 = getattr(summary, "md5", None) or None
+        new_end = getattr(summary, "end_ts", None) or None
+        if self.summary_md5 == new_md5 and self.summary_end_ts == new_end and new_md5 is not None:
+            return False
+        self.lawn_polygon = [list(p) for p in summary.lawn_polygon]
+        self.exclusion_zones = [
+            [list(p) for p in ex.points] for ex in summary.exclusions
+        ]
+        self.completed_track = [
+            [list(p) for p in seg] for seg in summary.track_segments
+        ]
+        self.obstacle_polygons = [
+            [list(p) for p in o.polygon] for o in summary.obstacles
+        ]
+        dock = getattr(summary, "dock", None)
+        self.dock_position = [dock[0], dock[1]] if dock else None
+        self.summary_md5 = new_md5
+        self.summary_end_ts = new_end
+        return True
+
     def to_attributes(
         self,
         position: list[float] | None,
@@ -70,6 +121,13 @@ class LiveMapState:
             "session_id": self.session_id,
             "session_start": self.session_start,
             "calibration": {"x_factor": x_factor, "y_factor": y_factor},
+            # Session-summary overlay — static once per completed session.
+            "lawn_polygon": list(self.lawn_polygon),
+            "exclusion_zones": [list(z) for z in self.exclusion_zones],
+            "completed_track": [list(s) for s in self.completed_track],
+            "obstacle_polygons": [list(o) for o in self.obstacle_polygons],
+            "dock_position": list(self.dock_position) if self.dock_position else None,
+            "summary_end_ts": self.summary_end_ts,
         }
 
     def buffer_pending_point(self, x_m: float, y_m: float) -> None:
@@ -182,10 +240,22 @@ class DreameA2LiveMap:
 
         if active and not self._prev_session_active:
             # New session — snapshot ISO timestamp in UTC, reset state, flush buffered points.
+            # Preserve the static overlay (lawn polygon, exclusions, prior
+            # completed track, obstacle polygons) across sessions — only
+            # clear the live-stream accumulators.
             now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
             self._state.start_session(now_iso)
             self._state.flush_pending()
         self._prev_session_active = active
+
+        # 1b) Pick up a newly-fetched session summary (happens once per
+        # session completion on g2408).
+        try:
+            summary = getattr(device, "latest_session_summary", None)
+        except Exception:
+            summary = None
+        if summary is not None:
+            self._state.load_from_session_summary(summary)
 
         # 2) Position from telemetry. Prefer `latest_position` (tuple set by
         # the blob decoder on every s1p4 arrival, including the 8-byte idle

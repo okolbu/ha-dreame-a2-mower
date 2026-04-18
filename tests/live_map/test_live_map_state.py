@@ -116,6 +116,13 @@ def test_to_attributes_matches_schema_when_empty():
         "session_id": 0,
         "session_start": None,
         "calibration": {"x_factor": 1.0, "y_factor": 0.625},
+        # Session-summary overlay keys — all empty/None when no summary yet.
+        "lawn_polygon": [],
+        "exclusion_zones": [],
+        "completed_track": [],
+        "obstacle_polygons": [],
+        "dock_position": None,
+        "summary_end_ts": None,
     }
 
 
