@@ -50,7 +50,7 @@ MAP_OBJECTS: Final = {
     "cruise_point": "Cruise Points",
 }
 NOTIFICATION: Final = {
-    "cleanup_completed": "Cleanup Completed",
+    "cleanup_completed": "Mowing Completed",
     "consumable": "Consumable",
     "information": "Information",
     "warning": "Warning",

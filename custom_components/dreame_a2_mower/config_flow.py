@@ -102,22 +102,9 @@ class DreameMowerOptionsFlowHandler(OptionsFlow):
                         CONF_COLOR_SCHEME, default=options.get(CONF_COLOR_SCHEME, next(iter(MAP_COLOR_SCHEME_LIST)))
                     ): vol.In(list(MAP_COLOR_SCHEME_LIST.keys())),
                     vol.Required(
-                        CONF_ICON_SET,
-                        default=options.get(
-                            CONF_ICON_SET, next(iter(MAP_ICON_SET_LIST))
-                        ),
-                    ): vol.In(list(MAP_ICON_SET_LIST.keys())),
-                    vol.Required(
                         CONF_MAP_OBJECTS,
                         default=options.get(CONF_MAP_OBJECTS, list(MAP_OBJECTS.keys())),
                     ): cv.multi_select(MAP_OBJECTS),
-                    vol.Required(
-                        CONF_SQUARE, default=options.get(CONF_SQUARE, False)
-                    ): bool,
-                    vol.Required(
-                        CONF_LOW_RESOLUTION,
-                        default=options.get(CONF_LOW_RESOLUTION, False),
-                    ): bool,
                 }
             )
             if data.get(CONF_ACCOUNT_TYPE, "mi") == "mi":
