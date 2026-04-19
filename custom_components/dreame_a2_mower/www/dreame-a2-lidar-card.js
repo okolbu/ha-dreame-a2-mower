@@ -1,9 +1,11 @@
-// Dreame A2 LiDAR Card — minimal pure-WebGL point-cloud viewer.
+// Dreame A2 LiDAR Card — pure-WebGL point-cloud viewer with optional
+// 2D-map underlay and live splat-size slider.
 //
-// Consumes the `.pcd` blob served at /api/dreame_a2_mower/lidar/latest.pcd,
-// renders with `gl.POINTS` and an orbit camera. No external libraries —
-// everything from raw WebGL 1.0 + a few lines of mat4 math so the install
-// is a single-file drop.
+// Consumes the `.pcd` at /api/dreame_a2_mower/lidar/latest.pcd, renders
+// with `gl.POINTS` and an orbit camera. Optionally textures a quad at
+// Z=0 from the base-map PNG (`camera.dreame_a2_mower_map`) so the lawn
+// shows under the 3D points. No external libraries — raw WebGL 1.0
+// with ~40 LOC of mat4 helpers + ~30 LOC PCD parser.
 //
 // Usage (Lovelace YAML):
 //   - url: /dreame_a2_mower/dreame-a2-lidar-card.js
@@ -11,14 +13,16 @@
 //   cards:
 //     - type: custom:dreame-a2-lidar-card
 //       # All optional:
-//       # point_size: 3          (default 2.5)
-//       # background: '#111'     (default black)
+//       # point_size: 3            (default 2.5; live slider overrides)
+//       # background: '#111'       (default black)
 //       # url: /api/dreame_a2_mower/lidar/latest.pcd
+//       # show_map: true           (default false)
+//       # map_entity: camera.dreame_a2_mower_map
 //
-// Controls: drag to orbit, wheel to zoom.
+// Controls: drag to orbit, wheel to zoom. Bottom controls: slider for
+// splat size (1-12 px), toggle for map underlay.
 //
-// Feasibility write-up for architecture notes:
-//   docs/research/webgl-lidar-card-feasibility.md
+// Feasibility write-up: docs/research/webgl-lidar-card-feasibility.md
 
 const VERTEX_SRC = `
   attribute vec3 aPos;
@@ -28,12 +32,9 @@ const VERTEX_SRC = `
   varying vec4 vColor;
   void main() {
     gl_Position = uMVP * vec4(aPos, 1.0);
-    // Distance-attenuated point size. Clamp so it stays visible at all
-    // zoom levels. gl_Position.w is ~distance-to-eye after projection.
-    gl_PointSize = clamp(uPointSize / max(gl_Position.w, 0.1), 1.0, 24.0);
-    // PCL packs rgb as 0x00RRGGBB. Little-endian byte order in the VBO
-    // is [B, G, R, 0]; WebGL reads that into aColor as (B, G, R, 0).
-    // Swizzle back to RGB.
+    gl_PointSize = clamp(uPointSize / max(gl_Position.w, 0.1), 1.0, 48.0);
+    // PCL packs rgb as 0x00RRGGBB. Little-endian memory layout is
+    // [B, G, R, 0]; WebGL reads that as (B, G, R, 0). Swizzle to RGB.
     vColor = vec4(aColor.b, aColor.g, aColor.r, 1.0);
   }
 `;
@@ -42,22 +43,38 @@ const FRAGMENT_SRC = `
   precision mediump float;
   varying vec4 vColor;
   void main() {
-    // Round splat: discard fragments outside a circle inscribed in the
-    // point's sprite bbox. No anti-aliasing — GL_POINTS smoothing is
-    // unreliable across drivers.
     vec2 d = gl_PointCoord - vec2(0.5);
     if (dot(d, d) > 0.25) discard;
     gl_FragColor = vColor;
   }
 `;
 
-// --------------- mat4 helpers (inline, ~column-major like OpenGL) ---------------
+// --- Textured-quad shaders for the optional map underlay ---
+const QUAD_VERTEX_SRC = `
+  attribute vec3 aPos;
+  attribute vec2 aUV;
+  uniform mat4 uMVP;
+  varying vec2 vUV;
+  void main() {
+    gl_Position = uMVP * vec4(aPos, 1.0);
+    vUV = aUV;
+  }
+`;
 
-function mat4Identity() {
-  const m = new Float32Array(16);
-  m[0] = m[5] = m[10] = m[15] = 1;
-  return m;
-}
+const QUAD_FRAGMENT_SRC = `
+  precision mediump float;
+  varying vec2 vUV;
+  uniform sampler2D uTex;
+  uniform float uAlpha;
+  void main() {
+    vec4 c = texture2D(uTex, vUV);
+    // Premultiply alpha against user-configurable transparency so the
+    // underlay can be dimmed for better readability through the cloud.
+    gl_FragColor = vec4(c.rgb, c.a * uAlpha);
+  }
+`;
+
+// --------------- mat4 helpers ---------------
 
 function mat4Perspective(fovy, aspect, near, far) {
   const f = 1 / Math.tan(fovy / 2);
@@ -73,7 +90,7 @@ function mat4LookAt(eye, target, up) {
   const [ex, ey, ez] = eye;
   const [tx, ty, tz] = target;
   let zx = ex - tx, zy = ey - ty, zz = ez - tz;
-  let zl = Math.hypot(zx, zy, zz);
+  const zl = Math.hypot(zx, zy, zz);
   zx /= zl; zy /= zl; zz /= zl;
   let xx = up[1] * zz - up[2] * zy;
   let xy = up[2] * zx - up[0] * zz;
@@ -106,11 +123,30 @@ function mat4Multiply(a, b) {
   return out;
 }
 
+function compileShader(gl, type, src) {
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+    throw new Error("shader compile: " + gl.getShaderInfoLog(s));
+  }
+  return s;
+}
+
+function linkProgram(gl, vs, fs) {
+  const p = gl.createProgram();
+  gl.attachShader(p, vs);
+  gl.attachShader(p, fs);
+  gl.linkProgram(p);
+  if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+    throw new Error("program link: " + gl.getProgramInfoLog(p));
+  }
+  return p;
+}
+
 // --------------- PCD parser ---------------
 
 function parsePCD(buffer) {
-  // Header is ASCII, terminated by first newline AFTER "DATA binary".
-  // Read up to 1KB as ASCII to find the header end.
   const headerBytes = new Uint8Array(buffer, 0, Math.min(1024, buffer.byteLength));
   const headerText = new TextDecoder("ascii").decode(headerBytes);
   const dataIdx = headerText.indexOf("DATA binary");
@@ -123,17 +159,14 @@ function parsePCD(buffer) {
   const fieldsMatch = headerText.match(/\nFIELDS\s+([^\n]+)/);
   const fields = fieldsMatch ? fieldsMatch[1].trim().split(/\s+/) : [];
   const hasRGB = fields.indexOf("rgb") >= 0;
-  // For the g2408 firmware's PCD the layout is always 3×f32 xyz + u32 rgb
-  // = 16 bytes per point. Rejecting anything else for now.
   const bpp = hasRGB ? 16 : 12;
-  const expected = points * bpp;
-  if (buffer.byteLength < bodyOffset + expected) {
-    throw new Error(`PCD truncated: have ${buffer.byteLength - bodyOffset} body bytes, need ${expected}`);
+  if (buffer.byteLength < bodyOffset + points * bpp) {
+    throw new Error(`PCD truncated: body short`);
   }
   return { points, bpp, bodyOffset, hasRGB };
 }
 
-function computeCentroidAndExtent(buffer, bodyOffset, bpp, n) {
+function computeStats(buffer, bodyOffset, bpp, n) {
   const view = new DataView(buffer);
   let sx = 0, sy = 0, sz = 0;
   let minx = Infinity, maxx = -Infinity;
@@ -164,18 +197,23 @@ class DreameA2LidarCard extends HTMLElement {
     this._config = null;
     this._hass = null;
     this._loaded = false;
-    this._url = null;
     this._gl = null;
-    this._program = null;
-    this._vbo = null;
+    this._pointProgram = null;
+    this._quadProgram = null;
+    this._pointVBO = null;
+    this._quadVBO = null;
+    this._mapTex = null;
+    this._mapTexReady = false;
+    this._mapQuadWorld = null; // [[x0,y0],[x1,y1]] in world metres
     this._nPoints = 0;
     this._centroid = [0, 0, 0];
     this._radius = 1;
-    // Orbit-camera state
+    this._pointSize = 2.5;
+    this._showMap = false;
+    this._mapAlpha = 0.85;
     this._yaw = Math.PI / 4;
     this._pitch = Math.PI / 4;
-    this._distance = 0; // set after parse
-    // Interaction state
+    this._distance = 0;
     this._dragging = false;
     this._lastX = 0;
     this._lastY = 0;
@@ -184,6 +222,8 @@ class DreameA2LidarCard extends HTMLElement {
 
   setConfig(config) {
     this._config = config || {};
+    this._pointSize = Number(this._config.point_size ?? 2.5);
+    this._showMap = Boolean(this._config.show_map ?? false);
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `
       <style>
@@ -194,10 +234,29 @@ class DreameA2LidarCard extends HTMLElement {
         .status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #bbb; font-family: var(--primary-font-family, sans-serif); font-size: 14px; pointer-events: none; }
         .status.err { color: #f88; }
         .hint { position: absolute; bottom: 8px; right: 10px; font-size: 11px; color: #888; font-family: monospace; pointer-events: none; }
+        .controls {
+          position: absolute; top: 8px; left: 8px; display: flex; flex-direction: column; gap: 6px;
+          background: rgba(20, 20, 20, 0.55); padding: 6px 10px; border-radius: 8px;
+          font-family: var(--primary-font-family, sans-serif); font-size: 12px; color: #ddd;
+          backdrop-filter: blur(2px);
+        }
+        .controls label { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+        .controls input[type=range] { width: 110px; }
+        .controls input[type=checkbox] { margin: 0; }
       </style>
       <ha-card>
         <div class="wrap">
           <canvas></canvas>
+          <div class="controls">
+            <label>Splat
+              <input type="range" class="splat" min="1" max="12" step="0.5" value="${this._pointSize}">
+              <span class="splat-val">${this._pointSize}</span>
+            </label>
+            <label>
+              <input type="checkbox" class="showmap" ${this._showMap ? "checked" : ""}>
+              Map underlay
+            </label>
+          </div>
           <div class="status">Loading…</div>
           <div class="hint"></div>
         </div>
@@ -206,6 +265,9 @@ class DreameA2LidarCard extends HTMLElement {
     this._canvas = this.shadowRoot.querySelector("canvas");
     this._status = this.shadowRoot.querySelector(".status");
     this._hint = this.shadowRoot.querySelector(".hint");
+    this._splat = this.shadowRoot.querySelector(".splat");
+    this._splatVal = this.shadowRoot.querySelector(".splat-val");
+    this._showMapCb = this.shadowRoot.querySelector(".showmap");
     this._bindInput();
   }
 
@@ -214,21 +276,15 @@ class DreameA2LidarCard extends HTMLElement {
     if (!this._loaded) this._fetchAndRender();
   }
 
-  getCardSize() {
-    return 6;
-  }
-
-  _url_from_config() {
-    return this._config && this._config.url ? this._config.url : "/api/dreame_a2_mower/lidar/latest.pcd";
-  }
+  getCardSize() { return 6; }
 
   async _fetchAndRender() {
     if (!this._hass) return;
-    this._loaded = true; // once-only; future fetches driven by hass entity listener
-    const url = this._url_from_config();
+    this._loaded = true;
     try {
       const token = this._hass.auth?.data?.access_token;
       if (!token) throw new Error("No HA access token");
+      const url = this._config.url || "/api/dreame_a2_mower/lidar/latest.pcd";
       this._setStatus("Fetching point cloud…");
       const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
@@ -236,13 +292,14 @@ class DreameA2LidarCard extends HTMLElement {
       this._setStatus("Parsing…");
       const meta = parsePCD(buf);
       this._nPoints = meta.points;
-      const stats = computeCentroidAndExtent(buf, meta.bodyOffset, meta.bpp, meta.points);
+      const stats = computeStats(buf, meta.bodyOffset, meta.bpp, meta.points);
       this._centroid = stats.centroid;
       this._radius = Math.max(stats.radius, 1);
       this._distance = this._radius * 2.5;
       this._hint.textContent = `${meta.points.toLocaleString()} pts · r=${this._radius.toFixed(1)}m`;
       this._setStatus("");
       this._initGL(buf, meta);
+      if (this._showMap) await this._loadMapUnderlay();
       this._startRenderLoop();
     } catch (ex) {
       console.error("[dreame-a2-lidar-card]", ex);
@@ -257,52 +314,102 @@ class DreameA2LidarCard extends HTMLElement {
   }
 
   _initGL(buffer, meta) {
-    const gl = this._canvas.getContext("webgl", { antialias: true });
+    const gl = this._canvas.getContext("webgl", { antialias: true, premultipliedAlpha: true });
     if (!gl) throw new Error("WebGL not available");
     this._gl = gl;
-    gl.clearColor(0, 0, 0, 1);
+    gl.clearColor(0, 0, 0, 0);
     gl.enable(gl.DEPTH_TEST);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
 
-    const vs = gl.createShader(gl.VERTEX_SHADER);
-    gl.shaderSource(vs, VERTEX_SRC);
-    gl.compileShader(vs);
-    if (!gl.getShaderParameter(vs, gl.COMPILE_STATUS)) {
-      throw new Error("VS compile: " + gl.getShaderInfoLog(vs));
-    }
-    const fs = gl.createShader(gl.FRAGMENT_SHADER);
-    gl.shaderSource(fs, FRAGMENT_SRC);
-    gl.compileShader(fs);
-    if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) {
-      throw new Error("FS compile: " + gl.getShaderInfoLog(fs));
-    }
-    const prog = gl.createProgram();
-    gl.attachShader(prog, vs);
-    gl.attachShader(prog, fs);
-    gl.linkProgram(prog);
-    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
-      throw new Error("Program link: " + gl.getProgramInfoLog(prog));
-    }
-    gl.useProgram(prog);
-    this._program = prog;
-
-    // Upload the PCD body directly — 16 bytes per point (xyz float32 + rgb uint32).
+    // Point-cloud program
+    const pVs = compileShader(gl, gl.VERTEX_SHADER, VERTEX_SRC);
+    const pFs = compileShader(gl, gl.FRAGMENT_SHADER, FRAGMENT_SRC);
+    this._pointProgram = linkProgram(gl, pVs, pFs);
     const body = new Uint8Array(buffer, meta.bodyOffset, meta.points * meta.bpp);
-    this._vbo = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, this._vbo);
+    this._pointVBO = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, this._pointVBO);
     gl.bufferData(gl.ARRAY_BUFFER, body, gl.STATIC_DRAW);
+    this._pointLocs = {
+      aPos: gl.getAttribLocation(this._pointProgram, "aPos"),
+      aColor: gl.getAttribLocation(this._pointProgram, "aColor"),
+      uMVP: gl.getUniformLocation(this._pointProgram, "uMVP"),
+      uPointSize: gl.getUniformLocation(this._pointProgram, "uPointSize"),
+    };
+    this._pointBPP = meta.bpp;
+    this._pointHasRGB = meta.hasRGB;
 
-    const aPos = gl.getAttribLocation(prog, "aPos");
-    gl.enableVertexAttribArray(aPos);
-    gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, meta.bpp, 0);
+    // Quad program (for map underlay)
+    const qVs = compileShader(gl, gl.VERTEX_SHADER, QUAD_VERTEX_SRC);
+    const qFs = compileShader(gl, gl.FRAGMENT_SHADER, QUAD_FRAGMENT_SRC);
+    this._quadProgram = linkProgram(gl, qVs, qFs);
+    this._quadLocs = {
+      aPos: gl.getAttribLocation(this._quadProgram, "aPos"),
+      aUV: gl.getAttribLocation(this._quadProgram, "aUV"),
+      uMVP: gl.getUniformLocation(this._quadProgram, "uMVP"),
+      uTex: gl.getUniformLocation(this._quadProgram, "uTex"),
+      uAlpha: gl.getUniformLocation(this._quadProgram, "uAlpha"),
+    };
+  }
 
-    if (meta.hasRGB) {
-      const aColor = gl.getAttribLocation(prog, "aColor");
-      gl.enableVertexAttribArray(aColor);
-      gl.vertexAttribPointer(aColor, 4, gl.UNSIGNED_BYTE, true, meta.bpp, 12);
+  async _loadMapUnderlay() {
+    try {
+      const entityId = this._config.map_entity || "camera.dreame_a2_mower_map";
+      const state = this._hass.states?.[entityId];
+      if (!state) throw new Error(`${entityId} not found`);
+      const calib = state.attributes?.calibration_points;
+      const token = this._hass.auth?.data?.access_token;
+      if (!calib || calib.length < 3) {
+        console.warn("[dreame-a2-lidar-card] no calibration_points on", entityId);
+        return;
+      }
+      // Derive mm-per-pixel from calibration and the quad's world bounds
+      // from the LiDAR point-cloud bbox projected onto Z=0. Simpler:
+      // just cover the point-cloud's XY bbox at Z=0 and UV-map the full
+      // texture across it. Alignment with the PNG's own coordinate
+      // system is approximate but usually close enough to see lawn
+      // boundary under the cloud.
+      const mapUrl = `/api/camera_proxy/${entityId}?token=${state.attributes?.access_token || ""}`;
+      const r = await fetch(mapUrl, { headers: { Authorization: `Bearer ${token}` } });
+      if (!r.ok) throw new Error(`map HTTP ${r.status}`);
+      const blob = await r.blob();
+      const bmp = await createImageBitmap(blob);
+
+      const gl = this._gl;
+      const tex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, tex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      this._mapTex = tex;
+
+      // Quad covering the point cloud's XY bbox at Z=0.
+      // Computed from the first-pass stats we captured.
+      const r_ = this._radius * 1.3;
+      const cx = this._centroid[0];
+      const cy = this._centroid[1];
+      const x0 = cx - r_, x1 = cx + r_;
+      const y0 = cy - r_, y1 = cy + r_;
+      // interleaved pos(xyz) + uv(st), CCW winding, two triangles
+      const data = new Float32Array([
+        x0, y0, 0,   0, 0,
+        x1, y0, 0,   1, 0,
+        x1, y1, 0,   1, 1,
+        x0, y0, 0,   0, 0,
+        x1, y1, 0,   1, 1,
+        x0, y1, 0,   0, 1,
+      ]);
+      this._quadVBO = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._quadVBO);
+      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      this._mapTexReady = true;
+    } catch (ex) {
+      console.warn("[dreame-a2-lidar-card] map underlay failed:", ex);
+      this._showMap = false;
+      if (this._showMapCb) this._showMapCb.checked = false;
     }
-
-    this._uMVP = gl.getUniformLocation(prog, "uMVP");
-    this._uPointSize = gl.getUniformLocation(prog, "uPointSize");
   }
 
   _bindInput() {
@@ -327,6 +434,18 @@ class DreameA2LidarCard extends HTMLElement {
       const f = Math.exp(e.deltaY * 0.001);
       this._distance = Math.min(this._radius * 8, Math.max(this._radius * 0.2, this._distance * f));
     }, { passive: false });
+
+    this._splat.addEventListener("input", () => {
+      this._pointSize = parseFloat(this._splat.value);
+      this._splatVal.textContent = this._pointSize;
+    });
+
+    this._showMapCb.addEventListener("change", async () => {
+      this._showMap = this._showMapCb.checked;
+      if (this._showMap && !this._mapTexReady && this._gl) {
+        await this._loadMapUnderlay();
+      }
+    });
   }
 
   _startRenderLoop() {
@@ -368,15 +487,42 @@ class DreameA2LidarCard extends HTMLElement {
     const proj = mat4Perspective(Math.PI / 3, aspect, 0.1, this._radius * 40);
     const view = mat4LookAt([ex, ey, ez], this._centroid, [0, 0, 1]);
     const mvp = mat4Multiply(proj, view);
-    gl.uniformMatrix4fv(this._uMVP, false, mvp);
-    gl.uniform1f(this._uPointSize, (this._config.point_size || 2.5) * this._dpr);
+
+    // Draw map underlay first so point cloud depth-tests over it.
+    if (this._showMap && this._mapTexReady && this._quadVBO) {
+      gl.useProgram(this._quadProgram);
+      gl.bindBuffer(gl.ARRAY_BUFFER, this._quadVBO);
+      const stride = 5 * 4;
+      gl.enableVertexAttribArray(this._quadLocs.aPos);
+      gl.vertexAttribPointer(this._quadLocs.aPos, 3, gl.FLOAT, false, stride, 0);
+      gl.enableVertexAttribArray(this._quadLocs.aUV);
+      gl.vertexAttribPointer(this._quadLocs.aUV, 2, gl.FLOAT, false, stride, 12);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, this._mapTex);
+      gl.uniform1i(this._quadLocs.uTex, 0);
+      gl.uniform1f(this._quadLocs.uAlpha, this._mapAlpha);
+      gl.uniformMatrix4fv(this._quadLocs.uMVP, false, mvp);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      gl.disableVertexAttribArray(this._quadLocs.aUV);
+    }
+
+    // Points on top (depth test keeps roof points above ground points).
+    gl.useProgram(this._pointProgram);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this._pointVBO);
+    gl.enableVertexAttribArray(this._pointLocs.aPos);
+    gl.vertexAttribPointer(this._pointLocs.aPos, 3, gl.FLOAT, false, this._pointBPP, 0);
+    if (this._pointHasRGB) {
+      gl.enableVertexAttribArray(this._pointLocs.aColor);
+      gl.vertexAttribPointer(this._pointLocs.aColor, 4, gl.UNSIGNED_BYTE, true, this._pointBPP, 12);
+    }
+    gl.uniformMatrix4fv(this._pointLocs.uMVP, false, mvp);
+    gl.uniform1f(this._pointLocs.uPointSize, this._pointSize * this._dpr);
     gl.drawArrays(gl.POINTS, 0, this._nPoints);
   }
 }
 
 customElements.define("dreame-a2-lidar-card", DreameA2LidarCard);
 
-// Announce to Lovelace's custom-card picker so the user can add it via the UI.
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "dreame-a2-lidar-card",
