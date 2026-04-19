@@ -24,9 +24,22 @@ def _blank_png(w: int = 256, h: int = 256, color=(0, 0, 0)) -> bytes:
     return buf.getvalue()
 
 
-def _red_pixels(png_bytes: bytes) -> int:
+def _trail_pixels(png_bytes: bytes) -> int:
+    """Count pixels coloured by the trail overlay.
+
+    The trail is dark grey on a black base, so any pixel with
+    R=G=B in roughly the 40–120 range counts. That keeps the test
+    independent of the exact TRAIL_COLOR tuple while still
+    distinguishing "trail present" from "all black".
+    """
     arr = np.array(Image.open(io.BytesIO(png_bytes)).convert("RGB"))
-    return int(((arr[:, :, 0] > 150) & (arr[:, :, 1] < 100) & (arr[:, :, 2] < 100)).sum())
+    r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
+    mask = (r > 30) & (r < 150) & (abs(r.astype(int) - g.astype(int)) < 20) & (abs(r.astype(int) - b.astype(int)) < 20)
+    return int(mask.sum())
+
+
+# Back-compat alias — older tests still reference this name.
+_red_pixels = _trail_pixels
 
 
 # ---------- affine ----------
@@ -132,8 +145,10 @@ def test_obstacle_polygon_blends_over_base():
     layer.set_obstacles([poly])
     png = layer.compose(_blank_png(color=(0, 255, 0)))
     arr = np.array(Image.open(io.BytesIO(png)).convert("RGB"))
-    orange = ((arr[:, :, 0] > 100) & (arr[:, :, 1] > 50) & (arr[:, :, 1] < 200) & (arr[:, :, 2] < 100)).sum()
-    assert orange > 0
+    # Blue obstacle over green base — expect blue channel elevated and
+    # red muted (obstacle is a blue-dominant translucent fill).
+    blue_px = ((arr[:, :, 2] > 80) & (arr[:, :, 0] < 120)).sum()
+    assert blue_px > 0
 
 
 # ---------- compose ----------

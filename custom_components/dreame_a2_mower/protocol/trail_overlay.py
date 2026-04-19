@@ -32,7 +32,7 @@ from typing import Iterable, Sequence
 from PIL import Image, ImageDraw
 
 
-TRAIL_COLOR = (220, 50, 50, 220)
+TRAIL_COLOR = (70, 70, 70, 220)             # dark grey — matches app
 TRAIL_WIDTH_PX = 4
 # Live-trail pen-up threshold — consecutive s1p4 samples more than this
 # far apart (metres) are treated as a session boundary / dock visit
@@ -42,8 +42,8 @@ LIVE_GAP_PENUP_M = 5.0
 DOCK_RADIUS_PX = 14
 DOCK_COLOR = (50, 180, 50, 255)
 DOCK_OUTLINE = (255, 255, 255, 255)
-OBSTACLE_COLOR = (255, 140, 0, 150)
-OBSTACLE_OUTLINE = (160, 60, 0, 220)
+OBSTACLE_COLOR = (90, 140, 230, 170)         # blue — matches app
+OBSTACLE_OUTLINE = (40, 80, 200, 230)
 
 
 def _affine_from_calibration(

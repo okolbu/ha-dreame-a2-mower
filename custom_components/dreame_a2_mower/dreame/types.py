@@ -2608,7 +2608,12 @@ class MapRendererColorScheme:
         34, 109, 242, 255)  # (103, 156, 244, 200)
     path: tuple[int] = (255, 255, 255, 255)
     segment: tuple[list[tuple[int]]] = (
-        [(171, 199, 248, 255), (121, 170, 255, 255)],
+        # A2 mower: the single mow zone is drawn with segment[0], so
+        # zone_id=1 (the lawn) gets the first gradient pair. Light grass
+        # greens chosen to match the Dreame app's pale-green lawn look
+        # (IMG_4421.PNG). Indices 1-3 retained for multi-zone setups
+        # and for other Dreame models that reuse this scheme.
+        [(178, 223, 138, 255), (156, 214, 120, 255)],   # grass green
         [(249, 224, 125, 255), (255, 211, 38, 255)],
         [(184, 227, 255, 255), (141, 210, 255, 255)],
         [(184, 217, 141, 255), (150, 217, 141, 255)],
