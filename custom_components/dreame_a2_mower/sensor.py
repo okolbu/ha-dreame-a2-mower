@@ -7,6 +7,40 @@ from dataclasses import dataclass
 from datetime import datetime
 
 
+def _mowing_zone_display(telemetry, device):
+    """Map the raw phase byte from s1p4 to a user-readable zone label.
+
+    Prefers the zone name from the cloud-built map's segments dict
+    (e.g. "Zone1", or a user-renamed custom label); falls back to a
+    1-indexed numeric string ("1", "2", ...) so the sensor never
+    shows "0" — mower firmware numbers zones from 0, but the app and
+    humans number from 1.
+    """
+    if telemetry is None:
+        return None
+    raw = getattr(telemetry, "phase_raw", None)
+    if raw is None:
+        return None
+    try:
+        zone_ix = int(raw)
+    except (TypeError, ValueError):
+        return None
+    zone_id_1based = zone_ix + 1
+    # Attempt to resolve via segment/zone metadata if the cloud-built
+    # map supplied names. `device.status.segments` is a dict keyed by
+    # zone_id (1-based). Silent fallback if anything's missing.
+    try:
+        segments = getattr(device.status, "segments", None) or {}
+        seg = segments.get(zone_id_1based)
+        if seg is not None:
+            name = getattr(seg, "custom_name", None) or getattr(seg, "name", None)
+            if name:
+                return str(name)
+    except Exception:
+        pass
+    return str(zone_id_1based)
+
+
 def _project_to_compass(telemetry, device, axis: str):
     """Project mower-frame (x_m, y_m_calibrated) onto a compass axis.
 
@@ -399,15 +433,18 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # zone-ID the mower firmware is currently mowing in — each distinct
     # value corresponds to a distinct non-overlapping X/Y region on the
     # lawn. The entity key stays `mowing_phase` so existing automations
-    # keep working. Enum labels (`mowing`, `transit`, etc.) are historical
-    # placeholders; see docs/research/g2408-protocol.md.
+    # keep working. Resolves the zone name from `device.status.segments`
+    # when available (cloud-built map provides segment definitions),
+    # otherwise falls back to a 1-indexed zone number so the state is
+    # never "0" (user-reported that was confusing; mower firmware
+    # numbers zones from 0 but the app and humans number from 1).
     DreameMowerSensorEntityDescription(
         key="mowing_phase",
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
         name="Mowing Zone",
         icon="mdi:vector-square",
         exists_fn=lambda description, device: True,
-        value_fn=lambda value, device: value.phase_raw if value is not None else None,
+        value_fn=lambda value, device: _mowing_zone_display(value, device),
     ),
     DreameMowerSensorEntityDescription(
         key="session_area_mowed",

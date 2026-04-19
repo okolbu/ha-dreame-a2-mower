@@ -227,6 +227,14 @@ class DreameMowerDevice:
         # polls this and writes through to the on-disk LidarArchive, same
         # pattern as session-summary JSON.
         self._latest_lidar_scan: tuple[str, int, bytes] | None = None
+        # g2408 session-status from s2p56. The upstream TASK_STATUS
+        # property (s4p7) never arrives on this device, so these flags
+        # are the only signal that a session is "active but paused"
+        # (rain-paused, low-battery recharge mid-session, etc).
+        # `_task_pending_resume` = True means `{"status": [[1, 4]]}`
+        # was the last value — session is on hold pending resume.
+        self._task_pending_resume: bool = False
+        self._task_running_s2p56: bool = False
         # Dedupe novelty detector — reports unknown (siid, piid) pairs,
         # unfamiliar methods, and new event piids exactly once each so
         # future protocol changes don't get silently discarded.
@@ -443,6 +451,22 @@ class DreameMowerDevice:
                             if isinstance(value, str) and value:
                                 self._handle_lidar_object_name(value)
                             continue
+                        # s2p56 = session-task status on g2408. Shape:
+                        #   `{"status": []}`         — no active task
+                        #   `{"status": [[1, 0]]}`   — task running
+                        #   `{"status": [[1, 4]]}`   — task paused, pending
+                        #                              resume (dock-charging
+                        #                              mid-session, rain-
+                        #                              paused, etc.)
+                        # The upstream TASK_STATUS property (s4p7) is never
+                        # emitted on the g2408, so the "session active but
+                        # not currently mowing" state (e.g. rain-pause) was
+                        # invisible to HA. Track it here so the
+                        # `mowing_session_active` binary sensor can reflect
+                        # the app's "Continue / End" state correctly.
+                        if param["siid"] == 2 and param["piid"] == 56:
+                            self._handle_session_status(param.get("value"))
+                            continue
                         if self._unknown_watchdog.saw_property(
                             param["siid"], param["piid"]
                         ):
@@ -593,6 +617,46 @@ class DreameMowerDevice:
             _LOGGER.warning(
                 "[EVENT] session-summary fetch failed for %s: %s", object_name, ex
             )
+
+    def _handle_session_status(self, value) -> None:
+        """React to an ``s2p56`` session-status arrival (g2408).
+
+        The g2408 never emits the upstream TASK_STATUS property, so
+        this is our only signal that a session is active. Flags we
+        set from the payload shape:
+
+        - ``{"status": []}``     → no active task (both False)
+        - ``{"status": [[1, 0]]}``→ task running (`_task_running_s2p56`)
+        - ``{"status": [[1, 4]]}``→ task paused, pending resume
+                                    (`_task_pending_resume`)
+
+        Used by ``device.status.started`` so the Mowing Session Active
+        binary sensor correctly reports "session in progress" during
+        rain-protection stops and low-battery recharge pauses even
+        when the mower is physically docked.
+        """
+        running = False
+        pending = False
+        try:
+            status = None
+            if isinstance(value, dict):
+                status = value.get("status")
+            if isinstance(status, list) and status:
+                first = status[0]
+                if isinstance(first, list) and len(first) >= 2:
+                    # Second element: 0 = running, 4 = paused-pending-resume.
+                    code = int(first[1])
+                    running = (code == 0)
+                    pending = (code == 4)
+        except (TypeError, ValueError):
+            pass
+        if running != self._task_running_s2p56 or pending != self._task_pending_resume:
+            _LOGGER.info(
+                "[SESSION] s2p56 update: running=%s pending_resume=%s (raw=%r)",
+                running, pending, value,
+            )
+        self._task_running_s2p56 = running
+        self._task_pending_resume = pending
 
     def _handle_lidar_object_name(self, object_name: str) -> None:
         """React to an ``s99p20`` LiDAR-scan upload announcement.
@@ -5567,8 +5631,16 @@ class DreameMowerDeviceStatus:
             and task_status is not DreameMowerTaskStatus.DOCKING_PAUSED
             and task_status is not DreameMowerTaskStatus.UNKNOWN
         )
+        # g2408 supplementary signal: session state from s2p56. Either
+        # "running" or "pending resume" means a task is live from the
+        # mower's perspective — the app still shows Continue/End, and
+        # HA's Mowing Session Active should agree.
+        task_active_by_s2p56 = bool(
+            self._device._task_running_s2p56 or self._device._task_pending_resume
+        )
         return bool(
             task_active_by_status
+            or task_active_by_s2p56
             or self.cleaning_paused
             or status is DreameMowerStatus.CLEANING
             or status is DreameMowerStatus.SEGMENT_CLEANING
