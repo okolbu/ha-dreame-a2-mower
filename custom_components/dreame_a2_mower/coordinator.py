@@ -144,6 +144,41 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
             self.session_archive.latest().md5 if self.session_archive and self.session_archive.latest() else None
         )
 
+        # Optional raw-MQTT archive — off by default. When enabled, every
+        # MQTT message the device client receives gets appended to a
+        # daily-rotating JSONL file under
+        # `<ha_config>/dreame_a2_mower/mqtt_archive/YYYY-MM-DD.jsonl`, with
+        # pruning at `retain_days`. Gives an in-HA equivalent of the
+        # external probe's capture for users who need a full record of
+        # unknown/novel fields without running a separate Python script.
+        from .const import (
+            CONF_MQTT_ARCHIVE,
+            CONF_MQTT_ARCHIVE_RETAIN_DAYS,
+            DEFAULT_MQTT_ARCHIVE_RETAIN_DAYS,
+        )
+        if entry.options.get(CONF_MQTT_ARCHIVE, False):
+            from .protocol.mqtt_archive import MqttArchive
+            mqtt_archive_dir = Path(hass.config.path(DOMAIN, "mqtt_archive"))
+            retain = int(entry.options.get(
+                CONF_MQTT_ARCHIVE_RETAIN_DAYS,
+                DEFAULT_MQTT_ARCHIVE_RETAIN_DAYS,
+            ))
+            try:
+                self._device.attach_mqtt_archive(
+                    MqttArchive(mqtt_archive_dir, retain_days=retain)
+                )
+                LOGGER.info(
+                    "MQTT archive enabled at %s (retain %d days)",
+                    mqtt_archive_dir,
+                    retain,
+                )
+            except OSError as ex:
+                LOGGER.warning(
+                    "MQTT archive: could not initialise at %s: %s — disabled",
+                    mqtt_archive_dir,
+                    ex,
+                )
+
         async_dispatcher_connect(
             hass,
             persistent_notification.SIGNAL_PERSISTENT_NOTIFICATIONS_UPDATED,

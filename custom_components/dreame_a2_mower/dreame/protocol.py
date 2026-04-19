@@ -95,6 +95,7 @@ class DreameMowerDreameHomeCloudProtocol:
         self._client = None
         self._message_callback = None
         self._connected_callback = None
+        self._mqtt_archive = None
         self._logged_in = None
         self._stream_key = None
         self._client_key = None
@@ -208,6 +209,19 @@ class DreameMowerDreameHomeCloudProtocol:
 
     @staticmethod
     def _on_client_message(client, self, message):
+        # Mirror the raw on-wire payload to the JSONL archive — always
+        # first so even malformed messages are captured. Never let an
+        # archive failure propagate; observability must not break the
+        # live pipeline.
+        if self._mqtt_archive is not None:
+            try:
+                self._mqtt_archive.write(
+                    topic=getattr(message, "topic", "?"),
+                    payload=message.payload,
+                )
+            except Exception as ex:
+                _LOGGER.warning("MQTT archive write failed: %s", ex)
+
         if self._message_callback:
             try:
                 response = json.loads(message.payload.decode("utf-8"))
@@ -489,6 +503,16 @@ class DreameMowerDreameHomeCloudProtocol:
                 return response.content
             retries = retries + 1
         return None
+
+    def attach_mqtt_archive(self, archive) -> None:
+        """Install an MQTT archive for raw JSONL capture.
+
+        See :class:`protocol.mqtt_archive.MqttArchive`. Called by the
+        coordinator when the ``mqtt_archive`` option is enabled on the
+        config entry. The archive sees every payload that arrives on
+        the paho callback thread, before JSON decoding.
+        """
+        self._mqtt_archive = archive
 
     def get_file_url(self, object_name: str = "") -> Any:
         api_response = self._api_call(
@@ -1280,6 +1304,13 @@ class DreameMowerProtocol:
         if self.device_cloud is not None:
             self.device_cloud.disconnect()
         self._connected = False
+
+    def attach_mqtt_archive(self, archive) -> None:
+        """Install an MQTT archive on whichever cloud client owns the
+        paho loop. Dreame Home is the canonical path for the g2408; Mi
+        Home is retained for upstream compatibility."""
+        if self.cloud is not None and hasattr(self.cloud, "attach_mqtt_archive"):
+            self.cloud.attach_mqtt_archive(archive)
 
     def send_async(self, callback, method, parameters: Any = None, retry_count: int = 2):
         if (self.prefer_cloud or not self.device) and self.device_cloud:

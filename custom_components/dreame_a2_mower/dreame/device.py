@@ -226,6 +226,10 @@ class DreameMowerDevice:
         # future protocol changes don't get silently discarded.
         from ..protocol.unknown_watchdog import UnknownFieldWatchdog
         self._unknown_watchdog = UnknownFieldWatchdog()
+        # Optional raw-MQTT archive, attached by coordinator when enabled.
+        # Forwarded to the protocol layer where the on-wire payload is
+        # still available before JSON-decode.
+        self._mqtt_archive = None
         self._discard_timeout = 5
         self._restore_timeout = 15
 
@@ -1957,6 +1961,19 @@ class DreameMowerDevice:
     def listen_error(self, callback) -> None:
         """Set error callback function for external listeners"""
         self._error_callback = callback
+
+    def attach_mqtt_archive(self, archive) -> None:
+        """Opt in to raw-MQTT JSONL archival.
+
+        The archive is held on the device so the protocol layer can be
+        discovered at attach time (cloud vs local, which exposes the
+        MQTT client). Any subsequent MQTT message handled by
+        ``_on_client_message`` is mirrored into the archive before
+        JSON-decoding so even undecodable payloads land on disk.
+        """
+        self._mqtt_archive = archive
+        if self._protocol is not None:
+            self._protocol.attach_mqtt_archive(archive)
 
     def schedule_update(self, wait: float = None, force_request_properties=False) -> None:
         """Schedule a device update for future"""

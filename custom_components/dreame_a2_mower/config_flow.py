@@ -42,6 +42,9 @@ from .const import (
     CONF_PREFER_CLOUD,
     CONF_LOW_RESOLUTION,
     CONF_SQUARE,
+    CONF_MQTT_ARCHIVE,
+    CONF_MQTT_ARCHIVE_RETAIN_DAYS,
+    DEFAULT_MQTT_ARCHIVE_RETAIN_DAYS,
     NOTIFICATION,
     MAP_OBJECTS,
     NOTIFICATION_ID_2FA_LOGIN,
@@ -131,6 +134,17 @@ class DreameMowerOptionsFlowHandler(OptionsFlow):
                         OPT_Y_FACTOR,
                         default=options.get(OPT_Y_FACTOR, DEFAULT_Y_FACTOR),
                     ): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=10.0)),
+                    vol.Optional(
+                        CONF_MQTT_ARCHIVE,
+                        default=options.get(CONF_MQTT_ARCHIVE, False),
+                    ): bool,
+                    vol.Optional(
+                        CONF_MQTT_ARCHIVE_RETAIN_DAYS,
+                        default=options.get(
+                            CONF_MQTT_ARCHIVE_RETAIN_DAYS,
+                            DEFAULT_MQTT_ARCHIVE_RETAIN_DAYS,
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=90)),
                 }
             )
 

@@ -23,6 +23,9 @@ CONF_PREFER_CLOUD: Final = "prefer_cloud"
 CONF_LOW_RESOLUTION: Final = "low_resolution"
 CONF_SQUARE: Final = "square"
 CONF_ACCOUNT_TYPE: Final = "account_type"
+CONF_MQTT_ARCHIVE: Final = "mqtt_archive"
+CONF_MQTT_ARCHIVE_RETAIN_DAYS: Final = "mqtt_archive_retain_days"
+DEFAULT_MQTT_ARCHIVE_RETAIN_DAYS: Final = 7
 
 CONTENT_TYPE: Final = "image/png"
 
