@@ -56,19 +56,21 @@ def replay_from_archive_file(
 
     state.load_from_session_summary(summary)
 
-    # Flatten every completed-track segment into state.path so map cards
-    # that draw the `path` attribute show the historical trail. Each
-    # point is already in metres (mower frame) per load_from_session_summary,
-    # so no further calibration is needed.
+    # Do NOT flatten completed_track into state.path — each track
+    # segment represents a continuous pen-down stroke, and the pen-up
+    # gaps between them correspond to dock visits / path-planner
+    # jumps that should NOT be drawn as connecting lines. A flat
+    # `path` would render a straight line across every such gap
+    # (user reported "ghost segments" 2026-04-19). The TrailLayer's
+    # `reset_to_session` draws each segment separately as a distinct
+    # `ImageDraw.line` call, so the gaps stay invisible.
     state.path = []
-    for seg in state.completed_track:
-        for pt in seg:
-            state.path.append([round(pt[0], 3), round(pt[1], 3)])
 
+    total_track_points = sum(len(seg) for seg in state.completed_track)
     return {
         "md5": state.summary_md5,
-        "path_points": len(state.path),
-        "path": state.path,
+        "path_points": total_track_points,
+        "segments": len(state.completed_track),
     }
 
 

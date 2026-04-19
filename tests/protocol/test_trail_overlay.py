@@ -157,6 +157,27 @@ def test_compose_handles_base_size_mismatch():
     assert Image.open(io.BytesIO(png)).size == (300, 200)
 
 
+def test_live_pen_up_on_large_jump():
+    """A jump greater than LIVE_GAP_PENUP_M should start a new
+    segment — no line drawn across the gap — otherwise dock visits
+    and telemetry glitches produce ghost trails."""
+    layer = TrailLayer(base_size=(256, 256), calibration=CALIBRATION)
+    # Draw a short segment in the upper-left.
+    layer.extend_live([0.0, 0.0])
+    layer.extend_live([0.1, 0.0])
+    red_after_short = _red_pixels(layer.compose(_blank_png()))
+    # Now "teleport" 10 m to the other side — should NOT draw a
+    # connecting line. Next point within 5 m should resume drawing.
+    layer.extend_live([10.0, 10.0])  # big jump — pen up
+    layer.extend_live([10.1, 10.0])  # short follow-up — pen down again
+    red_after_jump = _red_pixels(layer.compose(_blank_png()))
+    # Minimal growth — only the tiny second segment should have been added
+    # (roughly same pixel count as the first small segment). If the jump
+    # had drawn across, the red count would explode (diagonal across
+    # ~14 m of canvas).
+    assert red_after_jump < red_after_short * 3
+
+
 def test_x_reflect_mirrors_trail_horizontally():
     """When ``x_reflect_mm`` is set, an input X of 0 should produce
     the same pixel as an input X of the reflection value without a

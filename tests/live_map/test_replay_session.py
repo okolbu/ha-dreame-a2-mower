@@ -92,18 +92,19 @@ def test_replay_from_file_returns_summary_stats(tmp_path: Path, raw_summary_json
     state = LiveMapState()
     result = replay_from_archive_file(state, fixture_file, x_factor=1.0, y_factor=1.0)
 
-    assert result["path_points"] > 0  # mower path reconstructed from track segments
+    assert result["path_points"] > 0  # total points across all track segments
     assert result["md5"] == state.summary_md5
-    assert result["path"] == state.path  # replayed path exposed in result
+    assert result["segments"] == len(state.completed_track)
     # State got populated with the full overlay.
     assert len(state.lawn_polygon) > 0
     assert len(state.completed_track) > 0
 
 
-def test_replay_rebuilds_path_from_track_segments(tmp_path: Path, raw_summary_json):
-    """For animation / card-trail display, the `path` attribute must
-    reflect the completed mow track from the archived session — not stay
-    empty the way it would on a fresh LiveMapState."""
+def test_replay_keeps_path_empty_to_avoid_ghost_segments(tmp_path: Path, raw_summary_json):
+    """`state.path` is drawn as a single polyline, so flattening the
+    multi-segment completed_track into it would render straight lines
+    across every pen-up gap. Keep path empty during replay and let the
+    TrailLayer render completed_track segment-by-segment."""
     from live_map import replay_from_archive_file
 
     fixture_file = tmp_path / "sample.json"
@@ -112,11 +113,9 @@ def test_replay_rebuilds_path_from_track_segments(tmp_path: Path, raw_summary_js
     state = LiveMapState()
     replay_from_archive_file(state, fixture_file, x_factor=1.0, y_factor=1.0)
 
-    # Every track-segment point must be present in state.path.
-    total_track_points = sum(len(seg) for seg in state.completed_track)
-    assert total_track_points > 0
-    # path is flattened segments — at minimum first point of first segment.
-    assert len(state.path) > 0
+    assert state.path == []
+    # completed_track is what carries the per-segment geometry.
+    assert len(state.completed_track) > 0
 
 
 def test_replay_from_missing_file_raises():

@@ -34,6 +34,11 @@ from PIL import Image, ImageDraw
 
 TRAIL_COLOR = (220, 50, 50, 220)
 TRAIL_WIDTH_PX = 4
+# Live-trail pen-up threshold — consecutive s1p4 samples more than this
+# far apart (metres) are treated as a session boundary / dock visit
+# rather than a connected segment. Mower mow speed is <0.5 m/s over 5 s
+# telemetry; 5 m leaves comfortable margin before ghost-segment noise.
+LIVE_GAP_PENUP_M = 5.0
 DOCK_RADIUS_PX = 14
 DOCK_COLOR = (50, 180, 50, 255)
 DOCK_OUTLINE = (255, 255, 255, 255)
@@ -111,6 +116,8 @@ class TrailLayer:
         self._trail = Image.new("RGBA", base_size, (0, 0, 0, 0))
         self._draw = ImageDraw.Draw(self._trail, "RGBA")
         self._last_point: tuple[float, float] | None = None
+        # Metres version of `_last_point` for the pen-up jump test.
+        self._last_point_m: tuple[float, float] | None = None
         self._dock: tuple[float, float] | None = None
         self._obstacle_polys: list[list[tuple[float, float]]] = []
         # Version bumped on every mutation; used by callers to cache
@@ -125,19 +132,31 @@ class TrailLayer:
         Call this once per ``s1p4`` arrival. The first call after a
         reset / new session only remembers the point without drawing
         (there's no previous point to connect to).
+
+        Jumps larger than ``LIVE_GAP_PENUP_M`` metres are treated as a
+        pen-up / new segment (the mower can't physically travel that
+        far in one 5-second telemetry interval, so it's a dock visit,
+        a GPS correction, or a telemetry drop — drawing a straight
+        line across would produce a ghost segment).
         """
         if point_m is None or len(point_m) < 2:
             return
-        px = self._m_to_px(float(point_m[0]), float(point_m[1]))
-        if self._last_point is not None:
-            self._draw.line(
-                [self._last_point, px],
-                fill=self._trail_color,
-                width=self._trail_width,
-                joint="curve",
-            )
-            self.version += 1
+        new_x_m = float(point_m[0])
+        new_y_m = float(point_m[1])
+        px = self._m_to_px(new_x_m, new_y_m)
+        if self._last_point is not None and self._last_point_m is not None:
+            dx = new_x_m - self._last_point_m[0]
+            dy = new_y_m - self._last_point_m[1]
+            if (dx * dx + dy * dy) ** 0.5 <= LIVE_GAP_PENUP_M:
+                self._draw.line(
+                    [self._last_point, px],
+                    fill=self._trail_color,
+                    width=self._trail_width,
+                    joint="curve",
+                )
+                self.version += 1
         self._last_point = px
+        self._last_point_m = (new_x_m, new_y_m)
 
     # ------------------- replay -------------------
 
@@ -146,6 +165,7 @@ class TrailLayer:
         self._trail = Image.new("RGBA", self._size, (0, 0, 0, 0))
         self._draw = ImageDraw.Draw(self._trail, "RGBA")
         self._last_point = None
+        self._last_point_m = None
         self._obstacle_polys = []
         self._dock = None
         self.version += 1
