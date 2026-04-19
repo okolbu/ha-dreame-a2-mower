@@ -108,3 +108,51 @@ def test_full_fixture_renders_without_error(fixtures_dir: Path):
     # Expect a substantial fraction of pixels to be painted (ground plane visible)
     painted = (arr.sum(axis=2) > 0).sum()
     assert painted > 256 * 256 * 0.05, f"only {painted} pixels painted"
+
+
+def test_oblique_tilt_pushes_tall_points_north_in_image():
+    """A point with high Z in an oblique view should render HIGHER in
+    the image (smaller screen_y) than a point at ground level at the
+    same (x, y). Camera is south-of-scene pitched 45° forward, so
+    rooftops lean 'north/up' relative to their ground footprint."""
+    # Two points at same (x, y) — ground green vs tall red.
+    cloud = _tiny_cloud([
+        (0.0, 0.0, 0.0, 0, 255, 0),   # ground
+        (0.0, 0.0, 10.0, 255, 0, 0),  # 10 m tall
+    ])
+    png = render_top_down(cloud, width=128, height=128, tilt_deg=45)
+    arr = np.array(Image.open(io.BytesIO(png)).convert("RGB"))
+    # Find the row index of red pixels vs green pixels.
+    red_rows = np.where(arr[:, :, 0] > 200)[0]
+    green_rows = np.where(arr[:, :, 1] > 200)[0]
+    assert red_rows.size and green_rows.size, "expected both colours to land"
+    # Red (tall) should be at smaller row index (higher in the image) than green (ground).
+    assert red_rows.min() < green_rows.min(), (
+        f"tall red pixel at row {red_rows.min()} should be above "
+        f"ground green at row {green_rows.min()}"
+    )
+
+
+def test_top_down_is_default_for_back_compat():
+    """tilt_deg defaults to 0 so existing callers keep top-down behaviour."""
+    cloud = _tiny_cloud([
+        (0.0, 0.0, 0.0, 0, 255, 0),
+        (0.0, 0.0, 10.0, 255, 0, 0),
+    ])
+    png = render_top_down(cloud, width=64, height=64)
+    arr = np.array(Image.open(io.BytesIO(png)).convert("RGB"))
+    # In pure top-down, both points map to the same pixel (centre).
+    # We only need to see that the taller one overdrew → red wins.
+    nonblack = arr.sum(axis=2) > 0
+    assert arr[:, :, 0][nonblack].max() > arr[:, :, 1][nonblack].max()
+
+
+def test_oblique_with_real_capture_produces_recognisable_image(fixtures_dir: Path):
+    """Smoke test: oblique render on the 145k-point real capture must
+    still paint a substantial portion of the canvas."""
+    data = (fixtures_dir / "lidar_sample.pcd").read_bytes()
+    cloud = parse_pcd(data)
+    png = render_top_down(cloud, width=256, height=256, tilt_deg=45)
+    arr = np.array(Image.open(io.BytesIO(png)).convert("RGB"))
+    painted = (arr.sum(axis=2) > 0).sum()
+    assert painted > 256 * 256 * 0.05

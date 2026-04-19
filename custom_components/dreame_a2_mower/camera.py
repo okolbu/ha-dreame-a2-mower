@@ -1094,7 +1094,8 @@ def _render_lidar_png(
     pcd_path, width: int | None, height: int | None
 ) -> bytes | None:
     """Blocking helper — runs on HA's executor. Reads the PCD from disk
-    and renders a top-down PNG. Returns ``None`` on any failure."""
+    and renders an oblique PNG (45° pitch). Returns ``None`` on any
+    failure."""
     from .protocol.pcd import PCDHeaderError, parse_pcd
     from .protocol.pcd_render import render_top_down
     try:
@@ -1105,7 +1106,10 @@ def _render_lidar_png(
         return None
     w = int(width) if width else 512
     h = int(height) if height else 512
-    return render_top_down(cloud, width=w, height=h)
+    # Default to a 45° bird's-eye tilt — far more readable than pure
+    # top-down for this scene because roof/wall structure leans up into
+    # view instead of collapsing onto its own ground footprint.
+    return render_top_down(cloud, width=w, height=h, tilt_deg=45.0)
 
 
 class LidarPcdDownloadView(HomeAssistantView):

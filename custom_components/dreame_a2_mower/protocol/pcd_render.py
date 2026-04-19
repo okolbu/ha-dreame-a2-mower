@@ -1,10 +1,19 @@
-"""Top-down PNG renderer for LiDAR point clouds.
+"""PNG renderer for LiDAR point clouds.
 
 The firmware bakes a height-gradient into the ``rgb`` field (green at
-ground, blue for walls, magenta/red for roof peaks), so a plain
-top-down orthographic projection — colouring each pixel with the
-highest-Z sample that landed there — produces a map that matches the
-Dreame app's 3D view flattened to 2D.
+ground, blue for walls, magenta/red for roof peaks), so we just need
+to project XYZ to pixels with painter's-algorithm depth sorting and
+colour each surviving sample with its own RGB.
+
+Two projections are supported:
+
+- ``tilt_deg=0`` — pure orthographic top-down (legacy default).
+- ``tilt_deg>0`` — oblique/bird's-eye. The camera sits south of the
+  scene, elevated, pitched forward by ``tilt_deg``. High-Z points
+  appear higher in the image than their ground footprint ("roofs
+  leaning north"), giving a recognisable 3D-ish sense of structure
+  without actually rotating the view azimuth. 45° is the classic
+  sweet spot.
 
 Intentionally dependency-free beyond Pillow and NumPy (both already
 required by the integration's map renderer).
@@ -13,6 +22,7 @@ required by the integration's map renderer).
 from __future__ import annotations
 
 import io
+import math
 from typing import Tuple
 
 import numpy as np
@@ -27,8 +37,9 @@ def render_top_down(
     height: int = 512,
     margin_px: int = 8,
     background: Tuple[int, int, int] = (0, 0, 0),
+    tilt_deg: float = 0.0,
 ) -> bytes:
-    """Render ``cloud`` as a top-down PNG and return the encoded bytes.
+    """Render ``cloud`` as a PNG and return the encoded bytes.
 
     Parameters
     ----------
@@ -37,22 +48,32 @@ def render_top_down(
     width, height
         Output image dimensions in pixels.
     margin_px
-        Padding around the cloud's bounding box. Keeps edge points off
-        the literal edge.
+        Padding around the projected bounding box. Keeps edge points
+        off the literal edge.
     background
         RGB tuple painted on empty pixels (default black — matches the
         Dreame app's dark-themed 3D view).
+    tilt_deg
+        Camera pitch in degrees. ``0`` = pure top-down. ``45`` = classic
+        bird's-eye. Camera azimuth is fixed looking north; only pitch
+        is adjustable.
     """
     xyz = cloud.xyz
     rgb = cloud.rgb
     if xyz.size == 0:
         return _encode_empty(width, height, background)
 
+    # Pitch-only rotation: tilt the scene forward so +Z contributes to the
+    # projected vertical axis. At tilt=0 this is a no-op and y_eff == y.
+    tilt_rad = math.radians(tilt_deg)
+    cos_t, sin_t = math.cos(tilt_rad), math.sin(tilt_rad)
+    y_eff = xyz[:, 1] * cos_t + xyz[:, 2] * sin_t
+
     x_min, x_max = float(xyz[:, 0].min()), float(xyz[:, 0].max())
-    y_min, y_max = float(xyz[:, 1].min()), float(xyz[:, 1].max())
+    y_eff_min, y_eff_max = float(y_eff.min()), float(y_eff.max())
 
     span_x = max(x_max - x_min, 1e-6)
-    span_y = max(y_max - y_min, 1e-6)
+    span_y = max(y_eff_max - y_eff_min, 1e-6)
 
     usable_w = max(width - 2 * margin_px, 1)
     usable_h = max(height - 2 * margin_px, 1)
@@ -66,21 +87,24 @@ def render_top_down(
     offset_y = margin_px + (usable_h - content_h) * 0.5
 
     px = ((xyz[:, 0] - x_min) * scale + offset_x).astype(np.int32)
-    # Y pixels: image y grows downward; map world+Y to pixel-down so "north"
-    # of the mower appears at the top of the image. The app uses the same
-    # convention.
-    py = ((y_max - xyz[:, 1]) * scale + offset_y).astype(np.int32)
+    # Image y grows downward. World +Y and high Z both shift the projected
+    # point "north" in the image — so bigger y_eff → smaller screen_y.
+    py = ((y_eff_max - y_eff) * scale + offset_y).astype(np.int32)
 
     valid = (px >= 0) & (px < width) & (py >= 0) & (py < height)
     px = px[valid]
     py = py[valid]
     rgb_v = rgb[valid]
+    y_v = xyz[:, 1][valid]
     z_v = xyz[:, 2][valid]
 
-    # Paint order: draw points in ascending Z so the last-written pixel
-    # at each location corresponds to the highest point (roof on top of
-    # grass). Avoids a per-pixel depth buffer — sort is O(N log N) once.
-    order = np.argsort(z_v, kind="stable")
+    # Painter's algorithm — draw far-from-camera points first so near
+    # points overdraw them at shared pixels. Depth grows northward and
+    # shrinks with height: camera sits south, elevated, looking north+
+    # down. At tilt=0 this collapses to sorting by -z ascending, which
+    # is equivalent to "tallest on top" (the previous behaviour).
+    depth = y_v * sin_t - z_v * cos_t
+    order = np.argsort(-depth, kind="stable")
     px = px[order]
     py = py[order]
     rgb_v = rgb_v[order]
