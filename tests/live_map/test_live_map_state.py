@@ -123,6 +123,7 @@ def test_to_attributes_matches_schema_when_empty():
         "obstacle_polygons": [],
         "dock_position": None,
         "summary_end_ts": None,
+        "summary_md5": None,
     }
 
 
