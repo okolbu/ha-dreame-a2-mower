@@ -67,6 +67,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not hass.services.has_service(DOMAIN, "import_path_from_probe_log"):
         hass.services.async_register(DOMAIN, "import_path_from_probe_log", _handle_import)
 
+    # Session-replay service (A3). Freezes an archived session's
+    # overlay into the live-map camera so a Lovelace map card redraws
+    # the historical run. Accepts an explicit file or "latest".
+    async def _handle_replay(call):
+        coord = next(iter(hass.data[DOMAIN].values()), None)
+        if coord is None:
+            raise ValueError("No Dreame A2 coordinator loaded")
+        file = call.data.get("file")
+        if not file or file == "latest":
+            return coord.live_map.replay_latest_session()
+        return coord.live_map.replay_session(file)
+
+    if not hass.services.has_service(DOMAIN, "replay_session"):
+        hass.services.async_register(DOMAIN, "replay_session", _handle_replay)
+
     return True
 
 

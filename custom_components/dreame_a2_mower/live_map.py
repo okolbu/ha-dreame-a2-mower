@@ -17,6 +17,61 @@ PATH_DEDUPE_METRES = 0.2
 OBSTACLE_DEDUPE_METRES = 0.5
 
 
+def replay_from_archive_file(
+    state: "LiveMapState",
+    file_path,
+    x_factor: float,
+    y_factor: float,
+) -> dict:
+    """Load an archived session-summary JSON and replay it into
+    ``state`` — populating both the overlay fields and the ``path`` list.
+
+    Pure helper; no HA types. The caller is responsible for dispatching
+    the resulting snapshot.
+
+    Returns a small result dict: ``md5``, ``path_points``, ``path``.
+    Raises ``FileNotFoundError`` if the file does not exist, or
+    ``ValueError`` if the file is not valid JSON / not a session
+    summary.
+    """
+    from pathlib import Path
+    import json
+    try:
+        from .protocol.session_summary import parse_session_summary, InvalidSessionSummary
+    except ImportError:
+        # Test harness runs outside the HA package layout.
+        from protocol.session_summary import parse_session_summary, InvalidSessionSummary
+
+    path = Path(file_path)
+    if not path.is_file():
+        raise FileNotFoundError(f"session archive not found: {path}")
+    try:
+        data = json.loads(path.read_text())
+    except json.JSONDecodeError as ex:
+        raise ValueError(f"archive file is not valid JSON: {ex}") from ex
+    try:
+        summary = parse_session_summary(data)
+    except InvalidSessionSummary as ex:
+        raise ValueError(f"archive file is not a session summary: {ex}") from ex
+
+    state.load_from_session_summary(summary)
+
+    # Flatten every completed-track segment into state.path so map cards
+    # that draw the `path` attribute show the historical trail. Each
+    # point is already in metres (mower frame) per load_from_session_summary,
+    # so no further calibration is needed.
+    state.path = []
+    for seg in state.completed_track:
+        for pt in seg:
+            state.path.append([round(pt[0], 3), round(pt[1], 3)])
+
+    return {
+        "md5": state.summary_md5,
+        "path_points": len(state.path),
+        "path": state.path,
+    }
+
+
 @dataclass
 class LiveMapState:
     """Pure state machine tracking the current session's map data.
@@ -128,6 +183,7 @@ class LiveMapState:
             "obstacle_polygons": [list(o) for o in self.obstacle_polygons],
             "dock_position": list(self.dock_position) if self.dock_position else None,
             "summary_end_ts": self.summary_end_ts,
+            "summary_md5": self.summary_md5,
         }
 
     def buffer_pending_point(self, x_m: float, y_m: float) -> None:
@@ -302,6 +358,44 @@ class DreameA2LiveMap:
         """Called by the __init__ options listener when the user edits calibration."""
         # Re-push a snapshot with the new calibration so the card sees it.
         self._handle_coordinator_update()
+
+    def replay_session(self, file_path: str) -> dict[str, Any]:
+        """Replay an archived session-summary JSON into the camera.
+
+        Reads ``<file_path>`` (typically under
+        `<config>/dreame_a2_mower/sessions/<YYYY-MM-DD>_<ts>_<md5>.json`),
+        parses it, populates this live-map state's overlay fields plus
+        the path list, and dispatches a snapshot so the map card
+        redraws with the historical run frozen in place.
+
+        Used by the `dreame_a2_mower.replay_session` HA service.
+        """
+        result = replay_from_archive_file(
+            self._state, file_path, self.x_factor, self.y_factor
+        )
+        attrs = self._state.to_attributes(
+            position=None,  # no live mower position during replay
+            x_factor=self.x_factor,
+            y_factor=self.y_factor,
+        )
+        async_dispatcher_send(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
+        return result
+
+    def replay_latest_session(self) -> dict[str, Any]:
+        """Convenience: replay the most recently archived session.
+
+        Looks up the latest entry in the coordinator's session archive
+        and delegates to :meth:`replay_session`.
+        """
+        coord = self._coordinator
+        archive = getattr(coord, "session_archive", None) if coord else None
+        if archive is None:
+            raise ValueError("session archive is not available")
+        latest = archive.latest()
+        if latest is None:
+            raise ValueError("no archived sessions to replay")
+        path = archive.root / latest.filename
+        return self.replay_session(str(path))
 
     def import_from_probe_log(self, path: str, session_index: int = -1) -> dict[str, Any]:
         """Reconstruct a session from a probe-log file (dev service)."""

@@ -1,3 +1,15 @@
+replay_session:
+  fields:
+    file:
+      example: "latest"
+      description: >
+        Either "latest" (default if omitted) to replay the most recently
+        archived session, or an absolute path to a session-summary JSON
+        under <config>/dreame_a2_mower/sessions/.
+      required: false
+      selector:
+        text:
+
 mower_clean_segment:
   target:
     entity:
@@ -5,12 +17,12 @@ mower_clean_segment:
       domain: lawn_mower
   fields:
     segments:
-      example: "[3,2] or 3" 
+      example: "[3,2] or 3"
       required: true
       selector:
         object:
     repeats:
-      example: "[1,2] or 1" 
+      example: "[1,2] or 1"
       required: false
       selector:
         number:
