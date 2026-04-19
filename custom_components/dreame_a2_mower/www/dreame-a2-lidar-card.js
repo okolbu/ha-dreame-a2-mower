@@ -238,9 +238,20 @@ class DreameA2LidarCard extends HTMLElement {
 
   setConfig(config) {
     this._config = config || {};
-    this._pointSize = Number(this._config.point_size ?? 2.5);
-    this._showMap = Boolean(this._config.show_map ?? false);
-    this._mapZ = Number(this._config.map_z ?? 0.0);
+    // Priority for each setting: YAML config wins (user's explicit
+    // choice) → saved localStorage (last in-card tweak) → sensible
+    // default.
+    const saved = this._loadSaved();
+    const pick = (cfgKey, savedKey, dflt) =>
+      this._config[cfgKey] !== undefined
+        ? this._config[cfgKey]
+        : saved[savedKey] !== undefined
+        ? saved[savedKey]
+        : dflt;
+
+    this._pointSize = Number(pick("point_size", "pointSize", 2.5));
+    this._showMap = Boolean(pick("show_map", "showMap", false));
+    this._mapZ = Number(pick("map_z", "mapZ", 0.0));
     // Default both flips ON — user-verified 2026-04-19 on g2408: the
     // PCD is in the mower's native frame which matches the FLIPPED
     // rendering of the base map PNG (our `_build_map_from_cloud_data`
@@ -248,15 +259,18 @@ class DreameA2LidarCard extends HTMLElement {
     // docs/research/cloud-map-geometry.md). calibration_points
     // themselves come from the renderer's un-flipped Point.to_img,
     // so we need the UVs flipped in BOTH axes to compensate.
-    this._mapFlipX = Boolean(this._config.map_flip_x ?? true);
-    this._mapFlipY = Boolean(this._config.map_flip_y ?? true);
+    this._mapFlipX = Boolean(pick("map_flip_x", "mapFlipX", true));
+    this._mapFlipY = Boolean(pick("map_flip_y", "mapFlipY", true));
     // Soft-edge splat factor: 0 = hard-edged circles, 1 = soft fade.
     // Soft fade makes large splats blend into a pseudo-surface look
     // rather than showing as discrete fuzzy balls. Default soft.
-    this._softEdge = Number(this._config.soft_edge ?? 1.0);
+    this._softEdge = Number(pick("soft_edge", "softEdge", 1.0));
     // Underlay desaturation — default 1.0 (fully monochrome) so the
     // background lawn-green doesn't blend with the PCD's ground-green.
-    this._mapDesat = Number(this._config.map_desat ?? 1.0);
+    this._mapDesat = Number(pick("map_desat", "mapDesat", 1.0));
+    // Whether the Z slider was explicitly set by the user — if so,
+    // skip the bbox-min-Z auto-default below.
+    this._mapZExplicit = this._config.map_z !== undefined || saved.mapZ !== undefined;
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `
       <style>
@@ -335,6 +349,42 @@ class DreameA2LidarCard extends HTMLElement {
 
   getCardSize() { return 6; }
 
+  // --- localStorage persistence ---
+  // One shared key regardless of how many card instances there are —
+  // users typically only have one LiDAR card on their dashboard.
+  // If that assumption breaks we can key by `this._config.entity`
+  // later. Wrapped in try/except so private-browsing / disabled
+  // storage don't crash the card.
+  _storageKey() { return "dreame-a2-lidar-card.settings.v1"; }
+  _loadSaved() {
+    try {
+      const raw = window.localStorage.getItem(this._storageKey());
+      return raw ? JSON.parse(raw) : {};
+    } catch (_) {
+      return {};
+    }
+  }
+  _saveSaved() {
+    try {
+      window.localStorage.setItem(
+        this._storageKey(),
+        JSON.stringify({
+          pointSize: this._pointSize,
+          softEdge: this._softEdge,
+          showMap: this._showMap,
+          mapZ: this._mapZ,
+          mapFlipX: this._mapFlipX,
+          mapFlipY: this._mapFlipY,
+        })
+      );
+      // From now on the user has explicitly picked a Z, so don't
+      // auto-reset it to bbox-min-Z on next PCD load.
+      this._mapZExplicit = true;
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
   async _fetchAndRender() {
     if (!this._hass) return;
     this._loaded = true;
@@ -357,7 +407,7 @@ class DreameA2LidarCard extends HTMLElement {
       // the point cloud's bbox-min-Z so the map plane lands at ground
       // level on the first render instead of Z=0 (which typically
       // floats above the grass by ~1 m on this device).
-      if (this._config.map_z === undefined) {
+      if (!this._mapZExplicit) {
         this._mapZ = stats.bbox[0][2];
         if (this._mapZInput) {
           this._mapZInput.value = this._mapZ.toFixed(1);
@@ -534,10 +584,12 @@ class DreameA2LidarCard extends HTMLElement {
     this._splat.addEventListener("input", () => {
       this._pointSize = parseFloat(this._splat.value);
       this._splatVal.textContent = this._pointSize;
+      this._saveSaved();
     });
 
     this._softCb.addEventListener("change", () => {
       this._softEdge = this._softCb.checked ? 1.0 : 0.0;
+      this._saveSaved();
     });
 
     this._showMapCb.addEventListener("change", async () => {
@@ -546,20 +598,24 @@ class DreameA2LidarCard extends HTMLElement {
       if (this._showMap && !this._mapTexReady && this._gl) {
         await this._loadMapUnderlay();
       }
+      this._saveSaved();
     });
 
     this._mapZInput.addEventListener("input", () => {
       this._mapZ = parseFloat(this._mapZInput.value);
       this._mapZVal.textContent = this._mapZ.toFixed(1);
       this._rebuildMapQuad();
+      this._saveSaved();
     });
     this._flipXCb.addEventListener("change", () => {
       this._mapFlipX = this._flipXCb.checked;
       this._rebuildMapQuad();
+      this._saveSaved();
     });
     this._flipYCb.addEventListener("change", () => {
       this._mapFlipY = this._flipYCb.checked;
       this._rebuildMapQuad();
+      this._saveSaved();
     });
   }
 
