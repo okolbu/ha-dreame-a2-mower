@@ -25,6 +25,27 @@ Forked from [nicolasglg/dreame-mova-mower](https://github.com/nicolasglg/dreame-
 4. Restart Home Assistant.
 5. Settings → Devices & Services → Add Integration → "Dreame A2 Mower".
 
+## Settings invisible to Home Assistant (Bluetooth-only)
+
+A subset of the Dreame app's configuration flows over **Bluetooth directly from the phone to the mower**, bypassing the cloud entirely. Those settings never appear on MQTT and can't be read or written from HA. You have to adjust them in the app with Bluetooth reach of the mower.
+
+Confirmed BT-only on the Dreame A2 (`dreame.mower.g2408`):
+
+- Mowing Direction (angle slider)
+- Mowing Height (cutting-blade height slider)
+- Mowing Efficiency
+- Edge Mowing / Safe Edge Mowing / EdgeMaster
+- Start from Stop Point
+- Obstacle Avoidance Distance / Height
+- Pathway Obstacle Avoidance
+- Obstacle Avoidance on Edges
+- LiDAR / AI Recognition detail toggles
+- Robot Voice / Volume
+
+If a toggle you expect to see in HA is missing, check whether it's in the list above — it's almost certainly BT-only. Cloud-visible settings (DnD, Rain Protection, Frost Protection, Child Lock, Anti-Theft, Charging Config, Low-Speed Nighttime, LED schedule, AI Obstacle Photos, Human Presence Detection) are handled through `s2p51` MQTT multiplexed writes and exposed as HA switches / numbers / selects.
+
+See `docs/research/g2408-protocol.md` §6.1 for the full reverse-engineering notes.
+
 ## Map card configuration
 
 The integration exposes the active mowing session's position, path trail, and detected obstacles as attributes on the `camera.dreame_a2_map` entity. Use [lovelace-xiaomi-vacuum-map-card](https://github.com/PiotrMachowski/lovelace-xiaomi-vacuum-map-card) or a similar Lovelace map card to render them on top of the base map image.
