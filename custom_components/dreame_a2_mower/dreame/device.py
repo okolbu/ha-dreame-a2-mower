@@ -51,6 +51,7 @@ from .types import (
     MapData,
     MapImageDimensions,
     MapPixelType,
+    Point,
     Segment,
     Area,
     Shortcut,
@@ -1600,6 +1601,15 @@ class DreameMowerDevice:
             map_data.saved_map_status = 2
             map_data.last_updated = time.time()
             map_data.rotation = 0
+            # Cloud coords put the charger at the origin (0, 0) — the
+            # mower's s1p4 telemetry is reported relative to the charger,
+            # and the mowing-area path coordinates scale out to tens of
+            # thousands of millimetres, so (0, 0) sitting near the centre
+            # of the boundary is the dock. Expose it so the downstream
+            # renderer paints a dock icon there — user can then verify
+            # whether the charger pixel matches the real dock in the
+            # photographed map.
+            map_data.charger_position = Point(0, 0, 0)
 
             if self._map_manager:
                 self._map_manager._map_data = map_data
