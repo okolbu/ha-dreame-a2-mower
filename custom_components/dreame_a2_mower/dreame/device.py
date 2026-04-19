@@ -1445,10 +1445,48 @@ class DreameMowerDevice:
             # arithmetic below is integer-only — downstream PIL polygon /
             # Image.new calls reject floats with
             # "'float' object cannot be interpreted as an integer".
-            bx1 = int(boundary.get("x1", 0))
-            by1 = int(boundary.get("y1", 0))
-            bx2 = int(boundary.get("x2", 0))
-            by2 = int(boundary.get("y2", 0))
+            bx1_raw = int(boundary.get("x1", 0))
+            by1_raw = int(boundary.get("y1", 0))
+            bx2_raw = int(boundary.get("x2", 0))
+            by2_raw = int(boundary.get("y2", 0))
+
+            # Pre-rotate forbidden paths so we can include their post-
+            # rotation corners in the image bbox. Otherwise rotated
+            # exclusion zones that extend past the boundary get clipped
+            # (user saw this 2026-04-19).
+            forbidden_pre = map_json.get("forbiddenAreas", {}).get("value", [])
+            rotated_forbidden: list[tuple[int, list[dict]]] = []
+            for entry in forbidden_pre:
+                if isinstance(entry, list) and len(entry) >= 2:
+                    zid = entry[0]
+                    zdata = entry[1]
+                elif isinstance(entry, dict):
+                    zid = entry.get("id", 0)
+                    zdata = entry
+                else:
+                    continue
+                path = zdata.get("path", [])
+                if not path:
+                    continue
+                rp = _rotate_path_around_centroid(path, zdata.get("angle"))
+                rotated_forbidden.append((zid, rp))
+
+            # Expand the bbox to include every rotated exclusion corner.
+            bx1 = bx1_raw
+            by1 = by1_raw
+            bx2 = bx2_raw
+            by2 = by2_raw
+            for _zid, rp in rotated_forbidden:
+                for pt in rp:
+                    x, y = int(pt["x"]), int(pt["y"])
+                    if x < bx1:
+                        bx1 = x
+                    if x > bx2:
+                        bx2 = x
+                    if y < by1:
+                        by1 = y
+                    if y > by2:
+                        by2 = y
 
             grid_size = 50
             width = int(max(1, (bx2 - bx1) // grid_size + 1))
@@ -1505,45 +1543,17 @@ class DreameMowerDevice:
                 seg.color_index = (zone_id - 1) % 4
                 segments[zone_id] = seg
 
+            # Use the pre-rotated forbidden paths (computed above for bbox).
+            # Apply the same X-flip + Y-flip as mowingAreas/contours so
+            # everything lives in one consistent flipped frame.
             no_go_areas = []
-            forbidden = map_json.get("forbiddenAreas", {}).get("value", [])
-            for entry in forbidden:
-                if isinstance(entry, list) and len(entry) >= 2:
-                    zone_data = entry[1]
-                elif isinstance(entry, dict):
-                    zone_data = entry
-                else:
-                    continue
-
-                path = zone_data.get("path", [])
-                if not path:
-                    continue
-
-                # Forbidden-zone paths in the cloud JSON are stored as the
-                # AXIS-ALIGNED 4-corner rectangle in some canonical frame
-                # plus an `angle` field in degrees describing rotation
-                # around the polygon centroid. Ignoring the angle yields a
-                # visible rotation bug: the zone renders upright while
-                # the real fence is at an angle. We rotate the corners
-                # here so both the pixel mask and the Area object carry
-                # the true shape.
-                angle_deg = zone_data.get("angle")
-                rotated_path = _rotate_path_around_centroid(path, angle_deg)
-
-                poly_points = []
-                for pt in rotated_path:
-                    px = int((int(pt["x"]) - bx1) // grid_size)
-                    py = int((by2 - int(pt["y"])) // grid_size)
-                    poly_points.append((px, py))
-
-                if len(poly_points) >= 3:
-                    img = Image.new("L", (width, height), 0)
-                    draw = ImageDraw.Draw(img)
-                    draw.polygon(poly_points, fill=255)
-                    mask = np.array(img).T
-                    pixel_type[mask > 0] = MapPixelType.WALL.value
-
+            for _zid, rotated_path in rotated_forbidden:
                 if len(rotated_path) >= 4:
+                    # We only paint Area objects (not pixel_type) for
+                    # no-go zones — that lets the downstream renderer
+                    # draw them with its semi-transparent `no_go` colour
+                    # instead of the opaque grey WALL fill, so the lawn
+                    # zone below stays visible (matches the app's look).
                     no_go_areas.append(Area(
                         int(rotated_path[0]["x"]), int(rotated_path[0]["y"]),
                         int(rotated_path[1]["x"]), int(rotated_path[1]["y"]),
@@ -1597,19 +1607,27 @@ class DreameMowerDevice:
             map_data.segments = segments if segments else None
             map_data.no_go_areas = no_go_areas if no_go_areas else None
             map_data.empty_map = len(segments) == 0
-            map_data.saved_map = True
+            # Leave `saved_map` False so the downstream renderer's
+            # `render_areas` path runs and paints the no-go zones with
+            # the semi-transparent `no_go` colour scheme (opacity ~50/255
+            # by default) rather than opaque grey WALL pixels. The map
+            # IS persistent in a loose sense, but saved_map=True is the
+            # renderer's "skip overlays" branch, which we don't want.
+            map_data.saved_map = False
             map_data.saved_map_status = 2
             map_data.last_updated = time.time()
             map_data.rotation = 0
-            # Cloud coords put the charger at the origin (0, 0) — the
-            # mower's s1p4 telemetry is reported relative to the charger,
-            # and the mowing-area path coordinates scale out to tens of
-            # thousands of millimetres, so (0, 0) sitting near the centre
-            # of the boundary is the dock. Expose it so the downstream
-            # renderer paints a dock icon there — user can then verify
-            # whether the charger pixel matches the real dock in the
-            # photographed map.
-            map_data.charger_position = Point(0, 0, 0)
+            # Cloud-frame (0, 0) is the charger. Our pixel mask uses the
+            # X-flipped + Y-flipped coord system
+            # (px = (bx2 - x)/grid, py = (by2 - y)/grid), but the
+            # downstream renderer's Point.to_img does (x - bx1)/grid for
+            # X and (height-1 - (y-by1)/grid) for Y. That means to
+            # place the dock icon at the same pixel our lawn draws for
+            # cloud (0, 0), we hand the renderer a point whose input
+            # coords are `(bx1 + bx2, 0)` — after its unflipped
+            # transform, that produces the flipped-frame pixel. Y stays
+            # at 0 because both paths already use the same Y-flip.
+            map_data.charger_position = Point(bx1 + bx2, 0, 0)
 
             if self._map_manager:
                 self._map_manager._map_data = map_data
