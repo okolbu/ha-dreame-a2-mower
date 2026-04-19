@@ -1401,6 +1401,8 @@ class DreameMowerDevice:
         if not self.cloud_connected:
             return
 
+        from ..protocol.cloud_map_geom import _rotate_path_around_centroid  # noqa: F401 — imported at top of try for clarity
+
         try:
             map_keys = [f"MAP.{i}" for i in range(28)]
             response = self._protocol.cloud.get_batch_device_datas(map_keys)
@@ -1511,8 +1513,19 @@ class DreameMowerDevice:
                 if not path:
                     continue
 
+                # Forbidden-zone paths in the cloud JSON are stored as the
+                # AXIS-ALIGNED 4-corner rectangle in some canonical frame
+                # plus an `angle` field in degrees describing rotation
+                # around the polygon centroid. Ignoring the angle yields a
+                # visible rotation bug: the zone renders upright while
+                # the real fence is at an angle. We rotate the corners
+                # here so both the pixel mask and the Area object carry
+                # the true shape.
+                angle_deg = zone_data.get("angle")
+                rotated_path = _rotate_path_around_centroid(path, angle_deg)
+
                 poly_points = []
-                for pt in path:
+                for pt in rotated_path:
                     px = int((int(pt["x"]) - bx1) // grid_size)
                     py = int((int(pt["y"]) - by1) // grid_size)
                     poly_points.append((px, py))
@@ -1524,12 +1537,12 @@ class DreameMowerDevice:
                     mask = np.array(img).T
                     pixel_type[mask > 0] = MapPixelType.WALL.value
 
-                if len(path) >= 4:
+                if len(rotated_path) >= 4:
                     no_go_areas.append(Area(
-                        int(path[0]["x"]), int(path[0]["y"]),
-                        int(path[1]["x"]), int(path[1]["y"]),
-                        int(path[2]["x"]), int(path[2]["y"]),
-                        int(path[3]["x"]), int(path[3]["y"]),
+                        int(rotated_path[0]["x"]), int(rotated_path[0]["y"]),
+                        int(rotated_path[1]["x"]), int(rotated_path[1]["y"]),
+                        int(rotated_path[2]["x"]), int(rotated_path[2]["y"]),
+                        int(rotated_path[3]["x"]), int(rotated_path[3]["y"]),
                     ))
 
             contours = map_json.get("contours", {}).get("value", [])
