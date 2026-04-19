@@ -106,6 +106,13 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             "faults": device.status.faults,
             "description": device.status.error_description[0],
         },
+        # Upstream default availability falls through when the mower
+        # hasn't explicitly emitted an ERROR property value, showing
+        # "Unavailable" instead of the "No Error" state we already
+        # derive from `device.status.error_name`. Force always-available
+        # when the device is reachable so the no-error case is labelled
+        # correctly (user reported 2026-04-19).
+        available_fn=lambda device: True,
     ),
     DreameMowerSensorEntityDescription(
         property_key=DreameMowerProperty.CHARGING_STATUS,
