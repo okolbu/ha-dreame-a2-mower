@@ -1547,25 +1547,26 @@ class DreameMowerDevice:
             # The downstream renderer's `Area.to_img` uses un-flipped
             # cloud coords, which ended up placing the exclusion + dock
             # at the wrong Y (user reported "flip around X axis" 2026-04-19).
-            # Reflect Y through the vertical midline of the cloud frame
-            # so these stay consistent with the lawn's Y-flipped mask.
-            # X is left alone because the renderer's un-flipped X
-            # convention already happens to match the app's horizontal
-            # placement for the no-go rectangle.
+            # Reflect BOTH axes through the cloud-frame midlines so the
+            # no-go rectangle lines up with the lawn's X+Y-flipped mask
+            # and with the dock icon (same reflection applied there).
+            # User reported 2026-04-19 after the Y-only reflection that
+            # the exclusion was still too far to the right — X reflection
+            # brings it back.
+            x_reflect = bx1 + bx2
             y_reflect = by1 + by2
             no_go_areas = []
             for _zid, rotated_path in rotated_forbidden:
                 if len(rotated_path) >= 4:
-                    # We only paint Area objects (not pixel_type) for
-                    # no-go zones — that lets the downstream renderer
-                    # draw them with its semi-transparent `no_go` colour
-                    # instead of the opaque grey WALL fill, so the lawn
-                    # zone below stays visible (matches the app's look).
+                    # Area objects only (no pixel_type fill) so the
+                    # renderer's semi-transparent `no_go` colour paints
+                    # over the lawn instead of covering it with opaque
+                    # grey WALL pixels.
                     no_go_areas.append(Area(
-                        int(rotated_path[0]["x"]), int(y_reflect - rotated_path[0]["y"]),
-                        int(rotated_path[1]["x"]), int(y_reflect - rotated_path[1]["y"]),
-                        int(rotated_path[2]["x"]), int(y_reflect - rotated_path[2]["y"]),
-                        int(rotated_path[3]["x"]), int(y_reflect - rotated_path[3]["y"]),
+                        int(x_reflect - rotated_path[0]["x"]), int(y_reflect - rotated_path[0]["y"]),
+                        int(x_reflect - rotated_path[1]["x"]), int(y_reflect - rotated_path[1]["y"]),
+                        int(x_reflect - rotated_path[2]["x"]), int(y_reflect - rotated_path[2]["y"]),
+                        int(x_reflect - rotated_path[3]["x"]), int(y_reflect - rotated_path[3]["y"]),
                     ))
 
             contours = map_json.get("contours", {}).get("value", [])
