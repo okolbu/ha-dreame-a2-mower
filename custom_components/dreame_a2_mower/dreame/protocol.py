@@ -628,7 +628,14 @@ class DreameMowerDreameHomeCloudProtocol:
             if response.status_code == 200:
                 self._fail_count = 0
                 self._connected = True
-                return json.loads(response.text)
+                parsed = json.loads(response.text)
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    from ..protocol.api_log import summarize_api_response
+                    _LOGGER.debug(
+                        "API response: %s",
+                        summarize_api_response(url, parsed),
+                    )
+                return parsed
             elif response.status_code == 401 and self._secondary_key:
                 _LOGGER.debug("Execute api call failed: Token Expired")
                 self.login()
@@ -1082,7 +1089,14 @@ class DreameMowerMiHomeCloudProtocol:
                 self._connected = True
                 decoded = self.decrypt_rc4(
                     self.signed_nonce(fields["_nonce"]), response.text)
-                return json.loads(decoded) if decoded else None
+                parsed = json.loads(decoded) if decoded else None
+                if _LOGGER.isEnabledFor(logging.DEBUG):
+                    from ..protocol.api_log import summarize_api_response
+                    _LOGGER.debug(
+                        "API response: %s",
+                        summarize_api_response(url, parsed),
+                    )
+                return parsed
             _LOGGER.warn(
                 "Execute api call failed with response: %s", response.text)
 
