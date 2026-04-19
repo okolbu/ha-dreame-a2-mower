@@ -1476,7 +1476,7 @@ class DreameMowerDevice:
                 poly_points = []
                 for pt in path:
                     px = int((int(pt["x"]) - bx1) // grid_size)
-                    py = int((int(pt["y"]) - by1) // grid_size)
+                    py = int((by2 - int(pt["y"])) // grid_size)
                     poly_points.append((px, py))
 
                 if len(poly_points) >= 3:
@@ -1527,7 +1527,7 @@ class DreameMowerDevice:
                 poly_points = []
                 for pt in rotated_path:
                     px = int((int(pt["x"]) - bx1) // grid_size)
-                    py = int((int(pt["y"]) - by1) // grid_size)
+                    py = int((by2 - int(pt["y"])) // grid_size)
                     poly_points.append((px, py))
 
                 if len(poly_points) >= 3:
@@ -1561,7 +1561,7 @@ class DreameMowerDevice:
                 line_points = []
                 for pt in path:
                     px = int((int(pt["x"]) - bx1) // grid_size)
-                    py = int((int(pt["y"]) - by1) // grid_size)
+                    py = int((by2 - int(pt["y"])) // grid_size)
                     line_points.append((px, py))
 
                 img = Image.new("L", (width, height), 0)
