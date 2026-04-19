@@ -1454,6 +1454,18 @@ class DreameMowerDevice:
             # rotation corners in the image bbox. Otherwise rotated
             # exclusion zones that extend past the boundary get clipped
             # (user saw this 2026-04-19).
+            #
+            # Angle sign note: the cloud JSON stores the angle in a
+            # coordinate convention that's mirror-flipped relative to
+            # how the app renders (the app effectively mirrors the Y
+            # axis before rotating, so a positive-angle shape in the
+            # cloud draws as a negative-angle shape on screen). After
+            # we apply the X + Y midline reflections below, the
+            # exclusion zone is in the right POSITION but its rotation
+            # handedness remains from the cloud — producing a flipped-
+            # along-X-axis rectangle. Negating the angle up front fixes
+            # the tilt direction before reflection so final output
+            # matches the app.
             forbidden_pre = map_json.get("forbiddenAreas", {}).get("value", [])
             rotated_forbidden: list[tuple[int, list[dict]]] = []
             for entry in forbidden_pre:
@@ -1468,7 +1480,9 @@ class DreameMowerDevice:
                 path = zdata.get("path", [])
                 if not path:
                     continue
-                rp = _rotate_path_around_centroid(path, zdata.get("angle"))
+                raw_angle = zdata.get("angle")
+                rot_angle = -raw_angle if raw_angle is not None else None
+                rp = _rotate_path_around_centroid(path, rot_angle)
                 rotated_forbidden.append((zid, rp))
 
             # Expand the bbox to include every rotated exclusion corner.
@@ -1642,7 +1656,11 @@ class DreameMowerDevice:
             # reflected through (bx1+bx2, by1+by2) to land in the same
             # place. A +400 mm shift in cloud-X (house-ward) becomes
             # `- 400` on the reflected X axis.
-            CHARGER_OFFSET_MM = 400  # half the Dreame A2 charging-station length
+            # User-tuned 2026-04-19: 400 mm landed the icon on the lawn
+            # border (where the mower enters the dock). Another 400 mm
+            # puts it at the physical station centre — user confirmed
+            # "direction was fine, add the other 40 cm as well".
+            CHARGER_OFFSET_MM = 800  # full Dreame A2 charging-station length
             map_data.charger_position = Point(
                 bx1 + bx2 - CHARGER_OFFSET_MM,
                 by1 + by2,
