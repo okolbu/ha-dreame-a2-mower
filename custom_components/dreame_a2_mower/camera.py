@@ -460,6 +460,15 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         self.access_tokens = collections.deque([], 2)
         super().__init__(coordinator, description)
         self._live_map_attrs: dict = {}
+        # Incremental trail overlay — shared across live + replay.
+        # Created lazily on first live_map dispatch once calibration
+        # points are available.
+        self._trail_layer = None
+        self._trail_last_path_len = 0
+        self._trail_last_md5 = None
+        self._trail_last_session_id = None
+        # Composed PNG cache keyed by (base_image_id, trail.version).
+        self._composed_cache: tuple[int, int, bytes] | None = None
         Camera.__init__(self)
         self._generate_entity_id(ENTITY_ID_FORMAT)
         self.content_type = PNG_CONTENT_TYPE
@@ -578,18 +587,6 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
             self._state = STATE_IDLE
         self.async_write_ha_state()
 
-    async def async_camera_image(self, width: int | None = None, height: int | None = None) -> bytes | None:
-        if self._should_poll is True:
-            self._should_poll = False
-            now = time.time()
-            if now - self._last_map_request >= self.frame_interval:
-                self._last_map_request = now
-                if self.map_index == 0 and self.device:
-                    self.device.update_map()
-                self.update()
-            self._should_poll = True
-        return self._image
-
     async def handle_async_still_stream(self, request: web.Request, interval: float) -> web.StreamResponse:
         """Generate an HTTP MJPEG stream from camera images."""
         response = web.StreamResponse()
@@ -651,7 +648,106 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
     @callback
     def _on_live_map_update(self, attrs: dict) -> None:
         self._live_map_attrs = attrs
+        self._feed_trail_layer(attrs)
         self.async_write_ha_state()
+
+    def _feed_trail_layer(self, attrs: dict) -> None:
+        """Update the incremental ``TrailLayer`` from a live-map snapshot.
+
+        Distinguishes three cases so we avoid re-drawing the whole trail
+        on every tick:
+
+        - new session (``session_id`` or ``summary_md5`` changed) →
+          reset the layer to the snapshot in full
+        - same session, ``path`` grew → extend by just the new points
+        - otherwise → no-op
+        """
+        if self._image is None or self.map_index != 0 or self.map_data_json:
+            return
+        calibration = self._calibration_points or (
+            self._renderer.calibration_points if self._renderer else None
+        )
+        if not calibration:
+            return
+        path = attrs.get("path") or []
+        sess = attrs.get("session_id")
+        md5 = attrs.get("summary_md5")
+
+        # (Re)initialise layer if not yet built or the base image size
+        # changed (camera PNG was re-rendered at a different crop).
+        from .protocol.trail_overlay import TrailLayer
+        try:
+            from PIL import Image as _PIL
+            import io as _io
+            base_size = _PIL.open(_io.BytesIO(self._image)).size
+        except Exception:
+            return
+        if self._trail_layer is None or self._trail_layer._size != base_size:
+            try:
+                self._trail_layer = TrailLayer(base_size=base_size, calibration=calibration)
+            except ValueError:
+                self._trail_layer = None
+                return
+            self._trail_last_path_len = 0
+            self._trail_last_md5 = None
+            self._trail_last_session_id = None
+
+        new_session = (
+            sess != self._trail_last_session_id
+            or (md5 is not None and md5 != self._trail_last_md5)
+        )
+        if new_session:
+            self._trail_layer.reset_to_session(
+                completed_track=attrs.get("completed_track"),
+                path=path,
+                obstacle_polygons=attrs.get("obstacle_polygons"),
+                dock_position=attrs.get("dock_position") or attrs.get("charger_position"),
+            )
+            self._trail_last_path_len = len(path)
+            self._trail_last_md5 = md5
+            self._trail_last_session_id = sess
+        elif len(path) > self._trail_last_path_len:
+            for pt in path[self._trail_last_path_len:]:
+                self._trail_layer.extend_live(pt)
+            self._trail_last_path_len = len(path)
+
+    async def async_camera_image(self, width: int | None = None, height: int | None = None) -> bytes | None:
+        if self._should_poll is True:
+            self._should_poll = False
+            now = time.time()
+            if now - self._last_map_request >= self.frame_interval:
+                self._last_map_request = now
+                if self.map_index == 0 and self.device:
+                    self.device.update_map()
+                self.update()
+            self._should_poll = True
+        return await self._composed_image()
+
+    async def _composed_image(self) -> bytes | None:
+        """Return the base camera image composited with the trail overlay.
+
+        Falls back to the raw base image if the trail layer isn't ready
+        (no calibration yet, or on any compose failure). Caches the
+        composed bytes keyed by base-image identity + trail version so
+        dashboard fetches don't retrigger PIL work between real updates.
+        """
+        base = self._image
+        if base is None or self._trail_layer is None or self.map_index != 0 or self.map_data_json:
+            return base
+        base_id = id(base)
+        version = self._trail_layer.version
+        cached = self._composed_cache
+        if cached is not None and cached[0] == base_id and cached[1] == version:
+            return cached[2]
+        try:
+            composed = await self.hass.async_add_executor_job(
+                self._trail_layer.compose, base
+            )
+        except Exception as ex:
+            LOGGER.warning("Trail compose failed: %s", ex)
+            return base
+        self._composed_cache = (base_id, version, composed)
+        return composed
 
     def __del__(self):
         if self._renderer:
