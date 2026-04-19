@@ -1723,7 +1723,25 @@ class DreameMowerDevice:
             # renderer's "skip overlays" branch, which we don't want.
             map_data.saved_map = False
             map_data.saved_map_status = 2
-            map_data.last_updated = time.time()
+            # Only bump `last_updated` when the cloud map's content
+            # actually changed — compared via the md5sum the cloud
+            # JSON already ships (`md5sum` top-level field). The
+            # camera entity's state is this timestamp; without this
+            # guard, any MQTT state transition that causes a rebuild
+            # (mow start, return, dock, charge complete, …) flashed
+            # a fresh timestamp and HA's logbook treated each one as
+            # a "map changed" event. The PNG wasn't really changing.
+            new_md5 = str(map_json.get("md5sum", "") or "")
+            prior_md5 = getattr(self, "_last_cloud_map_md5", None)
+            if prior_md5 == new_md5 and self._map_manager and getattr(
+                self._map_manager._map_data, "last_updated", None
+            ):
+                # Content unchanged → preserve the prior timestamp so
+                # HA doesn't log a spurious state change.
+                map_data.last_updated = self._map_manager._map_data.last_updated
+            else:
+                map_data.last_updated = time.time()
+                self._last_cloud_map_md5 = new_md5
             map_data.rotation = 0
             # Cloud-frame (0, 0) is where the mower's nose meets the
             # charging station as it enters the dock — NOT the physical
