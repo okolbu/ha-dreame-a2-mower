@@ -230,8 +230,15 @@ class DreameA2LidarCard extends HTMLElement {
     this._pointSize = Number(this._config.point_size ?? 2.5);
     this._showMap = Boolean(this._config.show_map ?? false);
     this._mapZ = Number(this._config.map_z ?? 0.0);
-    this._mapFlipX = Boolean(this._config.map_flip_x ?? false);
-    this._mapFlipY = Boolean(this._config.map_flip_y ?? false);
+    // Default both flips ON — user-verified 2026-04-19 on g2408: the
+    // PCD is in the mower's native frame which matches the FLIPPED
+    // rendering of the base map PNG (our `_build_map_from_cloud_data`
+    // applies X + Y midline reflections; see
+    // docs/research/cloud-map-geometry.md). calibration_points
+    // themselves come from the renderer's un-flipped Point.to_img,
+    // so we need the UVs flipped in BOTH axes to compensate.
+    this._mapFlipX = Boolean(this._config.map_flip_x ?? true);
+    this._mapFlipY = Boolean(this._config.map_flip_y ?? true);
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `
       <style>
