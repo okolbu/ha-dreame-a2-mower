@@ -24,6 +24,7 @@ from homeassistant.components.camera import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_IDLE, CONTENT_TYPE_MULTIPART
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.components.http import HomeAssistantView
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers import entity_platform, entity_registry
@@ -344,6 +345,13 @@ async def async_setup_entry(
         hass.http.register_view(CameraHistoryView(hass.data["camera"]))
         hass.http.register_view(CameraRecoveryView(hass.data["camera"]))
         hass.http.register_view(CameraWifiView(hass.data["camera"]))
+
+    # LiDAR top-down camera + raw-.pcd download view. Enabled whenever the
+    # coordinator has a lidar_archive (g2408 path); independent of the
+    # vacuum-era `capability.map` gate above.
+    if getattr(coordinator, "lidar_archive", None) is not None:
+        async_add_entities([DreameMowerLidarTopDownCamera(coordinator)])
+        hass.http.register_view(LidarPcdDownloadView(coordinator))
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -1006,3 +1014,124 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
                         int(wifi_map_data.last_updated if wifi_map_data.last_updated else map_data.last_updated),
                     )
             return {**attributes, **self._live_map_attrs}
+
+
+class DreameMowerLidarTopDownCamera(Camera):
+    """Camera entity serving a top-down PNG rendered from the most
+    recently archived LiDAR scan.
+
+    The firmware bakes a height-gradient into the PCD's ``rgb`` field
+    (green at ground, blue for walls, magenta/red for roof peaks), so
+    the projected top-down view is already colourful and informative —
+    matches the Dreame app's 3D render flattened to 2D.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "LiDAR Top-Down"
+    _attr_icon = "mdi:rotate-3d-variant"
+
+    def __init__(self, coordinator: DreameMowerDataUpdateCoordinator) -> None:
+        super().__init__()
+        self._coordinator = coordinator
+        self._attr_unique_id = f"{coordinator.device.mac}_lidar_topdown"
+        self._cached_md5: str | None = None
+        self._cached_png: bytes | None = None
+        self.content_type = PNG_CONTENT_TYPE
+        self._attr_should_poll = False
+
+    @property
+    def available(self) -> bool:
+        return getattr(self._coordinator, "lidar_archive", None) is not None
+
+    async def async_camera_image(
+        self, width: int | None = None, height: int | None = None
+    ) -> bytes | None:
+        archive = self._coordinator.lidar_archive
+        if archive is None:
+            return None
+        latest = archive.latest()
+        if latest is None:
+            return None
+        if latest.md5 == self._cached_md5 and self._cached_png is not None:
+            return self._cached_png
+        png = await self._coordinator.hass.async_add_executor_job(
+            _render_lidar_png, archive.root / latest.filename, width, height
+        )
+        if png is not None:
+            self._cached_md5 = latest.md5
+            self._cached_png = png
+        return png
+
+    async def async_added_to_hass(self) -> None:
+        await super().async_added_to_hass()
+        self.async_on_remove(
+            self._coordinator.async_add_listener(self._invalidate_cache_on_update)
+        )
+
+    @callback
+    def _invalidate_cache_on_update(self) -> None:
+        # The archive's latest may have changed — let the next image
+        # request re-render. No re-render on the update tick itself
+        # (lazy; PIL work off the event loop).
+        archive = self._coordinator.lidar_archive
+        if archive is None:
+            return
+        latest = archive.latest()
+        if latest is None:
+            return
+        if latest.md5 != self._cached_md5:
+            self._cached_png = None
+            self._cached_md5 = None
+            self.async_write_ha_state()
+
+
+def _render_lidar_png(
+    pcd_path, width: int | None, height: int | None
+) -> bytes | None:
+    """Blocking helper — runs on HA's executor. Reads the PCD from disk
+    and renders a top-down PNG. Returns ``None`` on any failure."""
+    from .protocol.pcd import PCDHeaderError, parse_pcd
+    from .protocol.pcd_render import render_top_down
+    try:
+        data = pcd_path.read_bytes()
+        cloud = parse_pcd(data)
+    except (OSError, PCDHeaderError) as ex:
+        LOGGER.warning("LiDAR render: %s: %s", pcd_path, ex)
+        return None
+    w = int(width) if width else 512
+    h = int(height) if height else 512
+    return render_top_down(cloud, width=w, height=h)
+
+
+class LidarPcdDownloadView(HomeAssistantView):
+    """HTTP endpoint that serves the most recent archived ``.pcd`` blob
+    verbatim so users can drop it into Open3D / CloudCompare / MeshLab
+    for a full interactive 3D view.
+
+    GET ``/api/dreame_a2_mower/lidar/latest.pcd`` (auth required)
+    returns the file with ``Content-Disposition: attachment``.
+    """
+
+    url = "/api/dreame_a2_mower/lidar/latest.pcd"
+    name = "api:dreame_a2_mower:lidar_latest"
+    requires_auth = True
+
+    def __init__(self, coordinator: DreameMowerDataUpdateCoordinator) -> None:
+        self._coordinator = coordinator
+
+    async def get(self, request: web.Request) -> web.StreamResponse:
+        archive = getattr(self._coordinator, "lidar_archive", None)
+        if archive is None:
+            return web.Response(status=404, text="LiDAR archive disabled")
+        latest = archive.latest()
+        if latest is None:
+            return web.Response(status=404, text="No LiDAR scans archived yet")
+        path = archive.root / latest.filename
+        if not path.is_file():
+            return web.Response(status=404, text="Archived scan file missing")
+        resp = web.FileResponse(path=path)
+        resp.headers["Content-Type"] = "application/octet-stream"
+        resp.headers["Content-Disposition"] = (
+            f'attachment; filename="{latest.filename}"'
+        )
+        return resp
