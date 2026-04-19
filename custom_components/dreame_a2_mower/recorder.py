@@ -59,6 +59,22 @@ CAMERA_UNRECORDED_ATTRIBUTES = {
     ATTR_ROTATION,
     ATTR_UPDATED,
     ATTR_FRAME_ID,
+    # Live-map and session-summary overlay attributes — potentially
+    # large (path grows to thousands of points, lawn_polygon has 400+
+    # entries, completed_track carries every stroke of a replay). HA
+    # recorder warns at 16 KB and refuses to persist, spamming the log
+    # once per coordinator tick during mowing. None of these are
+    # historically useful in the sqlite DB; keep them as live-only.
+    "path",
+    "lawn_polygon",
+    "exclusion_zones",
+    "completed_track",
+    "obstacle_polygons",
+    "obstacles",
+    "calibration_points",
+    "no_go_areas",
+    "recent_sessions",
+    "recent_scans",
 }
 
 MOWER_UNRECORDED_ATTRIBUTES = {
