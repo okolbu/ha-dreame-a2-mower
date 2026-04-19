@@ -1688,6 +1688,15 @@ class DreameMowerDevice:
                 by1 + by2,
                 0,
             )
+            # Publish the cloud-frame midline reflections so overlay
+            # consumers (the camera's TrailLayer) can align themselves
+            # to the same X+Y-flipped frame the lawn mask is drawn in.
+            # Calibration_points live in the un-flipped frame (per
+            # DreameMowerMapRenderer._calculate_calibration_points),
+            # so without this hint any trail drawn through calibration
+            # lands on the opposite X of the lawn.
+            map_data.cloud_frame_x_reflect_mm = float(bx1 + bx2)
+            map_data.cloud_frame_y_reflect_mm = float(by1 + by2)
 
             if self._map_manager:
                 self._map_manager._map_data = map_data

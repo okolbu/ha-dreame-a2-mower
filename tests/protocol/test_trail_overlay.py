@@ -157,5 +157,25 @@ def test_compose_handles_base_size_mismatch():
     assert Image.open(io.BytesIO(png)).size == (300, 200)
 
 
+def test_x_reflect_mirrors_trail_horizontally():
+    """When ``x_reflect_mm`` is set, an input X of 0 should produce
+    the same pixel as an input X of the reflection value without a
+    reflect. I.e. (x, y) → (reflect - x, y) in mower-mm space."""
+    layer_flip = TrailLayer(
+        base_size=(256, 256),
+        calibration=CALIBRATION,
+        x_reflect_mm=1000.0,
+    )
+    layer_noflip = TrailLayer(
+        base_size=(256, 256),
+        calibration=CALIBRATION,
+    )
+    # Metres: 1.0 m → mm 1000. Reflected via x_reflect_mm=1000: 1000-1000=0.
+    # So `layer_flip._m_to_px(1.0, 0)` should equal `layer_noflip._m_to_px(0, 0)`.
+    a = layer_flip._m_to_px(1.0, 0.0)
+    b = layer_noflip._m_to_px(0.0, 0.0)
+    assert abs(a[0] - b[0]) < 1e-6 and abs(a[1] - b[1]) < 1e-6
+
+
 # pytest import needs to be present for `pytest.raises`
 import pytest  # noqa: E402

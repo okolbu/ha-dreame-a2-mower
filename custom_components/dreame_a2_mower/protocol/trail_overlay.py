@@ -91,9 +91,21 @@ class TrailLayer:
         calibration: Sequence[dict],
         trail_color: tuple[int, int, int, int] = TRAIL_COLOR,
         trail_width_px: int = TRAIL_WIDTH_PX,
+        x_reflect_mm: float | None = None,
+        y_reflect_mm: float | None = None,
     ) -> None:
+        """``x_reflect_mm`` / ``y_reflect_mm`` — when supplied, reflect
+        each input mower-mm coordinate through the given value before
+        applying the calibration affine. Use this for the g2408's
+        cloud-built map where the lawn mask drawn by the renderer
+        lives in an X+Y-flipped frame relative to the calibration's
+        naive `(x - bx1)/grid` transform. Set to `bx1 + bx2` / `by1 + by2`
+        respectively to align the trail with the lawn.
+        """
         self._size = base_size
         self._aff = _affine_from_calibration(calibration)
+        self._x_reflect_mm = x_reflect_mm
+        self._y_reflect_mm = y_reflect_mm
         self._trail_color = trail_color
         self._trail_width = trail_width_px
         self._trail = Image.new("RGBA", base_size, (0, 0, 0, 0))
@@ -232,4 +244,8 @@ class TrailLayer:
         a, b, c, d, tx, ty = self._aff
         mm_x = x_m * 1000.0
         mm_y = y_m * 1000.0
+        if self._x_reflect_mm is not None:
+            mm_x = self._x_reflect_mm - mm_x
+        if self._y_reflect_mm is not None:
+            mm_y = self._y_reflect_mm - mm_y
         return (a * mm_x + b * mm_y + tx, c * mm_x + d * mm_y + ty)

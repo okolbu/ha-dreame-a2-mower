@@ -683,8 +683,20 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         except Exception:
             return
         if self._trail_layer is None or self._trail_layer._size != base_size:
+            # Pull the cloud-frame midlines off the current MapData if
+            # this device uses the g2408 cloud-built map path. Absent
+            # on upstream map formats; defaulting to None means no
+            # reflection is applied.
+            map_data = self._map_data
+            x_ref = getattr(map_data, "cloud_frame_x_reflect_mm", None) if map_data else None
+            y_ref = getattr(map_data, "cloud_frame_y_reflect_mm", None) if map_data else None
             try:
-                self._trail_layer = TrailLayer(base_size=base_size, calibration=calibration)
+                self._trail_layer = TrailLayer(
+                    base_size=base_size,
+                    calibration=calibration,
+                    x_reflect_mm=x_ref,
+                    y_reflect_mm=y_ref,
+                )
             except ValueError:
                 self._trail_layer = None
                 return
