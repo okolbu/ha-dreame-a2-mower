@@ -351,7 +351,12 @@ async def async_setup_entry(
     # vacuum-era `capability.map` gate above.
     if getattr(coordinator, "lidar_archive", None) is not None:
         async_add_entities([DreameMowerLidarTopDownCamera(coordinator)])
-        hass.http.register_view(LidarPcdDownloadView(coordinator))
+        # Register the raw-PCD download view once; it looks up the
+        # current coordinator from `hass.data` on each request so a
+        # config-entry reload always hits the live coordinator.
+        if not getattr(hass, "_dreame_lidar_view_registered", False):
+            hass.http.register_view(LidarPcdDownloadView())
+            hass._dreame_lidar_view_registered = True
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -1109,18 +1114,23 @@ class LidarPcdDownloadView(HomeAssistantView):
     for a full interactive 3D view.
 
     GET ``/api/dreame_a2_mower/lidar/latest.pcd`` (auth required)
-    returns the file with ``Content-Disposition: attachment``.
+    returns the file with ``Content-Disposition: attachment``. The
+    coordinator is looked up from ``hass.data`` on each request so a
+    config-entry reload is picked up without re-registering the view.
     """
 
     url = "/api/dreame_a2_mower/lidar/latest.pcd"
     name = "api:dreame_a2_mower:lidar_latest"
     requires_auth = True
 
-    def __init__(self, coordinator: DreameMowerDataUpdateCoordinator) -> None:
-        self._coordinator = coordinator
-
     async def get(self, request: web.Request) -> web.StreamResponse:
-        archive = getattr(self._coordinator, "lidar_archive", None)
+        hass = request.app["hass"]
+        entries = hass.data.get(DOMAIN) or {}
+        archive = None
+        for coordinator in entries.values():
+            if getattr(coordinator, "lidar_archive", None) is not None:
+                archive = coordinator.lidar_archive
+                break
         if archive is None:
             return web.Response(status=404, text="LiDAR archive disabled")
         latest = archive.latest()
