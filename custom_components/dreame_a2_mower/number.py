@@ -61,6 +61,7 @@ async def async_setup_entry(
         for description in NUMBERS
         if description.exists_fn(description, coordinator.device)
     )
+    async_add_entities([DreameMowerStationBearingNumber(hass, entry, coordinator)])
 
 
 class DreameMowerNumberEntity(DreameMowerEntity, NumberEntity):
@@ -134,3 +135,64 @@ class DreameMowerNumberEntity(DreameMowerEntity, NumberEntity):
     def native_value(self) -> int | None:
         """Return the current Dreame Mower number value."""
         return self._attr_native_value
+
+
+class DreameMowerStationBearingNumber(NumberEntity):
+    """Station Direction bearing, editable from the device config card.
+
+    This is an HA-only setting (never flows to the mower — the mower
+    doesn't know its physical compass bearing). We store it on the
+    config entry's options so it survives restarts; the
+    `options_updated` listener in __init__.py picks it up and pushes
+    onto `device.station_bearing_deg`, where the Position North/East
+    sensors read it.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Station Direction"
+    _attr_icon = "mdi:compass-outline"
+    _attr_native_min_value = 0
+    _attr_native_max_value = 360
+    _attr_native_step = 1
+    _attr_native_unit_of_measurement = "°"
+    _attr_mode = NumberMode.BOX
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        coordinator: DreameMowerDataUpdateCoordinator,
+    ) -> None:
+        self._hass = hass
+        self._entry = entry
+        self._coordinator = coordinator
+        self._attr_unique_id = f"{coordinator.device.mac}_station_bearing"
+
+    @property
+    def device_info(self):
+        # Link to the same HA device as the rest of the entities.
+        from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
+        return {
+            "connections": {(CONNECTION_NETWORK_MAC, self._coordinator.device.mac)},
+            "identifiers": {(DOMAIN, self._coordinator.device.mac)},
+            "name": self._coordinator.device.name,
+        }
+
+    @property
+    def native_value(self) -> float:
+        from .const import CONF_STATION_BEARING
+        return float(self._entry.options.get(CONF_STATION_BEARING, 0.0) or 0.0)
+
+    async def async_set_native_value(self, value: float) -> None:
+        from .const import CONF_STATION_BEARING
+        # Clamp and wrap to [0, 360)
+        v = float(value) % 360.0
+        new_options = {**self._entry.options, CONF_STATION_BEARING: v}
+        self._hass.config_entries.async_update_entry(self._entry, options=new_options)
+        # `options_updated` listener will push the value onto
+        # device.station_bearing_deg; write our own state too so the
+        # UI reflects immediately.
+        self._coordinator.device.station_bearing_deg = v
+        self.async_write_ha_state()
