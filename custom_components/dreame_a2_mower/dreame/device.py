@@ -1437,14 +1437,19 @@ class DreameMowerDevice:
                     _LOGGER.warning("MAP JSON: no usable entry found in list")
                     return
             boundary = map_json.get("boundary", {})
-            bx1 = boundary.get("x1", 0)
-            by1 = boundary.get("y1", 0)
-            bx2 = boundary.get("x2", 0)
-            by2 = boundary.get("y2", 0)
+            # Cloud JSON sometimes returns boundary coords as floats (e.g.
+            # after a scale/rotation was applied server-side). Our grid
+            # arithmetic below is integer-only — downstream PIL polygon /
+            # Image.new calls reject floats with
+            # "'float' object cannot be interpreted as an integer".
+            bx1 = int(boundary.get("x1", 0))
+            by1 = int(boundary.get("y1", 0))
+            bx2 = int(boundary.get("x2", 0))
+            by2 = int(boundary.get("y2", 0))
 
             grid_size = 50
-            width = max(1, (bx2 - bx1) // grid_size + 1)
-            height = max(1, (by2 - by1) // grid_size + 1)
+            width = int(max(1, (bx2 - bx1) // grid_size + 1))
+            height = int(max(1, (by2 - by1) // grid_size + 1))
 
             pixel_type = np.full((width, height), MapPixelType.OUTSIDE.value, dtype=np.uint8)
 
@@ -1468,8 +1473,8 @@ class DreameMowerDevice:
 
                 poly_points = []
                 for pt in path:
-                    px = (pt["x"] - bx1) // grid_size
-                    py = (pt["y"] - by1) // grid_size
+                    px = int((int(pt["x"]) - bx1) // grid_size)
+                    py = int((int(pt["y"]) - by1) // grid_size)
                     poly_points.append((px, py))
 
                 if len(poly_points) >= 3:
@@ -1479,8 +1484,8 @@ class DreameMowerDevice:
                     mask = np.array(img).T
                     pixel_type[mask > 0] = zone_id
 
-                xs = [pt["x"] for pt in path]
-                ys = [pt["y"] for pt in path]
+                xs = [int(pt["x"]) for pt in path]
+                ys = [int(pt["y"]) for pt in path]
                 seg = Segment(
                     segment_id=zone_id,
                     x0=min(xs), y0=min(ys),
@@ -1508,8 +1513,8 @@ class DreameMowerDevice:
 
                 poly_points = []
                 for pt in path:
-                    px = (pt["x"] - bx1) // grid_size
-                    py = (pt["y"] - by1) // grid_size
+                    px = int((int(pt["x"]) - bx1) // grid_size)
+                    py = int((int(pt["y"]) - by1) // grid_size)
                     poly_points.append((px, py))
 
                 if len(poly_points) >= 3:
@@ -1521,10 +1526,10 @@ class DreameMowerDevice:
 
                 if len(path) >= 4:
                     no_go_areas.append(Area(
-                        path[0]["x"], path[0]["y"],
-                        path[1]["x"], path[1]["y"],
-                        path[2]["x"], path[2]["y"],
-                        path[3]["x"], path[3]["y"],
+                        int(path[0]["x"]), int(path[0]["y"]),
+                        int(path[1]["x"]), int(path[1]["y"]),
+                        int(path[2]["x"]), int(path[2]["y"]),
+                        int(path[3]["x"]), int(path[3]["y"]),
                     ))
 
             contours = map_json.get("contours", {}).get("value", [])
@@ -1542,8 +1547,8 @@ class DreameMowerDevice:
 
                 line_points = []
                 for pt in path:
-                    px = (pt["x"] - bx1) // grid_size
-                    py = (pt["y"] - by1) // grid_size
+                    px = int((int(pt["x"]) - bx1) // grid_size)
+                    py = int((int(pt["y"]) - by1) // grid_size)
                     line_points.append((px, py))
 
                 img = Image.new("L", (width, height), 0)
