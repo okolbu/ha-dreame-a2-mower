@@ -391,6 +391,10 @@ async def async_setup_entry(
     # devices that actually have an archive (g2408 path).
     if getattr(coordinator, "session_archive", None) is not None:
         async_add_entities([DreameArchivedSessionsSensor(coordinator)])
+    # Same thing for LiDAR scans — enabled as soon as the mower has
+    # uploaded at least one PCD blob (siid=99 path).
+    if getattr(coordinator, "lidar_archive", None) is not None:
+        async_add_entities([DreameArchivedLidarScansSensor(coordinator)])
 
 
 class DreameMowerSensorEntity(DreameMowerEntity, SensorEntity):
@@ -455,6 +459,53 @@ class DreameArchivedSessionsSensor(SensorEntity):
             "archive_root": str(archive.root),
             "latest": latest.to_dict() if latest else None,
             "recent_sessions": [s.to_dict() for s in sessions],
+        }
+
+    async def async_added_to_hass(self) -> None:
+        self.async_on_remove(
+            self._coordinator.async_add_listener(self._handle_coordinator_update)
+        )
+
+    def _handle_coordinator_update(self) -> None:
+        self.async_write_ha_state()
+
+
+class DreameArchivedLidarScansSensor(SensorEntity):
+    """Diagnostic sensor: count of archived LiDAR point-cloud scans."""
+
+    MAX_LISTED = 20
+
+    def __init__(self, coordinator: DreameMowerDataUpdateCoordinator) -> None:
+        self._coordinator = coordinator
+        self._attr_has_entity_name = True
+        self._attr_name = "Archived LiDAR Scans"
+        self._attr_unique_id = f"{coordinator.device.mac}_archived_lidar"
+        self._attr_entity_category = EntityCategory.DIAGNOSTIC
+        self._attr_icon = "mdi:rotate-3d-variant"
+        self._attr_native_unit_of_measurement = UNIT_TIMES
+        self._attr_state_class = SensorStateClass.MEASUREMENT
+        self._attr_should_poll = False
+
+    @property
+    def available(self) -> bool:
+        return self._coordinator.lidar_archive is not None
+
+    @property
+    def native_value(self) -> int:
+        archive = self._coordinator.lidar_archive
+        return archive.count if archive else 0
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        archive = self._coordinator.lidar_archive
+        if not archive:
+            return {}
+        latest = archive.latest()
+        scans = archive.list_scans()[: self.MAX_LISTED]
+        return {
+            "archive_root": str(archive.root),
+            "latest": latest.to_dict() if latest else None,
+            "recent_scans": [s.to_dict() for s in scans],
         }
 
     async def async_added_to_hass(self) -> None:

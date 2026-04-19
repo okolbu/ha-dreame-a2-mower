@@ -221,6 +221,11 @@ class DreameMowerDevice:
         # Raw JSON dict of the same summary, retained so the coordinator can
         # archive the authentic wire payload instead of a lossy rebuild.
         self._latest_session_raw = None
+        # Latest LiDAR scan — (object_name, unix_ts, raw_bytes) tuple. Populated
+        # by `_handle_lidar_object_name` on every s99p20 push. The coordinator
+        # polls this and writes through to the on-disk LidarArchive, same
+        # pattern as session-summary JSON.
+        self._latest_lidar_scan: tuple[str, int, bytes] | None = None
         # Dedupe novelty detector — reports unknown (siid, piid) pairs,
         # unfamiliar methods, and new event piids exactly once each so
         # future protocol changes don't get silently discarded.
@@ -428,6 +433,15 @@ class DreameMowerDevice:
                                         map_params.append(param)
                                 break
                     if not matched and "siid" in param and "piid" in param:
+                        # s99p20 = OSS object key for a LiDAR point-cloud upload.
+                        # Fires when the user taps "Download LiDAR map" in the
+                        # app and a fresh scan is produced. Treated as known
+                        # (not unknown) so the watchdog doesn't log it.
+                        if param["siid"] == 99 and param["piid"] == 20:
+                            value = param.get("value")
+                            if isinstance(value, str) and value:
+                                self._handle_lidar_object_name(value)
+                            continue
                         if self._unknown_watchdog.saw_property(
                             param["siid"], param["piid"]
                         ):
@@ -578,6 +592,59 @@ class DreameMowerDevice:
             _LOGGER.warning(
                 "[EVENT] session-summary fetch failed for %s: %s", object_name, ex
             )
+
+    def _handle_lidar_object_name(self, object_name: str) -> None:
+        """React to an ``s99p20`` LiDAR-scan upload announcement.
+
+        The mower uploads a point-cloud binary (standard PCL `.pcd`
+        format) to OSS and then publishes the object key over MQTT. We
+        fetch the blob via the same cloud client used for session
+        summaries, stash raw bytes on the device, and let the
+        coordinator write through to the on-disk archive.
+        """
+        if self._latest_lidar_scan and self._latest_lidar_scan[0] == object_name:
+            return  # same OSS key — nothing new to do
+        _LOGGER.info("[LIDAR] s99p20 announced object_name=%r", object_name)
+        self._fetch_lidar_scan(object_name)
+
+    def _fetch_lidar_scan(self, object_name: str) -> None:
+        """Download the PCD binary for ``object_name`` inline. Failures
+        are logged and swallowed — observability never breaks telemetry."""
+        cloud = getattr(self._protocol, "cloud", None)
+        if cloud is None or not getattr(cloud, "logged_in", False):
+            _LOGGER.info(
+                "[LIDAR] scan fetch skipped (no cloud login): %s", object_name
+            )
+            return
+        try:
+            url = cloud.get_interim_file_url(object_name)
+            if not url:
+                _LOGGER.warning(
+                    "[LIDAR] getDownloadUrl returned None for %s", object_name
+                )
+                return
+            raw = cloud.get_file(url)
+            if not raw:
+                _LOGGER.warning("[LIDAR] download returned empty for %s", object_name)
+                return
+            self._latest_lidar_scan = (object_name, int(time.time()), bytes(raw))
+            _LOGGER.info(
+                "[LIDAR] scan fetched: %s (%d bytes)",
+                object_name,
+                len(raw),
+            )
+        except Exception as ex:
+            _LOGGER.warning("[LIDAR] fetch failed for %s: %s", object_name, ex)
+
+    @property
+    def latest_lidar_scan(self) -> tuple[str, int, bytes] | None:
+        """Return the most recently fetched LiDAR scan, or None.
+
+        Tuple shape: ``(object_name, unix_ts, raw_pcd_bytes)``. The
+        coordinator polls this on each update tick and hands it to the
+        on-disk archive.
+        """
+        return self._latest_lidar_scan
 
     def _handle_properties(self, properties) -> bool:
         # Timestamp every incoming property event (even re-assertions that

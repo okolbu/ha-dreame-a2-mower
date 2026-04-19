@@ -144,6 +144,28 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
             self.session_archive.latest().md5 if self.session_archive and self.session_archive.latest() else None
         )
 
+        # LiDAR scan archive. Lives next to the session archive under
+        # `<ha_config>/dreame_a2_mower/lidar/`. Each downloaded PCD blob
+        # is content-addressed by md5 so re-downloading the same OSS key
+        # is a no-op.
+        from .lidar_archive import LidarArchive as _LidarArchive
+
+        lidar_root = Path(hass.config.path(DOMAIN, "lidar"))
+        try:
+            self.lidar_archive = _LidarArchive(lidar_root)
+        except OSError as ex:
+            LOGGER.warning(
+                "LidarArchive: could not initialise at %s: %s — archival disabled",
+                lidar_root,
+                ex,
+            )
+            self.lidar_archive = None
+        self._last_archived_lidar_md5: str | None = (
+            self.lidar_archive.latest().md5
+            if self.lidar_archive and self.lidar_archive.latest()
+            else None
+        )
+
         # Optional raw-MQTT archive — off by default. When enabled, every
         # MQTT message the device client receives gets appended to a
         # daily-rotating JSONL file under
@@ -492,6 +514,26 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
                             entry.area_mowed_m2,
                             entry.duration_min,
                             self.session_archive.count,
+                        )
+
+        # Same pattern for LiDAR scans — md5 dedupe so re-downloading the
+        # same OSS key (e.g. after HA restart) is idempotent.
+        if self.lidar_archive is not None:
+            latest = getattr(self._device, "latest_lidar_scan", None)
+            if latest is not None:
+                object_name, unix_ts, raw_bytes = latest
+                import hashlib as _hashlib
+
+                md5 = _hashlib.md5(raw_bytes).hexdigest()
+                if md5 != self._last_archived_lidar_md5:
+                    entry = self.lidar_archive.archive(object_name, unix_ts, raw_bytes)
+                    if entry is not None:
+                        self._last_archived_lidar_md5 = md5
+                        LOGGER.info(
+                            "LidarArchive: stored %s (%d bytes), total=%d",
+                            entry.filename,
+                            entry.size_bytes,
+                            self.lidar_archive.count,
                         )
 
         if self._has_temporary_map != self._device.status.has_temporary_map:
