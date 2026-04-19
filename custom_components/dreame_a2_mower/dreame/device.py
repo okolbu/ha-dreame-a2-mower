@@ -1475,7 +1475,12 @@ class DreameMowerDevice:
 
                 poly_points = []
                 for pt in path:
-                    px = int((int(pt["x"]) - bx1) // grid_size)
+                    # Mirror cloud +X horizontally (user-confirmed 2026-04-19:
+                    # the lawn polygon rendered mirrored vs the app unless we
+                    # flip X). forbiddenAreas does NOT get this flip — its
+                    # path is already in the correct visual orientation once
+                    # the `angle` rotation is applied.
+                    px = int((bx2 - int(pt["x"])) // grid_size)
                     py = int((by2 - int(pt["y"])) // grid_size)
                     poly_points.append((px, py))
 
@@ -1560,7 +1565,8 @@ class DreameMowerDevice:
 
                 line_points = []
                 for pt in path:
-                    px = int((int(pt["x"]) - bx1) // grid_size)
+                    # Same X-mirror as mowingAreas (see note there).
+                    px = int((bx2 - int(pt["x"])) // grid_size)
                     py = int((by2 - int(pt["y"])) // grid_size)
                     line_points.append((px, py))
 
