@@ -46,6 +46,19 @@ If a toggle you expect to see in HA is missing, check whether it's in the list a
 
 See `docs/research/g2408-protocol.md` §6.1 for the full reverse-engineering notes.
 
+## Removing orphaned `dreame_*` entities from an earlier install
+
+If you previously installed the upstream **Dreame Vacuum / Mover** integration before switching to this one, HA's entity registry retains the old `lawn_mower.dreame_mower_*`, `sensor.dreame_mower_*`, `camera.dreame_mower_*`, etc. They persist as greyed-out "Unavailable" rows and clutter dashboards.
+
+**To clean them up:**
+
+1. **Settings → Devices & Services**, find the old Dreame integration, click ⋮ → **Delete**. This removes the config entry but may leave the device/entities in the registry.
+2. **Settings → Devices & Services → Entities tab**. Filter by `dreame_` (or whatever prefix the old entity IDs used). For each row showing **Not available** or **Disabled by integration**, click into it and hit **Delete entity**.
+3. Repeat for the **Devices** tab — old Dreame devices with no associated integration can be removed.
+4. Refresh the browser. The new `dreame_a2_mower.*` entities remain.
+
+YAML dashboards referencing the old entity IDs will need to be updated to the new `lawn_mower.dreame_a2_mower`, `camera.dreame_a2_mower_map`, etc. The new integration deliberately uses the `dreame_a2_mower` domain prefix to avoid colliding.
+
 ## Map card configuration
 
 The integration exposes the active mowing session's position, path trail, and detected obstacles as attributes on the `camera.dreame_a2_map` entity. Use [lovelace-xiaomi-vacuum-map-card](https://github.com/PiotrMachowski/lovelace-xiaomi-vacuum-map-card) or a similar Lovelace map card to render them on top of the base map image.
