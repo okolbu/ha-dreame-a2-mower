@@ -1544,8 +1544,15 @@ class DreameMowerDevice:
                 segments[zone_id] = seg
 
             # Use the pre-rotated forbidden paths (computed above for bbox).
-            # Apply the same X-flip + Y-flip as mowingAreas/contours so
-            # everything lives in one consistent flipped frame.
+            # The downstream renderer's `Area.to_img` uses un-flipped
+            # cloud coords, which ended up placing the exclusion + dock
+            # at the wrong Y (user reported "flip around X axis" 2026-04-19).
+            # Reflect Y through the vertical midline of the cloud frame
+            # so these stay consistent with the lawn's Y-flipped mask.
+            # X is left alone because the renderer's un-flipped X
+            # convention already happens to match the app's horizontal
+            # placement for the no-go rectangle.
+            y_reflect = by1 + by2
             no_go_areas = []
             for _zid, rotated_path in rotated_forbidden:
                 if len(rotated_path) >= 4:
@@ -1555,10 +1562,10 @@ class DreameMowerDevice:
                     # instead of the opaque grey WALL fill, so the lawn
                     # zone below stays visible (matches the app's look).
                     no_go_areas.append(Area(
-                        int(rotated_path[0]["x"]), int(rotated_path[0]["y"]),
-                        int(rotated_path[1]["x"]), int(rotated_path[1]["y"]),
-                        int(rotated_path[2]["x"]), int(rotated_path[2]["y"]),
-                        int(rotated_path[3]["x"]), int(rotated_path[3]["y"]),
+                        int(rotated_path[0]["x"]), int(y_reflect - rotated_path[0]["y"]),
+                        int(rotated_path[1]["x"]), int(y_reflect - rotated_path[1]["y"]),
+                        int(rotated_path[2]["x"]), int(y_reflect - rotated_path[2]["y"]),
+                        int(rotated_path[3]["x"]), int(y_reflect - rotated_path[3]["y"]),
                     ))
 
             contours = map_json.get("contours", {}).get("value", [])
@@ -1617,17 +1624,13 @@ class DreameMowerDevice:
             map_data.saved_map_status = 2
             map_data.last_updated = time.time()
             map_data.rotation = 0
-            # Cloud-frame (0, 0) is the charger. Our pixel mask uses the
-            # X-flipped + Y-flipped coord system
-            # (px = (bx2 - x)/grid, py = (by2 - y)/grid), but the
-            # downstream renderer's Point.to_img does (x - bx1)/grid for
-            # X and (height-1 - (y-by1)/grid) for Y. That means to
-            # place the dock icon at the same pixel our lawn draws for
-            # cloud (0, 0), we hand the renderer a point whose input
-            # coords are `(bx1 + bx2, 0)` — after its unflipped
-            # transform, that produces the flipped-frame pixel. Y stays
-            # at 0 because both paths already use the same Y-flip.
-            map_data.charger_position = Point(bx1 + bx2, 0, 0)
+            # Cloud-frame (0, 0) is the charger. Our lawn mask lives in
+            # an X-flipped + Y-flipped coord system; the renderer's
+            # Point.to_img does NOT match that transform for X or Y
+            # (user-verified 2026-04-19 — "wrap around origo along both
+            # X and Y"). Reflect both so the dock icon lands where the
+            # lawn mask placed the real charger.
+            map_data.charger_position = Point(bx1 + bx2, by1 + by2, 0)
 
             if self._map_manager:
                 self._map_manager._map_data = map_data
