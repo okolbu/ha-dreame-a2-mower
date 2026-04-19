@@ -323,6 +323,17 @@ class DreameA2LidarCard extends HTMLElement {
       this._centroid = stats.centroid;
       this._radius = Math.max(stats.radius, 1);
       this._bbox = stats.bbox;
+      // When the user hasn't explicitly configured `map_z`, default to
+      // the point cloud's bbox-min-Z so the map plane lands at ground
+      // level on the first render instead of Z=0 (which typically
+      // floats above the grass by ~1 m on this device).
+      if (this._config.map_z === undefined) {
+        this._mapZ = stats.bbox[0][2];
+        if (this._mapZInput) {
+          this._mapZInput.value = this._mapZ.toFixed(1);
+          this._mapZVal.textContent = this._mapZ.toFixed(1);
+        }
+      }
       this._distance = this._radius * 2.5;
       this._hint.textContent = `${meta.points.toLocaleString()} pts · r=${this._radius.toFixed(1)}m`;
       this._setStatus("");
