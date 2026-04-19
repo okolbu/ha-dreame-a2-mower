@@ -39,12 +39,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     _www = _Path(__file__).parent / "www"
     if not getattr(hass, "_dreame_a2_static_registered", False) and _www.is_dir():
         try:
+            # Modern HA: async_register_static_paths takes a list of
+            # StaticPathConfig dataclasses, not plain dicts.
+            from homeassistant.components.http import StaticPathConfig
             await hass.http.async_register_static_paths(
-                [{"url_path": f"/{DOMAIN}", "path": str(_www), "cache_headers": False}]
+                [StaticPathConfig(f"/{DOMAIN}", str(_www), False)]
             )
-        except AttributeError:
-            # Older HA (pre-2024): sync API.
-            hass.http.register_static_path(f"/{DOMAIN}", str(_www), cache_headers=False)
+        except ImportError:
+            # Fallback for HA versions predating StaticPathConfig.
+            # `async_register_static_paths` on these accepts tuples.
+            try:
+                await hass.http.async_register_static_paths(
+                    [(f"/{DOMAIN}", str(_www), False)]
+                )
+            except Exception:
+                import logging as _logging
+                _logging.getLogger(__name__).warning(
+                    "Static-path registration for LiDAR card skipped "
+                    "(unsupported HA version). The card JS at %s won't "
+                    "be served; copy it into /config/www/ manually to use it.",
+                    _www,
+                )
         hass._dreame_a2_static_registered = True
 
     # Set up all platforms for this device/entry.
