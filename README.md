@@ -59,6 +59,33 @@ If you previously installed the upstream **Dreame Vacuum / Mover** integration b
 
 YAML dashboards referencing the old entity IDs will need to be updated to the new `lawn_mower.dreame_a2_mower`, `camera.dreame_a2_mower_map`, etc. The new integration deliberately uses the `dreame_a2_mower` domain prefix to avoid colliding.
 
+## Interactive 3D LiDAR card (alpha)
+
+A minimal pure-WebGL Lovelace card ships with the integration — no
+Three.js or other external dependencies, single JS file served from
+the integration itself. Consumes the `.pcd` from
+`/api/dreame_a2_mower/lidar/latest.pcd` and shows an orbitable 3D
+point cloud. Drag to rotate, wheel to zoom.
+
+**Enable it:**
+
+1. **Settings → Dashboards → Resources → Add Resource**
+   - URL: `/dreame_a2_mower/dreame-a2-lidar-card.js`
+   - Resource type: **JavaScript Module**
+2. Force-reload the browser (cache busts on the file path).
+3. Add the card either via the UI picker ("Dreame A2 LiDAR Card") or in YAML:
+   ```yaml
+   type: custom:dreame-a2-lidar-card
+   # Optional:
+   # point_size: 3
+   # background: '#111'
+   ```
+
+Status: **alpha**. Mouse only for now — no touch gestures,
+no auto-refresh on new scan, no screenshot export. Performance tested
+at 145 000 points on desktop integrated GPU (60 fps). Raspberry Pi-
+class hardware caps `gl_PointSize` to stay fill-rate-friendly.
+
 ## Map card configuration
 
 The integration exposes the active mowing session's position, path trail, and detected obstacles as attributes on the `camera.dreame_a2_map` entity. Use [lovelace-xiaomi-vacuum-map-card](https://github.com/PiotrMachowski/lovelace-xiaomi-vacuum-map-card) or a similar Lovelace map card to render them on top of the base map image.

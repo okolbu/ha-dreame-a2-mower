@@ -30,17 +30,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
-    # Register frontend
-    # frontend_js = f"/{DOMAIN}/frontend.js"
-    # if DATA_EXTRA_MODULE_URL not in hass.data:
-    #    hass.data[DATA_EXTRA_MODULE_URL] = set()
-    # if frontend_js not in (
-    #    hass.data[DATA_EXTRA_MODULE_URL].urls
-    #    if hasattr(hass.data[DATA_EXTRA_MODULE_URL], "urls")
-    #    else hass.data[DATA_EXTRA_MODULE_URL]
-    # ):
-    #    hass.data[DATA_EXTRA_MODULE_URL].add(frontend_js)
-    #    hass.http.register_static_path(frontend_js, str(Path(Path(__file__).parent / "frontend.js")), True)
+    # Register the bundled WebGL LiDAR card at `/dreame_a2_mower/<file>`.
+    # Users then add a Lovelace resource entry pointing at
+    # `/dreame_a2_mower/dreame-a2-lidar-card.js` (type: module) to make
+    # the `custom:dreame-a2-lidar-card` card type available in the UI.
+    # Done once per HA process; guarded so reloads don't fail.
+    from pathlib import Path as _Path
+    _www = _Path(__file__).parent / "www"
+    if not getattr(hass, "_dreame_a2_static_registered", False) and _www.is_dir():
+        try:
+            await hass.http.async_register_static_paths(
+                [{"url_path": f"/{DOMAIN}", "path": str(_www), "cache_headers": False}]
+            )
+        except AttributeError:
+            # Older HA (pre-2024): sync API.
+            hass.http.register_static_path(f"/{DOMAIN}", str(_www), cache_headers=False)
+        hass._dreame_a2_static_registered = True
 
     # Set up all platforms for this device/entry.
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
