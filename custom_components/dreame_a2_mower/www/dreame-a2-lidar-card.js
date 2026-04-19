@@ -229,6 +229,9 @@ class DreameA2LidarCard extends HTMLElement {
     this._config = config || {};
     this._pointSize = Number(this._config.point_size ?? 2.5);
     this._showMap = Boolean(this._config.show_map ?? false);
+    this._mapZ = Number(this._config.map_z ?? 0.0);
+    this._mapFlipX = Boolean(this._config.map_flip_x ?? false);
+    this._mapFlipY = Boolean(this._config.map_flip_y ?? false);
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `
       <style>
@@ -248,19 +251,33 @@ class DreameA2LidarCard extends HTMLElement {
         .controls label { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
         .controls input[type=range] { width: 110px; }
         .controls input[type=checkbox] { margin: 0; }
+        .map-controls { display: none; flex-direction: column; gap: 4px; margin-left: 18px; }
+        .map-controls.active { display: flex; }
+        .map-controls .row { display: flex; gap: 8px; align-items: center; font-size: 11px; }
+        .map-controls input[type=range] { width: 90px; }
       </style>
       <ha-card>
         <div class="wrap">
           <canvas></canvas>
           <div class="controls">
             <label>Splat
-              <input type="range" class="splat" min="1" max="12" step="0.5" value="${this._pointSize}">
+              <input type="range" class="splat" min="1" max="40" step="0.5" value="${this._pointSize}">
               <span class="splat-val">${this._pointSize}</span>
             </label>
             <label>
               <input type="checkbox" class="showmap" ${this._showMap ? "checked" : ""}>
               Map underlay
             </label>
+            <div class="map-controls ${this._showMap ? "active" : ""}">
+              <div class="row">Z
+                <input type="range" class="mapz" min="-5" max="5" step="0.1" value="${this._mapZ}">
+                <span class="mapz-val">${this._mapZ.toFixed(1)}</span>
+              </div>
+              <div class="row">
+                <label><input type="checkbox" class="flipx" ${this._mapFlipX ? "checked" : ""}> Flip X</label>
+                <label><input type="checkbox" class="flipy" ${this._mapFlipY ? "checked" : ""}> Flip Y</label>
+              </div>
+            </div>
           </div>
           <div class="status">Loading…</div>
           <div class="hint"></div>
@@ -273,6 +290,11 @@ class DreameA2LidarCard extends HTMLElement {
     this._splat = this.shadowRoot.querySelector(".splat");
     this._splatVal = this.shadowRoot.querySelector(".splat-val");
     this._showMapCb = this.shadowRoot.querySelector(".showmap");
+    this._mapControls = this.shadowRoot.querySelector(".map-controls");
+    this._mapZInput = this.shadowRoot.querySelector(".mapz");
+    this._mapZVal = this.shadowRoot.querySelector(".mapz-val");
+    this._flipXCb = this.shadowRoot.querySelector(".flipx");
+    this._flipYCb = this.shadowRoot.querySelector(".flipy");
     this._bindInput();
   }
 
@@ -429,26 +451,12 @@ class DreameA2LidarCard extends HTMLElement {
         return [mmx / 1000, mmy / 1000];
       });
 
-      // Place the quad at the ground Z from the point-cloud bbox,
-      // not Z=0 — the A2's ground level sits ~1 m below zero in our
-      // captured PCDs, which made the quad appear floating above the
-      // lawn dots.
-      const groundZ = this._bbox ? this._bbox[0][2] : 0;
-
-      // Two triangles; UVs 0-1 across the PNG (flip V so image-row-0
-      // lands on the first corner which maps pixel (0, 0)).
-      const [Atl, Atr, Abr, Abl] = cornersM;
-      const data = new Float32Array([
-        Atl[0], Atl[1], groundZ, 0, 0,
-        Atr[0], Atr[1], groundZ, 1, 0,
-        Abr[0], Abr[1], groundZ, 1, 1,
-        Atl[0], Atl[1], groundZ, 0, 0,
-        Abr[0], Abr[1], groundZ, 1, 1,
-        Abl[0], Abl[1], groundZ, 0, 1,
-      ]);
+      // Cache the four mower-frame corners so the Z slider and flip
+      // checkboxes can rebuild the quad cheaply without re-solving
+      // the affine.
+      this._mapCorners = cornersM;
       this._quadVBO = gl.createBuffer();
-      gl.bindBuffer(gl.ARRAY_BUFFER, this._quadVBO);
-      gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+      this._rebuildMapQuad();
       this._mapTexReady = true;
     } catch (ex) {
       console.warn("[dreame-a2-lidar-card] map underlay failed:", ex);
@@ -487,10 +495,48 @@ class DreameA2LidarCard extends HTMLElement {
 
     this._showMapCb.addEventListener("change", async () => {
       this._showMap = this._showMapCb.checked;
+      this._mapControls.classList.toggle("active", this._showMap);
       if (this._showMap && !this._mapTexReady && this._gl) {
         await this._loadMapUnderlay();
       }
     });
+
+    this._mapZInput.addEventListener("input", () => {
+      this._mapZ = parseFloat(this._mapZInput.value);
+      this._mapZVal.textContent = this._mapZ.toFixed(1);
+      this._rebuildMapQuad();
+    });
+    this._flipXCb.addEventListener("change", () => {
+      this._mapFlipX = this._flipXCb.checked;
+      this._rebuildMapQuad();
+    });
+    this._flipYCb.addEventListener("change", () => {
+      this._mapFlipY = this._flipYCb.checked;
+      this._rebuildMapQuad();
+    });
+  }
+
+  _rebuildMapQuad() {
+    // Re-upload the quad VBO with the currently-selected Z + UV flips.
+    // Uses cached inverse-calibration output. Cheap — 6 vertices.
+    if (!this._mapCorners || !this._gl || !this._quadVBO) return;
+    const [Atl, Atr, Abr, Abl] = this._mapCorners;
+    const z = this._mapZ;
+    // UV assignment: (0,0) TL by default. `map_flip_x` swaps U, `map_flip_y` swaps V.
+    const u0 = this._mapFlipX ? 1 : 0;
+    const u1 = this._mapFlipX ? 0 : 1;
+    const v0 = this._mapFlipY ? 1 : 0;
+    const v1 = this._mapFlipY ? 0 : 1;
+    const data = new Float32Array([
+      Atl[0], Atl[1], z, u0, v0,
+      Atr[0], Atr[1], z, u1, v0,
+      Abr[0], Abr[1], z, u1, v1,
+      Atl[0], Atl[1], z, u0, v0,
+      Abr[0], Abr[1], z, u1, v1,
+      Abl[0], Abl[1], z, u0, v1,
+    ]);
+    this._gl.bindBuffer(this._gl.ARRAY_BUFFER, this._quadVBO);
+    this._gl.bufferData(this._gl.ARRAY_BUFFER, data, this._gl.STATIC_DRAW);
   }
 
   _startRenderLoop() {
