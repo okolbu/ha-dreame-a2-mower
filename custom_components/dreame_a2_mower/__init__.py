@@ -69,15 +69,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Session-replay service (A3). Freezes an archived session's
     # overlay into the live-map camera so a Lovelace map card redraws
-    # the historical run. Accepts an explicit file or "latest".
+    # the historical run. Accepts an explicit file or "latest". The
+    # underlying method does blocking disk + JSON-parse work — run on
+    # the executor to keep the event loop free.
     async def _handle_replay(call):
         coord = next(iter(hass.data[DOMAIN].values()), None)
         if coord is None:
             raise ValueError("No Dreame A2 coordinator loaded")
         file = call.data.get("file")
         if not file or file == "latest":
-            return coord.live_map.replay_latest_session()
-        return coord.live_map.replay_session(file)
+            return await hass.async_add_executor_job(coord.live_map.replay_latest_session)
+        return await hass.async_add_executor_job(coord.live_map.replay_session, file)
 
     if not hass.services.has_service(DOMAIN, "replay_session"):
         hass.services.async_register(DOMAIN, "replay_session", _handle_replay)

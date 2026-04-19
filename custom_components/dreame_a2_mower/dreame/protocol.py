@@ -483,7 +483,16 @@ class DreameMowerDreameHomeCloudProtocol:
                 _LOGGER.warning(
                     "Cloud send error %s for %s (attempt %d/%d): %s",
                     error_code, method, attempt + 1, attempts, api_response.get("msg", ""))
-                if method == "action" and attempt < attempts - 1:
+                # 80001 = "device unreachable via cloud relay". On devices
+                # where the cloud consistently can't reach the mower
+                # (verified on g2408, B1 — every single action during
+                # mowing returned 80001 too), retrying burns ~32 s per
+                # call (3 attempts × ~8 s gap) with zero chance of a
+                # different outcome. Break out fast on this specific
+                # code so boot stays under a few seconds. Other error
+                # codes (transient HTTP 5xx, etc.) still get the
+                # retry-with-backoff path.
+                if method == "action" and error_code != 80001 and attempt < attempts - 1:
                     sleep(8)
                     continue
             break
