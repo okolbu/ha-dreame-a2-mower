@@ -211,10 +211,30 @@ class DreameMowerDreameHomeCloudProtocol:
         if self._message_callback:
             try:
                 response = json.loads(message.payload.decode("utf-8"))
-                if "data" in response and response["data"]:
-                    self._message_callback(response["data"])
-            except:
-                pass
+            except Exception as ex:
+                # Was silently swallowed; undecodable payloads used to vanish
+                # without trace. Log at WARNING with payload as hex so anything
+                # non-JSON can be recovered for analysis.
+                try:
+                    sample = message.payload[:200].hex()
+                except Exception:
+                    sample = "<unreadable>"
+                _LOGGER.warning(
+                    "[UNKNOWN] MQTT payload on topic %s did not decode as JSON "
+                    "(%s); first 200 bytes hex=%s",
+                    getattr(message, "topic", "?"),
+                    ex,
+                    sample,
+                )
+                return
+            if "data" in response and response["data"]:
+                self._message_callback(response["data"])
+            else:
+                _LOGGER.debug(
+                    "MQTT message without 'data' field on topic %s: %s",
+                    getattr(message, "topic", "?"),
+                    response,
+                )
 
     def _handle_device_info(self, info):
         self._uid = info[self._strings[8]]

@@ -221,6 +221,11 @@ class DreameMowerDevice:
         # Raw JSON dict of the same summary, retained so the coordinator can
         # archive the authentic wire payload instead of a lossy rebuild.
         self._latest_session_raw = None
+        # Dedupe novelty detector — reports unknown (siid, piid) pairs,
+        # unfamiliar methods, and new event piids exactly once each so
+        # future protocol changes don't get silently discarded.
+        from ..protocol.unknown_watchdog import UnknownFieldWatchdog
+        self._unknown_watchdog = UnknownFieldWatchdog()
         self._discard_timeout = 5
         self._restore_timeout = 15
 
@@ -388,10 +393,12 @@ class DreameMowerDevice:
 
         if "method" in message:
             self.available = True
-            if message["method"] == "properties_changed" and "params" in message:
+            method = message["method"]
+            if method == "properties_changed" and "params" in message:
                 params = []
                 map_params = []
                 for param in message["params"]:
+                    matched = False
                     properties = [prop for prop in DreameMowerProperty]
                     for prop in properties:
                         if prop in self.property_mapping:
@@ -402,6 +409,7 @@ class DreameMowerDevice:
                                 and param["siid"] == mapping["siid"]
                                 and param["piid"] == mapping["piid"]
                             ):
+                                matched = True
                                 if prop in self._default_properties:
                                     param["did"] = str(prop.value)
                                     param["code"] = 0
@@ -415,12 +423,24 @@ class DreameMowerDevice:
                                     ):
                                         map_params.append(param)
                                 break
+                    if not matched and "siid" in param and "piid" in param:
+                        if self._unknown_watchdog.saw_property(
+                            param["siid"], param["piid"]
+                        ):
+                            _LOGGER.info(
+                                "[UNKNOWN] properties_changed carried an unmapped "
+                                "siid=%s piid=%s value=%r — add to property mapping "
+                                "if this field turns out to be meaningful",
+                                param["siid"],
+                                param["piid"],
+                                param.get("value"),
+                            )
                 if len(map_params) and self._map_manager:
                     self._map_manager.handle_properties(map_params)
 
                 self._decode_blob_properties(params)
                 self._handle_properties(params)
-            elif message["method"] == "event_occured" and "params" in message:
+            elif method == "event_occured" and "params" in message:
                 # Dreame A2 (g2408) fires this at session-complete with the
                 # OSS object key for the session-summary JSON in piid=9.
                 # Upstream never read this message class, so integrations
@@ -428,6 +448,14 @@ class DreameMowerDevice:
                 # signal that carries the map object name on this device.
                 # See docs/research/g2408-protocol.md §"event_occured".
                 self._handle_event_occured(message["params"])
+            else:
+                if self._unknown_watchdog.saw_method(method):
+                    _LOGGER.info(
+                        "[UNKNOWN] MQTT message with unfamiliar method=%r "
+                        "arrived — payload sample: %s",
+                        method,
+                        message,
+                    )
 
     def _handle_event_occured(self, params) -> None:
         """Handle an `event_occured` MQTT message.
