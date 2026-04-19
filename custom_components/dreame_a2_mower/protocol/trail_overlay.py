@@ -254,8 +254,13 @@ class TrailLayer:
             )
 
         composed = Image.alpha_composite(base, overlay)
+        # Preserve the alpha channel — "outside the lawn" pixels are
+        # fully transparent in the upstream renderer's colour scheme,
+        # and flattening to RGB here would fill them with black. Keep
+        # the PNG in RGBA so the Lovelace card's page background shows
+        # through the way the app does it.
         buf = io.BytesIO()
-        composed.convert("RGB").save(buf, format="PNG", optimize=True)
+        composed.save(buf, format="PNG", optimize=True)
         return buf.getvalue()
 
     # ------------------- helpers -------------------
