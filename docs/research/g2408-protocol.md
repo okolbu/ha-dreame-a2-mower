@@ -398,6 +398,11 @@ settings will be missing.
 
 ## 7. Map-fetch flow (s6p1 / s6p3 + OSS)
 
+> **See also:** [`cloud-map-geometry.md`](./cloud-map-geometry.md) for the
+> coordinate-frame / rotation / reflection math every overlay writer needs
+> after the map data is in memory.
+
+
 This is the active investigation thread. The A2 does **not** push the map as a
 single MQTT blob the way some older Dreame devices do. Instead:
 

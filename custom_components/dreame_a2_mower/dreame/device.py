@@ -1398,7 +1398,16 @@ class DreameMowerDevice:
             self._map_manager.editor.refresh_map()
 
     def _build_map_from_cloud_data(self) -> None:
-        """Build map data from cloud MAP batch keys for A1 Pro (no MQTT map support)."""
+        """Build map data from cloud MAP batch keys for A1 Pro (no MQTT map support).
+
+        **See `docs/research/cloud-map-geometry.md`** for the complete
+        reference on cloud-frame units, boundary semantics, the two
+        coordinate transforms used below, the forbidden-zone angle
+        rotation, the midline-reflection bridge, and the charger-offset
+        calibration. Every overlay added to this pipeline (live mower
+        position, maintenance-point markers, session replay, …) must
+        follow the same geometry rules.
+        """
         if not self.cloud_connected:
             return
 
