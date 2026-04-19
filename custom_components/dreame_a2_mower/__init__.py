@@ -48,7 +48,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Options-update listener re-broadcasts current state with new calibration.
     async def _options_updated(hass_arg, entry_arg):
         coord = hass_arg.data[DOMAIN].get(entry_arg.entry_id)
-        if coord and hasattr(coord, "live_map"):
+        if coord is None:
+            return
+        # Pick up station-bearing option for the compass position sensors.
+        from .const import CONF_STATION_BEARING
+        if hasattr(coord, "_device"):
+            coord._device.station_bearing_deg = float(
+                entry_arg.options.get(CONF_STATION_BEARING, 0.0) or 0.0
+            )
+        if hasattr(coord, "live_map"):
             coord.live_map.handle_options_update()
 
     entry.async_on_unload(entry.add_update_listener(_options_updated))

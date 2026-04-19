@@ -26,6 +26,7 @@ CONF_ACCOUNT_TYPE: Final = "account_type"
 CONF_MQTT_ARCHIVE: Final = "mqtt_archive"
 CONF_MQTT_ARCHIVE_RETAIN_DAYS: Final = "mqtt_archive_retain_days"
 DEFAULT_MQTT_ARCHIVE_RETAIN_DAYS: Final = 7
+CONF_STATION_BEARING: Final = "station_bearing_deg"
 
 CONTENT_TYPE: Final = "image/png"
 

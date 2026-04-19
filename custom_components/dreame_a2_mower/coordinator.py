@@ -110,6 +110,16 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
             entry.data.get(CONF_DID),
         )
 
+        # Station-bearing option (compass degrees, 0=N 90=E 180=S 270=W).
+        # Makes the mower's +X axis map onto a real-world direction so
+        # the N/E position sensors can project mower-frame (x, y) onto
+        # world (north, east) coords. Zero = "station faces north"
+        # (identity projection: north = x, east = y).
+        from .const import CONF_STATION_BEARING
+        self._device.station_bearing_deg = float(
+            entry.options.get(CONF_STATION_BEARING, 0.0) or 0.0
+        )
+
         self._device.listen(self._error_changed, DreameMowerProperty.ERROR)
         self._device.listen(self._state_changed, DreameMowerProperty.STATE)
         self._device.listen(self._task_status_changed, DreameMowerProperty.TASK_STATUS)

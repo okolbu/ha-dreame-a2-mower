@@ -87,13 +87,15 @@
           "live_map_x_factor": "X calibration factor",
           "live_map_y_factor": "Y calibration factor",
           "mqtt_archive": "Raw MQTT archive",
-          "mqtt_archive_retain_days": "MQTT archive retention (days)"
+          "mqtt_archive_retain_days": "MQTT archive retention (days)",
+          "station_bearing_deg": "Station Direction (° compass)"
         },
         "data_description": {
           "live_map_x_factor": "Scaling factor for X-axis telemetry reported by the mower. Raise or lower to match your lawn's physical dimensions. Default 1.0 matches the mower's cm-based X reporting. Changes apply only to new points; the existing session path is not rewritten.",
           "live_map_y_factor": "Scaling factor for Y-axis telemetry. The A2's wheel-encoder reports a systematic ~1.6× over-read on Y; default 0.625 compensates. Tweak if your measured distances still don't match the rendered map.",
           "mqtt_archive": "Write every incoming MQTT payload to a daily-rotating JSONL file under <config>/dreame_a2_mower/mqtt_archive/. Useful for reverse engineering and for recovering novel fields flagged by the unknown-field watchdog. Off by default; adds modest disk writes during active mowing.",
-          "mqtt_archive_retain_days": "How many days of archive files to keep. Older files are pruned on each daily rotation. Default 7."
+          "mqtt_archive_retain_days": "How many days of archive files to keep. Older files are pruned on each daily rotation. Default 7.",
+          "station_bearing_deg": "Compass direction the charging station faces, in degrees (0 = north, 90 = east, 180 = south, 270 = west). When set, the Position North and Position East sensors project the mower's charger-relative coordinates onto real-world compass axes. Leave at 0 if you don't need compass projection — the sensors will then mirror raw X/Y."
         }
       }
     },

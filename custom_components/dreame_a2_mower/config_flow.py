@@ -45,6 +45,7 @@ from .const import (
     CONF_MQTT_ARCHIVE,
     CONF_MQTT_ARCHIVE_RETAIN_DAYS,
     DEFAULT_MQTT_ARCHIVE_RETAIN_DAYS,
+    CONF_STATION_BEARING,
     NOTIFICATION,
     MAP_OBJECTS,
     NOTIFICATION_ID_2FA_LOGIN,
@@ -145,6 +146,10 @@ class DreameMowerOptionsFlowHandler(OptionsFlow):
                             DEFAULT_MQTT_ARCHIVE_RETAIN_DAYS,
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=90)),
+                    vol.Optional(
+                        CONF_STATION_BEARING,
+                        default=options.get(CONF_STATION_BEARING, 0.0),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=360.0)),
                 }
             )
 

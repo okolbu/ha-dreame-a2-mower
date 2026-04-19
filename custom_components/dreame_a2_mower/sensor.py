@@ -2,8 +2,31 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from datetime import datetime
+
+
+def _project_to_compass(telemetry, device, axis: str):
+    """Project mower-frame (x_m, y_m_calibrated) onto a compass axis.
+
+    Mower +X points in the dock's facing direction, encoded in
+    ``device.station_bearing_deg`` (0°=N, 90°=E, 180°=S, 270°=W).
+    Mower +Y is 90° clockwise from +X. Projection formulas:
+        north = x·cos(θ) − y·sin(θ)
+        east  = x·sin(θ) + y·cos(θ)
+    """
+    if telemetry is None:
+        return None
+    bearing = float(getattr(device, "station_bearing_deg", 0.0) or 0.0)
+    theta = math.radians(bearing)
+    x_m = telemetry.x_m
+    y_m = telemetry.y_mm * 0.000625  # same calibration factor as Position Y
+    if axis == "north":
+        return round(x_m * math.cos(theta) - y_m * math.sin(theta), 2)
+    if axis == "east":
+        return round(x_m * math.sin(theta) + y_m * math.cos(theta), 2)
+    return None
 
 from homeassistant.components.sensor import (
     ENTITY_ID_FORMAT,
@@ -346,6 +369,31 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.y_mm if value is not None else None,
+    ),
+    # Compass-projected sensors — useful when the user has oriented the
+    # dock in a known compass direction (configured via the "Station
+    # Direction (°)" option). Projects the mower-frame (x, y) into
+    # world (north, east) metres. Mower +X points in the dock's facing
+    # direction = `station_bearing_deg` on the compass; mower +Y is
+    # 90° clockwise from +X. bearing=0 (default, "station faces north")
+    # means north=x_m, east=y_m — useful even without calibration.
+    DreameMowerSensorEntityDescription(
+        key="mowing_position_north_m",
+        property_key=DreameMowerProperty.MOWING_TELEMETRY,
+        name="Position North",
+        icon="mdi:compass",
+        native_unit_of_measurement="m",
+        exists_fn=lambda description, device: True,
+        value_fn=lambda value, device: _project_to_compass(value, device, axis="north"),
+    ),
+    DreameMowerSensorEntityDescription(
+        key="mowing_position_east_m",
+        property_key=DreameMowerProperty.MOWING_TELEMETRY,
+        name="Position East",
+        icon="mdi:compass",
+        native_unit_of_measurement="m",
+        exists_fn=lambda description, device: True,
+        value_fn=lambda value, device: _project_to_compass(value, device, axis="east"),
     ),
     # Exposed as "Mowing Zone" because byte [8] of s1p4 is the internal
     # zone-ID the mower firmware is currently mowing in — each distinct
