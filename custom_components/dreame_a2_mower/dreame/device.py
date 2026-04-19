@@ -1624,13 +1624,29 @@ class DreameMowerDevice:
             map_data.saved_map_status = 2
             map_data.last_updated = time.time()
             map_data.rotation = 0
-            # Cloud-frame (0, 0) is the charger. Our lawn mask lives in
-            # an X-flipped + Y-flipped coord system; the renderer's
-            # Point.to_img does NOT match that transform for X or Y
-            # (user-verified 2026-04-19 — "wrap around origo along both
-            # X and Y"). Reflect both so the dock icon lands where the
-            # lawn mask placed the real charger.
-            map_data.charger_position = Point(bx1 + bx2, by1 + by2, 0)
+            # Cloud-frame (0, 0) is where the mower's nose meets the
+            # charging station as it enters the dock — NOT the physical
+            # centre of the charger. The station body extends ~40 cm
+            # further in +X (mower-frame), i.e. house-ward. User
+            # observed 2026-04-19 (IMG_4422.PNG) that without the
+            # offset the dock icon sits on the very edge of the mowing
+            # boundary, whereas the app places the charger glyph a bit
+            # outside the lawn where the physical unit sits. Shifting
+            # the icon by half the known station length (400 mm) along
+            # +X matches the app.
+            #
+            # Our lawn mask uses (bx2 - x)/grid for X and (by2 - y)/grid
+            # for Y. The renderer's Point.to_img interprets raw cloud
+            # coords via its own transform, so the input Point must be
+            # reflected through (bx1+bx2, by1+by2) to land in the same
+            # place. A +400 mm shift in cloud-X (house-ward) becomes
+            # `- 400` on the reflected X axis.
+            CHARGER_OFFSET_MM = 400  # half the Dreame A2 charging-station length
+            map_data.charger_position = Point(
+                bx1 + bx2 - CHARGER_OFFSET_MM,
+                by1 + by2,
+                0,
+            )
 
             if self._map_manager:
                 self._map_manager._map_data = map_data
