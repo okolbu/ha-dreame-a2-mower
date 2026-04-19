@@ -1572,16 +1572,29 @@ class DreameMowerDevice:
             no_go_areas = []
             for _zid, rotated_path in rotated_forbidden:
                 if len(rotated_path) >= 4:
-                    # Area objects only (no pixel_type fill) so the
-                    # renderer's semi-transparent `no_go` colour paints
-                    # over the lawn instead of covering it with opaque
-                    # grey WALL pixels.
+                    # Area objects drive the renderer's semi-transparent
+                    # `no_go` colour (so the lawn zone below stays
+                    # visible). We keep them un-painted in pixel_type
+                    # because filling there would render as opaque grey.
                     no_go_areas.append(Area(
                         int(x_reflect - rotated_path[0]["x"]), int(y_reflect - rotated_path[0]["y"]),
                         int(x_reflect - rotated_path[1]["x"]), int(y_reflect - rotated_path[1]["y"]),
                         int(x_reflect - rotated_path[2]["x"]), int(y_reflect - rotated_path[2]["y"]),
                         int(x_reflect - rotated_path[3]["x"]), int(y_reflect - rotated_path[3]["y"]),
                     ))
+                # However, the renderer also auto-crops the canvas to
+                # the bbox of non-OUTSIDE pixels in pixel_type — so if we
+                # only paint the lawn, the exclusion overlay gets clipped
+                # when it extends past the lawn. Plant each rotated
+                # corner as a single WALL pixel inside the pixel mask:
+                # four pixels per corner is enough to stretch the crop
+                # bbox to cover the exclusion, and they all land UNDER
+                # the semi-transparent red overlay so they're invisible.
+                for pt in rotated_path:
+                    cx = int((bx2 - int(pt["x"])) // grid_size)
+                    cy = int((by2 - int(pt["y"])) // grid_size)
+                    if 0 <= cx < width and 0 <= cy < height:
+                        pixel_type[cx, cy] = MapPixelType.WALL.value
 
             contours = map_json.get("contours", {}).get("value", [])
             for entry in contours:
