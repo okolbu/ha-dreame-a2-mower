@@ -76,7 +76,7 @@ Pitfalls:
 ### Top unknowns that could blow the estimate
 
 1. **Coordinate-frame mismatch.** Our existing top-down PNG went through half a dozen reflect/rotate passes before it matched the app. The 3D card's viewing basis might need similar tuning before it looks "right" — add hours, not days.
-2. **Color channel encoding.** Packed `rgb` uint32 has platform-endianness history. `0x00RRGGBB` vs `0x00BBGGRR` will produce blue trees until diagnosed. Cheap fix once spotted, can eat half a day of confused testing.
+2. ~~**Color channel encoding.** Packed `rgb` uint32 has platform-endianness history. `0x00RRGGBB` vs `0x00BBGGRR` will produce blue trees until diagnosed. Cheap fix once spotted, can eat half a day of confused testing.~~ **Resolved at implementation time 2026-04-19**: the `.bgr` swizzle in the vertex shader (commit `03de4af`) works out of the box on this g2408 firmware. Little-endian byte order in the VBO = `[B, G, R, 0]` at each 4-byte rgb slot; WebGL reads that as `aColor = (B, G, R, 0)/255`; shader swizzles to `.bgr` = `(R, G, B)`. User confirmed colours render right-way-up.
 3. **HACS + frontend resource reload UX.** First-time installs trip on browser cache; users will report "card not found" until hard-reload. Mitigate with a version query string on the resource URL.
 
 ### Minimum-viable alpha deliverable
