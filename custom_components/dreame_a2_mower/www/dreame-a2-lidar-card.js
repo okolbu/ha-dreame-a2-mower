@@ -32,7 +32,12 @@ const VERTEX_SRC = `
   varying vec4 vColor;
   void main() {
     gl_Position = uMVP * vec4(aPos, 1.0);
-    gl_PointSize = clamp(uPointSize / max(gl_Position.w, 0.1), 1.0, 48.0);
+    // Direct pixel size — no distance attenuation. Clip-space w at
+    // default zoom is ~O(scene radius), which made previous
+    // uPointSize / w formula clamp to the minimum 1 px regardless of
+    // slider value. Plain uPointSize matches what the slider's
+    // numeric readout promises.
+    gl_PointSize = clamp(uPointSize, 1.0, 48.0);
     // PCL packs rgb as 0x00RRGGBB. Little-endian memory layout is
     // [B, G, R, 0]; WebGL reads that as (B, G, R, 0). Swizzle to RGB.
     vColor = vec4(aColor.b, aColor.g, aColor.r, 1.0);
@@ -295,6 +300,7 @@ class DreameA2LidarCard extends HTMLElement {
       const stats = computeStats(buf, meta.bodyOffset, meta.bpp, meta.points);
       this._centroid = stats.centroid;
       this._radius = Math.max(stats.radius, 1);
+      this._bbox = stats.bbox;
       this._distance = this._radius * 2.5;
       this._hint.textContent = `${meta.points.toLocaleString()} pts · r=${this._radius.toFixed(1)}m`;
       this._setStatus("");
@@ -363,12 +369,9 @@ class DreameA2LidarCard extends HTMLElement {
         console.warn("[dreame-a2-lidar-card] no calibration_points on", entityId);
         return;
       }
-      // Derive mm-per-pixel from calibration and the quad's world bounds
-      // from the LiDAR point-cloud bbox projected onto Z=0. Simpler:
-      // just cover the point-cloud's XY bbox at Z=0 and UV-map the full
-      // texture across it. Alignment with the PNG's own coordinate
-      // system is approximate but usually close enough to see lawn
-      // boundary under the cloud.
+
+      // Fetch the PNG and capture its pixel dimensions so we can turn
+      // the four image corners into world-metre quad corners.
       const mapUrl = `/api/camera_proxy/${entityId}?token=${state.attributes?.access_token || ""}`;
       const r = await fetch(mapUrl, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error(`map HTTP ${r.status}`);
@@ -385,21 +388,63 @@ class DreameA2LidarCard extends HTMLElement {
       gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
       this._mapTex = tex;
 
-      // Quad covering the point cloud's XY bbox at Z=0.
-      // Computed from the first-pass stats we captured.
-      const r_ = this._radius * 1.3;
-      const cx = this._centroid[0];
-      const cy = this._centroid[1];
-      const x0 = cx - r_, x1 = cx + r_;
-      const y0 = cy - r_, y1 = cy + r_;
-      // interleaved pos(xyz) + uv(st), CCW winding, two triangles
+      // calibration_points: list of 3 entries `{mower:{x,y}, map:{x,y}}`.
+      // `mower.*` is mower-frame mm (includes all the
+      // reflections/rotations the base renderer applied); `map.*` is
+      // pixels in the served PNG. Fit the affine mower_mm → pixel:
+      //   px = a*x + b*y + tx
+      //   py = c*x + d*y + ty
+      // then invert to pixel → mower_mm, and transform the 4 PNG
+      // corners to get the quad's world coords.
+      const [p0, p1, p2] = calib;
+      const x0 = p0.mower.x, y0 = p0.mower.y;
+      const x1 = p1.mower.x, y1 = p1.mower.y;
+      const x2 = p2.mower.x, y2 = p2.mower.y;
+      const u0 = p0.map.x, v0 = p0.map.y;
+      const u1 = p1.map.x, v1 = p1.map.y;
+      const u2 = p2.map.x, v2 = p2.map.y;
+      const det = (x1 - x0) * (y2 - y0) - (x2 - x0) * (y1 - y0);
+      if (Math.abs(det) < 1e-9) throw new Error("calib colinear");
+      const a = ((u1 - u0) * (y2 - y0) - (u2 - u0) * (y1 - y0)) / det;
+      const b = ((x1 - x0) * (u2 - u0) - (x2 - x0) * (u1 - u0)) / det;
+      const c = ((v1 - v0) * (y2 - y0) - (v2 - v0) * (y1 - y0)) / det;
+      const d = ((x1 - x0) * (v2 - v0) - (x2 - x0) * (v1 - v0)) / det;
+      const tx = u0 - a * x0 - b * y0;
+      const ty = v0 - c * x0 - d * y0;
+      // Invert the 2x2 to get pixel → mower_mm
+      const idet = 1 / (a * d - b * c);
+      const inv_a = d * idet, inv_b = -b * idet;
+      const inv_c = -c * idet, inv_d = a * idet;
+      const px2mm = (px, py) => {
+        const ox = px - tx, oy = py - ty;
+        return [inv_a * ox + inv_b * oy, inv_c * ox + inv_d * oy];
+      };
+
+      const W = bmp.width, H = bmp.height;
+      // Quad corners (world metres): translate pixel corners through
+      // the inverse affine and divide by 1000 (mm → m).
+      const cornersPx = [[0, 0], [W, 0], [W, H], [0, H]];
+      const cornersM = cornersPx.map(([px, py]) => {
+        const [mmx, mmy] = px2mm(px, py);
+        return [mmx / 1000, mmy / 1000];
+      });
+
+      // Place the quad at the ground Z from the point-cloud bbox,
+      // not Z=0 — the A2's ground level sits ~1 m below zero in our
+      // captured PCDs, which made the quad appear floating above the
+      // lawn dots.
+      const groundZ = this._bbox ? this._bbox[0][2] : 0;
+
+      // Two triangles; UVs 0-1 across the PNG (flip V so image-row-0
+      // lands on the first corner which maps pixel (0, 0)).
+      const [Atl, Atr, Abr, Abl] = cornersM;
       const data = new Float32Array([
-        x0, y0, 0,   0, 0,
-        x1, y0, 0,   1, 0,
-        x1, y1, 0,   1, 1,
-        x0, y0, 0,   0, 0,
-        x1, y1, 0,   1, 1,
-        x0, y1, 0,   0, 1,
+        Atl[0], Atl[1], groundZ, 0, 0,
+        Atr[0], Atr[1], groundZ, 1, 0,
+        Abr[0], Abr[1], groundZ, 1, 1,
+        Atl[0], Atl[1], groundZ, 0, 0,
+        Abr[0], Abr[1], groundZ, 1, 1,
+        Abl[0], Abl[1], groundZ, 0, 1,
       ]);
       this._quadVBO = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, this._quadVBO);
