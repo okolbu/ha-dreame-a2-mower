@@ -47,10 +47,16 @@ const VERTEX_SRC = `
 const FRAGMENT_SRC = `
   precision mediump float;
   varying vec4 vColor;
+  uniform float uSoftEdge;
   void main() {
     vec2 d = gl_PointCoord - vec2(0.5);
-    if (dot(d, d) > 0.25) discard;
-    gl_FragColor = vColor;
+    float r2 = dot(d, d);
+    if (r2 > 0.25) discard;
+    // Hard-edge circle when uSoftEdge=0 (crisp dots at small sizes).
+    // Soft falloff when uSoftEdge=1 (alpha fades from centre to edge,
+    // so overlapping large splats blend into a pseudo-surface look).
+    float alpha = mix(1.0, 1.0 - smoothstep(0.1, 0.25, r2), uSoftEdge);
+    gl_FragColor = vec4(vColor.rgb, alpha);
   }
 `;
 
@@ -71,11 +77,16 @@ const QUAD_FRAGMENT_SRC = `
   varying vec2 vUV;
   uniform sampler2D uTex;
   uniform float uAlpha;
+  uniform float uDesat;
   void main() {
     vec4 c = texture2D(uTex, vUV);
-    // Premultiply alpha against user-configurable transparency so the
-    // underlay can be dimmed for better readability through the cloud.
-    gl_FragColor = vec4(c.rgb, c.a * uAlpha);
+    // Desaturate towards luma so the underlay reads as background
+    // rather than competing with the coloured ground points (both
+    // naturally end up green otherwise). uDesat=0 keeps original
+    // colour; 1 fully monochrome.
+    float luma = dot(c.rgb, vec3(0.299, 0.587, 0.114));
+    vec3 rgb = mix(c.rgb, vec3(luma), uDesat);
+    gl_FragColor = vec4(rgb, c.a * uAlpha);
   }
 `;
 
@@ -239,6 +250,13 @@ class DreameA2LidarCard extends HTMLElement {
     // so we need the UVs flipped in BOTH axes to compensate.
     this._mapFlipX = Boolean(this._config.map_flip_x ?? true);
     this._mapFlipY = Boolean(this._config.map_flip_y ?? true);
+    // Soft-edge splat factor: 0 = hard-edged circles, 1 = soft fade.
+    // Soft fade makes large splats blend into a pseudo-surface look
+    // rather than showing as discrete fuzzy balls. Default soft.
+    this._softEdge = Number(this._config.soft_edge ?? 1.0);
+    // Underlay desaturation — default 1.0 (fully monochrome) so the
+    // background lawn-green doesn't blend with the PCD's ground-green.
+    this._mapDesat = Number(this._config.map_desat ?? 1.0);
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     this.shadowRoot.innerHTML = `
       <style>
@@ -272,6 +290,10 @@ class DreameA2LidarCard extends HTMLElement {
               <span class="splat-val">${this._pointSize}</span>
             </label>
             <label>
+              <input type="checkbox" class="soft" ${this._softEdge >= 0.5 ? "checked" : ""}>
+              Soft splats
+            </label>
+            <label>
               <input type="checkbox" class="showmap" ${this._showMap ? "checked" : ""}>
               Map underlay
             </label>
@@ -296,6 +318,7 @@ class DreameA2LidarCard extends HTMLElement {
     this._hint = this.shadowRoot.querySelector(".hint");
     this._splat = this.shadowRoot.querySelector(".splat");
     this._splatVal = this.shadowRoot.querySelector(".splat-val");
+    this._softCb = this.shadowRoot.querySelector(".soft");
     this._showMapCb = this.shadowRoot.querySelector(".showmap");
     this._mapControls = this.shadowRoot.querySelector(".map-controls");
     this._mapZInput = this.shadowRoot.querySelector(".mapz");
@@ -381,6 +404,7 @@ class DreameA2LidarCard extends HTMLElement {
       aColor: gl.getAttribLocation(this._pointProgram, "aColor"),
       uMVP: gl.getUniformLocation(this._pointProgram, "uMVP"),
       uPointSize: gl.getUniformLocation(this._pointProgram, "uPointSize"),
+      uSoftEdge: gl.getUniformLocation(this._pointProgram, "uSoftEdge"),
     };
     this._pointBPP = meta.bpp;
     this._pointHasRGB = meta.hasRGB;
@@ -395,6 +419,7 @@ class DreameA2LidarCard extends HTMLElement {
       uMVP: gl.getUniformLocation(this._quadProgram, "uMVP"),
       uTex: gl.getUniformLocation(this._quadProgram, "uTex"),
       uAlpha: gl.getUniformLocation(this._quadProgram, "uAlpha"),
+      uDesat: gl.getUniformLocation(this._quadProgram, "uDesat"),
     };
   }
 
@@ -511,6 +536,10 @@ class DreameA2LidarCard extends HTMLElement {
       this._splatVal.textContent = this._pointSize;
     });
 
+    this._softCb.addEventListener("change", () => {
+      this._softEdge = this._softCb.checked ? 1.0 : 0.0;
+    });
+
     this._showMapCb.addEventListener("change", async () => {
       this._showMap = this._showMapCb.checked;
       this._mapControls.classList.toggle("active", this._showMap);
@@ -610,6 +639,7 @@ class DreameA2LidarCard extends HTMLElement {
       gl.bindTexture(gl.TEXTURE_2D, this._mapTex);
       gl.uniform1i(this._quadLocs.uTex, 0);
       gl.uniform1f(this._quadLocs.uAlpha, this._mapAlpha);
+      gl.uniform1f(this._quadLocs.uDesat, this._mapDesat);
       gl.uniformMatrix4fv(this._quadLocs.uMVP, false, mvp);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       gl.disableVertexAttribArray(this._quadLocs.aUV);
@@ -626,6 +656,7 @@ class DreameA2LidarCard extends HTMLElement {
     }
     gl.uniformMatrix4fv(this._pointLocs.uMVP, false, mvp);
     gl.uniform1f(this._pointLocs.uPointSize, this._pointSize * this._dpr);
+    gl.uniform1f(this._pointLocs.uSoftEdge, this._softEdge);
     gl.drawArrays(gl.POINTS, 0, this._nPoints);
   }
 }
