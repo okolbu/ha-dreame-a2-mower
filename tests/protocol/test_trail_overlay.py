@@ -130,13 +130,19 @@ def test_reset_to_session_accepts_flat_path_too():
     assert _red_pixels(png) > 0
 
 
-def test_dock_marker_renders_green():
+def test_set_dock_accepted_but_not_rendered():
+    """Dock drawing is delegated to the upstream map renderer (it
+    paints the charger icon from `map_data.charger_position`).
+    `set_dock()` remains on the TrailLayer API so a future consumer
+    could draw a secondary marker, but compose() should NOT produce
+    a dock disc today — doing so caused visible doubling against the
+    upstream charger icon (observed 2026-04-19)."""
     layer = TrailLayer(base_size=(256, 256), calibration=CALIBRATION)
     layer.set_dock([0.0, 0.0])
     png = layer.compose(_blank_png())
     arr = np.array(Image.open(io.BytesIO(png)).convert("RGB"))
-    green = ((arr[:, :, 1] > 130) & (arr[:, :, 0] < 100) & (arr[:, :, 2] < 100)).sum()
-    assert green > 0
+    # No trail, no obstacles, no dock draw — expect an empty canvas.
+    assert (arr.sum(axis=2) > 0).sum() == 0
 
 
 def test_obstacle_polygon_blends_over_base():

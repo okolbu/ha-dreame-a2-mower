@@ -243,15 +243,17 @@ class TrailLayer:
         for poly in self._obstacle_polys:
             draw.polygon(poly, fill=OBSTACLE_COLOR, outline=OBSTACLE_OUTLINE)
 
-        if self._dock is not None:
-            cx, cy = self._dock
-            r = DOCK_RADIUS_PX
-            draw.ellipse(
-                (cx - r, cy - r, cx + r, cy + r),
-                fill=DOCK_COLOR,
-                outline=DOCK_OUTLINE,
-                width=2,
-            )
+        # Note: dock marker intentionally NOT drawn here. The upstream
+        # DreameMowerMapRenderer already paints a charger icon at
+        # `map_data.charger_position` (set in `_build_map_from_cloud_data`
+        # to the reflected cloud-origin + physical-station offset).
+        # Drawing another disc here caused a visible doubling with the
+        # TrailLayer's version a few pixels off because the two sources
+        # derive the coord differently — the upstream uses cloud (0,0)
+        # + 800 mm reflect, while ours pulled from each session's
+        # summary `dock` field which varies per recording. Kept
+        # `self._dock` state + setter for API compatibility in case a
+        # future consumer wants to draw a secondary marker.
 
         composed = Image.alpha_composite(base, overlay)
         # Preserve the alpha channel — "outside the lawn" pixels are
