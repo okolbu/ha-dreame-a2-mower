@@ -1406,8 +1406,21 @@ class Point:
     def __repr__(self) -> str:
         return self.__str__()
 
-    def __eq__(self: Point, other: Point) -> bool:
-        return other is not None and self.x == other.x and self.y == other.y and self.a == other.a
+    def __eq__(self, other) -> bool:
+        # Must tolerate non-Point comparands. HA's websocket state-diff
+        # path compares attribute values without knowing their types —
+        # if one snapshot had a Point and a later one has a plain list
+        # (which happens when live_map_attrs override the key on the
+        # camera), raising AttributeError from __eq__ crashes the
+        # entire state broadcast and downstream cards show
+        # "Configuration error". Return NotImplemented so Python falls
+        # back to `other.__eq__(self)` / False, and it never throws.
+        if not isinstance(other, Point):
+            return NotImplemented
+        return self.x == other.x and self.y == other.y and self.a == other.a
+
+    def __hash__(self):
+        return hash((self.x, self.y, self.a))
 
     def as_dict(self) -> Dict[str, Any]:
         if self.a is None:
@@ -1549,10 +1562,11 @@ class Obstacle(Point):
             attributes[ATTR_ZONE] = self.segment
         return attributes
 
-    def __eq__(self: Obstacle, other: Obstacle) -> bool:
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Obstacle):
+            return NotImplemented
         return not (
-            other is None
-            or self.x != other.x
+            self.x != other.x
             or self.y != other.y
             or self.type != other.type
             or self.possibility != other.possibility
@@ -1577,10 +1591,11 @@ class Zone:
     def __str__(self) -> str:
         return f"[{self.x0}, {self.y0}, {self.x1}, {self.y1}]"
 
-    def __eq__(self: Zone, other: Zone) -> bool:
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Zone):
+            return NotImplemented
         return (
-            other is not None
-            and self.x0 == other.x0
+            self.x0 == other.x0
             and self.y0 == other.y0
             and self.x1 == other.x1
             and self.y1 == other.y1
@@ -1754,10 +1769,11 @@ class Segment(Zone):
 
         return attributes
 
-    def __eq__(self: Segment, other: Segment) -> bool:
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Segment):
+            return NotImplemented
         return not (
-            other is None
-            or self.x0 != other.x0
+            self.x0 != other.x0
             or self.y0 != other.y0
             or self.x1 != other.x1
             or self.y1 != other.y1
@@ -1792,10 +1808,11 @@ class Wall:
         self.x1 = x1
         self.y1 = y1
 
-    def __eq__(self: Wall, other: Wall) -> bool:
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Wall):
+            return NotImplemented
         return (
-            other is not None
-            and self.x0 == other.x0
+            self.x0 == other.x0
             and self.y0 == other.y0
             and self.x1 == other.x1
             and self.y1 == other.y1
@@ -1845,10 +1862,11 @@ class Area:
         self.x3 = x3
         self.y3 = y3
 
-    def __eq__(self: Area, other: Area) -> bool:
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Area):
+            return NotImplemented
         return (
-            other is not None
-            and self.x0 == other.x0
+            self.x0 == other.x0
             and self.y0 == other.y0
             and self.x1 == other.x1
             and self.y1 == other.y1
@@ -1974,10 +1992,11 @@ class Furniture(Point):
         attributes[ATTR_SCALE] = self.scale
         return attributes
 
-    def __eq__(self: Furniture, other: Furniture) -> bool:
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Furniture):
+            return NotImplemented
         return not (
-            other is None
-            or self.x != other.x
+            self.x != other.x
             or self.y != other.y
             or self.x0 != other.x0
             or self.y0 != other.y0
@@ -2004,10 +2023,11 @@ class Coordinate(Point):
             attributes[ATTR_COMPLETED] = self.completed
         return attributes
 
-    def __eq__(self: Coordinate, other: Coordinate) -> bool:
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Coordinate):
+            return NotImplemented
         return not (
-            other is None
-            or self.x != other.x
+            self.x != other.x
             or self.y != other.y
             or self.type != other.type
             or self.completed != other.completed
@@ -2054,10 +2074,11 @@ class MapImageDimensions:
             (((self.height - 1) * self.grid_size - (point.y - top)) / self.grid_size),
         )
 
-    def __eq__(self: MapImageDimensions, other: MapImageDimensions) -> bool:
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, MapImageDimensions):
+            return NotImplemented
         return (
-            other is not None
-            and self.top == other.top
+            self.top == other.top
             and self.left == other.left
             and self.height == other.height
             and self.width == other.width
@@ -2353,7 +2374,9 @@ class MapData:
         self.walls_info: Optional[Any] = None
         self.walls_info_new: Optional[Any] = None
 
-    def __eq__(self: MapData, other: MapData) -> bool:
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, MapData):
+            return NotImplemented
         if other is None:
             return False
 
