@@ -1,0 +1,101 @@
+# Starter dashboard for the Dreame A2 Mower integration.
+#
+# Copy this file to `<ha_config>/dashboards/dreame_a2_mower/dashboard.yaml`
+# and register it in `<ha_config>/configuration.yaml`:
+#
+#   lovelace:
+#     mode: storage          # default for UI-edited dashboards
+#     dashboards:
+#       dreame-a2-mower:
+#         mode: yaml
+#         title: Mower
+#         icon: mdi:robot-mower
+#         show_in_sidebar: true
+#         filename: dashboards/dreame_a2_mower/dashboard.yaml
+#
+# After HA restart the Mower dashboard appears in the sidebar with the
+# base map, replay picker, 3D LiDAR card, and relevant sensors arranged
+# for the way this integration's entities are meant to be used. Edit
+# freely — this YAML is a starting point, not a locked template.
+#
+# See docs/dashboard-setup.md for the full copy-paste walkthrough.
+
+title: Mower
+views:
+  - title: Mower
+    path: mower
+    icon: mdi:robot-mower
+    cards:
+      # 2D base map. picture-entity is used instead of
+      # `custom:xiaomi-vacuum-map-card` because xiaomi-vacuum-map-card
+      # crashes on this integration's calibration_points shape
+      # (see docs/research/g2408-protocol.md and the commit log for
+      # v2.0.0-alpha.11 for the incident report).
+      - type: picture-entity
+        entity: camera.dreame_a2_mower_map
+        camera_image: camera.dreame_a2_mower_map
+        show_state: false
+        show_name: true
+        name: Live map
+
+      # Session replay picker — choose any archived session to freeze
+      # its path + obstacles onto the map above. "None" clears the
+      # overlay back to the base map; "Latest" auto-tracks the most
+      # recent run. Entity_id is `select.dreame_a2_mower_replay_session`
+      # on installs from v2.0.0-alpha.13+; pre-alpha.13 installs use
+      # the shorter `select.replay_session` — rename in
+      # Settings → Devices & Services → Entities if desired.
+      - type: entities
+        title: Replay
+        entities:
+          - entity: select.dreame_a2_mower_replay_session
+            name: Overlay session
+
+      # Interactive 3D WebGL point-cloud viewer bundled with the
+      # integration (no HACS frontend plugin required — served from
+      # the integration's own static path). Drag to orbit, wheel to
+      # zoom. Controls in the top-left adjust splat size, soft-edge
+      # fade, and the optional base-map underlay.
+      - type: custom:dreame-a2-lidar-card
+        point_size: 2.5
+
+      - type: entities
+        title: Session
+        entities:
+          - entity: lawn_mower.dreame_a2_mower
+          - entity: binary_sensor.dreame_a2_mower_mowing_session_active
+          - entity: sensor.dreame_a2_mower_state
+          - entity: sensor.dreame_a2_mower_battery_level
+
+      - type: entities
+        title: Problem indicators
+        entities:
+          - entity: binary_sensor.dreame_a2_mower_battery_temperature_low
+          - entity: binary_sensor.dreame_a2_mower_positioning_failed
+          - entity: binary_sensor.dreame_a2_mower_rain_protection_active
+          - entity: binary_sensor.dreame_a2_mower_obstacle_detected
+
+      - type: entities
+        title: Live telemetry
+        entities:
+          - entity: sensor.dreame_a2_mower_mowing_position_x
+          - entity: sensor.dreame_a2_mower_mowing_position_y
+          - entity: sensor.dreame_a2_mower_mowing_phase
+          - entity: sensor.dreame_a2_mower_session_area_mowed
+          - entity: sensor.dreame_a2_mower_session_distance
+          - entity: sensor.dreame_a2_mower_slam_activity
+
+      - type: entities
+        title: LiDAR
+        entities:
+          - entity: sensor.archived_lidar_scans
+            name: Scans archived
+      - type: markdown
+        content: >
+          [Download latest .pcd](/api/dreame_a2_mower/lidar/latest.pcd)
+
+
+          The raw file opens in **CloudCompare**, **Open3D**, or
+          **MeshLab** for full 3D inspection. Fresh scans are only
+          downloaded when you tap *Download LiDAR map* in the Dreame
+          app — see the README "Map & LiDAR freshness" section for why.

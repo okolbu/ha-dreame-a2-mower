@@ -36,6 +36,24 @@ If you own another model, use the [upstream project](https://github.com/nicolasg
 4. Restart Home Assistant.
 5. Settings → Devices & Services → Add Integration → "Dreame A2 Mower".
 
+## Starter dashboard (optional but recommended)
+
+This integration ships a ready-made Lovelace dashboard at
+[`dashboards/mower.yaml`](dashboards/mower.yaml) with the map,
+replay-session picker, 3D LiDAR card, problem-indicator panel, and
+live telemetry already arranged. Home Assistant doesn't auto-install
+integration dashboards (by design — it's your config), but a copy-
+paste takes 2 minutes:
+
+1. Drop `dashboards/mower.yaml` into `<ha_config>/dashboards/dreame_a2_mower/dashboard.yaml`.
+2. Register it in `configuration.yaml` under `lovelace.dashboards`.
+3. Restart HA — the **Mower** entry appears in the sidebar.
+
+Full walkthrough: [`docs/dashboard-setup.md`](docs/dashboard-setup.md).
+
+Otherwise the individual cards below can be mixed into your own
+dashboard.
+
 ## The 2D base map — `camera.dreame_a2_mower_map`
 
 After setup, a camera entity is created that serves the lawn map with the mower trail overlaid. Behind the scenes the integration:
