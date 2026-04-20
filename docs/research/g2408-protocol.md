@@ -562,11 +562,23 @@ from the cloud API separately (not yet wired).
 | `d.o` | Meaning | Occurs when |
 |---|---|---|
 | 3   | task cancelled | user hits *Cancel* / *Stop* during an active mowing session. Fires 1 s after `s2p2 = 48`. Does **not** carry `id`/`ids`. See "User-cancel abort" in §4.3. |
+| 6   | explicit Recharge command | user taps the app's *Recharge* button (either to send the mower home from a user-cancelled state, or any time the mower is away from the dock). Fires at the moment charging actually begins (`s2p1 → 6`, `s3p2 → 1`). Distinct from auto-recharge mid-session which emits NO `s2p50` at all. Confirmed once 2026-04-20 18:09:56 after a user-cancel at 18:06. |
 | 204 | map-edit request | zone / exclusion add / edit / delete: first of the pair |
 | 215 | map-edit confirm | same edit: second of the pair, carries `id` and `ids` |
 
 Flat-fields variants without the `d` wrapper are the session-task metadata
 described under §4.3 "Session start" (`o: 100`).
+
+**Still-silent app operations** (no `/status/` MQTT message at all):
+
+- Scheduled-mow add / edit / delete (noted in §7.1).
+- Maintenance-point placement — tapping a spot on the map in the app
+  to define a custom maintenance location. Confirmed 2026-04-20 18:10
+  with extended MQTT capture: **zero messages** between the tap and
+  the user confirming the placement. Like schedules, this lives in
+  Dreame-cloud user prefs and the mower only learns about it when
+  the *Head to Maintenance Point* button actually dispatches the
+  go-to. That button-press MQTT is still uncaptured — test pending.
 
 ---
 
