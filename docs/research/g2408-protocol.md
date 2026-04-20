@@ -742,12 +742,15 @@ They do not indicate a new firmware issue.
 
 **Observed but not yet mapped** (2026-04-20):
 
-- `s5p106 = 7` — the 5-level status counter at value 7, near the end of its
-  1..7 cycle. Logged as `[PROTOCOL_NOVEL] … siid=5 piid=106 value=7` only
-  on the very first push each HA session (watchdog dedup). Not harmful,
-  not urgent — documented in §2.1. Could be suppressed once we decide what
-  the counter represents (leaving visible for now so a user's different
-  lawn / dock situation can surface an unexpected value).
+- `s2p66`, `s5p105`, `s5p106`, `s5p107` — already characterised in §2.1.
+  These slots log at **DEBUG** with the prefix `[PROTOCOL_OBSERVED]`
+  rather than `[PROTOCOL_NOVEL]` so they don't spam WARNING on every
+  HA reload (the watchdog's in-memory dedup resets each time the device
+  object is reconstructed). Anything outside this allowlist — a
+  genuinely unmapped (siid, piid) — still produces the one-shot WARNING.
+  If the user wants to confirm cadence or value range for these known-
+  quiet slots, raise the integration's log level to DEBUG for
+  `custom_components.dreame_a2_mower.dreame.device`.
 
 ---
 

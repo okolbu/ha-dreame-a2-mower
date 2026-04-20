@@ -507,21 +507,42 @@ class DreameMowerDevice:
                         if self._unknown_watchdog.saw_property(
                             param["siid"], param["piid"]
                         ):
-                            # Promoted from INFO to WARNING so novel fields
-                            # surface at HA's default `logger.default: warning`
-                            # level instead of being invisible to most users.
-                            # One-shot per (siid, piid) via the watchdog, so
-                            # this never floods the log.
-                            _LOGGER.warning(
-                                "[PROTOCOL_NOVEL] properties_changed carried an "
-                                "unmapped siid=%s piid=%s value=%r — add to "
-                                "property mapping if this field turns out to be "
-                                "meaningful. Please report at "
-                                "https://github.com/okolbu/ha-dreame-a2-mower/issues",
-                                param["siid"],
-                                param["piid"],
-                                param.get("value"),
-                            )
+                            # Known-unmapped slots whose existence we've
+                            # already characterised (see
+                            # docs/research/g2408-protocol.md §2.1) — no
+                            # point surfacing at WARNING every HA reload
+                            # when the watchdog's in-memory dedup resets.
+                            # Downgrade to DEBUG so genuine novelty
+                            # (anything NOT in this set) still produces
+                            # the one-shot WARNING.
+                            known_quiet = {
+                                (2, 66),    # pre-observed 2-element list
+                                (5, 105),   # mid-session = 1, unknown role
+                                (5, 106),   # 1..7 rolling counter
+                                (5, 107),   # dynamic, values catalogued
+                            }
+                            key = (int(param["siid"]), int(param["piid"]))
+                            if key in known_quiet:
+                                _LOGGER.debug(
+                                    "[PROTOCOL_OBSERVED] properties_changed "
+                                    "siid=%s piid=%s value=%r (known-unmapped slot, "
+                                    "see docs/research/g2408-protocol.md §2.1)",
+                                    param["siid"],
+                                    param["piid"],
+                                    param.get("value"),
+                                )
+                            else:
+                                # Genuine novelty — not yet catalogued.
+                                _LOGGER.warning(
+                                    "[PROTOCOL_NOVEL] properties_changed carried an "
+                                    "unmapped siid=%s piid=%s value=%r — add to "
+                                    "property mapping if this field turns out to be "
+                                    "meaningful. Please report at "
+                                    "https://github.com/okolbu/ha-dreame-a2-mower/issues",
+                                    param["siid"],
+                                    param["piid"],
+                                    param.get("value"),
+                                )
                 if len(map_params) and self._map_manager:
                     self._map_manager.handle_properties(map_params)
 
