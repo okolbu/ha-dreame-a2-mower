@@ -34,7 +34,6 @@ from .const import (
     CONF_COLOR_SCHEME,
     CONF_ICON_SET,
     CONF_COUNTRY,
-    CONF_TYPE,
     CONF_ACCOUNT_TYPE,
     CONF_MAC,
     CONF_DID,
@@ -118,17 +117,11 @@ class DreameMowerOptionsFlowHandler(OptionsFlow):
                     ): cv.multi_select(MAP_OBJECTS),
                 }
             )
-            if data.get(CONF_ACCOUNT_TYPE, "mi") == "mi":
-                data_schema = data_schema.extend(
-                    {
-                        vol.Required(
-                            CONF_PREFER_CLOUD,
-                            default=options.get(CONF_PREFER_CLOUD, False),
-                        ): bool,
-                    }
-                )
+            # CONF_PREFER_CLOUD toggle removed in Phase 5: cloud is
+            # now the only transport. Existing options values will be
+            # ignored.
 
-            # Calibration factors apply to all account types (g2408 live map).
+            # Calibration factors for the live map.
             data_schema = data_schema.extend(
                 {
                     vol.Optional(
