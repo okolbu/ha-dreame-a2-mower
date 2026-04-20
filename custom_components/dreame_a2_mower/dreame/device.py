@@ -1779,6 +1779,33 @@ class DreameMowerDevice:
                     elif isinstance(item, dict) and ("boundary" in item or "mowingAreas" in item):
                         map_json = item
                         break
+
+            # One-shot schema dump per HA process, WARNING-level so users
+            # running at `logger.default: warning` see it without bumping
+            # a logger override. Goal: catalogue every top-level key the
+            # Dreame cloud puts in the map payload so we can decide which
+            # ones (beyond boundary/mowingAreas/forbiddenAreas/contours
+            # we already parse) carry useful information. Rerun a new
+            # fetch after an HA restart if you want to compare payloads
+            # across sessions. Key shape: `type:<count-or-sample>`.
+            if isinstance(map_json, dict) and not getattr(self, "_map_schema_logged", False):
+                self._map_schema_logged = True
+                def _shape(v):
+                    if isinstance(v, dict):
+                        return f"dict(keys={list(v.keys())[:10]})"
+                    if isinstance(v, list):
+                        head = f" head={v[0]!r}"[:80] if v else ""
+                        return f"list(len={len(v)}{head})"
+                    if isinstance(v, str):
+                        return f"str(len={len(v)})" if len(v) > 60 else f"str={v!r}"
+                    return f"{type(v).__name__}={v!r}"
+                schema = {k: _shape(v) for k, v in sorted(map_json.items())}
+                _LOGGER.warning(
+                    "[MAP_SCHEMA] cloud MAP payload has %d top-level keys "
+                    "(one-shot dump per HA process): %s",
+                    len(schema),
+                    schema,
+                )
                 if isinstance(map_json, list):
                     _LOGGER.warning("MAP JSON: no usable entry found in list")
                     return

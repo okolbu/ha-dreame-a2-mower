@@ -62,7 +62,10 @@ SWITCHES: tuple[DreameMowerSwitchEntityDescription, ...] = (
         key="dnd",
         name="DnD",
         icon_fn=lambda value, device: "mdi:minus-circle-off-outline" if not value else "mdi:minus-circle-outline",
-        entity_category=EntityCategory.CONFIG,
+        # Moved out of the Configuration card and into Controls (top of
+        # the device page) so users can toggle it without hunting for
+        # it under a collapsible. It's a frequently-flipped preference
+        # (bedtime / weekend quiet hours), not static config.
     ),
     DreameMowerSwitchEntityDescription(
         property_key=DreameMowerProperty.MULTI_FLOOR_MAP,

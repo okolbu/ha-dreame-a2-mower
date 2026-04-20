@@ -525,7 +525,12 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
             self._attr_unique_id = f"{self.device.mac}_{'wifi_' if self.wifi_map else ''}map_{self.map_index}"
             self.entity_id = f"camera.{self.device.name.lower().replace(' ','_')}_{'wifi_' if self.wifi_map else ''}map_{self.map_index}"
         else:
-            self._attr_name = f"{self.device.name} Current {'Wifi ' if self.wifi_map else ''}{description.name}"
+            # "Live Map" instead of "Current Map" — clearer label for
+            # the camera that carries live overlays (position, trail,
+            # session replay). Pairs with the "Base Map" naming on
+            # saved variants below. User reported 2026-04-20 that
+            # "Current Map" vs "Saved Map 1" was confusing at a glance.
+            self._attr_name = f"{self.device.name} Live {'Wifi ' if self.wifi_map else ''}{description.name}"
             self._attr_unique_id = f"{self.device.mac}_map_{'wifi_' if self.wifi_map else ''}{description.key}"
             self.entity_id = f"camera.{self.device.name.lower().replace(' ','_')}_{'wifi_' if self.wifi_map else ''}{description.key.lower()}"
 
@@ -533,12 +538,16 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
             self.update()
 
     def _set_map_name(self, wifi_map) -> None:
+        # "Base Map" for saved/static variants — replaces the
+        # historical "Saved Map 1" label which was too easily confused
+        # with "Current Map". Pairs with "Live Map" naming above for
+        # the index-0 camera. See camera.py comment at line ~528.
         name = (
             f"{self.map_index}"
             if self._map_name is None
             else f"{self._map_name.replace('_', ' ').replace('-', ' ').title()}"
         )
-        self._attr_name = f"{self.device.name} Saved {'Wifi ' if wifi_map else ''}Map {name}"
+        self._attr_name = f"{self.device.name} Base {'Wifi ' if wifi_map else ''}Map {name}"
 
     @callback
     def _handle_coordinator_update(self) -> None:

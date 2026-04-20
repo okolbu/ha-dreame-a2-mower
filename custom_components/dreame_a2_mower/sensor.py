@@ -392,7 +392,12 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     DreameMowerSensorEntityDescription(
         key="mowing_x_raw",
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
-        name="X (raw, cm)",
+        # Raw, uncalibrated. X is reported by the firmware as int16 cm
+        # at s1p4 bytes [1-2] but we don't assert a unit on the entity
+        # because Y uses a different scale with a 0.625 calibration
+        # factor, so "cm" / "mm" in the entity name would be misleading
+        # as a pair. See docs/research/g2408-protocol.md §3.1.
+        name="X (raw)",
         icon="mdi:help-circle",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
@@ -402,7 +407,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     DreameMowerSensorEntityDescription(
         key="mowing_y_raw",
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
-        name="Y (raw, mm)",
+        name="Y (raw)",
         icon="mdi:help-circle",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
