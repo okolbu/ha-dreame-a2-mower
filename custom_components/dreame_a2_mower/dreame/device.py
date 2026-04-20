@@ -1994,14 +1994,57 @@ class DreameMowerDevice:
             map_data.saved_map = False
             map_data.saved_map_status = 2
             # Only bump `last_updated` when the cloud map's content
-            # actually changed — compared via the md5sum the cloud
-            # JSON already ships (`md5sum` top-level field). The
-            # camera entity's state is this timestamp; without this
-            # guard, any MQTT state transition that causes a rebuild
-            # (mow start, return, dock, charge complete, …) flashed
-            # a fresh timestamp and HA's logbook treated each one as
-            # a "map changed" event. The PNG wasn't really changing.
-            new_md5 = str(map_json.get("md5sum", "") or "")
+            # actually changed. Earlier code used the cloud-provided
+            # `md5sum` top-level field, but 2026-04-20 evidence (11
+            # camera state-changes over the 19:28-19:44 Positioning-
+            # Failed episode, each aligned to an unrelated s2p1/s2p2
+            # transition) proved the cloud's md5 is NOT stable across
+            # fetches — it apparently includes volatile state (robot
+            # position, active task, …) so every state-transition-
+            # triggered poll ended up bumping `last_updated` and
+            # flooding HA's logbook with "Current Map changed to …"
+            # lines even when the polygons hadn't moved.
+            #
+            # Compute our own hash instead, over just the structurally
+            # stable fields: zones, no-go areas, dimensions, and
+            # charger position. Any real map edit changes one of
+            # these; ephemeral state doesn't.
+            import hashlib
+            stable_repr = json.dumps({
+                "zones": sorted(
+                    [
+                        (
+                            getattr(seg, "segment_id", None),
+                            round(getattr(seg, "x0", 0) or 0, 3),
+                            round(getattr(seg, "y0", 0) or 0, 3),
+                            round(getattr(seg, "x1", 0) or 0, 3),
+                            round(getattr(seg, "y1", 0) or 0, 3),
+                        )
+                        for seg in (map_data.segments or {}).values()
+                    ]
+                ) if isinstance(map_data.segments, dict) else [],
+                "no_go_areas": [
+                    (getattr(a, "x0", 0), getattr(a, "y0", 0),
+                     getattr(a, "x1", 0), getattr(a, "y1", 0),
+                     getattr(a, "x2", 0), getattr(a, "y2", 0),
+                     getattr(a, "x3", 0), getattr(a, "y3", 0))
+                    for a in (map_data.no_go_areas or [])
+                ],
+                "dims": (
+                    int(getattr(map_data.dimensions, "width", 0) or 0),
+                    int(getattr(map_data.dimensions, "height", 0) or 0),
+                    int(getattr(map_data.dimensions, "grid_size", 0) or 0),
+                ),
+                "charger": (
+                    round(float(getattr(map_data, "charger_position", None) is not None
+                                and getattr(map_data.charger_position, "x", 0)), 2)
+                    if getattr(map_data, "charger_position", None) is not None else None,
+                    round(float(getattr(map_data, "charger_position", None) is not None
+                                and getattr(map_data.charger_position, "y", 0)), 2)
+                    if getattr(map_data, "charger_position", None) is not None else None,
+                ),
+            }, sort_keys=True).encode()
+            new_md5 = hashlib.md5(stable_repr).hexdigest()
             prior_md5 = getattr(self, "_last_cloud_map_md5", None)
             if prior_md5 == new_md5 and self._map_manager and getattr(
                 self._map_manager._map_data, "last_updated", None
