@@ -531,7 +531,7 @@ class DreameMowerDevice:
                         # user can report it back.
                         if param["siid"] == 2 and param["piid"] == 2:
                             value = param.get("value")
-                            known = {27, 43, 48, 50, 53, 54, 56, 70}
+                            known = {27, 43, 48, 50, 53, 54, 56, 70, 75}
                             if (
                                 value not in known
                                 and value not in self._protocol_novelty

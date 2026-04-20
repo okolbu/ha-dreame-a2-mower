@@ -375,6 +375,7 @@ refresh, otherwise it latches indefinitely. See Open Item 0e in
 | 54 | returning |
 | 56 | **Rain protection activated** — water detected on the LiDAR. See §4.3 rain-pause. |
 | 70 | mowing (edge / standard) |
+| 75 | **Arrived at Maintenance Point** — confirmed 2026-04-20 18:18:05 when mower reached a user-set maintenance point after tapping *Head to Maintenance Point*. Fires in the same second as `s2p1 → 2 (IDLE)`, followed by `s1p52 = {}`. No `event_occured` summary for Head-to-MP tasks. See §4.3 "Go to Maintenance Point". |
 
 Anything **outside** this set arriving on `s2p2` will log exactly one WARNING
 (`[PROTOCOL_NOVEL] s2p2 carried unknown value=…`) so new firmware codes surface
@@ -492,6 +493,45 @@ behaviour is correct: `_fetch_session_summary` archives it and the
 session-picker select shows "66.47 m² (N min)" for the cancelled run
 alongside completed runs.
 
+**Go to Maintenance Point** (observed 2026-04-20 18:16:40–18:18:05 — user tapped *Head to Maintenance Point* from the Dreame app; MP was set earlier the same session at x≈2.6 m, y≈20.4 m charger-relative):
+
+```
+HH:MM:39  s2p56 = {'status': []}            — task list cleared
+HH:MM:40  s3p2  = 0                          — stops charging
+HH:MM:40  s2p1  = 1 (MOWING)                 — NOTE: same state as real mowing
+          NO s2p2 emitted (vs 50 manual / 53 scheduled / 70 mid-mow)
+          NO s2p50 task metadata (either shape)
+          NO coordinate anywhere in MQTT — destination was pushed to the
+          mower via the cloud-command path we don't see on /status/
+HH:MM+41s  s1p50 + s1p51 = {}                — session-start pair
+HH:MM+42s  s2p56 = {'status': [[1, 0]]}     — task running
+HH:MM+42s  33-byte s1p4 frames begin at phase_raw = 0
+… mower drives to the MP …
+           s1p4 position at arrival = MP coord (last frame before `s2p1 → 2`)
+HH:MM:arrive  s2p56 = {'status': [[1, 2]]}   — task-complete (same as mowing end)
+HH:MM:arrive  s2p1  = 2 (IDLE)
+HH:MM:arrive+1s  s2p2  = 75                  — **arrived at MP** (new code)
+HH:MM:arrive+1s  s1p52 = {}                  — end-of-task flush
+```
+
+**Identification challenge:** during the drive, MQTT does NOT distinguish
+Head-to-MP from a real mowing task. Same `s2p1 = 1`, same `phase_raw = 0`,
+no `s2p2` marker. The only way to know it's a go-to is when arrival fires
+`s2p2 = 75`. If an integration wants to reflect "mower is going to MP" in
+real time, it has to infer from context: a transition `s2p1: 6 → 1` with
+no accompanying `s2p2 = {50, 53}` (neither manual nor scheduled mow start
+code) implies go-to. The mower's final pre-arrival `s1p4` position is
+effectively the MP coordinate — useful for future automation.
+
+**Maintenance points:** the app supports multiple saved maintenance points;
+the user selects which one to dispatch to. The selection + coord both live
+in Dreame-cloud user-prefs, not MQTT. To enumerate them from HA would
+require a separate cloud endpoint call (probably a new `get_batch_device_datas`
+key family). Placement of a MP emits two `s1p50 = {}` pings only (§4.6).
+
+No `event_occured siid=4 eiid=1` fires for a Head-to-MP arrival — the
+session-summary JSON pipeline is mowing-session-specific.
+
 **Mid-task recharge** (observed 2026-04-18): the mower can pause for a mid-task
 recharge and resume mowing once topped off. The task is not considered complete
 during this pause; `s1p4` telemetry continues throughout the return leg. No map
@@ -569,16 +609,39 @@ from the cloud API separately (not yet wired).
 Flat-fields variants without the `d` wrapper are the session-task metadata
 described under §4.3 "Session start" (`o: 100`).
 
-**Still-silent app operations** (no `/status/` MQTT message at all):
+**Maintenance-point placement** — tapping a spot on the map in the
+Dreame app to define a custom maintenance location. Confirmed
+2026-04-20 18:14:06–18:14:07: **two `s1p50 = {}` pulses, 1 second
+apart**, and nothing else. No `s2p50` envelope, no coordinate payload,
+no `s6p1`/`s6p3`. The actual coord lives in Dreame-cloud user-prefs
+(probably alongside zones in the MAP.* dataset) — the `s1p50` pair is
+just a "something changed, consider re-fetching" ping the mower sends
+when the cloud applies the prefs update. The *Head to Maintenance
+Point* button press (which actually moves the robot) is still
+uncaptured.
+
+See §4.7 for the full `s1p50` / `s1p51` / `s1p52` role catalogue —
+the "something changed" ping fires at many more boundaries than just
+this one.
+
+**Still-silent app operations**:
 
 - Scheduled-mow add / edit / delete (noted in §7.1).
-- Maintenance-point placement — tapping a spot on the map in the app
-  to define a custom maintenance location. Confirmed 2026-04-20 18:10
-  with extended MQTT capture: **zero messages** between the tap and
-  the user confirming the placement. Like schedules, this lives in
-  Dreame-cloud user prefs and the mower only learns about it when
-  the *Head to Maintenance Point* button actually dispatches the
-  go-to. That button-press MQTT is still uncaptured — test pending.
+
+### 4.7 Empty-dict `s1p50` / `s1p51` / `s1p52` — lightweight state-change pings
+
+All three slots carry an empty `{}` — no payload. Their role is positional:
+which slot fires, and how many times, signals the event class.
+
+| Slot | Role | Observed triggers (2026-04-20) |
+|---|---|---|
+| `s1p50` | "something changed, consider re-fetching" ping | Session start (paired with s1p51), BUILDING save (multiple pulses), zone/exclusion edit (paired with `s2p50 o=215`), maintenance-point save (two pulses, 1 s apart, no other context) |
+| `s1p51` | "new session — subscribe to fresh telemetry" | Always co-arrives with `s1p50` within the same second at session start / resume. Never fires standalone. |
+| `s1p52` | "task ended — flush / commit" | Session complete (`s2p2 = 48`). Observed at natural end (12:33:09) and user-cancel (18:06:19). Doesn't fire at BUILDING end. |
+
+Practical implication: treat a standalone `s1p50` (no `s1p51`, no `s2p50`) as
+a "something edited server-side" signal and re-fetch whatever you cache from
+the cloud — in the integration's case, the MAP.* dataset. See §7.1.
 
 ---
 

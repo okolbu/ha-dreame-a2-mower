@@ -1,6 +1,6 @@
 [project]
 name = "ha-dreame-a2-mower"
-version = "2.0.0-alpha.22"
+version = "2.0.0-alpha.23"
 description = "Home Assistant integration for the Dreame A2 robotic lawn mower"
 requires-python = ">=3.14"
 
