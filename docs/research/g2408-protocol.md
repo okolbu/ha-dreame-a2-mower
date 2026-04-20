@@ -463,6 +463,35 @@ the mowable-area sum, so any overlap subtracts from the reported
 area. If `s2p66[0]` or event_occured piid=14 doesn't budge after an
 expand, check for overlapping exclusions first.
 
+**User-cancel abort** (observed 2026-04-20 18:06:18 — user hit *Cancel* from the Dreame app mid-session):
+```
+s2p1 = 2   (IDLE)             — task cancelled
+s2p2 = 48  (MOWING_COMPLETE)  — reused for abort (same code as natural end)
+s1p52 = {}                    — session-boundary marker
+s2p50 = {'d':{'exe':True, 'o':3, 'status':True}, 't':'TASK'}
+                              — NEW operation code o=3 for "cancelled"
+event_occured siid=4 eiid=1   — session-summary JSON uploaded (!)
+```
+
+**The mower does NOT auto-return to dock after a cancel.** `s2p1` stops at
+`2 (IDLE)` with no `→ 5 (RETURNING)` transition. The robot stays where
+it last was on the lawn. To bring it home, the user must explicitly hit
+*Recharge* in the app (which issues a separate `s2p1 → 5` RPC). This is
+firmware behaviour, not an integration choice.
+
+**Earlier "aborted sessions skip the summary" memory note was wrong** —
+the abort DID emit `event_occured` with a fresh JSON OSS key. Distinguishing
+fields from natural completion:
+- `piid 7` = 3 (previously only 1 observed; 3 = user-cancel)
+- `piid 2` = 36 (new end-code; naturals give 31/69/128/170/195)
+- `piid 60` = 101 (first non-`-1` observation; maybe "abort reason")
+- `piid 3` = centiares-mowed at abort time (here 6647 → 66.47 m²)
+
+So the session-summary-JSON pipeline covers aborts too. Integration
+behaviour is correct: `_fetch_session_summary` archives it and the
+session-picker select shows "66.47 m² (N min)" for the cancelled run
+alongside completed runs.
+
 **Mid-task recharge** (observed 2026-04-18): the mower can pause for a mid-task
 recharge and resume mowing once topped off. The task is not considered complete
 during this pause; `s1p4` telemetry continues throughout the return leg. No map
@@ -532,6 +561,7 @@ from the cloud API separately (not yet wired).
 
 | `d.o` | Meaning | Occurs when |
 |---|---|---|
+| 3   | task cancelled | user hits *Cancel* / *Stop* during an active mowing session. Fires 1 s after `s2p2 = 48`. Does **not** carry `id`/`ids`. See "User-cancel abort" in §4.3. |
 | 204 | map-edit request | zone / exclusion add / edit / delete: first of the pair |
 | 215 | map-edit confirm | same edit: second of the pair, carries `id` and `ids` |
 
@@ -759,18 +789,18 @@ event-id 1. Four of these have been captured across 2026-04-17 / 2026-04-18:
 
 The `piid=9` value is the OSS object key for the session-summary JSON.
 
-Decoded fields across five captures (2026-04-17..2026-04-20):
+Decoded fields across six captures (2026-04-17..2026-04-20, incl. one user-cancel):
 
 | piid | guess | observed values |
 |---|---|---|
 | 1 | constant / flag | always 100 |
-| 2 | end-code / reason | 31, 69, 128, 170, 195 |
-| 3 | area mowed × 100 (m² × 100) | 5232, 10759, 19613, 28744, 31133 — the 2026-04-20 value (28744 = 287.44 m²) matches the final `s1p4` `area_mowed_m2` reading for that session (29358 / 100 = 293.58 m²) to within recharge-leg-transit overhead. |
-| 7 | stop-reason-ish | 1 or 3 |
-| 8 | unix timestamp of session **start** | 2026-04-20 run: 1776664681 → 05:58:01 UTC = 07:58:01 local, exact match to `s2p1 → 1` at 07:58:03. Confirms that piid 8 is start-time, not end-time. |
-| 9 | **OSS object key (`.json`)** | `ali_dreame/YYYY/MM/DD/<master-uid>/<did>_HHMMSSmmm.MMMM.json` |
+| 2 | end-code | 31, 36, 69, 128, 170, 195 — the 36 comes from the 2026-04-20 18:06 user-cancel; the 31–195 band is from natural completions. So **36 appears to be the "user cancelled" marker**; further cancels will confirm. |
+| 3 | area mowed × 100 (m² × 100) | 5232, 6647 (cancel, 66.47 m²), 10759, 19613, 28744, 31133 — matches the final `s1p4` `area_mowed_m2` reading at session end to within recharge-leg-transit overhead. |
+| 7 | stop-reason-ish | 1 = natural completion; 3 = user-cancel (confirmed by the 2026-04-20 abort). |
+| 8 | unix timestamp of session **start** | 2026-04-20 morning run: 1776664681 → 05:58:01 UTC = 07:58:01 local, exact match to `s2p1 → 1` at 07:58:03. The 18:06 user-cancel emitted 1776699000 = 15:30:00 UTC = 17:30:00 local — again session-start, not cancel-time. Confirms piid 8 is session-start, independent of end reason. |
+| 9 | **OSS object key (`.json`)** | `ali_dreame/YYYY/MM/DD/<master-uid>/<did>_HHMMSSmmm.MMMM.json` — fires for both natural completion AND user-cancel. |
 | 11 | ? | 0 or 1 |
-| 60 | ? | 101 or -1 |
+| 60 | ? | -1 (normal) or 101 (user-cancel, first non-`-1` observation 2026-04-20 18:06). May be an abort-specific reason code. |
 | 13 | empty list | `[]` |
 | 14 | **total mowable lawn area (m², rounded int)** | 379 pre-2026-04-18, 384 after user added a zone in-app. Matches `map_area` and rounded `map[0].area` in the session-summary JSON — user-confirmed that the lawn grew by ~5 m² when the new zone was added. |
 | 15 | ? | 0 |
