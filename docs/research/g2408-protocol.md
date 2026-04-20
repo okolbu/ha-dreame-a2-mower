@@ -632,7 +632,7 @@ Fully re-measured during the 2026-04-20 full-run (07:58 → 12:33, two auto-rech
 |---|---|---|
 | **Auto-recharge begins** (MOWING → RETURNING for top-off) | `s6p1 = 300` | Fires at the exact ms `s2p2 → 54`, `s2p1 → 2 → 5`. Confirmed twice in the 2026-04-20 run at 09:14:09 and 11:13:04. This is the primary mid-session "map may have been refreshed" signal. |
 | **True session completion** (task done, not recharge) | `event_occured siid=4 eiid=1`, `piid 9 = ali_dreame/…/*.json` | Fires once at session end (12:33:12 — 3 s after `s2p2 = 48`). Carries the *session-summary* OSS key. See §7.4. |
-| **LiDAR point-cloud upload** | `s2p54` progress + `s99p20 = ali_dreame/…/*.bin` | Only when the user opens "Download LiDAR map" in the Dreame app, and only if the scan has changed since last upload. Not pushed passively. |
+| **LiDAR point-cloud upload** | `s2p54` 0..100 progress counter + `s99p20 = ali_dreame/…/*.bin` | Only when the user opens "Download LiDAR map" in the Dreame app, and only if the scan has changed since last upload. Not pushed passively. See §7.4.1 for full sequence. |
 | User taps "End" while docked (no actual mowing) | (none) | No map push, no summary event. |
 | Manual pause mid-mow | (none) | No map push. |
 | Session start from dock | `s2p56: [[1,4]] → []`, `s2p1 → 1`, `s2p2 → 50` or `53` | No map push — the mower is just starting to generate new data. |
@@ -688,6 +688,35 @@ no-op. Triggers are:
 - **2026-04-19 discovery**: the session-summary OSS object key arrives not as
   an `s6p3` property-change but inside an `event_occured` MQTT message that the
   integration was never listening for. See §7.5.
+
+### 7.3b LiDAR point-cloud upload sequence
+
+Triggered by the user tapping *"View LiDAR Map"* in the Dreame app, provided
+the current scan differs from the last-uploaded one (reopening the screen with
+no scan change is a no-op). Confirmed 2026-04-20 17:41:58–17:42:28 with a
+full progress sample at 1 Hz:
+
+```
+17:41:58  s2p54 = 0         ← upload requested, mower prepping
+…six 0-s pushes…
+17:42:04  s2p54 = 10        ← firmware started staging the PCD
+17:42:08  s2p54 = 16
+17:42:11  s2p54 = 21, 26, 26, 26, 26, 26, 32, 32, 37, 40, 45
+17:42:22  s2p54 = 61        ← partway through OSS upload
+17:42:28  s99p20 = "ali_dreame/2026/04/20/BM169439/-112293549_154157120.0550.bin"
+17:42:28  s2p54 = 100       ← done
+```
+
+`s2p54` is a 0..100 progress percent, published roughly once per second while
+the upload runs. `s99p20` arrives **before** the `s2p54 = 100` marker (today at
+61 %) — the integration should therefore key off `s99p20` (which always lands
+before the final tick) rather than waiting for `s2p54 = 100`.
+
+Total wire time today: 30 seconds, 2.45 MB PCD (153 261 points). The HA
+integration's `_handle_lidar_object_name` → `get_interim_file_url` → OSS
+fetch → archive path completes within a few seconds of the `s99p20` arrival;
+the new file lands under `<config>/dreame_a2_mower/lidar/YYYY-MM-DD_<ts>_<md5>.pcd`
+and is content-addressed by md5 (re-tapping the same scan is a no-op).
 
 ### 7.4 `event_occured` at session completion — the missing trigger
 

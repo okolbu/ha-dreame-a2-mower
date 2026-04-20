@@ -576,6 +576,7 @@ class DreameMowerDevice:
                             # (anything NOT in this set) still produces
                             # the one-shot WARNING.
                             known_quiet = {
+                                (2, 54),    # LiDAR upload progress 0..100 (§7.3b)
                                 (2, 66),    # pre-observed 2-element list
                                 (5, 105),   # mid-session = 1, unknown role
                                 (5, 106),   # 1..7 rolling counter
