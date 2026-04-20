@@ -649,6 +649,17 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
     def _on_live_map_update(self, attrs: dict) -> None:
         self._live_map_attrs = attrs
         self._feed_trail_layer(attrs)
+        # Force the access token to rotate so the dashboard's
+        # picture-entity card re-fetches the image. HA keys the
+        # <img src=…?token=…> URL on the token, so without this the
+        # browser keeps showing a cached image until the rate-limited
+        # `async_update_token` finally rotates on its own schedule.
+        # User-observed symptom (2026-04-20): replay-picker selection
+        # applied correctly but the dashboard only refreshed when the
+        # image was opened in the more-info popout and closed again.
+        # Bypass the rate-limiter here because the user just asked for
+        # a fresh view by changing the overlay selection.
+        Camera.async_update_token(self)
         self.async_write_ha_state()
 
     def _feed_trail_layer(self, attrs: dict) -> None:
