@@ -162,6 +162,7 @@ NOTIFICATION_ID_INFORMATION: Final = "information"
 NOTIFICATION_ID_CONSUMABLE: Final = "consumable"
 NOTIFICATION_ID_REPLACE_TEMPORARY_MAP: Final = "replace_temporary_map"
 NOTIFICATION_ID_2FA_LOGIN: Final = "2fa_login"
+NOTIFICATION_ID_BATTERY_TEMP_LOW: Final = "warning_battery_temp_low"
 
 NOTIFICATION_CLEANUP_COMPLETED: Final = "### Cleanup completed"
 NOTIFICATION_RESUME_CLEANING: Final = (
@@ -179,6 +180,11 @@ NOTIFICATION_2FA_LOGIN: Final = (
 )
 NOTIFICATION_DRAINAGE_COMPLETED: Final = "### Drainage completed"
 NOTIFICATION_DRAINAGE_FAILED: Final = "### Drainage failed"
+NOTIFICATION_BATTERY_TEMP_LOW: Final = (
+    "### Battery temperature is low. Charging stopped.\n"
+    "The mower has paused charging because the battery is below its safe-charge "
+    "temperature. Charging will resume automatically once the battery warms up."
+)
 
 EVENT_TASK_STATUS: Final = "task_status"
 EVENT_CONSUMABLE: Final = "consumable"

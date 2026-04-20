@@ -57,6 +57,20 @@ BINARY_SENSORS: tuple[DreameMowerBinarySensorEntityDescription, ...] = (
         value_fn=lambda value, device: bool(device.status.started),
         exists_fn=lambda description, device: True,
     ),
+    # Battery-temperature-low charging-pause flag. Sourced from the s1p1
+    # heartbeat byte[6]&0x08 bit (see docs/research/g2408-protocol.md §4.4).
+    # Reports None until the first heartbeat decode so dashboards render
+    # "Unknown" instead of "Off" before the mower first reports. The
+    # coordinator fires EVENT_WARNING + a persistent notification on the
+    # rising edge.
+    DreameMowerBinarySensorEntityDescription(
+        key="battery_temp_low",
+        name="Battery Temperature Low",
+        icon="mdi:battery-alert-variant-outline",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        value_fn=lambda value, device: device.battery_temp_low,
+        exists_fn=lambda description, device: True,
+    ),
 )
 
 

@@ -56,6 +56,8 @@ from .const import (
     NOTIFICATION_ID_CONSUMABLE,
     NOTIFICATION_ID_REPLACE_TEMPORARY_MAP,
     NOTIFICATION_ID_2FA_LOGIN,
+    NOTIFICATION_ID_BATTERY_TEMP_LOW,
+    NOTIFICATION_BATTERY_TEMP_LOW,
     EVENT_TASK_STATUS,
     EVENT_CONSUMABLE,
     EVENT_WARNING,
@@ -91,6 +93,7 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
         self._ready = False
         self._available = False
         self._has_warning = False
+        self._was_battery_temp_low = False
         self._was_error = False
         self._has_temporary_map = None
         self._two_factor_url = None
@@ -124,6 +127,7 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
         self._device.listen(self._state_changed, DreameMowerProperty.STATE)
         self._device.listen(self._task_status_changed, DreameMowerProperty.TASK_STATUS)
         self._device.listen(self._cleaning_paused_changed, DreameMowerProperty.CLEANING_PAUSED)
+        self._device.listen(self._heartbeat_changed, DreameMowerProperty.HEARTBEAT)
         self._device.listen(self.set_updated_data)
         self._device.listen_error(self.set_update_error)
 
@@ -175,6 +179,11 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
             if self.lidar_archive and self.lidar_archive.latest()
             else None
         )
+        # Throttle for the deferred-session-summary retry so repeated
+        # failures during a cloud outage don't spam the executor pool.
+        # Minimum seconds between retry attempts.
+        self._session_retry_min_interval = 60.0
+        self._session_retry_last_at: float = 0.0
 
         # Optional raw-MQTT archive — off by default. When enabled, every
         # MQTT message the device client receives gets appended to a
@@ -216,6 +225,33 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
             persistent_notification.SIGNAL_PERSISTENT_NOTIFICATIONS_UPDATED,
             self._notification_dismiss_listener,
         )
+
+    def _heartbeat_changed(self, previous_value=None) -> None:
+        """Rising-edge notifier for the s1p1 battery-temperature-low flag.
+
+        The Dreame app raises "Battery temperature is low. Charging stopped."
+        every time the mower (re-)enters the low-temp charging-pause state.
+        We mirror that semantics: fire EVENT_WARNING + create/refresh a
+        persistent notification on the False→True transition, and dismiss
+        the notification on True→False. See docs/research/g2408-protocol.md
+        §4.4 for the wire-level evidence.
+        """
+        flag = self._device.battery_temp_low
+        if flag is None:
+            return
+        is_low = bool(flag)
+        if is_low and not self._was_battery_temp_low:
+            self._fire_event(
+                EVENT_WARNING,
+                {EVENT_WARNING: NOTIFICATION_ID_BATTERY_TEMP_LOW},
+            )
+            self._create_persistent_notification(
+                NOTIFICATION_BATTERY_TEMP_LOW,
+                NOTIFICATION_ID_BATTERY_TEMP_LOW,
+            )
+        elif not is_low and self._was_battery_temp_low:
+            self._remove_persistent_notification(NOTIFICATION_ID_BATTERY_TEMP_LOW)
+        self._was_battery_temp_low = is_low
 
     def _cleaning_paused_changed(self, previous_value=None) -> None:
         if self._device.status.cleaning_paused:
@@ -507,6 +543,24 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
 
     @callback
     def async_set_updated_data(self, device=None) -> None:
+        # If an earlier event_occured push announced a session-summary OSS
+        # key but the download was deferred (no cloud login, HTTP error),
+        # retry it on a worker thread. The mower only announces the key
+        # once per session, so missing it here permanently loses that
+        # session — worth the cheap retry on every update tick, throttled
+        # to at most once per `_session_retry_min_interval` seconds so a
+        # persistent cloud outage doesn't flood the executor.
+        if self._device is not None and getattr(
+            self._device, "_pending_session_object_name", None
+        ):
+            import time as _time
+            now = _time.monotonic()
+            if now - self._session_retry_last_at >= self._session_retry_min_interval:
+                self._session_retry_last_at = now
+                self.hass.async_add_executor_job(
+                    self._device.retry_pending_session_summary
+                )
+
         # Archive any newly-fetched session summary. Cheap check:
         # compare md5 against the last archived one.
         if self.session_archive is not None:

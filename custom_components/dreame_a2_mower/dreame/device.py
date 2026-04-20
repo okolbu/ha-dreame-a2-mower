@@ -222,6 +222,13 @@ class DreameMowerDevice:
         # Raw JSON dict of the same summary, retained so the coordinator can
         # archive the authentic wire payload instead of a lossy rebuild.
         self._latest_session_raw = None
+        # OSS object key of the most recently *announced* session-summary
+        # (from the event_occured push) that we have NOT yet successfully
+        # downloaded. Cleared on a successful fetch. Used so a transient
+        # cloud-auth failure at session-end doesn't permanently lose the
+        # summary — the coordinator retries on every update cycle until
+        # the fetch succeeds. Set back to None to disable retry.
+        self._pending_session_object_name: str | None = None
         # Latest LiDAR scan — (object_name, unix_ts, raw_bytes) tuple. Populated
         # by `_handle_lidar_object_name` on every s99p20 push. The coordinator
         # polls this and writes through to the on-disk LidarArchive, same
@@ -240,6 +247,10 @@ class DreameMowerDevice:
         # future protocol changes don't get silently discarded.
         from ..protocol.unknown_watchdog import UnknownFieldWatchdog
         self._unknown_watchdog = UnknownFieldWatchdog()
+        # g2408 s2p2 novelty detector — records each distinct value once
+        # so new firmware codes surface exactly one WARNING instead of
+        # flooding the log every time the same new code repeats.
+        self._s2p2_novel_watchdog: set[object] = set()
         # Optional raw-MQTT archive, attached by coordinator when enabled.
         # Forwarded to the protocol layer where the on-wire payload is
         # still available before JSON-decode.
@@ -467,6 +478,30 @@ class DreameMowerDevice:
                         if param["siid"] == 2 and param["piid"] == 56:
                             self._handle_session_status(param.get("value"))
                             continue
+                        # s2p2 on g2408 is the "secondary phase code" channel
+                        # (not the error enum other models use). Known codes
+                        # observed so far: 27, 43 (battery-temp-low), 48
+                        # (mowing complete), 50, 53 (scheduled-start,
+                        # provisional), 54 (returning), 56 (rain-protection),
+                        # 70 (mowing). Anything outside this set is
+                        # firmware-novel — worth a one-shot WARNING so the
+                        # user can report it back.
+                        if param["siid"] == 2 and param["piid"] == 2:
+                            value = param.get("value")
+                            known = {27, 43, 48, 50, 53, 54, 56, 70}
+                            if (
+                                value not in known
+                                and value not in self._s2p2_novel_watchdog
+                            ):
+                                self._s2p2_novel_watchdog.add(value)
+                                _LOGGER.warning(
+                                    "[PROTOCOL_NOVEL] s2p2 carried unknown value=%r "
+                                    "on g2408 (known: %s). Please report at "
+                                    "https://github.com/okolbu/ha-dreame-a2-mower/issues",
+                                    value,
+                                    sorted(known),
+                                )
+                            continue
                         if self._unknown_watchdog.saw_property(
                             param["siid"], param["piid"]
                         ):
@@ -564,36 +599,47 @@ class DreameMowerDevice:
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("_handle_event_occured parse failed: %s", ex)
 
-    def _fetch_session_summary(self, object_name: str) -> None:
+    def _fetch_session_summary(self, object_name: str) -> bool:
         """Download + parse the session-summary JSON referenced by `object_name`.
 
         Happens inline on the MQTT callback thread — the request is small
         (~60 KB) and the fetch typically completes in under a second. Any
-        failure is logged and swallowed so a cloud hiccup never interrupts
-        the property pipeline.
+        failure is logged and the object_name is stashed in
+        `_pending_session_object_name` so the next coordinator update can
+        retry (this matters because g2408 only emits the announcement once
+        per session — dropping it on a transient cloud hiccup permanently
+        loses that session's summary).
+
+        Returns True on a successful fetch, False on any failure.
         """
         cloud = getattr(self._protocol, "cloud", None)
         if cloud is None or not getattr(cloud, "logged_in", False):
-            _LOGGER.info(
-                "[EVENT] session-summary fetch skipped (no cloud login): %s",
+            _LOGGER.warning(
+                "[EVENT] session-summary fetch deferred (no cloud login yet) "
+                "for %s — will retry on next coordinator update",
                 object_name,
             )
-            return
+            self._pending_session_object_name = object_name
+            return False
         try:
             url = cloud.get_interim_file_url(object_name)
             if not url:
                 _LOGGER.warning(
-                    "[EVENT] session-summary: getDownloadUrl returned None for %s",
+                    "[EVENT] session-summary: getDownloadUrl returned None for %s "
+                    "— will retry on next coordinator update",
                     object_name,
                 )
-                return
+                self._pending_session_object_name = object_name
+                return False
             raw = cloud.get_file(url)
             if not raw:
                 _LOGGER.warning(
-                    "[EVENT] session-summary: download returned None for %s",
+                    "[EVENT] session-summary: download returned None for %s "
+                    "— will retry on next coordinator update",
                     object_name,
                 )
-                return
+                self._pending_session_object_name = object_name
+                return False
             data = json.loads(raw.decode("utf-8") if isinstance(raw, bytes) else raw)
             # Local import keeps the heavy protocol package out of the hot
             # property-dispatch path for non-g2408 devices.
@@ -602,6 +648,7 @@ class DreameMowerDevice:
             summary = parse_session_summary(data)
             self._latest_session_summary = summary
             self._latest_session_raw = data
+            self._pending_session_object_name = None
             _LOGGER.info(
                 "[EVENT] session-summary fetched: %.1f/%d m² mowed in %d min; "
                 "%d boundary pts, %d track segments, %d obstacles, %d exclusions",
@@ -613,10 +660,28 @@ class DreameMowerDevice:
                 len(summary.obstacles),
                 len(summary.exclusions),
             )
+            return True
         except Exception as ex:
             _LOGGER.warning(
-                "[EVENT] session-summary fetch failed for %s: %s", object_name, ex
+                "[EVENT] session-summary fetch failed for %s: %s "
+                "— will retry on next coordinator update",
+                object_name,
+                ex,
             )
+            self._pending_session_object_name = object_name
+            return False
+
+    def retry_pending_session_summary(self) -> bool:
+        """Retry the most recently deferred session-summary fetch, if any.
+
+        Called from the coordinator's periodic update. No-op when nothing
+        is pending. Returns True only when this call actually completed
+        the fetch (so the coordinator knows to re-archive).
+        """
+        object_name = self._pending_session_object_name
+        if not object_name:
+            return False
+        return self._fetch_session_summary(object_name)
 
     def _handle_session_status(self, value) -> None:
         """React to an ``s2p56`` session-status arrival (g2408).
@@ -4984,6 +5049,21 @@ class DreameMowerDevice:
         """Return the s1p53 obstacle flag, or None if never seen."""
         value = self.data.get(DreameMowerProperty.OBSTACLE_FLAG.value)
         return bool(value) if value is not None else None
+
+    @property
+    def battery_temp_low(self) -> bool | None:
+        """Return the s1p1 HEARTBEAT byte[6]&0x08 low-temp charging-paused flag.
+
+        Asserted by the mower while it refuses to charge because the battery
+        is below its safe-charge threshold (the Dreame app surfaces this as
+        "Battery temperature is low. Charging stopped."). Returns None if no
+        heartbeat has been decoded yet. See docs/research/g2408-protocol.md
+        §3.4 and §4.4 for the signal discovery and wire-level evidence.
+        """
+        hb = self.data.get(DreameMowerProperty.HEARTBEAT.value)
+        if hb is None:
+            return None
+        return bool(getattr(hb, "battery_temp_low", False))
 
 
 class DreameMowerDeviceStatus:

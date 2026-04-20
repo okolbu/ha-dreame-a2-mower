@@ -58,3 +58,29 @@ def test_decode_s1p1_exposes_state_byte_7():
 def test_decode_s1p1_exposes_raw_bytes():
     hb = decode_s1p1(HEARTBEAT_FRAME_A)
     assert hb.raw == HEARTBEAT_FRAME_A
+
+
+# From probe_log_20260419_130434.jsonl at 2026-04-20 06:25:42 — the moment
+# the Dreame app raised "Battery temperature is low. Charging stopped."
+# Byte[6]=0x08 asserts the transient low-temp charging-pause flag;
+# byte[10]=0x80 latches for the remainder of the session (see §3.4, §4.4 of
+# docs/research/g2408-protocol.md).
+HEARTBEAT_FRAME_LOW_TEMP = bytes([
+    0xCE, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x00, 0x00, 0x00,
+    0x80, 0x64, 0x91, 0xFF, 0x00, 0x00, 0x80, 0xC6, 0xBA, 0xCE,
+])
+
+
+def test_decode_s1p1_battery_temp_low_flag_default_false():
+    assert decode_s1p1(HEARTBEAT_FRAME_A).battery_temp_low is False
+
+
+def test_decode_s1p1_battery_temp_low_flag_set_on_06_25_event():
+    assert decode_s1p1(HEARTBEAT_FRAME_LOW_TEMP).battery_temp_low is True
+
+
+def test_decode_s1p1_battery_temp_low_ignores_unrelated_byte6_bits():
+    # byte[6]=0x10 is not the low-temp bit — only 0x08 is.
+    frame = bytearray(HEARTBEAT_FRAME_A)
+    frame[6] = 0x10
+    assert decode_s1p1(bytes(frame)).battery_temp_low is False

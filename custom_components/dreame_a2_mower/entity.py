@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from collections.abc import Callable
 from functools import partial
 
+from .protocol._jsonable import jsonable as _jsonable
+
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
 from homeassistant.helpers import entity_registry
@@ -211,7 +213,7 @@ class DreameMowerEntity(CoordinatorEntity[DreameMowerDataUpdateCoordinator]):
                 attrs = {ATTR_VALUE: self.device.get_property(self.entity_description.property_key)}
             elif self.entity_description.value_int_fn is not None:
                 attrs = {ATTR_VALUE: self.entity_description.value_int_fn(self.native_value, self)}
-        return attrs
+        return _jsonable(attrs)
 
     @property
     def device(self) -> DreameMowerDevice:

@@ -252,10 +252,14 @@ Sent every ~45 seconds regardless of state. `0xCE` delimiters at the ends.
 | bytes | meaning |
 |---|---|
 | [4] | pulse `0x00 → 0x08 → 0x00` lasting ~0.8 s during a **human-presence-detection event**. Evidence: session 2 (2026-04-18) showed byte[4]=0x08 exactly twice at 21:04:39.580 and 21:04:40.210; the user confirmed the Dreame app raised a human-in-mapped-area alert at that same moment. Byte is `0x00` at all other times across the whole session. Single-event datapoint — reproduce before relying on it. |
+| [6] `& 0x08` | **Charging paused — battery temperature too low.** Asserted while the mower is docked but refusing to charge because the battery is below its safe-charge threshold; clears when the cell warms up (or momentarily, while the charger retries). Evidence: 2026-04-20 the Dreame app raised *"Battery temperature is low. Charging stopped."* at 06:25 and 07:54; at 06:25:42 byte[6] went `0x00 → 0x08` coincident with `s2p2` dropping from 48 (MOWING_COMPLETE) to 43, at 07:54:39 byte[6] flipped `0x08 → 0x00 → 0x08 → 0x00` while the mower bounced `STATION_RESET ↔ CHARGING_COMPLETED` and re-emitted `s2p2 = 43`. Cleared to 0 once charging resumed around 07:58 and stayed 0 through the following mowing session. |
 | [7] | 0=idle, 1 or 4 = state transitions |
 | [9] | 0/64 pulse at mow start |
+| [10] `& 0x80` | **Latched** after the first low-temp charging-pause event of the day — observed to set at 06:25:42 together with byte[6]`=0x08` and remain `0x80` through the 07:54 re-trigger, the 07:58 mowing start, and every subsequent heartbeat in the session. Normal value at a cold-boot/idle charge is `0x00` (confirmed: 2026-04-19 13:04–14:29 all show byte[10]=0). Best guess: "battery-temp-low event has occurred since last power-cycle" maintenance flag. Cleared state unconfirmed (reproduce with a fresh boot after a warm day). |
 | [11-12] | monotonic counter |
 | [14] | state machine during startup: 0 → 64 → 68 → 4 → 5 → 7 → 135 |
+
+See §4.4 for the companion `s2p2 = 43` signal and the app-notification semantics.
 
 Related coincident MQTT events at the same human-presence moment (21:04:39):
 - `s2p2 = 27` (IDLE) emitted **twice** in a single second while the mower was
@@ -283,8 +287,10 @@ refresh, otherwise it latches indefinitely. See Open Item 0e in
 | Value | Meaning |
 |---|---|
 | 27 | idle |
+| 43 | **Battery temperature is low; charging stopped.** Drives the Dreame app notification of the same name. Observed to be republished on every (re-)entry into the condition — i.e. each re-emission causes a fresh app notification, not just the first one. See §4.4. |
 | 48 | mowing complete |
 | 50 | session started |
+| 53 | seen once at 07:58:02 on 2026-04-20, transition `43 → 53 → …` as the mower cleared the low-temp condition and armed the next mowing session; may be "ready to mow / charging-OK" acknowledgement token, unconfirmed. |
 | 54 | returning |
 | 70 | mowing (edge / standard) |
 
@@ -330,7 +336,30 @@ recharge and resume mowing once topped off. The task is not considered complete
 during this pause; `s1p4` telemetry continues throughout the return leg. No map
 push observed at the pause itself — only at true session completion.
 
-### 4.4 `s1p4` telemetry lifecycle
+### 4.4 Low-temp charging-pause event
+
+Confirmed 2026-04-20 from two live notifications ("Battery temperature is low.
+Charging stopped.") at 06:25 and 07:54. All three signals below fire as one
+atomic MQTT burst at the moment the Dreame app issues the notification:
+
+```
+s2p1 (STATE)            → 16  (STATION_RESET)       -- was 13 (CHARGING_COMPLETED)
+s2p2                    → 43  (low-temp signal)     -- was 48 (MOWING_COMPLETE)
+s1p1 HEARTBEAT byte[6]  |= 0x08                     -- was 0x00
+s1p1 HEARTBEAT byte[10] |= 0x80  (latches for the session, see §3.4)
+```
+
+A **re-entry** (07:54 in our capture) republishes `s2p2 = 43` and re-pulses
+byte[6] — so one Dreame app notification arrives per republish, not just on
+rising edge. The HA integration piggybacks on the byte[6]`&0x08` bit
+(`Heartbeat.battery_temp_low_flag` from the s1p1 decoder) and raises a
+persistent-notification + `dreame_a2_mower_warning` event on the rising edge;
+see `coordinator._heartbeat_changed`. We don't currently attach to `s2p2 = 43`
+directly because the upstream property overlay keeps ERROR (`s2p2`) disabled
+on g2408 to avoid upstream's vacuum-era misinterpretation of the same slot
+(§2.2).
+
+### 4.5 `s1p4` telemetry lifecycle
 
 Position telemetry fires throughout an active TASK, including the return-to-dock
 leg of a low-battery auto-recharge. It stops only when the task itself ends

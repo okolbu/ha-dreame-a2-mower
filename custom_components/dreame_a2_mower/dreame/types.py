@@ -193,6 +193,13 @@ class DreameMowerErrorCode(IntEnum):
     STRONG_MAGNET = 41
     RTC = 43
     AUTO_KEY_TRIG = 44
+    # 53 is not an error — observed once at 2026-04-20 07:58:02 on g2408,
+    # co-arriving with `s2p56={'status':[]}` and `s2p1=1` at the instant a
+    # *scheduled* mowing task began. Distinct from the manual-start path
+    # which does not appear to emit this code. Needs a second observation
+    # before promoting to a stable label; keeping the enum entry here so
+    # future reports show a name instead of raw 53.
+    SESSION_STARTING_SCHEDULED = 53  # g2408, provisional — see §s2p2 codes
     P3V3 = 45
     CAMERA_IDLE = 46
     TASK_CANCELLED = 47  # [MOWER] Was BLOCKED - Scheduled task cancelled (warning, not error)
@@ -1063,6 +1070,16 @@ _G2408_OVERLAY: dict[DreameMowerProperty, dict[str, int]] = {
     # wrapped"). Point ERROR at a siid/piid the mower never emits to
     # keep the entity silent.
     DreameMowerProperty.ERROR: {siid: 999, piid: 999},
+    # Upstream maps OBJECT_NAME to s6p3. On g2408 that slot is the WiFi
+    # signal broadcast `[cloud_connected: bool, rssi_dbm: int]` — not an
+    # OSS object key. Leaving the upstream mapping in place makes the map
+    # handler misinterpret every WiFi push as a malformed OBJECT_NAME and
+    # log a warning. Point it at a slot the mower never emits so the push
+    # stays available on s6p3 for a future WiFi-signal sensor (memo open
+    # item §"Novel MQTT fields catalogue") without confusing the map path.
+    # The actual session-summary OSS key arrives via event_occured
+    # siid=4 eiid=1 piid=9, not via the OBJECT_NAME property slot.
+    DreameMowerProperty.OBJECT_NAME: {siid: 999, piid: 998},
     # g2408-specific blob properties, decoded via the protocol/ package.
     DreameMowerProperty.MOWING_TELEMETRY: {siid: 1, piid: 4},
     DreameMowerProperty.HEARTBEAT: {siid: 1, piid: 1},
