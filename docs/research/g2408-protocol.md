@@ -659,11 +659,25 @@ no-op. Triggers are:
 
 | Trigger | Condition | Handler |
 |---|---|---|
+| Integration setup / HA startup | one-shot | `_build_map_from_cloud_data` |
+| Periodic freshness check | every 6h | coordinator `async_track_time_interval` → `_schedule_cloud_map_poll` |
 | s2p2 session-start code | `value ∈ {50, 53}` | `_message_callback` → poll |
 | BUILDING complete | `s2p1: 11 → *` transition | `_state_transition_map_poll` → poll |
 | Dock departure | `s2p1: 6 → *` transition | `_state_transition_map_poll` → poll |
 | Map-edit confirm | `s2p50 d.o == 215` | `_message_callback` → poll (§4.6) |
 | Auto-recharge leg start | `s6p1 = 300` | upstream map pipeline |
+
+All five poll paths funnel into the same `_build_map_from_cloud_data`,
+which fetches 28 MAP.* cloud keys (one HTTP round-trip, ~100–200 KB)
+and compares the top-level `md5sum` against the previously-seen value.
+**No lightweight probe exists** — the Dreame cloud stores the md5 inside
+the compressed payload, so a full fetch IS the cheapest freshness
+check. Unchanged md5 → no camera state change, no Lovelace reload.
+
+**LiDAR archive cannot be proactively polled.** The mower only emits
+`s99p20` when the user taps *Download LiDAR map* in the Dreame app and
+the scan has actually changed. No passive endpoint exposes the current
+scan's md5 or timestamp — the archive is as fresh as the last app view.
 
 ### 7.2 Failure modes seen on our fork
 

@@ -5,6 +5,7 @@ from __future__ import annotations
 import math
 import time
 import traceback
+from datetime import timedelta
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
@@ -18,6 +19,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity import generate_entity_id
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from .dreame import DreameMowerDevice, DreameMowerProperty
 from .dreame.types import DreameMowerState
@@ -224,6 +226,39 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
             hass,
             persistent_notification.SIGNAL_PERSISTENT_NOTIFICATIONS_UPDATED,
             self._notification_dismiss_listener,
+        )
+
+        # Periodic cloud-map freshness poll. The mower only broadcasts a
+        # map-ready signal on auto-recharge legs (`s6p1 = 300`); zone /
+        # exclusion edits made from another device (or from this phone
+        # before HA comes online) are otherwise invisible until the next
+        # mowing session. If HA has been up for days without a session,
+        # the camera's polygons drift out of sync. Re-pull the MAP.*
+        # cloud keys every 6 hours to close that gap — the md5sum
+        # dedupe inside `_build_map_from_cloud_data` turns a no-change
+        # poll into a zero-cost no-op, and one HTTP round-trip per
+        # 6-hour tick is negligible next to the mower's own MQTT
+        # traffic. No lightweight probe is possible: the md5sum is
+        # embedded inside the compressed payload so the full fetch IS
+        # the cheapest check the Dreame cloud offers. The user-LiDAR
+        # archive has no analogous poll — `s99p20` is only emitted when
+        # the user opens the app's LiDAR view, there's no
+        # integration-side way to know whether the on-mower scan has
+        # changed.
+        async def _periodic_map_refresh(_now):
+            dev = self._device
+            if dev is None:
+                return
+            await self.hass.async_add_executor_job(
+                dev._schedule_cloud_map_poll, "periodic-6h"
+            )
+
+        entry.async_on_unload(
+            async_track_time_interval(
+                hass,
+                _periodic_map_refresh,
+                timedelta(hours=6),
+            )
         )
 
     def _heartbeat_changed(self, previous_value=None) -> None:
