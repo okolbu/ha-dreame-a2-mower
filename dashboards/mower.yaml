@@ -35,8 +35,7 @@ views:
         entity: camera.dreame_a2_mower_map
         camera_image: camera.dreame_a2_mower_map
         show_state: false
-        show_name: true
-        name: Live map
+        show_name: false
 
       # Session replay picker — choose any archived session to freeze
       # its path + obstacles onto the map above. "None" clears the

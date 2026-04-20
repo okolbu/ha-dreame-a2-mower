@@ -450,6 +450,40 @@ class DreameA2LiveMap:
         # `hass.async_add_executor_job`.
         _send_update(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
 
+    def render_blank(self) -> None:
+        """Wipe BOTH the session-summary overlay AND the live path so
+        the camera shows only the static base map (zones + exclusions
+        + charger, no trail, no mower marker).
+
+        Distinct from `clear_replay()` which keeps the live stream so
+        a trail reappears the instant the mower reports a new
+        position. This method zeroes out the live accumulators too;
+        the next `_handle_coordinator_update` with a live position
+        WILL repopulate state.path, so the effect of "Blank" is only
+        durable while no s1p4 arrives — i.e. while the mower is
+        parked / silent. This is the expected UX: a clean static map
+        for screenshots or when the user explicitly wants to see only
+        the lawn layout.
+        """
+        self._state.lawn_polygon = []
+        self._state.exclusion_zones = []
+        self._state.completed_track = []
+        self._state.obstacle_polygons = []
+        self._state.dock_position = None
+        self._state.summary_md5 = None
+        self._state.summary_end_ts = None
+        self._state.path = []
+        self._state.obstacles = []
+        self._state._pending = []
+        self._state.session_id = 0
+        self._state.session_start = None
+        attrs = self._state.to_attributes(
+            position=None,
+            x_factor=self.x_factor,
+            y_factor=self.y_factor,
+        )
+        _send_update(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
+
     def import_from_probe_log(self, path: str, session_index: int = -1) -> dict[str, Any]:
         """Reconstruct a session from a probe-log file (dev service)."""
         from pathlib import Path

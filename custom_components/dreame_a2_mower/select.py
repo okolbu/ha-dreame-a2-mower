@@ -307,11 +307,24 @@ class DreameReplaySessionSelect(SelectEntity):
     _attr_entity_category = EntityCategory.CONFIG
     _attr_should_poll = False
 
-    # Kept in sync with the constants used in live_map — "None" clears the
-    # overlay and "Latest" delegates to replay_latest_session so the value
-    # survives archive growth without the user re-selecting.
-    _OPT_NONE = "None"
+    # Option order (top→bottom in the UI):
+    #   "Live"   — default. Clears any replay overlay but lets the live
+    #              stream keep painting mower position + active trail.
+    #              During an active mow this is what you want.
+    #   "Blank"  — base map only. Wipes both the overlay AND the live
+    #              accumulators so the PNG shows just zones + dock; a
+    #              clean static view for screenshots. Live data will
+    #              re-populate on the next s1p4 push, so this is
+    #              mostly useful while the mower is docked.
+    #   "Latest" — overlay from the most recent archived session.
+    #              Value survives archive growth without re-selecting.
+    #   "<date>" — specific archived session, newest-first.
+    _OPT_LIVE = "Live"
+    _OPT_BLANK = "Blank"
     _OPT_LATEST = "Latest"
+    # Legacy constant name preserved for back-compat with any earlier
+    # automations referencing "None"; internally now aliases to "Live".
+    _OPT_NONE = _OPT_LIVE
 
     def __init__(self, coordinator: DreameMowerDataUpdateCoordinator) -> None:
         self._coordinator = coordinator
@@ -333,7 +346,7 @@ class DreameReplaySessionSelect(SelectEntity):
             sw_version=getattr(info, "firmware_version", None),
             hw_version=getattr(info, "hardware_version", None),
         )
-        self._attr_current_option = self._OPT_NONE
+        self._attr_current_option = self._OPT_LIVE
         self._refresh_options()
 
     # -------- option formatting --------
@@ -362,7 +375,8 @@ class DreameReplaySessionSelect(SelectEntity):
             for s in sessions
         }
         self._attr_options = [
-            self._OPT_NONE,
+            self._OPT_LIVE,
+            self._OPT_BLANK,
             *( [self._OPT_LATEST] if sessions else [] ),
             *self._label_to_file.keys(),
         ]
@@ -387,10 +401,11 @@ class DreameReplaySessionSelect(SelectEntity):
             # Archive grew — make sure the previously-selected option is
             # still valid. If the user had selected "Latest" stay there
             # (still valid, now points to the newer entry); if they had
-            # a concrete entry that got evicted for some reason, fall
-            # back to "None".
+            # a concrete entry that got evicted (retention pruned it)
+            # fall back to Live so the dashboard keeps showing the
+            # current mower rather than a blank screen.
             if self._attr_current_option not in self._attr_options:
-                self._attr_current_option = self._OPT_NONE
+                self._attr_current_option = self._OPT_LIVE
             self.async_write_ha_state()
 
     # -------- selection --------
@@ -403,8 +418,13 @@ class DreameReplaySessionSelect(SelectEntity):
         if live_map is None:
             raise HomeAssistantError("Live map is not available on this device")
 
-        if option == self._OPT_NONE:
+        if option == self._OPT_LIVE:
+            # Default: clear any replay overlay, let the live stream
+            # continue to paint position + active trail.
             await self.hass.async_add_executor_job(live_map.clear_replay)
+        elif option == self._OPT_BLANK:
+            # Pure base map — wipes overlay AND the live accumulators.
+            await self.hass.async_add_executor_job(live_map.render_blank)
         elif option == self._OPT_LATEST:
             await self.hass.async_add_executor_job(live_map.replay_latest_session)
         else:
@@ -422,6 +442,6 @@ class DreameReplaySessionSelect(SelectEntity):
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Expose the resolved file path for the current option so a user
         or automation can see what a label maps to without parsing it."""
-        if self._attr_current_option in (self._OPT_NONE, self._OPT_LATEST):
+        if self._attr_current_option in (self._OPT_LIVE, self._OPT_BLANK, self._OPT_LATEST):
             return {"resolved_file": None}
         return {"resolved_file": self._label_to_file.get(self._attr_current_option)}
