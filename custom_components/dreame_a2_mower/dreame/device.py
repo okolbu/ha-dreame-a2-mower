@@ -30,7 +30,6 @@ from .types import (
     DreameMowerChargingStatus,
     DreameMowerTaskStatus,
     DreameMowerState,
-    DreameMowerStateOld,
     DreameMowerStatus,
     DreameMowerErrorCode,
     DreameMowerRelocationStatus,
@@ -1151,15 +1150,8 @@ class DreameMowerDevice:
     def _update_property(self, prop: DreameMowerProperty, value: Any) -> Any:
         """Update device property on memory and notify listeners."""
         if prop in self.property_mapping:
-            if (
-                not self.capability.new_state
-                and prop == DreameMowerProperty.STATE
-                and int(value) > 18
-                and value in DreameMowerState._value2member_map_
-            ):
-                old_state = DreameMowerStateOld[DreameMowerState(value).name]
-                if old_state:
-                    value = int(old_state)
+            # Legacy old-state remap (>18 → new enum via DreameMowerStateOld)
+            # removed 2026-04-20. A2 always uses the new-state enum.
             current_value = self.get_property(prop)
             if current_value != value:
                 did = prop.value
@@ -5590,14 +5582,8 @@ class DreameMowerDeviceStatus:
             if mapped is not None:
                 value = mapped.value
 
-        if (
-            value is not None
-            and int(value) > 18
-            and not self._capability.new_state
-            and value in DreameMowerStateOld._value2member_map_
-        ):
-            value = DreameMowerState[DreameMowerStateOld(value).name].value
-
+        # Legacy old-state enum remap removed 2026-04-20; A2 always uses
+        # the new-state enum.
         if value is not None and value in DreameMowerState._value2member_map_:
             if self.go_to_zone and (
                 value == DreameMowerState.IDLE

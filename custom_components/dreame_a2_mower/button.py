@@ -77,31 +77,9 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         exists_fn=lambda description, device: not device.capability.disable_sensor_cleaning,
     ),
-    DreameMowerButtonEntityDescription(
-        action_key=DreameMowerAction.RESET_SILVER_ION,
-        icon="mdi:shimmer",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        exists_fn=lambda description, device: bool(
-            DreameMowerEntityDescription().exists_fn(description, device)
-            and device.status.silver_ion_life is not None
-        ),
-    ),
-    DreameMowerButtonEntityDescription(
-        action_key=DreameMowerAction.RESET_LENSBRUSH,
-        icon="mdi:brush",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        exists_fn=lambda description, device: bool(
-            DreameMowerEntityDescription().exists_fn(description, device) and device.capability.lensbrush
-        ),
-    ),
-    DreameMowerButtonEntityDescription(
-        action_key=DreameMowerAction.RESET_SQUEEGEE,
-        icon="mdi:squeegee",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        exists_fn=lambda description, device: bool(
-            DreameMowerEntityDescription().exists_fn(description, device) and device.status.squeegee_life is not None
-        ),
-    ),
+    # Removed vacuum-only consumable-reset buttons (Cleanup Phase 1,
+    # v2.0.0-alpha.32): RESET_SILVER_ION, RESET_LENSBRUSH,
+    # RESET_SQUEEGEE. A2 has none of these consumables.
 )
 
 

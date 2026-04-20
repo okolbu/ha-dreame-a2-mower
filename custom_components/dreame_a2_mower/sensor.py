@@ -256,68 +256,14 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         # entity_registry_enabled_default=False,
         exists_fn=lambda description, device: not device.capability.disable_sensor_cleaning,
     ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.TANK_FILTER_LEFT,
-        icon="mdi:air-filter",
-        native_unit_of_measurement=UNIT_PERCENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        # entity_registry_enabled_default=False,
-    ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.TANK_FILTER_TIME_LEFT,
-        icon="mdi:air-filter",
-        native_unit_of_measurement=UNIT_HOURS,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        # entity_registry_enabled_default=False,
-    ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.SILVER_ION_LEFT,
-        icon="mdi:shimmer",
-        native_unit_of_measurement=UNIT_PERCENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        # entity_registry_enabled_default=False,
-    ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.SILVER_ION_TIME_LEFT,
-        icon="mdi:shimmer",
-        native_unit_of_measurement=UNIT_DAYS,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        # entity_registry_enabled_default=False,
-    ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.LENSBRUSH_LEFT,
-        icon="mdi:brush",
-        native_unit_of_measurement=UNIT_PERCENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        exists_fn=lambda description, device: bool(
-            DreameMowerEntityDescription().exists_fn(description, device) and device.capability.lensbrush
-        )
-        # entity_registry_enabled_default=False,
-    ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.LENSBRUSH_TIME_LEFT,
-        icon="mdi:brush-outline",
-        native_unit_of_measurement=UNIT_DAYS,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        exists_fn=lambda description, device: bool(
-            DreameMowerEntityDescription().exists_fn(description, device) and device.capability.lensbrush
-        )
-        # entity_registry_enabled_default=False,
-    ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.SQUEEGEE_LEFT,
-        icon="mdi:squeegee",
-        native_unit_of_measurement=UNIT_PERCENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        # entity_registry_enabled_default=False,
-    ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.SQUEEGEE_TIME_LEFT,
-        icon="mdi:squeegee",
-        native_unit_of_measurement=UNIT_DAYS,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        # entity_registry_enabled_default=False,
-    ),
+    # Removed vacuum-only consumable sensors (Cleanup Phase 1,
+    # v2.0.0-alpha.32): TANK_FILTER_LEFT / TANK_FILTER_TIME_LEFT,
+    # SILVER_ION_LEFT / SILVER_ION_TIME_LEFT, LENSBRUSH_LEFT /
+    # LENSBRUSH_TIME_LEFT, SQUEEGEE_LEFT / SQUEEGEE_TIME_LEFT. The
+    # A2 mower has no water tank, no UV silver-ion sanitiser, no
+    # lens brush, no squeegee — these properties never fire on
+    # g2408 and the corresponding entities were permanently
+    # "Unavailable" on the device page.
     # Legacy `first_cleaning_date` / `total_cleaning_time` /
     # `cleaning_count` / `total_cleaned_area` — vacuum-era names that
     # the g2408-specific mowing_* siblings below supersede. Removed

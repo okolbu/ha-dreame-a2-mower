@@ -253,27 +253,6 @@ class DreameMowerState(IntEnum):
     MONITORING_PAUSED = 99
 
 
-class DreameMowerStateOld(IntEnum):
-    """Dreame Mower old state"""
-
-    UNKNOWN = -1
-    MOWING = 1
-    IDLE = 2
-    PAUSED = 3
-    ERROR = 4
-    RETURNING = 5
-    CHARGING = 6
-    BUILDING = 11
-    CHARGING_COMPLETED = 13
-    UPGRADING = 14
-    CLEAN_SUMMON = 15
-    STATION_RESET = 16
-    REMOTE_CONTROL = 19
-    MONITORING = 21
-    MONITORING_PAUSED = 21
-    SMART_CHARGING = 26
-
-
 class DreameMowerCleaningMode(IntEnum):
     """Dreame Mower cleaning mode"""
 
