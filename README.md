@@ -71,6 +71,41 @@ map_modes:
 
 Known map-card compatibility: **`lovelace-xiaomi-vacuum-map-card` works well**. `dreame-vacuum-map-card` expects entity=vacuum and auto-derives the camera by appending `_map` — ends up with `camera.dreame_a2_mower_map_map` (a non-existent entity). Stick to xiaomi unless you already know what you're doing.
 
+## Map & LiDAR freshness — when does the integration re-pull?
+
+The short version: **the base map is kept fresh automatically; the LiDAR scan is not — you have to trigger it from the app**.
+
+### Base map (`camera.dreame_a2_mower_map`)
+
+The mower does not push a "your cached map is stale" signal on every edit. To keep the HA camera in sync with app-side zone/exclusion/no-go changes, the integration re-pulls the cloud `MAP.*` dataset at seven different trigger points:
+
+| When | Why |
+|---|---|
+| HA startup / integration setup | First load |
+| **Every 6 hours** (periodic timer) | Catches edits made while HA was offline or from another phone, even if you don't mow for days |
+| Session start (scheduled or manual) | In case you edited zones since the last run |
+| BUILDING complete (after *Expand Lawn* / *Add Zone*) | Firmware just committed a new polygon |
+| Dock departure | Belt-and-braces catch |
+| Zone / exclusion edit from the Dreame app (while HA is running) | MQTT confirm `s2p50 o=215` detected in real time |
+| Auto-recharge leg start (mid-session) | Firmware's own "map may be newer" signal |
+
+Each refresh is a single ~100-200 KB cloud HTTP call. The server payload carries an `md5sum`; if it matches what's already cached, the camera is untouched (no logbook entry, no Lovelace reload). You can see the polls happening by enabling DEBUG on `custom_components.dreame_a2_mower.dreame.device` and grepping for `[MAP_POLL]`.
+
+**No lightweight probe is possible:** the `md5sum` lives *inside* the 28 zlib+base64-compressed cloud chunks, so a full fetch IS the cheapest freshness check the Dreame platform exposes. Hence the deduplication at the md5 layer instead of a HEAD-style probe.
+
+### LiDAR point cloud (`/api/dreame_a2_mower/lidar/latest.pcd`, `camera.*_lidar_top_down`, 3D card)
+
+**The integration can only download a fresh LiDAR scan when you tap *Download LiDAR map* in the Dreame app.** This is a platform limitation, not a missing feature on our end — there is no passive endpoint that tells HA whether the on-mower scan has changed, and the mower only emits the `s99p20` OSS object key when the app view is opened *and* the scan has actually updated since last time.
+
+Practical consequences:
+
+- First install: until you've opened the LiDAR view in the app once, the integration has no PCD to show. The 3D card will say "no data" and the top-down camera will be blank.
+- Between mowing sessions, the on-mower scan evolves as the LiDAR spins up on every run. To bring that into HA, tap the app's LiDAR view and wait ~30 s for the upload (you'll see the `s2p54` progress ticking in the HA log if DEBUG is on).
+- Re-opening the LiDAR view with no scan change is a no-op — the mower deduplicates server-side. The existing cached PCD stays.
+- If you want HA to always have a recent scan, open the app's LiDAR view once after each significant mow. There's no automation-side way to trigger this.
+
+`camera.dreame_a2_mower_map_lidar_top_down` and the WebGL card re-render immediately when a new PCD lands. Old scans stay in `<config>/dreame_a2_mower/lidar/` indefinitely (content-addressed by md5) in case you want to compare across time.
+
 ## Interactive 3D LiDAR card
 
 A pure-WebGL Lovelace card ships bundled with the integration (no Three.js, no HACS frontend plugin — served directly from the integration's own static path). Consumes the `.pcd` from `/api/dreame_a2_mower/lidar/latest.pcd` and shows an orbitable 3D point cloud.
@@ -127,7 +162,9 @@ This repopulates the camera attributes with the historical lawn polygon, complet
 
 ## LiDAR scans
 
-When you tap "Download LiDAR map" in the Dreame app, the mower uploads a PCD point cloud to Alibaba OSS and announces the object key via MQTT on `s99p20`. The integration detects this, fetches the binary, and stores it at `<config>/dreame_a2_mower/lidar/<YYYY-MM-DD>_<ts>_<md5>.pcd`.
+> LiDAR downloads only happen when **you tap *Download LiDAR map* in the Dreame app** — see the "Map & LiDAR freshness" section above for the full explanation of why this is a user-driven flow.
+
+When you do tap, the mower uploads a PCD point cloud to Alibaba OSS and announces the object key via MQTT on `s99p20`. The integration detects this, fetches the binary, and stores it at `<config>/dreame_a2_mower/lidar/<YYYY-MM-DD>_<ts>_<md5>.pcd`.
 
 Exposed surfaces:
 
