@@ -344,7 +344,33 @@ class DreameA2LidarCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
-    if (!this._loaded) this._fetchAndRender();
+    // Guard the fetch behind three conditions so navigation races don't
+    // leave the card blank:
+    //   1. Config has been applied (setConfig built the shadow DOM).
+    //   2. Shadow DOM is live (attached; not in the middle of teardown).
+    //   3. We haven't already started the initial fetch.
+    // Without this guard HA's occasional "set hass before setConfig" path
+    // (seen when a dashboard is restored after navigation) triggered a
+    // _setStatus() call against `undefined` DOM refs, the exception was
+    // caught silently, and the card sat blank until a browser refresh.
+    if (!this._loaded && this._config && this._status) {
+      this._fetchAndRender();
+    }
+  }
+
+  connectedCallback() {
+    // HA recycles custom elements across view navigations — the element
+    // may be disconnected when the user leaves the Mower dashboard and
+    // re-attached on return. `_startRenderLoop` self-terminates on
+    // `isConnected === false`, so it won't run after disconnection;
+    // re-kick it here whenever the card comes back into the DOM if we
+    // already have a point cloud loaded. Also retries the initial fetch
+    // if it never ran (handles the rare set-hass-before-setConfig race).
+    if (this._gl && this._nPoints > 0) {
+      this._startRenderLoop();
+    } else if (!this._loaded && this._hass && this._config && this._status) {
+      this._fetchAndRender();
+    }
   }
 
   getCardSize() { return 6; }
