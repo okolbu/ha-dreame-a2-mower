@@ -213,26 +213,14 @@ class DreameMowerFlowHandler(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Handle a flow initialized by the user."""
-        if user_input is not None:
-            config_type = user_input.get(CONF_TYPE, DREAMEHOME)
-            if config_type == DREAMEHOME:
-                return await self.async_step_dreame()
-            if config_type == MOVAHOME:
-                return await self.async_step_mova()
-            return await self.async_step_local()
+        """Handle a flow initialized by the user.
 
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_TYPE, default=DREAMEHOME): vol.In(
-                        [DREAMEHOME, MOVAHOME, LOCAL]
-                    )
-                }
-            ),
-            errors={},
-        )
+        Phase 2 cleanup: Mi/Xiaomi and Mova account types + the
+        local-LAN miIO path are gone. The A2 only speaks Dreame cloud,
+        so the user-facing chooser is redundant — jump straight to the
+        Dreame cloud credentials step.
+        """
+        return await self.async_step_dreame()
 
     async def async_step_reauth(self, user_input: Mapping[str, Any]) -> FlowResult:
         """Perform reauth upon an authentication error or missing cloud credentials."""
@@ -313,140 +301,16 @@ class DreameMowerFlowHandler(ConfigFlow, domain=DOMAIN):
                     errors["base"] = "unsupported"
 
             if self.username and self.password:
-                if self.account_type == "mi":
-                    return await self.async_step_mi(errors=errors)
-                elif self.account_type == "mova":
-                    return await self.async_step_mova(errors=errors)
-                else:
-                    return await self.async_step_dreame(errors=errors)
+                return await self.async_step_dreame(errors=errors)
         else:
             errors["base"] = "wrong_token"
-        return await self.async_step_local(errors=errors)
+        # Fall through to the Dreame step for re-auth — the local step
+        # was removed in Phase 2 cleanup.
+        return await self.async_step_dreame(errors=errors)
 
-    async def async_step_local(
-        self,
-        user_input: dict[str, Any] | None = None,
-        errors: dict[str, Any] | None = {},
-    ) -> FlowResult:
-        """Handle the initial step."""
+    # step_local removed 2026-04-20 (Cleanup Phase 2): A2 only uses Dreame cloud.
 
-        if user_input is not None:
-            self._async_abort_entries_match(user_input)
-
-            self.host = user_input[CONF_HOST]
-            self.token = user_input[CONF_TOKEN]
-            self.mac = None
-            return await self.async_step_connect()
-
-        return self.async_show_form(
-            step_id="local",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_HOST, default=self.host): str,
-                    vol.Required(CONF_TOKEN, default=self.token): str,
-                }
-            ),
-            errors=errors,
-        )
-
-    async def async_step_mi(
-        self,
-        user_input: dict[str, Any] | None = None,
-        errors: dict[str, Any] | None = {},
-    ) -> FlowResult:
-        """Configure a mi mower device through the Miio Cloud."""
-        placeholders = {}
-        if user_input is not None:
-            self.account_type = "mi"
-            username = user_input.get(CONF_USERNAME)
-            password = user_input.get(CONF_PASSWORD)
-            country = user_input.get(CONF_COUNTRY)
-
-            if username and password and country:
-                self.username = username
-                self.password = password
-                self.country = country
-                self.prefer_cloud = user_input.get(CONF_PREFER_CLOUD, False)
-
-                self.protocol = DreameMowerProtocol(
-                    username=self.username,
-                    password=self.password,
-                    country=self.country,
-                    prefer_cloud=self.prefer_cloud,
-                    account_type="mi",
-                )
-                await self.hass.async_add_executor_job(self.protocol.cloud.login)
-
-                if self.protocol.cloud.two_factor_url is not None:
-                    errors["base"] = "2fa_required"
-                    persistent_notification.create(
-                        self.hass,
-                        f"{NOTIFICATION_2FA_LOGIN}[{self.protocol.cloud.two_factor_url}]({self.protocol.cloud.two_factor_url})",
-                        f"Login to Dreame Mower: {self.username}",
-                        f"{DOMAIN}_{NOTIFICATION_ID_2FA_LOGIN}",
-                    )
-                    placeholders = {"url": self.protocol.cloud.two_factor_url}
-                elif self.protocol.cloud.logged_in is False:
-                    errors["base"] = "login_error"
-                elif self.protocol.cloud.logged_in:
-                    persistent_notification.dismiss(
-                        self.hass, f"{DOMAIN}_{NOTIFICATION_ID_2FA_LOGIN}"
-                    )
-
-                    devices = await self.hass.async_add_executor_job(
-                        self.protocol.cloud.get_devices
-                    )
-                    if devices:
-                        found = list(
-                            filter(
-                                lambda d: not d.get("parent_id")
-                                and any(
-                                    str(d["model"]).startswith(prefix)
-                                    for prefix in DREAME_MODELS
-                                ),
-                                devices,
-                            )
-                        )
-
-                        self.devices = {}
-                        for device in found:
-                            name = device["name"]
-                            model = device["model"]
-                            list_name = f"{name} - {model}"
-                            self.devices[list_name] = device
-
-                        if self.host is not None:
-                            for device in self.devices.values():
-                                host = device.get("localip")
-                                if host == self.host:
-                                    self.extract_info(device)
-                                    return await self.async_step_connect()
-
-                        if self.devices:
-                            if len(self.devices) == 1:
-                                self.extract_info(list(self.devices.values())[0])
-                                return await self.async_step_connect()
-                            return await self.async_step_devices()
-
-                    errors["base"] = "no_devices"
-            else:
-                errors["base"] = "credentials_incomplete"
-
-        return self.async_show_form(
-            step_id="mi",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_USERNAME, default=self.username): str,
-                    vol.Required(CONF_PASSWORD, default=self.password): str,
-                    vol.Required(CONF_COUNTRY, default=self.country): vol.In(
-                        ["cn", "de", "us", "ru", "tw", "sg", "in", "i2"]
-                    ),
-                    vol.Required(CONF_PREFER_CLOUD, default=self.prefer_cloud): bool,
-                }
-            ),
-            description_placeholders=placeholders,
-            errors=errors,
-        )
+    # step_mi removed 2026-04-20 (Cleanup Phase 2): A2 only uses Dreame cloud.
 
     async def async_step_dreame(
         self,
@@ -535,91 +399,7 @@ class DreameMowerFlowHandler(ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
-    async def async_step_mova(
-        self,
-        user_input: dict[str, Any] | None = None,
-        errors: dict[str, Any] | None = {},
-    ) -> FlowResult:
-        """Configure a mova mower device through the Miio Cloud."""
-        placeholders = {}
-        if user_input is not None:
-            self.account_type = "mova"
-            username = user_input.get(CONF_USERNAME)
-            password = user_input.get(CONF_PASSWORD)
-            country = user_input.get(CONF_COUNTRY)
-
-            if username and password and country:
-                self.username = username
-                self.password = password
-                self.country = country
-                self.prefer_cloud = True
-
-                self.protocol = DreameMowerProtocol(
-                    username=self.username,
-                    password=self.password,
-                    country=self.country,
-                    prefer_cloud=self.prefer_cloud,
-                    account_type="mova",
-                )
-                await self.hass.async_add_executor_job(self.protocol.cloud.login)
-
-                if self.protocol.cloud.logged_in is False:
-                    errors["base"] = "login_error"
-                elif self.protocol.cloud.logged_in:
-                    persistent_notification.dismiss(
-                        self.hass, f"{DOMAIN}_{NOTIFICATION_ID_2FA_LOGIN}"
-                    )
-
-                    devices = await self.hass.async_add_executor_job(
-                        self.protocol.cloud.get_devices
-                    )
-                    if devices:
-                        found = list(
-                            filter(
-                                lambda d: any(
-                                    str(d["model"]).startswith(prefix)
-                                    for prefix in DREAME_MODELS
-                                ),
-                                devices["page"]["records"],
-                            )
-                        )
-
-                        self.devices = {}
-                        for device in found:
-                            name = (
-                                device["customName"]
-                                if device["customName"]
-                                and len(device["customName"]) > 0
-                                else device["deviceInfo"]["displayName"]
-                            )
-                            model = device["model"]
-                            list_name = f"{name} - {model}"
-                            self.devices[list_name] = device
-
-                        if self.devices:
-                            if len(self.devices) == 1:
-                                self.extract_info(list(self.devices.values())[0])
-                                return await self.async_step_connect()
-                            return await self.async_step_devices()
-
-                    errors["base"] = "no_devices"
-            else:
-                errors["base"] = "credentials_incomplete"
-
-        return self.async_show_form(
-            step_id="mova",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_USERNAME, default=self.username): str,
-                    vol.Required(CONF_PASSWORD, default=self.password): str,
-                    vol.Required(CONF_COUNTRY, default=self.country): vol.In(
-                        ["cn", "eu", "us", "ru", "sg"]
-                    ),
-                }
-            ),
-            description_placeholders=placeholders,
-            errors=errors,
-        )
+    # step_mova removed 2026-04-20 (Cleanup Phase 2): A2 only uses Dreame cloud.
 
     async def async_step_devices(
         self, user_input: dict[str, Any] | None = None
@@ -710,31 +490,23 @@ class DreameMowerFlowHandler(ConfigFlow, domain=DOMAIN):
         )
 
     def extract_info(self, device_info: dict[str, Any]) -> None:
-        """Extract the device info."""
-        if self.account_type == "mi":
-            if self.host is None:
-                self.host = device_info["localip"]
-            if self.mac is None:
-                self.mac = device_info["mac"]
-            if self.model is None:
-                self.model = device_info["model"]
-            if self.name is None:
-                self.name = device_info["name"]
-            self.token = device_info["token"]
-            self.device_id = device_info["did"]
-        elif self.account_type == "dreame" or self.account_type == "mova":
-            if self.token is None:
-                self.token = " "  # device_info["token"]
-            if self.host is None:
-                self.host = device_info["bindDomain"]
-            if self.mac is None:
-                self.mac = device_info["mac"]
-            if self.model is None:
-                self.model = device_info["model"]
-            if self.name is None:
-                self.name = (
-                    device_info["customName"]
-                    if device_info["customName"] and len(device_info["customName"]) > 0
-                    else device_info["deviceInfo"]["displayName"]
-                )
+        """Extract the device info from the Dreame cloud /listV2 payload.
+
+        The Mi-cloud branch was removed in Phase 2; only the Dreame-cloud
+        field layout remains.
+        """
+        if self.token is None:
+            self.token = " "  # placeholder — cloud-only, never used
+        if self.host is None:
+            self.host = device_info["bindDomain"]
+        if self.mac is None:
+            self.mac = device_info["mac"]
+        if self.model is None:
+            self.model = device_info["model"]
+        if self.name is None:
+            self.name = (
+                device_info["customName"]
+                if device_info["customName"] and len(device_info["customName"]) > 0
+                else device_info["deviceInfo"]["displayName"]
+            )
             self.device_id = device_info["did"]

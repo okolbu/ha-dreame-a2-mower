@@ -15,61 +15,26 @@ import locale
 from datetime import datetime
 from paho.mqtt import client as mqtt_client
 from typing import Any, Dict, Optional, Tuple
-from Crypto.Cipher import ARC4
-from miio.miioprotocol import MiIOProtocol
-
 from .exceptions import DeviceException
 from .const import DREAME_STRINGS
+
+
+def _random_agent_id() -> str:
+    """Module-level helper used by the Dreame cloud MQTT client-id
+    factory. Formerly `DreameMowerMiHomeCloudProtocol.get_random_agent_id`
+    — kept as a plain function now that the Mi cloud class is gone
+    (Phase 2 cleanup, v2.0.0-alpha.33)."""
+    import random
+    letters = "ABCDEF"
+    return "".join(random.choice(letters) for _ in range(13))
 
 _LOGGER = logging.getLogger(__name__)
 
 
-class DreameMowerDeviceProtocol(MiIOProtocol):
-    def __init__(self, ip: str, token: str) -> None:
-        super().__init__(ip, token, 0, 0, True, 2)
-        self.ip = None
-        self.token = None
-        self._queue = queue.Queue()
-        self._thread = None
-        self.set_credentials(ip, token)
-
-    def _api_task(self):
-        while True:
-            item = self._queue.get()
-            if len(item) == 0:
-                self._queue.task_done()
-                return
-            response = self.send(item[1], item[2], item[3])
-            if item[0]:
-                item[0](response)
-            self._queue.task_done()
-
-    def send_async(self, callback, command, parameters=None, retry_count=2):
-        if self._thread is None:
-            self._thread = Thread(target=self._api_task, daemon=True)
-            self._thread.start()
-
-        self._queue.put((callback, command, parameters, retry_count))
-
-    def set_credentials(self, ip: str, token: str):
-        if self.ip != ip or self.token != token:
-            self.ip = ip
-            self.port = 54321
-            self.token = token
-
-            if token is None or token == "":
-                token = 32 * "0"
-            self.token = bytes.fromhex(token)
-            self._discovered = False
-
-    @property
-    def connected(self) -> bool:
-        return self._discovered
-
-    def disconnect(self):
-        self._discovered = False
-        if self._thread:
-            self._queue.put([])
+# DreameMowerDeviceProtocol (local-LAN miIO path via python-miio)
+# removed 2026-04-20, Cleanup Phase 2. The A2 uses cloud-push MQTT
+# only; there was never a local LAN token available for this device
+# family, so the class was permanently dead code.
 
 
 class DreameMowerDreameHomeCloudProtocol:
@@ -274,7 +239,7 @@ class DreameMowerDreameHomeCloudProtocol:
                             host = self._host.split(":")
                             self._client = mqtt_client.Client(
                                 mqtt_client.CallbackAPIVersion.VERSION1,
-                                f"{self._strings[53]}{self._uid}{self._strings[54]}{DreameMowerMiHomeCloudProtocol.get_random_agent_id()}{self._strings[54]}{host[0]}",
+                                f"{self._strings[53]}{self._uid}{self._strings[54]}{_random_agent_id()}{self._strings[54]}{host[0]}",
                                 clean_session=True,
                                 userdata=self,
                             )
@@ -702,546 +667,27 @@ class DreameMowerDreameHomeCloudProtocol:
         self._connected_callback = None
 
 
-class DreameMowerMiHomeCloudProtocol:
-    def __init__(self, username: str, password: str, country: str) -> None:
-        self._username = username
-        self._password = password
-        self._country = country
-        self._session = requests.session()
-        self._queue = queue.Queue()
-        self._thread = None
-        self._sign = None
-        self._ssecurity = None
-        self._userId = None
-        self._cUserId = None
-        self._passToken = None
-        self._location = None
-        self._code = None
-        self._service_token = None
-        self._logged_in = None
-        self._uid = None
-        self._did = None
-        self.two_factor_url = None
-        self._useragent = f"Android-7.1.1-1.0.0-ONEPLUS A3010-136-{DreameMowerMiHomeCloudProtocol.get_random_agent_id()} APP/xiaomi.smarthome APPV/62830"
-        self._locale = locale.getdefaultlocale()[0]
-        self._v3 = False
-
-        self._fail_count = 0
-        self._connected = False
-        try:
-            offset = (time.timezone if (time.localtime().tm_isdst == 0)
-                      else time.altzone) / 60 * -1
-            self._timezone = "GMT{}{:02d}:{:02d}".format(
-                '+' if offset >= 0 else '-', abs(int(offset / 60)), int(offset % 60))
-        except:
-            self._timezone = "GMT+00:00"
-
-    def _api_task(self):
-        while True:
-            item = self._queue.get()
-            if len(item) == 0:
-                self._queue.task_done()
-                return
-            item[0](self._api_call(item[1], item[2], item[3]))
-            sleep(0.1)
-            self._queue.task_done()
-
-    def _api_call_async(self, callback, url, params=None, retry_count=2):
-        if self._thread is None:
-            self._thread = Thread(target=self._api_task, daemon=True)
-            self._thread.start()
-
-        self._queue.put((callback, url, params, retry_count))
-
-    def _api_call(self, url, params, retry_count=2):
-        return self.request(
-            f"{self.get_api_url()}/{url}",
-            {"data": json.dumps(params, separators=(",", ":"))},
-            retry_count,
-        )
-
-    def _iot_call(self, url, params, retry_count=2):
-        return self.request(
-            f"{self.get_dreame_iot_api_url()}/{url}",
-            {"did": self._did, "data": json.dumps(
-                params, separators=(",", ":"))},
-            retry_count,
-        )
-
-    @property
-    def logged_in(self) -> bool:
-        return self._logged_in
-
-    @property
-    def connected(self) -> bool:
-        return self._connected
-
-    @property
-    def device_id(self) -> str:
-        return self._did
-
-    @property
-    def dreame_cloud(self) -> bool:
-        return False
-
-    @property
-    def object_name(self) -> str:
-        return f"{str(self._uid)}/{str(self._did)}/0"
-
-    def login_step_1(self) -> bool:
-        url = "https://account.xiaomi.com/pass/serviceLogin?sid=xiaomiio&_json=true"
-        headers = {
-            "User-Agent": self._useragent,
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
-        cookies = {"userId": self._username}
-        try:
-            response = self._session.get(
-                url, headers=headers, cookies=cookies, timeout=5)
-        except:
-            response = None
-        successful = response is not None and response.status_code == 200 and "_sign" in self.to_json(
-            response.text)
-        if successful:
-            self._sign = self.to_json(response.text)["_sign"]
-        return successful
-
-    def login_step_2(self) -> bool:
-        url = "https://account.xiaomi.com/pass/serviceLoginAuth2"
-        headers = {
-            "User-Agent": self._useragent,
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
-        fields = {
-            "sid": "xiaomiio",
-            "hash": hashlib.md5(str.encode(self._password)).hexdigest().upper(),
-            "callback": "https://sts.api.io.mi.com/sts",
-            "qs": "%3Fsid%3Dxiaomiio%26_json%3Dtrue",
-            "user": self._username,
-            "_json": "true",
-        }
-        if self._sign:
-            fields["_sign"] = self._sign
-
-        try:
-            response = self._session.post(
-                url, headers=headers, params=fields, timeout=5)
-        except:
-            response = None
-        successful = response is not None and response.status_code == 200
-        if successful:
-            json_resp = self.to_json(response.text)
-            successful = "ssecurity" in json_resp and len(
-                str(json_resp["ssecurity"])) > 4
-            if successful:
-                self._ssecurity = json_resp["ssecurity"]
-                self._userId = json_resp["userId"]
-                self._cUserId = json_resp["cUserId"]
-                self._passToken = json_resp["passToken"]
-                self._location = json_resp["location"]
-                self._code = json_resp["code"]
-                self.two_factor_url = None
-            else:
-                if "notificationUrl" in json_resp and self.two_factor_url is None:
-                    self.two_factor_url = json_resp["notificationUrl"]
-                    if self.two_factor_url[:4] != "http":
-                        self.two_factor_url = f"https://account.xiaomi.com{self.two_factor_url}"
-
-                    _LOGGER.error(
-                        "Additional authentication required. Open following URL using device that has the same public IP, as your Home Assistant instance: %s ",
-                        self.two_factor_url,
-                    )
-
-                successful = False
-
-        if successful:
-            self.two_factor_url = None
-
-        return successful
-
-    def login_step_3(self) -> bool:
-        headers = {
-            "User-Agent": self._useragent,
-            "Content-Type": "application/x-www-form-urlencoded",
-        }
-        try:
-            response = self._session.get(
-                self._location, headers=headers, timeout=5)
-        except:
-            response = None
-        successful = response is not None and response.status_code == 200 and "serviceToken" in response.cookies
-        if successful:
-            self._service_token = response.cookies.get("serviceToken")
-        return successful
-
-    def login(self) -> bool:
-        self._session.close()
-        self._session = requests.session()
-        self._device = DreameMowerMiHomeCloudProtocol.generate_device_id()
-        self._session.cookies.set("sdkVersion", "3.8.6", domain="mi.com")
-        self._session.cookies.set("sdkVersion", "3.8.6", domain="xiaomi.com")
-        self._session.cookies.set("deviceId", self._device, domain="mi.com")
-        self._session.cookies.set(
-            "deviceId", self._device, domain="xiaomi.com")
-        self._logged_in = self.login_step_1() and self.login_step_2() and self.login_step_3()
-        if self._logged_in:
-            self._fail_count = 0
-            self._connected = True
-        return self._logged_in
-
-    def get_file(self, url: str, retry_count: int = 4) -> Any:
-        retries = 0
-        if not retry_count or retry_count < 0:
-            retry_count = 0
-        while retries < retry_count + 1:
-            try:
-                response = self._session.get(url, timeout=15)
-            except Exception as ex:
-                response = None
-                _LOGGER.warning("Unable to get file at %s: %s", url, ex)
-            if response is not None and response.status_code == 200:
-                return response.content
-            retries = retries + 1
-        return None
-
-    def get_file_url(self, object_name: str = "") -> Any:
-        api_response = self._api_call(
-            f'home/getfileurl{("_v3" if self._v3 else "")}', {"obj_name": object_name})
-        _LOGGER.debug("Get file url result: %s", api_response)
-        if api_response is None or "result" not in api_response or "url" not in api_response["result"]:
-            return None
-
-        return api_response["result"]["url"]
-
-    def get_interim_file_url(self, object_name: str = "") -> str:
-        _LOGGER.debug("Get interim file url: %s", object_name)
-        api_response = self._api_call(
-            f'v2/home/get_interim_file_url{("_pro" if self._v3 else "")}',
-            {"obj_name": object_name},
-        )
-        if api_response is None or not api_response.get("result") or "url" not in api_response["result"]:
-            return None
-
-        return api_response["result"]["url"]
-
-    def send_async(self, callback, method, parameters, retry_count: int = 2):
-        self._api_call_async(
-            lambda api_response: callback(
-                None if api_response is None or "result" not in api_response else api_response[
-                    "result"]
-            ),
-            f"v2/home/rpc/{self._did}",
-            {"method": method, "params": parameters},
-            retry_count,
-        )
-
-    # SEND DATA TO MOWER
-    def send(self, method, parameters, retry_count: int = 2) -> Any:
-        api_response = self._iot_call(
-            f"device/sendCommand",
-            {"method": method, "params": parameters, "did": self._did},
-            retry_count,
-        )
-        if api_response is None or "result" not in api_response:
-            return None
-        return api_response["result"]
-
-    def get_device_property(self, key, limit=1, time_start=0, time_end=9999999999):
-        return self.get_device_data(key, "prop", limit, time_start, time_end)
-
-    def get_device_event(self, key, limit=1, time_start=0, time_end=9999999999):
-        return self.get_device_data(key, "event", limit, time_start, time_end)
-
-    def get_device_data(self, key, type, limit=1, time_start=0, time_end=9999999999):
-        api_response = self._api_call(
-            "user/get_user_device_data",
-            {
-                "uid": str(self._uid),
-                "did": str(self._did),
-                "time_end": time_end,
-                "time_start": time_start,
-                "limit": limit,
-                "key": key,
-                "type": type,
-            },
-        )
-        if api_response is None or "result" not in api_response:
-            return None
-
-        return api_response["result"]
-
-    def get_info(self, mac: str) -> Tuple[Optional[str], Optional[str]]:
-        devices = self.get_devices()
-        if devices:
-            found = list(filter(lambda d: str(d["mac"]) == mac, devices))
-
-            if len(found) > 0:
-                self._uid = found[0]["uid"]
-                self._did = found[0]["did"]
-                self._v3 = bool(
-                    "model" in found[0] and "xiaomi.mower." in found[0]["model"])
-                return found[0]["token"], found[0]["localip"]
-        return None, None
-
-    def get_devices(self) -> Any:
-        device_list = []
-        response = self._api_call(
-            "v2/homeroom/gethome",
-            {
-                "fg": True,
-                "fetch_share": True,
-                "fetch_share_dev": True,
-                "limit": 100,
-                "app_ver": 7,
-            },
-        )
-        if response and "result" in response and response["result"]:
-            homes = {}
-            for home in response["result"].get("homelist"):
-                homes[home["id"]] = self._userId
-
-            response = self._api_call(
-                "v2/user/get_device_cnt",
-                {
-                    "fetch_own": True,
-                    "fetch_share": True,
-                },
-            )
-            if (
-                response
-                and "result" in response
-                and response["result"]
-                and "share" in response["result"]
-                and response["result"]["share"]
-            ):
-                for device in response["result"]["share"].get("share_family"):
-                    homes[device["home_id"]] = device["home_owner"]
-
-            if homes:
-                for k, v in homes.items():
-                    response = self._api_call(
-                        "v2/home/home_device_list",
-                        {
-                            "home_id": int(k),
-                            "home_owner": v,
-                            "limit": 100,
-                            "get_split_device": True,
-                            "support_smart_home": True,
-                        },
-                    )
-                    if (
-                        response
-                        and "result" in response
-                        and response["result"]
-                        and "device_info" in response["result"]
-                        and response["result"]["device_info"]
-                    ):
-                        device_list.extend(response["result"]["device_info"])
-
-            response = self._api_call(
-                "home/device_list", {"getVirtualModel": False, "getHuamiDevices": 0})
-            if (
-                response
-                and "result" in response
-                and response["result"]
-                and "list" in response["result"]
-                and response["result"]["list"]
-            ):
-                for device in response["result"]["list"]:
-                    if (
-                        len(
-                            list(
-                                filter(
-                                    lambda d: str(d["mac"]) == device["mac"],
-                                    device_list,
-                                )
-                            )
-                        )
-                        == 0
-                    ):
-                        device_list.append(device)
-
-            return device_list
-
-    def get_batch_device_datas(self, props) -> Any:
-        api_response = self._api_call(
-            "device/batchdevicedatas", [{"did": self._did, "props": props}])
-        if api_response is None or self._did not in api_response:
-            return None
-        return api_response[self._did]
-
-    def set_batch_device_datas(self, props) -> Any:
-        api_response = self._api_call(
-            "v2/device/batch_set_props", [{"did": self._did, "props": props}])
-        if api_response is None or "result" not in api_response:
-            return None
-        return api_response["result"]
-
-    def request(self, url: str, params: Dict[str, str], retry_count=2) -> Any:
-        retries = 0
-        if not retry_count or retry_count < 0:
-            retry_count = 0
-        headers = {
-            "User-Agent": self._useragent,
-            "Accept-Encoding": "identity",
-            "x-xiaomi-protocal-flag-cli": "PROTOCAL-HTTP2",
-            "content-type": "application/x-www-form-urlencoded",
-            "MIOT-ENCRYPT-ALGORITHM": "ENCRYPT-RC4",
-        }
-        cookies = {
-            "userId": str(self._userId),
-            "yetAnotherServiceToken": self._service_token,
-            "serviceToken": self._service_token,
-            "locale": str(self._locale),
-            "timezone": str(self._timezone),
-            "is_daylight": str(time.daylight),
-            "dst_offset": str(time.localtime().tm_isdst * 60 * 60 * 1000),
-            "channel": "MI_APP_STORE",
-        }
-
-        nonce = self.generate_nonce()
-        signed_nonce = self.signed_nonce(nonce)
-        fields = self.generate_enc_params(
-            url, "POST", signed_nonce, nonce, params, self._ssecurity)
-
-        while retries < retry_count + 1:
-            try:
-                response = self._session.post(
-                    url, headers=headers, cookies=cookies, data=fields, timeout=15)
-                break
-            except Exception as ex:
-                retries = retries + 1
-                response = None
-                if self._connected:
-                    _LOGGER.warning(
-                        "Error while executing request: %s %s", url, str(ex))
-
-        if response is not None:
-            if response.status_code == 200:
-                self._fail_count = 0
-                self._connected = True
-                decoded = self.decrypt_rc4(
-                    self.signed_nonce(fields["_nonce"]), response.text)
-                parsed = json.loads(decoded) if decoded else None
-                if _LOGGER.isEnabledFor(logging.DEBUG):
-                    from ..protocol.api_log import summarize_api_response
-                    _LOGGER.debug(
-                        "API response: %s",
-                        summarize_api_response(url, parsed),
-                    )
-                return parsed
-            _LOGGER.warn(
-                "Execute api call failed with response: %s", response.text)
-
-        if self._fail_count == 5:
-            self._connected = False
-        else:
-            self._fail_count = self._fail_count + 1
-        return None
-
-    def get_api_url(self) -> str:
-        return f"https://{('' if self._country == 'cn' else (self._country + '.'))}api.io.mi.com/app"
-
-    def get_dreame_iot_api_url(self) -> str:
-        return f"https://{('' if self._country == 'cn' else (self._country + '.'))}iot.dreame.tech:13267/dreame-iot-com-10000"
-
-    def signed_nonce(self, nonce: str) -> str:
-        hash_object = hashlib.sha256(base64.b64decode(
-            self._ssecurity) + base64.b64decode(nonce))
-        return base64.b64encode(hash_object.digest()).decode("utf-8")
-
-    def disconnect(self):
-        self._session.close()
-        self._connected = False
-        self._logged_in = False
-        if self._thread:
-            self._queue.put([])
-
-    @staticmethod
-    def generate_nonce():
-        millis = int(round(time.time() * 1000))
-        b = (random.getrandbits(64) - 2**63).to_bytes(8, "big", signed=True)
-        part2 = int(millis / 60000)
-        b += part2.to_bytes(((part2.bit_length() + 7) // 8), "big")
-        return base64.b64encode(b).decode("utf-8")
-
-    @staticmethod
-    def generate_device_id() -> str:
-        return "".join((chr(random.randint(97, 122)) for _ in range(6)))
-
-    @staticmethod
-    def generate_signature(url, signed_nonce: str, nonce: str, params: Dict[str, str]) -> str:
-        signature_params = [url.split("com")[1], signed_nonce, nonce]
-        for k, v in params.items():
-            signature_params.append(f"{k}={v}")
-        signature_string = "&".join(signature_params)
-        signature = hmac.new(
-            base64.b64decode(signed_nonce),
-            msg=signature_string.encode(),
-            digestmod=hashlib.sha256,
-        )
-        return base64.b64encode(signature.digest()).decode()
-
-    @staticmethod
-    def generate_enc_signature(url, method: str, signed_nonce: str, params: Dict[str, str]) -> str:
-        signature_params = [
-            str(method).upper(),
-            url.split("com")[1].replace("/app/", "/"),
-        ]
-        for k, v in params.items():
-            signature_params.append(f"{k}={v}")
-        signature_params.append(signed_nonce)
-        signature_string = "&".join(signature_params)
-        return base64.b64encode(hashlib.sha1(signature_string.encode("utf-8")).digest()).decode()
-
-    @staticmethod
-    def generate_enc_params(
-        url: str,
-        method: str,
-        signed_nonce: str,
-        nonce: str,
-        params: Dict[str, str],
-        ssecurity: str,
-    ) -> Dict[str, str]:
-        params["rc4_hash__"] = DreameMowerMiHomeCloudProtocol.generate_enc_signature(
-            url, method, signed_nonce, params
-        )
-        for k, v in params.items():
-            params[k] = DreameMowerMiHomeCloudProtocol.encrypt_rc4(
-                signed_nonce, v)
-        params.update(
-            {
-                "signature": DreameMowerMiHomeCloudProtocol.generate_enc_signature(url, method, signed_nonce, params),
-                "ssecurity": ssecurity,
-                "_nonce": nonce,
-            }
-        )
-        return params
-
-    @staticmethod
-    def to_json(response_text: str) -> Any:
-        return json.loads(response_text.replace("&&&START&&&", ""))
-
-    @staticmethod
-    def encrypt_rc4(password: str, payload: str) -> str:
-        r = ARC4.new(base64.b64decode(password))
-        r.encrypt(bytes(1024))
-        return base64.b64encode(r.encrypt(payload.encode())).decode()
-
-    @staticmethod
-    def decrypt_rc4(password: str, payload: str) -> bytes:
-        r = ARC4.new(base64.b64decode(password))
-        r.encrypt(bytes(1024))
-        return r.encrypt(base64.b64decode(payload))
-
-    @staticmethod
-    def get_random_agent_id() -> str:
-        letters = "ABCDEF"
-        result_str = "".join(random.choice(letters) for i in range(13))
-        return result_str
+# DreameMowerMiHomeCloudProtocol (Xiaomi / Mi Home cloud path)
+# removed 2026-04-20, Cleanup Phase 2. This fork targets the
+# Dreame A2 mower which authenticates only against the Dreame
+# cloud; the ~540 lines of Mi cloud auth / API / MQTT code were
+# dead for every user of this integration. Static helpers that
+# were reused by the Dreame cloud client (get_random_agent_id)
+# are now module-level: see _random_agent_id at top of file.
 
 
 class DreameMowerProtocol:
+    """Thin wrapper over the Dreame Home cloud client.
+
+    Phase 2 cleanup (v2.0.0-alpha.33) collapsed this from a
+    multi-backend router (Mi cloud / Dreame cloud / local miIO) into a
+    pure Dreame-cloud client. `self.device` (local LAN) is always None;
+    `self.cloud` and `self.device_cloud` are the same
+    `DreameMowerDreameHomeCloudProtocol` instance. The `prefer_cloud`
+    attribute is retained as constant True so downstream code paths
+    that gate on it keep compiling; local-first logic is gone.
+    """
+
     def __init__(
         self,
         ip: str = None,
@@ -1250,74 +696,49 @@ class DreameMowerProtocol:
         password: str = None,
         country: str = None,
         prefer_cloud: bool = False,
-        account_type: str = "mi",
+        account_type: str = "dreame",
         device_id: str = None,
     ) -> None:
-        self.prefer_cloud = prefer_cloud
+        # ip/token/prefer_cloud/account_type kept in the signature for
+        # back-compat with callers that still pass them positionally;
+        # all ignored.
+        del ip, token, prefer_cloud, account_type
+        self.prefer_cloud = True
         self._connected = False
         self._mac = None
-        self._account_type = account_type
-
-        if ip and token:
-            self.device = DreameMowerDeviceProtocol(ip, token)
-        else:
-            self.prefer_cloud = True
-            self.device = None
-
+        self.device = None  # no local-LAN path on A2
         if username and password and country:
-            if account_type == "mi":
-                self.cloud = DreameMowerMiHomeCloudProtocol(
-                    username, password, country)
-            else:
-                self.cloud = DreameMowerDreameHomeCloudProtocol(
-                    username, password, country, device_id)
+            self.cloud = DreameMowerDreameHomeCloudProtocol(
+                username, password, country, device_id
+            )
         else:
-            self.prefer_cloud = False
             self.cloud = None
+        # On the old code path `device_cloud` could be a distinct Mi
+        # client; now it's the same Dreame cloud instance so the
+        # sendCommand / getBatchDeviceDatas helpers below can continue
+        # to reference it without a `None` check.
+        self.device_cloud = self.cloud
 
-        if account_type == "mi":
-            self.device_cloud = DreameMowerMiHomeCloudProtocol(
-                username, password, country) if prefer_cloud else None
-        else:
-            self.prefer_cloud = True
-            self.device_cloud = self.cloud
-
-    def set_credentials(self, ip: str, token: str, mac: str = None, account_type: str = "mi"):
+    def set_credentials(self, ip: str, token: str, mac: str = None, account_type: str = "dreame"):
+        """Kept for back-compat; only `mac` is retained for the MQTT
+        client-id factory. IP/token/account_type are ignored."""
+        del ip, token, account_type
         self._mac = mac
-        self._account_type = account_type
-        if ip and token and account_type == "mi":
-            if self.device:
-                self.device.set_credentials(ip, token)
-            else:
-                self.device = DreameMowerDeviceProtocol(ip, token)
-        else:
-            self.device = None
+        self.device = None
 
     def connect(self, message_callback=None, connected_callback=None, retry_count=1) -> Any:
-        if self._account_type == "mi":
-            response = self.send("miIO.info", retry_count=retry_count)
-            if (self.prefer_cloud or not self.device) and self.device_cloud and response:
-                self._connected = True
-            return response
-        else:
-            info = self.cloud.connect(message_callback, connected_callback)
-            if info:
-                self._connected = True
-            return info
+        info = self.cloud.connect(message_callback, connected_callback)
+        if info:
+            self._connected = True
+        return info
 
     def disconnect(self):
-        if self.device is not None:
-            self.device.disconnect()
         if self.cloud is not None:
             self.cloud.disconnect()
-        if self.device_cloud is not None:
-            self.device_cloud.disconnect()
         self._connected = False
 
     def attach_mqtt_archive(self, archive) -> None:
-        """Install an MQTT archive on whichever cloud client owns the
-        paho loop. Dreame Home is the canonical path for the g2408; Mi
-        Home is retained for upstream compatibility."""
+        """Install an MQTT archive on the Dreame cloud's paho loop."""
         if self.cloud is not None and hasattr(self.cloud, "attach_mqtt_archive"):
             self.cloud.attach_mqtt_archive(archive)
 
@@ -1348,37 +769,33 @@ class DreameMowerProtocol:
             self.device_cloud.send_async(
                 cloud_callback, method, parameters=parameters, retry_count=retry_count)
             return
-
-        if self.device:
-            self.device.send_async(
-                callback, method, parameters=parameters, retry_count=retry_count)
+        # Local-LAN fallback (`self.device.send_async`) removed in
+        # Phase 2 cleanup — A2 has no local-LAN path.
 
     def send(self, method, parameters: Any = None, retry_count: int = 2) -> Any:
-        if (self.prefer_cloud or not self.device) and self.device_cloud:
-            if not self.device_cloud.logged_in:
-                # Use different session for device cloud
-                self.device_cloud.login()
-                if self.device_cloud.logged_in and not self.device_cloud.device_id:
-                    if self.cloud.device_id:
-                        self.device_cloud._did = self.cloud.device_id
-                    elif self._mac:
-                        self.device_cloud.get_info(self._mac)
+        if self.device_cloud is None:
+            return None
+        if not self.device_cloud.logged_in:
+            # Use different session for device cloud
+            self.device_cloud.login()
+            if self.device_cloud.logged_in and not self.device_cloud.device_id:
+                if self.cloud.device_id:
+                    self.device_cloud._did = self.cloud.device_id
+                elif self._mac:
+                    self.device_cloud.get_info(self._mac)
 
-            if not self.device_cloud.logged_in:
-                raise DeviceException(
-                    "Unable to login to device over cloud") from None
+        if not self.device_cloud.logged_in:
+            raise DeviceException(
+                "Unable to login to device over cloud") from None
 
-            response = self.device_cloud.send(
-                method, parameters=parameters, retry_count=retry_count)
-            if response is None:
-                _LOGGER.warning(
-                    "Cloud request returned None for %s (device may be in deep sleep)", method)
-                return None
-            self._connected = True
-            return response
-
-        if self.device:
-            return self.device.send(method, parameters=parameters, retry_count=retry_count)
+        response = self.device_cloud.send(
+            method, parameters=parameters, retry_count=retry_count)
+        if response is None:
+            _LOGGER.warning(
+                "Cloud request returned None for %s (device may be in deep sleep)", method)
+            return None
+        self._connected = True
+        return response
 
     def get_properties(self, parameters: Any = None, retry_count: int = 1) -> Any:
         return self.send("get_properties", parameters=parameters, retry_count=retry_count)
@@ -1434,13 +851,13 @@ class DreameMowerProtocol:
 
     @property
     def connected(self) -> bool:
-        if (self.prefer_cloud or not self.device) and self.device_cloud:
-            return self.device_cloud.logged_in and self.device_cloud.connected and self._connected
-
-        if self.device:
-            return self.device.connected
-
-        return False
+        if self.device_cloud is None:
+            return False
+        return (
+            self.device_cloud.logged_in
+            and self.device_cloud.connected
+            and self._connected
+        )
 
     @property
     def dreame_cloud(self) -> bool:
