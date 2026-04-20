@@ -107,7 +107,7 @@ Siid/piid combinations observed on g2408. All properties arrive as JSON-encoded
 | 2.50 | Session task metadata | `{area_id, exe, o, region_id, time, t}` | Emitted at session start |
 | 2.51 | `MULTIPLEXED_CONFIG` | shape varies | App "More Settings" writes (§6) |
 | 2.56 | Cloud status push | `{status}` | Internal ack |
-| 2.66 | — | `[379, 1394]` | 2-element list, unknown |
+| 2.66 | Lawn-size snapshot | `[area_m2, ???]` | **First element = total mowable lawn area in m²** (matches `event_occured` piid 14 from the session-summary exactly). Observed `[379, 1394]` 2026-04-17, `[384, 1386]` 2026-04-20 after a manual "Expand Lawn". Second element unknown — decreased by 8 when area grew by 5 m², so not perimeter-proportional; candidates: blade-hours ×10, unique path segments, or a total-distance-mown counter. Fires at the end of a BUILDING session (§4.3) and probably periodically during mowing. |
 | 3.1 | `BATTERY_LEVEL` | int `0..100` | % battery |
 | 3.2 | `CHARGING_STATUS` | int `{0, 1, 2}` | `0`=not charging on g2408 (enum offset vs upstream) |
 | 5.105 | — | `1` | Mid-session appearance, unknown |
@@ -264,10 +264,11 @@ in-app merge collapsed the display but not the internal task plan.
 
 ### 3.2 `s1p4` — 8-byte beacon variant
 
-Emitted in two distinct situations, both with the same layout:
+Emitted in **three** distinct situations, same layout:
 
 1. **Idle / docked / remote control** — mower parked, sending position-only heartbeats.
-2. **Start-of-leg preamble** — fired exactly once ~37-45 s after each `s2p1 → 1` transition (session start, and each resume after an auto-recharge interrupt). Three consecutive 8-byte frames observed during the 2026-04-20 full-run (07:58:40, 10:03:55, 12:07:50) before the 33-byte telemetry stream resumed for that leg. Distinct from the idle beacon because it carries *non-zero* position (the mower has already rolled off the dock) and a distinct value at byte[6].
+2. **Start-of-leg preamble** — fired exactly once ~37-45 s after each `s2p1 → 1` transition (session start, and each resume after an auto-recharge interrupt). Three consecutive 8-byte frames observed during the 2026-04-20 full-run (07:58:40, 10:03:55, 12:07:50) before the 33-byte telemetry stream resumed for that leg.
+3. **Throughout a BUILDING session** — during `s2p1 = 11` (manual map-learn / "Expand Lawn") the mower does **not** emit the 33-byte telemetry frame at all; every s1p4 push is an 8-byte frame carrying live position as the mower traces the new boundary. Confirmed 2026-04-20 17:00:09–17:04:00: 47 consecutive 8-byte frames at ~5 s cadence (no 33-byte frame in between), plus one 10-byte frame at 17:03:41 marking the save moment.
 
 Layout (X/Y at the same offsets as the 33-byte frame, no phase/session/area fields):
 
@@ -280,32 +281,50 @@ Layout (X/Y at the same offsets as the 33-byte frame, no phase/session/area fiel
 [7]     0xCE
 ```
 
-Raw samples from 2026-04-20 run (leg-start preamble shape):
+Raw samples from 2026-04-20 run (leg-start preamble shape — Y=0xFFFF sentinel):
 - `07:58:40  [0xCE, 19, 0, 192, 0xFF, 0xFF, 125, 0xCE]`
 - `10:03:55  [0xCE, 20, 0, 160, 0xFF, 0xFF, 125, 0xCE]`
 - `12:07:50  [0xCE, 30, 0, 192, 0xFF, 0xFF, 123, 0xCE]`
+
+BUILDING-mode samples (same 8-byte shape, real Y values, byte[6] varies widely):
+- `17:01:01  [0xCE, 6, 0, 192, 0xFF, 0xFF, 250, 0xCE]`  (at dock, sentinel Y)
+- `17:01:11  [0xCE, 235, 255, 47, 3, 0, 69, 0xCE]`      (X=-21 cm, Y=815 mm)
+- `17:02:16  [0xCE, 72, 1, 144, 73, 0, 4, 0xCE]`        (X=328 cm, Y=18.83 m)
+- `17:03:11  [0xCE, 9, 2, 80, 110, 0, 126, 0xCE]`       (X=521 cm, Y=28.24 m)
+
+byte[6] plays at least two roles depending on context: `123..125` during the
+leg-start preamble (monotonic across legs), and highly variable during BUILDING
+(values 0..252 span observed, no obvious pattern). Could be a heading angle,
+course-correction code, or per-packet checksum; more captures needed.
 
 The integration decodes the position correctly via `decode_s1p4_position`. As of
 v2.0.0-alpha.7 each novel short-frame length also logs the raw bytes once at
 WARNING (`[PROTOCOL_NOVEL] s1p4 short frame len=…`) so contributors capturing
 future variants can see the undecoded bytes without running a separate probe
-script. Byte[6]'s role and the high-byte of Y (`0xFF` sentinel) await more
-captures.
+script.
 
 ### 3.3 `s1p4` — 10-byte BUILDING variant
 
-Emitted while the mower is in BUILDING state (map-learn / zone-expand). Same X/Y
-header as the beacon plus two uncharacterized bytes at [6-7]:
+Emitted **exactly once per BUILDING session**, at the moment the new zone is
+saved — i.e. as the mower finishes the perimeter trace and the firmware
+commits the map delta. Confirmed 2026-04-20 17:03:41 at the same second
+`s1p50 = {}` fired (first of three in that second). The other 47 frames of
+the BUILDING session were all the 8-byte variant (§3.2).
 
 ```
 [0]     0xCE
 [1-2]   int16_le   x_cm
 [3-4]   int16_le   y_mm
 [5]     0x00
-[6-7]   ??         purpose not yet decoded
-[8]     ?
+[6-7]   uint16_le  ??  (observed 0x15C2 = 5570 on 2026-04-20; probably a
+                       sequence counter, zone-id, or point count for the
+                       new polygon — needs more captures to disambiguate)
+[8]     0x00
 [9]     0xCE
 ```
+
+Sample: `[0xCE, 139, 0, 240, 77, 0, 194, 21, 0, 0xCE]` → X=139 cm, Y=19952 mm,
+bytes[6-7] uint16_le = 5570.
 
 ### 3.4 `s1p1` — HEARTBEAT (20-byte blob)
 
@@ -369,6 +388,9 @@ without flooding the log.
 | 2 | IDLE |
 | 5 | RETURNING |
 | 6 | CHARGING |
+| 11 | **BUILDING** — manual map-learn / zone-expand. Confirmed 2026-04-20 17:00:09 when user triggered "Expand Lawn" from the Dreame app. Mower left the dock, drove the new perimeter for ~4 min, then returned. See §4.3 "Manual lawn expansion". |
+| 13 | CHARGING_COMPLETED |
+| 16 | STATION_RESET (battery-temp-low pause, see §4.4) |
 
 ### 4.3 Observed session transitions
 
@@ -397,6 +419,32 @@ CHARGING → MOWING
 s2p50 gains {area_id, exe, o:100, region_id:[1], time:10510, t:'TASK'}
 s5p107 changes dynamically: 176 → 250 → 133 → 158 (driver unknown)
 ```
+
+**Manual lawn expansion / zone edit** (observed 2026-04-20 17:00:09–17:06:06, user tapped *"Expand Lawn"* in the Dreame app):
+```
+CHARGING(6) → BUILDING(11) → IDLE(2) → RETURNING(5) → CHARGING(6)
+              ↑ s2p1=11 (previously unlabelled, now confirmed)
+
+s3p2: 1 → 0 (charging stops as mower prepares to leave dock)
+s1p50 = {} + s1p51 = {}  (session-boundary markers, same as mowing)
+s1p4  = 8-byte frames with real X/Y telemetry during the drive
+        (not the 0xFFFF sentinel — active position tracking)
+s1p4  = one 10-byte frame fires at the exact moment the expand
+        completes (17:03:41 — same second s1p50 fires again).
+        Likely the "zone saved" marker.
+s6p2  = [60, 0, True, 2] at 17:03:42 (see §2.1). Previously [35,0,T,2]
+s2p66 = [384, 1386] at 17:04:02 — mowable-area snapshot after save
+        (first int matches event_occured piid=14 from morning run).
+s1p53 = True  (obstacle flag — mower nosing around the boundary)
+```
+**No `event_occured` siid=4 eiid=1**, no `s2p2` code change, no `s2p50`.
+These are mowing-session artefacts; BUILDING is a distinct session class.
+
+Under-counting of newly-added area is likely if the new zone overlaps
+an existing **exclusion zone** — the exclusion polygon filters BEFORE
+the mowable-area sum, so any overlap subtracts from the reported
+area. If `s2p66[0]` or event_occured piid=14 doesn't budge after an
+expand, check for overlapping exclusions first.
 
 **Mid-task recharge** (observed 2026-04-18): the mower can pause for a mid-task
 recharge and resume mowing once topped off. The task is not considered complete
