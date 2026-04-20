@@ -371,7 +371,7 @@ refresh, otherwise it latches indefinitely. See Open Item 0e in
 | 43 | **Battery temperature is low; charging stopped.** Drives the Dreame app notification of the same name. Observed to be republished on every (re-)entry into the condition — i.e. each re-emission causes a fresh app notification, not just the first one. See §4.4. |
 | 48 | mowing complete |
 | 50 | session started (manual start from the app) |
-| 53 | **Scheduled-session start** (provisional). Observed once on 2026-04-20 at 07:58:02 — the same second `s2p56` cleared to `{'status':[]}` and `s2p1` flipped to `1 (MOWING)`, i.e. the instant a scheduled mowing task began. Distinct from manual starts which appear to emit `50` instead. The preceding battery-temp-low episode at 07:54 had cleared by this point. Enum entry `SESSION_STARTING_SCHEDULED` is provisional — needs a second observation (next scheduled run) before promoting. |
+| 53 | **Scheduled-session start** — confirmed by two identical captures on 2026-04-20: morning run at 07:58:02 and afternoon run at 17:30:02. Both fired the exact same second-level sequence: `s2p56 → {'status':[]}` and `s2p2 → 53` in the same second, then `s3p2 → 0` + `s2p1 → 1 (MOWING)` one second later, then `s1p50/s1p51 → {}` and `s2p56 → [[1,0]]` ~40 s later when the mower starts emitting 33-byte telemetry. Distinct from manual starts which emit `s2p2 = 50` instead. Enum: `SESSION_STARTING_SCHEDULED`. |
 | 54 | returning |
 | 56 | **Rain protection activated** — water detected on the LiDAR. See §4.3 rain-pause. |
 | 70 | mowing (edge / standard) |
@@ -411,14 +411,31 @@ s2p50 → {task metadata}
 no s6p1, no state transitions
 ```
 
-**Session start** (from dock):
+**Manual session start** (user-initiated from the app):
 ```
 s2p56: [[1,4]] → []
-s2p2:   → 50
+s2p2:   → 50                  ← manual-start code
 CHARGING → MOWING
 s2p50 gains {area_id, exe, o:100, region_id:[1], time:10510, t:'TASK'}
 s5p107 changes dynamically: 176 → 250 → 133 → 158 (driver unknown)
 ```
+
+**Scheduled session start** (cloud fires schedule at configured time — confirmed
+2026-04-20 across two independent captures, 07:58:02 and 17:30:02):
+```
+HH:MM:02  s2p56 = {'status': []}   (task-list cleared ready for new task)
+HH:MM:02  s2p2  = 53                ← scheduled-start code (distinct from 50)
+HH:MM:03  s3p2  = 0                 (stops charging)
+HH:MM:03  s2p1  = 1                 (MOWING)
+HH:MM:46  s1p4 (33-byte) frames begin arriving
+          (one observation had an 8-byte preamble at +37 s before the 33-byte
+          stream resumed; the other went straight to 33-byte at +43 s)
+HH:MM:44  s1p50 = {} + s1p51 = {}   (session-boundary markers)
+HH:MM:45  s2p56 = {'status': [[1,0]]} (task now running)
+```
+**No `s2p50` fires on scheduled starts** — the task metadata block is only
+emitted on manual starts. Scheduled runs rely on the cloud to know the plan.
+**No `s6p1 = 300` either** — the map-ready signal is recharge-leg-only.
 
 **Manual lawn expansion / zone edit** (observed 2026-04-20 17:00:09–17:06:06, user tapped *"Expand Lawn"* in the Dreame app):
 ```

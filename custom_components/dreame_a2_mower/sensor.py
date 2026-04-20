@@ -386,12 +386,20 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # Raw axis values for diagnostics — preserved alongside the calibrated
     # sensors so future work can re-derive calibration factors from fresh
     # data. X is reported by the firmware in cm, Y in mm.
+    #
+    # Disabled by default: these flip on every s1p4 push (~5 s during
+    # mowing) and otherwise flood the Activity / logbook views with
+    # pairs of `X (raw, cm): -742 → -738` lines. Existing installs
+    # can disable them manually from the device page if they upgrade;
+    # new installs get them off. Users doing calibration work can
+    # re-enable either one from the entity's config screen.
     DreameMowerSensorEntityDescription(
         key="mowing_x_raw",
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
         name="X (raw, cm)",
         icon="mdi:help-circle",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.x_cm if value is not None else None,
     ),
@@ -401,6 +409,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         name="Y (raw, mm)",
         icon="mdi:help-circle",
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.y_mm if value is not None else None,
     ),
