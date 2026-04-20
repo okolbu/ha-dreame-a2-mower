@@ -112,6 +112,39 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not hass.services.has_service(DOMAIN, "replay_session"):
         hass.services.async_register(DOMAIN, "replay_session", _handle_replay)
 
+    # Session-summary recovery service. Lets the user hand an OSS object
+    # key to the integration when the auto-archival missed a session —
+    # typically because the Dreame cloud auth was momentarily unhealthy
+    # at the instant `event_occured` fired, and the pre-v2.0.0-alpha.6
+    # handler silently dropped the key instead of stashing it for retry.
+    # The key is usually recoverable from a probe log or the user's
+    # Dreame app traffic. Setting the pending slot on the device lets
+    # the coordinator's next tick perform the normal retry path —
+    # including the `session_archive.archive(...)` call at the end on
+    # success.
+    async def _handle_recover_session(call):
+        coord = next(iter(hass.data[DOMAIN].values()), None)
+        if coord is None:
+            raise ValueError("No Dreame A2 coordinator loaded")
+        object_name = call.data.get("object_name")
+        if not object_name or not isinstance(object_name, str):
+            raise ValueError("object_name is required (e.g. ali_dreame/YYYY/MM/DD/…/…_*.json)")
+        if coord._device is None:
+            raise ValueError("Device not initialised yet")
+        coord._device._pending_session_object_name = object_name
+        # Bypass the coordinator's 60 s retry throttle — the user invoked
+        # the service explicitly, so they want it now.
+        coord._session_retry_last_at = 0.0
+        # Fire the retry on the executor so the blocking HTTP round-trip
+        # doesn't stall the event loop. We don't await the result — the
+        # coordinator's normal archive path will pick it up on the next
+        # updated-data tick, same as the auto-retry.
+        hass.async_add_executor_job(coord._device.retry_pending_session_summary)
+        return True
+
+    if not hass.services.has_service(DOMAIN, "recover_session_summary"):
+        hass.services.async_register(DOMAIN, "recover_session_summary", _handle_recover_session)
+
     return True
 
 

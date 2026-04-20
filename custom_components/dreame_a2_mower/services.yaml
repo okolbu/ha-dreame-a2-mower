@@ -552,3 +552,23 @@ import_path_from_probe_log:
           max: 20
           step: 1
           mode: box
+
+recover_session_summary:
+  name: Recover session-summary JSON
+  description: >-
+    Manually fetch and archive a session-summary JSON whose `event_occured`
+    push was dropped because the Dreame cloud auth was unhealthy at the
+    moment the mower announced it. Find the OSS object key in a probe log
+    (look for `event_occured siid=4 eiid=1` and `piid=9`) and pass it here.
+    The integration will download, parse, and archive it to
+    `<ha_config>/dreame_a2_mower/sessions/` on the next coordinator tick.
+  fields:
+    object_name:
+      name: OSS object key
+      description: >-
+        The full `ali_dreame/YYYY/MM/DD/BM<uid>/<did>_<seq>.json` path the
+        mower emitted on MQTT at session completion.
+      example: "ali_dreame/2026/04/20/BM169439/-112293549_103311182.0550.json"
+      required: true
+      selector:
+        text:

@@ -38,17 +38,52 @@ effectively unavailable.
 | MQTT status topic | `/status/<did>/<mac-hash>/dreame.mower.g2408/eu/` |
 | `sendCommand` | `POST /dreame-iot-com-10000/device/sendCommand` (fails with 80001) |
 
-### 1.2 `80001` failure mode
+### 1.2 `80001` failure mode — expected, not a bug
 
-`cloud → mower` RPCs fail as `{"code": 80001, "msg": "device unreachable"}` **even while**
-the mower is pushing live telemetry over MQTT on the same connection. Observed 373
-instances across one ~90 min session. This asymmetry has persisted across every
-observed session.
+`cloud → mower` RPCs (`set_properties`, `action`, `get_properties`) fail as
+`{"code": 80001, "msg": "device unreachable"}` **even while** the mower is
+pushing live telemetry over MQTT on the same connection. The HA log surfaces
+this as:
 
-**Working hypothesis:** the g2408's cloud-RPC tunnel opens only during a narrow post-
-handshake window; our fork has never hit one in practice. Historical probe logs from
-2026-04-17 captured 5 `s6p1: 200 ↔ 300` cycles over 12 hours that DID trigger successful
-map fetches, suggesting the tunnel does open intermittently but not predictably.
+```
+WARNING ... Cloud send error 80001 for get_properties (attempt 1/1): 设备可能不在线，指令发送超时。
+WARNING ... Cloud request returned None for get_properties (device may be in deep sleep)
+WARNING ... Cloud send error 80001 for action (attempt 1/3): 设备可能不在线，指令发送超时。
+WARNING ... Cloud request returned None for action (device may be in deep sleep)
+```
+
+**This is the g2408's normal behaviour, not a transient error.** Treat these
+WARNINGs as signal that the cloud-RPC write path is unavailable. Don't open
+issues for them; they are already documented here. They persist across every
+observed session (373 instances in one ~90 min session observation).
+
+**Scope of what 80001 breaks:**
+- ❌ `lawn_mower.start` / `.pause` / `.dock` service calls route via `action()`
+  → hit 80001, silent no-op from the user's perspective.
+- ❌ `set_property` writes (config changes) route the same way.
+- ❌ `get_properties(...)` one-shot pulls.
+
+**Scope of what still works** (different cloud endpoint, different auth path):
+- ✅ MQTT property push from the mower → HA coordinator (the whole read pipeline).
+- ✅ Session-summary JSON fetch via `get_interim_file_url` + OSS signed URL.
+- ✅ LiDAR PCD fetch via the same getDownloadUrl / OSS path.
+- ✅ Login / device discovery / getDevices.
+
+So historically we've pulled session-summary JSONs and LiDAR point clouds
+successfully even while the command path was returning 80001 the entire
+session. The two paths share the account session cookie but hit different
+endpoints on the Dreame cloud; the write path needs the mower's RPC tunnel
+to be open, the fetch path does not.
+
+**Working hypothesis** (unchanged): the g2408's cloud-RPC tunnel opens only
+during a narrow post-handshake window; our fork has never hit one in
+practice. The 2026-04-17 probe captured 5 `s6p1: 200 ↔ 300` cycles over
+12 hours that DID trigger successful map fetches — but those were using
+the getDownloadUrl / OSS path, not the RPC tunnel.
+
+**Future work:** an MQTT-publish write path on the `/request/` or `/command/`
+topic would bypass 80001 entirely. See open item 0 in the
+`project_g2408_reverse_eng.md` memory.
 
 ---
 
@@ -76,11 +111,11 @@ Siid/piid combinations observed on g2408. All properties arrive as JSON-encoded
 | 3.1 | `BATTERY_LEVEL` | int `0..100` | % battery |
 | 3.2 | `CHARGING_STATUS` | int `{0, 1, 2}` | `0`=not charging on g2408 (enum offset vs upstream) |
 | 5.105 | — | `1` | Mid-session appearance, unknown |
-| 5.106 | — | `{3, 5, 7}` | Dynamic, unknown |
-| 5.107 | — | `{133, 176, 250, 158}` | Dynamic, unknown |
-| 6.1 | `MAP_DATA` | `{200, 300}` | Map-readiness signal; triggers fetch (§7) |
+| 5.106 | — | `1..7` | **Cycles 1→7 over ~3 hours**, ~30 min per step. Probably a rolling status-report counter (7 slots per cycle, one advance every ~30 min). Observed full 1-7 span across the 2026-04-20 run plus a spontaneous `value=7` push at 15:04:52 while the mower was docked. Not tied to mowing state. |
+| 5.107 | — | `{14, 15, 43, 133, 158, 165, 176, 190, 196, 250}` | Dynamic, changes at session boundaries and mid-mow. Unknown. |
+| 6.1 | `MAP_DATA` | `{200, 300}` | Map-readiness signal; `300` at auto-recharge-leg-start (§7.1). |
 | 6.2 | `FRAME_INFO` | list len 4 | Map frame metadata |
-| 6.3 | `OBJECT_NAME` | string | OSS object key for the uploaded map (§7) |
+| 6.3 | **WiFi signal push** (g2408) / `OBJECT_NAME` (upstream) | list `[bool, int]` on g2408 | `[cloud_connected, rssi_dbm]`. NOT the OSS object key — upstream's `OBJECT_NAME` slot is unused on g2408 (session-summary key arrives via `event_occured` instead, see §7.4). Our overlay remaps `OBJECT_NAME` to `999/998` so the map handler does not misinterpret s6p3 pushes. |
 
 ### 2.2 Upstream-divergence cheat-sheet
 
@@ -695,6 +730,24 @@ against log flooding and visible without any extra logger tuning.
 When a user sees any of these, the right action is to open an issue with the
 log line quoted verbatim — the raw values in the message are exactly what we
 need to extend decoders.
+
+**Not a `[PROTOCOL_NOVEL]` — don't report** (see §1.2 for the full story):
+
+- `Cloud send error 80001 for get_properties/action (attempt X/Y)`
+- `Cloud request returned None for get_properties/action (device may be in deep sleep)`
+
+These are the g2408's expected response to cloud-RPC writes. They will repeat
+every time the integration tries a write (buttons, services, config changes).
+They do not indicate a new firmware issue.
+
+**Observed but not yet mapped** (2026-04-20):
+
+- `s5p106 = 7` — the 5-level status counter at value 7, near the end of its
+  1..7 cycle. Logged as `[PROTOCOL_NOVEL] … siid=5 piid=106 value=7` only
+  on the very first push each HA session (watchdog dedup). Not harmful,
+  not urgent — documented in §2.1. Could be suppressed once we decide what
+  the counter represents (leaving visible for now so a user's different
+  lawn / dock situation can surface an unexpected value).
 
 ---
 
