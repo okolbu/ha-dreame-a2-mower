@@ -317,6 +317,22 @@ class DreameReplaySessionSelect(SelectEntity):
         self._coordinator = coordinator
         self._attr_name = "Replay Session"
         self._attr_unique_id = f"{coordinator.device.mac}_replay_session"
+        # Link to the Dreame A2 device so HA generates the entity_id with
+        # the device-name prefix (`select.dreame_a2_mower_replay_session`)
+        # and groups this picker under the mower in the device page.
+        device = coordinator.device
+        info = getattr(device, "info", None)
+        from homeassistant.helpers.entity import DeviceInfo
+        from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
+        self._attr_device_info = DeviceInfo(
+            connections={(CONNECTION_NETWORK_MAC, device.mac)},
+            identifiers={(DOMAIN, device.mac)},
+            name=device.name,
+            manufacturer=getattr(info, "manufacturer", None),
+            model=getattr(info, "model", None),
+            sw_version=getattr(info, "firmware_version", None),
+            hw_version=getattr(info, "hardware_version", None),
+        )
         self._attr_current_option = self._OPT_NONE
         self._refresh_options()
 
