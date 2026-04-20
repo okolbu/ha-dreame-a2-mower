@@ -247,10 +247,12 @@ class DreameMowerDevice:
         # future protocol changes don't get silently discarded.
         from ..protocol.unknown_watchdog import UnknownFieldWatchdog
         self._unknown_watchdog = UnknownFieldWatchdog()
-        # g2408 s2p2 novelty detector — records each distinct value once
-        # so new firmware codes surface exactly one WARNING instead of
-        # flooding the log every time the same new code repeats.
-        self._s2p2_novel_watchdog: set[object] = set()
+        # General novelty detector — records each distinct (shape-key)
+        # once so novel protocol content surfaces exactly one WARNING
+        # instead of flooding the log every time the same new shape
+        # repeats. Holds arbitrary hashables: int values for s2p2 codes,
+        # (siid, piid, len) tuples for short-frame lengths, etc.
+        self._protocol_novelty: set[object] = set()
         # Optional raw-MQTT archive, attached by coordinator when enabled.
         # Forwarded to the protocol layer where the on-wire payload is
         # still available before JSON-decode.
@@ -491,9 +493,9 @@ class DreameMowerDevice:
                             known = {27, 43, 48, 50, 53, 54, 56, 70}
                             if (
                                 value not in known
-                                and value not in self._s2p2_novel_watchdog
+                                and value not in self._protocol_novelty
                             ):
-                                self._s2p2_novel_watchdog.add(value)
+                                self._protocol_novelty.add(value)
                                 _LOGGER.warning(
                                     "[PROTOCOL_NOVEL] s2p2 carried unknown value=%r "
                                     "on g2408 (known: %s). Please report at "
@@ -505,10 +507,17 @@ class DreameMowerDevice:
                         if self._unknown_watchdog.saw_property(
                             param["siid"], param["piid"]
                         ):
-                            _LOGGER.info(
-                                "[UNKNOWN] properties_changed carried an unmapped "
-                                "siid=%s piid=%s value=%r — add to property mapping "
-                                "if this field turns out to be meaningful",
+                            # Promoted from INFO to WARNING so novel fields
+                            # surface at HA's default `logger.default: warning`
+                            # level instead of being invisible to most users.
+                            # One-shot per (siid, piid) via the watchdog, so
+                            # this never floods the log.
+                            _LOGGER.warning(
+                                "[PROTOCOL_NOVEL] properties_changed carried an "
+                                "unmapped siid=%s piid=%s value=%r — add to "
+                                "property mapping if this field turns out to be "
+                                "meaningful. Please report at "
+                                "https://github.com/okolbu/ha-dreame-a2-mower/issues",
                                 param["siid"],
                                 param["piid"],
                                 param.get("value"),
@@ -528,9 +537,14 @@ class DreameMowerDevice:
                 self._handle_event_occured(message["params"])
             else:
                 if self._unknown_watchdog.saw_method(method):
-                    _LOGGER.info(
-                        "[UNKNOWN] MQTT message with unfamiliar method=%r "
-                        "arrived — payload sample: %s",
+                    # Promoted from INFO to WARNING so novel methods surface
+                    # at HA's default `logger.default: warning` level. One-
+                    # shot per method via the watchdog.
+                    _LOGGER.warning(
+                        "[PROTOCOL_NOVEL] MQTT message with unfamiliar "
+                        "method=%r arrived — payload sample: %s. Please "
+                        "report at "
+                        "https://github.com/okolbu/ha-dreame-a2-mower/issues",
                         method,
                         message,
                     )
@@ -583,6 +597,24 @@ class DreameMowerDevice:
             area_centiares = fields.get(3)
             total_lawn_m2 = fields.get(14)
             unix_ts = fields.get(8)
+            # Surface any previously-unseen (siid, eiid) combo, or a known
+            # combo that introduces a new piid, at WARNING level. One-shot
+            # per novelty via the watchdog; known (siid=4, eiid=1) stays
+            # silent for the stable piid set so normal operation doesn't
+            # log at WARN.
+            if (
+                isinstance(siid, int)
+                and isinstance(eiid, int)
+                and self._unknown_watchdog.saw_event(siid, eiid, fields.keys())
+            ):
+                _LOGGER.warning(
+                    "[PROTOCOL_NOVEL] event_occured siid=%s eiid=%s with "
+                    "piids=%s — first time seen. Please report at "
+                    "https://github.com/okolbu/ha-dreame-a2-mower/issues",
+                    siid,
+                    eiid,
+                    sorted(fields.keys()),
+                )
             _LOGGER.info(
                 "[EVENT] event_occured siid=%s eiid=%s: object_name=%r "
                 "area_mowed_m2=%s total_lawn_m2=%s unix_ts=%s (other fields: %s)",
@@ -941,6 +973,25 @@ class DreameMowerDevice:
                         # between real data and None when no full frame has
                         # arrived yet).
                         param["code"] = 1
+                        # Log the raw bytes once per frame length so the
+                        # un-decoded bytes (e.g. the 8-byte preamble's
+                        # middle bytes varying 19/20/30 and 192/160/192 —
+                        # see 2026-04-20 run analysis) stay recoverable
+                        # for future RE instead of silently discarding.
+                        # Key on (siid, piid, len) so each novel shape
+                        # logs exactly once.
+                        key = (1, 4, len(raw))
+                        if key not in self._protocol_novelty:
+                            self._protocol_novelty.add(key)
+                            _LOGGER.warning(
+                                "[PROTOCOL_NOVEL] s1p4 short frame len=%d "
+                                "observed — position decoded, remaining "
+                                "bytes not yet reverse-engineered. "
+                                "Raw=%s. Please report at "
+                                "https://github.com/okolbu/ha-dreame-a2-mower/issues",
+                                len(raw),
+                                list(raw),
+                            )
                 elif did == heartbeat_did and isinstance(value, list):
                     param["value"] = decode_s1p1(bytes(value))
                 elif did == config_did and isinstance(value, dict):
