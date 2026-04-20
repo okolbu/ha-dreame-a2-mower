@@ -531,7 +531,7 @@ class DreameMowerDevice:
                         # user can report it back.
                         if param["siid"] == 2 and param["piid"] == 2:
                             value = param.get("value")
-                            known = {27, 43, 48, 50, 53, 54, 56, 70, 75}
+                            known = {27, 31, 33, 43, 48, 50, 53, 54, 56, 70, 71, 75}
                             if (
                                 value not in known
                                 and value not in self._protocol_novelty
@@ -577,7 +577,9 @@ class DreameMowerDevice:
                             # the one-shot WARNING.
                             known_quiet = {
                                 (2, 54),    # LiDAR upload progress 0..100 (§7.3b)
+                                (2, 65),    # SLAM-task-type string (§4.8)
                                 (2, 66),    # pre-observed 2-element list
+                                (5, 104),   # SLAM relocate counter, unknown role
                                 (5, 105),   # mid-session = 1, unknown role
                                 (5, 106),   # 1..7 rolling counter
                                 (5, 107),   # dynamic, values catalogued

@@ -107,9 +107,11 @@ Siid/piid combinations observed on g2408. All properties arrive as JSON-encoded
 | 2.50 | TASK envelope — multiple operation classes | shape varies by `d.o` | Session start (mowing): flat fields `{area_id, exe, o:100, region_id:[1], time, t:'TASK'}`. **Map-edit** (zone / exclusion-zone add/edit/delete): wrapped `{d:{exe, o, status, ...}, t:'TASK'}` with a pair of pushes per edit — request `o:204` then confirm `o:215` carrying `id` (edit-txn #), `ids` (affected zone ids), `error`. See §4.6. |
 | 2.51 | `MULTIPLEXED_CONFIG` | shape varies | App "More Settings" writes (§6) |
 | 2.56 | Cloud status push | `{status}` | Internal ack |
+| 2.65 | **SLAM task-type string** | string | First string-valued property observed on this mower. Carries a task-type label like `'TASK_SLAM_RELOCATE'`. Fires 3× in 1 second at the moment the mower kicks off a LiDAR relocalization (re-anchor to the saved map). Other label values likely exist for other SLAM modes — catalogue as seen. See §4.8. |
 | 2.66 | Lawn-size snapshot | `[area_m2, ???]` | **First element = total mowable lawn area in m²** (matches `event_occured` piid 14 from the session-summary exactly). Observed `[379, 1394]` 2026-04-17, `[384, 1386]` 2026-04-20 after a manual "Expand Lawn". Second element unknown — decreased by 8 when area grew by 5 m², so not perimeter-proportional; candidates: blade-hours ×10, unique path segments, or a total-distance-mown counter. Fires at the end of a BUILDING session (§4.3) and probably periodically during mowing. |
 | 3.1 | `BATTERY_LEVEL` | int `0..100` | % battery |
 | 3.2 | `CHARGING_STATUS` | int `{0, 1, 2}` | `0`=not charging on g2408 (enum offset vs upstream) |
+| 5.104 | **SLAM relocate counter** | `7` | Fires exclusively alongside `s2p65 = 'TASK_SLAM_RELOCATE'` bursts — three pushes in ~1 s at relocalization start. Value has been `7` in every capture; role unclear (retry count? relocate mode enum?). Quiet-listed so it doesn't re-fire `[PROTOCOL_NOVEL]` on every relocate. |
 | 5.105 | — | `1` | Mid-session appearance, unknown |
 | 5.106 | — | `1..7` | **Cycles 1→7 over ~3 hours**, ~30 min per step. Probably a rolling status-report counter (7 slots per cycle, one advance every ~30 min). Observed full 1-7 span across the 2026-04-20 run plus a spontaneous `value=7` push at 15:04:52 while the mower was docked. Not tied to mowing state. |
 | 5.107 | — | `{14, 15, 43, 133, 158, 165, 176, 190, 196, 250}` | Dynamic, changes at session boundaries and mid-mow. Unknown. |
@@ -368,6 +370,8 @@ refresh, otherwise it latches indefinitely. See Open Item 0e in
 | Value | Meaning |
 |---|---|
 | 27 | idle |
+| 31 | **Idle-after-error** — follows `s2p1 = 2 (IDLE)` after a failed task. Observed three times 2026-04-20 19:29-19:35 each time a *Positioning Failed* / *Failed to return* sequence ended. Paired with `s2p2 = 33` immediately preceding. |
+| 33 | **Failure transition** — fires at the moment a task fails (positioning, task-start, return). Precedes `s2p1 → 2 (IDLE)` + `s2p2 = 31` by ~1 s. Combined 33→31 pair is the g2408's "task errored out, now idle" pattern. |
 | 43 | **Battery temperature is low; charging stopped.** Drives the Dreame app notification of the same name. Observed to be republished on every (re-)entry into the condition — i.e. each re-emission causes a fresh app notification, not just the first one. See §4.4. |
 | 48 | mowing complete |
 | 50 | session started (manual start from the app) |
@@ -375,6 +379,7 @@ refresh, otherwise it latches indefinitely. See Open Item 0e in
 | 54 | returning |
 | 56 | **Rain protection activated** — water detected on the LiDAR. See §4.3 rain-pause. |
 | 70 | mowing (edge / standard) |
+| 71 | **Positioning Failed** — mower cannot localize itself on the saved map (e.g. parked outside the known area, or LiDAR loop-closure failed). The Dreame app shows the notification *"Positioning Failed"*. Observed 2026-04-20 19:28:19 after the user ended a Manual session not-fully-in-the-dock. Recovery path: the user has to drive the mower back into a known area (e.g. the lawn), where a `s2p65 = 'TASK_SLAM_RELOCATE'` pass (§4.8) can re-anchor. Any return-to-station / start-task commands fail with `s2p2 = 33 → 31` while this condition persists. |
 | 75 | **Arrived at Maintenance Point** — confirmed 2026-04-20 18:18:05 when mower reached a user-set maintenance point after tapping *Head to Maintenance Point*. Fires in the same second as `s2p1 → 2 (IDLE)`, followed by `s1p52 = {}`. No `event_occured` summary for Head-to-MP tasks. See §4.3 "Go to Maintenance Point". |
 
 Anything **outside** this set arriving on `s2p2` will log exactly one WARNING
@@ -647,8 +652,10 @@ from the cloud API separately (not yet wired).
 
 | `d.o` | Meaning | Occurs when |
 |---|---|---|
+| -1  | **Error abort** — fires after a failed task (status=True, no id/ids). Observed 2026-04-20 19:34:20 immediately after an `o=109` task-start failure: the mower emits `s2p50 o=109 status:False` (failure), then 0 ms later `s2p50 o=-1 status:True` (abort ack). The -1 value is firmware-idiomatic for "no specific op — this is a cleanup marker". |
 | 3   | task cancelled | user hits *Cancel* / *Stop* during an active mowing session. Fires 1 s after `s2p2 = 48`. Does **not** carry `id`/`ids`. See "User-cancel abort" in §4.3. |
-| 6   | explicit Recharge command | user taps the app's *Recharge* button (either to send the mower home from a user-cancelled state, or any time the mower is away from the dock). Fires at the moment charging actually begins (`s2p1 → 6`, `s3p2 → 1`). Distinct from auto-recharge mid-session which emits NO `s2p50` at all. Confirmed once 2026-04-20 18:09:56 after a user-cancel at 18:06. |
+| 6   | explicit Recharge command | user taps the app's *Recharge* button (either to send the mower home from a user-cancelled state, or any time the mower is away from the dock). Fires at the moment charging actually begins (`s2p1 → 6`, `s3p2 → 1`). Distinct from auto-recharge mid-session which emits NO `s2p50` at all. Confirmed 2026-04-20 18:09:56 and 18:25:57. |
+| 109 | **Task start failed** — `status: False` (first observed `False` in any `s2p50` op-code). Fires when a cloud-issued task command (typically *Recharge* or *Start*) cannot be honoured because the mower is in a bad state, e.g. *Positioning Failed* (§4.1 code 71). Confirmed 2026-04-20 19:34:20 when the user's Recharge request failed while the mower was outside the known map. |
 | 204 | map-edit request | zone / exclusion add / edit / delete: first of the pair |
 | 215 | map-edit confirm | same edit: second of the pair, carries `id` and `ids` |
 
@@ -688,6 +695,69 @@ which slot fires, and how many times, signals the event class.
 Practical implication: treat a standalone `s1p50` (no `s1p51`, no `s2p50`) as
 a "something edited server-side" signal and re-fetch whatever you cache from
 the cloud — in the integration's case, the MAP.* dataset. See §7.1.
+
+### 4.8 Positioning-failed recovery via SLAM relocate
+
+The mower relies on LiDAR-based SLAM to localize itself against the saved
+map. When it wakes up outside the known area (e.g. user ended a Manual
+session with the dock outside the mowing boundary, as observed
+2026-04-20 19:27) or loop-closure fails for some other reason, it enters
+a **Positioning Failed** state. Every cloud-issued task command in that
+state fails.
+
+**Failure pattern** (full capture 2026-04-20 19:28–19:35):
+
+```
+19:28:19  s2p2 = 71      — Positioning Failed (new code, §4.1)
+19:28:19  s2p1 = 5        — attempts RETURNING, stays there for ~90 s
+19:29:56  s2p2 = 33       — failure transition
+19:29:57  s2p1 = 2 (IDLE) + s2p2 = 31 (idle-after-error)
+          → "Failed to return to station" app notification
+
+User retried Recharge at 19:34:20:
+19:34:19  s2p2 = 33       — failure transition
+19:34:20  s2p2 = 36       — cancellation / reset marker
+19:34:20  s2p50 = {d:{o:109, status:False, exe:True}, t:TASK}
+            — op-code 109 = "Task start failed" with status:False (first
+              ever s2p50 with a False status — dedicated error path)
+19:34:20  s2p1 = 2 (IDLE) + s1p52 = {}
+19:34:20  s2p50 = {d:{o:-1, status:True, exe:True}, t:TASK}
+            — op-code -1 = "Error abort" cleanup marker
+19:34:21  s2p1 = 5        — retries RETURNING, fails again at 19:35:50
+          → "Failed to start the task" app notification
+```
+
+**Recovery** (user physically drove the mower from the dock onto the
+lawn via Manual mode, ended Manual, then tapped Recharge):
+
+```
+19:42:42  s2p1 = 1 (MOWING)                — Manual drive starts
+19:42:52  s5p107 = 56, s5p105 = 1,
+          s5p106 = 1, s5p104 = 7           — SLAM counters reset
+19:42:52  s2p65 = 'TASK_SLAM_RELOCATE'     — LiDAR relocalization kicks
+          … 3 pushes of s2p65 + s5p104      in (see §2.1 for s2p65's
+          in 1 second …                     string-value nature)
+19:42:58  s2p1 = 2 (IDLE)                  — relocate succeeded,
+                                             mower now knows its position
+19:43:00  s2p1 = 5 (RETURNING)             — retries RETURNING — works
+                                             this time
+19:44:01  s3p2 = 1                          — charging starts
+19:44:07  s2p1 = 6 (CHARGING)              — docked successfully
+```
+
+**Integration implications:**
+
+- `s2p2 = 71` is worth a `binary_sensor.dreame_a2_mower_positioning_failed`
+  (PROBLEM class) so users know the mower is stuck needing manual
+  intervention — the Dreame app's notification channel is the only
+  existing UX for this and HA users rarely watch that.
+- `s2p65 = 'TASK_SLAM_RELOCATE'` is the "mower is re-localizing" signal.
+  Useful for a `sensor.dreame_a2_mower_slam_activity` that surfaces
+  which SLAM task is running (RELOCATE now; future firmware may add
+  MAPPING / LOOP_CLOSURE / etc).
+- `s2p50 o=109 status:False` marks the end-of-failure-path; pairs with
+  `o=-1` abort cleanup. Also worth reflecting via an event so
+  automations can catch them.
 
 ---
 
