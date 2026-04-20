@@ -184,6 +184,45 @@ See [`docs/research/g2408-protocol.md`](docs/research/g2408-protocol.md) §6.1 f
 
 Net: the integration is read-mostly on this device. `lawn_mower.dreame_a2_mower.start` / `.pause` / `.dock` service calls exist (inherited from upstream) and will fire HTTP calls; they just won't reach the mower. Future work to find a working write path is in `docs/research/g2408-protocol.md`.
 
+## Reporting new firmware behaviour (`[PROTOCOL_NOVEL]` warnings)
+
+The integration was built by reverse-engineering the MQTT traffic of one
+g2408 firmware build. When Dreame ships a firmware update — or when your
+specific lawn / schedule / dock hardware triggers a protocol path we haven't
+seen — the integration will log a one-shot WARNING so the new data doesn't
+just vanish. You can help the project by opening an issue when any of these
+appear in `home-assistant.log`:
+
+```
+[PROTOCOL_NOVEL] MQTT message with unfamiliar method=…
+[PROTOCOL_NOVEL] properties_changed carried an unmapped siid=… piid=… value=…
+[PROTOCOL_NOVEL] event_occured siid=… eiid=… with piids=…
+[PROTOCOL_NOVEL] s2p2 carried unknown value=…
+[PROTOCOL_NOVEL] s1p4 short frame len=… Raw=[…]
+```
+
+Each novel shape logs exactly **once** for the lifetime of the HA process
+(deduped in-memory) — so these are safe to leave enabled and won't flood
+the log. If you see one, please:
+
+1. Copy the **full WARNING line verbatim** (the raw bytes / piid list are
+   the data we need).
+2. Note what you were doing at the time (mowing, docking, opening the
+   LiDAR view in the app, changing a setting, etc.).
+3. Open an issue at <https://github.com/okolbu/ha-dreame-a2-mower/issues>
+   tagged `protocol` — we'll extend the decoder in the next release.
+
+Integration-generated WARNINGs that are **not** actionable bugs:
+
+- `[EVENT] session-summary fetch deferred (no cloud login yet) …` — routine
+  at HA startup; the coordinator retries on the next update tick (see
+  v2.0.0-alpha.6 changelog).
+- `Discarding malformed g2408 blob (did=…)` — a single corrupted MQTT push;
+  the blob decoder dropped it and the prior good value is retained.
+
+If you see repeated (not one-shot) WARNINGs from this integration, that's
+worth an issue too.
+
 ## Removing orphaned `dreame_*` entities from an earlier install
 
 If you previously installed the upstream **Dreame Vacuum / Mover** integration before switching, HA's entity registry retains the old `*.dreame_*` entities. To clean up:

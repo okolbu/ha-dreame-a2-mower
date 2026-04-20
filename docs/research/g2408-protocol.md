@@ -189,6 +189,17 @@ Transitions (monotonic, non-repeating, each at a crisp coordinate):
 21:20:06  ph 6 → 7    at x =  -8.70 m
 ```
 
+**`phase_raw = 15` during post-complete return** (new 2026-04-20): the last
+23 `s1p4` frames of the full-run (12:33:11-12:33:56, *after* `s2p56=[[1,2]]`
+and `s2p2=48` declared the task complete and before the mower reached the
+dock) all reported `phase_raw = 15`. Counters were frozen at the session's
+final values (`distance=10000` decis, `mowed=29358` centi-m²) — the mower
+was no longer mowing, just driving home. Treat high phase values as
+"return-home" rather than a real task index; the post-complete return
+reuses the phase slot rather than emitting a separate state. Earlier phases
+topped out at 7 so 8-15 are either edge-variant indices on denser lawns or
+specific post-complete transport codes — more captures needed to separate.
+
 The **first group** (low phase values) look like per-zone area-fills: each
 occupies a distinct non-overlapping X region and is stable over hundreds of
 samples inside it. The **later group** (higher values, starting around 5) have
@@ -218,17 +229,33 @@ in-app merge collapsed the display but not the internal task plan.
 
 ### 3.2 `s1p4` — 8-byte beacon variant
 
-Emitted while mower is idle/docked or under remote control. X and Y at the same
-offsets as the 33-byte frame, no phase/session/area fields.
+Emitted in two distinct situations, both with the same layout:
+
+1. **Idle / docked / remote control** — mower parked, sending position-only heartbeats.
+2. **Start-of-leg preamble** — fired exactly once ~37-45 s after each `s2p1 → 1` transition (session start, and each resume after an auto-recharge interrupt). Three consecutive 8-byte frames observed during the 2026-04-20 full-run (07:58:40, 10:03:55, 12:07:50) before the 33-byte telemetry stream resumed for that leg. Distinct from the idle beacon because it carries *non-zero* position (the mower has already rolled off the dock) and a distinct value at byte[6].
+
+Layout (X/Y at the same offsets as the 33-byte frame, no phase/session/area fields):
 
 ```
 [0]     0xCE
-[1-2]   int16_le   x_cm
-[3-4]   int16_le   y_mm
+[1-2]   int16_le   x_cm               (small positive during preamble)
+[3-4]   int16_le   y_mm               (near-zero / negative sentinel -64..-96)
 [5]     0x00
-[6]     ?
+[6]     uint8      123..125           TBD — monotonic across legs (see open item)
 [7]     0xCE
 ```
+
+Raw samples from 2026-04-20 run (leg-start preamble shape):
+- `07:58:40  [0xCE, 19, 0, 192, 0xFF, 0xFF, 125, 0xCE]`
+- `10:03:55  [0xCE, 20, 0, 160, 0xFF, 0xFF, 125, 0xCE]`
+- `12:07:50  [0xCE, 30, 0, 192, 0xFF, 0xFF, 123, 0xCE]`
+
+The integration decodes the position correctly via `decode_s1p4_position`. As of
+v2.0.0-alpha.7 each novel short-frame length also logs the raw bytes once at
+WARNING (`[PROTOCOL_NOVEL] s1p4 short frame len=…`) so contributors capturing
+future variants can see the undecoded bytes without running a separate probe
+script. Byte[6]'s role and the high-byte of Y (`0xFF` sentinel) await more
+captures.
 
 ### 3.3 `s1p4` — 10-byte BUILDING variant
 
@@ -289,10 +316,15 @@ refresh, otherwise it latches indefinitely. See Open Item 0e in
 | 27 | idle |
 | 43 | **Battery temperature is low; charging stopped.** Drives the Dreame app notification of the same name. Observed to be republished on every (re-)entry into the condition — i.e. each re-emission causes a fresh app notification, not just the first one. See §4.4. |
 | 48 | mowing complete |
-| 50 | session started |
-| 53 | seen once at 07:58:02 on 2026-04-20, transition `43 → 53 → …` as the mower cleared the low-temp condition and armed the next mowing session; may be "ready to mow / charging-OK" acknowledgement token, unconfirmed. |
+| 50 | session started (manual start from the app) |
+| 53 | **Scheduled-session start** (provisional). Observed once on 2026-04-20 at 07:58:02 — the same second `s2p56` cleared to `{'status':[]}` and `s2p1` flipped to `1 (MOWING)`, i.e. the instant a scheduled mowing task began. Distinct from manual starts which appear to emit `50` instead. The preceding battery-temp-low episode at 07:54 had cleared by this point. Enum entry `SESSION_STARTING_SCHEDULED` is provisional — needs a second observation (next scheduled run) before promoting. |
 | 54 | returning |
+| 56 | **Rain protection activated** — water detected on the LiDAR. See §4.3 rain-pause. |
 | 70 | mowing (edge / standard) |
+
+Anything **outside** this set arriving on `s2p2` will log exactly one WARNING
+(`[PROTOCOL_NOVEL] s2p2 carried unknown value=…`) so new firmware codes surface
+without flooding the log.
 
 ### 4.2 `s2p1` mode enum (separate from state)
 
@@ -453,18 +485,20 @@ single MQTT blob the way some older Dreame devices do. Instead:
 
 ### 7.1 Trigger conditions (from historical observations)
 
-`s6p1` value transitions and map-fetch correlation, 2026-04-17 probe log:
+Fully re-measured during the 2026-04-20 full-run (07:58 → 12:33, two auto-recharge interrupts, one clean session end). The mechanism is clearer now than it appeared from earlier partial captures:
 
-| Event | `s6p1` | Map fetched? |
+| Event | MQTT artefact | Notes |
 |---|---|---|
-| Low-battery auto-return | `200 → 300` | ✅ yes |
-| User tap "End" while docked | no change | ❌ |
-| Manual pause | no change | ❌ |
-| Session start | `300 → 200` | ❌ (but prepares for next) |
+| **Auto-recharge begins** (MOWING → RETURNING for top-off) | `s6p1 = 300` | Fires at the exact ms `s2p2 → 54`, `s2p1 → 2 → 5`. Confirmed twice in the 2026-04-20 run at 09:14:09 and 11:13:04. This is the primary mid-session "map may have been refreshed" signal. |
+| **True session completion** (task done, not recharge) | `event_occured siid=4 eiid=1`, `piid 9 = ali_dreame/…/*.json` | Fires once at session end (12:33:12 — 3 s after `s2p2 = 48`). Carries the *session-summary* OSS key. See §7.4. |
+| **LiDAR point-cloud upload** | `s2p54` progress + `s99p20 = ali_dreame/…/*.bin` | Only when the user opens "Download LiDAR map" in the Dreame app, and only if the scan has changed since last upload. Not pushed passively. |
+| User taps "End" while docked (no actual mowing) | (none) | No map push, no summary event. |
+| Manual pause mid-mow | (none) | No map push. |
+| Session start from dock | `s2p56: [[1,4]] → []`, `s2p1 → 1`, `s2p2 → 50` or `53` | No map push — the mower is just starting to generate new data. |
 
-In 12 hours of observation, **5** `200 ↔ 300` cycles were seen. Not every mowing
-session triggers a fresh upload; the cycle appears tied to "mower has observed
-enough new map data to be worth uploading" rather than to session lifecycle.
+Key corrections vs. earlier notes:
+- `s6p1 = 300` is **not** a session-completion signal. It's a recharge-leg-start signal. The session-completion trigger is the `event_occured` on its own dedicated method — which the integration now handles (§7.4).
+- The 2026-04-20 run produced **two** `s6p1 = 300` pushes (once per recharge interrupt) plus **one** `event_occured`. Three distinct "map-ish" artefacts per session, each with its own meaning.
 
 ### 7.2 Failure modes seen on our fork
 
@@ -517,21 +551,25 @@ event-id 1. Four of these have been captured across 2026-04-17 / 2026-04-18:
 
 The `piid=9` value is the OSS object key for the session-summary JSON.
 
-Decoded fields across the four captures:
+Decoded fields across five captures (2026-04-17..2026-04-20):
 
 | piid | guess | observed values |
 |---|---|---|
 | 1 | constant / flag | always 100 |
-| 2 | end-code / reason | 31, 69, 128, 195 |
-| 3 | area mowed × 100 (m² × 100) | 5232, 10759, 19613, 31133 |
+| 2 | end-code / reason | 31, 69, 128, 170, 195 |
+| 3 | area mowed × 100 (m² × 100) | 5232, 10759, 19613, 28744, 31133 — the 2026-04-20 value (28744 = 287.44 m²) matches the final `s1p4` `area_mowed_m2` reading for that session (29358 / 100 = 293.58 m²) to within recharge-leg-transit overhead. |
 | 7 | stop-reason-ish | 1 or 3 |
-| 8 | unix timestamp | variable |
+| 8 | unix timestamp of session **start** | 2026-04-20 run: 1776664681 → 05:58:01 UTC = 07:58:01 local, exact match to `s2p1 → 1` at 07:58:03. Confirms that piid 8 is start-time, not end-time. |
 | 9 | **OSS object key (`.json`)** | `ali_dreame/YYYY/MM/DD/<master-uid>/<did>_HHMMSSmmm.MMMM.json` |
 | 11 | ? | 0 or 1 |
 | 60 | ? | 101 or -1 |
 | 13 | empty list | `[]` |
 | 14 | **total mowable lawn area (m², rounded int)** | 379 pre-2026-04-18, 384 after user added a zone in-app. Matches `map_area` and rounded `map[0].area` in the session-summary JSON — user-confirmed that the lawn grew by ~5 m² when the new zone was added. |
 | 15 | ? | 0 |
+
+A one-shot WARNING fires (`[PROTOCOL_NOVEL] event_occured …`) the first time a
+given (siid, eiid) combo is seen, or when a known combo carries a new piid.
+That makes silent firmware additions impossible to miss.
 
 ### 7.5 Fetching the session-summary JSON
 
@@ -639,6 +677,24 @@ curl -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
 ```
 
 Reverts on HA restart.
+
+### 7.5 `[PROTOCOL_NOVEL]` WARNING catalog (for issue reporters)
+
+Everything below logs at WARNING level, exactly **once per process lifetime per
+distinct shape**, at HA's default `logger.default: warning` — so they're safe
+against log flooding and visible without any extra logger tuning.
+
+| Message prefix | Trigger | What it tells us |
+|---|---|---|
+| `[PROTOCOL_NOVEL] MQTT message with unfamiliar method=…` | MQTT message arrives with a method other than `properties_changed` or `event_occured` (e.g. `props`, `request`). | Firmware has a verb we don't decode yet. |
+| `[PROTOCOL_NOVEL] properties_changed carried an unmapped siid=… piid=…` | Push arrived on an (siid, piid) not in the property mapping and not intercepted by a specific handler. | New field on an existing service — either a new feature or a firmware revision. |
+| `[PROTOCOL_NOVEL] event_occured siid=… eiid=… with piids=…` | First occurrence of an (siid, eiid) combo OR known combo with a new piid in the argument list. | New event class, or existing event gained a field (e.g. a new reason code). |
+| `[PROTOCOL_NOVEL] s2p2 carried unknown value=…` | `s2p2` push outside the known set `{27, 43, 48, 50, 53, 54, 56, 70}`. | Firmware emitted a state code we don't recognise. See §4.1. |
+| `[PROTOCOL_NOVEL] s1p4 short frame len=…` | `s1p4` push with a length other than 8 / 10 / 33. Raw bytes included in the log line. | Firmware emitted a telemetry frame variant we haven't reverse-engineered. The position is still decoded correctly; only the trailing bytes are un-decoded. |
+
+When a user sees any of these, the right action is to open an issue with the
+log line quoted verbatim — the raw values in the message are exactly what we
+need to extend decoders.
 
 ---
 
