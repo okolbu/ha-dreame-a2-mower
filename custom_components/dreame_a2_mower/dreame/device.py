@@ -480,6 +480,46 @@ class DreameMowerDevice:
                         if param["siid"] == 2 and param["piid"] == 56:
                             self._handle_session_status(param.get("value"))
                             continue
+                        # s2p50 on g2408 wraps multiple operation classes:
+                        #   session-start (mowing):  flat fields {area_id, exe, o:100, region_id, time, t:'TASK'}
+                        #   map edit (zone add/remove, exclusion-zone edit):
+                        #     {d:{exe, o, status, ...}, t:'TASK'} with 204 (request) + 215 (confirm)
+                        # A confirmed map edit (o=215) means the cloud's
+                        # MAP.* dataset has changed server-side — our
+                        # cached camera image is now stale. Re-fetch +
+                        # rebuild so the Mower dashboard reflects the
+                        # new zones without waiting for the next HA
+                        # restart. See docs/research/g2408-protocol.md
+                        # §4.6.
+                        if param["siid"] == 2 and param["piid"] == 50:
+                            value = param.get("value")
+                            if (
+                                isinstance(value, dict)
+                                and value.get("t") == "TASK"
+                                and isinstance(value.get("d"), dict)
+                                and value["d"].get("o") == 215
+                            ):
+                                _LOGGER.info(
+                                    "[MAP_EDIT] s2p50 confirmed map edit "
+                                    "(ids=%s, id=%s); rebuilding camera "
+                                    "map from cloud",
+                                    value["d"].get("ids"),
+                                    value["d"].get("id"),
+                                )
+                                try:
+                                    self._build_map_from_cloud_data()
+                                    # Fire the standard map-changed hook
+                                    # so the camera entity picks up the
+                                    # new `last_updated` and redraws on
+                                    # the next coordinator tick.
+                                    if self._map_manager:
+                                        self._map_manager._map_data_changed()
+                                    self._property_changed()
+                                except Exception as ex:  # pragma: no cover
+                                    _LOGGER.warning(
+                                        "[MAP_EDIT] cloud-map rebuild failed: %s", ex
+                                    )
+                            continue
                         # s2p2 on g2408 is the "secondary phase code" channel
                         # (not the error enum other models use). Known codes
                         # observed so far: 27, 43 (battery-temp-low), 48

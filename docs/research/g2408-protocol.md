@@ -104,7 +104,7 @@ Siid/piid combinations observed on g2408. All properties arrive as JSON-encoded
 | 1.53 | `OBSTACLE_FLAG` | bool | Obstacle / person detected near mower (§5) |
 | 2.1 | (misc mode byte) | `{1, 2, 5}` | **Not STATE** — small enum, semantic TBD |
 | 2.2 | `STATE` (g2408) | `{27, 48, 50, 54, 70, ...}` | Mower state machine (§4) |
-| 2.50 | Session task metadata | `{area_id, exe, o, region_id, time, t}` | Emitted at session start |
+| 2.50 | TASK envelope — multiple operation classes | shape varies by `d.o` | Session start (mowing): flat fields `{area_id, exe, o:100, region_id:[1], time, t:'TASK'}`. **Map-edit** (zone / exclusion-zone add/edit/delete): wrapped `{d:{exe, o, status, ...}, t:'TASK'}` with a pair of pushes per edit — request `o:204` then confirm `o:215` carrying `id` (edit-txn #), `ids` (affected zone ids), `error`. See §4.6. |
 | 2.51 | `MULTIPLEXED_CONFIG` | shape varies | App "More Settings" writes (§6) |
 | 2.56 | Cloud status push | `{status}` | Internal ack |
 | 2.66 | Lawn-size snapshot | `[area_m2, ???]` | **First element = total mowable lawn area in m²** (matches `event_occured` piid 14 from the session-summary exactly). Observed `[379, 1394]` 2026-04-17, `[384, 1386]` 2026-04-20 after a manual "Expand Lawn". Second element unknown — decreased by 8 when area grew by 5 m², so not perimeter-proportional; candidates: blade-hours ×10, unique path segments, or a total-distance-mown counter. Fires at the end of a BUILDING session (§4.3) and probably periodically during mowing. |
@@ -479,6 +479,47 @@ on g2408 to avoid upstream's vacuum-era misinterpretation of the same slot
 Position telemetry fires throughout an active TASK, including the return-to-dock
 leg of a low-battery auto-recharge. It stops only when the task itself ends
 (`s2p1` transitions to `2` = complete / cancelled).
+
+### 4.6 Map-edit transport via `s2p50`
+
+Zone / exclusion-zone / no-go-zone adds / edits / deletes travel over MQTT as
+two `s2p50` pushes, both with the shape `{d: {...}, t: 'TASK'}`:
+
+```json
+{"d": {"exe": true, "o": 204, "status": true}, "t": "TASK"}
+        ^^^ request — map edit starting
+{"d": {"error": 0, "exe": true, "id": 101, "ids": [1], "o": 215, "status": true}, "t": "TASK"}
+        ^^^ confirm — edit applied; `ids` = affected zone id(s), `id` = tx counter
+```
+
+Captured 2026-04-20 17:15:41 → 17:17:16 when the user resized the single
+exclusion zone from the Dreame app. Neither push triggers `s2p1 = 11` (BUILDING
+is reserved for drive-the-boundary operations), `s6p1 = 300` (no map-ready
+signal), `s2p66` (area snapshot — stale until the next BUILDING or session
+start), or `event_occured`.
+
+**Integration behaviour** (2.0.0-alpha.17): the `o=215` confirm push triggers an
+immediate `_build_map_from_cloud_data()` rebuild + camera-state nudge so the
+Mower dashboard's base-map image reflects the new exclusion polygon within a
+few seconds of the edit. Prior to this version the camera kept drawing the
+stale polygon until HA was restarted.
+
+**Scheduled-mow add / edit / delete: no MQTT signal at all.** The Dreame cloud
+stores schedules app-side; nothing appears on the mower's `/status/` topic when
+the user adds or edits a schedule. The mower only learns about the schedule
+when the cloud wakes it for the configured time. So there's nothing for the
+integration to observe at edit time — the schedule list itself has to be pulled
+from the cloud API separately (not yet wired).
+
+**Other `s2p50` operation codes** (catalog, extend as new ones appear):
+
+| `d.o` | Meaning | Occurs when |
+|---|---|---|
+| 204 | map-edit request | zone / exclusion add / edit / delete: first of the pair |
+| 215 | map-edit confirm | same edit: second of the pair, carries `id` and `ids` |
+
+Flat-fields variants without the `d` wrapper are the session-task metadata
+described under §4.3 "Session start" (`o: 100`).
 
 ---
 
