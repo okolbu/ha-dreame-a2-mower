@@ -2102,6 +2102,26 @@ class DreameMowerDevice:
                 by1 + by2,
                 0,
             )
+            # Seed `robot_position` at the charger so the renderer's
+            # robot-icon layer (map.py:4838 gating on `map_data.robot_position`)
+            # has something to draw when the mower is docked. The cloud
+            # MAP.* JSON doesn't include a robot position — the upstream
+            # binary-blob decoder populated it from MQTT map pushes that
+            # the A2 never emits. Without this seed the mower icon only
+            # appears once s1p4 live telemetry has arrived, i.e. never
+            # while docked. Live updates during mowing overwrite this
+            # via the coordinator's position tracking; Manual mode
+            # (no s1p4 broadcast) and dock-idle fall back to this
+            # charger-relative value, which is factually correct for
+            # those states (user 2026-04-20: "if state is Docked or
+            # Charging we know it is in the charger location"). See
+            # docs/research/g2408-protocol.md §Manual mode for the
+            # no-telemetry caveat.
+            map_data.robot_position = Point(
+                map_data.charger_position.x,
+                map_data.charger_position.y,
+                0,
+            )
             # Publish the cloud-frame midline reflections so overlay
             # consumers (the camera's TrailLayer) can align themselves
             # to the same X+Y-flipped frame the lawn mask is drawn in.
