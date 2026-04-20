@@ -136,6 +136,12 @@ async def async_setup_entry(
         for description in SELECTS
         if description.exists_fn(description, coordinator.device)
     )
+    # Session-replay picker — dynamically populated from the on-disk
+    # session archive so the Lovelace dashboard can pick a historical
+    # run to overlay on the map without the user having to type a
+    # filename into a service call.
+    if getattr(coordinator, "session_archive", None) is not None:
+        async_add_entities([DreameReplaySessionSelect(coordinator)])
     platform = entity_platform.current_platform.get()
     platform.async_register_entity_service(
         SERVICE_SELECT_NEXT,
@@ -279,3 +285,119 @@ class DreameMowerSelectEntity(DreameMowerEntity, SelectEntity):
             )
 
 
+
+
+class DreameReplaySessionSelect(SelectEntity):
+    """Dashboard-friendly picker for archived session replays.
+
+    Options are built dynamically from `coordinator.session_archive`:
+
+        "None"    — clear the overlay, show only the base map
+        "Latest"  — replay the most recent archived session
+        "2026-04-20 07:58 — 293.58 m² (275 min)" — one entry per archive
+
+    Selecting an option fires `live_map.replay_session(...)` on an executor
+    thread (blocking disk + JSON parse, so it must not run on the event
+    loop). The option strings are stable for the archive entry's lifetime,
+    which lets the user bookmark a specific run in a dashboard card.
+    """
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:history"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+
+    # Kept in sync with the constants used in live_map — "None" clears the
+    # overlay and "Latest" delegates to replay_latest_session so the value
+    # survives archive growth without the user re-selecting.
+    _OPT_NONE = "None"
+    _OPT_LATEST = "Latest"
+
+    def __init__(self, coordinator: DreameMowerDataUpdateCoordinator) -> None:
+        self._coordinator = coordinator
+        self._attr_name = "Replay Session"
+        self._attr_unique_id = f"{coordinator.device.mac}_replay_session"
+        self._attr_current_option = self._OPT_NONE
+        self._refresh_options()
+
+    # -------- option formatting --------
+
+    @staticmethod
+    def _format_label(entry) -> str:
+        import datetime as _dt
+        ts = _dt.datetime.fromtimestamp(entry.end_ts).strftime("%Y-%m-%d %H:%M")
+        return f"{ts} — {entry.area_mowed_m2:.2f} m² ({entry.duration_min} min)"
+
+    def _refresh_options(self) -> None:
+        archive = self._coordinator.session_archive
+        sessions = archive.list_sessions() if archive else []
+        # Remember the filename keyed by label so on select we can fetch
+        # the right one without re-parsing the label.
+        self._label_to_file = {
+            self._format_label(s): str(archive.root / s.filename)
+            for s in sessions
+        }
+        self._attr_options = [
+            self._OPT_NONE,
+            *( [self._OPT_LATEST] if sessions else [] ),
+            *self._label_to_file.keys(),
+        ]
+
+    # -------- HA lifecycle --------
+
+    @property
+    def available(self) -> bool:
+        return self._coordinator.session_archive is not None
+
+    async def async_added_to_hass(self) -> None:
+        # React to new archived sessions by rebuilding the options list.
+        self.async_on_remove(
+            self._coordinator.async_add_listener(self._handle_coordinator_update)
+        )
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        prev_opts = tuple(self._attr_options)
+        self._refresh_options()
+        if tuple(self._attr_options) != prev_opts:
+            # Archive grew — make sure the previously-selected option is
+            # still valid. If the user had selected "Latest" stay there
+            # (still valid, now points to the newer entry); if they had
+            # a concrete entry that got evicted for some reason, fall
+            # back to "None".
+            if self._attr_current_option not in self._attr_options:
+                self._attr_current_option = self._OPT_NONE
+            self.async_write_ha_state()
+
+    # -------- selection --------
+
+    async def async_select_option(self, option: str) -> None:
+        if option not in self._attr_options:
+            raise HomeAssistantError(f"Unknown replay option: {option}")
+
+        live_map = getattr(self._coordinator, "live_map", None)
+        if live_map is None:
+            raise HomeAssistantError("Live map is not available on this device")
+
+        if option == self._OPT_NONE:
+            await self.hass.async_add_executor_job(live_map.clear_replay)
+        elif option == self._OPT_LATEST:
+            await self.hass.async_add_executor_job(live_map.replay_latest_session)
+        else:
+            path = self._label_to_file.get(option)
+            if path is None:
+                # Shouldn't happen — options and label_to_file are kept
+                # in sync — but guard against a race with archival.
+                raise HomeAssistantError(f"No file registered for option {option}")
+            await self.hass.async_add_executor_job(live_map.replay_session, path)
+
+        self._attr_current_option = option
+        self.async_write_ha_state()
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        """Expose the resolved file path for the current option so a user
+        or automation can see what a label maps to without parsing it."""
+        if self._attr_current_option in (self._OPT_NONE, self._OPT_LATEST):
+            return {"resolved_file": None}
+        return {"resolved_file": self._label_to_file.get(self._attr_current_option)}

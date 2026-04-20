@@ -399,6 +399,29 @@ class DreameA2LiveMap:
         path = archive.root / latest.filename
         return self.replay_session(str(path))
 
+    def clear_replay(self) -> None:
+        """Clear the session-summary overlay so the map shows only the
+        live base data (zones, calibration, current position). Used by
+        the session-picker entity when the user selects "None".
+        """
+        self._state.lawn_polygon = []
+        self._state.exclusion_zones = []
+        self._state.completed_track = []
+        self._state.obstacle_polygons = []
+        self._state.dock_position = None
+        self._state.summary_md5 = None
+        self._state.summary_end_ts = None
+        # No live position argument — the coordinator's next tick will
+        # push the current mower position through the normal path. If
+        # the mower is docked right now, this leaves `position: None`
+        # which is what the base-map renderer expects.
+        attrs = self._state.to_attributes(
+            position=None,
+            x_factor=self.x_factor,
+            y_factor=self.y_factor,
+        )
+        async_dispatcher_send(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
+
     def import_from_probe_log(self, path: str, session_index: int = -1) -> dict[str, Any]:
         """Reconstruct a session from a probe-log file (dev service)."""
         from pathlib import Path
