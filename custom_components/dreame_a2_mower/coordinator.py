@@ -147,8 +147,12 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
         from .session_archive import SessionArchive
 
         archive_root = Path(hass.config.path(DOMAIN, "sessions"))
+        from .const import CONF_SESSION_ARCHIVE_KEEP, DEFAULT_SESSION_ARCHIVE_KEEP
+        session_keep = int(entry.options.get(
+            CONF_SESSION_ARCHIVE_KEEP, DEFAULT_SESSION_ARCHIVE_KEEP
+        ))
         try:
-            self.session_archive = SessionArchive(archive_root)
+            self.session_archive = SessionArchive(archive_root, retention=session_keep)
         except OSError as ex:
             LOGGER.warning(
                 "SessionArchive: could not initialise at %s: %s — archival disabled",
@@ -165,10 +169,14 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
         # is content-addressed by md5 so re-downloading the same OSS key
         # is a no-op.
         from .lidar_archive import LidarArchive as _LidarArchive
+        from .const import CONF_LIDAR_ARCHIVE_KEEP, DEFAULT_LIDAR_ARCHIVE_KEEP
 
         lidar_root = Path(hass.config.path(DOMAIN, "lidar"))
+        lidar_keep = int(entry.options.get(
+            CONF_LIDAR_ARCHIVE_KEEP, DEFAULT_LIDAR_ARCHIVE_KEEP
+        ))
         try:
-            self.lidar_archive = _LidarArchive(lidar_root)
+            self.lidar_archive = _LidarArchive(lidar_root, retention=lidar_keep)
         except OSError as ex:
             LOGGER.warning(
                 "LidarArchive: could not initialise at %s: %s — archival disabled",

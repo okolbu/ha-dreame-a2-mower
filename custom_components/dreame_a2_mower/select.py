@@ -346,7 +346,15 @@ class DreameReplaySessionSelect(SelectEntity):
 
     def _refresh_options(self) -> None:
         archive = self._coordinator.session_archive
-        sessions = archive.list_sessions() if archive else []
+        all_sessions = archive.list_sessions() if archive else []
+        # Hard cap so the dropdown doesn't become a scroll nightmare
+        # even if the user opted out of disk retention
+        # (`session_archive_keep = 0`). list_sessions() is already
+        # sorted newest-first, so slicing keeps the most useful ones.
+        # See docs/research/g2408-protocol.md § "Map & LiDAR freshness"
+        # / project memory for the UX rationale.
+        from .const import SESSION_REPLAY_PICKER_HARD_CAP
+        sessions = all_sessions[:SESSION_REPLAY_PICKER_HARD_CAP]
         # Remember the filename keyed by label so on select we can fetch
         # the right one without re-parsing the label.
         self._label_to_file = {

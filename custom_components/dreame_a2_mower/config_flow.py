@@ -46,6 +46,10 @@ from .const import (
     CONF_MQTT_ARCHIVE_RETAIN_DAYS,
     DEFAULT_MQTT_ARCHIVE_RETAIN_DAYS,
     CONF_STATION_BEARING,
+    CONF_SESSION_ARCHIVE_KEEP,
+    DEFAULT_SESSION_ARCHIVE_KEEP,
+    CONF_LIDAR_ARCHIVE_KEEP,
+    DEFAULT_LIDAR_ARCHIVE_KEEP,
     NOTIFICATION,
     MAP_OBJECTS,
     NOTIFICATION_ID_2FA_LOGIN,
@@ -150,6 +154,20 @@ class DreameMowerOptionsFlowHandler(OptionsFlow):
                         CONF_STATION_BEARING,
                         default=options.get(CONF_STATION_BEARING, 0.0),
                     ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=360.0)),
+                    vol.Optional(
+                        CONF_SESSION_ARCHIVE_KEEP,
+                        default=options.get(
+                            CONF_SESSION_ARCHIVE_KEEP,
+                            DEFAULT_SESSION_ARCHIVE_KEEP,
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=500)),
+                    vol.Optional(
+                        CONF_LIDAR_ARCHIVE_KEEP,
+                        default=options.get(
+                            CONF_LIDAR_ARCHIVE_KEEP,
+                            DEFAULT_LIDAR_ARCHIVE_KEEP,
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=200)),
                 }
             )
 

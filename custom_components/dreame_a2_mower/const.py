@@ -27,6 +27,29 @@ CONF_MQTT_ARCHIVE: Final = "mqtt_archive"
 CONF_MQTT_ARCHIVE_RETAIN_DAYS: Final = "mqtt_archive_retain_days"
 DEFAULT_MQTT_ARCHIVE_RETAIN_DAYS: Final = 7
 CONF_STATION_BEARING: Final = "station_bearing_deg"
+# Cap on the number of session-summary JSONs kept in
+# <config>/dreame_a2_mower/sessions/ AND the length of the replay-
+# picker dropdown on the Mower dashboard. At one mow per day the
+# default keeps ~7 weeks of history; at multiple mows per day it's
+# closer to 2 weeks. Older files are deleted from disk when the
+# archive grows past this limit. Set via the options flow. A value
+# of 0 means "keep forever" (explicit opt-out) — the picker's own
+# hard cap below still applies to prevent UI bloat.
+CONF_SESSION_ARCHIVE_KEEP: Final = "session_archive_keep"
+DEFAULT_SESSION_ARCHIVE_KEEP: Final = 50
+# Dropdown never shows more than this many entries regardless of how
+# many files are on disk — prevents the Lovelace select from
+# becoming a scroll nightmare even if the user opted into unlimited
+# disk retention.
+SESSION_REPLAY_PICKER_HARD_CAP: Final = 50
+# LiDAR archive retention. Each PCD is ~2–3 MB (much larger than the
+# ~30 KB session JSONs), so the default is more aggressive: keep the
+# 10 most recent scans (~25 MB at 2.5 MB each). The user typically
+# only cares about the current scan anyway — archived PCDs are for
+# before/after comparisons when the lawn has changed materially. Set
+# to 0 for unlimited.
+CONF_LIDAR_ARCHIVE_KEEP: Final = "lidar_archive_keep"
+DEFAULT_LIDAR_ARCHIVE_KEEP: Final = 10
 
 CONTENT_TYPE: Final = "image/png"
 

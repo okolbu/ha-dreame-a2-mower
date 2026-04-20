@@ -83,10 +83,14 @@ class ArchivedSession:
 class SessionArchive:
     """Filesystem-backed session archive."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, retention: int = 0) -> None:
+        """`retention` = max number of sessions to keep on disk. 0 means
+        unlimited. Adjustable at runtime via `set_retention()`.
+        """
         self._root = Path(root)
         self._root.mkdir(parents=True, exist_ok=True)
         self._index: list[ArchivedSession] = []
+        self._retention = int(retention) if retention else 0
         self._load_index()
 
     # -------------------- index I/O --------------------
@@ -170,7 +174,51 @@ class SessionArchive:
         entry = ArchivedSession.from_summary(filename=stem, summary=summary)
         self._index.append(entry)
         self._save_index()
+        self._enforce_retention()
         return entry
+
+    def _enforce_retention(self) -> None:
+        """Prune oldest sessions beyond the configured cap.
+
+        No-op when `self._retention` is 0 or None (unlimited). Otherwise
+        keeps only the `_retention` most recent (by `end_ts`) entries
+        on disk + in the index. Runs after every successful archive;
+        typical cost is a single `path.unlink()` per mow once the
+        archive is full.
+        """
+        keep = getattr(self, "_retention", 0)
+        if not keep or keep <= 0:
+            return
+        if len(self._index) <= keep:
+            return
+        # Sort oldest-first, chop the excess from the front.
+        sorted_idx = sorted(self._index, key=lambda s: s.end_ts)
+        excess = len(sorted_idx) - keep
+        to_drop = sorted_idx[:excess]
+        for entry in to_drop:
+            try:
+                (self._root / entry.filename).unlink(missing_ok=True)
+            except OSError as ex:
+                _LOGGER.warning(
+                    "SessionArchive: failed to prune %s: %s",
+                    entry.filename,
+                    ex,
+                )
+        # Keep only the most-recent `keep` entries in the in-memory
+        # index and rewrite the index file.
+        kept_files = {e.filename for e in sorted_idx[excess:]}
+        self._index = [e for e in self._index if e.filename in kept_files]
+        self._save_index()
+        _LOGGER.info(
+            "SessionArchive: pruned %d old session(s) past retention=%d",
+            excess,
+            keep,
+        )
+
+    def set_retention(self, keep: int) -> None:
+        """Set the retention cap. 0 or negative means unlimited."""
+        self._retention = int(keep) if keep else 0
+        self._enforce_retention()
 
     def load(self, entry: ArchivedSession) -> dict[str, Any] | None:
         """Read the raw JSON of an archived session. None on error."""

@@ -67,10 +67,16 @@ def _format_date(unix_ts: int) -> str:
 class LidarArchive:
     """Filesystem-backed point-cloud archive."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, retention: int = 0) -> None:
+        """`retention` = max number of PCDs to keep on disk. 0 means
+        unlimited. Each PCD is ~2-3 MB on this hardware, so an
+        aggressive cap is sensible. Adjustable at runtime via
+        `set_retention()`.
+        """
         self._root = Path(root)
         self._root.mkdir(parents=True, exist_ok=True)
         self._index: list[ArchivedLidarScan] = []
+        self._retention = int(retention) if retention else 0
         self._load_index()
 
     def _index_path(self) -> Path:
@@ -152,4 +158,39 @@ class LidarArchive:
         )
         self._index.append(scan)
         self._save_index()
+        self._enforce_retention()
         return scan
+
+    def _enforce_retention(self) -> None:
+        """Prune oldest PCDs beyond the configured cap. Mirrors
+        SessionArchive._enforce_retention; PCDs are a lot larger
+        (2-3 MB each) so users will want this on by default."""
+        keep = getattr(self, "_retention", 0)
+        if not keep or keep <= 0:
+            return
+        if len(self._index) <= keep:
+            return
+        sorted_idx = sorted(self._index, key=lambda s: s.unix_ts)
+        excess = len(sorted_idx) - keep
+        to_drop = sorted_idx[:excess]
+        for scan in to_drop:
+            try:
+                (self._root / scan.filename).unlink(missing_ok=True)
+            except OSError as ex:
+                _LOGGER.warning(
+                    "LidarArchive: failed to prune %s: %s",
+                    scan.filename,
+                    ex,
+                )
+        kept_files = {s.filename for s in sorted_idx[excess:]}
+        self._index = [s for s in self._index if s.filename in kept_files]
+        self._save_index()
+        _LOGGER.info(
+            "LidarArchive: pruned %d old scan(s) past retention=%d",
+            excess,
+            keep,
+        )
+
+    def set_retention(self, keep: int) -> None:
+        self._retention = int(keep) if keep else 0
+        self._enforce_retention()
