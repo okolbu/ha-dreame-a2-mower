@@ -253,6 +253,16 @@ class DreameMowerDevice:
         # repeats. Holds arbitrary hashables: int values for s2p2 codes,
         # (siid, piid, len) tuples for short-frame lengths, etc.
         self._protocol_novelty: set[object] = set()
+        # Latest-value caches for g2408 novel properties surfaced as
+        # HA entities. Populated from `_message_callback`. See §4.1
+        # (s2p2) and §4.8 (s2p65) in docs/research/g2408-protocol.md.
+        # `_s2p2_last` is the most recent secondary state-code emitted
+        # (None before first push). `_s2p65_last` is the most recent
+        # SLAM task-type string. Neither property currently has a
+        # dedicated mapping slot, so we store them here instead of in
+        # `self.data[did]` (which is keyed by DreameMowerProperty).
+        self._s2p2_last: int | None = None
+        self._s2p65_last: str | None = None
         # Optional raw-MQTT archive, attached by coordinator when enabled.
         # Forwarded to the protocol layer where the on-wire payload is
         # still available before JSON-decode.
@@ -531,6 +541,12 @@ class DreameMowerDevice:
                         # user can report it back.
                         if param["siid"] == 2 and param["piid"] == 2:
                             value = param.get("value")
+                            # Cache so HA sensors (positioning_failed,
+                            # rain_protection_active, …) can read the
+                            # most-recent code via
+                            # `device.s2p2_last`.
+                            if isinstance(value, int):
+                                self._s2p2_last = value
                             known = {27, 31, 33, 43, 48, 50, 53, 54, 56, 70, 71, 75}
                             if (
                                 value not in known
@@ -563,6 +579,18 @@ class DreameMowerDevice:
                                 self._schedule_cloud_map_poll(
                                     reason=f"session-start s2p2={value}"
                                 )
+                            continue
+                        # s2p65 on g2408 is a string-valued SLAM task
+                        # label — observed `'TASK_SLAM_RELOCATE'` during
+                        # LiDAR relocalization (see §4.8). Cache the
+                        # most recent value so HA sensors can surface
+                        # it. Other label values likely exist for
+                        # other SLAM modes; we store whatever string
+                        # arrives.
+                        if param["siid"] == 2 and param["piid"] == 65:
+                            value = param.get("value")
+                            if isinstance(value, str):
+                                self._s2p65_last = value
                             continue
                         if self._unknown_watchdog.saw_property(
                             param["siid"], param["piid"]
@@ -5273,6 +5301,42 @@ class DreameMowerDevice:
         if hb is None:
             return None
         return bool(getattr(hb, "battery_temp_low", False))
+
+    @property
+    def positioning_failed(self) -> bool | None:
+        """True when the mower's most recent `s2p2` code is 71.
+
+        `s2p2 = 71` is the g2408's *Positioning Failed* marker — the
+        mower cannot locate itself on the saved map (e.g. parked outside
+        the known area, loop-closure failed). Recovery requires driving
+        the mower back into the known area so SLAM relocation
+        (§4.8) can re-anchor. Returns None before any `s2p2` has been
+        seen in the current process lifetime.
+        """
+        if self._s2p2_last is None:
+            return None
+        return self._s2p2_last == 71
+
+    @property
+    def rain_protection_active(self) -> bool | None:
+        """True when the mower's most recent `s2p2` code is 56 —
+        Dreame app's *"Water is detected on the LiDAR. Rain Protection
+        is activated."* signal. Cleared when the next `s2p2` arrives.
+        """
+        if self._s2p2_last is None:
+            return None
+        return self._s2p2_last == 56
+
+    @property
+    def slam_activity(self) -> str | None:
+        """Most recent SLAM task-type label from `s2p65` — e.g.
+        `'TASK_SLAM_RELOCATE'` during LiDAR relocalization. None before
+        the first `s2p65` arrives. Because the mower only fires s2p65
+        when a SLAM task is actively dispatched, this doesn't
+        auto-clear; consumers should treat a stale value as "last
+        known SLAM activity" rather than "currently running".
+        """
+        return self._s2p65_last
 
 
 class DreameMowerDeviceStatus:

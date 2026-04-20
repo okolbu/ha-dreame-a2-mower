@@ -71,6 +71,29 @@ BINARY_SENSORS: tuple[DreameMowerBinarySensorEntityDescription, ...] = (
         value_fn=lambda value, device: device.battery_temp_low,
         exists_fn=lambda description, device: True,
     ),
+    # Positioning-failed flag — s2p2 = 71. Dreame app shows *"Positioning
+    # Failed"*. While this is true every cloud-issued task (Recharge /
+    # Start / Dock) fails until the mower re-anchors via SLAM relocate
+    # (§4.8). Cleared when any other s2p2 code arrives.
+    DreameMowerBinarySensorEntityDescription(
+        key="positioning_failed",
+        name="Positioning Failed",
+        icon="mdi:map-marker-off",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        value_fn=lambda value, device: device.positioning_failed,
+        exists_fn=lambda description, device: True,
+    ),
+    # Rain-protection flag — s2p2 = 56. Mower's LiDAR doubles as a
+    # rain sensor; when water is detected the firmware returns to the
+    # dock and asserts this code until rain clears.
+    DreameMowerBinarySensorEntityDescription(
+        key="rain_protection_active",
+        name="Rain Protection Active",
+        icon="mdi:weather-pouring",
+        device_class=BinarySensorDeviceClass.PROBLEM,
+        value_fn=lambda value, device: device.rain_protection_active,
+        exists_fn=lambda description, device: True,
+    ),
 )
 
 

@@ -151,29 +151,46 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: device.capability.camera_streaming
         or DreameMowerEntityDescription().exists_fn(description, device),
     ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.ERROR,
-        icon_fn=lambda value, device: (
-            "mdi:alert-circle-outline"
-            if device.status.has_error
-            else "mdi:alert-outline" if device.status.has_warning else "mdi:check-circle-outline"
-        ),
-        attrs_fn=lambda device: {
-            ATTR_VALUE: device.status.error,
-            "faults": device.status.faults,
-            "description": device.status.error_description[0],
-        },
-        # Upstream default availability falls through when the mower
-        # hasn't explicitly emitted an ERROR property value, showing
-        # "Unavailable" instead of the "No Error" state we already
-        # derive from `device.status.error_name`. Force always-available
-        # when the device is reachable so the no-error case is labelled
-        # correctly (user reported 2026-04-19).
-        available_fn=lambda device: True,
-    ),
+    # `sensor.error` — disabled for g2408. The upstream ERROR property
+    # maps to `s2p2` which carries SECONDARY state codes on this mower
+    # (27/31/33/43/48/50/53/54/56/70/71/75 — mowing phase / start /
+    # return / rain / positioning-failed / MP-arrived / low-temp …),
+    # not a real fault enum. The g2408 overlay redirects ERROR to
+    # siid/piid 999/999 (a slot the mower never emits on) to keep the
+    # upstream translator from mislabelling valid state codes as
+    # specific faults. As a result this sensor was permanently
+    # "Unavailable" on the device page — worse than useless since
+    # users expect to look here for error information.
+    #
+    # Instead, the real g2408 error conditions surface as dedicated
+    # binary_sensors (PROBLEM device_class): `battery_temp_low`,
+    # `positioning_failed`, `rain_protection_active`. SLAM task
+    # activity goes to `sensor.slam_activity`.
+    # See docs/research/g2408-protocol.md §4.1 for the s2p2 catalogue
+    # and §4.4 / §4.8 for the condition semantics.
     DreameMowerSensorEntityDescription(
         property_key=DreameMowerProperty.CHARGING_STATUS,
         icon="mdi:home-lightning-bolt",
+        # Redundant with sensor.state during normal charging (both say
+        # "charging"), but the two channels can diverge — e.g. after a
+        # user-cancel on the lawn state=idle while charging_status=not
+        # charging. Keep it, but park it under Diagnostic so it doesn't
+        # clutter the main dashboard next to `sensor.state`.
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    # SLAM activity — g2408-specific. s2p65 on this mower is a string
+    # property that carries the task-type label for the current SLAM
+    # operation (e.g. `TASK_SLAM_RELOCATE` during LiDAR relocalization,
+    # see §4.8). The value is a latched "most-recent" — the mower does
+    # not fire this while at rest, so a stale reading means "last SLAM
+    # task we saw", not "currently active".
+    DreameMowerSensorEntityDescription(
+        key="slam_activity",
+        name="SLAM Activity",
+        icon="mdi:crosshairs-gps",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda value, device: device.slam_activity,
+        exists_fn=lambda description, device: True,
     ),
     DreameMowerSensorEntityDescription(
         property_key=DreameMowerProperty.BATTERY_LEVEL,
@@ -301,35 +318,14 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         # entity_registry_enabled_default=False,
     ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.FIRST_CLEANING_DATE,
-        icon="mdi:calendar-start",
-        device_class=SensorDeviceClass.TIMESTAMP,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda value, device: datetime.fromtimestamp(value).replace(
-            tzinfo=datetime.now().astimezone().tzinfo
-        ),
-        # entity_registry_enabled_default=False,
-    ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.TOTAL_CLEANING_TIME,
-        icon="mdi:timer-outline",
-        native_unit_of_measurement=UNIT_MINUTES,
-        device_class=SensorDeviceClass.DURATION,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.CLEANING_COUNT,
-        icon="mdi:counter",
-        native_unit_of_measurement=UNIT_TIMES,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.TOTAL_CLEANED_AREA,
-        icon="mdi:set-square",
-        native_unit_of_measurement=UNIT_AREA,
-        entity_category=EntityCategory.DIAGNOSTIC,
-    ),
+    # Legacy `first_cleaning_date` / `total_cleaning_time` /
+    # `cleaning_count` / `total_cleaned_area` — vacuum-era names that
+    # the g2408-specific mowing_* siblings below supersede. Removed
+    # 2026-04-20 (v2.0.0-alpha.27) per user preference: this fork is
+    # A2-only, backward-compat with the upstream vacuum integration is
+    # a non-goal. The "mowing" variants are defined a few entries
+    # above and pull from the same underlying properties via the
+    # `*_name` computed attributes on `device.status`.
     DreameMowerSensorEntityDescription(
         key="cruising_history",
         icon="mdi:map-marker-path",
