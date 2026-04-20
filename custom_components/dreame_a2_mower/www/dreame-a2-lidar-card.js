@@ -281,6 +281,7 @@ class DreameA2LidarCard extends HTMLElement {
         .status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: #bbb; font-family: var(--primary-font-family, sans-serif); font-size: 14px; pointer-events: none; }
         .status.err { color: #f88; }
         .hint { position: absolute; bottom: 8px; right: 10px; font-size: 11px; color: #888; font-family: monospace; pointer-events: none; }
+        .timestamp { position: absolute; bottom: 8px; left: 10px; font-size: 11px; color: #888; font-family: monospace; pointer-events: none; }
         .controls {
           position: absolute; top: 8px; left: 8px; display: flex; flex-direction: column; gap: 6px;
           background: rgba(20, 20, 20, 0.55); padding: 6px 10px; border-radius: 8px;
@@ -324,12 +325,14 @@ class DreameA2LidarCard extends HTMLElement {
           </div>
           <div class="status">Loading…</div>
           <div class="hint"></div>
+          <div class="timestamp"></div>
         </div>
       </ha-card>
     `;
     this._canvas = this.shadowRoot.querySelector("canvas");
     this._status = this.shadowRoot.querySelector(".status");
     this._hint = this.shadowRoot.querySelector(".hint");
+    this._timestamp = this.shadowRoot.querySelector(".timestamp");
     this._splat = this.shadowRoot.querySelector(".splat");
     this._splatVal = this.shadowRoot.querySelector(".splat-val");
     this._softCb = this.shadowRoot.querySelector(".soft");
@@ -421,6 +424,20 @@ class DreameA2LidarCard extends HTMLElement {
       this._setStatus("Fetching point cloud…");
       const r = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      // `Last-Modified` comes from HA's static-path handler: it reflects
+      // the PCD file's mtime on disk, which = the moment the integration
+      // archived the scan after the mower's s99p20 OSS push (see
+      // docs/research/g2408-protocol.md §7.3b). Show it bottom-left so
+      // users have a clear visual cue whether the 3D view is current.
+      const lm = r.headers.get("last-modified");
+      if (lm && this._timestamp) {
+        const d = new Date(lm);
+        if (!isNaN(d)) {
+          this._timestamp.textContent = `scan: ${d.toLocaleString()}`;
+        } else {
+          this._timestamp.textContent = `scan: ${lm}`;
+        }
+      }
       const buf = await r.arrayBuffer();
       this._setStatus("Parsing…");
       const meta = parsePCD(buf);
