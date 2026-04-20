@@ -4358,15 +4358,9 @@ class DreameMowerMapRenderer:
             self.config.pet = False
             self.config.furniture = False
 
-        if self.icon_set == 2:
-            repeats = MAP_ICON_REPEATS_MIJIA
-            cleaning_mode = MAP_ICON_CLEANING_MODE_MIJIA
-        elif self.icon_set == 3:
-            repeats = MAP_ICON_REPEATS_MATERIAL
-            cleaning_mode = MAP_ICON_CLEANING_MODE_MATERIAL
-        else:
-            repeats = MAP_ICON_REPEATS_DREAME
-            cleaning_mode = MAP_ICON_CLEANING_MODE_DREAME
+        # Phase 3 cleanup: A2 always uses the Dreame icon set.
+        repeats = MAP_ICON_REPEATS_DREAME
+        cleaning_mode = MAP_ICON_CLEANING_MODE_DREAME
 
         if self.config.cleaning_times:
             self._cleaning_times_icon = [
@@ -6507,24 +6501,11 @@ class DreameMowerMapRenderer:
             icon_size = int(icon_size * 1.5)
 
         if self._charger_icon is None:
-            if self.icon_set == 3:
-                charger_image = MAP_CHARGER_IMAGE_MATERIAL
-            elif self.icon_set == 2:
-                charger_image = MAP_CHARGER_IMAGE_MIJIA
-            else:
-                if self._robot_type == RobotType.VSLAM:
-                    charger_image = MAP_CHARGER_VSLAM_IMAGE_DREAME
-                else:
-                    charger_image = MAP_CHARGER_IMAGE_DREAME
+            # Phase 3 cleanup: A2 is LIDAR-only with the Dreame icon
+            # set. Mijia (icon_set=2) / Material-light (icon_set=3) /
+            # VSLAM variants gone.
+            charger_image = MAP_CHARGER_IMAGE_DREAME
             self._charger_icon = Image.open(BytesIO(base64.b64decode(charger_image))).convert("RGBA")
-
-            if self.icon_set == 3:
-                self._charger_icon = DreameMowerMapRenderer._set_icon_color(
-                    self._charger_icon,
-                    icon_size,
-                    (0, 255, 126),
-                )
-
             if self.color_scheme.dark:
                 enhancer = ImageEnhance.Brightness(self._charger_icon)
                 self._charger_icon = enhancer.enhance(0.7)
@@ -6565,35 +6546,20 @@ class DreameMowerMapRenderer:
     ):
         new_layer = Image.new("RGBA", layer_size, (255, 255, 255, 0))
         icon_size = int(size * scale)
-        robot_icon_size = (
-            int(icon_size * 1.4)
-            if self.icon_set == 2 or (self._robot_type == RobotType.VSLAM and self.icon_set == 3)
-            else icon_size
-        )
+        robot_icon_size = icon_size
         if self._robot_icon is None:
-            if self.icon_set == 2:
-                if self._robot_type == RobotType.VSLAM:
-                    robot_image = MAP_ROBOT_VSLAM_IMAGE_MIJIA
-                else:
-                    robot_image = MAP_ROBOT_LIDAR_IMAGE_MIJIA
-            else:
-                if self._robot_type == RobotType.VSLAM:
-                    if self.icon_set == 3:
-                        robot_image = MAP_ROBOT_VSLAM_IMAGE_DREAME_LIGHT
-                    else:
-                        robot_image = MAP_ROBOT_VSLAM_IMAGE_DREAME_DARK
-                else:
-                    if self.icon_set == 3:
-                        robot_image = MAP_ROBOT_LIDAR_IMAGE_DREAME_LIGHT
-                    else:
-                        robot_image = MAP_ROBOT_LIDAR_IMAGE_DREAME_DARK
-
+            # Phase 3 cleanup: A2 is LIDAR-only with the Dreame icon
+            # set. Mijia (icon_set=2) / Dreame Light (icon_set=3) /
+            # VSLAM variants gone; the DARK icon is the A2 top-down
+            # photograph (swapped in at v2.0.0-alpha.24).
+            robot_image = (
+                MAP_ROBOT_LIDAR_IMAGE_DREAME_LIGHT
+                if self.icon_set == 3
+                else MAP_ROBOT_LIDAR_IMAGE_DREAME_DARK
+            )
             self._robot_icon = Image.open(BytesIO(base64.b64decode(robot_image))).convert("RGBA")
 
-            if (
-                self.icon_set != 2
-                and self.icon_set != 3
-            ):
+            if True:
                 enhancer = ImageEnhance.Brightness(self._robot_icon)
                 if self.color_scheme.dark:
                     self._robot_icon = enhancer.enhance(1.5)
@@ -6760,14 +6726,7 @@ class DreameMowerMapRenderer:
             active = active and not neglected
             text = None
             if segment.type not in self._segment_icons:
-                icon_set = SEGMENT_ICONS_DREAME
-                if self.icon_set == 1:
-                    icon_set = SEGMENT_ICONS_DREAME_OLD
-                elif self.icon_set == 2:
-                    icon_set = SEGMENT_ICONS_MIJIA
-                elif self.icon_set == 3:
-                    icon_set = SEGMENT_ICONS_MATERIAL
-
+                icon_set = SEGMENT_ICONS_DREAME_OLD if self.icon_set == 1 else SEGMENT_ICONS_DREAME
                 if segment.type in icon_set:
                     self._segment_icons[segment.type] = Image.open(
                         BytesIO(base64.b64decode(icon_set[segment.type]))
@@ -7661,50 +7620,17 @@ class DreameMowerMapRenderer:
         return mask_layer
 
     def get_resources(self, capability) -> MapRendererResources:
-        if self.icon_set == 2:
-            if self._robot_type == RobotType.VSLAM:
-                robot_image = MAP_ROBOT_VSLAM_IMAGE_MIJIA
-            else:
-                robot_image = MAP_ROBOT_LIDAR_IMAGE_MIJIA
-        else:
-            if self._robot_type == RobotType.VSLAM:
-                if self.icon_set == 3:
-                    robot_image = MAP_ROBOT_VSLAM_IMAGE_DREAME_LIGHT
-                else:
-                    robot_image = MAP_ROBOT_VSLAM_IMAGE_DREAME_DARK
-            else:
-                if self.icon_set == 3:
-                    robot_image = MAP_ROBOT_LIDAR_IMAGE_DREAME_LIGHT
-                else:
-                    robot_image = MAP_ROBOT_LIDAR_IMAGE_DREAME_DARK
-
-        if self.icon_set == 3:
-            charger_image = MAP_CHARGER_IMAGE_MATERIAL
-        elif self.icon_set == 2:
-            charger_image = MAP_CHARGER_IMAGE_MIJIA
-        else:
-            if self._robot_type == RobotType.VSLAM:
-                charger_image = MAP_CHARGER_VSLAM_IMAGE_DREAME
-            else:
-                charger_image = MAP_CHARGER_IMAGE_DREAME
-
-        icon_set = SEGMENT_ICONS_DREAME
-        if self.icon_set == 1:
-            icon_set = SEGMENT_ICONS_DREAME_OLD
-        elif self.icon_set == 2:
-            icon_set = SEGMENT_ICONS_MIJIA
-        elif self.icon_set == 3:
-            icon_set = SEGMENT_ICONS_MATERIAL
-
-        if self.icon_set == 2:
-            repeats = MAP_ICON_REPEATS_MIJIA
-            cleaning_mode = MAP_ICON_CLEANING_MODE_MIJIA
-        elif self.icon_set == 3:
-            repeats = MAP_ICON_REPEATS_MATERIAL
-            cleaning_mode = MAP_ICON_CLEANING_MODE_MATERIAL
-        else:
-            repeats = MAP_ICON_REPEATS_DREAME
-            cleaning_mode = MAP_ICON_CLEANING_MODE_DREAME
+        # Phase 3 cleanup: Mijia / Material / VSLAM variants removed;
+        # A2 always uses the Dreame icon set on LIDAR hardware.
+        robot_image = (
+            MAP_ROBOT_LIDAR_IMAGE_DREAME_LIGHT
+            if self.icon_set == 3
+            else MAP_ROBOT_LIDAR_IMAGE_DREAME_DARK
+        )
+        charger_image = MAP_CHARGER_IMAGE_DREAME
+        icon_set = SEGMENT_ICONS_DREAME_OLD if self.icon_set == 1 else SEGMENT_ICONS_DREAME
+        repeats = MAP_ICON_REPEATS_DREAME
+        cleaning_mode = MAP_ICON_CLEANING_MODE_DREAME
 
         if self._light_font_file is None:
             self._light_font_file = zlib.decompress(base64.b64decode(MAP_FONT_LIGHT), zlib.MAX_WBITS | 32)
