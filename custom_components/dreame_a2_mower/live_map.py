@@ -220,6 +220,27 @@ except ImportError:
     callback = lambda f: f  # no-op decorator
     def async_dispatcher_send(*args, **kwargs): pass
 
+
+def _send_update(hass, signal: str, attrs) -> None:
+    """Fire a dispatcher signal from any thread.
+
+    HA's `async_dispatcher_send` is event-loop-only; calling it from a
+    worker thread raises the "calls async_dispatcher_send from a thread
+    other than the event loop" warning and may be refused entirely in
+    newer HA versions. `replay_session` and friends run inside
+    `hass.async_add_executor_job` (I/O + JSON parse on a worker), so
+    the final dispatch has to hop back onto the loop via
+    `call_soon_threadsafe`. When called from the event loop the hop is
+    a no-op.
+    """
+    if hass is None:
+        return
+    loop = getattr(hass, "loop", None)
+    if loop is None:
+        async_dispatcher_send(hass, signal, attrs)
+        return
+    loop.call_soon_threadsafe(async_dispatcher_send, hass, signal, attrs)
+
 # Import DOMAIN defensively (works both as relative and absolute)
 try:
     from .const import DOMAIN
@@ -380,7 +401,12 @@ class DreameA2LiveMap:
             x_factor=self.x_factor,
             y_factor=self.y_factor,
         )
-        async_dispatcher_send(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
+        # `_send_update` hops to the event loop if we're on a worker
+        # thread — replay_session is routed through
+        # `hass.async_add_executor_job` by the `replay_session` service
+        # and the session-picker select, both of which call us from a
+        # non-loop thread.
+        _send_update(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
         return result
 
     def replay_latest_session(self) -> dict[str, Any]:
@@ -420,7 +446,9 @@ class DreameA2LiveMap:
             x_factor=self.x_factor,
             y_factor=self.y_factor,
         )
-        async_dispatcher_send(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
+        # Thread-safe: the session-picker select calls us via
+        # `hass.async_add_executor_job`.
+        _send_update(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
 
     def import_from_probe_log(self, path: str, session_index: int = -1) -> dict[str, Any]:
         """Reconstruct a session from a probe-log file (dev service)."""
@@ -477,7 +505,9 @@ class DreameA2LiveMap:
             x_factor=self.x_factor,
             y_factor=self.y_factor,
         )
-        async_dispatcher_send(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
+        # Same thread-safety note as replay_session / clear_replay —
+        # `import_path_from_probe_log` runs this through the executor.
+        _send_update(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
         return {
             "path_points": len(self._state.path),
             "session_index": idx,
