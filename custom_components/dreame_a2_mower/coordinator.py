@@ -593,6 +593,17 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
         # session — worth the cheap retry on every update tick, throttled
         # to at most once per `_session_retry_min_interval` seconds so a
         # persistent cloud outage doesn't flood the executor.
+        # Manual drive is BT-only on the A2 — when the mower enters
+        # state=MOWING but no s1p4 telemetry arrives within 15s, we
+        # hide the icon and draw a "MANUAL MODE" banner. Checked here
+        # every tick so the banner appears/disappears within one
+        # update cycle of telemetry going silent or resuming.
+        if self._device is not None:
+            try:
+                self._device.manual_mode_tick()
+            except Exception as ex:
+                LOGGER.debug("manual_mode_tick failed: %s", ex)
+
         if self._device is not None and getattr(
             self._device, "_pending_session_object_name", None
         ):

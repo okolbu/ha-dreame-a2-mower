@@ -2266,6 +2266,11 @@ class MapData:
         self.frame_type: Optional[int] = None  # Map header: frame_type
         # Map header: robot x, robot y, robot angle
         self.robot_position: Optional[Point] = None
+        # Manual drive is BT-only on the A2 — firmware suppresses s1p4
+        # telemetry for the duration, so we hide the robot icon and
+        # overlay this text (set by device.manual_mode_tick). None =
+        # no overlay. See docs/research/g2408-protocol.md §Manual mode.
+        self.manual_mode_overlay: Optional[str] = None
         # Map header: charger x, charger y, charger angle
         self.charger_position: Optional[Point] = None
         self.optimized_charger_position: Optional[Point] = None

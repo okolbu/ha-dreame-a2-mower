@@ -4162,6 +4162,36 @@ class DreameMowerMapRenderer:
             elif map_data.rotation == 270:
                 image = image.transpose(Image.ROTATE_270)
 
+            overlay_text = getattr(map_data, "manual_mode_overlay", None)
+            if overlay_text and not map_data.saved_map:
+                try:
+                    if self._light_font_file is None:
+                        self._light_font_file = zlib.decompress(
+                            base64.b64decode(MAP_FONT_LIGHT), zlib.MAX_WBITS | 32
+                        )
+                    banner_size = max(18, int(image.size[0] * 0.05))
+                    banner_font = ImageFont.truetype(
+                        BytesIO(self._light_font_file), banner_size
+                    )
+                    banner_draw = ImageDraw.Draw(image, "RGBA")
+                    tb = banner_draw.textbbox((0, 0), overlay_text, font=banner_font)
+                    tw, th = tb[2] - tb[0], tb[3] - tb[1]
+                    pad = int(banner_size * 0.4)
+                    bx = (image.size[0] - tw) / 2 - pad
+                    by = int(image.size[1] * 0.08) - pad
+                    banner_draw.rectangle(
+                        (bx, by, bx + tw + pad * 2, by + th + pad * 2),
+                        fill=(0, 0, 0, 180),
+                    )
+                    banner_draw.text(
+                        (bx + pad, by + pad),
+                        overlay_text,
+                        fill=(255, 255, 255, 255),
+                        font=banner_font,
+                    )
+                except Exception as ex:
+                    _LOGGER.debug("Manual-mode overlay draw failed: %s", ex)
+
             if info_text:
                 base_width = 490  # int(round(image.size[0] / 4 * 3))
                 if image.size[0] > base_width:

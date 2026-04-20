@@ -214,6 +214,18 @@ class DreameMowerDevice:
         # arrival; independent of `mowing_telemetry` (which is only set for
         # full-shape frames so phase/area/distance sensors don't flicker).
         self._latest_position: tuple[int, int] | None = None
+        # Monotonic time.time() of the last s1p4 arrival. Used to detect
+        # Manual mode (state=MOWING but no telemetry — Manual is BT-only,
+        # firmware doesn't broadcast position/phase on MQTT during a
+        # Manual drive, confirmed 2026-04-20 run analysis).
+        self._latest_position_ts: float | None = None
+        # time.time() of the last s2p1 → MOWING transition. Used as a
+        # reference point for Manual-mode detection: we only count
+        # "no telemetry" against the mower once the MOWING state has
+        # been held for longer than the telemetry timeout, to avoid a
+        # brief false-Manual flash at the start of a normal session
+        # before the first s1p4 arrives.
+        self._mowing_state_entered_at: float | None = None
         # Latest SessionSummary (populated on event_occured → JSON fetch).
         # Holds lawn boundary + mow path + obstacles from the last completed
         # session. Exposed to consumers as `device.latest_session_summary`.
@@ -1074,6 +1086,8 @@ class DreameMowerDevice:
                     # Always extract position — works on 8/10-byte variants too.
                     beacon = decode_s1p4_position(raw)
                     self._latest_position = (beacon.x_cm, beacon.y_mm)
+                    self._latest_position_ts = time.time()
+                    self._update_map_robot_position(beacon.x_cm, beacon.y_mm)
                     if len(raw) == FRAME_LENGTH:
                         param["value"] = decode_s1p4(raw)
                     else:
@@ -1210,6 +1224,153 @@ class DreameMowerDevice:
             self._schedule_cloud_map_poll(
                 reason=f"dock-departure s2p1: {prev_int} → {cur_int}"
             )
+        # Trigger 3: reset mower icon on the map when (re)docked so the
+        # icon sits at the station instead of wherever the last s1p4 put
+        # it. The final in-flight telemetry frame typically lags the
+        # state change by a few seconds, so we re-seed on transition.
+        if cur_int == CHARGING and prev_int != CHARGING:
+            self._seed_robot_at_charger()
+        # Track MOWING-state entry time so Manual-mode detection can
+        # wait out an initial telemetry grace period instead of
+        # false-triggering at session start.
+        if cur_int == DreameMowerState.MOWING.value and prev_int != DreameMowerState.MOWING.value:
+            self._mowing_state_entered_at = time.time()
+        # Trigger 4: state left MOWING → always clear any Manual-mode
+        # overlay (either we arrived at dock with no telemetry, or the
+        # session finished normally). The overlay itself is set by the
+        # coordinator's periodic tick calling `manual_mode_tick`.
+        if prev_int == DreameMowerState.MOWING.value and cur_int != DreameMowerState.MOWING.value:
+            self._clear_manual_mode_overlay()
+            self._mowing_state_entered_at = None
+
+    def _update_map_robot_position(self, x_cm: int, y_mm: int) -> None:
+        """Project s1p4 charger-relative position into the cloud-frame map.
+
+        Transform (see docs/research/g2408-protocol.md §Coordinates):
+
+            mower_cloud_x = charger_position.x - x_cm * 10
+            mower_cloud_y = charger_position.y - y_mm * 0.625
+
+        The cloud frame uses X+Y reflection through the midline that the
+        A2 station sits on, so a positive charger-relative x_cm (mower
+        moved forward out of the dock) becomes a *negative* delta in
+        cloud-X. The 0.625 factor on y_mm was tuned against overlay
+        path data (user 2026-04-19 session review).
+
+        Updates both the live `_map_data.robot_position` and the saved
+        map copy that the camera renders from. No-op if the map hasn't
+        been built yet. Also clears any Manual-mode overlay since we
+        now have authoritative telemetry.
+        """
+        if not self._map_manager:
+            return
+        map_data = getattr(self._map_manager, "_map_data", None)
+        if map_data is None or map_data.charger_position is None:
+            return
+        try:
+            from .types import Point
+            mower_x = map_data.charger_position.x - x_cm * 10
+            mower_y = map_data.charger_position.y - y_mm * 0.625
+            pt = Point(mower_x, mower_y, 0)
+            map_data.robot_position = pt
+            saved = getattr(self._map_manager, "_saved_map_data", None)
+            if isinstance(saved, dict) and 1 in saved and saved[1] is not None:
+                saved[1].robot_position = pt
+                # Clear manual overlay on both copies — telemetry means
+                # the mower is talking via MQTT, so not in BT-only Manual.
+                saved[1].manual_mode_overlay = None
+            map_data.manual_mode_overlay = None
+        except Exception as ex:
+            _LOGGER.debug("Failed to update map robot position: %s", ex)
+
+    def _seed_robot_at_charger(self) -> None:
+        """Reset robot_position to the charger (used on re-dock transitions)."""
+        if not self._map_manager:
+            return
+        map_data = getattr(self._map_manager, "_map_data", None)
+        if map_data is None or map_data.charger_position is None:
+            return
+        try:
+            from .types import Point
+            pt = Point(
+                map_data.charger_position.x,
+                map_data.charger_position.y,
+                0,
+            )
+            map_data.robot_position = pt
+            saved = getattr(self._map_manager, "_saved_map_data", None)
+            if isinstance(saved, dict) and 1 in saved and saved[1] is not None:
+                saved[1].robot_position = pt
+        except Exception as ex:
+            _LOGGER.debug("Failed to seed robot at charger: %s", ex)
+
+    def is_manual_mode(self) -> bool:
+        """Return True if the mower is in Manual drive (BT-only, no MQTT telemetry).
+
+        Heuristic: state is MOWING but no s1p4 frame has arrived within
+        MANUAL_MODE_TELEMETRY_TIMEOUT_S seconds. Manual mode is driven
+        purely over Bluetooth from the phone; firmware does not broadcast
+        s1p4 position/phase or s2p2 status codes during the drive. The
+        only MQTT artefacts are the bookend s2p1 transitions (1 on start,
+        2 on end). Confirmed in 2026-04-20 Manual-run log analysis.
+        """
+        MANUAL_MODE_TELEMETRY_TIMEOUT_S = 15.0
+        try:
+            state_val = self.get_property(DreameMowerProperty.STATE)
+            if state_val is None or int(state_val) != DreameMowerState.MOWING.value:
+                return False
+        except (TypeError, ValueError):
+            return False
+        entered_at = self._mowing_state_entered_at
+        if entered_at is None:
+            # We don't know when MOWING started (e.g. integration came
+            # up already in MOWING). Be conservative and don't flag
+            # Manual — the next state transition will give us a
+            # reference point.
+            return False
+        now = time.time()
+        if now - entered_at < MANUAL_MODE_TELEMETRY_TIMEOUT_S:
+            # Grace period: normal sessions may take several seconds
+            # to emit the first s1p4 after s2p1=MOWING.
+            return False
+        if self._latest_position_ts is None:
+            return True
+        # Any s1p4 since state entered MOWING disqualifies Manual.
+        return self._latest_position_ts < entered_at
+
+    def manual_mode_tick(self) -> None:
+        """Periodic check for Manual mode, called from the coordinator.
+
+        If Manual is detected, clear the robot_position on the map
+        (so the icon is hidden) and set `manual_mode_overlay` so the
+        renderer can draw a 'MANUAL MODE' banner. If the mower leaves
+        Manual (telemetry returns or state leaves MOWING), the overlay
+        is cleared by `_update_map_robot_position` or the state-transition
+        handler.
+        """
+        if not self._map_manager:
+            return
+        map_data = getattr(self._map_manager, "_map_data", None)
+        if map_data is None:
+            return
+        if self.is_manual_mode():
+            map_data.robot_position = None
+            map_data.manual_mode_overlay = "MANUAL MODE"
+            saved = getattr(self._map_manager, "_saved_map_data", None)
+            if isinstance(saved, dict) and 1 in saved and saved[1] is not None:
+                saved[1].robot_position = None
+                saved[1].manual_mode_overlay = "MANUAL MODE"
+
+    def _clear_manual_mode_overlay(self) -> None:
+        """Remove any 'MANUAL MODE' overlay from the map data."""
+        if not self._map_manager:
+            return
+        map_data = getattr(self._map_manager, "_map_data", None)
+        if map_data is not None:
+            map_data.manual_mode_overlay = None
+        saved = getattr(self._map_manager, "_saved_map_data", None)
+        if isinstance(saved, dict) and 1 in saved and saved[1] is not None:
+            saved[1].manual_mode_overlay = None
 
     def _map_list_changed(self, previous_map_list: Any = None) -> None:
         """Update map list object name on map manager map list property when changed"""
