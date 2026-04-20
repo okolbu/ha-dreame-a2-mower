@@ -532,6 +532,52 @@ key family). Placement of a MP emits two `s1p50 = {}` pings only (§4.6).
 No `event_occured siid=4 eiid=1` fires for a Head-to-MP arrival — the
 session-summary JSON pipeline is mowing-session-specific.
 
+**Manual mode** (observed 2026-04-20 18:26:18–18:28:19 — user selected *Manual* mow mode in the Dreame app; when started, the mower auto-drives off the dock, then the user drives it via on-screen controls with a separate blade on/off toggle):
+
+```
+HH:MM:17  s3p2 = 0                   — stops charging
+HH:MM:18  s2p1 = 1 (MOWING)          — Manual session started
+(… N minutes of driving — /status/ topic is SILENT …)
+HH:MM:19  s2p1 = 2 (IDLE)            — session ended (user drove into dock
+                                        and tapped End, or tapped End on
+                                        the lawn)
+```
+
+**Manual mode is BT-mediated, not MQTT-mediated.** The Dreame app's own
+map screen also does **not** show the Manual path afterwards (user
+confirmed 2026-04-20: "the map does not show the manual run, but it
+shows the path taken to/from the maintenance point"). So this isn't
+"we missed a channel" — the mower genuinely stops broadcasting position
+to the cloud during Manual, and the app is rendering from whatever the
+cloud has, which is nothing. During the drive the /status/ topic emits:
+- `s1p4`: **zero frames.** No position telemetry reaches the cloud.
+- `s1p53`: zero. Obstacle detection not exposed to the cloud during
+  Manual. (The mower still avoids obstacles for safety — the app's
+  remote-control dispatches over BT carry the nudges and the blade
+  toggle, and the mower's local LiDAR does its own thing.)
+- `s2p2`: no code. No task-type marker.
+- `s2p50`: no task metadata.
+- blade on/off: invisible to MQTT. The *Mow* toggle is a BT command
+  to the mower's motor controller.
+- BT dropout → blade auto-stops for safety (per user 2026-04-20) —
+  this too is invisible on /status/; the cloud never knows.
+- `event_occured` siid=4 eiid=1: does **not** fire. No session-summary
+  JSON is uploaded for Manual sessions.
+
+**Integration implication:** HA cannot meaningfully render a Manual
+mow on the live-map camera (no positions), cannot track blade-on time
+for Manual, and the session-picker select will not include Manual
+sessions (no archive entry). A user-facing note in the README under
+"Modes" should say "Manual mode is invisible to HA beyond the
+start/end state transitions — use the app directly, don't rely on
+the HA camera during Manual driving".
+
+After ending Manual with the mower parked in-dock-ish but not fully
+aligned (user 2026-04-20: "not totally straight in the charger"),
+`s3p2` stayed `0` (no charging started) and no further state
+transition fired — consistent with the mower waiting for the user to
+either re-dock or press Recharge.
+
 **Mid-task recharge** (observed 2026-04-18): the mower can pause for a mid-task
 recharge and resume mowing once topped off. The task is not considered complete
 during this pause; `s1p4` telemetry continues throughout the return leg. No map
