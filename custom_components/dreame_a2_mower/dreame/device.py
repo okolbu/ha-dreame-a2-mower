@@ -403,6 +403,7 @@ class DreameMowerDevice:
             self.listen(self._battery_level_changed, DreameMowerProperty.BATTERY_LEVEL)
             self.listen(self._map_property_changed, DreameMowerProperty.CUSTOMIZED_CLEANING)
             self.listen(self._map_property_changed, DreameMowerProperty.STATE)
+            self.listen(self._state_transition_map_poll, DreameMowerProperty.STATE)
             self.listen(
                 self._map_backup_status_changed,
                 DreameMowerProperty.MAP_BACKUP_STATUS,
@@ -542,6 +543,25 @@ class DreameMowerDevice:
                                     "https://github.com/okolbu/ha-dreame-a2-mower/issues",
                                     value,
                                     sorted(known),
+                                )
+                            # Session-start codes — 50 = manual start,
+                            # 53 = scheduled start. Neither fires a map-
+                            # ready MQTT signal (no s6p1=300, no
+                            # event_occured until session-end), so
+                            # anything edited since the last rebuild —
+                            # exclusion zones, BUILDING-derived zone
+                            # additions, app-side tweaks — would leave
+                            # the HA camera showing a stale polygon
+                            # during the whole run. Proactively poll
+                            # the cloud MAP.* dataset here; the md5sum
+                            # dedupe inside `_build_map_from_cloud_data`
+                            # makes this a no-op if nothing actually
+                            # changed. See docs/research/g2408-protocol.md
+                            # §7.1 for the full list of map-refresh
+                            # triggers the integration now handles.
+                            if value in (50, 53):
+                                self._schedule_cloud_map_poll(
+                                    reason=f"session-start s2p2={value}"
                                 )
                             continue
                         if self._unknown_watchdog.saw_property(
@@ -1125,6 +1145,48 @@ class DreameMowerDevice:
         """Update last update time of the map when a property associated with rendering map changed."""
         if self._map_manager and previous_property is not None:
             self._map_manager.editor.refresh_map()
+
+    def _state_transition_map_poll(self, previous_value: Any = None) -> None:
+        """Re-pull the cloud MAP.* dataset when the state transitions in a
+        way that's likely to have left the cached map out of date.
+
+        Triggers:
+        - Previous was BUILDING(11), now anything else → zone boundary trace
+          just completed and the firmware committed a new map polygon.
+          Dreame does not emit `s2p50 o=215` for firmware-driven saves,
+          so `_message_callback`'s map-edit branch doesn't catch this one.
+        - Previous was CHARGING(6) and current is MOWING(1), IDLE(2) or
+          BUILDING(11) → starting a new session. Catches the s2p2=50/53
+          path already covered in `_message_callback` as a belt-and-braces
+          fallback for manual-UI starts that emit `s2p1` transition first.
+
+        The md5sum dedupe inside `_build_map_from_cloud_data` makes this a
+        no-op if nothing actually changed upstream, so it's cheap to be
+        liberal with triggers.
+        """
+        if previous_value is None:
+            return  # Initial population, not a real transition
+        current = self.get_property(DreameMowerProperty.STATE)
+        if current is None:
+            return
+        try:
+            prev_int = int(previous_value)
+            cur_int = int(current)
+        except (TypeError, ValueError):
+            return
+        BUILDING = 11
+        CHARGING = 6
+        # Trigger 1: BUILDING → anything else
+        if prev_int == BUILDING and cur_int != BUILDING:
+            self._schedule_cloud_map_poll(
+                reason=f"building-complete s2p1: {prev_int} → {cur_int}"
+            )
+            return
+        # Trigger 2: CHARGING → anything active (mow / build / idle-out-of-dock)
+        if prev_int == CHARGING and cur_int != CHARGING:
+            self._schedule_cloud_map_poll(
+                reason=f"dock-departure s2p1: {prev_int} → {cur_int}"
+            )
 
     def _map_list_changed(self, previous_map_list: Any = None) -> None:
         """Update map list object name on map manager map list property when changed"""
@@ -1970,6 +2032,38 @@ class DreameMowerDevice:
 
         except Exception as ex:
             _LOGGER.warning("Failed to build map from cloud data: %s", ex)
+
+    def _schedule_cloud_map_poll(self, reason: str) -> None:
+        """Re-pull the cloud MAP.* dataset and rebuild the camera image.
+
+        The g2408 only pushes an MQTT map-refresh signal on auto-recharge
+        legs (`s6p1 = 300`). Session starts, manual BUILDING sessions, and
+        app-driven zone/exclusion edits are silent on that channel, so
+        without proactive polling the HA camera can drift out of sync
+        with the mower's actual map for a whole run. This helper is
+        called at those silent inflection points; the md5sum dedupe
+        inside `_build_map_from_cloud_data` makes it a no-op if nothing
+        changed upstream.
+
+        Called from the MQTT paho worker thread, so the cloud HTTP call
+        is fine to do inline. Errors are caught here so a transient
+        cloud hiccup at session start doesn't spam the property pipeline.
+        """
+        if not self.cloud_connected:
+            _LOGGER.debug(
+                "[MAP_POLL] skipped (cloud not connected) — trigger=%s", reason
+            )
+            return
+        _LOGGER.info("[MAP_POLL] rebuilding cloud map — trigger=%s", reason)
+        try:
+            self._build_map_from_cloud_data()
+            if self._map_manager:
+                self._map_manager._map_data_changed()
+            self._property_changed()
+        except Exception as ex:  # pragma: no cover — defensive
+            _LOGGER.warning(
+                "[MAP_POLL] rebuild failed (trigger=%s): %s", reason, ex
+            )
 
     def _populate_stats_from_history(self) -> None:
         """Calculate cumulative stats from cloud event history when siid:12 properties are unavailable."""

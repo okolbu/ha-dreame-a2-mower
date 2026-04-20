@@ -641,6 +641,30 @@ Key corrections vs. earlier notes:
 - `s6p1 = 300` is **not** a session-completion signal. It's a recharge-leg-start signal. The session-completion trigger is the `event_occured` on its own dedicated method — which the integration now handles (§7.4).
 - The 2026-04-20 run produced **two** `s6p1 = 300` pushes (once per recharge interrupt) plus **one** `event_occured`. Three distinct "map-ish" artefacts per session, each with its own meaning.
 
+**Silent inflection points** (mower's internal map changes, no MQTT signal):
+
+The mower does NOT broadcast a map-ready signal for:
+- Scheduled session starts (`s2p2 = 53`, `s2p1 → 1`).
+- Manual session starts (`s2p2 = 50`, `s2p1 → 1`).
+- BUILDING-end (user tapped *Expand Lawn* or *Add Zone*; `s2p1: 11 → 2`).
+- App-driven zone / exclusion edits (`s2p50` `o=215`, see §4.6) — this one
+  is discoverable from MQTT, just not as `s6p1 = 300`.
+
+For the first three, the MAP.* cloud dataset may have changed server-side
+during the previous session boundary but the integration would never know.
+**As of v2.0.0-alpha.19** the integration proactively re-pulls the cloud map at
+each of these inflection points (see `_schedule_cloud_map_poll`) — cheap
+because `_build_map_from_cloud_data` md5-dedupes a no-change result into a
+no-op. Triggers are:
+
+| Trigger | Condition | Handler |
+|---|---|---|
+| s2p2 session-start code | `value ∈ {50, 53}` | `_message_callback` → poll |
+| BUILDING complete | `s2p1: 11 → *` transition | `_state_transition_map_poll` → poll |
+| Dock departure | `s2p1: 6 → *` transition | `_state_transition_map_poll` → poll |
+| Map-edit confirm | `s2p50 d.o == 215` | `_message_callback` → poll (§4.6) |
+| Auto-recharge leg start | `s6p1 = 300` | upstream map pipeline |
+
 ### 7.2 Failure modes seen on our fork
 
 1. **`getFileUrl("")` returns 404** — querying the OSS URL without the object
