@@ -656,18 +656,27 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
 
     @callback
     def _on_live_map_update(self, attrs: dict) -> None:
+        new_mode = attrs.get("mode")
+        prev_mode = (self._live_map_attrs or {}).get("mode")
+        new_md5 = attrs.get("summary_md5")
+        prev_md5 = (self._live_map_attrs or {}).get("summary_md5")
         self._live_map_attrs = attrs
         self._feed_trail_layer(attrs)
+        # Mode transitions and pinned-md5 changes must invalidate the
+        # composed cache. The cache key (id(base_image), trail_version)
+        # does not always change when the overlay content changes
+        # without a new base PNG — user-reported 2026-04-20 that
+        # switching the replay picker left the dashboard on the old
+        # image until the more-info popup was opened and closed. Clear
+        # the cache unconditionally on any selection change so the next
+        # dashboard fetch recomposes fresh bytes.
+        if new_mode != prev_mode or new_md5 != prev_md5:
+            self._composed_cache = None
         # Force the access token to rotate so the dashboard's
         # picture-entity card re-fetches the image. HA keys the
         # <img src=…?token=…> URL on the token, so without this the
         # browser keeps showing a cached image until the rate-limited
-        # `async_update_token` finally rotates on its own schedule.
-        # User-observed symptom (2026-04-20): replay-picker selection
-        # applied correctly but the dashboard only refreshed when the
-        # image was opened in the more-info popout and closed again.
-        # Bypass the rate-limiter here because the user just asked for
-        # a fresh view by changing the overlay selection.
+        # `async_update_token` rotates on its own schedule.
         Camera.async_update_token(self)
         self.async_write_ha_state()
 
