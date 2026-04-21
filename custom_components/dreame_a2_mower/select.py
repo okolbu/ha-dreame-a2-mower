@@ -288,18 +288,24 @@ class DreameMowerSelectEntity(DreameMowerEntity, SelectEntity):
 
 
 class DreameReplaySessionSelect(SelectEntity):
-    """Dashboard-friendly picker for archived session replays.
+    """Dashboard picker for live-map mode.
 
-    Options are built dynamically from `coordinator.session_archive`:
+    Options:
 
-        "None"    — clear the overlay, show only the base map
-        "Latest"  — replay the most recent archived session
-        "2026-04-20 07:58 — 293.58 m² (275 min)" — one entry per archive
+        "Latest"  — default. Auto-tracks the current run, or the newest
+                    archived session if no run is active. When a new run
+                    starts the map clears and begins drawing the new run
+                    live. Survives archive growth automatically.
+        "Blank"   — empty canvas (for screenshots). Not touched by
+                    mower activity or archive events.
+        "<date>"  — pinned to one archived session, newest-first. Frozen
+                    until another mode is selected.
 
-    Selecting an option fires `live_map.replay_session(...)` on an executor
-    thread (blocking disk + JSON parse, so it must not run on the event
-    loop). The option strings are stable for the archive entry's lifetime,
-    which lets the user bookmark a specific run in a dashboard card.
+    Selecting an option calls ``live_map.set_mode(...)`` on an executor
+    thread (blocking JSON parse keeps off the event loop). A sticky
+    md5 pin preserves a date selection across archive growth even if
+    the displayed label changes (area / duration can drift if the
+    summary is re-ingested).
     """
 
     _attr_has_entity_name = True
@@ -307,24 +313,8 @@ class DreameReplaySessionSelect(SelectEntity):
     _attr_entity_category = EntityCategory.CONFIG
     _attr_should_poll = False
 
-    # Option order (top→bottom in the UI):
-    #   "Live"   — default. Clears any replay overlay but lets the live
-    #              stream keep painting mower position + active trail.
-    #              During an active mow this is what you want.
-    #   "Blank"  — base map only. Wipes both the overlay AND the live
-    #              accumulators so the PNG shows just zones + dock; a
-    #              clean static view for screenshots. Live data will
-    #              re-populate on the next s1p4 push, so this is
-    #              mostly useful while the mower is docked.
-    #   "Latest" — overlay from the most recent archived session.
-    #              Value survives archive growth without re-selecting.
-    #   "<date>" — specific archived session, newest-first.
-    _OPT_LIVE = "Live"
-    _OPT_BLANK = "Blank"
     _OPT_LATEST = "Latest"
-    # Legacy constant name preserved for back-compat with any earlier
-    # automations referencing "None"; internally now aliases to "Live".
-    _OPT_NONE = _OPT_LIVE
+    _OPT_BLANK = "Blank"
 
     def __init__(self, coordinator: DreameMowerDataUpdateCoordinator) -> None:
         self._coordinator = coordinator
@@ -346,10 +336,12 @@ class DreameReplaySessionSelect(SelectEntity):
             sw_version=getattr(info, "firmware_version", None),
             hw_version=getattr(info, "hardware_version", None),
         )
-        self._attr_current_option = self._OPT_LIVE
+        self._attr_current_option = self._OPT_LATEST
+        # md5 of the currently-pinned session (only set when user picked
+        # a date). Stable across archive re-indexing and label changes,
+        # so we can relocate the entry if its display string shifts.
+        self._pinned_md5: str | None = None
         self._refresh_options()
-
-    # -------- option formatting --------
 
     @staticmethod
     def _format_label(entry) -> str:
@@ -364,31 +356,20 @@ class DreameReplaySessionSelect(SelectEntity):
         # even if the user opted out of disk retention
         # (`session_archive_keep = 0`). list_sessions() is already
         # sorted newest-first, so slicing keeps the most useful ones.
-        # See docs/research/g2408-protocol.md § "Map & LiDAR freshness"
-        # / project memory for the UX rationale.
         from .const import SESSION_REPLAY_PICKER_HARD_CAP
         sessions = all_sessions[:SESSION_REPLAY_PICKER_HARD_CAP]
-        # Remember the filename keyed by label so on select we can fetch
-        # the right one without re-parsing the label.
-        self._label_to_file = {
-            self._format_label(s): str(archive.root / s.filename)
-            for s in sessions
-        }
+        self._label_to_entry = {self._format_label(s): s for s in sessions}
         self._attr_options = [
-            self._OPT_LIVE,
+            self._OPT_LATEST,
             self._OPT_BLANK,
-            *( [self._OPT_LATEST] if sessions else [] ),
-            *self._label_to_file.keys(),
+            *self._label_to_entry.keys(),
         ]
-
-    # -------- HA lifecycle --------
 
     @property
     def available(self) -> bool:
         return self._coordinator.session_archive is not None
 
     async def async_added_to_hass(self) -> None:
-        # React to new archived sessions by rebuilding the options list.
         self.async_on_remove(
             self._coordinator.async_add_listener(self._handle_coordinator_update)
         )
@@ -397,18 +378,27 @@ class DreameReplaySessionSelect(SelectEntity):
     def _handle_coordinator_update(self) -> None:
         prev_opts = tuple(self._attr_options)
         self._refresh_options()
-        if tuple(self._attr_options) != prev_opts:
-            # Archive grew — make sure the previously-selected option is
-            # still valid. If the user had selected "Latest" stay there
-            # (still valid, now points to the newer entry); if they had
-            # a concrete entry that got evicted (retention pruned it)
-            # fall back to Live so the dashboard keeps showing the
-            # current mower rather than a blank screen.
-            if self._attr_current_option not in self._attr_options:
-                self._attr_current_option = self._OPT_LIVE
-            self.async_write_ha_state()
+        if tuple(self._attr_options) == prev_opts:
+            return
 
-    # -------- selection --------
+        # If the user pinned a specific session, keep them on it even if
+        # the display label changed — match by md5 which is stable.
+        if self._pinned_md5 is not None:
+            for label, entry in self._label_to_entry.items():
+                if entry.md5 == self._pinned_md5:
+                    self._attr_current_option = label
+                    self.async_write_ha_state()
+                    return
+            # Pinned entry got evicted by retention — fall back to Latest.
+            self._pinned_md5 = None
+            self._attr_current_option = self._OPT_LATEST
+            self.async_write_ha_state()
+            return
+
+        # Non-pinned (Latest / Blank) are always valid — no change.
+        if self._attr_current_option not in self._attr_options:
+            self._attr_current_option = self._OPT_LATEST
+        self.async_write_ha_state()
 
     async def async_select_option(self, option: str) -> None:
         if option not in self._attr_options:
@@ -418,30 +408,28 @@ class DreameReplaySessionSelect(SelectEntity):
         if live_map is None:
             raise HomeAssistantError("Live map is not available on this device")
 
-        if option == self._OPT_LIVE:
-            # Default: clear any replay overlay, let the live stream
-            # continue to paint position + active trail.
-            await self.hass.async_add_executor_job(live_map.clear_replay)
+        from .live_map import MapMode
+
+        if option == self._OPT_LATEST:
+            await self.hass.async_add_executor_job(live_map.set_mode, MapMode.LATEST)
+            self._pinned_md5 = None
         elif option == self._OPT_BLANK:
-            # Pure base map — wipes overlay AND the live accumulators.
-            await self.hass.async_add_executor_job(live_map.render_blank)
-        elif option == self._OPT_LATEST:
-            await self.hass.async_add_executor_job(live_map.replay_latest_session)
+            await self.hass.async_add_executor_job(live_map.set_mode, MapMode.BLANK)
+            self._pinned_md5 = None
         else:
-            path = self._label_to_file.get(option)
-            if path is None:
-                # Shouldn't happen — options and label_to_file are kept
-                # in sync — but guard against a race with archival.
-                raise HomeAssistantError(f"No file registered for option {option}")
-            await self.hass.async_add_executor_job(live_map.replay_session, path)
+            entry = self._label_to_entry.get(option)
+            if entry is None:
+                raise HomeAssistantError(f"No archive entry for option {option}")
+            await self.hass.async_add_executor_job(
+                live_map.set_mode, MapMode.SESSION, entry
+            )
+            self._pinned_md5 = entry.md5
 
         self._attr_current_option = option
         self.async_write_ha_state()
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
-        """Expose the resolved file path for the current option so a user
-        or automation can see what a label maps to without parsing it."""
-        if self._attr_current_option in (self._OPT_LIVE, self._OPT_BLANK, self._OPT_LATEST):
-            return {"resolved_file": None}
-        return {"resolved_file": self._label_to_file.get(self._attr_current_option)}
+        if self._attr_current_option in (self._OPT_LATEST, self._OPT_BLANK):
+            return {"pinned_md5": None}
+        return {"pinned_md5": self._pinned_md5}
