@@ -12,9 +12,26 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
+from enum import Enum
 
 PATH_DEDUPE_METRES = 0.2
 OBSTACLE_DEDUPE_METRES = 0.5
+
+
+class MapMode(str, Enum):
+    """Replay-picker selection. Determines what the camera snapshot shows.
+
+    - LATEST:  auto-track. Shows the current run live, or the most recent
+               archived session when no run is active. New run starting
+               wipes the overlay and begins drawing the new run.
+    - SESSION: pinned to one archived session, frozen until another mode
+               is selected. Mower activity does not affect it.
+    - BLANK:   empty canvas, for screenshots. Not touched by telemetry.
+    """
+
+    LATEST = "latest"
+    SESSION = "session"
+    BLANK = "blank"
 
 
 def replay_from_archive_file(
@@ -88,11 +105,13 @@ class LiveMapState:
       card has a stable underlay even while docked.
     """
 
+    mode: MapMode = MapMode.LATEST
+    pinned_md5: str | None = None
+
     path: list[list[float]] = field(default_factory=list)
     obstacles: list[list[float]] = field(default_factory=list)
     session_id: int = 0
     session_start: str | None = None
-    _pending: list[list[float]] = field(default_factory=list)
 
     # Fields sourced from the session-summary JSON. All coordinates are
     # metres in the mower / charger-relative frame (no calibration needed —
@@ -171,6 +190,7 @@ class LiveMapState:
     ) -> dict:
         """Produce the extra_state_attributes dict consumable by a Lovelace map card."""
         return {
+            "mode": self.mode.value,
             "position": position,
             "path": list(self.path),
             "obstacles": list(self.obstacles),
@@ -188,17 +208,34 @@ class LiveMapState:
             "summary_md5": self.summary_md5,
         }
 
-    def buffer_pending_point(self, x_m: float, y_m: float) -> None:
-        """Buffer a point until a session has started. Keeps most recent 20 only."""
-        self._pending.append([round(x_m, 3), round(y_m, 3)])
-        if len(self._pending) > 20:
-            self._pending = self._pending[-20:]
+    def set_mode(self, mode: "MapMode", pinned_md5: str | None = None) -> None:
+        """Switch to ``mode``, clearing fields that don't belong there.
 
-    def flush_pending(self) -> None:
-        """Apply buffered points to the current session path (subject to dedupe)."""
-        for pt in self._pending:
-            self.append_point(pt[0], pt[1])
-        self._pending = []
+        LATEST:  live accumulators + overlay + pinned_md5 all cleared.
+                 Caller is expected to reload the newest archive (if any)
+                 after this so the snapshot reflects the last run.
+        SESSION: live accumulators cleared, pinned_md5 set. Caller is
+                 expected to load the pinned archive into the overlay.
+        BLANK:   everything cleared; session_id reset.
+        """
+        self.mode = mode
+        self.path = []
+        self.obstacles = []
+        if mode is MapMode.SESSION:
+            self.pinned_md5 = pinned_md5
+        else:
+            self.pinned_md5 = None
+        if mode in (MapMode.LATEST, MapMode.BLANK):
+            self.lawn_polygon = []
+            self.exclusion_zones = []
+            self.completed_track = []
+            self.obstacle_polygons = []
+            self.dock_position = None
+            self.summary_md5 = None
+            self.summary_end_ts = None
+        if mode is MapMode.BLANK:
+            self.session_id = 0
+            self.session_start = None
 
 
 # -------------------------------------------------------------

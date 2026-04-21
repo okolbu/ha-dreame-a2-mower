@@ -61,17 +61,22 @@ def test_load_from_none_is_noop():
     assert s.lawn_polygon == []
 
 
-def test_overlay_survives_start_session(summary):
+def test_overlay_cleared_by_set_mode_latest(summary):
+    """Switching to LATEST clears the overlay; the coordinator is expected
+    to reload the newest archive into the overlay right after. In LATEST
+    mode we show the *most recent* thing — not whatever was previously
+    loaded."""
+    from live_map import MapMode
+
     s = LiveMapState()
     s.load_from_session_summary(summary)
-    s.append_point(1.0, 2.0)
-
-    s.start_session("2026-04-19T10:00:00+00:00")
-    # Live-stream state reset, but overlay persists.
-    assert s.path == []
     assert s.lawn_polygon != []
-    assert s.obstacle_polygons != []
-    assert s.dock_position == [1.54, 0.02]
+
+    s.set_mode(MapMode.LATEST)
+
+    assert s.lawn_polygon == []
+    assert s.summary_md5 is None
+    assert s.path == []
 
 
 def test_to_attributes_includes_overlay(summary):

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from live_map import LiveMapState
+from live_map import LiveMapState, MapMode
 
 
 def test_new_state_has_empty_path_and_obstacles():
@@ -109,6 +109,7 @@ def test_to_attributes_matches_schema_when_empty():
         y_factor=0.625,
     )
     assert attrs == {
+        "mode": "latest",
         "position": None,
         "path": [],
         "obstacles": [],
@@ -149,39 +150,55 @@ def test_to_attributes_includes_current_state():
     assert attrs["calibration"] == {"x_factor": 1.0, "y_factor": 0.625}
 
 
-def test_pending_point_is_buffered_before_session_starts():
+def test_new_state_defaults_to_latest_mode():
     s = LiveMapState()
-    # No session started yet — these should NOT go into path directly.
-    s.buffer_pending_point(1.0, 2.0)
-    s.buffer_pending_point(1.5, 2.5)
+    assert s.mode == MapMode.LATEST
+    assert s.pinned_md5 is None
+
+
+def test_set_mode_to_blank_clears_all_layers():
+    s = LiveMapState()
+    s.append_point(1.0, 2.0)
+    s.append_obstacle(3.0, 4.0)
+    s.lawn_polygon = [[0.0, 0.0], [1.0, 0.0]]
+    s.completed_track = [[[0.0, 0.0]]]
+    s.summary_md5 = "abc"
+
+    s.set_mode(MapMode.BLANK)
+
+    assert s.mode == MapMode.BLANK
+    assert s.path == []
+    assert s.obstacles == []
+    assert s.lawn_polygon == []
+    assert s.completed_track == []
+    assert s.summary_md5 is None
+
+
+def test_set_mode_to_session_stores_pinned_md5_and_clears_live():
+    s = LiveMapState()
+    s.append_point(1.0, 2.0)
+    s.append_obstacle(3.0, 4.0)
+
+    s.set_mode(MapMode.SESSION, pinned_md5="deadbeef")
+
+    assert s.mode == MapMode.SESSION
+    assert s.pinned_md5 == "deadbeef"
+    assert s.path == []
+    assert s.obstacles == []
+
+
+def test_set_mode_to_latest_clears_pinned_md5_and_live():
+    s = LiveMapState()
+    s.set_mode(MapMode.SESSION, pinned_md5="deadbeef")
+    s.set_mode(MapMode.LATEST)
+
+    assert s.mode == MapMode.LATEST
+    assert s.pinned_md5 is None
     assert s.path == []
 
-    s.start_session("2026-04-18T12:00:00")
-    s.flush_pending()
 
-    assert s.path == [[1.0, 2.0], [1.5, 2.5]]
-
-
-def test_buffer_limited_to_max_20_frames():
+def test_to_attributes_includes_mode():
     s = LiveMapState()
-    for i in range(30):
-        s.buffer_pending_point(i * 1.0, 0.0)
-
-    s.start_session("t1")
-    s.flush_pending()
-
-    # Should have at most 20 points from the buffered 30.
-    assert len(s.path) == 20
-    # The OLDEST frames are dropped; newest 20 retained.
-    assert s.path[0] == [10.0, 0.0]
-    assert s.path[-1] == [29.0, 0.0]
-
-
-def test_flush_pending_clears_buffer():
-    s = LiveMapState()
-    s.buffer_pending_point(1.0, 2.0)
-    s.start_session("t1")
-    s.flush_pending()
-    # Further flush has no effect.
-    s.flush_pending()
-    assert s.path == [[1.0, 2.0]]
+    s.set_mode(MapMode.BLANK)
+    attrs = s.to_attributes(position=None, x_factor=1.0, y_factor=1.0)
+    assert attrs["mode"] == "blank"
