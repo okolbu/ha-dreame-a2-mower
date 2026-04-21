@@ -95,19 +95,42 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not hass.services.has_service(DOMAIN, "import_path_from_probe_log"):
         hass.services.async_register(DOMAIN, "import_path_from_probe_log", _handle_import)
 
-    # Session-replay service (A3). Freezes an archived session's
-    # overlay into the live-map camera so a Lovelace map card redraws
-    # the historical run. Accepts an explicit file or "latest". The
-    # underlying method does blocking disk + JSON-parse work — run on
-    # the executor to keep the event loop free.
+    # Session-replay service (A3). Dispatches to live_map.set_mode:
+    #   file missing / "latest" → LATEST (auto-track newest run)
+    #   file == "blank"         → BLANK (empty canvas)
+    #   file == <archive path>  → SESSION pinned to that entry
+    # Runs on the executor because set_mode does blocking JSON parsing.
     async def _handle_replay(call):
         coord = next(iter(hass.data[DOMAIN].values()), None)
         if coord is None:
             raise ValueError("No Dreame A2 coordinator loaded")
         file = call.data.get("file")
+        from .live_map import MapMode
+
         if not file or file == "latest":
-            return await hass.async_add_executor_job(coord.live_map.replay_latest_session)
-        return await hass.async_add_executor_job(coord.live_map.replay_session, file)
+            return await hass.async_add_executor_job(
+                coord.live_map.set_mode, MapMode.LATEST
+            )
+        if file == "blank":
+            return await hass.async_add_executor_job(
+                coord.live_map.set_mode, MapMode.BLANK
+            )
+
+        # Resolve the file path to an archive entry by basename.
+        archive = getattr(coord, "session_archive", None)
+        if archive is None:
+            raise ValueError("session archive not available")
+        from pathlib import Path as _Path
+        basename = _Path(file).name
+        entry = next(
+            (e for e in archive.list_sessions() if e.filename == basename),
+            None,
+        )
+        if entry is None:
+            raise ValueError(f"No archived session matches {basename}")
+        return await hass.async_add_executor_job(
+            coord.live_map.set_mode, MapMode.SESSION, entry
+        )
 
     if not hass.services.has_service(DOMAIN, "replay_session"):
         hass.services.async_register(DOMAIN, "replay_session", _handle_replay)

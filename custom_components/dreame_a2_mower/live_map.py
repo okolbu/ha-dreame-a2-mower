@@ -348,36 +348,48 @@ class DreameA2LiveMap:
         if device is None:
             return
 
-        # 1) Session-active transitions.
+        # SESSION and BLANK are frozen — the snapshot pushed by set_mode()
+        # stands until the picker changes mode again. Live telemetry and
+        # new session summaries are ignored so the user's chosen view is
+        # never disturbed by mower activity.
+        if self._state.mode is not MapMode.LATEST:
+            return
+
+        # Session-active transitions. In LATEST mode a fresh run wipes
+        # the previous session's overlay — we want a clean canvas plus
+        # the new live path, not last run's completed_track underneath.
         try:
             active = bool(device.status.started)
         except AttributeError:
             active = False
 
         if active and not self._prev_session_active:
-            # New session — snapshot ISO timestamp in UTC, reset state, flush buffered points.
-            # Preserve the static overlay (lawn polygon, exclusions, prior
-            # completed track, obstacle polygons) across sessions — only
-            # clear the live-stream accumulators.
             now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
             self._state.start_session(now_iso)
-            self._state.flush_pending()
+            self._state.lawn_polygon = []
+            self._state.exclusion_zones = []
+            self._state.completed_track = []
+            self._state.obstacle_polygons = []
+            self._state.dock_position = None
+            self._state.summary_md5 = None
+            self._state.summary_end_ts = None
         self._prev_session_active = active
 
-        # 1b) Pick up a newly-fetched session summary (happens once per
-        # session completion on g2408).
+        # Pick up a freshly-fetched session summary (fires once per
+        # session completion on g2408). The summary's completed_track
+        # supersedes the live accumulation for this run.
         try:
             summary = getattr(device, "latest_session_summary", None)
         except Exception:
             summary = None
         if summary is not None:
-            self._state.load_from_session_summary(summary)
+            if self._state.load_from_session_summary(summary):
+                self._state.path = []
+                self._state.obstacles = []
 
-        # 2) Position from telemetry. Prefer `latest_position` (tuple set by
-        # the blob decoder on every s1p4 arrival, including the 8-byte idle
-        # beacon) so the map overlay moves during remote-drive / learn
-        # modes, not just active mow sessions. Fall back to `mowing_telemetry`
-        # when that's all we have.
+        # Position is only meaningful during an active run. Between runs
+        # LATEST shows the archived overlay, which already carries the
+        # dock position — no need to seed a marker at the charger.
         pos_source = getattr(device, "latest_position", None)
         if pos_source is None:
             telem = getattr(device, "mowing_telemetry", None)
@@ -385,18 +397,13 @@ class DreameA2LiveMap:
                 pos_source = (telem.x_cm, telem.y_mm)
 
         position = None
-        if pos_source is not None:
+        if active and pos_source is not None:
             x_cm, y_mm = pos_source
             x_m = (x_cm / 100.0) * self.x_factor
             y_m = (y_mm / 1000.0) * self.y_factor
             position = [round(x_m, 3), round(y_m, 3)]
+            self._state.append_point(x_m, y_m)
 
-            if active:
-                self._state.append_point(x_m, y_m)
-            else:
-                self._state.buffer_pending_point(x_m, y_m)
-
-        # 3) Obstacle: append if True and no recent dupe. Position must exist.
         try:
             obstacle_on = bool(device.obstacle_detected)
         except AttributeError:
@@ -405,7 +412,6 @@ class DreameA2LiveMap:
         if obstacle_on and position is not None:
             self._state.append_obstacle(position[0], position[1])
 
-        # 4) Push snapshot.
         attrs = self._state.to_attributes(
             position=position,
             x_factor=self.x_factor,
@@ -419,107 +425,61 @@ class DreameA2LiveMap:
         # Re-push a snapshot with the new calibration so the card sees it.
         self._handle_coordinator_update()
 
-    def replay_session(self, file_path: str) -> dict[str, Any]:
-        """Replay an archived session-summary JSON into the camera.
+    def set_mode(
+        self,
+        mode: "MapMode",
+        archive_entry=None,
+    ) -> dict[str, Any]:
+        """Switch the replay picker mode and dispatch a fresh snapshot.
 
-        Reads ``<file_path>`` (typically under
-        `<config>/dreame_a2_mower/sessions/<YYYY-MM-DD>_<ts>_<md5>.json`),
-        parses it, populates this live-map state's overlay fields plus
-        the path list, and dispatches a snapshot so the map card
-        redraws with the historical run frozen in place.
+        - LATEST: reset to auto-track. Loads the newest archive entry
+          into the overlay (if any) so the card shows the most recent
+          run. A subsequent session-start transition will wipe this
+          overlay and begin drawing the new run live.
+        - SESSION: pin the map to ``archive_entry``. Coordinator ticks
+          will be ignored until the mode changes again.
+        - BLANK: empty canvas. Same freeze behaviour as SESSION.
 
-        Used by the `dreame_a2_mower.replay_session` HA service.
+        Runs on a worker thread (blocking JSON parse) — callers in HA
+        should dispatch through ``hass.async_add_executor_job``.
         """
-        result = replay_from_archive_file(
-            self._state, file_path, self.x_factor, self.y_factor
-        )
+        self._state.set_mode(mode, pinned_md5=getattr(archive_entry, "md5", None))
+
+        result: dict[str, Any] = {"mode": mode.value}
+        if mode is MapMode.LATEST:
+            archive = getattr(self._coordinator, "session_archive", None)
+            latest = archive.latest() if archive else None
+            if latest is not None:
+                path = archive.root / latest.filename
+                try:
+                    replay_from_archive_file(
+                        self._state, str(path), self.x_factor, self.y_factor
+                    )
+                    # LATEST is auto-tracking, not pinned to a specific md5.
+                    self._state.pinned_md5 = None
+                    result["md5"] = self._state.summary_md5
+                except (FileNotFoundError, ValueError) as ex:
+                    result["error"] = str(ex)
+        elif mode is MapMode.SESSION:
+            if archive_entry is None:
+                raise ValueError("archive_entry is required for SESSION mode")
+            archive = getattr(self._coordinator, "session_archive", None)
+            if archive is None:
+                raise ValueError("session archive unavailable")
+            path = archive.root / archive_entry.filename
+            replay_from_archive_file(
+                self._state, str(path), self.x_factor, self.y_factor
+            )
+            self._state.pinned_md5 = archive_entry.md5
+            result["md5"] = archive_entry.md5
+
         attrs = self._state.to_attributes(
-            position=None,  # no live mower position during replay
+            position=None,
             x_factor=self.x_factor,
             y_factor=self.y_factor,
         )
-        # `_send_update` hops to the event loop if we're on a worker
-        # thread — replay_session is routed through
-        # `hass.async_add_executor_job` by the `replay_session` service
-        # and the session-picker select, both of which call us from a
-        # non-loop thread.
         _send_update(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
         return result
-
-    def replay_latest_session(self) -> dict[str, Any]:
-        """Convenience: replay the most recently archived session.
-
-        Looks up the latest entry in the coordinator's session archive
-        and delegates to :meth:`replay_session`.
-        """
-        coord = self._coordinator
-        archive = getattr(coord, "session_archive", None) if coord else None
-        if archive is None:
-            raise ValueError("session archive is not available")
-        latest = archive.latest()
-        if latest is None:
-            raise ValueError("no archived sessions to replay")
-        path = archive.root / latest.filename
-        return self.replay_session(str(path))
-
-    def clear_replay(self) -> None:
-        """Clear the session-summary overlay so the map shows only the
-        live base data (zones, calibration, current position). Used by
-        the session-picker entity when the user selects "None".
-        """
-        self._state.lawn_polygon = []
-        self._state.exclusion_zones = []
-        self._state.completed_track = []
-        self._state.obstacle_polygons = []
-        self._state.dock_position = None
-        self._state.summary_md5 = None
-        self._state.summary_end_ts = None
-        # No live position argument — the coordinator's next tick will
-        # push the current mower position through the normal path. If
-        # the mower is docked right now, this leaves `position: None`
-        # which is what the base-map renderer expects.
-        attrs = self._state.to_attributes(
-            position=None,
-            x_factor=self.x_factor,
-            y_factor=self.y_factor,
-        )
-        # Thread-safe: the session-picker select calls us via
-        # `hass.async_add_executor_job`.
-        _send_update(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
-
-    def render_blank(self) -> None:
-        """Wipe BOTH the session-summary overlay AND the live path so
-        the camera shows only the static base map (zones + exclusions
-        + charger, no trail, no mower marker).
-
-        Distinct from `clear_replay()` which keeps the live stream so
-        a trail reappears the instant the mower reports a new
-        position. This method zeroes out the live accumulators too;
-        the next `_handle_coordinator_update` with a live position
-        WILL repopulate state.path, so the effect of "Blank" is only
-        durable while no s1p4 arrives — i.e. while the mower is
-        parked / silent. This is the expected UX: a clean static map
-        for screenshots or when the user explicitly wants to see only
-        the lawn layout.
-        """
-        self._state.lawn_polygon = []
-        self._state.exclusion_zones = []
-        self._state.completed_track = []
-        self._state.obstacle_polygons = []
-        self._state.dock_position = None
-        self._state.summary_md5 = None
-        self._state.summary_end_ts = None
-        self._state.path = []
-        self._state.obstacles = []
-        self._state._pending = []
-        self._state.session_id = 0
-        self._state.session_start = None
-        attrs = self._state.to_attributes(
-            position=None,
-            x_factor=self.x_factor,
-            y_factor=self.y_factor,
-        )
-        _send_update(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
 
     def import_from_probe_log(self, path: str, session_index: int = -1) -> dict[str, Any]:
         """Reconstruct a session from a probe-log file (dev service)."""
