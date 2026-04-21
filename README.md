@@ -166,17 +166,24 @@ A pure-WebGL Lovelace card ships bundled with the integration (no Three.js, no H
 
 Every completed mow run is archived as a JSON summary under `<config>/dreame_a2_mower/sessions/`. Exposed count at `sensor.dreame_a2_mower_archived_mowing_sessions` with metadata for each run in the attributes.
 
-Replay any archived run back into the camera view:
+Use the **Replay Session** picker on the Mower dashboard, or call the service directly:
 
 ```yaml
 service: dreame_a2_mower.replay_session
 data:
-  file: latest
-  # Or an absolute path to a specific summary JSON:
+  file: latest           # auto-track newest run (= picker "Latest")
+  # file: blank          # empty canvas (= picker "Blank")
+  # Or an absolute path to a specific summary JSON (pinned — = picker "<date>"):
   # file: /config/dreame_a2_mower/sessions/2026-04-18_1776541055_0a68d124.json
 ```
 
-This repopulates the camera attributes with the historical lawn polygon, completed track (segment-aware — no ghost lines across pen-up gaps), obstacle polygons, and dock position. Map cards that read these attributes redraw with the frozen session overlaid. The live camera PNG also recomposites the trail directly.
+The picker has three option types:
+
+- **Latest** — auto-tracks the current run, or the newest archive when no run is active. A new run starting clears the map and begins drawing live.
+- **Blank** — empty canvas; not affected by mower activity (for screenshots).
+- **`<date>`** — pins the map to one archived session. Frozen until you pick something else.
+
+The pinned overlay carries the historical lawn polygon, completed track (segment-aware — no ghost lines across pen-up gaps), obstacle polygons, and dock position. Map cards that read these attributes redraw with the frozen session overlaid. The live camera PNG also recomposites the trail directly.
 
 ## LiDAR scans
 

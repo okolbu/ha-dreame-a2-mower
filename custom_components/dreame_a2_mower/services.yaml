@@ -3,9 +3,11 @@ replay_session:
     file:
       example: "latest"
       description: >
-        Either "latest" (default if omitted) to replay the most recently
-        archived session, or an absolute path to a session-summary JSON
-        under <config>/dreame_a2_mower/sessions/.
+        Controls the Live map mode. "latest" (or omitted) switches to
+        auto-track (shows the current or most recent run). "blank"
+        shows an empty canvas. An absolute path to a session-summary
+        JSON under <config>/dreame_a2_mower/sessions/ pins the map to
+        that session.
       required: false
       selector:
         text:

@@ -37,13 +37,17 @@ views:
         show_state: false
         show_name: false
 
-      # Session replay picker — choose any archived session to freeze
-      # its path + obstacles onto the map above. "None" clears the
-      # overlay back to the base map; "Latest" auto-tracks the most
-      # recent run. Entity_id is `select.dreame_a2_mower_replay_session`
-      # on installs from v2.0.0-alpha.13+; pre-alpha.13 installs use
-      # the shorter `select.replay_session` — rename in
-      # Settings → Devices & Services → Entities if desired.
+      # Session replay picker — controls what the Live map camera shows.
+      #   "Latest": follows the current (or most recent) run live. When a
+      #             new run starts the map clears and begins drawing it.
+      #   "Blank":  empty canvas for screenshots; not affected by activity.
+      #   "<date>": pins the map to one archived session, frozen until
+      #             you pick something else. Mower activity does not
+      #             affect the pinned view.
+      # Entity_id is `select.dreame_a2_mower_replay_session` on installs
+      # from v2.0.0-alpha.13+; pre-alpha.13 installs use the shorter
+      # `select.replay_session` — rename in Settings → Devices & Services
+      # → Entities if desired.
       - type: entities
         title: Replay
         entities:
