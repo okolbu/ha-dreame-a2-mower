@@ -378,6 +378,11 @@ class DreameA2LiveMap:
         # a leg; multi-leg recharge cycles merge into one in-progress
         # entry until `started` finally drops.
         self._in_progress_leg_md5s: list[str] = []
+        # Monotonic timestamp of the first tick where the auto-finalize
+        # gate was satisfied. Cleared if any condition reverts. Acts
+        # as a debounce so brief started=False blips during a recharge
+        # transition can't trigger finalize.
+        self._inactive_since: float | None = None
         try:
             self._migrate_legacy_drafts(hass)
         except Exception:  # pragma: no cover — best-effort cleanup
@@ -476,6 +481,22 @@ class DreameA2LiveMap:
             "area_mowed_m2": _approximate_area(self._state.path),
             "map_area_m2": 0,
         }
+        # Off-load the disk write to the executor so we don't block
+        # the event loop. HA's blocking-call detector flags any
+        # write_text() inside a @callback (this method is called
+        # from `_handle_coordinator_update`, a callback). Keeping it
+        # synchronous risks the operation being short-circuited /
+        # warning-spammed. Fire-and-forget is fine — the payload's
+        # last_update_ts is stamped inside write_in_progress, and
+        # the next tick will re-fire if this one drops.
+        offload = getattr(self._hass, "async_add_executor_job", None)
+        if callable(offload):
+            try:
+                offload(archive.write_in_progress, payload)
+                return
+            except RuntimeError:
+                pass  # no running loop — fall through to sync write
+        # Test harness or no-loop context: write inline.
         archive.write_in_progress(payload)
 
     def _restore_in_progress(self) -> bool:
@@ -543,6 +564,36 @@ class DreameA2LiveMap:
         if archive is not None:
             archive.delete_in_progress()
         self._in_progress_leg_md5s = []
+
+    @staticmethod
+    def _recharge_status_enums(device) -> set:
+        """Return the status-enum values that mean "recharging mid-run".
+
+        The device's status enum has different members per upstream
+        firmware. We resolve them dynamically by attribute lookup so
+        an unknown variant doesn't crash; the returned set covers the
+        BACK_HOME / RETURNING / CHARGING / CHARGING_COMPLETED /
+        DOCKING family that all mean "we're in a charge cycle, the
+        run isn't over". Used by the auto-finalize gate so the
+        recharge transition doesn't get mistaken for session end.
+        """
+        try:
+            from .dreame.const import DreameMowerStatus as _S
+        except ImportError:
+            try:
+                from dreame.const import DreameMowerStatus as _S
+            except ImportError:
+                return set()
+        names = (
+            "BACK_HOME", "CHARGING", "CHARGING_COMPLETED", "RETURNING",
+            "STATION_RESET", "STATION_ARRIVING", "DOCKING",
+        )
+        out = set()
+        for n in names:
+            v = getattr(_S, n, None)
+            if v is not None:
+                out.add(v)
+        return out
 
     def finalize_session(self) -> dict[str, Any]:
         """Close out the current in-progress entry, archiving if needed.
@@ -673,26 +724,54 @@ class DreameA2LiveMap:
             len(self._state.path),
         )
 
-        # Auto-close in-progress entry: if the device has definitively
-        # reported no active session (s2p56 known + started=False),
-        # the in-progress file is obsolete. Either the cloud summary
-        # already arrived and the coordinator promoted it, or no
-        # summary will come for this run. Either way the entry
-        # should not linger.
-        # `_session_status_known` distinguishes "we haven't heard yet"
-        # from "we asked and got empty", so a just-restored entry
-        # isn't discarded during boot before the first s2p56 push.
+        # Auto-close in-progress entry: only after a *sustained*
+        # "no active task" reading. The previous gate fired the
+        # moment `started` flipped False, which clobbered legitimate
+        # mid-run recharges — between mower-goes-IDLE (s2p1=2) and
+        # s2p56-confirms-pending-resume (code=4), there's a ~50 s
+        # window where started can briefly read False, and a
+        # finalize during that window deletes the real in-progress
+        # entry then a fresh start_session fires when pending_resume
+        # arrives → "phantom" replay row with a new session_start.
+        #
+        # The fix: require both
+        #   (a) `_session_status_known and not active`, AND
+        #   (b) it's been that way for ≥120 s,
+        #   AND the mower is not currently docking / charging /
+        #   returning (status enum) — those signal a recharge cycle,
+        #   not session end.
         session_known = getattr(device, "_session_status_known", False)
-        if session_known and not active and self._prev_session_active:
-            # Logical session just ended. If any leg summary fired
-            # during the run, the per-leg archive entries are already
-            # on disk — `finalize_session` will simply drop the
-            # in-progress aggregator. If no leg ever fired (e.g. HA
-            # was down through the entire run, mower offline at the
-            # cloud-event window), the captured live_path is the
-            # only record — `finalize_session` synthesizes an
-            # "(incomplete)" archive entry for it before deleting.
-            self.finalize_session()
+        try:
+            status_enum = device.status.status
+        except AttributeError:
+            status_enum = None
+        recharge_states = self._recharge_status_enums(device)
+        in_recharge = status_enum is not None and status_enum in recharge_states
+        if session_known and not active and self._prev_session_active and not in_recharge:
+            import time as _time
+            now = _time.monotonic()
+            if self._inactive_since is None:
+                self._inactive_since = now
+                _LOGGER.debug(
+                    "live_map: started→False observed; arming finalize timer"
+                )
+            elif now - self._inactive_since >= 120.0:
+                _LOGGER.debug(
+                    "live_map: started=False sustained ≥120s; finalizing"
+                )
+                self.finalize_session()
+                self._inactive_since = None
+        else:
+            # Cancel the pending-finalize timer the moment any of the
+            # gate conditions go back the other way (e.g. recharge
+            # state observed, or pending_resume re-arms started=True).
+            if self._inactive_since is not None:
+                _LOGGER.debug(
+                    "live_map: finalize timer cancelled "
+                    "(active=%s in_recharge=%s status=%s)",
+                    active, in_recharge, status_enum,
+                )
+            self._inactive_since = None
 
         # Session-boundary wipe: only clear the LATEST overlay when a
         # new session starts. In SESSION/BLANK mode this still resets

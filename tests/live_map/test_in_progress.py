@@ -118,8 +118,11 @@ def test_auto_finalize_on_session_end_no_legs_synthesizes_incomplete(tmp_path):
     lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
     assert archive.read_in_progress() is not None  # restored
 
-    # Now the device reports definitively idle → auto-finalize.
+    # The auto-finalize gate now requires sustained idle. Skip the
+    # 120s wait by simulating an already-elapsed inactive period.
+    import time as _time
     device._session_status_known = True
+    lm._inactive_since = _time.monotonic() - 200.0
     lm._handle_coordinator_update()
 
     # In-progress is gone; an incomplete archive entry took its place.
@@ -156,13 +159,71 @@ def test_auto_finalize_with_existing_legs_just_drops_in_progress(tmp_path):
     device = _make_device(started=False, session_known=False)
     lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
 
+    # Same as above: bypass the 120s sustained-idle debounce.
+    import time as _time
     device._session_status_known = True
+    lm._inactive_since = _time.monotonic() - 200.0
     lm._handle_coordinator_update()
 
     # No synthesized entry — leg summaries already on disk would be the
     # archive's responsibility, not finalize's.
     assert archive.read_in_progress() is None
     assert archive.count == 0
+
+
+def test_recharge_transition_does_not_trigger_finalize(tmp_path):
+    """Regression: at recharge time the mower goes IDLE → BACK_HOME →
+    CHARGING for ~50 s before s2p56 sends pending_resume (code 4).
+    The auto-finalize gate must NOT fire during that gap, otherwise
+    the in-progress entry gets deleted and a fresh start_session
+    creates a phantom new run when pending_resume arrives."""
+    archive = SessionArchive(tmp_path)
+    archive.write_in_progress({
+        "session_start_ts": 1776840000,
+        "live_path": [[0.0, 0.0], [1.0, 1.0]],
+        "obstacles": [],
+        "leg_md5s": [],
+        "completed_track": [],
+        "lawn_polygon": [],
+        "exclusion_zones": [],
+        "obstacle_polygons": [],
+        "dock_position": None,
+        "summary_md5": None,
+        "summary_end_ts": None,
+        "area_mowed_m2": 0.0,
+        "map_area_m2": 0,
+    })
+
+    # Simulate the recharge window: started=False but status enum
+    # reports BACK_HOME / CHARGING — the recharge-state gate must
+    # suppress finalize entirely.
+    try:
+        from dreame.const import DreameMowerStatus as _S
+    except ImportError:
+        _S = None
+    pytest_skip = _S is None
+    if pytest_skip:
+        pytest.skip("DreameMowerStatus enum unavailable in test env")
+
+    device = SimpleNamespace(
+        status=SimpleNamespace(started=False, status=_S.BACK_HOME),
+        latest_position=None,
+        obstacle_detected=False,
+        latest_session_summary=None,
+        _session_status_known=True,
+    )
+    lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
+    # Pretend a long time has passed in the inactive state — the
+    # recharge gate should still keep the timer disarmed.
+    import time as _time
+    lm._inactive_since = _time.monotonic() - 200.0
+    lm._prev_session_active = True
+
+    lm._handle_coordinator_update()
+
+    # In-progress survives unchanged; timer was reset.
+    assert archive.read_in_progress() is not None
+    assert lm._inactive_since is None
 
 
 def test_finalize_session_returns_no_in_progress_when_clean(tmp_path):
