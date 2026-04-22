@@ -99,6 +99,115 @@ and restore on boot; (c) eager s2p56 probe at boot (already
 exists per commit 36502b8 — verify it actually fires before the
 binary_sensor's first state computation).
 
+## Protocol-RE bridging plan — capture remaining unknowns
+
+See `docs/superpowers/specs/2026-04-22-latest-view-path-rendering-design.md`
+and chat 2026-04-22 structured review for the full context. Tier
+catalog of known/partial/unknown lives in
+`docs/research/g2408-protocol.md` §2.1.
+
+### A — Value-history capture (LANDED alpha.64)
+
+`UnknownFieldWatchdog.saw_value(siid, piid, value)` drives
+`[PROTOCOL_VALUE_NOVEL]` WARNINGs for each new distinct value of
+an unmapped property. Capped at 32 distinct values per property.
+Lets us catalogue s5p106 (1..7 cycle), s5p107 (dynamic enum),
+s2p66[1] mystery integer, s6p2[0] profile id, and all other
+Tier 2 slots without manual probe analysis.
+
+### B — Change-correlation tagger
+
+**Goal**: derive semantics from CONCURRENT state when an unknown
+property changes. Currently we log "s5p107 → 158" but not the
+battery / phase / session-elapsed at that moment, so the
+correlation has to be reconstructed manually.
+
+**Proposal**: add a helper that captures a context snapshot and
+logs it alongside each `[PROTOCOL_VALUE_NOVEL]` (or even on every
+change of a Tier-2 property). Format:
+
+```
+[PROTOCOL_CORRELATION] s5p107 → 158 at battery=74%, s2p1=2,
+  s2p2=48, since_session_start=2370s, mowing_phase=?
+```
+
+Snapshot fields: `battery_pct`, `s2p1`, `s2p2`, seconds since
+current session start, seconds since last leg start, current
+`mowing_phase`, current `x_m`/`y_m` rounded, `cleaning_paused`.
+
+Implementation: `_capture_context()` method on device that
+returns a formatted string; call it right before the
+`[PROTOCOL_VALUE_NOVEL]` emission. Zero behaviour change.
+
+### C — Switch entity `switch.dreame_a2_mower_re_capture`
+
+**Goal**: self-service experiment mode the user can toggle in the
+app without editing YAML. While ON:
+- Every unknown-property change logs at WARNING (not just novel
+  values — also CORRELATION breadcrumbs)
+- Every MQTT message gets dumped via `_deep_format` to
+  `<config>/dreame_a2_mower/debug/re_capture_<date>.jsonl`
+  (bounded rotation at ~10 MB per file, 5 files kept)
+- On turn-OFF, a summary report is emitted at WARNING listing:
+  - Distinct values seen per property during the window
+  - Count of each s2p1 / s2p2 code observed
+  - Any novel events
+  - Time range of capture
+
+**Usage flow**: user enables Switch → does experiment X (e.g.
+toggle Mowing Direction + Chequerboard + Schedule edits) → turns
+Switch OFF → pastes the summary report.
+
+### D — App-config experiment plan (manual, no code)
+
+Run each of these experiments at least once under the RE-capture
+Switch (alphabetical; update protocol doc §2.1 as each completes):
+
+| # | Target | Experiment | Expected signal |
+|---|--------|-----------|-----------------|
+| 1 | `s5p106` cycle | Leave integration running overnight without interacting; correlate transitions with battery level and time-of-day | Confirm 30-min cadence + identify reset trigger (midnight? session boundary?) |
+| 2 | `s6p2[0]` profile id | Visit BUILDING mode ("Expand Lawn"), run normal mow, run scheduled mow, run manual mow — capture s6p2 value at each | Map value → session class |
+| 3 | `s2p2` state codes | Trigger every app action: Head to Maintenance, Cancel, Return to Base, manual drive, Find My Mower | Pin down `27`, `43`, `56`, `69`, `128`, `170` triggers |
+| 4 | `s5p107` bitfield | Mow with Rain Protection on/off; Frost Protection on/off; AI Obstacle Photos on/off; obstacle-avoidance variants | Look for value bands per mode toggle |
+| 5 | `s1p4` byte[6] | Drive manually in BUILDING mode varying heading; note if values correlate with cardinal direction | Confirm/refute heading hypothesis |
+| 6 | MAP `cleanPoints` / `cruisePoints` / `notObsAreas` / `cut` | Set maintenance-point, add zone, add exclusion, add patrol-point — capture MAP payload before+after | Derive schema for each top-level key |
+| 7 | `s2p1 {1,2,5}` small enum | Trigger every app action under every battery level | Catalog the 5 distinct values |
+| 8 | `s1p4` bytes `[18-21]` | High-cadence capture during a straight-line run vs tight-turn run | Correlate with linear vs angular motion |
+
+### E — OSS session-summary failure diagnostics (LANDED alpha.63/.64)
+
+`_fetch_session_summary` now logs the cloud's full error response
+on failure (alpha.64 protocol.py change). Next session-end will
+show exactly why downloads fail when they do. After a week of
+captures:
+- Categorise the failure classes (deep-sleep, token, not-found, …)
+- Pick an appropriate retry / backoff strategy
+- Consider pre-fetching on the `s1p52 + s2p52` pair to
+  minimise the cloud-deep-sleep race window
+
+### F — Doc pipeline
+
+**Goal**: close the loop so `[PROTOCOL_VALUE_NOVEL]` captures
+propagate into §2.1 of the protocol doc without manual transcription.
+
+**Proposal**: `scripts/update-protocol-doc.py` that:
+- Reads a probe log or HA core log
+- Extracts all `[PROTOCOL_VALUE_NOVEL]` lines
+- Emits a markdown diff against §2.1 showing which rows gain
+  which new values
+- User reviews + commits
+
+### G — In-integration deep-print
+
+Currently the external `probe_a2_mqtt.py` has a `_deep_format`
+helper that walks nested structures for log output. The
+integration's `[PROTOCOL_NOVEL]` only logs `value=%r` which
+truncates / loses nested detail for dicts and lists. Move
+`_deep_format` into the integration (or import from the probe
+package) so both tools render identical output.
+
+---
+
 ## PROTOCOL_NOVEL entries — documented, but cloud session-summary download still failing
 
 Audit of all PROTOCOL_NOVEL captures across `home-assistant*.log`
