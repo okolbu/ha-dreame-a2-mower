@@ -59,6 +59,46 @@ A user-facing button (`button.dreame_a2_mower_finalize_session`)
 exposes the same finalize path for the stuck case where s2p56 never
 resumes — e.g. mower permanently offline mid-run.
 
+## Auto-finalize ambiguity around CHARGING_COMPLETED
+
+**Context** (2026-04-22): the alpha.52 finalize gate suppresses
+auto-close while the status enum is in any "recharge state"
+(BACK_HOME / CHARGING / CHARGING_COMPLETED / RETURNING / …) so
+mid-run recharges can't be misread as session end. But this
+also suppresses finalize when a run *truly* ended and the
+mower charged back to full — the user is left with a stale
+in_progress entry until they press the Finalize button.
+
+**The disambiguator**: `_task_pending_resume` (s2p56 code 4)
+and `_task_running_s2p56`. If both are False AND status is
+CHARGING_COMPLETED, the run is genuinely done — the device
+isn't planning to resume. If pending_resume is True, mid-run.
+
+**Needed**:
+- Tighten the recharge gate in `live_map._handle_coordinator_update`
+  so CHARGING_COMPLETED *only* suppresses finalize while
+  `_task_pending_resume or _task_running_s2p56`. Otherwise the
+  120s sustained-idle timer should be allowed to count down.
+- Verify against the captured probe log around 2026-04-22 11:53
+  (mid-run recharge with pending_resume) and a future "true end"
+  capture for contrast.
+
+**Acceptance**: a run that ended while HA was down auto-cleans
+within ~2 min of HA boot once s2p56 confirms no pending_resume.
+A mid-run recharge keeps the in_progress entry indefinitely.
+
+## "Mowing Session Active = Off" at reboot
+
+Cosmetic but confusing: the binary_sensor reads `device.status.started`
+which is False until the first s2p56 push lands and
+`_session_status_known` flips True. Means the dashboard briefly
+lies "no session" right after HA boots, even when a run is
+ongoing. Fix candidates: (a) initial value `unknown` instead of
+False until known; (b) cache the last-known-good state to disk
+and restore on boot; (c) eager s2p56 probe at boot (already
+exists per commit 36502b8 — verify it actually fires before the
+binary_sensor's first state computation).
+
 ## LiDAR card popout / fullscreen view
 
 **Context**: `custom:dreame-a2-lidar-card` (served from
