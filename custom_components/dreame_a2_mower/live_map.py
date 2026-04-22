@@ -378,14 +378,24 @@ class DreameA2LiveMap:
         # Pick up a freshly-fetched session summary (fires once per
         # session completion on g2408). The summary's completed_track
         # supersedes the live accumulation for this run.
-        try:
-            summary = getattr(device, "latest_session_summary", None)
-        except Exception:
-            summary = None
-        if summary is not None:
-            if self._state.load_from_session_summary(summary):
-                self._state.path = []
-                self._state.obstacles = []
+        #
+        # Only consult it when the mower is NOT in an active session:
+        # during a mow, `device.latest_session_summary` still holds
+        # yesterday's summary (the new one only arrives at session
+        # end) and reloading it would overwrite the clean overlay
+        # that the session-start wipe just cleared — reintroducing
+        # the previous run's completed_track *on top of* the live
+        # path. Users reported the symptom on 2026-04-22: Latest view
+        # showing yesterday's short run plus the current run's tail.
+        if not active:
+            try:
+                summary = getattr(device, "latest_session_summary", None)
+            except Exception:
+                summary = None
+            if summary is not None:
+                if self._state.load_from_session_summary(summary):
+                    self._state.path = []
+                    self._state.obstacles = []
 
         # Position is only meaningful during an active run. Between runs
         # LATEST shows the archived overlay, which already carries the
