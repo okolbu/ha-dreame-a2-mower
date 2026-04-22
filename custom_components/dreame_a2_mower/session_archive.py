@@ -103,6 +103,12 @@ class ArchivedSession:
 class SessionArchive:
     """Filesystem-backed session archive."""
 
+    # In-progress cache TTL — read_in_progress disk hits are throttled to
+    # at most one per IN_PROGRESS_CACHE_TTL_S, since list_sessions() and
+    # latest() get called from every coordinator tick AND the picker
+    # entity. Cache invalidates immediately on write/delete.
+    IN_PROGRESS_CACHE_TTL_S = 5.0
+
     def __init__(self, root: Path, retention: int = 0) -> None:
         """`retention` = max number of sessions to keep on disk. 0 means
         unlimited. Adjustable at runtime via `set_retention()`.
@@ -111,6 +117,9 @@ class SessionArchive:
         self._root.mkdir(parents=True, exist_ok=True)
         self._index: list[ArchivedSession] = []
         self._retention = int(retention) if retention else 0
+        # In-progress cache: (read_at_monotonic, payload | None).
+        # Sentinel `read_at = 0.0` means "not cached yet, read on next call".
+        self._in_progress_cached: tuple[float, dict | None] = (0.0, None)
         self._load_index()
 
     # -------------------- index I/O --------------------
@@ -193,23 +202,39 @@ class SessionArchive:
         Stale entries (age > IN_PROGRESS_MAX_AGE_S) are auto-deleted —
         otherwise an orphaned crash from yesterday would keep
         re-spawning a phantom "current run" entry every boot.
+
+        Cached for IN_PROGRESS_CACHE_TTL_S to keep this off the
+        coordinator's hot path. `list_sessions()` and `latest()` both
+        funnel through here on every tick (the picker entity reads
+        them) — without caching, that produces a disk read + JSON
+        parse for every coordinator update, which trips HA's blocking-
+        I/O detector and floods the log. The cache is invalidated
+        explicitly by `write_in_progress` and `delete_in_progress` so
+        a same-tick read after a write sees fresh data.
         """
+        import time as _time
+        cached_at, cached_data = self._in_progress_cached
+        now = _time.monotonic()
+        if cached_at and (now - cached_at) < self.IN_PROGRESS_CACHE_TTL_S:
+            return cached_data
         path = self._in_progress_path()
-        if not path.exists():
-            return None
-        try:
-            data = json.loads(path.read_text())
-        except (OSError, ValueError):
-            return None
-        if not isinstance(data, dict):
-            return None
-        try:
-            age = time.time() - float(data.get("last_update_ts", 0))
-        except (TypeError, ValueError):
-            age = 9e9
-        if age > IN_PROGRESS_MAX_AGE_S:
-            self.delete_in_progress()
-            return None
+        data: dict[str, Any] | None = None
+        if path.exists():
+            try:
+                data = json.loads(path.read_text())
+            except (OSError, ValueError):
+                data = None
+            if not isinstance(data, dict):
+                data = None
+            if data is not None:
+                try:
+                    age = _time.time() - float(data.get("last_update_ts", 0))
+                except (TypeError, ValueError):
+                    age = 9e9
+                if age > IN_PROGRESS_MAX_AGE_S:
+                    self.delete_in_progress()
+                    data = None
+        self._in_progress_cached = (now, data)
         return data
 
     def write_in_progress(self, payload: dict[str, Any]) -> None:
@@ -227,6 +252,9 @@ class SessionArchive:
         try:
             tmp.write_text(json.dumps(body, default=str))
             tmp.replace(path)
+            # Invalidate the read cache so a same-tick read after this
+            # write picks up the fresh data instead of the stale one.
+            self._in_progress_cached = (0.0, None)
         except OSError as ex:
             _LOGGER.warning("SessionArchive: failed to write in-progress: %s", ex)
 
@@ -236,6 +264,10 @@ class SessionArchive:
             path.unlink(missing_ok=True)
         except OSError:
             pass
+        # Invalidate cache so subsequent reads in the same tick see
+        # the deletion (otherwise they'd return the cached payload
+        # for up to IN_PROGRESS_CACHE_TTL_S after delete).
+        self._in_progress_cached = (0.0, None)
 
     def in_progress_entry(self) -> ArchivedSession | None:
         """Synthesize an ArchivedSession from the in-progress payload.
