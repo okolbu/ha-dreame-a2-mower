@@ -512,12 +512,18 @@ def test_recharge_transition_does_not_trigger_finalize(tmp_path):
     if pytest_skip:
         pytest.skip("DreameMowerStatus enum unavailable in test env")
 
+    # Mid-run recharge: device reports BACK_HOME + s2p56 pending-
+    # resume (`_task_pending_resume=True`). The alpha.74 gate
+    # tightening requires BOTH in_recharge AND no pending-resume to
+    # allow finalize, so this scenario must keep the entry alive.
     device = SimpleNamespace(
         status=SimpleNamespace(started=False, status=_S.BACK_HOME),
         latest_position=None,
         obstacle_detected=False,
         latest_session_summary=None,
         _session_status_known=True,
+        _task_pending_resume=True,
+        _task_running_s2p56=False,
     )
     lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
     # Pretend a long time has passed in the inactive state — the
@@ -531,6 +537,60 @@ def test_recharge_transition_does_not_trigger_finalize(tmp_path):
     # In-progress survives unchanged; timer was reset.
     assert archive.read_in_progress() is not None
     assert lm._inactive_since is None
+
+
+def test_truly_idle_at_dock_allows_finalize_alpha74(tmp_path):
+    """alpha.74 gate tightening: when the device is at a recharge-
+    state status (e.g. CHARGING_COMPLETED) AND s2p56 reports no
+    task running AND no resume pending, the run is truly over —
+    don't keep in-progress alive forever just because the status
+    enum sits in the recharge family.
+    """
+    archive = SessionArchive(tmp_path)
+    archive.write_in_progress({
+        "session_start_ts": 1776840000,
+        "live_path": [[0.0, 0.0], [1.0, 1.0]],
+        "obstacles": [],
+        "leg_md5s": [],
+        "completed_track": [],
+        "lawn_polygon": [],
+        "exclusion_zones": [],
+        "obstacle_polygons": [],
+        "dock_position": None,
+        "summary_md5": None,
+        "summary_end_ts": None,
+        "area_mowed_m2": 0.0,
+        "map_area_m2": 0,
+    })
+
+    try:
+        from dreame.const import DreameMowerStatus as _S
+    except ImportError:
+        pytest.skip("DreameMowerStatus enum unavailable in test env")
+
+    # Mower at dock charging, no pending resume — i.e. the run
+    # truly ended and the mower's just sitting there charging
+    # (DreameMowerStatus enum doesn't break out CHARGING_COMPLETED;
+    # CHARGING is the right recharge-state member to test against).
+    device = SimpleNamespace(
+        status=SimpleNamespace(started=False, status=_S.CHARGING),
+        latest_position=None,
+        obstacle_detected=False,
+        latest_session_summary=None,
+        _session_status_known=True,
+        _task_pending_resume=False,
+        _task_running_s2p56=False,
+    )
+    lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
+    # Skip the 120s sustained-idle wait by pretending it elapsed.
+    import time as _time
+    lm._inactive_since = _time.monotonic() - 200.0
+    lm._prev_session_active = True
+
+    lm._handle_coordinator_update()
+
+    # In-progress finalised — disk entry gone.
+    assert archive.read_in_progress() is None
 
 
 def test_finalize_session_returns_no_in_progress_when_clean(tmp_path):

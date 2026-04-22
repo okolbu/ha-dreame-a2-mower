@@ -629,6 +629,18 @@ class DreameA2LiveMap:
             # below treats False→True transitions as the s2p56
             # confirmation arriving, not as a fresh session.
             self._have_active_in_progress = True
+        # Mirror the in-progress flag onto the device so the MSA
+        # binary_sensor can show "On" immediately after a reboot
+        # mid-run, before s2p56 has had a chance to confirm
+        # `device.status.started`. Without this, MSA flickers Off
+        # for the first 30+ seconds of every restart even when a
+        # session is clearly ongoing.
+        try:
+            self._coordinator.device.has_active_in_progress = (
+                self._have_active_in_progress
+            )
+        except AttributeError:
+            pass
 
     def _migrate_legacy_drafts(self, hass) -> None:
         """One-shot cleanup of the old `drafts/live_path_*.json` files.
@@ -894,6 +906,10 @@ class DreameA2LiveMap:
         archive.delete_in_progress()
         self._in_progress_leg_md5s = []
         self._have_active_in_progress = False
+        try:
+            self._coordinator.device.has_active_in_progress = False
+        except AttributeError:
+            pass
         # Reset live state so the next tick starts clean.
         self._state.path = []
         self._state.obstacles = []
@@ -1008,7 +1024,26 @@ class DreameA2LiveMap:
             status_enum = None
         recharge_states = self._recharge_status_enums(device)
         in_recharge = status_enum is not None and status_enum in recharge_states
-        if session_known and not active and self._prev_session_active and not in_recharge:
+        # Tighter recharge-state suppression: in_recharge alone kept
+        # the in-progress entry alive even when the mower had truly
+        # finished and was idling at CHARGING_COMPLETED. Now also
+        # check the s2p56 task-status flags — if neither is set
+        # (no task running, no resume pending), the device itself
+        # is reporting "no current task" and the recharge-state is
+        # just "charged up after a finished run". In that case
+        # let the 120s timer arm and finalize normally.
+        pending_resume = getattr(device, "_task_pending_resume", False)
+        running_s2p56 = getattr(device, "_task_running_s2p56", False)
+        truly_idle_at_dock = (
+            in_recharge and not pending_resume and not running_s2p56
+        )
+        finalize_eligible = (
+            session_known
+            and not active
+            and self._prev_session_active
+            and (not in_recharge or truly_idle_at_dock)
+        )
+        if finalize_eligible:
             import time as _time
             now = _time.monotonic()
             if self._inactive_since is None:
@@ -1087,6 +1122,10 @@ class DreameA2LiveMap:
             self._state.start_session(now_iso)
             self._in_progress_leg_md5s = []
             self._have_active_in_progress = True
+            try:
+                device.has_active_in_progress = True
+            except AttributeError:
+                pass
             if self._state.mode is MapMode.LATEST:
                 self._state.lawn_polygon = []
                 self._state.exclusion_zones = []

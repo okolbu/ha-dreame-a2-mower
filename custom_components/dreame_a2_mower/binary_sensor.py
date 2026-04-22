@@ -54,7 +54,17 @@ BINARY_SENSORS: tuple[DreameMowerBinarySensorEntityDescription, ...] = (
         key="mowing_session_active",
         name="Mowing Session Active",
         icon="mdi:robot-mower",
-        value_fn=lambda value, device: bool(device.status.started),
+        # Read both the live state (`started`) and a disk-restored
+        # in-progress flag (`has_active_in_progress`, mirrored from
+        # live_map). After a reboot mid-run the live state can read
+        # False for 30+ seconds while waiting for s2p56 confirmation,
+        # but the in-progress entry on disk knows we're in a session
+        # — so the disk flag fills in the gap. Once s2p56 lands, both
+        # signals agree on True.
+        value_fn=lambda value, device: bool(
+            device.status.started
+            or getattr(device, "has_active_in_progress", False)
+        ),
         exists_fn=lambda description, device: True,
     ),
     # Battery-temperature-low charging-pause flag. Sourced from the s1p1

@@ -486,6 +486,17 @@ class DreameArchivedSessionsSensor(SensorEntity):
         self._attr_native_unit_of_measurement = UNIT_TIMES
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_should_poll = False
+        # Cached extra_state_attributes — recomputed only on coordinator
+        # update, returned on every other property access. The build
+        # involves list_sessions() (which now hits the alpha.57 disk
+        # cache) plus 20 to_dict() calls for the recent_sessions list;
+        # field-flagged 2026-04-22 as taking ~485 ms when called from
+        # HA's state-update path. Caching pins the cost to once-per-
+        # coordinator-tick instead of once-per-property-access.
+        self._cached_attrs: dict | None = None
+        # Last (count, in_progress_md5) signature we built for. Used
+        # to skip rebuild when the underlying archive hasn't changed.
+        self._cached_sig: tuple | None = None
 
     @property
     def available(self) -> bool:
@@ -496,8 +507,7 @@ class DreameArchivedSessionsSensor(SensorEntity):
         archive = self._coordinator.session_archive
         return archive.count if archive else 0
 
-    @property
-    def extra_state_attributes(self) -> dict:
+    def _build_attrs(self) -> dict:
         archive = self._coordinator.session_archive
         if not archive:
             return {}
@@ -509,12 +519,34 @@ class DreameArchivedSessionsSensor(SensorEntity):
             "recent_sessions": [s.to_dict() for s in sessions],
         }
 
+    @property
+    def extra_state_attributes(self) -> dict:
+        if self._cached_attrs is None:
+            self._cached_attrs = self._build_attrs()
+        return self._cached_attrs
+
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(
             self._coordinator.async_add_listener(self._handle_coordinator_update)
         )
 
     def _handle_coordinator_update(self) -> None:
+        # Recompute attrs only when the archive's signature changed
+        # — count + in-progress entry's md5 (or absence). Dramatically
+        # reduces the per-tick to_dict() / list_sessions() work for
+        # users with many archived sessions.
+        archive = self._coordinator.session_archive
+        if archive is not None:
+            in_progress = archive.in_progress_entry()
+            sig = (
+                archive.count,
+                in_progress.start_ts if in_progress else None,
+            )
+        else:
+            sig = (0, None)
+        if sig != self._cached_sig:
+            self._cached_sig = sig
+            self._cached_attrs = self._build_attrs()
         self.async_write_ha_state()
 
 
