@@ -263,18 +263,26 @@ def test_latest_mode_session_start_wipes_overlay():
     assert len(lm._state.path) == 1
 
 
-def test_latest_mode_position_only_when_active():
-    """Position is None between runs, so the TrailLayer draws no marker at
-    the dock. Position is a real coord only while `started` is True."""
+def test_latest_mode_position_dispatched_whenever_telemetry_arrives():
+    """Updated 2026-04-22 alpha.59: telemetry-is-truth.
+
+    The old contract said "position only when active" (gate
+    position dispatch on device.status.started). But `started`
+    depends on s2p56/task_status/cleaning_paused/status_enum —
+    all of which can be stale on g2408 because the cloud
+    get_properties endpoint is unreliable for this model. The
+    only authoritative live signal is s1p4 telemetry itself.
+
+    New contract: if pos_source is not None, the position field
+    is set in the dispatched attrs, regardless of `started`."""
     device = SimpleNamespace(
         status=SimpleNamespace(started=False),
-        latest_position=(0, 0),  # idle beacon reports dock pos
+        latest_position=(100, 100),
         obstacle_detected=False,
         latest_session_summary=None,
+        _session_status_known=True,
     )
     captured: list = []
-
-    from live_map import LIVE_MAP_UPDATE_SIGNAL  # noqa: F401
 
     import live_map as _lm_mod
 
@@ -291,7 +299,8 @@ def test_latest_mode_position_only_when_active():
         _lm_mod.async_dispatcher_send = orig
 
     assert captured, "expected a dispatch on coordinator update"
-    assert captured[-1]["position"] is None
+    # Telemetry triggers position dispatch even with started=False.
+    assert captured[-1]["position"] == [1.0, 0.062]
 
 
 def test_latest_mode_new_summary_clears_live_path(tmp_path):

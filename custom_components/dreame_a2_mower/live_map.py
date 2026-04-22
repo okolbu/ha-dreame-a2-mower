@@ -935,14 +935,22 @@ class DreameA2LiveMap:
                 pos_source = (telem.x_cm, telem.y_mm)
 
         position = None
-        if active and pos_source is not None:
+        if pos_source is not None:
+            # Telemetry-is-truth: draw whatever s1p4 reports, regardless
+            # of `active`. The `started` property depends on s2p56 /
+            # task_status / cleaning_paused / status enum — all of
+            # which can be stale or absent (cloud get_properties fails
+            # device-deep-sleep, MQTT property pushes are sparse). But
+            # s1p4 itself only arrives while the mower is physically
+            # moving, so its presence is the most trustworthy signal
+            # we have. Field report 2026-04-22: the integration sat
+            # at 122 pts for 46 minutes while the mower was clearly
+            # mowing (s1p4 still pushing, battery draining), because
+            # `active` was stuck on stale state-property data.
             x_cm, y_mm = pos_source
             x_m = (x_cm / 100.0) * self.x_factor
             y_m = (y_mm / 1000.0) * self.y_factor
             position = [round(x_m, 3), round(y_m, 3)]
-            # Accumulate into state.path in every mode — see top of
-            # function. SESSION/BLANK simply won't dispatch this, but
-            # the buffer survives for a subsequent Latest switch.
             self._state.append_point(x_m, y_m)
 
         try:
@@ -953,9 +961,12 @@ class DreameA2LiveMap:
         if obstacle_on and position is not None:
             self._state.append_obstacle(position[0], position[1])
 
-        # Persist the in-progress entry while active so an HA restart
-        # mid-mow can recover it. Throttled internally to ~10s.
-        if active:
+        # Persist the in-progress entry only when a logical session is
+        # actually live (active OR have_in_progress). Telemetry that
+        # arrives outside a session (manual drive, post-finalize blip)
+        # still draws on the live canvas via dispatch but isn't
+        # persisted as a phantom run on disk.
+        if active or self._have_active_in_progress:
             self._persist_in_progress()
 
         # Only LATEST drives the displayed snapshot; SESSION/BLANK

@@ -171,6 +171,89 @@ def test_auto_finalize_with_existing_legs_just_drops_in_progress(tmp_path):
     assert archive.count == 0
 
 
+def test_telemetry_extends_path_when_active_is_stale_but_in_progress_exists(tmp_path):
+    """Regression (2026-04-22 alpha.59): the integration's `active`
+    flag depends on s2p56/task_status/status_enum/cleaning_paused —
+    any of which can be stale (cloud get_properties fails on
+    device-deep-sleep; MQTT property pushes can be hours apart while
+    s1p4 telemetry keeps flowing). User reported the path frozen at
+    122 pts for 46 min while the mower was clearly mowing (s1p4
+    still pushing, battery draining).
+
+    Telemetry-is-truth: if s1p4 reports a position, draw the line
+    regardless of `active`.
+    """
+    archive = SessionArchive(tmp_path)
+    archive.write_in_progress({
+        "session_start_ts": 1776840000,
+        "session_id": 1,
+        "session_start": "2026-04-22T08:00:00+00:00",
+        "live_path": [[0.0, 0.0]],
+        "obstacles": [],
+        "leg_md5s": [],
+        "completed_track": [],
+        "lawn_polygon": [],
+        "exclusion_zones": [],
+        "obstacle_polygons": [],
+        "dock_position": None,
+        "summary_md5": None,
+        "summary_end_ts": None,
+        "area_mowed_m2": 0.0,
+        "map_area_m2": 0,
+    })
+
+    # Stale state-properties: started=False, no s2p56 confirmation
+    # — but real telemetry IS arriving (latest_position non-None).
+    device = SimpleNamespace(
+        status=SimpleNamespace(started=False),
+        latest_position=(500, 500),
+        obstacle_detected=False,
+        latest_session_summary=None,
+        _session_status_known=False,
+    )
+    coord = _make_coordinator(archive, device)
+    lm = DreameA2LiveMap(_make_hass(), _make_entry(), coord)
+
+    # Restore loaded the seed point.
+    assert lm._state.path == [[0.0, 0.0]]
+
+    lm._handle_coordinator_update()
+
+    # Telemetry should have been appended even though `active=False`.
+    assert len(lm._state.path) == 2
+    assert lm._state.path[-1] == [5.0, 0.312]  # 500cm * 1.0 / 100, 500mm * 0.625 / 1000
+
+
+def test_telemetry_outside_session_does_not_persist_phantom(tmp_path):
+    """Counterpart to the telemetry-is-truth fix: when there's no
+    active session AND no in_progress entry on disk (e.g. between
+    runs, or after a finalize), telemetry still draws on the live
+    canvas but must NOT be persisted as a phantom in_progress file.
+    """
+    archive = SessionArchive(tmp_path)
+    # No in_progress on disk; nothing restored.
+
+    device = SimpleNamespace(
+        status=SimpleNamespace(started=False),
+        latest_position=(500, 500),
+        obstacle_detected=False,
+        latest_session_summary=None,
+        _session_status_known=True,  # known not active
+    )
+    coord = _make_coordinator(archive, device)
+    lm = DreameA2LiveMap(_make_hass(), _make_entry(), coord)
+
+    # No session restored.
+    assert lm._have_active_in_progress is False
+    assert lm._state.path == []
+
+    lm._handle_coordinator_update()
+
+    # Telemetry drew live (in-memory) but no phantom file on disk.
+    assert len(lm._state.path) == 1  # appended in memory
+    assert archive.read_in_progress() is None  # no persist
+
+
 def test_dispatched_attrs_cached_for_late_subscriber_replay(tmp_path):
     """Regression (2026-04-22 alpha.55): a camera entity that subscribes
     *after* the first dispatch (which fires inside
