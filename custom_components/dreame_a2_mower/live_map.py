@@ -133,9 +133,21 @@ class LiveMapState:
     summary_md5: str | None = None
     summary_end_ts: int | None = None
 
-    def append_point(self, x_m: float, y_m: float) -> None:
-        """Append a position to the path unless it's within PATH_DEDUPE_METRES of the last point."""
+    def append_point(self, x_m: float, y_m: float, phase: int | None = None) -> None:
+        """Append a position to the path unless it's within PATH_DEDUPE_METRES of the last point.
+
+        ``phase`` — s1p4 phase byte (0=MOWING, 1=TRANSIT, 2=PHASE_2,
+        3=RETURNING) or None if unknown (short-frame beacons carry
+        position only, no phase byte). When known, stored as a
+        third element of the path entry so `_approximate_area` can
+        skip blades-up transit / return-to-dock segments instead
+        of painting them as mowed area. Legacy 2-element entries
+        remain supported — restored in_progress files from before
+        the phase field was tracked still load fine.
+        """
         point = [round(x_m, 3), round(y_m, 3)]
+        if phase is not None:
+            point.append(int(phase))
         if self.path:
             last = self.path[-1]
             dx = point[0] - last[0]
@@ -422,8 +434,23 @@ def _approximate_area(path: list[list[float]]) -> float:
                 stamp.append((ox, oy))
     cells: set[tuple[int, int]] = set()
     for i in range(len(path) - 1):
-        x0, y0 = path[i][0], path[i][1]
-        x1, y1 = path[i + 1][0], path[i + 1][1]
+        p0 = path[i]
+        p1 = path[i + 1]
+        x0, y0 = p0[0], p0[1]
+        x1, y1 = p1[0], p1[1]
+        # Phase filter: s1p4 phase byte (0=MOWING, 1=TRANSIT,
+        # 2=PHASE_2, 3=RETURNING). Blades are only down in phase 0;
+        # phase 1/3 segments are the mower traversing the lawn with
+        # blades UP (relocating to the next zone, returning to dock
+        # for a charge). Counting them as mowed area over-reports
+        # the cut coverage by ~20-25 m per typical run. Legacy
+        # 2-element entries (len < 3) lack phase info — treat them
+        # as mowing by default so older in_progress files that
+        # restore keep being painted.
+        phase0 = p0[2] if len(p0) >= 3 else None
+        phase1 = p1[2] if len(p1) >= 3 else None
+        if phase0 in (1, 3) or phase1 in (1, 3):
+            continue
         dx = x1 - x0
         dy = y1 - y0
         seg_len = math.hypot(dx, dy)
@@ -1075,10 +1102,19 @@ class DreameA2LiveMap:
                     self._state.obstacles = []
 
         pos_source = getattr(device, "latest_position", None)
-        if pos_source is None:
-            telem = getattr(device, "mowing_telemetry", None)
-            if telem is not None:
-                pos_source = (telem.x_cm, telem.y_mm)
+        telem = getattr(device, "mowing_telemetry", None)
+        if pos_source is None and telem is not None:
+            pos_source = (telem.x_cm, telem.y_mm)
+        # Phase from full 33-byte telemetry if available; None for
+        # short-frame beacons. mowing_telemetry may be stale (prev
+        # 33-byte frame cached while current 8-byte beacon is in
+        # flight) but the phase can't flip arbitrarily between two
+        # near-simultaneous s1p4 frames, so trusting the cached
+        # phase for the next position is safe enough for the area
+        # filter. `_approximate_area` treats None as "unknown
+        # phase, paint it" — preserves back-compat for legacy
+        # 2-element entries.
+        phase = getattr(telem, "phase", None) if telem is not None else None
 
         position = None
         if pos_source is not None:
@@ -1097,7 +1133,7 @@ class DreameA2LiveMap:
             x_m = (x_cm / 100.0) * self.x_factor
             y_m = (y_mm / 1000.0) * self.y_factor
             position = [round(x_m, 3), round(y_m, 3)]
-            self._state.append_point(x_m, y_m)
+            self._state.append_point(x_m, y_m, phase=phase)
 
         try:
             obstacle_on = bool(device.obstacle_detected)
