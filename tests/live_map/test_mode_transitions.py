@@ -69,13 +69,59 @@ def _write_fixture(tmp_path: Path, filename: str = "summary.json") -> Path:
     return dst
 
 
-def test_set_mode_blank_clears_state():
+def test_session_to_latest_round_trip_preserves_live_path(tmp_path):
+    """Regression (2026-04-22): going from LATEST to a SESSION replay
+    used to wipe the live accumulator (LiveMapState.set_mode
+    unconditionally cleared state.path), so returning to LATEST left
+    the camera with only post-switch points. The live buffer must
+    survive the round-trip so the user's full live-mow path is
+    still visible."""
+    _write_fixture(tmp_path, "old_session.json")
+    entry = SimpleNamespace(
+        filename="old_session.json",
+        md5="oldsess",
+        end_ts=1,
+        start_ts=0,
+        duration_min=1,
+        area_mowed_m2=1.0,
+        map_area_m2=1,
+    )
+    archive = FakeArchive([entry], tmp_path)
+    device = SimpleNamespace(
+        status=SimpleNamespace(started=True),
+        latest_position=None,
+        obstacle_detected=False,
+        latest_session_summary=None,
+        _session_status_known=True,
+    )
+    lm = _make_live_map(archive=archive, device=device)
+    # Simulate a live mow having drawn 3 points before the user
+    # reaches for the picker.
+    lm._state.append_point(1.0, 2.0)
+    lm._state.append_point(1.5, 2.5)
+    lm._state.append_point(2.0, 3.0)
+
+    # Pick an older session, then return to Latest.
+    lm.set_mode(MapMode.SESSION, archive_entry=entry)
+    lm.set_mode(MapMode.LATEST)
+
+    # Live buffer is still there — not just post-switch points.
+    assert lm._state.path == [[1.0, 2.0], [1.5, 2.5], [2.0, 3.0]]
+    assert lm._state.mode is MapMode.LATEST
+
+
+def test_set_mode_blank_clears_overlay_dispatches_empty_path():
+    """BLANK mode should clear the overlay AND dispatch an empty path
+    (so the camera shows a blank canvas), but the underlying live
+    accumulator stays intact for SESSION→LATEST continuity."""
     lm = _make_live_map()
     lm._state.append_point(1.0, 2.0)
     lm._state.lawn_polygon = [[0.0, 0.0]]
     lm.set_mode(MapMode.BLANK)
     assert lm._state.mode is MapMode.BLANK
-    assert lm._state.path == []
+    # Live buffer preserved (post-2026-04-22 behaviour).
+    assert lm._state.path == [[1.0, 2.0]]
+    # Overlay still cleared.
     assert lm._state.lawn_polygon == []
 
 

@@ -84,7 +84,13 @@ def replay_from_archive_file(
     # (user reported "ghost segments" 2026-04-19). The TrailLayer's
     # `reset_to_session` draws each segment separately as a distinct
     # `ImageDraw.line` call, so the gaps stay invisible.
-    state.path = []
+    #
+    # We also do NOT wipe state.path here — that would destroy the
+    # live accumulator the moment a SESSION replay is loaded, so a
+    # subsequent return to LATEST would show only post-switch points.
+    # The DreameA2LiveMap.set_mode wrapper passes path_override=[] to
+    # to_attributes when dispatching SESSION/BLANK so the camera shows
+    # the archive (or blank) without the live trail bleeding through.
 
     total_track_points = sum(len(seg) for seg in state.completed_track)
     return {
@@ -190,13 +196,26 @@ class LiveMapState:
         position: list[float] | None,
         x_factor: float,
         y_factor: float,
+        path_override: list[list[float]] | None = None,
+        obstacles_override: list[list[float]] | None = None,
     ) -> dict:
-        """Produce the extra_state_attributes dict consumable by a Lovelace map card."""
+        """Produce the extra_state_attributes dict consumable by a Lovelace map card.
+
+        ``path_override`` / ``obstacles_override`` let the caller dispatch
+        a snapshot whose displayed path differs from the running live
+        accumulator — used by ``DreameA2LiveMap.set_mode`` for SESSION/
+        BLANK so the canvas shows the picked archive (or nothing) while
+        the underlying live buffer keeps growing in the background.
+        """
+        out_path = list(self.path) if path_override is None else list(path_override)
+        out_obstacles = (
+            list(self.obstacles) if obstacles_override is None else list(obstacles_override)
+        )
         return {
             "mode": self.mode.value,
             "position": position,
-            "path": list(self.path),
-            "obstacles": list(self.obstacles),
+            "path": out_path,
+            "obstacles": out_obstacles,
             "charger_position": [0.0, 0.0],
             "session_id": self.session_id,
             "session_start": self.session_start,
@@ -212,18 +231,29 @@ class LiveMapState:
         }
 
     def set_mode(self, mode: "MapMode", pinned_md5: str | None = None) -> None:
-        """Switch to ``mode``, clearing fields that don't belong there.
+        """Switch to ``mode``, clearing overlay fields that don't belong there.
 
-        LATEST:  live accumulators + overlay + pinned_md5 all cleared.
-                 Caller is expected to reload the newest archive (if any)
-                 after this so the snapshot reflects the last run.
-        SESSION: live accumulators cleared, pinned_md5 set. Caller is
-                 expected to load the pinned archive into the overlay.
-        BLANK:   everything cleared; session_id reset.
+        Overlay fields (lawn_polygon, exclusion_zones, completed_track,
+        obstacle_polygons, dock_position, summary_md5, summary_end_ts)
+        get cleared on LATEST/BLANK so they don't carry over from a
+        previous SESSION view.
+
+        Live accumulators (`path`, `obstacles`) are NEVER wiped here —
+        they accumulate continuously across mode switches so a user
+        who briefly visits a SESSION replay and returns to LATEST
+        sees their full live-mow path waiting (the
+        ``_handle_coordinator_update`` comment up top explicitly
+        relies on this). The display side dispatches an empty
+        ``path`` for SESSION/BLANK via the ``path_override`` arg on
+        ``to_attributes`` rather than clobbering the live buffer.
+
+        LATEST:  pinned_md5 cleared, overlay cleared. Caller is
+                 expected to reload the newest archive (if any).
+        SESSION: pinned_md5 set. Caller is expected to load the
+                 pinned archive into the overlay.
+        BLANK:   pinned_md5 + overlay cleared, session_id reset.
         """
         self.mode = mode
-        self.path = []
-        self.obstacles = []
         if mode is MapMode.SESSION:
             self.pinned_md5 = pinned_md5
         else:
@@ -921,42 +951,43 @@ class DreameA2LiveMap:
         Runs on a worker thread (blocking JSON parse) — callers in HA
         should dispatch through ``hass.async_add_executor_job``.
         """
-        # If switching to LATEST mid-mow, preserve any live path already
-        # accumulated so the user doesn't lose visible progress on
-        # mode-switch. set_mode() on the state wipes path/obstacles
-        # unconditionally; we snapshot first and restore below.
-        preserved_path: list[list[float]] | None = None
-        preserved_obstacles: list[list[float]] | None = None
-        preserved_session_id: int | None = None
-        preserved_session_start: str | None = None
-        if mode is MapMode.LATEST:
-            try:
-                active = bool(self._coordinator.device.status.started)
-            except AttributeError:
-                active = False
-            if active:
-                preserved_path = list(self._state.path)
-                preserved_obstacles = list(self._state.obstacles)
-                preserved_session_id = self._state.session_id
-                preserved_session_start = self._state.session_start
+        # LiveMapState.set_mode no longer wipes the live path/obstacles
+        # (it just clears overlay fields when LATEST/BLANK and resets
+        # the SESSION pin). The live accumulator therefore survives
+        # every mode switch automatically — going SESSION → LATEST
+        # always shows the full live-mow path, including parts drawn
+        # before the picker was touched. Previously this code had to
+        # snapshot+restore path manually because set_mode wiped it,
+        # but only for LATEST entry — making SESSION entry destroy
+        # the live data with no recovery path.
+        active = False
+        try:
+            active = bool(self._coordinator.device.status.started)
+        except AttributeError:
+            pass
 
         self._state.set_mode(mode, pinned_md5=getattr(archive_entry, "md5", None))
 
         result: dict[str, Any] = {"mode": mode.value}
+        # For SESSION/BLANK we dispatch a snapshot whose displayed
+        # path is empty (so the camera shows the static archive /
+        # blank canvas), but the live accumulator stays intact in
+        # state.path for when the user returns to LATEST.
+        path_override: list | None = None
+        obstacles_override: list | None = None
+
         if mode is MapMode.LATEST:
-            if preserved_path is not None:
-                # Mid-mow: leave overlay fields empty (already wiped
-                # by set_mode), restore live accumulators so the user
-                # keeps seeing progress they'd already watched.
-                self._state.path = preserved_path
-                self._state.obstacles = preserved_obstacles or []
-                self._state.session_id = preserved_session_id or 0
-                self._state.session_start = preserved_session_start
+            if active:
+                # Mid-mow: state.path already holds the live trail
+                # (set_mode no longer wipes it). Nothing to restore.
                 result["mid_mow"] = True
             else:
                 archive = getattr(self._coordinator, "session_archive", None)
                 latest = archive.latest() if archive else None
-                if latest is not None:
+                if latest is not None and not getattr(latest, "still_running", False):
+                    # Skip in-progress entries — they live in the
+                    # custom in_progress.json schema and aren't
+                    # readable as a SessionSummary.
                     path = archive.root / latest.filename
                     try:
                         replay_from_archive_file(
@@ -978,11 +1009,20 @@ class DreameA2LiveMap:
             )
             self._state.pinned_md5 = archive_entry.md5
             result["md5"] = archive_entry.md5
+            # Camera should display the archived session, not the live
+            # accumulator (which keeps growing in state.path).
+            path_override = []
+            obstacles_override = []
+        elif mode is MapMode.BLANK:
+            path_override = []
+            obstacles_override = []
 
         attrs = self._state.to_attributes(
             position=None,
             x_factor=self.x_factor,
             y_factor=self.y_factor,
+            path_override=path_override,
+            obstacles_override=obstacles_override,
         )
         _send_update(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
         return result

@@ -156,7 +156,12 @@ def test_new_state_defaults_to_latest_mode():
     assert s.pinned_md5 is None
 
 
-def test_set_mode_to_blank_clears_all_layers():
+def test_set_mode_to_blank_clears_overlay_but_preserves_live_buffer():
+    """As of 2026-04-22, set_mode no longer wipes the live path/obstacles
+    accumulator — only overlay fields are cleared on LATEST/BLANK and
+    the SESSION pin gets set/cleared. The live buffer survives every
+    mode switch so a SESSION→LATEST round-trip carries forward the
+    user's full live-mow path."""
     s = LiveMapState()
     s.append_point(1.0, 2.0)
     s.append_obstacle(3.0, 4.0)
@@ -167,14 +172,17 @@ def test_set_mode_to_blank_clears_all_layers():
     s.set_mode(MapMode.BLANK)
 
     assert s.mode == MapMode.BLANK
-    assert s.path == []
-    assert s.obstacles == []
+    # Overlay cleared.
     assert s.lawn_polygon == []
     assert s.completed_track == []
     assert s.summary_md5 is None
+    # Live buffer preserved.
+    assert s.path == [[1.0, 2.0]]
+    assert s.obstacles == [[3.0, 4.0]]
 
 
-def test_set_mode_to_session_stores_pinned_md5_and_clears_live():
+def test_set_mode_to_session_stores_pinned_md5_and_preserves_live():
+    """SESSION mode pins md5 but must not clobber the live accumulator."""
     s = LiveMapState()
     s.append_point(1.0, 2.0)
     s.append_obstacle(3.0, 4.0)
@@ -183,18 +191,21 @@ def test_set_mode_to_session_stores_pinned_md5_and_clears_live():
 
     assert s.mode == MapMode.SESSION
     assert s.pinned_md5 == "deadbeef"
-    assert s.path == []
-    assert s.obstacles == []
+    # Live buffer survives — a SESSION→LATEST round-trip restores it.
+    assert s.path == [[1.0, 2.0]]
+    assert s.obstacles == [[3.0, 4.0]]
 
 
-def test_set_mode_to_latest_clears_pinned_md5_and_live():
+def test_set_mode_to_latest_clears_pinned_md5_and_preserves_live():
     s = LiveMapState()
+    s.append_point(1.0, 2.0)
     s.set_mode(MapMode.SESSION, pinned_md5="deadbeef")
     s.set_mode(MapMode.LATEST)
 
     assert s.mode == MapMode.LATEST
     assert s.pinned_md5 is None
-    assert s.path == []
+    # Same preservation rule applies on LATEST entry.
+    assert s.path == [[1.0, 2.0]]
 
 
 def test_to_attributes_includes_mode():
