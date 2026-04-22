@@ -611,6 +611,16 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
                 # happened to trigger update() (mowing→returning,
                 # error toggling, etc).
                 #
+                # Telemetry-is-truth gate: trust the position-timestamp
+                # freshness rather than `device.status.active`. The
+                # latter depends on s2p56 / task_status / status_enum
+                # — all unreliable on g2408 (cloud get_properties
+                # can fail for hours; state pushes are sparse). But
+                # `_latest_position_ts` only advances when the
+                # decoder receives a real s1p4 frame, so a recent
+                # value means the mower IS moving regardless of
+                # what stale state-properties say.
+                #
                 # Throttled to ~10 s so the renderer's PIL work
                 # (≈100 ms per call at the 2660×2980 base size on
                 # this hardware) doesn't dominate the event loop —
@@ -623,12 +633,18 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
                     self.map_index == 0
                     and pos_ts is not None
                     and pos_ts != last_seen
-                    and self.device.status.active
                 ):
                     import time as _time
-                    last_render = getattr(self, "_last_position_render_at", 0.0)
                     now = _time.monotonic()
-                    if now - last_render >= 10.0:
+                    last_render = getattr(self, "_last_position_render_at", 0.0)
+                    # Treat telemetry as fresh if the last frame
+                    # arrived within the past 30 s — covers the
+                    # 5 s s1p4 cadence with comfortable slack.
+                    pos_fresh = (
+                        getattr(self, "_pos_ts_was_wall_clock", True)
+                        and (_time.time() - pos_ts < 30.0)
+                    )
+                    if pos_fresh and now - last_render >= 10.0:
                         self._last_seen_position_ts = pos_ts
                         self._last_position_render_at = now
                         self.update()

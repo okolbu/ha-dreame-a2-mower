@@ -33,12 +33,13 @@ from PIL import Image, ImageDraw
 
 
 TRAIL_COLOR = (70, 70, 70, 220)             # dark grey — matches app
-# Blades-up transit / return-to-dock — muted desaturated blue.
-# Visible enough to follow at a glance but distinct from the
-# mowing colour so the diagonal relocation strokes that an
-# irregular lawn produces don't visually merge with the mowing
-# pattern. Matches phase ∈ {1, 3} segments per s1p4 byte[8].
-TRANSIT_COLOR = (90, 115, 170, 180)
+# Blades-up transit / return-to-dock — vivid medium blue, distinct
+# from the dark grey mowing strokes so diagonal relocation lines
+# read at a glance as "moving but not cutting". Earlier muted
+# (90, 115, 170, 180) was too close to TRAIL_COLOR's value to
+# distinguish on a low-contrast lawn background (field report
+# 2026-04-22). Matches phase ∈ {1, 3} segments per s1p4 byte[8].
+TRANSIT_COLOR = (50, 130, 230, 220)
 TRAIL_WIDTH_PX = 4
 # Live-trail pen-up threshold — consecutive s1p4 samples more than this
 # far apart (metres) are treated as a session boundary / dock visit
