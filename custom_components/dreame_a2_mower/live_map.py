@@ -133,21 +133,29 @@ class LiveMapState:
     summary_md5: str | None = None
     summary_end_ts: int | None = None
 
-    def append_point(self, x_m: float, y_m: float, phase: int | None = None) -> None:
+    def append_point(self, x_m: float, y_m: float, cutting: int | None = None) -> None:
         """Append a position to the path unless it's within PATH_DEDUPE_METRES of the last point.
 
-        ``phase`` — s1p4 phase byte (0=MOWING, 1=TRANSIT, 2=PHASE_2,
-        3=RETURNING) or None if unknown (short-frame beacons carry
-        position only, no phase byte). When known, stored as a
-        third element of the path entry so `_approximate_area` can
-        skip blades-up transit / return-to-dock segments instead
-        of painting them as mowed area. Legacy 2-element entries
-        remain supported — restored in_progress files from before
-        the phase field was tracked still load fine.
+        ``cutting`` — derived blades-down indicator (1 = mower was
+        cutting in the segment leading to THIS point; 0 = blades
+        up / transit / returning). Computed by the caller from the
+        delta of the s1p4 area-counter between consecutive
+        telemetry frames (the firmware's own area_mowed_m2 only
+        increases when blades are physically cutting). When known,
+        stored as a third element of the path entry so the
+        rasteriser and renderer can skip / re-colour transit
+        segments. Legacy 2-element entries remain supported.
+
+        Note: the original design tried storing the s1p4 phase
+        byte (byte[8]) here, but field captures showed the byte
+        sits at constant values during BOTH transit and mowing
+        on this firmware (e.g. phase=2 throughout a 50 m
+        dock-to-mowing-resume drive at 2026-04-22 20:47-20:50).
+        Area-counter delta is the only reliable discriminator.
         """
         point = [round(x_m, 3), round(y_m, 3)]
-        if phase is not None:
-            point.append(int(phase))
+        if cutting is not None:
+            point.append(int(cutting))
         if self.path:
             last = self.path[-1]
             dx = point[0] - last[0]
@@ -438,21 +446,20 @@ def _approximate_area(path: list[list[float]]) -> float:
         p1 = path[i + 1]
         x0, y0 = p0[0], p0[1]
         x1, y1 = p1[0], p1[1]
-        # Phase byte (s1p4 byte[8]) — protocol doc claims values
-        # {0: MOWING, 1: TRANSIT, 2: PHASE_2, 3: RETURNING}, but
-        # field-captured probe logs show the byte taking values
-        # 0..16+ with no clean correlation to mowing/transit
-        # state. The 2026-04-22 run had the byte fixed at 2 and 3
-        # while the user observed actual mowing in unmowed areas.
-        # Until the phase semantics are properly RE'd, do NOT
-        # filter by phase — paint everything as mowing. The
-        # phase-tracking infra (3-element entries) stays so the
-        # filter can be re-enabled once we know the real mapping.
-        # See TODO.md "phase byte semantics" item.
-        # phase0 = p0[2] if len(p0) >= 3 else None
-        # phase1 = p1[2] if len(p1) >= 3 else None
-        # if phase0 in (1, 3) or phase1 in (1, 3):
-        #     continue
+        # Cutting filter (derived from area-counter delta — see
+        # LiveMapState.append_point and DreameA2LiveMap._handle_
+        # coordinator_update). 3rd element of a path entry is 1
+        # when the firmware's area_mowed_m2 increased between
+        # this point and the previous one, 0 when it stayed
+        # constant (= blades-up transit). Skip segments whose
+        # endpoint reports cutting=0; the firmware itself is the
+        # ground truth on whether actual cutting happened. Legacy
+        # 2-element entries with no indicator default to "paint"
+        # so older in_progress files restored from before this
+        # release continue to render.
+        cutting1 = p1[2] if len(p1) >= 3 else None
+        if cutting1 == 0:
+            continue
         dx = x1 - x0
         dy = y1 - y0
         seg_len = math.hypot(dx, dy)
@@ -586,6 +593,16 @@ class DreameA2LiveMap:
         # blip downgrades `_prev_session_active`, then the next True
         # transition wipes the restored path.
         self._have_active_in_progress: bool = False
+        # Most recent firmware-reported area_mowed_m2 from s1p4
+        # byte[29-30]/100. Used to derive a per-segment "blades-
+        # down" indicator: if the area counter increased between
+        # consecutive telemetry frames, the mower was cutting in
+        # that segment; if it stayed constant, it was a blades-up
+        # transit (going to/from dock, relocating between zones).
+        # The firmware's own counter is the ground truth — way
+        # more reliable than the s1p4 phase byte, which sits at
+        # constant values during both mowing and transit.
+        self._last_area_m2: float | None = None
         # The most recent snapshot dispatched via LIVE_MAP_UPDATE_SIGNAL,
         # cached so a camera entity that subscribes *after* the first
         # dispatch (which is the actual order on HA boot — first_refresh
@@ -1147,16 +1164,25 @@ class DreameA2LiveMap:
         telem = getattr(device, "mowing_telemetry", None)
         if pos_source is None and telem is not None:
             pos_source = (telem.x_cm, telem.y_mm)
-        # Phase from full 33-byte telemetry if available; None for
-        # short-frame beacons. mowing_telemetry may be stale (prev
-        # 33-byte frame cached while current 8-byte beacon is in
-        # flight) but the phase can't flip arbitrarily between two
-        # near-simultaneous s1p4 frames, so trusting the cached
-        # phase for the next position is safe enough for the area
-        # filter. `_approximate_area` treats None as "unknown
-        # phase, paint it" — preserves back-compat for legacy
-        # 2-element entries.
-        phase = getattr(telem, "phase", None) if telem is not None else None
+        # Cutting-now indicator: derived from the firmware's
+        # area_mowed_m2 counter delta. The counter only increases
+        # when blades are physically cutting — confirmed
+        # 2026-04-22 capture: a 30s straight-line drive from
+        # dock to mowing-resume position kept area constant at
+        # 164.31 m², then started incrementing the moment the
+        # mower started its first mowing pass. Much better
+        # discriminator than the s1p4 phase byte (which is
+        # constant during BOTH transit and mowing on this
+        # firmware). None when no full-frame telemetry available
+        # (cold boot beacon-only); rasteriser then defaults to
+        # painting the segment.
+        cutting = None
+        if telem is not None:
+            current_area = getattr(telem, "area_mowed_m2", None)
+            if isinstance(current_area, (int, float)):
+                if self._last_area_m2 is not None:
+                    cutting = 1 if current_area > self._last_area_m2 else 0
+                self._last_area_m2 = float(current_area)
 
         position = None
         if pos_source is not None:
@@ -1175,7 +1201,7 @@ class DreameA2LiveMap:
             x_m = (x_cm / 100.0) * self.x_factor
             y_m = (y_mm / 1000.0) * self.y_factor
             position = [round(x_m, 3), round(y_m, 3)]
-            self._state.append_point(x_m, y_m, phase=phase)
+            self._state.append_point(x_m, y_m, cutting=cutting)
 
         try:
             obstacle_on = bool(device.obstacle_detected)

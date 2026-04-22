@@ -174,13 +174,14 @@ class TrailLayer:
             dx = new_x_m - self._last_point_m[0]
             dy = new_y_m - self._last_point_m[1]
             if (dx * dx + dy * dy) ** 0.5 <= LIVE_GAP_PENUP_M:
-                # Phase-based colouring disabled pending proper RE
-                # of the s1p4 phase byte semantics — see live_map.py
-                # _approximate_area docstring + TODO. Use mowing
-                # colour for everything until we know which phase
-                # values mean blades-up.
-                _ = phase  # captured for future filter re-enable
-                color = self._trail_color
+                # The 3rd element is now a derived "cutting" flag
+                # (alpha.73): 1 = firmware area_mowed_m2 ticked
+                # forward in this segment; 0 = it stayed constant
+                # (blades-up transit). Use TRANSIT_COLOR when we
+                # know cutting=0, otherwise default colour.
+                color = (
+                    TRANSIT_COLOR if phase == 0 else self._trail_color
+                )
                 self._draw.line(
                     [self._last_point, px],
                     fill=color,
@@ -220,17 +221,40 @@ class TrailLayer:
                         pts, fill=self._trail_color, width=self._trail_width, joint="curve"
                     )
         if path:
-            # Phase-based colouring disabled pending proper RE of
-            # the s1p4 phase byte (see TODO + live_map docstring).
-            # Draw the whole path in the mowing colour as one stroke.
-            pts = [self._m_to_px(p[0], p[1]) for p in path if len(p) >= 2]
-            if len(pts) >= 2:
+            # Group consecutive entries by colour (alpha.73): the
+            # 3rd element is the derived cutting flag (1 = blades
+            # down, 0 = blades up transit, None = unknown / legacy).
+            # Each contiguous same-colour run becomes one
+            # ImageDraw.line so curve smoothing is preserved within
+            # the run; we carry the last point of the previous run
+            # as the first point of the next so colour transitions
+            # join visually without a gap.
+            current_color = None
+            current_pts: list[tuple[float, float]] = []
+            last_pt: tuple[float, float] | None = None
+            for entry in path:
+                if not isinstance(entry, (list, tuple)) or len(entry) < 2:
+                    continue
+                cutting = int(entry[2]) if len(entry) >= 3 else None
+                color = TRANSIT_COLOR if cutting == 0 else self._trail_color
+                px = self._m_to_px(entry[0], entry[1])
+                if color != current_color:
+                    if current_color is not None and len(current_pts) >= 2:
+                        self._draw.line(
+                            current_pts, fill=current_color,
+                            width=self._trail_width, joint="curve",
+                        )
+                    current_pts = [last_pt] if last_pt is not None else []
+                    current_color = color
+                current_pts.append(px)
+                last_pt = px
+            if current_color is not None and len(current_pts) >= 2:
                 self._draw.line(
-                    pts, fill=self._trail_color,
+                    current_pts, fill=current_color,
                     width=self._trail_width, joint="curve",
                 )
-            if pts:
-                self._last_point = pts[-1]
+            if last_pt is not None:
+                self._last_point = last_pt
         if obstacle_polygons:
             self.set_obstacles(obstacle_polygons)
         if dock_position is not None:

@@ -305,25 +305,63 @@ def test_approximate_area_serpentine_pattern_matches_strip_total(tmp_path):
     assert 30 <= area <= 70, f"area={area}, expected near 44 m²"
 
 
-def test_approximate_area_paints_all_phases_until_semantics_known(tmp_path):
-    """Phase byte semantics in s1p4 are not yet known (protocol doc
-    §3.1's enum was field-disproved 2026-04-22 — see TODO.md
-    'phase byte semantics'). Until we know which phase values
-    actually mean blades-up, every segment is painted as mowing
-    regardless of phase. This test pins that behaviour: identical
-    paths with vs without phase metadata produce the same area.
+def test_approximate_area_skips_segments_with_cutting_zero(tmp_path):
+    """Cutting filter (alpha.73): path entries with 3rd element = 0
+    mean the firmware's area_mowed_m2 counter didn't tick forward
+    between this point and the previous one, i.e. blades-up
+    transit / return-to-dock. These segments must be excluded
+    from the area calc.
 
-    When the phase mapping is properly RE'd, this test should be
-    replaced with one that exercises the real filter."""
+    Field-verified 2026-04-22: a 30 s straight-line dock-to-
+    mowing-resume drive kept area_mowed_cent constant while
+    travelling ~10 m. The phase byte sat at constant=2 the whole
+    time (phase-byte filter doesn't work on this firmware), but
+    the area-counter delta is a perfect discriminator.
+
+    Legacy 2-element entries (no indicator) default to paint —
+    so older in_progress files load fine."""
     from live_map import _approximate_area
-    path_no_phase = [[float(i), 0.0] for i in range(11)]
-    path_phase_0 = [[float(i), 0.0, 0] for i in range(11)]
-    path_phase_3 = [[float(i), 0.0, 3] for i in range(11)]
-    a_no = _approximate_area(path_no_phase)
-    a_p0 = _approximate_area(path_phase_0)
-    a_p3 = _approximate_area(path_phase_3)
-    assert a_no == a_p0 == a_p3
-    assert a_no > 0
+    # 11 mowing points (cutting=1), 11 transit points (cutting=0),
+    # 11 more mowing. Transit between the two mowing runs must be
+    # skipped.
+    path_mowing_only = (
+        [[float(i), 0.0, 1] for i in range(11)]
+        + [[float(20 + i), 5.0, 1] for i in range(11)]
+    )
+    path_with_transit = (
+        [[float(i), 0.0, 1] for i in range(11)]
+        + [[10.0 + (i + 1) * 1.0, 0.0, 0] for i in range(10)]
+        + [[float(20 + i), 5.0, 1] for i in range(11)]
+    )
+    a_mowing = _approximate_area(path_mowing_only)
+    a_with_transit = _approximate_area(path_with_transit)
+    # The transit segments themselves get skipped, but the
+    # boundary segment FROM the last transit point TO the first
+    # mowing point of the second leg is still painted (its
+    # endpoint has cutting=1, only segments whose endpoint reports
+    # cutting=0 get skipped). At the small synthetic test scale
+    # that connector contributes meaningful relative overhead;
+    # cap at +50 % to allow for it while still catching a
+    # regression where the filter doesn't fire at all (which
+    # would roughly double the area).
+    assert a_with_transit <= a_mowing * 1.5
+    # Also confirm the filter is doing SOMETHING — without the
+    # filter, painting all 31 connected segments (including the
+    # 10 m of transit) would land much higher.
+    path_unfiltered = (
+        [[float(i), 0.0, 1] for i in range(11)]
+        + [[10.0 + (i + 1) * 1.0, 0.0, 1] for i in range(10)]
+        + [[float(20 + i), 5.0, 1] for i in range(11)]
+    )
+    a_unfiltered = _approximate_area(path_unfiltered)
+    # Unfiltered should be meaningfully larger (the 10 m transit
+    # band gets painted as a full strip ~10 m × 0.22 m ≈ 2.2 m²
+    # of additional cells). Filtered should be smaller.
+    assert a_unfiltered > a_with_transit + 1.0
+
+    # Legacy entries still paint.
+    legacy = [[float(i), 0.0] for i in range(11)]
+    assert _approximate_area(legacy) > 0
 
 
 def test_approximate_area_skips_pen_up_jumps(tmp_path):

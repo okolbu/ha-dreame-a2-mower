@@ -161,8 +161,46 @@ offset  type         field
 [32]    uint8        0xCE          frame delimiter
 ```
 
-**Naming convention**: the `_deci` / `_cent` suffixes refer to
-scale factors (SI prefixes), NOT percentages:
+#### Detecting blades-down (cutting) vs blades-up (transit)
+
+The s1p4 frame doesn't carry an explicit blades-state bit. Two
+candidate signals were investigated:
+
+1. **`phase` (byte[8])** — DOES NOT WORK on this firmware.
+   Field-captured 2026-04-22: an obvious blades-up dock-to-mowing-
+   resume drive (~50 m straight line) and the subsequent mowing
+   pattern BOTH had `phase = 2` throughout. Across 4 probe logs
+   the byte ranges 0..16+ with no clean cutting-vs-transit
+   correlation. See TODO `s1p4 phase byte semantics` for the
+   per-log distribution.
+
+2. **`area_mowed_cent` (byte[29-30])** — WORKS PERFECTLY. The
+   firmware's own area counter only ticks forward when blades
+   are physically cutting. Confirmed 2026-04-22 20:47-20:50:
+   ```
+   20:47:44  pos=( +0.00, -0.10)  area=164.31m²       ← at dock
+   20:47:49  pos=( -2.03, -0.08)  area=164.31m² (Δ=0) ← driving out
+   20:47:54  pos=( -4.09, -0.07)  area=164.31m² (Δ=0)  blades up
+   20:47:59  pos=( -6.14, -0.08)  area=164.31m² (Δ=0)
+   20:48:04  pos=( -8.17, -0.13)  area=164.31m² (Δ=0)
+   20:48:09  pos=( -9.76, -1.04)  area=164.31m² (Δ=0)
+   20:48:14  pos=(-10.53, -1.70)  area=164.38m² Δ=+0.07 ← cutting starts
+   20:48:49  pos=( -3.14,+10.73)  area=164.44m² Δ=+0.06
+   20:48:54  pos=( -1.77,+12.91)  area=164.55m² Δ=+0.11
+   20:48:59  pos=( -0.43,+15.09)  area=164.61m² Δ=+0.06
+   ```
+   Same pattern with `distance_deci` (byte[24-25]). Either
+   counter's frame-to-frame delta is a one-bit blades-on/off
+   signal. The integration uses this in
+   `live_map.DreameA2LiveMap._handle_coordinator_update` to
+   tag each captured path point with a `cutting` flag (1 = area
+   counter ticked forward in the segment leading TO this point;
+   0 = stayed constant).
+
+#### Naming convention
+
+The `_deci` / `_cent` suffixes refer to scale factors (SI
+prefixes), NOT percentages:
 - `_deci` = deci- = raw value × 0.1 → the decoded value is in tenths
   of the base unit. For `distance_deci`, base unit is metres, so
   raw 1664 means 166.4 m.
