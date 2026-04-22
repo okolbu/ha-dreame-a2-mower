@@ -476,6 +476,9 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         self._trail_last_md5 = None
         self._trail_last_session_id = None
         self._trail_last_completed_track_len = 0
+        # Once-per-process WARNING breadcrumbs for end-to-end diagnosis.
+        self._logged_trail_init = False
+        self._logged_first_compose = False
         # Composed PNG cache keyed by (base_image_id, trail.version).
         self._composed_cache: tuple[int, int, bytes] | None = None
         Camera.__init__(self)
@@ -662,6 +665,28 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
                 self._on_live_map_update,
             )
         )
+        # Recovery for the boot-time race: live_map's first dispatch
+        # fires inside coordinator.async_config_entry_first_refresh()
+        # which runs *before* this entity is added to HA. So we missed
+        # at least one — possibly many — dispatches. Replay the cached
+        # snapshot now so the trail layer doesn't sit empty until the
+        # next inbound MQTT push (which during a dock charge could be
+        # minutes away).
+        live_map = getattr(self._coordinator, "live_map", None)
+        cached = getattr(live_map, "_last_dispatched_attrs", None) if live_map else None
+        if cached is not None:
+            _LOGGER.warning(
+                "camera subscribed to LIVE_MAP_UPDATE; replaying cached "
+                "snapshot (path=%d ct=%d)",
+                len(cached.get("path") or []),
+                len(cached.get("completed_track") or []),
+            )
+            self._on_live_map_update(cached)
+        else:
+            _LOGGER.warning(
+                "camera subscribed to LIVE_MAP_UPDATE; no cached snapshot "
+                "to replay (live_map=%s)", bool(live_map),
+            )
 
     @callback
     def _on_live_map_update(self, attrs: dict) -> None:
@@ -750,13 +775,23 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
                     x_reflect_mm=x_ref,
                     y_reflect_mm=y_ref,
                 )
-            except ValueError:
+            except ValueError as ex:
+                _LOGGER.warning(
+                    "trail-layer init failed (calibration invalid): %s", ex,
+                )
                 self._trail_layer = None
                 return
             self._trail_last_path_len = 0
             self._trail_last_md5 = None
             self._trail_last_session_id = None
             self._trail_last_completed_track_len = 0
+            if not self._logged_trail_init:
+                self._logged_trail_init = True
+                _LOGGER.warning(
+                    "trail-layer first initialized (size=%s, x_ref=%s, "
+                    "y_ref=%s, will draw path=%d ct=%d)",
+                    base_size, x_ref, y_ref, len(path), len(attrs.get("completed_track") or []),
+                )
 
         # Reset triggers (any one is enough to repaint the layer):
         # - session_id changed: a new run started, or finalize ran.
@@ -843,6 +878,12 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
             LOGGER.warning("Trail compose failed: %s", ex)
             return base
         self._composed_cache = (base_id, version, composed)
+        if not self._logged_first_compose:
+            self._logged_first_compose = True
+            _LOGGER.warning(
+                "trail compose succeeded (path=%d, version=%d, %d bytes)",
+                self._trail_last_path_len, version, len(composed) if composed else 0,
+            )
         return composed
 
     def __del__(self):
@@ -1001,8 +1042,30 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         try:
             self._image = self._renderer.render_map(map_data, robot_status, station_status)
             if not self.map_data_json and self._calibration_points != self._renderer.calibration_points:
+                calibration_was_unset = self._calibration_points is None
                 self._calibration_points = self._renderer.calibration_points
                 self.coordinator.set_updated_data()
+                # Recovery for the calibration-arrived-late race: any
+                # earlier dispatches that we received before calibration
+                # was set bailed inside _feed_trail_layer (returns when
+                # calibration is missing). Now that calibration is in
+                # hand AND we cached the most recent attrs, re-run the
+                # feed so the trail layer initializes with the path
+                # data we already have. Without this the trail stays
+                # empty until the *next* dispatch arrives, which during
+                # a dock charge could be a long time.
+                if (
+                    calibration_was_unset
+                    and self._live_map_attrs
+                    and self._trail_layer is None
+                ):
+                    _LOGGER.warning(
+                        "camera calibration arrived late; re-feeding trail "
+                        "layer from cached attrs (path=%d ct=%d)",
+                        len(self._live_map_attrs.get("path") or []),
+                        len(self._live_map_attrs.get("completed_track") or []),
+                    )
+                    self._feed_trail_layer(self._live_map_attrs)
         except Exception:
             LOGGER.warn("Map render Failed: %s", traceback.format_exc())
 

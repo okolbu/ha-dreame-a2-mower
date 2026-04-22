@@ -171,6 +171,51 @@ def test_auto_finalize_with_existing_legs_just_drops_in_progress(tmp_path):
     assert archive.count == 0
 
 
+def test_dispatched_attrs_cached_for_late_subscriber_replay(tmp_path):
+    """Regression (2026-04-22 alpha.55): a camera entity that subscribes
+    *after* the first dispatch (which fires inside
+    coordinator.async_config_entry_first_refresh, before
+    async_forward_entry_setups creates camera) used to miss it
+    entirely. live_map now caches the most recent attrs in
+    `_last_dispatched_attrs` so the camera can replay it on
+    `async_added_to_hass`.
+    """
+    archive = SessionArchive(tmp_path)
+    archive.write_in_progress({
+        "session_start_ts": 1776840000,
+        "session_id": 3,
+        "session_start": "2026-04-22T08:00:00+00:00",
+        "live_path": [[1.0, 1.0], [2.0, 2.0], [3.0, 3.0]],
+        "obstacles": [],
+        "leg_md5s": [],
+        "completed_track": [],
+        "lawn_polygon": [],
+        "exclusion_zones": [],
+        "obstacle_polygons": [],
+        "dock_position": None,
+        "summary_md5": None,
+        "summary_end_ts": None,
+        "area_mowed_m2": 1.5,
+        "map_area_m2": 0,
+    })
+    device = _make_device(started=True, session_known=True, position=None)
+    lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
+
+    # Pre-tick: nothing dispatched yet.
+    assert lm._last_dispatched_attrs is None
+
+    # Simulate the first coordinator tick (what async_setup's
+    # call_soon_threadsafe would have done in HA — but our test
+    # _make_hass returns loop=None so we drive it manually).
+    lm._handle_coordinator_update()
+
+    # The cached snapshot is what the late camera-subscriber will replay.
+    assert lm._last_dispatched_attrs is not None
+    cached = lm._last_dispatched_attrs
+    assert cached["session_id"] == 3
+    assert cached["path"] == [[1.0, 1.0], [2.0, 2.0], [3.0, 3.0]]
+
+
 def test_boot_active_blip_does_not_wipe_restored_path(tmp_path):
     """Regression (2026-04-22): on HA boot, the in_progress.json is
     restored (state.path populated), but the first few coordinator

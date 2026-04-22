@@ -421,6 +421,19 @@ class DreameA2LiveMap:
         # blip downgrades `_prev_session_active`, then the next True
         # transition wipes the restored path.
         self._have_active_in_progress: bool = False
+        # The most recent snapshot dispatched via LIVE_MAP_UPDATE_SIGNAL,
+        # cached so a camera entity that subscribes *after* the first
+        # dispatch (which is the actual order on HA boot — first_refresh
+        # runs before async_forward_entry_setups creates camera) can
+        # replay it on `async_added_to_hass` instead of waiting for the
+        # next inbound MQTT push. Without this, a mower at dock that
+        # pushes nothing for minutes leaves the Latest view stuck on
+        # the base map until the next telemetry arrives.
+        self._last_dispatched_attrs: dict | None = None
+        # Once-per-process WARNING-level breadcrumbs for end-to-end
+        # diagnosis without needing to enable DEBUG logging.
+        self._logged_subscribed: bool = False
+        self._logged_first_dispatch: bool = False
         try:
             self._migrate_legacy_drafts(hass)
         except Exception:  # pragma: no cover — best-effort cleanup
@@ -473,7 +486,22 @@ class DreameA2LiveMap:
         self._unsub_listener = self._coordinator.async_add_listener(
             self._handle_coordinator_update
         )
-        _LOGGER.debug("live_map: subscribed to coordinator updates")
+        if not self._logged_subscribed:
+            self._logged_subscribed = True
+            _LOGGER.warning(
+                "live_map subscribed to coordinator updates (path_len=%d, "
+                "have_in_progress=%s)",
+                len(self._state.path), self._have_active_in_progress,
+            )
+        # Schedule one synthetic tick on the next event-loop turn so we
+        # dispatch *something* even before the first inbound MQTT push
+        # arrives. Without this, a mower at dock that's pushing nothing
+        # leaves the camera with no attrs to render — we miss the
+        # first_refresh dispatch (camera not yet subscribed) and the
+        # next dispatch may be minutes away.
+        loop = getattr(self._hass, "loop", None)
+        if loop is not None:
+            loop.call_soon_threadsafe(self._handle_coordinator_update)
 
     @callback
     def async_unload(self) -> None:
@@ -941,6 +969,17 @@ class DreameA2LiveMap:
             x_factor=self.x_factor,
             y_factor=self.y_factor,
         )
+        self._last_dispatched_attrs = attrs
+        if not self._logged_first_dispatch and (
+            attrs.get("path") or attrs.get("completed_track") or attrs.get("position")
+        ):
+            self._logged_first_dispatch = True
+            _LOGGER.warning(
+                "live_map first non-empty dispatch: path=%d ct=%d pos=%s sess=%s",
+                len(attrs.get("path") or []),
+                len(attrs.get("completed_track") or []),
+                attrs.get("position"), attrs.get("session_id"),
+            )
         _LOGGER.debug(
             "live_map dispatch: signal=%s path=%d ct=%d pos=%s",
             LIVE_MAP_UPDATE_SIGNAL, len(attrs.get("path") or []),
@@ -1045,6 +1084,7 @@ class DreameA2LiveMap:
             path_override=path_override,
             obstacles_override=obstacles_override,
         )
+        self._last_dispatched_attrs = attrs
         _send_update(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
         return result
 
