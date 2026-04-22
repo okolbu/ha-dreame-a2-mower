@@ -2666,6 +2666,26 @@ class DreameMowerDevice:
             except Exception as ex:
                 _LOGGER.warning(
                     "Initial property request failed (MQTT will provide updates): %s", ex)
+            # Proactively query s2p56 (g2408 session-task status) so
+            # `device.status.started` is correct on startup. The
+            # property is normally push-only on change, so after an
+            # HA reboot mid-session the integration would otherwise
+            # see `started=False` until the next mower-driven event
+            # (often not until the resume-from-charging minutes
+            # later). The Live Map's Latest view and the Session
+            # Active binary sensor both depend on this, and without
+            # it users rebooting mid-mow see yesterday's archive
+            # replayed instead of the ongoing run.
+            try:
+                result = self._protocol.get_properties(
+                    [{"did": "2.56", "siid": 2, "piid": 56}]
+                )
+                if isinstance(result, list) and result:
+                    param = result[0]
+                    if isinstance(param, dict) and param.get("code") == 0:
+                        self._handle_session_status(param.get("value"))
+            except Exception as ex:
+                _LOGGER.debug("s2p56 startup probe failed: %s", ex)
             self._last_update_failed = None
 
             if self.device_connected and self._protocol.cloud is not None and (not self._ready or not self.available):
