@@ -443,23 +443,51 @@ class DreameA2LiveMap:
         Runs on a worker thread (blocking JSON parse) — callers in HA
         should dispatch through ``hass.async_add_executor_job``.
         """
+        # If switching to LATEST mid-mow, preserve any live path already
+        # accumulated so the user doesn't lose visible progress on
+        # mode-switch. set_mode() on the state wipes path/obstacles
+        # unconditionally; we snapshot first and restore below.
+        preserved_path: list[list[float]] | None = None
+        preserved_obstacles: list[list[float]] | None = None
+        preserved_session_id: int | None = None
+        preserved_session_start: str | None = None
+        if mode is MapMode.LATEST:
+            try:
+                active = bool(self._coordinator.device.status.started)
+            except AttributeError:
+                active = False
+            if active:
+                preserved_path = list(self._state.path)
+                preserved_obstacles = list(self._state.obstacles)
+                preserved_session_id = self._state.session_id
+                preserved_session_start = self._state.session_start
+
         self._state.set_mode(mode, pinned_md5=getattr(archive_entry, "md5", None))
 
         result: dict[str, Any] = {"mode": mode.value}
         if mode is MapMode.LATEST:
-            archive = getattr(self._coordinator, "session_archive", None)
-            latest = archive.latest() if archive else None
-            if latest is not None:
-                path = archive.root / latest.filename
-                try:
-                    replay_from_archive_file(
-                        self._state, str(path), self.x_factor, self.y_factor
-                    )
-                    # LATEST is auto-tracking, not pinned to a specific md5.
-                    self._state.pinned_md5 = None
-                    result["md5"] = self._state.summary_md5
-                except (FileNotFoundError, ValueError) as ex:
-                    result["error"] = str(ex)
+            if preserved_path is not None:
+                # Mid-mow: leave overlay fields empty (already wiped
+                # by set_mode), restore live accumulators so the user
+                # keeps seeing progress they'd already watched.
+                self._state.path = preserved_path
+                self._state.obstacles = preserved_obstacles or []
+                self._state.session_id = preserved_session_id or 0
+                self._state.session_start = preserved_session_start
+                result["mid_mow"] = True
+            else:
+                archive = getattr(self._coordinator, "session_archive", None)
+                latest = archive.latest() if archive else None
+                if latest is not None:
+                    path = archive.root / latest.filename
+                    try:
+                        replay_from_archive_file(
+                            self._state, str(path), self.x_factor, self.y_factor
+                        )
+                        self._state.pinned_md5 = None
+                        result["md5"] = self._state.summary_md5
+                    except (FileNotFoundError, ValueError) as ex:
+                        result["error"] = str(ex)
         elif mode is MapMode.SESSION:
             if archive_entry is None:
                 raise ValueError("archive_entry is required for SESSION mode")
