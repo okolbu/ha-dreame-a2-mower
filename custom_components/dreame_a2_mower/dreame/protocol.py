@@ -514,9 +514,25 @@ class DreameMowerDreameHomeCloudProtocol:
                 self._strings[21]: self._country,
             },
         )
-        if api_response is None or "data" not in api_response:
+        if api_response is None:
+            _LOGGER.warning(
+                "[OSS] get_interim_file_url: API call returned None for "
+                "object_name=%r — cloud transport failure, see prior "
+                "Cloud send error / get_properties warnings.",
+                object_name,
+            )
             return None
-
+        if "data" not in api_response:
+            # Cloud responded with an envelope but no `data` field —
+            # this is the failure mode that's been silently dropping
+            # session-summary downloads on g2408. Surface the full
+            # response so we can categorise the error class.
+            _LOGGER.warning(
+                "[OSS] get_interim_file_url: response had no `data` field "
+                "for object_name=%r. Full response: %r",
+                object_name, api_response,
+            )
+            return None
         return api_response["data"]
 
     def get_properties(self, keys):

@@ -668,6 +668,28 @@ class DreameMowerDevice:
                                     param["piid"],
                                     param.get("value"),
                                 )
+                        # Value-history capture: independent of the
+                        # first-seen-property hook above, log each
+                        # distinct value of an unmapped property at
+                        # WARNING. Lets us derive semantics from the
+                        # value pattern without manual probe analysis
+                        # (e.g. s5p107 cycles a 10-value enum we want
+                        # to catalogue; s2p2 state codes accumulate
+                        # over time). Capped at MAX_VALUES_PER_PROP
+                        # so high-entropy slots can't flood the log.
+                        siid_int = int(param["siid"])
+                        piid_int = int(param["piid"])
+                        value = param.get("value")
+                        if self._unknown_watchdog.saw_value(
+                            siid_int, piid_int, value
+                        ):
+                            _LOGGER.warning(
+                                "[PROTOCOL_VALUE_NOVEL] siid=%d piid=%d "
+                                "value=%r — first time seeing this value "
+                                "for this property. Update §2.1 of the "
+                                "protocol doc if a pattern emerges.",
+                                siid_int, piid_int, value,
+                            )
                 if len(map_params) and self._map_manager:
                     self._map_manager.handle_properties(map_params)
 
@@ -865,6 +887,9 @@ class DreameMowerDevice:
             from ..protocol.session_summary import parse_session_summary
 
             summary = parse_session_summary(data)
+            prev_md5 = getattr(
+                getattr(self, "_latest_session_summary", None), "md5", None
+            )
             self._latest_session_summary = summary
             self._latest_session_raw = data
             self._pending_session_object_name = None
@@ -872,9 +897,14 @@ class DreameMowerDevice:
             # flag so live_map doesn't synthesize an "(incomplete)"
             # entry in addition to the cloud-authoritative one.
             self._session_end_detected_at = None
+            md5_note = (
+                "" if prev_md5 != summary.md5 else
+                " (same md5 as previous; downstream dedupe will skip)"
+            )
             _LOGGER.warning(
-                "[EVENT] session-summary fetched: %.1f/%d m² mowed in %d min; "
-                "%d boundary pts, %d track segments, %d obstacles, %d exclusions",
+                "[EVENT] session-summary fetched: md5=%s %.1f/%d m² mowed in %d min; "
+                "%d boundary pts, %d track segments, %d obstacles, %d exclusions%s",
+                summary.md5[:8] if summary.md5 else "?",
                 summary.area_mowed_m2,
                 summary.map_area_m2,
                 summary.duration_min,
@@ -882,6 +912,7 @@ class DreameMowerDevice:
                 len(summary.track_segments),
                 len(summary.obstacles),
                 len(summary.exclusions),
+                md5_note,
             )
             return True
         except Exception as ex:

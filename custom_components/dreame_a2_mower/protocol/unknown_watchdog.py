@@ -20,7 +20,14 @@ network thread, so every mutation happens on one thread. No locking.
 
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Any, Iterable
+
+
+# Cap per-property value-history at this many distinct values. Bounds
+# log/memory growth for properties that emit a wide range (e.g. s5p107
+# was observed firing 10 distinct values; capping at 32 lets us catch
+# a few times that without unbounded growth on truly random fields).
+MAX_VALUES_PER_PROP = 32
 
 
 class UnknownFieldWatchdog:
@@ -36,6 +43,16 @@ class UnknownFieldWatchdog:
         self._seen_properties: set[tuple[int, int]] = set()
         self._seen_methods: set[str] = set()
         self._seen_event_piids: dict[tuple[int, int], set[int]] = {}
+        # Per-property value catalog. `_seen_values[(siid, piid)]` holds
+        # the hashable representations of every distinct value seen for
+        # that property, capped at MAX_VALUES_PER_PROP. Used by
+        # `saw_value` to drive [PROTOCOL_VALUE_NOVEL] logging — extends
+        # the existing "first time we see this property" novelty hook
+        # to also catch "first time we see this VALUE for this
+        # property". Critical for partially-known properties whose
+        # semantics we're trying to derive from value patterns
+        # (s5p107's dynamic enum, s2p2 state codes, etc.).
+        self._seen_values: dict[tuple[int, int], set[Any]] = {}
 
     def saw_property(self, siid: int, piid: int) -> bool:
         key = (int(siid), int(piid))
@@ -49,6 +66,35 @@ class UnknownFieldWatchdog:
         if key in self._seen_methods:
             return False
         self._seen_methods.add(key)
+        return True
+
+    def saw_value(self, siid: int, piid: int, value: Any) -> bool:
+        """Return True the first time this (siid, piid, value) is observed.
+
+        Caps each property at `MAX_VALUES_PER_PROP` distinct values so a
+        property that emits truly random data can't bloat memory or log
+        volume unboundedly. Once the cap is hit the method returns
+        False for any further values (the caller can take the cap as
+        a signal that this slot is high-entropy and probably needs a
+        different analysis strategy).
+
+        Lists / dicts get hashed by their `repr` since they're
+        themselves unhashable. Other unhashable types fall through to
+        repr too. This is fine for log keying — collisions would
+        require two distinct values with identical repr, which is a
+        Python-level edge case.
+        """
+        key = (int(siid), int(piid))
+        seen = self._seen_values.setdefault(key, set())
+        if len(seen) >= MAX_VALUES_PER_PROP:
+            return False
+        try:
+            hashable = value if isinstance(value, (int, float, str, bool, type(None))) else repr(value)
+        except Exception:
+            hashable = repr(value) if value is not None else None
+        if hashable in seen:
+            return False
+        seen.add(hashable)
         return True
 
     def saw_event(self, siid: int, eiid: int, piids: Iterable[int]) -> bool:
