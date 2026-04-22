@@ -174,6 +174,109 @@ def test_finalize_session_returns_no_in_progress_when_clean(tmp_path):
     assert result == {"result": "no_in_progress"}
 
 
+def test_leg_merge_skips_stale_summary_from_previous_run(tmp_path):
+    """Regression: device.latest_session_summary is sticky after a run
+    completes. When a new run starts, the leg-merge code MUST NOT
+    absorb that previous summary's tracks into the fresh in-progress
+    entry — only legs whose start_ts falls inside the current session
+    window should merge."""
+    archive = SessionArchive(tmp_path)
+    # Stale summary from a run that ended an hour ago.
+    stale = SimpleNamespace(
+        md5="stale-md5",
+        start_ts=1776840000,
+        end_ts=1776843600,
+        track_segments=[[(0.0, 0.0), (1.0, 1.0)]],
+        lawn_polygon=[(0.0, 0.0), (10.0, 10.0)],
+        exclusions=[],
+        obstacles=[],
+        dock=(0.0, 0.0),
+    )
+    device = _make_device(started=True, session_known=True, position=(100, 100))
+    device.latest_session_summary = stale
+    lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
+
+    # Force a fresh session boundary well after the stale leg ended.
+    lm._prev_session_active = False
+    lm._handle_coordinator_update()
+
+    # The fresh session_start is "now"; stale.start_ts is an hour
+    # before that, so the merge gate must reject it.
+    assert lm._state.completed_track == []
+    assert lm._state.lawn_polygon == []
+    # md5 still recorded so we don't keep evaluating it every tick.
+    assert "stale-md5" in lm._in_progress_leg_md5s
+
+
+def test_leg_merge_accepts_summary_inside_current_session(tmp_path):
+    """Counterpart to the regression test — a leg whose start_ts lies
+    inside the current session window MUST merge so multi-leg
+    recharge cycles still aggregate correctly."""
+    import time as _time
+    archive = SessionArchive(tmp_path)
+    now = int(_time.time())
+    fresh = SimpleNamespace(
+        md5="fresh-md5",
+        start_ts=now,            # leg started right now
+        end_ts=now + 60,
+        track_segments=[[(2.0, 2.0), (3.0, 3.0)]],
+        lawn_polygon=[(0.0, 0.0), (5.0, 5.0)],
+        exclusions=[],
+        obstacles=[],
+        dock=(0.0, 0.0),
+    )
+    device = _make_device(started=True, session_known=True, position=(100, 100))
+    device.latest_session_summary = fresh
+    lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
+    lm._prev_session_active = False
+    lm._handle_coordinator_update()
+
+    assert "fresh-md5" in lm._in_progress_leg_md5s
+    assert lm._state.completed_track == [[[2.0, 2.0], [3.0, 3.0]]]
+    assert lm._state.lawn_polygon == [[0.0, 0.0], [5.0, 5.0]]
+
+
+def test_restore_self_heals_poisoned_completed_track(tmp_path):
+    """alpha.46-on-disk in-progress entries may carry the previous
+    run's completed_track merged in. Restore should drop overlay
+    fields whose summary_end_ts is older than this session's start."""
+    import time as _time
+    archive = SessionArchive(tmp_path)
+    now = int(_time.time())
+    archive.write_in_progress({
+        "session_start_ts": now,
+        "session_id": 1,
+        "session_start": _make_session_start_iso(now),
+        "live_path": [[0.0, 0.0]],
+        "obstacles": [],
+        "leg_md5s": ["stale-md5"],
+        # Bogus carry-over from the previous run (end_ts before this session).
+        "completed_track": [[[5.0, 5.0], [6.0, 6.0]]],
+        "lawn_polygon": [[0.0, 0.0], [10.0, 10.0]],
+        "exclusion_zones": [],
+        "obstacle_polygons": [],
+        "dock_position": [0.0, 0.0],
+        "summary_md5": "stale-md5",
+        "summary_end_ts": now - 3600,   # an hour before this session
+        "area_mowed_m2": 0.0,
+        "map_area_m2": 0,
+    })
+    device = _make_device(started=False, session_known=False)
+    lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
+
+    # Self-heal: poisoned overlay dropped.
+    assert lm._state.completed_track == []
+    assert lm._state.lawn_polygon == []
+    assert lm._in_progress_leg_md5s == []
+    # Live path is preserved (it's ours, not poisoned).
+    assert lm._state.path == [[0.0, 0.0]]
+
+
+def _make_session_start_iso(unix_ts: int) -> str:
+    import datetime as _dt
+    return _dt.datetime.fromtimestamp(unix_ts, tz=_dt.timezone.utc).isoformat(timespec="seconds")
+
+
 def test_finalize_session_archives_incomplete_when_path_only(tmp_path):
     archive = SessionArchive(tmp_path)
     archive.write_in_progress({

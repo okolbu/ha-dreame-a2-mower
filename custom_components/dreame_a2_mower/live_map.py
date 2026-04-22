@@ -492,25 +492,44 @@ class DreameA2LiveMap:
             self._state.session_start = data.get("session_start")
             self._state.path = [list(p) for p in data.get("live_path", [])]
             self._state.obstacles = [list(p) for p in data.get("obstacles", [])]
-            self._state.completed_track = [
-                [list(p) for p in seg] for seg in data.get("completed_track", [])
-            ]
-            self._state.lawn_polygon = [
-                list(p) for p in data.get("lawn_polygon", [])
-            ]
-            self._state.exclusion_zones = [
-                [list(p) for p in z] for z in data.get("exclusion_zones", [])
-            ]
-            self._state.obstacle_polygons = [
-                [list(p) for p in o] for o in data.get("obstacle_polygons", [])
-            ]
-            dock = data.get("dock_position")
-            self._state.dock_position = (
-                [dock[0], dock[1]] if dock else None
-            )
-            self._state.summary_md5 = data.get("summary_md5")
-            self._state.summary_end_ts = data.get("summary_end_ts")
-            self._in_progress_leg_md5s = list(data.get("leg_md5s", []))
+            # Self-heal: in-progress files written between the in-progress
+            # refactor (alpha.46) and the leg-merge timestamp gate
+            # (alpha.47) may carry the previous run's tracks merged
+            # into completed_track. If the persisted `summary_end_ts`
+            # falls *before* this session's start, the merge was bogus
+            # and we drop the overlay carry-over (the picker / Latest
+            # view will re-populate from the next legitimate leg).
+            sst = _iso_to_unix(self._state.session_start)
+            sumend = data.get("summary_end_ts") or 0
+            if sst and sumend and int(sumend) < sst:
+                self._state.completed_track = []
+                self._state.lawn_polygon = []
+                self._state.exclusion_zones = []
+                self._state.obstacle_polygons = []
+                self._state.dock_position = None
+                self._state.summary_md5 = None
+                self._state.summary_end_ts = None
+                self._in_progress_leg_md5s = []
+            else:
+                self._state.completed_track = [
+                    [list(p) for p in seg] for seg in data.get("completed_track", [])
+                ]
+                self._state.lawn_polygon = [
+                    list(p) for p in data.get("lawn_polygon", [])
+                ]
+                self._state.exclusion_zones = [
+                    [list(p) for p in z] for z in data.get("exclusion_zones", [])
+                ]
+                self._state.obstacle_polygons = [
+                    [list(p) for p in o] for o in data.get("obstacle_polygons", [])
+                ]
+                dock = data.get("dock_position")
+                self._state.dock_position = (
+                    [dock[0], dock[1]] if dock else None
+                )
+                self._state.summary_md5 = data.get("summary_md5")
+                self._state.summary_end_ts = data.get("summary_end_ts")
+                self._in_progress_leg_md5s = list(data.get("leg_md5s", []))
         except (TypeError, ValueError):
             return False
         return True
@@ -687,6 +706,18 @@ class DreameA2LiveMap:
         # geometry (lawn polygon, exclusions, completed_track) as
         # legs complete. Each leg's md5 is tracked so we don't
         # re-merge on subsequent ticks.
+        #
+        # CRITICAL gate: `device.latest_session_summary` is sticky — the
+        # device keeps the previous run's summary in memory until a new
+        # event_occured fires. Without a timestamp check, every fresh
+        # session would absorb the *previous* run's tracks the moment
+        # start_session() emptied `_in_progress_leg_md5s` (regression
+        # observed 2026-04-22 right after the in-progress refactor:
+        # Latest view rendered the previous run's path on top of an
+        # empty live trail). Only merge a leg whose start_ts falls
+        # inside the current logical session's window — i.e. >= the
+        # session_start we wrote when start_session() fired (with a
+        # small tolerance for clock skew across cloud/device).
         try:
             summary = getattr(device, "latest_session_summary", None)
         except Exception:
@@ -697,14 +728,27 @@ class DreameA2LiveMap:
             and leg_md5
             and leg_md5 not in self._in_progress_leg_md5s
         ):
+            session_start_unix = _iso_to_unix(self._state.session_start)
+            leg_start_unix = int(getattr(summary, "start_ts", 0) or 0)
             if active:
-                # Multi-leg merge: append the leg's track segments,
-                # refresh static geometry from this leg's view.
-                self._state.completed_track.extend(
-                    [list(p) for p in seg] for seg in summary.track_segments
+                # Multi-leg merge — but only if this leg actually
+                # belongs to the current session (or session_start is
+                # unknown, which is the cold-boot fallback).
+                belongs_to_session = (
+                    session_start_unix == 0
+                    or leg_start_unix >= session_start_unix - 300
                 )
-                self._state.load_from_session_summary(summary)
-                self._in_progress_leg_md5s.append(leg_md5)
+                if belongs_to_session:
+                    self._state.completed_track.extend(
+                        [list(p) for p in seg] for seg in summary.track_segments
+                    )
+                    self._state.load_from_session_summary(summary)
+                    self._in_progress_leg_md5s.append(leg_md5)
+                else:
+                    # Stale summary from the prior run — record the md5
+                    # so we don't keep evaluating it on every tick, but
+                    # don't import its data into this session.
+                    self._in_progress_leg_md5s.append(leg_md5)
             elif self._state.mode is MapMode.LATEST:
                 # Between-runs path: just adopt the summary as the
                 # new Latest overlay (replaces whatever the picker
