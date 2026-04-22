@@ -33,6 +33,12 @@ from PIL import Image, ImageDraw
 
 
 TRAIL_COLOR = (70, 70, 70, 220)             # dark grey — matches app
+# Blades-up transit / return-to-dock — muted desaturated blue.
+# Visible enough to follow at a glance but distinct from the
+# mowing colour so the diagonal relocation strokes that an
+# irregular lawn produces don't visually merge with the mowing
+# pattern. Matches phase ∈ {1, 3} segments per s1p4 byte[8].
+TRANSIT_COLOR = (90, 115, 170, 180)
 TRAIL_WIDTH_PX = 4
 # Live-trail pen-up threshold — consecutive s1p4 samples more than this
 # far apart (metres) are treated as a session boundary / dock visit
@@ -138,19 +144,31 @@ class TrailLayer:
         far in one 5-second telemetry interval, so it's a dock visit,
         a GPS correction, or a telemetry drop — drawing a straight
         line across would produce a ghost segment).
+
+        ``point_m`` may be a 2-element ``[x, y]`` (legacy / no phase)
+        or a 3-element ``[x, y, phase]`` where phase is the s1p4
+        byte[8]. When phase is 1 (TRANSIT) or 3 (RETURNING) the
+        segment renders in TRANSIT_COLOR — visually distinct from
+        normal mowing strokes so the diagonal relocation lines
+        characteristic of irregular lawns can be seen without
+        being mistaken for cut area.
         """
         if point_m is None or len(point_m) < 2:
             return
         new_x_m = float(point_m[0])
         new_y_m = float(point_m[1])
+        phase = int(point_m[2]) if len(point_m) >= 3 else None
         px = self._m_to_px(new_x_m, new_y_m)
         if self._last_point is not None and self._last_point_m is not None:
             dx = new_x_m - self._last_point_m[0]
             dy = new_y_m - self._last_point_m[1]
             if (dx * dx + dy * dy) ** 0.5 <= LIVE_GAP_PENUP_M:
+                color = (
+                    TRANSIT_COLOR if phase in (1, 3) else self._trail_color
+                )
                 self._draw.line(
                     [self._last_point, px],
-                    fill=self._trail_color,
+                    fill=color,
                     width=self._trail_width,
                     joint="curve",
                 )
@@ -187,13 +205,45 @@ class TrailLayer:
                         pts, fill=self._trail_color, width=self._trail_width, joint="curve"
                     )
         if path:
-            pts = [self._m_to_px(p[0], p[1]) for p in path if len(p) >= 2]
-            if len(pts) >= 2:
-                self._draw.line(
-                    pts, fill=self._trail_color, width=self._trail_width, joint="curve"
+            # Walk the path entries and group consecutive points by
+            # rendering colour. Phase ∈ {1, 3} → TRANSIT_COLOR;
+            # everything else (including legacy 2-element entries
+            # with no phase) → mowing colour. We draw each
+            # contiguous same-colour run as a single ImageDraw.line
+            # call to preserve curve smoothing while still
+            # honouring the phase distinction.
+            current_color = None
+            current_pts: list[tuple[float, float]] = []
+            last_pt: tuple[float, float] | None = None
+            for entry in path:
+                if not isinstance(entry, (list, tuple)) or len(entry) < 2:
+                    continue
+                phase = int(entry[2]) if len(entry) >= 3 else None
+                color = (
+                    TRANSIT_COLOR if phase in (1, 3) else self._trail_color
                 )
-            if pts:
-                self._last_point = pts[-1]
+                px = self._m_to_px(entry[0], entry[1])
+                if color != current_color:
+                    if current_color is not None and len(current_pts) >= 2:
+                        self._draw.line(
+                            current_pts, fill=current_color,
+                            width=self._trail_width, joint="curve",
+                        )
+                    # Carry the last point of the previous run as
+                    # the first point of the next run so segments
+                    # join visually without a gap at the colour
+                    # transition.
+                    current_pts = [last_pt] if last_pt is not None else []
+                    current_color = color
+                current_pts.append(px)
+                last_pt = px
+            if current_color is not None and len(current_pts) >= 2:
+                self._draw.line(
+                    current_pts, fill=current_color,
+                    width=self._trail_width, joint="curve",
+                )
+            if last_pt is not None:
+                self._last_point = last_pt
         if obstacle_polygons:
             self.set_obstacles(obstacle_polygons)
         if dock_position is not None:
