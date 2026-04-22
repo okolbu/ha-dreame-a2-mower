@@ -10,9 +10,12 @@ design rationale and attribute schema.
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass, field
 from enum import Enum
+
+_LOGGER = logging.getLogger(__name__)
 
 PATH_DEDUPE_METRES = 0.2
 OBSTACLE_DEDUPE_METRES = 0.5
@@ -423,6 +426,7 @@ class DreameA2LiveMap:
         self._unsub_listener = self._coordinator.async_add_listener(
             self._handle_coordinator_update
         )
+        _LOGGER.debug("live_map: subscribed to coordinator updates")
 
     @callback
     def async_unload(self) -> None:
@@ -647,6 +651,7 @@ class DreameA2LiveMap:
     def _handle_coordinator_update(self) -> None:
         device = self._coordinator.device
         if device is None:
+            _LOGGER.debug("live_map tick: device=None, skip")
             return
 
         # Live path accumulation runs on every tick regardless of the
@@ -660,6 +665,13 @@ class DreameA2LiveMap:
             active = bool(device.status.started)
         except AttributeError:
             active = False
+        _LOGGER.debug(
+            "live_map tick: mode=%s active=%s prev_active=%s "
+            "session_known=%s path_len=%d",
+            self._state.mode.value, active, self._prev_session_active,
+            getattr(device, "_session_status_known", False),
+            len(self._state.path),
+        )
 
         # Auto-close in-progress entry: if the device has definitively
         # reported no active session (s2p56 known + started=False),
@@ -791,12 +803,18 @@ class DreameA2LiveMap:
         # Only LATEST drives the displayed snapshot; SESSION/BLANK
         # remain frozen on whatever set_mode() last pushed.
         if self._state.mode is not MapMode.LATEST:
+            _LOGGER.debug("live_map tick: mode=%s, skipping dispatch", self._state.mode.value)
             return
 
         attrs = self._state.to_attributes(
             position=position,
             x_factor=self.x_factor,
             y_factor=self.y_factor,
+        )
+        _LOGGER.debug(
+            "live_map dispatch: signal=%s path=%d ct=%d pos=%s",
+            LIVE_MAP_UPDATE_SIGNAL, len(attrs.get("path") or []),
+            len(attrs.get("completed_track") or []), attrs.get("position"),
         )
         async_dispatcher_send(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)
 
