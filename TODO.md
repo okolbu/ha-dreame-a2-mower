@@ -99,6 +99,56 @@ and restore on boot; (c) eager s2p56 probe at boot (already
 exists per commit 36502b8 — verify it actually fires before the
 binary_sensor's first state computation).
 
+## PROTOCOL_NOVEL entries — investigate + map
+
+Three first-time-seen MQTT shapes captured 2026-04-22 16:35
+(coincident with session-end of a 104-min mowing run that
+didn't fire the integration's normal session-completion event):
+
+1. **`properties_changed siid=1 piid=52 value={}`** (16:35:17.786)
+   Empty-dict push on s1p52. Already in `OBSERVED_LABELS` as
+   `UNKNOWN_DICT` per `mower_tail.py`. Co-fires with s2p52 below.
+
+2. **`properties_changed siid=2 piid=52 value={}`** (16:35:18.031)
+   Empty-dict push on s2p52. Co-fires with s1p52. Together these
+   are likely session-boundary markers (similar to the
+   `s1p50/s1p51 = {}` we already document in protocol §4.4 for
+   session start). Hypothesis: `{s1p52, s2p52} = {}` marks
+   session END, mirroring `{s1p50, s1p51} = {}` at session start.
+
+3. **`event_occured siid=4 eiid=1 with piids=[1, 2, 3, 7, 8, 9, 11, 13, 14, 15, 60]`**
+   (16:35:22.498) — almost certainly the session-completion
+   event for g2408. The integration currently only handles
+   `siid=1 eiid=12` for `_fetch_session_summary`. Result: the
+   completed run never gets its summary downloaded, the picker
+   keeps showing "still mowing" indefinitely until the user
+   presses Finalize Session.
+
+   piids 1, 2, 3, 7, 8, 9, 11, 13, 14, 15, 60 likely correspond
+   to the cleanup-completed event payload (cleaning_time,
+   area_mowed, stop_reason, OSS object_name, etc.). Need to
+   capture the full payload (not just the piid list) to map
+   each piid → meaning. The PROTOCOL_NOVEL handler currently
+   only logs the piid list — it should also dump values.
+
+**Needed**:
+- Extend `[PROTOCOL_NOVEL] event_occured ...` log to include
+  the full piid→value mapping (truncated for large blobs) so
+  next capture has the data we need.
+- Add a handler for `siid=4 eiid=1` events that downloads the
+  session summary OSS object (probably under one of the piid
+  values — historically piid=9 carried the object_name in
+  upstream models).
+- Once decoded, document in `docs/research/g2408-protocol.md`
+  §7.4 alongside `event_occured siid=1 eiid=12`.
+- Verify s1p52 / s2p52 hypothesis by capturing more session
+  ends and confirming the timing pattern.
+
+**Acceptance**: every captured PROTOCOL_NOVEL message gets
+documented + the integration recognises the g2408's actual
+session-end event so picker auto-clears without manual
+intervention.
+
 ## LiDAR card popout / fullscreen view
 
 **Context**: `custom:dreame-a2-lidar-card` (served from

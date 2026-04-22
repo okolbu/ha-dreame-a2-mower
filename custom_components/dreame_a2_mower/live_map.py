@@ -900,30 +900,36 @@ class DreameA2LiveMap:
         ):
             session_start_unix = _iso_to_unix(self._state.session_start)
             leg_start_unix = int(getattr(summary, "start_ts", 0) or 0)
-            if active:
-                # Multi-leg merge — but only if this leg actually
-                # belongs to the current session (or session_start is
-                # unknown, which is the cold-boot fallback).
-                belongs_to_session = (
-                    session_start_unix == 0
-                    or leg_start_unix >= session_start_unix - 300
+            belongs_to_session = (
+                session_start_unix == 0
+                or leg_start_unix >= session_start_unix - 300
+            )
+            # Mark this md5 as seen regardless of whether we merge it;
+            # a mismatched leg (e.g. yesterday's summary that the
+            # device keeps in memory) shouldn't be re-evaluated every
+            # tick.
+            self._in_progress_leg_md5s.append(leg_md5)
+            if active and belongs_to_session:
+                # Multi-leg merge within the current logical run.
+                self._state.completed_track.extend(
+                    [list(p) for p in seg] for seg in summary.track_segments
                 )
-                if belongs_to_session:
-                    self._state.completed_track.extend(
-                        [list(p) for p in seg] for seg in summary.track_segments
-                    )
-                    self._state.load_from_session_summary(summary)
-                    self._in_progress_leg_md5s.append(leg_md5)
-                else:
-                    # Stale summary from the prior run — record the md5
-                    # so we don't keep evaluating it on every tick, but
-                    # don't import its data into this session.
-                    self._in_progress_leg_md5s.append(leg_md5)
-            elif self._state.mode is MapMode.LATEST:
-                # Between-runs path: just adopt the summary as the
-                # new Latest overlay (replaces whatever the picker
-                # was showing). Path is wiped because there is no
-                # live mow to extend it.
+                self._state.load_from_session_summary(summary)
+            elif (
+                not active
+                and belongs_to_session
+                and self._state.mode is MapMode.LATEST
+                and not self._have_active_in_progress
+            ):
+                # True between-runs path: no current session at all,
+                # so load this summary as the Latest overlay. Wipe
+                # path because there's no live accumulator to extend.
+                # Gated on `not _have_active_in_progress` so we don't
+                # clobber a restored in-progress session with a stale
+                # cloud-cached summary from a previous run (field
+                # report 2026-04-22 alpha.59: the 10:58 archive kept
+                # merging itself into the 15:16 session because its
+                # start_ts gate wasn't checked here).
                 if self._state.load_from_session_summary(summary):
                     self._state.path = []
                     self._state.obstacles = []
