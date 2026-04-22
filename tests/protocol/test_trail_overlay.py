@@ -181,22 +181,27 @@ def test_compose_handles_base_size_mismatch():
 def test_live_pen_up_on_large_jump():
     """A jump greater than LIVE_GAP_PENUP_M should start a new
     segment — no line drawn across the gap — otherwise dock visits
-    and telemetry glitches produce ghost trails."""
+    and telemetry glitches produce ghost trails.
+
+    Note: as of 2026-04-22, the layer also paints a live mower-
+    position marker (filled circle ~10 px radius with white outline)
+    at `_last_point` — anti-aliased edge of that outline lands a
+    handful of grey pixels in `_trail_pixels`'s grey-band filter.
+    Use a more permissive threshold that still catches the bug:
+    drawing a real line across a 14 m gap on a 256×256 canvas
+    paints hundreds of pixels, well above any marker noise.
+    """
     layer = TrailLayer(base_size=(256, 256), calibration=CALIBRATION)
-    # Draw a short segment in the upper-left.
     layer.extend_live([0.0, 0.0])
     layer.extend_live([0.1, 0.0])
     red_after_short = _red_pixels(layer.compose(_blank_png()))
-    # Now "teleport" 10 m to the other side — should NOT draw a
-    # connecting line. Next point within 5 m should resume drawing.
     layer.extend_live([10.0, 10.0])  # big jump — pen up
     layer.extend_live([10.1, 10.0])  # short follow-up — pen down again
     red_after_jump = _red_pixels(layer.compose(_blank_png()))
-    # Minimal growth — only the tiny second segment should have been added
-    # (roughly same pixel count as the first small segment). If the jump
-    # had drawn across, the red count would explode (diagonal across
-    # ~14 m of canvas).
-    assert red_after_jump < red_after_short * 3
+    # Bound drawn-across overhead: a drawn-across line would add
+    # hundreds of pixels (far more than any plausible marker-edge
+    # contribution); generous absolute cap catches the real bug.
+    assert red_after_jump < red_after_short + 200
 
 
 def test_x_reflect_mirrors_trail_horizontally():

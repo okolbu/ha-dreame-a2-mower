@@ -41,6 +41,16 @@ TRAIL_COLOR = (70, 70, 70, 220)             # dark grey — matches app
 # 2026-04-22). Matches phase ∈ {1, 3} segments per s1p4 byte[8].
 TRANSIT_COLOR = (50, 130, 230, 220)
 TRAIL_WIDTH_PX = 4
+# Live mower-position marker painted on the overlay at the end of the
+# trail. The base renderer also paints a mower icon but only updates
+# when the camera entity re-runs `update()` (heavy, throttled), so a
+# live dot on the overlay — which recomposes on every telemetry frame
+# via `extend_live` → `version++` — is the cheapest way to get real-
+# time icon movement. Picked a saturated orange-red so it pops
+# against both the dark-grey trail and the green lawn base.
+MOWER_MARKER_COLOR = (230, 75, 40, 240)
+MOWER_MARKER_OUTLINE = (255, 255, 255, 255)
+MOWER_MARKER_RADIUS_PX = 10
 # Live-trail pen-up threshold — consecutive s1p4 samples more than this
 # far apart (metres) are treated as a session boundary / dock visit
 # rather than a connected segment. Mower mow speed is <0.5 m/s over 5 s
@@ -290,6 +300,23 @@ class TrailLayer:
         # and draw obstacles + dock onto IT, then compose once.
         overlay = self._trail.copy()
         draw = ImageDraw.Draw(overlay, "RGBA")
+
+        # Live mower position: paint a filled circle at the last
+        # telemetry point. Updates on every `extend_live` call, so
+        # the icon follows the mower without waiting for the heavy
+        # base-PNG re-render. The base renderer's mower icon may
+        # lag wherever update() last painted it (typically dock)
+        # until the camera's next throttled refresh — this overlay
+        # dot is what actually shows the current position.
+        if self._last_point is not None:
+            px, py = self._last_point
+            r = MOWER_MARKER_RADIUS_PX
+            draw.ellipse(
+                [(px - r, py - r), (px + r, py + r)],
+                fill=MOWER_MARKER_COLOR,
+                outline=MOWER_MARKER_OUTLINE,
+                width=2,
+            )
 
         for poly in self._obstacle_polys:
             draw.polygon(poly, fill=OBSTACLE_COLOR, outline=OBSTACLE_OUTLINE)
