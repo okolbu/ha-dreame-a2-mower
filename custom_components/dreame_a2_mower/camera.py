@@ -672,7 +672,13 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         # snapshot now so the trail layer doesn't sit empty until the
         # next inbound MQTT push (which during a dock charge could be
         # minutes away).
-        live_map = getattr(self._coordinator, "live_map", None)
+        # Note: this entity uses CoordinatorEntity → `self.coordinator`,
+        # NOT `self._coordinator`. The latter is only set on
+        # DreameMowerLidarTopDownCamera (separate class). Reading the
+        # wrong attribute raised AttributeError post-subscribe in
+        # alpha.55, leaving the camera entity flagged "no longer
+        # provided" by HA — see field report 2026-04-22.
+        live_map = getattr(self.coordinator, "live_map", None)
         cached = getattr(live_map, "_last_dispatched_attrs", None) if live_map else None
         if cached is not None:
             _LOGGER.warning(
