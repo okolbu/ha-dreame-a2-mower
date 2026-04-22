@@ -153,13 +153,28 @@ offset  type         field
                      mv2 ≈ Y velocity; others likely heading / angular rate
 [18-21] 2× int16_le  paired sentinel/active pattern, unknown quantity
 [22-23] flags        [22] 0→1 after init; [23]=2
-[24-25] uint16_le    distance_deci      ÷ 10 → metres
-[26-27] uint16_le    total_area_cent    ÷ 100 → m² (total mowable area)
+[24-25] uint16_le    distance_deci      decimetres (raw ÷ 10 → m). Not a %.
+[26-27] uint16_le    total_area_cent    centi-m² (raw ÷ 100 → m²). Not a %.
 [28]    uint8        0x00          static
-[29-30] uint16_le    area_mowed_cent    ÷ 100 → m² (area cut this session)
+[29-30] uint16_le    area_mowed_cent    centi-m² (raw ÷ 100 → m²). Not a %.
 [31]    uint8        0x00          static
 [32]    uint8        0xCE          frame delimiter
 ```
+
+**Naming convention**: the `_deci` / `_cent` suffixes refer to
+scale factors (SI prefixes), NOT percentages:
+- `_deci` = deci- = raw value × 0.1 → the decoded value is in tenths
+  of the base unit. For `distance_deci`, base unit is metres, so
+  raw 1664 means 166.4 m.
+- `_cent` = centi- = raw value × 0.01 → the decoded value is in
+  hundredths of the base unit. For `*_area_cent`, base unit is
+  m², so raw 16430 means 164.30 m². The encoding is just the
+  firmware's way of keeping two decimals of precision in a
+  uint16_le without using floats — the field's actual semantic is
+  plain m² (or plain metres for distance).
+
+Neither field is in the range 0-100; both routinely exceed those
+bounds (a 300 m² lawn stores `total_area_cent = 30000`).
 
 Distance / area counters reset at the start of each mowing session.
 
