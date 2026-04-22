@@ -427,11 +427,7 @@ class DreameA2LiveMap:
             age = _time.time() - float(data.get("ts", 0))
         except (TypeError, ValueError):
             age = 9e9
-        # A single A2 mow can span several days (auto-recharge cycles).
-        # Use a 7-day freshness window so a mid-session HA restart on
-        # day 3 of a long run still recovers the accumulated path
-        # instead of discarding it as stale.
-        if age > 7 * 86400:
+        if age > 12 * 3600:
             try:
                 src.unlink()
             except OSError:
