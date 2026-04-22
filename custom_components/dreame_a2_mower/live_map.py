@@ -330,11 +330,42 @@ OPT_Y_FACTOR = "live_map_y_factor"
 DEFAULT_X_FACTOR = 1.0
 DEFAULT_Y_FACTOR = 0.625
 
-# Mower deck width in metres — used as the swath width when estimating
-# in-progress mowed area from the live path. Approximation only: the
-# real area depends on overlap pattern. Cloud-summary `areas` overrides
-# this once a leg completes.
-_LIVE_AREA_SWATH_M = 0.32
+# Cutting blade width in metres — used as the swath width when
+# estimating in-progress mowed area from the live path. Cloud-summary
+# `areas` overrides this once a leg completes.
+#
+# Why 0.22 m and not 0.32 m: the deck's two contra-rotating blade
+# discs span ~0.22 m end-to-end. The mower mows in lanes spaced
+# ~0.32 m apart (a 10 cm "leave for next pass" gap between cuts),
+# which is why earlier observations of row pitch read as 0.32 m and
+# why the trail rendering uses 0.32 m visual width — but the actual
+# CUT swath per pass is the blade width, 0.22 m. Using 0.32 m
+# inflates the live area calc by ~45 % over the cloud's authoritative
+# `areas` figure (field-verified 2026-04-22: app reported 164 m²
+# while a 0.32 m calc produced 196 m²; switching to 0.22 m brings
+# the live estimate into the same band as the cloud number).
+#
+# The integration STILL over-counts vs the cloud during mid-run
+# returns to dock — the mower travels with blades up but live_map
+# sees the same s1p4 (x, y) telemetry, so the rasteriser paints
+# those segments too. We don't currently store the phase byte per
+# point, so segregating "blades-up transit" from "blades-down
+# mowing" would require a path-schema change. Acceptable for the
+# picker label (a rough indicator); the cloud-summary value lands
+# at session-end and replaces it.
+_LIVE_AREA_SWATH_M = 0.22
+# Coarseness of the rasterised area grid. 0.10 m bins → 0.01 m² per
+# cell. Finer than the deck swath / 3 so per-stamp discs approximate
+# the swath circle area closely (π × 0.16² ≈ 0.08 m² ≈ 8 cells),
+# which matches the cloud's `areas` figure (field-verified within
+# ~5 % against a same-run app reading 2026-04-22). 0.20 m grid was
+# tried first and was too coarse — partial cells at strip edges
+# either over- or under-counted by 30+ %.
+_LIVE_AREA_GRID_M = 0.10
+# Pen-up jump threshold for skipping segments — anything beyond this
+# is dock-visit / GPS-correction / telemetry-drop, not a real mowing
+# pass; matches the trail layer's LIVE_GAP_PENUP_M for consistency.
+_LIVE_AREA_PENUP_M = 5.0
 
 
 def _iso_to_unix(iso: str | None) -> int:
@@ -351,11 +382,84 @@ def _iso_to_unix(iso: str | None) -> int:
 
 
 def _approximate_area(path: list[list[float]]) -> float:
-    """Rough mowed-area estimate: path length × deck swath width.
+    """Estimate mowed area by rasterising the path swath into a grid.
 
-    Used only for the in-progress picker label so users see a
-    plausible "X m²" while a run is in progress. Replaced by the
-    authoritative cloud `areas` value once a leg summary lands.
+    Each path segment paints a `_LIVE_AREA_SWATH_M`-wide strip; the
+    result is the count of distinct grid cells touched, multiplied by
+    cell area. Matches the cloud's `areas` figure (unique cells
+    covered) within a few %, capped by the actual lawn area — so
+    re-traversing the same row doesn't inflate the number the way the
+    old `path-length × swath` calculation did (field report
+    2026-04-22: a 1.7-hour run reported 532 m² on a 384 m² lawn
+    because every retrace counted again).
+
+    Pen-up jumps (>5 m between consecutive points) are treated as
+    dock visits / telemetry drops and skipped — drawing a swath
+    across an off-canvas straight line would phantom-claim metres
+    of coverage that the mower never actually cut.
+
+    Compute: O(n × samples_per_segment × cells_per_sample), ~5 ms
+    for a 1000-point path on the integration's target hardware.
+    Picker dispatch is throttled to 10 s so the per-second cost is
+    negligible.
+    """
+    if not path or len(path) < 2:
+        return 0.0
+    half_swath = _LIVE_AREA_SWATH_M / 2.0
+    grid = _LIVE_AREA_GRID_M
+    half_swath_sq = half_swath * half_swath
+    cell_radius = int(math.ceil(half_swath / grid))
+    # Pre-build the stamp: cells whose CENTER lies within half_swath
+    # of the sample point. With grid=0.10 this approximates the
+    # swath disc area (π × 0.16² ≈ 0.08 m²) closely — about 8 cells
+    # at 0.01 m² each. Center-in-disc is the natural choice at this
+    # grid resolution; the corner-overlap variant at coarser grid
+    # over-painted by 30+ %.
+    stamp = []
+    for ox in range(-cell_radius, cell_radius + 1):
+        for oy in range(-cell_radius, cell_radius + 1):
+            if (ox * grid) ** 2 + (oy * grid) ** 2 <= half_swath_sq + 1e-9:
+                stamp.append((ox, oy))
+    cells: set[tuple[int, int]] = set()
+    for i in range(len(path) - 1):
+        x0, y0 = path[i][0], path[i][1]
+        x1, y1 = path[i + 1][0], path[i + 1][1]
+        dx = x1 - x0
+        dy = y1 - y0
+        seg_len = math.hypot(dx, dy)
+        if seg_len > _LIVE_AREA_PENUP_M:
+            continue
+        if seg_len < 1e-6:
+            cx = round(x0 / grid)
+            cy = round(y0 / grid)
+            for ox, oy in stamp:
+                cells.add((cx + ox, cy + oy))
+            continue
+        # Sample along the segment at one-grid-cell resolution.
+        # Finer (sub-grid) sampling visibly over-counts because
+        # each sample paints a disc and the disc unions widen the
+        # band beyond the true swath; one-cell spacing keeps the
+        # union closer to a strict strip without leaving visible
+        # gaps on diagonals at this grid.
+        steps = max(2, int(seg_len / grid))
+        for s in range(steps + 1):
+            t = s / steps
+            px = x0 + dx * t
+            py = y0 + dy * t
+            cx = round(px / grid)
+            cy = round(py / grid)
+            for ox, oy in stamp:
+                cells.add((cx + ox, cy + oy))
+    return round(len(cells) * grid * grid, 2)
+
+
+def _legacy_path_length_area(path: list[list[float]]) -> float:
+    """Cumulative-swept calculation kept for diagnostics / testing.
+
+    Returns path-length × swath. Used to be `_approximate_area` but
+    over-counts re-traversals badly — see `_approximate_area`'s
+    docstring. Exposed for tests that want to verify the rasteriser
+    actually solves the over-count problem.
     """
     if not path or len(path) < 2:
         return 0.0

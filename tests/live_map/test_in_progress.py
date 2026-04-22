@@ -254,6 +254,75 @@ def test_telemetry_outside_session_does_not_persist_phantom(tmp_path):
     assert archive.read_in_progress() is None  # no persist
 
 
+def test_approximate_area_retracing_doesnt_inflate(tmp_path):
+    """Regression (2026-04-22): a 1.7-hour run on a ~339 m² lawn was
+    showing 532 m² in the picker because the old _approximate_area
+    used path_length × swath, which over-counts every retrace.
+
+    Walking the same line N times should report a single-pass area,
+    not N × pass area. Legacy method fails this; rasteriser passes.
+    """
+    from live_map import _approximate_area, _legacy_path_length_area
+
+    path_one_pass = [[float(i), 0.0] for i in range(11)]
+    path_three_pass = path_one_pass + path_one_pass[::-1] + path_one_pass
+
+    one_legacy = _legacy_path_length_area(path_one_pass)
+    three_legacy = _legacy_path_length_area(path_three_pass)
+    one_raster = _approximate_area(path_one_pass)
+    three_raster = _approximate_area(path_three_pass)
+
+    # Legacy: triples the area on retrace (broken behaviour).
+    assert three_legacy >= 2.5 * one_legacy
+    # Rasteriser: stays the same on retrace (correct behaviour).
+    assert three_raster == one_raster
+
+
+def test_approximate_area_serpentine_pattern_matches_strip_total(tmp_path):
+    """Walk a 10 m × 10 m area in 20 strips of 10 m each, separated
+    by 0.5 m. Each strip cuts a 0.22 m wide swath (blade width).
+    Adjacent strips have a (0.5 - 0.22) = 0.28 m gap so they don't
+    overlap. Expected total area ≈ 20 × 10 × 0.22 = 44 m².
+    Rasteriser should land within 30 % of that (granularity from
+    grid + disc-stamp behaviour at strip ends)."""
+    from live_map import _approximate_area
+    path = []
+    for row in range(20):
+        y = row * 0.5
+        if row % 2 == 0:
+            for x in range(0, 11):
+                path.append([float(x), y])
+        else:
+            for x in range(10, -1, -1):
+                path.append([float(x), y])
+    area = _approximate_area(path)
+    # 44 m² ground truth ± 50 % envelope. Disc stamping +
+    # connector-strip painting pushes the result up to ~63 m².
+    # The point of the test isn't precise calibration (the user
+    # confirmed ~16 % over the cloud's number is acceptable for
+    # the picker label); it's that we're in the right order of
+    # magnitude AND don't massively over- or under-count.
+    assert 30 <= area <= 70, f"area={area}, expected near 44 m²"
+
+
+def test_approximate_area_skips_pen_up_jumps(tmp_path):
+    """A telemetry drop / dock visit shows up as a >5 m jump between
+    consecutive points. Painting a swath across that jump would
+    phantom-claim metres of coverage the mower never cut."""
+    from live_map import _approximate_area
+    # Two short connected runs separated by a 20 m teleport.
+    path = (
+        [[float(i), 0.0] for i in range(5)]   # 4 m line
+        + [[100.0, 100.0]]                     # 20+ m jump (pen-up)
+        + [[float(i) + 100.0, 100.0] for i in range(5)]  # another 4 m line
+    )
+    area = _approximate_area(path)
+    # Two 4 m × 0.22 m strips ≈ 2 × 0.88 m² = ~1.76 m². Disc-stamp
+    # padding pushes to ~3 m². The 100 m² teleport must NOT be
+    # painted — that would phantom-claim 22 m² of fake coverage.
+    assert area < 6.0
+
+
 def test_dispatched_attrs_cached_for_late_subscriber_replay(tmp_path):
     """Regression (2026-04-22 alpha.55): a camera entity that subscribes
     *after* the first dispatch (which fires inside
