@@ -599,6 +599,39 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
                     self.update()
             elif self._error != self.device.status.error or self._device_active != self.device.status.active:
                 self.update()
+            else:
+                # Position-driven re-render: the base map renderer
+                # paints the mower icon from `map_data.robot_position`,
+                # but `_update_map_robot_position` only mutates the
+                # data — it doesn't bump frame_id or last_updated, so
+                # the gates above never fire during steady mowing.
+                # Result: the icon was frozen wherever it was last
+                # rendered (typically the dock) and only jumped to the
+                # current position when an unrelated state transition
+                # happened to trigger update() (mowing→returning,
+                # error toggling, etc).
+                #
+                # Throttled to ~10 s so the renderer's PIL work
+                # (≈100 ms per call at the 2660×2980 base size on
+                # this hardware) doesn't dominate the event loop —
+                # at the mower's <0.5 m/s travel speed that's a
+                # ≤5 m latency on the icon, well below the path-
+                # rendering granularity already documented in TODO.
+                pos_ts = getattr(self.device, "_latest_position_ts", None)
+                last_seen = getattr(self, "_last_seen_position_ts", None)
+                if (
+                    self.map_index == 0
+                    and pos_ts is not None
+                    and pos_ts != last_seen
+                    and self.device.status.active
+                ):
+                    import time as _time
+                    last_render = getattr(self, "_last_position_render_at", 0.0)
+                    now = _time.monotonic()
+                    if now - last_render >= 10.0:
+                        self._last_seen_position_ts = pos_ts
+                        self._last_position_render_at = now
+                        self.update()
             self._device_active = self.device.status.active
             self._error = self.device.status.error
         else:
