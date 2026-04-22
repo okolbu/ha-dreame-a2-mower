@@ -171,6 +171,57 @@ def test_auto_finalize_with_existing_legs_just_drops_in_progress(tmp_path):
     assert archive.count == 0
 
 
+def test_boot_active_blip_does_not_wipe_restored_path(tmp_path):
+    """Regression (2026-04-22): on HA boot, the in_progress.json is
+    restored (state.path populated), but the first few coordinator
+    ticks may see active=False because s2p56 hasn't arrived yet.
+    The end-of-tick `_prev_session_active = active` then downgrades
+    the seeded True to False. When s2p56 finally arrives and active
+    flips True, start_session() used to fire and wipe state.path.
+    The `_have_active_in_progress` flag must suppress that.
+    """
+    archive = SessionArchive(tmp_path)
+    archive.write_in_progress({
+        "session_start_ts": 1776840000,
+        "session_id": 5,
+        "session_start": "2026-04-22T08:00:00+00:00",
+        "live_path": [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]],
+        "obstacles": [],
+        "leg_md5s": [],
+        "completed_track": [],
+        "lawn_polygon": [],
+        "exclusion_zones": [],
+        "obstacle_polygons": [],
+        "dock_position": None,
+        "summary_md5": None,
+        "summary_end_ts": None,
+        "area_mowed_m2": 1.0,
+        "map_area_m2": 0,
+    })
+
+    # Boot: device hasn't yet received s2p56; started=False initially.
+    device = _make_device(started=False, session_known=False)
+    lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
+    assert lm._state.path == [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]]
+    assert lm._have_active_in_progress is True
+
+    # Tick 1: still no s2p56 → active=False. Downgrade prev_active.
+    lm._handle_coordinator_update()
+    assert lm._prev_session_active is False
+    assert lm._state.path == [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]]
+
+    # Tick 2: s2p56 arrives saying pending_resume → active=True.
+    # The False→True transition would normally fire start_session
+    # and wipe path. The _have_active_in_progress guard must stop it.
+    device.status = SimpleNamespace(started=True)
+    device._session_status_known = True
+    lm._handle_coordinator_update()
+
+    assert lm._state.path == [[0.0, 0.0], [1.0, 1.0], [2.0, 2.0]], \
+        "boot active-blip race wiped restored path — start_session fired spuriously"
+    assert lm._state.session_id == 5  # not bumped
+
+
 def test_recharge_transition_does_not_trigger_finalize(tmp_path):
     """Regression: at recharge time the mower goes IDLE → BACK_HOME →
     CHARGING for ~50 s before s2p56 sends pending_resume (code 4).

@@ -413,6 +413,14 @@ class DreameA2LiveMap:
         # as a debounce so brief started=False blips during a recharge
         # transition can't trigger finalize.
         self._inactive_since: float | None = None
+        # Tracks whether the in-progress entry on disk represents an
+        # active logical session. Set on restore + on start_session,
+        # cleared on finalize. Used to suppress spurious start_session
+        # firings when `started` flips False→True during the s2p56
+        # arrival window after boot — without this guard, the False
+        # blip downgrades `_prev_session_active`, then the next True
+        # transition wipes the restored path.
+        self._have_active_in_progress: bool = False
         try:
             self._migrate_legacy_drafts(hass)
         except Exception:  # pragma: no cover — best-effort cleanup
@@ -422,6 +430,10 @@ class DreameA2LiveMap:
             # coordinator tick doesn't treat us as a fresh
             # session-start and wipe the just-restored path.
             self._prev_session_active = True
+            # Mark the in-progress as live so the start_session gate
+            # below treats False→True transitions as the s2p56
+            # confirmation arriving, not as a fresh session.
+            self._have_active_in_progress = True
 
     def _migrate_legacy_drafts(self, hass) -> None:
         """One-shot cleanup of the old `drafts/live_path_*.json` files.
@@ -663,6 +675,7 @@ class DreameA2LiveMap:
                 }
         archive.delete_in_progress()
         self._in_progress_leg_md5s = []
+        self._have_active_in_progress = False
         # Reset live state so the next tick starts clean.
         self._state.path = []
         self._state.obstacles = []
@@ -808,10 +821,18 @@ class DreameA2LiveMap:
         # the accumulator so the buffered live path matches the new
         # run (rather than carrying forward stale points from the
         # previous run once the user eventually returns to Latest).
-        if active and not self._prev_session_active:
+        #
+        # `_have_active_in_progress` suppresses start_session when an
+        # in_progress entry already exists on disk — a False→True
+        # `active` transition during the s2p56 arrival window after
+        # boot is the same logical session resuming, not a new one.
+        # Without this guard the restored path would be wiped the
+        # moment s2p56 confirms `pending_resume`.
+        if active and not self._prev_session_active and not self._have_active_in_progress:
             now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
             self._state.start_session(now_iso)
             self._in_progress_leg_md5s = []
+            self._have_active_in_progress = True
             if self._state.mode is MapMode.LATEST:
                 self._state.lawn_polygon = []
                 self._state.exclusion_zones = []
