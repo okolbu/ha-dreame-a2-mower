@@ -99,55 +99,61 @@ and restore on boot; (c) eager s2p56 probe at boot (already
 exists per commit 36502b8 — verify it actually fires before the
 binary_sensor's first state computation).
 
-## PROTOCOL_NOVEL entries — investigate + map
+## PROTOCOL_NOVEL entries — documented, but cloud session-summary download still failing
 
-Three first-time-seen MQTT shapes captured 2026-04-22 16:35
-(coincident with session-end of a 104-min mowing run that
-didn't fire the integration's normal session-completion event):
+Audit of all PROTOCOL_NOVEL captures across `home-assistant*.log`
+(2026-04-22):
 
-1. **`properties_changed siid=1 piid=52 value={}`** (16:35:17.786)
-   Empty-dict push on s1p52. Already in `OBSERVED_LABELS` as
-   `UNKNOWN_DICT` per `mower_tail.py`. Co-fires with s2p52 below.
+1. **`s1p4 short frame len=8`** — already documented in protocol §7
+   row of the PROTOCOL_NOVEL reference table; position decoded fine,
+   trailing bytes un-RE'd. Logs once per length per HA process via
+   `_protocol_novelty` set.
+2. **`s1p50 = {}`** / **`s1p51 = {}`** — documented in protocol §4.7
+   as session-start pair. Now in `known_quiet` set in device.py so
+   the noise warning is suppressed (downgraded to DEBUG via
+   `[PROTOCOL_OBSERVED]`).
+3. **`s1p52 = {}`** — documented in protocol §4.7 as session-end
+   flush ping. Now in `known_quiet`.
+4. **`s2p52 = {}`** — NEWLY documented in protocol §4.7 (alpha.62)
+   as cloud-side session-completion ping, paired with `s1p52`. Also
+   in `known_quiet`.
+5. **`event_occured siid=4 eiid=1` with piids `{1,2,3,7,8,9,11,13,14,15,60}`**
+   — fully documented in protocol §7.4. The watchdog is now
+   pre-seeded so the WARNING doesn't fire on every HA restart for
+   this known shape (alpha.62).
 
-2. **`properties_changed siid=2 piid=52 value={}`** (16:35:18.031)
-   Empty-dict push on s2p52. Co-fires with s1p52. Together these
-   are likely session-boundary markers (similar to the
-   `s1p50/s1p51 = {}` we already document in protocol §4.4 for
-   session start). Hypothesis: `{s1p52, s2p52} = {}` marks
-   session END, mirroring `{s1p50, s1p51} = {}` at session start.
+**Remaining real bug** (separate from documentation): even though
+the integration's `_handle_event_occured` handler IS called for
+`siid=4 eiid=1` and DOES invoke `_fetch_session_summary(object_name)`,
+the current run's summary somehow never lands in
+`device.latest_session_summary`. As a result:
 
-3. **`event_occured siid=4 eiid=1 with piids=[1, 2, 3, 7, 8, 9, 11, 13, 14, 15, 60]`**
-   (16:35:22.498) — almost certainly the session-completion
-   event for g2408. The integration currently only handles
-   `siid=1 eiid=12` for `_fetch_session_summary`. Result: the
-   completed run never gets its summary downloaded, the picker
-   keeps showing "still mowing" indefinitely until the user
-   presses Finalize Session.
-
-   piids 1, 2, 3, 7, 8, 9, 11, 13, 14, 15, 60 likely correspond
-   to the cleanup-completed event payload (cleaning_time,
-   area_mowed, stop_reason, OSS object_name, etc.). Need to
-   capture the full payload (not just the piid list) to map
-   each piid → meaning. The PROTOCOL_NOVEL handler currently
-   only logs the piid list — it should also dump values.
+- The in-progress entry's `summary_md5` stays at the previous
+  run's value (e5868865… from 2026-04-22 10:58 archive).
+- The picker keeps showing "still mowing" until the user
+  presses Finalize Session.
+- The auto-finalize gate doesn't fire because no fresh leg
+  summary marks the logical run as ended.
 
 **Needed**:
-- Extend `[PROTOCOL_NOVEL] event_occured ...` log to include
-  the full piid→value mapping (truncated for large blobs) so
-  next capture has the data we need.
-- Add a handler for `siid=4 eiid=1` events that downloads the
-  session summary OSS object (probably under one of the piid
-  values — historically piid=9 carried the object_name in
-  upstream models).
-- Once decoded, document in `docs/research/g2408-protocol.md`
-  §7.4 alongside `event_occured siid=1 eiid=12`.
-- Verify s1p52 / s2p52 hypothesis by capturing more session
-  ends and confirming the timing pattern.
+- Trace why `_fetch_session_summary` apparently doesn't update
+  `latest_session_summary`. Suspects: the OSS download URL fetch
+  is failing silently (cloud "device may be in deep sleep" warnings
+  appear nearby in the log), or the parsed summary's md5 matches
+  the previous one and gets short-circuited.
+- Add WARNING-level logs around `_fetch_session_summary`
+  success/failure paths so future captures show the failure mode
+  directly.
+- Consider falling back to the `s1p52 + s2p52` empty-dict pair
+  as the "session ended" signal when the cloud download fails —
+  per protocol §4.7 those are the earliest predictive end-of-
+  session signals (~4 s before `event_occured` lands).
 
-**Acceptance**: every captured PROTOCOL_NOVEL message gets
-documented + the integration recognises the g2408's actual
-session-end event so picker auto-clears without manual
-intervention.
+**Acceptance**: a session that ends fires `event_occured`,
+`_fetch_session_summary` populates `latest_session_summary` with
+fresh data, leg-merge absorbs it, auto-finalize promotes the
+in-progress entry to a completed archive, and the picker shows
+the new entry without manual intervention.
 
 ## LiDAR card popout / fullscreen view
 

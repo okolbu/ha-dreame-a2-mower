@@ -264,6 +264,17 @@ class DreameMowerDevice:
         # future protocol changes don't get silently discarded.
         from ..protocol.unknown_watchdog import UnknownFieldWatchdog
         self._unknown_watchdog = UnknownFieldWatchdog()
+        # Pre-seed with shapes that are fully documented in
+        # docs/research/g2408-protocol.md — otherwise every HA
+        # restart fires a fresh WARNING for normal operation. The
+        # watchdog is in-memory only, so without this seeding the
+        # session-completion event would log [PROTOCOL_NOVEL] on
+        # every boot even though §7.4 catalogs every piid.
+        # Update this list when the protocol doc adds a new
+        # documented (siid, eiid, piids) combo.
+        self._unknown_watchdog.saw_event(
+            4, 1, {1, 2, 3, 7, 8, 9, 11, 13, 14, 15, 60}
+        )
         # General novelty detector — records each distinct (shape-key)
         # once so novel protocol content surfaces exactly one WARNING
         # instead of flooding the log every time the same new shape
@@ -628,6 +639,12 @@ class DreameMowerDevice:
                                 (5, 105),   # mid-session = 1, unknown role
                                 (5, 106),   # 1..7 rolling counter
                                 (5, 107),   # dynamic, values catalogued
+                                # Session-boundary empty-dict pings, all
+                                # carry value={}. Per protocol §4.7:
+                                (1, 50),    # "something changed" ping (session start, edits)
+                                (1, 51),    # "new session — subscribe to telemetry"
+                                (1, 52),    # "task ended — flush / commit"
+                                (2, 52),    # cloud-side session-completion ping
                             }
                             key = (int(param["siid"]), int(param["piid"]))
                             if key in known_quiet:

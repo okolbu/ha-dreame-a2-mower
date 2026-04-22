@@ -681,20 +681,29 @@ this one.
 
 - Scheduled-mow add / edit / delete (noted in §7.1).
 
-### 4.7 Empty-dict `s1p50` / `s1p51` / `s1p52` — lightweight state-change pings
+### 4.7 Empty-dict `s1p50` / `s1p51` / `s1p52` / `s2p52` — lightweight state-change pings
 
-All three slots carry an empty `{}` — no payload. Their role is positional:
-which slot fires, and how many times, signals the event class.
+All four slots carry an empty `{}` — no payload. Their role is positional:
+which slot fires, and how many times, signals the event class. The
+session-START half (s1p50 + s1p51) and the session-END half
+(s1p52 + s2p52) together bracket every mowing run.
 
-| Slot | Role | Observed triggers (2026-04-20) |
+| Slot | Role | Observed triggers |
 |---|---|---|
 | `s1p50` | "something changed, consider re-fetching" ping | Session start (paired with s1p51), BUILDING save (multiple pulses), zone/exclusion edit (paired with `s2p50 o=215`), maintenance-point save (two pulses, 1 s apart, no other context) |
 | `s1p51` | "new session — subscribe to fresh telemetry" | Always co-arrives with `s1p50` within the same second at session start / resume. Never fires standalone. |
-| `s1p52` | "task ended — flush / commit" | Session complete (`s2p2 = 48`). Observed at natural end (12:33:09) and user-cancel (18:06:19). Doesn't fire at BUILDING end. |
+| `s1p52` | "task ended — flush / commit" | Session complete (`s2p2 = 48`). Observed at natural end (12:33:09 on 2026-04-20) and user-cancel (18:06:19). Doesn't fire at BUILDING end. Also fires immediately before the cloud `event_occured siid=4 eiid=1` session-summary push (2026-04-22 16:35:17). |
+| `s2p52` | "cloud-side session-completion ping" — paired with `s1p52` | Co-fires with `s1p52` ~250 ms later at session end (2026-04-22 16:35:17.786 → 16:35:18.031). Hypothesis: `s1p52` is the firmware-side flush, `s2p52` is the cloud-mirrored "summary now available" notification. Together they mirror the `s1p50` + `s1p51` pair at session start. |
 
 Practical implication: treat a standalone `s1p50` (no `s1p51`, no `s2p50`) as
 a "something edited server-side" signal and re-fetch whatever you cache from
 the cloud — in the integration's case, the MAP.* dataset. See §7.1.
+
+The `s1p52` + `s2p52` pair is the earliest *predictive* signal that the
+cloud's session-summary OSS object will appear shortly thereafter — the
+actual `event_occured siid=4 eiid=1` push for g2408 fires ~4 s later
+(see §7.4 below). Subscribers wanting the lowest-latency end-of-session
+signal can pre-arm on the empty-dict pair.
 
 ### 4.8 Positioning-failed recovery via SLAM relocate
 
