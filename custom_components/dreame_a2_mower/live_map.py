@@ -321,6 +321,38 @@ class DreameA2LiveMap:
         self._state = LiveMapState()
         self._prev_session_active: bool | None = None
         self._unsub_listener = None
+        # Draft-path persistence: during an active mow the live path
+        # accumulator is written to disk every ~10s so an HA restart
+        # mid-session can restore what was captured instead of losing
+        # it. See docs/research/g2408-protocol.md §Restart recovery
+        # for the rationale. The draft's presence also acts as a
+        # fallback "session active" signal for a limited window
+        # after startup in case s2p56 / MQTT state don't yet agree.
+        import time as _time
+        from pathlib import Path as _Path
+        try:
+            from .const import DOMAIN as _DOMAIN
+        except ImportError:
+            _DOMAIN = "dreame_a2_mower"
+        try:
+            self._draft_root = _Path(hass.config.path(_DOMAIN, "drafts"))
+            self._draft_root.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            self._draft_root = None
+        self._draft_mac = getattr(coordinator.device, "mac", "unknown") or "unknown"
+        self._last_draft_write: float = 0.0
+        self._draft_fallback_active_until: float | None = None
+        if self._load_draft():
+            # Optimistically treat the draft as evidence of an
+            # ongoing session for up to 30 minutes post-boot. That
+            # is enough for the real signals (s2p56 probe, MQTT
+            # state resume) to come in and take over; after that
+            # window we trust them exclusively again.
+            self._draft_fallback_active_until = _time.monotonic() + 30 * 60
+            # Seed `_prev_session_active = True` so the first
+            # coordinator tick doesn't treat us as a fresh
+            # session-start and wipe the just-loaded path.
+            self._prev_session_active = True
 
     @property
     def x_factor(self) -> float:
@@ -342,6 +374,83 @@ class DreameA2LiveMap:
             self._unsub_listener()
             self._unsub_listener = None
 
+    def _draft_file(self):
+        if self._draft_root is None:
+            return None
+        return self._draft_root / f"live_path_{self._draft_mac}.json"
+
+    def _persist_draft(self) -> None:
+        """Write the current live path to disk (throttled to ~10s).
+
+        Called from the coordinator tick while a session is active.
+        Throttling keeps disk writes off the hot property-update
+        path even on devices that push s1p4 at several Hz.
+        """
+        import time as _time
+        import json as _json
+        now = _time.monotonic()
+        if now - self._last_draft_write < 10.0:
+            return
+        self._last_draft_write = now
+        dest = self._draft_file()
+        if dest is None:
+            return
+        try:
+            payload = {
+                "ts": _time.time(),
+                "session_id": self._state.session_id,
+                "session_start": self._state.session_start,
+                "path": self._state.path,
+                "obstacles": self._state.obstacles,
+            }
+            dest.write_text(_json.dumps(payload))
+        except OSError:
+            pass
+
+    def _load_draft(self) -> bool:
+        """Read any persisted draft path into `self._state`.
+
+        Returns True if a *fresh* draft was loaded (age <12h). Stale
+        drafts are deleted so an orphaned week-old file doesn't keep
+        re-triggering the fallback-active signal on every boot.
+        """
+        import time as _time
+        import json as _json
+        src = self._draft_file()
+        if src is None or not src.exists():
+            return False
+        try:
+            data = _json.loads(src.read_text())
+        except (OSError, ValueError):
+            return False
+        try:
+            age = _time.time() - float(data.get("ts", 0))
+        except (TypeError, ValueError):
+            age = 9e9
+        if age > 12 * 3600:
+            try:
+                src.unlink()
+            except OSError:
+                pass
+            return False
+        try:
+            self._state.session_id = int(data.get("session_id", 0))
+            self._state.session_start = data.get("session_start")
+            self._state.path = [list(p) for p in data.get("path", [])]
+            self._state.obstacles = [list(p) for p in data.get("obstacles", [])]
+        except (TypeError, ValueError):
+            return False
+        return bool(self._state.path)
+
+    def _delete_draft(self) -> None:
+        dest = self._draft_file()
+        if dest is None:
+            return
+        try:
+            dest.unlink(missing_ok=True)
+        except OSError:
+            pass
+
     @callback
     def _handle_coordinator_update(self) -> None:
         device = self._coordinator.device
@@ -359,6 +468,21 @@ class DreameA2LiveMap:
             active = bool(device.status.started)
         except AttributeError:
             active = False
+
+        # Draft-fallback: if we loaded a persisted live path on startup
+        # and the real signals haven't caught up yet, optimistically
+        # treat the session as active for up to 30 minutes. This keeps
+        # the Latest view showing the saved path instead of falling
+        # back to yesterday's archive overlay while the mower is
+        # charging mid-session after an HA restart.
+        if self._draft_fallback_active_until is not None:
+            import time as _time
+            if _time.monotonic() < self._draft_fallback_active_until:
+                if not active:
+                    active = True
+            else:
+                # Window expired — trust the real signals from here on.
+                self._draft_fallback_active_until = None
 
         # Session-boundary wipe: only clear the LATEST overlay when a
         # new session starts. In SESSION/BLANK mode this still resets
@@ -392,6 +516,10 @@ class DreameA2LiveMap:
                 if self._state.load_from_session_summary(summary):
                     self._state.path = []
                     self._state.obstacles = []
+                    # Fresh summary = session definitively ended. Any
+                    # on-disk draft is now obsolete.
+                    self._delete_draft()
+                    self._draft_fallback_active_until = None
 
         pos_source = getattr(device, "latest_position", None)
         if pos_source is None:
@@ -417,6 +545,11 @@ class DreameA2LiveMap:
 
         if obstacle_on and position is not None:
             self._state.append_obstacle(position[0], position[1])
+
+        # Persist the live path to disk while active so an HA restart
+        # mid-mow can recover it. Throttled internally to ~10s.
+        if active and self._state.path:
+            self._persist_draft()
 
         # Only LATEST drives the displayed snapshot; SESSION/BLANK
         # remain frozen on whatever set_mode() last pushed.
