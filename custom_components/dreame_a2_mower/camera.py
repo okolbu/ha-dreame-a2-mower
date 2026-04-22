@@ -884,10 +884,17 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
             LOGGER.warning("Trail compose failed: %s", ex)
             return base
         self._composed_cache = (base_id, version, composed)
-        if not self._logged_first_compose:
-            self._logged_first_compose = True
+        # Track the version we last logged so we can WARNING-log
+        # version bumps without spamming on every redundant fetch
+        # (Lovelace re-asks every few seconds; cache hits skip the
+        # compose entirely so we'd never log those anyway). One log
+        # per genuine recompose tells us whether the dashboard is
+        # actually pulling fresh bytes after each trail-layer extend.
+        last_logged = getattr(self, "_last_logged_compose_version", -1)
+        if version != last_logged:
+            self._last_logged_compose_version = version
             _LOGGER.warning(
-                "trail compose succeeded (path=%d, version=%d, %d bytes)",
+                "trail compose: path=%d, version=%d, %d bytes",
                 self._trail_last_path_len, version, len(composed) if composed else 0,
             )
         return composed
