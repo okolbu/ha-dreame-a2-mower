@@ -253,6 +253,12 @@ class DreameMowerDevice:
         # was the last value — session is on hold pending resume.
         self._task_pending_resume: bool = False
         self._task_running_s2p56: bool = False
+        # Flips True on first s2p56 arrival (startup probe or MQTT
+        # push). Distinguishes "no session-task" (empty s2p56 seen)
+        # from "we haven't heard yet"; consumers like the live-map
+        # draft auto-close need that difference to avoid discarding
+        # a just-loaded draft while waiting for the first push.
+        self._session_status_known: bool = False
         # Dedupe novelty detector — reports unknown (siid, piid) pairs,
         # unfamiliar methods, and new event piids exactly once each so
         # future protocol changes don't get silently discarded.
@@ -877,6 +883,7 @@ class DreameMowerDevice:
             )
         self._task_running_s2p56 = running
         self._task_pending_resume = pending
+        self._session_status_known = True
 
     def _handle_lidar_object_name(self, object_name: str) -> None:
         """React to an ``s99p20`` LiDAR-scan upload announcement.

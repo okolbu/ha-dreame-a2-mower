@@ -427,7 +427,11 @@ class DreameA2LiveMap:
             age = _time.time() - float(data.get("ts", 0))
         except (TypeError, ValueError):
             age = 9e9
-        if age > 12 * 3600:
+        # A single A2 mow can span several days (auto-recharge cycles).
+        # Use a 7-day freshness window so a mid-session HA restart on
+        # day 3 of a long run still recovers the accumulated path
+        # instead of discarding it as stale.
+        if age > 7 * 86400:
             try:
                 src.unlink()
             except OSError:
@@ -468,6 +472,21 @@ class DreameA2LiveMap:
             active = bool(device.status.started)
         except AttributeError:
             active = False
+
+        # Auto-close draft: if the device has definitively reported
+        # no active session (s2p56 known + started=False), any lingering
+        # draft is obsolete — the session ended either while HA was up
+        # (in which case a summary arrived and already cleared the
+        # draft) or while HA was down (in which case no summary will
+        # ever come for that run; the draft would otherwise linger
+        # forever). `_session_status_known` distinguishes "we haven't
+        # heard yet" from "we asked and got empty" so we don't
+        # discard a just-loaded draft while waiting for the first
+        # s2p56 push.
+        session_known = getattr(device, "_session_status_known", False)
+        if session_known and not active:
+            self._delete_draft()
+            self._draft_fallback_active_until = None
 
         # Draft-fallback: if we loaded a persisted live path on startup
         # and the real signals haven't caught up yet, optimistically

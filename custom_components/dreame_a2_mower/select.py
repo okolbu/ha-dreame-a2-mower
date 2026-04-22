@@ -315,6 +315,7 @@ class DreameReplaySessionSelect(SelectEntity):
 
     _OPT_LATEST = "Latest"
     _OPT_BLANK = "Blank"
+    _CURRENT_PREFIX = "Current run"
 
     def __init__(self, coordinator: DreameMowerDataUpdateCoordinator) -> None:
         self._coordinator = coordinator
@@ -341,6 +342,7 @@ class DreameReplaySessionSelect(SelectEntity):
         # a date). Stable across archive re-indexing and label changes,
         # so we can relocate the entry if its display string shifts.
         self._pinned_md5: str | None = None
+        self._current_run_option: str | None = None
         self._refresh_options()
 
     @staticmethod
@@ -348,6 +350,69 @@ class DreameReplaySessionSelect(SelectEntity):
         import datetime as _dt
         ts = _dt.datetime.fromtimestamp(entry.end_ts).strftime("%Y-%m-%d %H:%M")
         return f"{ts} — {entry.area_mowed_m2:.2f} m² ({entry.duration_min} min)"
+
+    def _current_run_label(self) -> str | None:
+        """Synthesise a dropdown entry for an in-progress mow, or None.
+
+        The picker otherwise only shows completed, archived runs —
+        which gave users no cue from the picker alone that a run was
+        live. Adding a top-of-list "Current run" entry with the
+        start time and an approximate duration makes the active
+        session visible without opening any other card. Duration is
+        rounded to 5-minute increments so the label doesn't churn
+        every coordinator tick.
+
+        Returns `None` when no session is active, so the entry
+        disappears between runs.
+        """
+        device = self._coordinator.device
+        try:
+            if not bool(device.status.started):
+                return None
+        except AttributeError:
+            return None
+        import datetime as _dt
+        live_map = getattr(self._coordinator, "live_map", None)
+        state = getattr(live_map, "_state", None) if live_map else None
+        start_iso = getattr(state, "session_start", None) if state else None
+        start_str = ""
+        elapsed_str = ""
+        if start_iso:
+            try:
+                start_dt = _dt.datetime.fromisoformat(start_iso)
+                if start_dt.tzinfo is None:
+                    start_dt = start_dt.replace(tzinfo=_dt.timezone.utc)
+                local_start = start_dt.astimezone()
+                # If the run is multi-day (A2 auto-recharge cycles can
+                # keep a single session alive for days), include the
+                # date component in the label so users can tell at a
+                # glance which run is still active.
+                now = _dt.datetime.now(_dt.timezone.utc)
+                elapsed_s = max(0, (now - start_dt).total_seconds())
+                if elapsed_s >= 86400:
+                    start_str = local_start.strftime("%Y-%m-%d %H:%M")
+                else:
+                    start_str = local_start.strftime("%H:%M")
+                # Bucket elapsed time so the label doesn't change
+                # every coordinator tick. Bucket widens with duration
+                # (5 min / 1 h / 1 d) to keep the label readable.
+                if elapsed_s < 3600:
+                    bucket = 5 * round(elapsed_s / 60 / 5)
+                    elapsed_str = f"~{bucket} min"
+                elif elapsed_s < 86400:
+                    hours = round(elapsed_s / 3600, 1)
+                    elapsed_str = f"~{hours:.1f} h"
+                else:
+                    days = round(elapsed_s / 86400, 1)
+                    elapsed_str = f"~{days:.1f} d"
+            except (TypeError, ValueError):
+                pass
+        pieces = [self._CURRENT_PREFIX]
+        if start_str:
+            pieces.append(start_str)
+        if elapsed_str:
+            pieces.append(elapsed_str)
+        return " · ".join(pieces) + " (still running)"
 
     def _refresh_options(self) -> None:
         archive = self._coordinator.session_archive
@@ -359,11 +424,14 @@ class DreameReplaySessionSelect(SelectEntity):
         from .const import SESSION_REPLAY_PICKER_HARD_CAP
         sessions = all_sessions[:SESSION_REPLAY_PICKER_HARD_CAP]
         self._label_to_entry = {self._format_label(s): s for s in sessions}
-        self._attr_options = [
-            self._OPT_LATEST,
-            self._OPT_BLANK,
-            *self._label_to_entry.keys(),
-        ]
+        self._current_run_option = self._current_run_label()
+        options = [self._OPT_LATEST, self._OPT_BLANK]
+        if self._current_run_option is not None:
+            # Between the two fixed rows so it sits right above the
+            # archived-session list — easy to spot from the default
+            # Latest row without hunting through history.
+            options.insert(1, self._current_run_option)
+        self._attr_options = [*options, *self._label_to_entry.keys()]
 
     @property
     def available(self) -> bool:
@@ -377,8 +445,24 @@ class DreameReplaySessionSelect(SelectEntity):
     @callback
     def _handle_coordinator_update(self) -> None:
         prev_opts = tuple(self._attr_options)
+        prev_current_run = getattr(self, "_current_run_option", None)
+        was_on_current_run = (
+            prev_current_run is not None
+            and self._attr_current_option == prev_current_run
+        )
         self._refresh_options()
         if tuple(self._attr_options) == prev_opts:
+            return
+
+        # If the user was parked on the synthetic "Current run" entry,
+        # keep them on it when the label shifts (elapsed-time bucket
+        # changed) so the selection doesn't silently jump to Latest.
+        if was_on_current_run:
+            if self._current_run_option is not None:
+                self._attr_current_option = self._current_run_option
+            else:
+                self._attr_current_option = self._OPT_LATEST
+            self.async_write_ha_state()
             return
 
         # If the user pinned a specific session, keep them on it even if
@@ -410,7 +494,11 @@ class DreameReplaySessionSelect(SelectEntity):
 
         from .live_map import MapMode
 
-        if option == self._OPT_LATEST:
+        if option == self._OPT_LATEST or option == self._current_run_option:
+            # The "Current run" entry is a display label only — it
+            # resolves to the same auto-tracking behaviour as Latest.
+            # We keep the clicked label as the visible selection so
+            # users can see at a glance that the mow is still on.
             await self.hass.async_add_executor_job(live_map.set_mode, MapMode.LATEST)
             self._pinned_md5 = None
         elif option == self._OPT_BLANK:
