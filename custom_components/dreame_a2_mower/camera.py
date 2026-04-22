@@ -467,6 +467,7 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         self._trail_last_path_len = 0
         self._trail_last_md5 = None
         self._trail_last_session_id = None
+        self._trail_last_completed_track_len = 0
         # Composed PNG cache keyed by (base_image_id, trail.version).
         self._composed_cache: tuple[int, int, bytes] | None = None
         Camera.__init__(self)
@@ -732,14 +733,30 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
             self._trail_last_path_len = 0
             self._trail_last_md5 = None
             self._trail_last_session_id = None
+            self._trail_last_completed_track_len = 0
 
+        # Reset triggers (any one is enough to repaint the layer):
+        # - session_id changed: a new run started, or finalize ran.
+        # - summary_md5 changed (including value↔None): the LATEST/SESSION
+        #   overlay was loaded or cleared. Catches SESSION→LATEST going
+        #   back to the live in-progress run, where md5 transitions
+        #   value→None but session_id stays the same.
+        # - path got shorter than what we already drew: can't be
+        #   incremented forward — the only honest way to converge is
+        #   a full repaint.
+        # - completed_track segment count changed: a new leg landed
+        #   (multi-leg merge) or the overlay was wiped.
+        completed_track = attrs.get("completed_track") or []
+        ct_len = len(completed_track)
         new_session = (
             sess != self._trail_last_session_id
-            or (md5 is not None and md5 != self._trail_last_md5)
+            or md5 != self._trail_last_md5
+            or len(path) < self._trail_last_path_len
+            or ct_len != self._trail_last_completed_track_len
         )
         if new_session:
             self._trail_layer.reset_to_session(
-                completed_track=attrs.get("completed_track"),
+                completed_track=completed_track,
                 path=path,
                 obstacle_polygons=attrs.get("obstacle_polygons"),
                 dock_position=attrs.get("dock_position") or attrs.get("charger_position"),
@@ -747,6 +764,7 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
             self._trail_last_path_len = len(path)
             self._trail_last_md5 = md5
             self._trail_last_session_id = sess
+            self._trail_last_completed_track_len = ct_len
         elif len(path) > self._trail_last_path_len:
             for pt in path[self._trail_last_path_len:]:
                 self._trail_layer.extend_live(pt)
