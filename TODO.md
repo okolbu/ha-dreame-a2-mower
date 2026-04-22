@@ -59,6 +59,39 @@ A user-facing button (`button.dreame_a2_mower_finalize_session`)
 exposes the same finalize path for the stuck case where s2p56 never
 resumes — e.g. mower permanently offline mid-run.
 
+## LiDAR card popout / fullscreen view
+
+**Context**: `custom:dreame-a2-lidar-card` (served from
+`custom_components/dreame_a2_mower/www/dreame-a2-lidar-card.js`)
+renders an interactive 3D point cloud with orbit/zoom controls.
+At dashboard size the scene is too small to inspect detail —
+splat texture, base-map underlay, and LiDAR features are all
+cramped.
+
+**Needed**:
+- Add a fullscreen toggle button (overlay corner of the card,
+  e.g. bottom-right). Tap → call `element.requestFullscreen()`
+  on the host element so the canvas fills the viewport. ESC or
+  re-tap exits.
+- Listen for `fullscreenchange` on the document and resize the
+  WebGL renderer + camera aspect to match the new dimensions
+  (and resize back when exiting).
+- Persist orbit camera state across the fullscreen transition
+  so the user doesn't lose their viewpoint.
+- Confirm controls (drag-orbit, wheel-zoom, splat-size /
+  soft-edge / underlay sliders) remain reachable in fullscreen
+  — overlay them with the same z-index they have in the small
+  view.
+
+**Optional but nice**: also support an HA-popup-style enlarged
+modal for users on Safari iOS where `requestFullscreen` is
+restricted — open in a `<dialog>` element sized to ~95vw × 95vh.
+
+**Acceptance**: a one-tap "expand" gesture brings the LiDAR
+viewer to fullscreen at full resolution; orbit/zoom continue to
+work; ESC or re-tap returns to the dashboard layout with the
+previous camera position restored.
+
 ## Cloud MAP payload — deeper RE pass
 
 **Context**: a one-shot `[MAP_SCHEMA]` WARNING dump in
