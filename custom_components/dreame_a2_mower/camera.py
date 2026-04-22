@@ -45,6 +45,14 @@ from .const import (
 from .coordinator import DreameMowerDataUpdateCoordinator
 from .entity import DreameMowerEntity, DreameMowerEntityDescription
 from .live_map import LIVE_MAP_UPDATE_SIGNAL
+
+# Per-module logger so users can enable DEBUG for just camera traffic
+# via `custom_components.dreame_a2_mower.camera: debug` without bumping
+# the entire integration. The shared `LOGGER` (imported from const) is
+# bound to the parent package via `getLogger(__package__)`, so DEBUG
+# overrides on the submodule name don't reach it.
+import logging as _logging
+_LOGGER = _logging.getLogger(__name__)
 from .dreame.const import (
     STATE_UNKNOWN,
     STATUS_CODE_TO_NAME,
@@ -661,7 +669,7 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         prev_mode = (self._live_map_attrs or {}).get("mode")
         new_md5 = attrs.get("summary_md5")
         prev_md5 = (self._live_map_attrs or {}).get("summary_md5")
-        LOGGER.debug(
+        _LOGGER.debug(
             "live_map dispatch: mode=%s sess=%s md5=%s path=%d ct=%d pos=%s",
             new_mode, attrs.get("session_id"), new_md5,
             len(attrs.get("path") or []),
@@ -700,7 +708,7 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         - otherwise → no-op
         """
         if self._image is None or self.map_index != 0 or self.map_data_json:
-            LOGGER.debug(
+            _LOGGER.debug(
                 "trail-layer: skip (image=%s, map_index=%s, map_data_json=%s)",
                 self._image is not None, self.map_index, self.map_data_json,
             )
@@ -709,7 +717,7 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
             self._renderer.calibration_points if self._renderer else None
         )
         if not calibration:
-            LOGGER.debug(
+            _LOGGER.debug(
                 "trail-layer: skip (no calibration; renderer=%s)",
                 bool(self._renderer),
             )
@@ -770,7 +778,7 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
             or ct_len != self._trail_last_completed_track_len
         )
         if new_session:
-            LOGGER.debug(
+            _LOGGER.debug(
                 "trail-layer: reset sess=%s→%s md5=%s→%s path=%d ct=%d",
                 self._trail_last_session_id, sess,
                 self._trail_last_md5, md5,
@@ -788,12 +796,12 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
             self._trail_last_completed_track_len = ct_len
         elif len(path) > self._trail_last_path_len:
             n_new = len(path) - self._trail_last_path_len
-            LOGGER.debug("trail-layer: extend +%d (total %d)", n_new, len(path))
+            _LOGGER.debug("trail-layer: extend +%d (total %d)", n_new, len(path))
             for pt in path[self._trail_last_path_len:]:
                 self._trail_layer.extend_live(pt)
             self._trail_last_path_len = len(path)
         else:
-            LOGGER.debug(
+            _LOGGER.debug(
                 "trail-layer: no-op (sess=%s md5=%s path=%d/%d ct=%d/%d)",
                 sess, md5, len(path), self._trail_last_path_len,
                 ct_len, self._trail_last_completed_track_len,
