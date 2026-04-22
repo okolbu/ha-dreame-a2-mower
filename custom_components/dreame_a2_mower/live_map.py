@@ -480,6 +480,38 @@ def _approximate_area(path: list[list[float]]) -> float:
     return round(len(cells) * grid * grid, 2)
 
 
+def _telemetry_area_or_estimate(device, path: list[list[float]]) -> float:
+    """Authoritative mowed-area number from the s1p4 telemetry frame.
+
+    The mower's firmware tracks `area_mowed_m2` in bytes [29-30] of
+    the 33-byte s1p4 frame and updates it at every telemetry tick
+    (~5 s). This value is what the Dreame cloud serializes into the
+    session-summary `areas` field — i.e. it's what the user sees in
+    the app. mower_tail.py field-verified an exact match
+    2026-04-22.
+
+    Falls back to the path-rasteriser estimate when no 33-byte
+    telemetry has arrived yet (cold boot, idle beacon only,
+    BUILDING-mode session that emits 8-byte frames exclusively).
+    """
+    telem = getattr(device, "mowing_telemetry", None)
+    if telem is not None:
+        reported = getattr(telem, "area_mowed_m2", None)
+        if isinstance(reported, (int, float)) and reported >= 0:
+            return float(reported)
+    return _approximate_area(path)
+
+
+def _telemetry_total_area(device) -> int:
+    """Total mowable lawn area from s1p4 byte[26-27]. 0 when unknown."""
+    telem = getattr(device, "mowing_telemetry", None)
+    if telem is not None:
+        total = getattr(telem, "total_area_m2", None)
+        if isinstance(total, (int, float)) and total >= 0:
+            return int(total)
+    return 0
+
+
 def _legacy_path_length_area(path: list[list[float]]) -> float:
     """Cumulative-swept calculation kept for diagnostics / testing.
 
@@ -677,10 +709,18 @@ class DreameA2LiveMap:
             "dock_position": self._state.dock_position,
             "summary_md5": self._state.summary_md5,
             "summary_end_ts": self._state.summary_end_ts,
-            # Coarse derived fields so the picker label has something
-            # meaningful even when no leg summary has arrived yet.
-            "area_mowed_m2": _approximate_area(self._state.path),
-            "map_area_m2": 0,
+            # Authoritative area + total — the mower's own firmware
+            # tracks both in s1p4 byte[26-30] and reports them at the
+            # 5 s telemetry cadence. mower_tail.py field-verified
+            # 2026-04-22 that this matches the Dreame app's "areas"
+            # display exactly. We read it directly when available
+            # and fall back to our rasteriser only if no full-frame
+            # telemetry has arrived yet (e.g. during an idle-beacon
+            # boot before the first 33-byte frame).
+            "area_mowed_m2": _telemetry_area_or_estimate(
+                self._coordinator.device, self._state.path
+            ),
+            "map_area_m2": _telemetry_total_area(self._coordinator.device),
         }
         # Off-load the disk write to the executor so we don't block
         # the event loop. HA's blocking-call detector flags any
