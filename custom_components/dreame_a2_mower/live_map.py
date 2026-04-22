@@ -348,46 +348,42 @@ class DreameA2LiveMap:
         if device is None:
             return
 
-        # SESSION and BLANK are frozen — the snapshot pushed by set_mode()
-        # stands until the picker changes mode again. Live telemetry and
-        # new session summaries are ignored so the user's chosen view is
-        # never disturbed by mower activity.
-        if self._state.mode is not MapMode.LATEST:
-            return
-
-        # Session-active transitions. In LATEST mode a fresh run wipes
-        # the previous session's overlay — we want a clean canvas plus
-        # the new live path, not last run's completed_track underneath.
+        # Live path accumulation runs on every tick regardless of the
+        # picker's current mode. Users who click into a SESSION replay
+        # during a mow expect the full current-run path to be waiting
+        # for them when they return to Latest — not just what happened
+        # after the click. If we gated accumulation on mode, switching
+        # to Latest mid-mow would show the path truncated at the
+        # switch point. Only the display/dispatch is gated on LATEST.
         try:
             active = bool(device.status.started)
         except AttributeError:
             active = False
 
+        # Session-boundary wipe: only clear the LATEST overlay when a
+        # new session starts. In SESSION/BLANK mode this still resets
+        # the accumulator so the buffered live path matches the new
+        # run (rather than carrying forward stale points from the
+        # previous run once the user eventually returns to Latest).
         if active and not self._prev_session_active:
             now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
             self._state.start_session(now_iso)
-            self._state.lawn_polygon = []
-            self._state.exclusion_zones = []
-            self._state.completed_track = []
-            self._state.obstacle_polygons = []
-            self._state.dock_position = None
-            self._state.summary_md5 = None
-            self._state.summary_end_ts = None
+            if self._state.mode is MapMode.LATEST:
+                self._state.lawn_polygon = []
+                self._state.exclusion_zones = []
+                self._state.completed_track = []
+                self._state.obstacle_polygons = []
+                self._state.dock_position = None
+                self._state.summary_md5 = None
+                self._state.summary_end_ts = None
         self._prev_session_active = active
 
-        # Pick up a freshly-fetched session summary (fires once per
-        # session completion on g2408). The summary's completed_track
-        # supersedes the live accumulation for this run.
-        #
-        # Only consult it when the mower is NOT in an active session:
-        # during a mow, `device.latest_session_summary` still holds
-        # yesterday's summary (the new one only arrives at session
-        # end) and reloading it would overwrite the clean overlay
-        # that the session-start wipe just cleared — reintroducing
-        # the previous run's completed_track *on top of* the live
-        # path. Users reported the symptom on 2026-04-22: Latest view
-        # showing yesterday's short run plus the current run's tail.
-        if not active:
+        # Load newest session summary only between runs, only in
+        # LATEST mode. During a mow `device.latest_session_summary`
+        # still holds yesterday's; reloading it mid-tick would
+        # reintroduce the previous run on top of the live path
+        # (symptom reported 2026-04-22).
+        if not active and self._state.mode is MapMode.LATEST:
             try:
                 summary = getattr(device, "latest_session_summary", None)
             except Exception:
@@ -397,9 +393,6 @@ class DreameA2LiveMap:
                     self._state.path = []
                     self._state.obstacles = []
 
-        # Position is only meaningful during an active run. Between runs
-        # LATEST shows the archived overlay, which already carries the
-        # dock position — no need to seed a marker at the charger.
         pos_source = getattr(device, "latest_position", None)
         if pos_source is None:
             telem = getattr(device, "mowing_telemetry", None)
@@ -412,6 +405,9 @@ class DreameA2LiveMap:
             x_m = (x_cm / 100.0) * self.x_factor
             y_m = (y_mm / 1000.0) * self.y_factor
             position = [round(x_m, 3), round(y_m, 3)]
+            # Accumulate into state.path in every mode — see top of
+            # function. SESSION/BLANK simply won't dispatch this, but
+            # the buffer survives for a subsequent Latest switch.
             self._state.append_point(x_m, y_m)
 
         try:
@@ -421,6 +417,11 @@ class DreameA2LiveMap:
 
         if obstacle_on and position is not None:
             self._state.append_obstacle(position[0], position[1])
+
+        # Only LATEST drives the displayed snapshot; SESSION/BLANK
+        # remain frozen on whatever set_mode() last pushed.
+        if self._state.mode is not MapMode.LATEST:
+            return
 
         attrs = self._state.to_attributes(
             position=position,
