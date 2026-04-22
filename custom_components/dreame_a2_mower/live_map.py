@@ -438,19 +438,21 @@ def _approximate_area(path: list[list[float]]) -> float:
         p1 = path[i + 1]
         x0, y0 = p0[0], p0[1]
         x1, y1 = p1[0], p1[1]
-        # Phase filter: s1p4 phase byte (0=MOWING, 1=TRANSIT,
-        # 2=PHASE_2, 3=RETURNING). Blades are only down in phase 0;
-        # phase 1/3 segments are the mower traversing the lawn with
-        # blades UP (relocating to the next zone, returning to dock
-        # for a charge). Counting them as mowed area over-reports
-        # the cut coverage by ~20-25 m per typical run. Legacy
-        # 2-element entries (len < 3) lack phase info — treat them
-        # as mowing by default so older in_progress files that
-        # restore keep being painted.
-        phase0 = p0[2] if len(p0) >= 3 else None
-        phase1 = p1[2] if len(p1) >= 3 else None
-        if phase0 in (1, 3) or phase1 in (1, 3):
-            continue
+        # Phase byte (s1p4 byte[8]) — protocol doc claims values
+        # {0: MOWING, 1: TRANSIT, 2: PHASE_2, 3: RETURNING}, but
+        # field-captured probe logs show the byte taking values
+        # 0..16+ with no clean correlation to mowing/transit
+        # state. The 2026-04-22 run had the byte fixed at 2 and 3
+        # while the user observed actual mowing in unmowed areas.
+        # Until the phase semantics are properly RE'd, do NOT
+        # filter by phase — paint everything as mowing. The
+        # phase-tracking infra (3-element entries) stays so the
+        # filter can be re-enabled once we know the real mapping.
+        # See TODO.md "phase byte semantics" item.
+        # phase0 = p0[2] if len(p0) >= 3 else None
+        # phase1 = p1[2] if len(p1) >= 3 else None
+        # if phase0 in (1, 3) or phase1 in (1, 3):
+        #     continue
         dx = x1 - x0
         dy = y1 - y0
         seg_len = math.hypot(dx, dy)

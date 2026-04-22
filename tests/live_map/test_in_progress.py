@@ -305,36 +305,25 @@ def test_approximate_area_serpentine_pattern_matches_strip_total(tmp_path):
     assert 30 <= area <= 70, f"area={area}, expected near 44 m²"
 
 
-def test_approximate_area_skips_transit_and_returning_phases(tmp_path):
-    """Phase filter: path entries with phase 1 (TRANSIT) or 3
-    (RETURNING) mean the mower is moving with blades UP. Painting
-    those segments as mowed area inflates the metric by the
-    transit distance (~20-25 m per typical irregular-lawn run).
+def test_approximate_area_paints_all_phases_until_semantics_known(tmp_path):
+    """Phase byte semantics in s1p4 are not yet known (protocol doc
+    §3.1's enum was field-disproved 2026-04-22 — see TODO.md
+    'phase byte semantics'). Until we know which phase values
+    actually mean blades-up, every segment is painted as mowing
+    regardless of phase. This test pins that behaviour: identical
+    paths with vs without phase metadata produce the same area.
 
-    Legacy 2-element entries without phase (pre-alpha.67) are
-    painted unconditionally for backward compat."""
+    When the phase mapping is properly RE'd, this test should be
+    replaced with one that exercises the real filter."""
     from live_map import _approximate_area
-    # 10 m mowing line (phase 0) + 5 m transit (phase 1) + 10 m
-    # mowing line (phase 0). Transit must be excluded.
-    path_mowing_only = [[float(i), 0.0, 0] for i in range(11)]
-    path_mowing_only += [[float(15 + i), 5.0, 0] for i in range(11)]
-    area_mowing_only = _approximate_area(path_mowing_only)
-
-    path_with_transit = [[float(i), 0.0, 0] for i in range(11)]
-    path_with_transit += [[10.0 + (i+1)*0.5, 0.0, 1] for i in range(10)]
-    path_with_transit += [[float(15 + i), 5.0, 0] for i in range(11)]
-    area_with_transit = _approximate_area(path_with_transit)
-
-    # Adding 5 m of transit in the middle shouldn't inflate the
-    # area — the rasteriser must skip phase=1 segments.
-    assert area_with_transit <= area_mowing_only * 1.1
-
-    # Legacy 2-element entries get painted as if phase=0 (known-mowing):
-    # back-compat for in_progress files restored from before this
-    # release.
-    legacy_path = [[float(i), 0.0] for i in range(11)]
-    legacy_area = _approximate_area(legacy_path)
-    assert legacy_area > 0
+    path_no_phase = [[float(i), 0.0] for i in range(11)]
+    path_phase_0 = [[float(i), 0.0, 0] for i in range(11)]
+    path_phase_3 = [[float(i), 0.0, 3] for i in range(11)]
+    a_no = _approximate_area(path_no_phase)
+    a_p0 = _approximate_area(path_phase_0)
+    a_p3 = _approximate_area(path_phase_3)
+    assert a_no == a_p0 == a_p3
+    assert a_no > 0
 
 
 def test_approximate_area_skips_pen_up_jumps(tmp_path):

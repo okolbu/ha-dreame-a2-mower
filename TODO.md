@@ -264,6 +264,52 @@ fresh data, leg-merge absorbs it, auto-finalize promotes the
 in-progress entry to a completed archive, and the picker shows
 the new entry without manual intervention.
 
+## s1p4 phase byte semantics — protocol doc is wrong
+
+Field-captured 2026-04-22 across 4 probe logs shows the s1p4
+byte[8] ("phase") taking values 0..16+ — not the simple
+{0:MOWING, 1:TRANSIT, 2:PHASE_2, 3:RETURNING} the protocol doc
+§3.1 claims. Distribution across logs:
+
+| Log file | Distinct phase values observed |
+|---|---|
+| 2026-04-17 | {0: 1378, 1: 530, 2: 540, 3: 348} |
+| 2026-04-18 (1st) | {0: 536, 1: 414} |
+| 2026-04-18 (2nd) | {3: 88, 4: 236, 5..15: ~25 each} |
+| 2026-04-19 | {0: 2559, 1: 1568, 2: 1359, 3: 1006, 4..16: 33-567} |
+| 2026-04-22 (current run) | {2: 129, 3: 49} — only two values, both during active mowing in unmowed area |
+
+The 2026-04-22 capture rules out the doc's interpretation: the
+mower was actively mowing in lines (visible mowing pattern in
+unmowed area) but every single frame had phase ∈ {2, 3}. So
+phase=2 and phase=3 cannot mean PHASE_2 / RETURNING in the
+sense of "blades up". They're both valid mowing states.
+
+**Hypothesis candidates** to test:
+- Phase byte is a sub-pattern index (which row/segment of the
+  programmed mowing pattern, increments through subroutines)
+- Phase byte is a counter that wraps through 0..N per session
+- Phase byte encodes a state machine that includes mowing-mode
+  variants (edge mowing, fill-in, cleanup, etc.) plus transit
+  states
+
+**Needed**:
+- Integration's PROTOCOL_VALUE_NOVEL (alpha.64) will catch new
+  phase values as they appear. Cross-reference with
+  visually-observed mower behaviour at the same timestamps.
+- Manual experiments under the RE-capture switch (TODO item C):
+  trigger BUILDING / Find Maintenance Point / cancel / each
+  mode and look at the phase-byte timeline.
+- Once the mapping is known, re-enable the area-calc filter in
+  live_map._approximate_area and the TRANSIT_COLOR rendering
+  in trail_overlay (both currently disabled, infra preserved
+  via comments).
+
+**Acceptance**: each phase-byte value documented with confirmed
+behaviour, and the area calc + colour rendering filter only
+on values we know are blades-up (most likely a single specific
+value, not a range).
+
 ## LiDAR card popout / fullscreen view
 
 **Context**: `custom:dreame-a2-lidar-card` (served from
