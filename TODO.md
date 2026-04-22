@@ -59,3 +59,39 @@ A user-facing button (`button.dreame_a2_mower_finalize_session`)
 exposes the same finalize path for the stuck case where s2p56 never
 resumes — e.g. mower permanently offline mid-run.
 
+## Cloud MAP payload — deeper RE pass
+
+**Context**: a one-shot `[MAP_SCHEMA]` WARNING dump in
+`device.py:1963` lists the 17 top-level keys of the cloud MAP
+payload by *shape only* — `dict(keys=...)`, `list(len=N)`, etc.
+Original purpose was to discover keys beyond the four we already
+parse (`boundary`, `mowingAreas`, `forbiddenAreas`, `contours`).
+Now that the rest of the protocol is mapped, expand this RE work.
+
+**Known top-level keys (2026-04-22 sample)**: `boundary`,
+`cleanPoints`, `contours`, `cruisePoints`, `cut`,
+`forbiddenAreas`, `hasBack`, `mapIndex`, `md5sum`, `merged`,
+`mowingAreas`, `name`, `notObsAreas`, `obstacles`, `paths`,
+`spotAreas`, `totalArea`. Most of the value-bearing ones are
+`{dataType, value}` envelopes.
+
+**Next steps**:
+- Replace the shape-only dump with a full-depth recursive dump
+  guarded by a config-entry option (`debug_map_schema`) so the
+  WARNING doesn't fire by default. Walk dicts/lists; sample
+  first/last entries from large lists; truncate strings >120
+  chars. Emit one tree per fetched map.
+- Once dumps are in hand, document each key in
+  `docs/research/g2408-protocol.md` §7 alongside the existing
+  map-fetch flow, with field semantics + observed value ranges.
+- Promote interesting keys (e.g. `cleanPoints`, `cruisePoints`,
+  `paths`) to first-class fields in `protocol/cloud_map.py` if
+  they unlock new HA features (path replay, cruise-point pins,
+  etc.). `notObsAreas` and `cut` are unknown — likely
+  zone-modifier types (no-obstacle-detection zones, cut-line
+  geometry) but unverified.
+
+**Acceptance**: every top-level key has a documented role + at
+least one decoded value-shape example in the protocol doc, and
+the integration consciously chooses to ignore vs surface each one.
+
