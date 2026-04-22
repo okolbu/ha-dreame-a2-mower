@@ -29,12 +29,26 @@ class FakeArchive:
     def __init__(self, entries, root):
         self._entries = entries
         self.root = Path(root)
+        self._in_progress = None
 
     def latest(self):
         return self._entries[0] if self._entries else None
 
     def list_sessions(self):
         return list(self._entries)
+
+    # In-progress entry — minimal stubs matching SessionArchive's API.
+    def read_in_progress(self):
+        return self._in_progress
+
+    def write_in_progress(self, payload):
+        self._in_progress = dict(payload)
+
+    def delete_in_progress(self):
+        self._in_progress = None
+
+    def in_progress_entry(self):
+        return None
 
 
 def _make_live_map(archive=None, device=None):
@@ -119,21 +133,27 @@ def test_set_mode_session_without_entry_raises():
         lm.set_mode(MapMode.SESSION)
 
 
-def test_tick_ignores_telemetry_in_blank_mode():
+def test_tick_in_blank_mode_accumulates_path_but_does_not_dispatch():
+    # Path now accumulates in every mode so a Latest-switch mid-mow
+    # carries the full current-run buffer (commit 25afba4). What
+    # BLANK mode protects is the *displayed snapshot*: no dispatch
+    # happens. Mode itself stays BLANK.
     device = SimpleNamespace(
         status=SimpleNamespace(started=True),
         latest_position=(100, 100),
         obstacle_detected=False,
         latest_session_summary=None,
+        _session_status_known=True,
     )
     lm = _make_live_map(device=device)
     lm.set_mode(MapMode.BLANK)
     lm._handle_coordinator_update()
-    assert lm._state.path == []
+    # Path *did* accumulate (silent buffer), but mode is preserved.
+    assert lm._state.path != []
     assert lm._state.mode is MapMode.BLANK
 
 
-def test_tick_ignores_telemetry_in_session_mode(tmp_path):
+def test_tick_in_session_mode_accumulates_path_but_overlay_frozen(tmp_path):
     _write_fixture(tmp_path, "pinned.json")
     entry = SimpleNamespace(
         filename="pinned.json",
@@ -150,6 +170,7 @@ def test_tick_ignores_telemetry_in_session_mode(tmp_path):
         latest_position=(100, 100),
         obstacle_detected=False,
         latest_session_summary=None,
+        _session_status_known=True,
     )
     lm = _make_live_map(archive=archive, device=device)
     lm.set_mode(MapMode.SESSION, archive_entry=entry)
@@ -157,8 +178,10 @@ def test_tick_ignores_telemetry_in_session_mode(tmp_path):
 
     lm._handle_coordinator_update()
 
-    assert lm._state.path == []
-    assert lm._state.lawn_polygon == overlay_before  # frozen
+    # Path accumulates silently in SESSION mode too; overlay must
+    # not change (the pinned session is frozen).
+    assert lm._state.path != []
+    assert lm._state.lawn_polygon == overlay_before
 
 
 def test_latest_mode_session_start_wipes_overlay():

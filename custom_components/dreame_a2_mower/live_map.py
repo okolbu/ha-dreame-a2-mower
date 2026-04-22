@@ -297,6 +297,44 @@ OPT_Y_FACTOR = "live_map_y_factor"
 DEFAULT_X_FACTOR = 1.0
 DEFAULT_Y_FACTOR = 0.625
 
+# Mower deck width in metres — used as the swath width when estimating
+# in-progress mowed area from the live path. Approximation only: the
+# real area depends on overlap pattern. Cloud-summary `areas` overrides
+# this once a leg completes.
+_LIVE_AREA_SWATH_M = 0.32
+
+
+def _iso_to_unix(iso: str | None) -> int:
+    """Parse an ISO-8601 timestamp into a unix int. 0 on failure."""
+    if not iso:
+        return 0
+    try:
+        dt = datetime.fromisoformat(iso)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return int(dt.timestamp())
+    except (TypeError, ValueError):
+        return 0
+
+
+def _approximate_area(path: list[list[float]]) -> float:
+    """Rough mowed-area estimate: path length × deck swath width.
+
+    Used only for the in-progress picker label so users see a
+    plausible "X m²" while a run is in progress. Replaced by the
+    authoritative cloud `areas` value once a leg summary lands.
+    """
+    if not path or len(path) < 2:
+        return 0.0
+    total = 0.0
+    prev = path[0]
+    for pt in path[1:]:
+        dx = pt[0] - prev[0]
+        dy = pt[1] - prev[1]
+        total += math.hypot(dx, dy)
+        prev = pt
+    return round(total * _LIVE_AREA_SWATH_M, 2)
+
 
 class DreameA2LiveMap:
     """HA-facing live map state manager.
@@ -321,38 +359,56 @@ class DreameA2LiveMap:
         self._state = LiveMapState()
         self._prev_session_active: bool | None = None
         self._unsub_listener = None
-        # Draft-path persistence: during an active mow the live path
-        # accumulator is written to disk every ~10s so an HA restart
-        # mid-session can restore what was captured instead of losing
-        # it. See docs/research/g2408-protocol.md §Restart recovery
-        # for the rationale. The draft's presence also acts as a
-        # fallback "session active" signal for a limited window
-        # after startup in case s2p56 / MQTT state don't yet agree.
-        import time as _time
+        # In-progress entry persistence: while a logical mow is active
+        # (started==True, possibly across recharge legs) the live path
+        # accumulator is written to `<config>/dreame_a2_mower/sessions/
+        # in_progress.json` every ~10s. An HA restart mid-mow restores
+        # this entry so the Latest view picks up where it left off. The
+        # picker surfaces it like any completed run, sorted to the top
+        # by `last_update_ts`. See session_archive.SessionArchive.
+        # Migration: any leftover legacy `drafts/` files are unlinked
+        # on first boot — keeping that path alive isn't worth the
+        # divergence with the new design (user agreed to discard).
+        self._last_persist_at: float = 0.0
+        # Track which leg md5s we have already merged into the
+        # in-progress entry. Each cloud `event_occured` summary fires
+        # a leg; multi-leg recharge cycles merge into one in-progress
+        # entry until `started` finally drops.
+        self._in_progress_leg_md5s: list[str] = []
+        try:
+            self._migrate_legacy_drafts(hass)
+        except Exception:  # pragma: no cover — best-effort cleanup
+            pass
+        if self._restore_in_progress():
+            # Seed `_prev_session_active = True` so the first
+            # coordinator tick doesn't treat us as a fresh
+            # session-start and wipe the just-restored path.
+            self._prev_session_active = True
+
+    def _migrate_legacy_drafts(self, hass) -> None:
+        """One-shot cleanup of the old `drafts/live_path_*.json` files.
+
+        Replaced by sessions/in_progress.json (managed via
+        SessionArchive). Anything in drafts/ would be stale after this
+        rewrite anyway — wipe it so two stores can't disagree.
+        """
         from pathlib import Path as _Path
         try:
             from .const import DOMAIN as _DOMAIN
         except ImportError:
             _DOMAIN = "dreame_a2_mower"
+        legacy = _Path(hass.config.path(_DOMAIN, "drafts"))
+        if not legacy.exists():
+            return
+        for child in legacy.glob("live_path_*.json"):
+            try:
+                child.unlink()
+            except OSError:
+                pass
         try:
-            self._draft_root = _Path(hass.config.path(_DOMAIN, "drafts"))
-            self._draft_root.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            self._draft_root = None
-        self._draft_mac = getattr(coordinator.device, "mac", "unknown") or "unknown"
-        self._last_draft_write: float = 0.0
-        self._draft_fallback_active_until: float | None = None
-        if self._load_draft():
-            # Optimistically treat the draft as evidence of an
-            # ongoing session for up to 30 minutes post-boot. That
-            # is enough for the real signals (s2p56 probe, MQTT
-            # state resume) to come in and take over; after that
-            # window we trust them exclusively again.
-            self._draft_fallback_active_until = _time.monotonic() + 30 * 60
-            # Seed `_prev_session_active = True` so the first
-            # coordinator tick doesn't treat us as a fresh
-            # session-start and wipe the just-loaded path.
-            self._prev_session_active = True
+            legacy.rmdir()
+        except OSError:
+            pass
 
     @property
     def x_factor(self) -> float:
@@ -374,82 +430,199 @@ class DreameA2LiveMap:
             self._unsub_listener()
             self._unsub_listener = None
 
-    def _draft_file(self):
-        if self._draft_root is None:
-            return None
-        return self._draft_root / f"live_path_{self._draft_mac}.json"
+    def _persist_in_progress(self) -> None:
+        """Write the current live path to the in-progress archive entry.
 
-    def _persist_draft(self) -> None:
-        """Write the current live path to disk (throttled to ~10s).
+        Throttled to one disk write per ~10s so even devices that push
+        s1p4 telemetry at several Hz don't cause excessive I/O on the
+        coordinator's hot path. Called from `_handle_coordinator_update`
+        while a session is active.
 
-        Called from the coordinator tick while a session is active.
-        Throttling keeps disk writes off the hot property-update
-        path even on devices that push s1p4 at several Hz.
+        The payload mirrors what `LiveMapState` would render: live path,
+        live obstacles, plus the static overlay (lawn polygon /
+        exclusions / dock / completed_track) carried forward from any
+        leg summaries already merged. That way a restart reconstructs
+        a visually-identical Latest view immediately rather than
+        waiting for the cloud to re-push the geometry.
         """
         import time as _time
-        import json as _json
+        archive = getattr(self._coordinator, "session_archive", None)
+        if archive is None:
+            return
         now = _time.monotonic()
-        if now - self._last_draft_write < 10.0:
+        if now - self._last_persist_at < 10.0:
             return
-        self._last_draft_write = now
-        dest = self._draft_file()
-        if dest is None:
-            return
-        try:
-            payload = {
-                "ts": _time.time(),
-                "session_id": self._state.session_id,
-                "session_start": self._state.session_start,
-                "path": self._state.path,
-                "obstacles": self._state.obstacles,
-            }
-            dest.write_text(_json.dumps(payload))
-        except OSError:
-            pass
+        self._last_persist_at = now
+        payload = {
+            "session_id": self._state.session_id,
+            "session_start": self._state.session_start,
+            "session_start_ts": _iso_to_unix(self._state.session_start),
+            "live_path": self._state.path,
+            "obstacles": self._state.obstacles,
+            "leg_md5s": list(self._in_progress_leg_md5s),
+            "completed_track": self._state.completed_track,
+            "lawn_polygon": self._state.lawn_polygon,
+            "exclusion_zones": self._state.exclusion_zones,
+            "obstacle_polygons": self._state.obstacle_polygons,
+            "dock_position": self._state.dock_position,
+            "summary_md5": self._state.summary_md5,
+            "summary_end_ts": self._state.summary_end_ts,
+            # Coarse derived fields so the picker label has something
+            # meaningful even when no leg summary has arrived yet.
+            "area_mowed_m2": _approximate_area(self._state.path),
+            "map_area_m2": 0,
+        }
+        archive.write_in_progress(payload)
 
-    def _load_draft(self) -> bool:
-        """Read any persisted draft path into `self._state`.
+    def _restore_in_progress(self) -> bool:
+        """Repopulate `self._state` from a persisted in-progress entry.
 
-        Returns True if a *fresh* draft was loaded (age <12h). Stale
-        drafts are deleted so an orphaned week-old file doesn't keep
-        re-triggering the fallback-active signal on every boot.
+        Returns True if an entry was loaded so the caller can seed
+        `_prev_session_active = True` and avoid re-firing the
+        fresh-session wipe on the very next tick.
         """
-        import time as _time
-        import json as _json
-        src = self._draft_file()
-        if src is None or not src.exists():
+        archive = getattr(self._coordinator, "session_archive", None)
+        if archive is None:
             return False
-        try:
-            data = _json.loads(src.read_text())
-        except (OSError, ValueError):
-            return False
-        try:
-            age = _time.time() - float(data.get("ts", 0))
-        except (TypeError, ValueError):
-            age = 9e9
-        if age > 12 * 3600:
-            try:
-                src.unlink()
-            except OSError:
-                pass
+        data = archive.read_in_progress()
+        if data is None:
             return False
         try:
             self._state.session_id = int(data.get("session_id", 0))
             self._state.session_start = data.get("session_start")
-            self._state.path = [list(p) for p in data.get("path", [])]
+            self._state.path = [list(p) for p in data.get("live_path", [])]
             self._state.obstacles = [list(p) for p in data.get("obstacles", [])]
+            self._state.completed_track = [
+                [list(p) for p in seg] for seg in data.get("completed_track", [])
+            ]
+            self._state.lawn_polygon = [
+                list(p) for p in data.get("lawn_polygon", [])
+            ]
+            self._state.exclusion_zones = [
+                [list(p) for p in z] for z in data.get("exclusion_zones", [])
+            ]
+            self._state.obstacle_polygons = [
+                [list(p) for p in o] for o in data.get("obstacle_polygons", [])
+            ]
+            dock = data.get("dock_position")
+            self._state.dock_position = (
+                [dock[0], dock[1]] if dock else None
+            )
+            self._state.summary_md5 = data.get("summary_md5")
+            self._state.summary_end_ts = data.get("summary_end_ts")
+            self._in_progress_leg_md5s = list(data.get("leg_md5s", []))
         except (TypeError, ValueError):
             return False
-        return bool(self._state.path)
+        return True
 
-    def _delete_draft(self) -> None:
-        dest = self._draft_file()
-        if dest is None:
-            return
-        try:
-            dest.unlink(missing_ok=True)
-        except OSError:
-            pass
+    def _delete_in_progress(self) -> None:
+        archive = getattr(self._coordinator, "session_archive", None)
+        if archive is not None:
+            archive.delete_in_progress()
+        self._in_progress_leg_md5s = []
+
+    def finalize_session(self) -> dict[str, Any]:
+        """Close out the current in-progress entry, archiving if needed.
+
+        Two cases:
+
+        1. The cloud already shipped one or more leg summaries during
+           the run — they're already in the per-leg archive (one entry
+           per leg, written by the coordinator). Nothing to synthesize;
+           just delete the in-progress aggregator.
+        2. No leg summaries arrived (HA was down through the entire
+           run, or the cloud was silent / the device offline). The
+           live_path is the only record. Synthesize an "(incomplete)"
+           archive entry from it so the run shows up in the picker
+           with whatever path data we managed to capture, then delete.
+
+        Returns a small result dict for the caller (e.g. the finalize
+        button) so it can surface the outcome in the UI / logs.
+        """
+        archive = getattr(self._coordinator, "session_archive", None)
+        if archive is None:
+            return {"result": "no_archive"}
+        data = archive.read_in_progress()
+        if data is None:
+            return {"result": "no_in_progress"}
+        leg_md5s = list(data.get("leg_md5s", []))
+        live_path = list(data.get("live_path", []))
+        result: dict[str, Any] = {"result": "deleted"}
+        if not leg_md5s and len(live_path) >= 2:
+            entry = self._archive_incomplete_session(archive, data)
+            if entry is not None:
+                result = {
+                    "result": "archived_incomplete",
+                    "filename": entry.filename,
+                    "area_mowed_m2": entry.area_mowed_m2,
+                    "duration_min": entry.duration_min,
+                }
+        archive.delete_in_progress()
+        self._in_progress_leg_md5s = []
+        # Reset live state so the next tick starts clean.
+        self._state.path = []
+        self._state.obstacles = []
+        self._state.completed_track = []
+        self._state.lawn_polygon = []
+        self._state.exclusion_zones = []
+        self._state.obstacle_polygons = []
+        self._state.dock_position = None
+        self._state.summary_md5 = None
+        self._state.summary_end_ts = None
+        self._prev_session_active = False
+        return result
+
+    def _archive_incomplete_session(self, archive, data) -> Any:
+        """Synthesize an "(incomplete)" archive entry from in-progress data.
+
+        Used when no cloud leg summary ever arrived (e.g. HA missed the
+        `event_occured` window). Stores enough so the picker shows
+        the run with its captured path; flagged so the loader and any
+        future analyser can tell this isn't an authoritative cloud
+        summary.
+        """
+        import time as _time
+        import hashlib as _hashlib
+        start_ts = int(data.get("session_start_ts") or 0)
+        end_ts = int(_time.time())
+        live_path = [list(p) for p in data.get("live_path", [])]
+        obstacles = [list(p) for p in data.get("obstacles", [])]
+        area = _approximate_area(live_path)
+        duration_min = max(0, (end_ts - start_ts) // 60) if start_ts else 0
+        # md5 over the synthesized payload — gives a stable filename
+        # and lets archive.has() dedupe if the user mashes the button
+        # twice. Hex-truncated to match the cloud-summary md5 width.
+        digest = _hashlib.md5(
+            f"incomplete:{start_ts}:{end_ts}:{len(live_path)}".encode()
+        ).hexdigest()
+        raw = {
+            "_incomplete": True,
+            "_synthesized_by": "finalize_session",
+            "start": start_ts,
+            "end": end_ts,
+            "areas": area,
+            "map_area": int(data.get("map_area_m2", 0) or 0),
+            "md5": digest,
+            "dock": data.get("dock_position"),
+            "live_path": live_path,
+            "obstacles": obstacles,
+            "lawn_polygon": data.get("lawn_polygon", []),
+            "exclusion_zones": data.get("exclusion_zones", []),
+            "obstacle_polygons": data.get("obstacle_polygons", []),
+        }
+        # Minimal stub matching the attrs SessionArchive.archive() reads
+        # off the summary object. Not a real SessionSummary — this
+        # path won't survive parse_session_summary, hence _incomplete.
+        from types import SimpleNamespace as _NS
+        stub = _NS(
+            md5=digest,
+            start_ts=start_ts,
+            end_ts=end_ts,
+            duration_min=duration_min,
+            area_mowed_m2=area,
+            map_area_m2=int(data.get("map_area_m2", 0) or 0),
+        )
+        return archive.archive(stub, raw_json=raw)
 
     @callback
     def _handle_coordinator_update(self) -> None:
@@ -469,35 +642,26 @@ class DreameA2LiveMap:
         except AttributeError:
             active = False
 
-        # Auto-close draft: if the device has definitively reported
-        # no active session (s2p56 known + started=False), any lingering
-        # draft is obsolete — the session ended either while HA was up
-        # (in which case a summary arrived and already cleared the
-        # draft) or while HA was down (in which case no summary will
-        # ever come for that run; the draft would otherwise linger
-        # forever). `_session_status_known` distinguishes "we haven't
-        # heard yet" from "we asked and got empty" so we don't
-        # discard a just-loaded draft while waiting for the first
-        # s2p56 push.
+        # Auto-close in-progress entry: if the device has definitively
+        # reported no active session (s2p56 known + started=False),
+        # the in-progress file is obsolete. Either the cloud summary
+        # already arrived and the coordinator promoted it, or no
+        # summary will come for this run. Either way the entry
+        # should not linger.
+        # `_session_status_known` distinguishes "we haven't heard yet"
+        # from "we asked and got empty", so a just-restored entry
+        # isn't discarded during boot before the first s2p56 push.
         session_known = getattr(device, "_session_status_known", False)
-        if session_known and not active:
-            self._delete_draft()
-            self._draft_fallback_active_until = None
-
-        # Draft-fallback: if we loaded a persisted live path on startup
-        # and the real signals haven't caught up yet, optimistically
-        # treat the session as active for up to 30 minutes. This keeps
-        # the Latest view showing the saved path instead of falling
-        # back to yesterday's archive overlay while the mower is
-        # charging mid-session after an HA restart.
-        if self._draft_fallback_active_until is not None:
-            import time as _time
-            if _time.monotonic() < self._draft_fallback_active_until:
-                if not active:
-                    active = True
-            else:
-                # Window expired — trust the real signals from here on.
-                self._draft_fallback_active_until = None
+        if session_known and not active and self._prev_session_active:
+            # Logical session just ended. If any leg summary fired
+            # during the run, the per-leg archive entries are already
+            # on disk — `finalize_session` will simply drop the
+            # in-progress aggregator. If no leg ever fired (e.g. HA
+            # was down through the entire run, mower offline at the
+            # cloud-event window), the captured live_path is the
+            # only record — `finalize_session` synthesizes an
+            # "(incomplete)" archive entry for it before deleting.
+            self.finalize_session()
 
         # Session-boundary wipe: only clear the LATEST overlay when a
         # new session starts. In SESSION/BLANK mode this still resets
@@ -507,6 +671,7 @@ class DreameA2LiveMap:
         if active and not self._prev_session_active:
             now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
             self._state.start_session(now_iso)
+            self._in_progress_leg_md5s = []
             if self._state.mode is MapMode.LATEST:
                 self._state.lawn_polygon = []
                 self._state.exclusion_zones = []
@@ -517,24 +682,37 @@ class DreameA2LiveMap:
                 self._state.summary_end_ts = None
         self._prev_session_active = active
 
-        # Load newest session summary only between runs, only in
-        # LATEST mode. During a mow `device.latest_session_summary`
-        # still holds yesterday's; reloading it mid-tick would
-        # reintroduce the previous run on top of the live path
-        # (symptom reported 2026-04-22).
-        if not active and self._state.mode is MapMode.LATEST:
-            try:
-                summary = getattr(device, "latest_session_summary", None)
-            except Exception:
-                summary = None
-            if summary is not None:
+        # Merge any newly-arrived leg summary into the live overlay so
+        # the in-progress entry reflects the cloud's authoritative
+        # geometry (lawn polygon, exclusions, completed_track) as
+        # legs complete. Each leg's md5 is tracked so we don't
+        # re-merge on subsequent ticks.
+        try:
+            summary = getattr(device, "latest_session_summary", None)
+        except Exception:
+            summary = None
+        leg_md5 = getattr(summary, "md5", None) if summary is not None else None
+        if (
+            summary is not None
+            and leg_md5
+            and leg_md5 not in self._in_progress_leg_md5s
+        ):
+            if active:
+                # Multi-leg merge: append the leg's track segments,
+                # refresh static geometry from this leg's view.
+                self._state.completed_track.extend(
+                    [list(p) for p in seg] for seg in summary.track_segments
+                )
+                self._state.load_from_session_summary(summary)
+                self._in_progress_leg_md5s.append(leg_md5)
+            elif self._state.mode is MapMode.LATEST:
+                # Between-runs path: just adopt the summary as the
+                # new Latest overlay (replaces whatever the picker
+                # was showing). Path is wiped because there is no
+                # live mow to extend it.
                 if self._state.load_from_session_summary(summary):
                     self._state.path = []
                     self._state.obstacles = []
-                    # Fresh summary = session definitively ended. Any
-                    # on-disk draft is now obsolete.
-                    self._delete_draft()
-                    self._draft_fallback_active_until = None
 
         pos_source = getattr(device, "latest_position", None)
         if pos_source is None:
@@ -561,10 +739,10 @@ class DreameA2LiveMap:
         if obstacle_on and position is not None:
             self._state.append_obstacle(position[0], position[1])
 
-        # Persist the live path to disk while active so an HA restart
+        # Persist the in-progress entry while active so an HA restart
         # mid-mow can recover it. Throttled internally to ~10s.
-        if active and self._state.path:
-            self._persist_draft()
+        if active:
+            self._persist_in_progress()
 
         # Only LATEST drives the displayed snapshot; SESSION/BLANK
         # remain frozen on whatever set_mode() last pushed.

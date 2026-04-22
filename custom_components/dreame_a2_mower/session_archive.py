@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -31,10 +32,27 @@ _LOGGER = logging.getLogger(__name__)
 INDEX_NAME = "index.json"
 INDEX_VERSION = 1
 
+# In-progress entry — single mutable file representing the currently-active
+# logical run (one or more Dreame `event_occured` legs while
+# `device.status.started` stays True). Surfaces in list_sessions() at the
+# top so the picker shows it like any other run, with the Latest view
+# auto-tracking it. Promoted to a regular archive entry when the session
+# finally ends — or discarded if no completed-leg summary ever arrived.
+IN_PROGRESS_NAME = "in_progress.json"
+IN_PROGRESS_VERSION = 1
+IN_PROGRESS_MAX_AGE_S = 12 * 3600  # stale beyond this; auto-cleaned on read
+
 
 @dataclass(frozen=True)
 class ArchivedSession:
-    """Metadata for one archived session (as stored in `index.json`)."""
+    """Metadata for one archived session (as stored in `index.json`).
+
+    `still_running` is False for every persisted entry and True only for the
+    synthesized in-progress row surfaced via `SessionArchive.in_progress_entry()`.
+    Consumers (the replay picker, the Latest-view loader) branch on this to
+    pick up the live in-progress payload from disk instead of treating the
+    entry as a finalized archive file.
+    """
 
     filename: str
     start_ts: int
@@ -43,6 +61,7 @@ class ArchivedSession:
     area_mowed_m2: float
     map_area_m2: int
     md5: str
+    still_running: bool = False
 
     @classmethod
     def from_summary(cls, filename: str, summary) -> "ArchivedSession":
@@ -77,6 +96,7 @@ class ArchivedSession:
             area_mowed_m2=float(d.get("area_mowed_m2", 0.0)),
             map_area_m2=int(d.get("map_area_m2", 0)),
             md5=str(d.get("md5", "")),
+            still_running=bool(d.get("still_running", False)),
         )
 
 
@@ -133,16 +153,136 @@ class SessionArchive:
         return len(self._index)
 
     def latest(self) -> ArchivedSession | None:
-        if not self._index:
+        """Return the newest entry — in-progress wins if one is on disk.
+
+        Used by the Latest view to decide what to display: an active run
+        outranks any completed archive, even one that finished seconds ago,
+        because `last_update_ts` is bumped on every coordinator tick.
+        """
+        in_progress = self.in_progress_entry()
+        candidates = list(self._index)
+        if in_progress is not None:
+            candidates.append(in_progress)
+        if not candidates:
             return None
-        return max(self._index, key=lambda s: s.end_ts)
+        return max(candidates, key=lambda s: s.end_ts)
 
     def list_sessions(self) -> list[ArchivedSession]:
-        """Return archived sessions ordered most-recent-first (by end_ts)."""
-        return sorted(self._index, key=lambda s: s.end_ts, reverse=True)
+        """Return all sessions ordered most-recent-first (by end_ts).
+
+        The in-progress entry, if any, sorts to the front because its
+        `end_ts` is the most-recent persistence tick — i.e. always now.
+        """
+        sessions = list(self._index)
+        in_progress = self.in_progress_entry()
+        if in_progress is not None:
+            sessions.append(in_progress)
+        return sorted(sessions, key=lambda s: s.end_ts, reverse=True)
 
     def has(self, md5: str) -> bool:
         return any(s.md5 == md5 for s in self._index)
+
+    # ------------------ in-progress entry I/O ------------------
+
+    def _in_progress_path(self) -> Path:
+        return self._root / IN_PROGRESS_NAME
+
+    def read_in_progress(self) -> dict[str, Any] | None:
+        """Load the in-progress payload from disk, or None.
+
+        Stale entries (age > IN_PROGRESS_MAX_AGE_S) are auto-deleted —
+        otherwise an orphaned crash from yesterday would keep
+        re-spawning a phantom "current run" entry every boot.
+        """
+        path = self._in_progress_path()
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text())
+        except (OSError, ValueError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        try:
+            age = time.time() - float(data.get("last_update_ts", 0))
+        except (TypeError, ValueError):
+            age = 9e9
+        if age > IN_PROGRESS_MAX_AGE_S:
+            self.delete_in_progress()
+            return None
+        return data
+
+    def write_in_progress(self, payload: dict[str, Any]) -> None:
+        """Atomically rewrite the in-progress file.
+
+        The caller owns the schema; we only stamp `version` and
+        `last_update_ts` so the reader can age-check without consulting
+        the OS mtime (which can drift across reboots / docker mounts).
+        """
+        path = self._in_progress_path()
+        tmp = path.with_suffix(".json.tmp")
+        body = dict(payload)
+        body["version"] = IN_PROGRESS_VERSION
+        body["last_update_ts"] = time.time()
+        try:
+            tmp.write_text(json.dumps(body, default=str))
+            tmp.replace(path)
+        except OSError as ex:
+            _LOGGER.warning("SessionArchive: failed to write in-progress: %s", ex)
+
+    def delete_in_progress(self) -> None:
+        path = self._in_progress_path()
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+    def in_progress_entry(self) -> ArchivedSession | None:
+        """Synthesize an ArchivedSession from the in-progress payload.
+
+        Returns None when no fresh in-progress file exists. The synthesized
+        entry has `md5=""` (no canonical hash until the cloud summary
+        arrives) and `still_running=True` so the picker can render it
+        with a "still running" suffix and consumers can branch on it.
+        """
+        data = self.read_in_progress()
+        if data is None:
+            return None
+        try:
+            start_ts = int(data.get("session_start_ts", 0))
+            last_ts = int(data.get("last_update_ts", start_ts))
+            area = float(data.get("area_mowed_m2", 0.0))
+            map_area = int(data.get("map_area_m2", 0))
+        except (TypeError, ValueError):
+            return None
+        duration_min = max(0, (last_ts - start_ts) // 60)
+        return ArchivedSession(
+            filename=IN_PROGRESS_NAME,
+            start_ts=start_ts,
+            end_ts=last_ts,
+            duration_min=duration_min,
+            area_mowed_m2=area,
+            map_area_m2=map_area,
+            md5="",
+            still_running=True,
+        )
+
+    def promote_in_progress(
+        self,
+        summary,
+        raw_json: dict[str, Any] | None = None,
+    ) -> ArchivedSession | None:
+        """Archive a final-leg summary AND remove the in-progress file.
+
+        The leg summary is stored exactly the same way as a free-standing
+        completed session (idempotent by md5). Then the in-progress
+        payload is unlinked — the caller is responsible for deciding
+        when to call this (i.e. only when the logical session has truly
+        ended, not on every leg boundary mid-recharge cycle).
+        """
+        entry = self.archive(summary, raw_json=raw_json)
+        self.delete_in_progress()
+        return entry
 
     def archive(self, summary, raw_json: dict[str, Any] | None = None) -> ArchivedSession | None:
         """Persist one session summary. Idempotent by `summary.md5`.

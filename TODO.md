@@ -35,33 +35,27 @@ progression at roughly the mower's real travel speed.
 dashboard, not in visible chunks. No synthetic data in archived
 sessions (interpolation is a render-time effect only).
 
-## Finalize-in-progress-session (explicit override)
+## In-progress session architecture (landed)
 
-**Context**: v44 added auto-close for orphan drafts — on s2p56=empty
-the `<ha_config>/dreame_a2_mower/drafts/live_path_*.json` file and
-the 30-min fallback-active window are dropped automatically. That
-covers the common "mow finished while HA was down" case.
+The `drafts/live_path_*.json` file has been replaced by
+`sessions/in_progress.json`, managed by
+`SessionArchive.{read,write,delete,promote}_in_progress`. The
+in-progress entry is a first-class row in
+`SessionArchive.list_sessions()` (sorts to the top by `last_update_ts`)
+and `latest()`. The replay picker shows it as `YYYY-MM-DD HH:MM —
+X m² (N min, still running)`; selecting it routes through
+`MapMode.LATEST` (no wire-format to replay from). Leg-per-recharge
+cycles are absorbed by merging each `event_occured` leg's
+`track_segments` into the in-progress entry while `started==True`.
 
-**Gap**: if s2p56 never comes back (firmware silent, device offline),
-the draft lingers until its 12h freshness window elapses. A user who
-knows the mow ended and wants the draft cleared / saved as an archive
-entry has no UI handle for it.
+Auto-close triggers on the coordinator tick where
+`_session_status_known=True and not device.status.started and
+_prev_session_active`. If no leg summary ever fired during the run
+(HA was down through the end), `live_map.finalize_session()`
+synthesizes an "(incomplete)" archive entry from the captured
+live path + session_start_ts before deleting the in-progress file.
 
-**Needed**:
-- Button entity `button.dreame_a2_mower_finalize_session` under the
-  mower device card. Press action:
-  1. Read current `LiveMapState.path` + `session_start`.
-  2. Build a minimal `SessionSummary` (start_ts from session_start,
-     end_ts = now, path = [[state.path]], synthetic md5 from path
-     hash, area_mowed_m2 approximate or 0 with an "incomplete" flag).
-  3. Hand to `session_archive.archive(summary)` so it shows in the
-     replay picker.
-  4. Delete the draft + clear fallback window.
-- Decide whether to compute an approximate area (shoelace on the
-  bounding polygon) or leave as 0 with a label suffix like
-  "(incomplete)". Approximation risks being misleading; 0 + label is
-  honest but forces the user to check the path visually.
+A user-facing button (`button.dreame_a2_mower_finalize_session`)
+exposes the same finalize path for the stuck case where s2p56 never
+resumes — e.g. mower permanently offline mid-run.
 
-**Acceptance**: a stranded draft can be promoted to a first-class
-archive entry via one button press, and the resulting entry appears
-in the replay dropdown with a clear "(incomplete)" marker.

@@ -7,7 +7,13 @@ from pathlib import Path
 
 import pytest
 
-from session_archive import ArchivedSession, INDEX_NAME, SessionArchive
+from session_archive import (
+    ArchivedSession,
+    INDEX_NAME,
+    IN_PROGRESS_NAME,
+    IN_PROGRESS_MAX_AGE_S,
+    SessionArchive,
+)
 from protocol.session_summary import parse_session_summary
 
 
@@ -134,3 +140,135 @@ def test_archive_without_raw_json_falls_back(tmp_path, summary):
     # Fallback reconstruction contains the scalar fields with a note.
     assert loaded["md5"] == summary.md5
     assert "_note" in loaded
+
+
+# -------------------- in-progress entry --------------------
+
+
+def test_in_progress_absent_by_default(tmp_path):
+    a = SessionArchive(tmp_path)
+    assert a.read_in_progress() is None
+    assert a.in_progress_entry() is None
+
+
+def test_in_progress_round_trip(tmp_path):
+    a = SessionArchive(tmp_path)
+    payload = {
+        "session_start_ts": 1776840000,
+        "live_path": [[1.0, 2.0], [1.5, 2.5]],
+        "obstacles": [],
+        "leg_md5s": [],
+        "area_mowed_m2": 12.34,
+        "map_area_m2": 200,
+    }
+    a.write_in_progress(payload)
+    got = a.read_in_progress()
+    assert got["session_start_ts"] == 1776840000
+    assert got["live_path"] == [[1.0, 2.0], [1.5, 2.5]]
+    assert got["area_mowed_m2"] == 12.34
+    # Stamped automatically.
+    assert got["version"] == 1
+    assert got["last_update_ts"] >= got["session_start_ts"]
+
+
+def test_in_progress_entry_synthesizes_archived_session(tmp_path):
+    a = SessionArchive(tmp_path)
+    a.write_in_progress({
+        "session_start_ts": 1776840000,
+        "live_path": [[0.0, 0.0]],
+        "obstacles": [],
+        "leg_md5s": [],
+        "area_mowed_m2": 5.5,
+        "map_area_m2": 150,
+    })
+    entry = a.in_progress_entry()
+    assert entry is not None
+    assert entry.still_running is True
+    assert entry.start_ts == 1776840000
+    assert entry.end_ts >= entry.start_ts
+    assert entry.area_mowed_m2 == 5.5
+    assert entry.map_area_m2 == 150
+    assert entry.md5 == ""
+    assert entry.filename == IN_PROGRESS_NAME
+
+
+def test_in_progress_appears_at_top_of_list_sessions(tmp_path):
+    a = SessionArchive(tmp_path)
+
+    class S:
+        def __init__(self, md5, end_ts):
+            self.md5 = md5
+            self.end_ts = end_ts
+            self.start_ts = end_ts - 100
+            self.duration_min = 1
+            self.area_mowed_m2 = 1.0
+            self.map_area_m2 = 100
+            self.mode = 0
+            self.result = 0
+            self.stop_reason = 0
+            self.start_mode = 0
+            self.pre_type = 0
+            self.dock = None
+
+    a.archive(S("hash-a", 1776700000))
+    a.archive(S("hash-b", 1776800000))
+    a.write_in_progress({
+        "session_start_ts": 1776840000,
+        "live_path": [],
+        "obstacles": [],
+        "leg_md5s": [],
+        "area_mowed_m2": 0.0,
+        "map_area_m2": 0,
+    })
+
+    listed = a.list_sessions()
+    assert listed[0].still_running is True
+    assert listed[0].filename == IN_PROGRESS_NAME
+    assert [s.md5 for s in listed[1:]] == ["hash-b", "hash-a"]
+    # latest() prefers in-progress.
+    assert a.latest().still_running is True
+
+
+def test_in_progress_stale_is_auto_deleted(tmp_path):
+    a = SessionArchive(tmp_path)
+    # Write a payload with an obviously-ancient last_update_ts. The
+    # writer always restamps on write, so we craft the file directly.
+    path = tmp_path / IN_PROGRESS_NAME
+    ancient_ts = 0  # epoch zero — well past IN_PROGRESS_MAX_AGE_S
+    path.write_text(json.dumps({
+        "version": 1,
+        "session_start_ts": 0,
+        "last_update_ts": ancient_ts,
+        "live_path": [],
+        "obstacles": [],
+    }))
+    assert a.read_in_progress() is None
+    assert not path.exists()
+
+
+def test_delete_in_progress_is_idempotent(tmp_path):
+    a = SessionArchive(tmp_path)
+    a.delete_in_progress()  # no-op when absent
+    a.write_in_progress({
+        "session_start_ts": 1776840000,
+        "live_path": [],
+        "obstacles": [],
+    })
+    assert (tmp_path / IN_PROGRESS_NAME).exists()
+    a.delete_in_progress()
+    assert not (tmp_path / IN_PROGRESS_NAME).exists()
+    a.delete_in_progress()  # no-op again
+
+
+def test_promote_in_progress_archives_and_clears(tmp_path, summary, raw_json):
+    a = SessionArchive(tmp_path)
+    a.write_in_progress({
+        "session_start_ts": int(summary.start_ts) - 10,
+        "live_path": [],
+        "obstacles": [],
+    })
+    entry = a.promote_in_progress(summary, raw_json=raw_json)
+    assert entry is not None
+    assert a.has(summary.md5)
+    assert a.in_progress_entry() is None
+    assert not (tmp_path / IN_PROGRESS_NAME).exists()

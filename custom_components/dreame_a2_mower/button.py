@@ -95,6 +95,12 @@ async def async_setup_entry(
         for description in BUTTONS
         if description.exists_fn(description, coordinator.device)
     )
+    # Finalize-session button: forces a clean close of the in-progress
+    # entry when the cloud event window is missed (HA down through the
+    # actual end of mowing, mower offline at the moment of dock-up,
+    # etc). Always present so the user can reach for it whenever the
+    # picker shows a stuck "still running" entry that won't clear.
+    async_add_entities([DreameMowerFinalizeSessionButton(coordinator)])
 
     if coordinator.device.capability.shortcuts or coordinator.device.capability.backup_map:
         update_buttons = partial(async_update_buttons, coordinator, {}, {}, async_add_entities)
@@ -326,3 +332,69 @@ class DreameMowerMapButtonEntity(DreameMowerEntity, ButtonEntity):
             self.device.backup_map,
             self.device.get_map(self.map_index).map_id,
         )
+
+
+class DreameMowerFinalizeSessionButton(ButtonEntity):
+    """Manually close out an in-progress mow.
+
+    Used when the integration's auto-close (s2p56 says "no task" while
+    `_prev_session_active=True`) won't fire — typical case is the mower
+    being offline so s2p56 never recovers, leaving a "still running"
+    entry in the picker indefinitely. Pressing the button calls
+    `live_map.finalize_session()`, which:
+
+    - drops the in-progress aggregator file, and
+    - if no leg summary ever fired, synthesizes an "(incomplete)"
+      archive entry from the captured live path so the run still
+      shows up in the replay picker.
+
+    Available whenever an in-progress entry exists on disk; otherwise
+    greyed out.
+    """
+
+    _attr_icon = "mdi:stop-circle-outline"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_should_poll = False
+
+    def __init__(self, coordinator: DreameMowerDataUpdateCoordinator) -> None:
+        self._coordinator = coordinator
+        device = coordinator.device
+        info = getattr(device, "info", None)
+        self._attr_name = "Finalize Session"
+        self._attr_unique_id = f"{device.mac}_finalize_session"
+        from homeassistant.helpers.entity import DeviceInfo
+        from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
+        self._attr_device_info = DeviceInfo(
+            connections={(CONNECTION_NETWORK_MAC, device.mac)},
+            identifiers={(DOMAIN, device.mac)},
+            name=device.name,
+            manufacturer=getattr(info, "manufacturer", None),
+            model=getattr(info, "model", None),
+            sw_version=getattr(info, "firmware_version", None),
+            hw_version=getattr(info, "hardware_version", None),
+        )
+
+    @property
+    def available(self) -> bool:
+        archive = getattr(self._coordinator, "session_archive", None)
+        if archive is None:
+            return False
+        return archive.in_progress_entry() is not None
+
+    async def async_added_to_hass(self) -> None:
+        # Refresh availability when an in-progress entry appears or
+        # disappears (so the button enables/disables in real time).
+        self.async_on_remove(
+            self._coordinator.async_add_listener(self.async_write_ha_state)
+        )
+
+    async def async_press(self, **kwargs: Any) -> None:
+        live_map = getattr(self._coordinator, "live_map", None)
+        if live_map is None:
+            raise HomeAssistantError("Live map is not available on this device")
+        result = await self.hass.async_add_executor_job(live_map.finalize_session)
+        if result.get("result") == "no_in_progress":
+            raise HomeAssistantError("No in-progress session to finalize")
+        # Force the picker / camera to refresh now that the entry has
+        # vanished (or been promoted to an "(incomplete)" archive row).
+        await self._coordinator.async_request_refresh()
