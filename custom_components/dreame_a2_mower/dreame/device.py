@@ -695,6 +695,20 @@ class DreameMowerDevice:
                         message,
                     )
 
+    @property
+    def session_end_detected_at(self) -> float | None:
+        """Monotonic timestamp of the most recent `event_occured` that the
+        cloud fired at session end (`siid=4 eiid=1` on g2408). None until
+        the first end-of-session event arrives after HA boot. Cleared by
+        `_fetch_session_summary` on a successful fetch, so the presence of
+        a value here means "the cloud told us a session ended but we
+        haven't yet ingested its summary" — live_map's fallback-finalize
+        path reads this + `_pending_session_object_name` to decide when
+        to promote the captured live_path to an "(incomplete)" archive
+        entry instead of losing the run.
+        """
+        return getattr(self, "_session_end_detected_at", None)
+
     def _handle_event_occured(self, params) -> None:
         """Handle an `event_occured` MQTT message.
 
@@ -772,8 +786,35 @@ class DreameMowerDevice:
                 unix_ts,
                 {k: v for k, v in fields.items() if k not in (3, 8, 9, 14)},
             )
+            # Stamp session-end so live_map can fall back to captured
+            # telemetry if the OSS fetch never recovers (g2408 cloud
+            # is flaky around session-end with "device may be in deep
+            # sleep" errors). Only stamp for the documented end-of-
+            # session shape so other event_occured variants don't
+            # spuriously trigger fallback finalize.
+            if siid == 4 and eiid == 1:
+                import time as _time
+                self._session_end_detected_at = _time.monotonic()
+                _LOGGER.warning(
+                    "[EVENT] session-end event_occured siid=4 eiid=1 received; "
+                    "object_name=%r area=%s m² total_lawn=%s m² ts=%s "
+                    "fields=%s",
+                    object_name,
+                    None if area_centiares is None else area_centiares / 100.0,
+                    total_lawn_m2,
+                    unix_ts,
+                    {k: v for k, v in fields.items()},
+                )
             if isinstance(object_name, str) and object_name:
                 self._fetch_session_summary(object_name)
+            elif siid == 4 and eiid == 1:
+                _LOGGER.warning(
+                    "[EVENT] session-end event_occured had no object_name "
+                    "(piid=9 was %r) — OSS session-summary download cannot "
+                    "be attempted; live_map fallback will save captured "
+                    "telemetry as (incomplete) archive entry.",
+                    object_name,
+                )
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("_handle_event_occured parse failed: %s", ex)
 
@@ -827,7 +868,11 @@ class DreameMowerDevice:
             self._latest_session_summary = summary
             self._latest_session_raw = data
             self._pending_session_object_name = None
-            _LOGGER.info(
+            # OSS download succeeded — clear the session-end fallback
+            # flag so live_map doesn't synthesize an "(incomplete)"
+            # entry in addition to the cloud-authoritative one.
+            self._session_end_detected_at = None
+            _LOGGER.warning(
                 "[EVENT] session-summary fetched: %.1f/%d m² mowed in %d min; "
                 "%d boundary pts, %d track segments, %d obstacles, %d exclusions",
                 summary.area_mowed_m2,

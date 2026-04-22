@@ -844,6 +844,42 @@ class DreameA2LiveMap:
                 )
             self._inactive_since = None
 
+        # Session-end fallback: when the device fires the cloud
+        # event_occured (siid=4 eiid=1) we know the run has ended,
+        # but the OSS session-summary download can fail silently
+        # (g2408 cloud's "device may be in deep sleep" warnings around
+        # session-end are a known pain point). Without this fallback
+        # the captured live_path data is lost — picker keeps showing
+        # "still mowing" until the user presses Finalize Session.
+        # Wait 90 s after the event so transient cloud retries have a
+        # chance to land the OSS payload first; if `_pending_session_
+        # object_name` is still set after that, promote the captured
+        # telemetry to an "(incomplete)" archive entry instead.
+        end_at = getattr(device, "session_end_detected_at", None)
+        if (
+            end_at is not None
+            and self._have_active_in_progress
+            and getattr(device, "_pending_session_object_name", None)
+        ):
+            import time as _time
+            elapsed = _time.monotonic() - end_at
+            if elapsed >= 90.0:
+                _LOGGER.warning(
+                    "live_map: session-end event fired %.0fs ago but OSS "
+                    "summary fetch never landed (object_name still pending) "
+                    "— falling back to captured telemetry, finalizing as "
+                    "(incomplete) archive entry",
+                    elapsed,
+                )
+                self.finalize_session()
+                # Stop retrying the doomed download — we've used the
+                # captured telemetry instead.
+                try:
+                    device._session_end_detected_at = None
+                    device._pending_session_object_name = None
+                except AttributeError:
+                    pass
+
         # Session-boundary wipe: only clear the LATEST overlay when a
         # new session starts. In SESSION/BLANK mode this still resets
         # the accumulator so the buffered live path matches the new
