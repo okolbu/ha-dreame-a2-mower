@@ -135,14 +135,17 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
 
         super().__init__(hass, LOGGER, name=DOMAIN)
 
-        from .live_map import DreameA2LiveMap
-        self.live_map = DreameA2LiveMap(hass, entry, self)
-        self.live_map.async_setup()
-
         # Persistent archive of every session-summary JSON the mower uploads.
         # Lives alongside HA's config dir under `dreame_a2_mower/sessions/`.
         # The coordinator polls `device.latest_session_summary` on every
         # update tick and writes new (unseen md5) summaries through.
+        #
+        # Created BEFORE live_map because live_map's _restore_in_progress
+        # (called from DreameA2LiveMap.__init__) reads session_archive off
+        # this coordinator to hydrate the in_progress.json on boot. If
+        # the order is swapped, `getattr(coordinator, "session_archive",
+        # None)` returns None inside _restore_in_progress and the
+        # restore silently no-ops, losing the saved path data.
         from pathlib import Path
         from .session_archive import SessionArchive
 
@@ -163,6 +166,10 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
         self._last_archived_md5: str | None = (
             self.session_archive.latest().md5 if self.session_archive and self.session_archive.latest() else None
         )
+
+        from .live_map import DreameA2LiveMap
+        self.live_map = DreameA2LiveMap(hass, entry, self)
+        self.live_map.async_setup()
 
         # LiDAR scan archive. Lives next to the session archive under
         # `<ha_config>/dreame_a2_mower/lidar/`. Each downloaded PCD blob
