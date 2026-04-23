@@ -48,6 +48,11 @@ def test_mowing_telemetry_is_serialized_to_dict():
         total_area_m2=327.0,
         area_mowed_m2=293.58,
         heading_deg=180.0,
+        region_id=1,
+        task_id=2,
+        percent=50.0,
+        total_uint24_m2=327.0,
+        finish_uint24_m2=293.58,
     )
     serialized = _jsonable({"value": t})
     assert isinstance(serialized["value"], dict)
@@ -65,7 +70,7 @@ def test_position_beacon_is_serialized_to_dict():
 
 
 def test_nested_dataclass_inside_list_is_converted():
-    t = MowingTelemetry(1, 2, 3, Phase.MOWING, 0, 0.0, 0.0, 0.0, 0.0)
+    t = MowingTelemetry(1, 2, 3, Phase.MOWING, 0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0.0, 0.0, 0.0)
     serialized = _jsonable({"value": [t, {"nested": t}]})
     assert serialized["value"][0]["x_cm"] == 1
     assert serialized["value"][1]["nested"]["x_cm"] == 1

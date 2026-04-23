@@ -241,3 +241,45 @@ def test_decode_s1p4_position_rejects_9_byte_frame():
     # Defensive: 9 bytes is not a recognized variant.
     with pytest.raises(InvalidS1P4Frame):
         decode_s1p4_position(bytes([0xCE] + [0] * 7 + [0xCE]))
+
+
+# --- task struct (bytes [22-31]) tests --------------------------------
+# Per apk parseRobotTask, frame bytes [22-31] hold regionId / taskId /
+# percent / total_uint24_m² / finish_uint24_m². The uint24 area reads
+# overlap the low 16 bits of the legacy uint16 reads (which truncate
+# above 655.35 m²).
+
+
+def test_decode_s1p4_task_struct_zero_frame():
+    """All-zero frame: every task field is 0."""
+    frame = bytes([0xCE] + [0] * 31 + [0xCE])
+    telem = decode_s1p4(frame)
+    assert telem.region_id == 0
+    assert telem.task_id == 0
+    assert telem.percent == 0.0
+    assert telem.total_uint24_m2 == 0.0
+    assert telem.finish_uint24_m2 == 0.0
+
+
+def test_decode_s1p4_task_struct_uint24_overflows_uint16():
+    """If total_uint24 > 65535 cm² (655.35 m²), the legacy uint16
+    read truncates; the new uint24 read survives. Pin the behavior."""
+    frame = bytearray([0xCE] + [0] * 31 + [0xCE])
+    # Set bytes [26-28] to 0x000100 little-endian → 65536 cent
+    # → 655.36 m². Just above uint16 max.
+    frame[26] = 0x00
+    frame[27] = 0x00
+    frame[28] = 0x01
+    telem = decode_s1p4(bytes(frame))
+    assert telem.total_uint24_m2 == 655.36
+    # Legacy field would read bytes [26-27] = 0 → reports 0.
+    assert telem.total_area_m2 == 0.0
+
+
+def test_decode_s1p4_task_percent_division():
+    """percent = bytes[24-25] / 100. Test 5000 raw → 50.00 %."""
+    frame = bytearray([0xCE] + [0] * 31 + [0xCE])
+    frame[24] = 0x88
+    frame[25] = 0x13
+    telem = decode_s1p4(bytes(frame))
+    assert telem.percent == 50.0

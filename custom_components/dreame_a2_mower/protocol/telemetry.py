@@ -73,6 +73,17 @@ class MowingTelemetry:
     total_area_m2: float
     area_mowed_m2: float
     heading_deg: float
+    # Task struct from frame bytes [22-31] per apk parseRobotTask.
+    # On g2408 these fields may overlap with our current
+    # distance_deci / total_area_cent / area_mowed_cent reads —
+    # both interpretations are computed in decode_s1p4 and the
+    # caller can pick whichever the field-validation effort
+    # (Task 4) blesses.
+    region_id: int
+    task_id: int
+    percent: float       # 0..100 mowing progress
+    total_uint24_m2: float
+    finish_uint24_m2: float
 
     @property
     def x_m(self) -> float:
@@ -102,6 +113,11 @@ class PositionBeacon:
     @property
     def y_m(self) -> float:
         return self.y_mm / 1000.0
+
+
+def _read_uint24_le(buf: bytes, offset: int) -> int:
+    """Read a little-endian unsigned 24-bit integer from `buf` at `offset`."""
+    return buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16)
 
 
 def decode_s1p4_position(data: bytes) -> PositionBeacon:
@@ -162,6 +178,25 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
     distance_deci = struct.unpack_from("<H", data, 24)[0]
     total_area_cent = struct.unpack_from("<H", data, 26)[0]
     area_mowed_cent = struct.unpack_from("<H", data, 29)[0]
+    # apk parseRobotTask: payload bytes [22-31] of the frame.
+    # Interpreted as a 10-byte sub-struct starting at frame[22]:
+    #   [22] regionId (uint8)
+    #   [23] taskId (uint8)
+    #   [24-25] percent ÷ 100 → %
+    #   [26-28] total m² × 100 (uint24_le)
+    #   [29-31] finish m² × 100 (uint24_le)
+    # NOTE: bytes [24-25] overlap with `distance_deci` above, and bytes
+    # [26-27] / [29-30] overlap with `total_area_cent` / `area_mowed_cent`.
+    # The legacy reads are LEFT IN PLACE; both interpretations are exposed
+    # so downstream code can pick whichever the field-validation effort
+    # (Task 4) blesses. Lawns > 655 m² truncate under the uint16 reads but
+    # survive under the uint24 reads.
+    region_id = data[22]
+    task_id = data[23]
+    percent_raw = struct.unpack_from("<H", data, 24)[0]
+    percent = percent_raw / 100.0
+    total_u24_cent = _read_uint24_le(data, 26)
+    finish_u24_cent = _read_uint24_le(data, 29)
     return MowingTelemetry(
         x_cm=x_cm,
         y_mm=y_mm,
@@ -172,4 +207,9 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
         total_area_m2=total_area_cent / 100.0,
         area_mowed_m2=area_mowed_cent / 100.0,
         heading_deg=heading_deg,
+        region_id=region_id,
+        task_id=task_id,
+        percent=percent,
+        total_uint24_m2=total_u24_cent / 100.0,
+        finish_uint24_m2=finish_u24_cent / 100.0,
     )
