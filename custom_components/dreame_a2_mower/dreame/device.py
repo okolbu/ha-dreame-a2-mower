@@ -5736,8 +5736,21 @@ class DreameMowerDevice:
         """
         from ..protocol.cfg_action import get_cfg, CfgActionError
 
-        if self._protocol is None or not getattr(self._protocol, "connected", False):
-            _LOGGER.warning("refresh_cfg: protocol not connected, skipping")
+        if self._protocol is None:
+            _LOGGER.warning("refresh_cfg: no protocol, skipping")
+            return False
+        # Don't gate on `protocol.connected` here — that flag is False
+        # inside _connected_callback because the wrapper sets it AFTER
+        # the callback returns. Check cloud-readiness directly: the
+        # action call goes through `cloud.send` which only needs the
+        # cloud client to be logged in.
+        cloud = getattr(self._protocol, "cloud", None)
+        if cloud is None or not getattr(cloud, "logged_in", False):
+            _LOGGER.warning(
+                "refresh_cfg: cloud not logged in (cloud=%r, logged_in=%r); skipping",
+                cloud is not None,
+                getattr(cloud, "logged_in", None),
+            )
             return False
         _LOGGER.warning("refresh_cfg: calling get_cfg via routed action siid=2 aiid=50")
         try:
