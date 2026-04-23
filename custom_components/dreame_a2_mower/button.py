@@ -27,6 +27,15 @@ from .coordinator import DreameMowerDataUpdateCoordinator
 from .entity import DreameMowerEntity, DreameMowerEntityDescription
 from .dreame import DreameMowerAction
 
+# Action opcodes for the routed action endpoint (siid:2 aiid:50, m:'a').
+# Sourced from apk.md §"Actions". Numbers stay verbatim rather than
+# aliased to enums — the apk-side names are the canonical reference.
+_OP_FIND_BOT = 9
+_OP_LOCK_BOT = 12
+_OP_SUPPRESS_FAULT = 11
+_OP_TAKE_PIC = 401
+_OP_CUTTER_BIAS = 503
+
 
 @dataclass
 class DreameMowerButtonEntityDescription(DreameMowerEntityDescription, ButtonEntityDescription):
@@ -80,6 +89,41 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
     # Removed vacuum-only consumable-reset buttons (Cleanup Phase 1,
     # v2.0.0-alpha.32): RESET_SILVER_ION, RESET_LENSBRUSH,
     # RESET_SQUEEGEE. A2 has none of these consumables.
+    DreameMowerButtonEntityDescription(
+        key="find_bot",
+        name="Find Mower",
+        icon="mdi:bell-ring",
+        action_fn=lambda device: device.call_action_opcode(_OP_FIND_BOT),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerButtonEntityDescription(
+        key="lock_bot",
+        name="Lock Mower",
+        icon="mdi:lock",
+        action_fn=lambda device: device.call_action_opcode(_OP_LOCK_BOT),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerButtonEntityDescription(
+        key="suppress_fault",
+        name="Clear Warning",
+        icon="mdi:alert-octagon-outline",
+        action_fn=lambda device: device.call_action_opcode(_OP_SUPPRESS_FAULT),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerButtonEntityDescription(
+        key="take_pic",
+        name="Take Picture",
+        icon="mdi:camera",
+        action_fn=lambda device: device.call_action_opcode(_OP_TAKE_PIC),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerButtonEntityDescription(
+        key="cutter_bias",
+        name="Calibrate Blade",
+        icon="mdi:tune-vertical",
+        action_fn=lambda device: device.call_action_opcode(_OP_CUTTER_BIAS),
+        exists_fn=lambda description, device: True,
+    ),
 )
 
 

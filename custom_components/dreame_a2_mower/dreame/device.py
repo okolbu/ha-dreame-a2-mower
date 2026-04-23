@@ -5762,6 +5762,25 @@ class DreameMowerDevice:
         _LOGGER.warning("[DOCK] %s", self._dock_pos)
         return True
 
+    def call_action_opcode(self, op: int, extra: dict | None = None) -> bool:
+        """Invoke a routed action opcode via siid:2 aiid:50. See
+        protocol/cfg_action.py and apk.md for the opcode catalog
+        (9 findBot, 11 suppressFault, 12 lockBot, 100 globalMower,
+        101 edgeMower, 102 zoneMower, 110 startLearningMap,
+        401 takePic, 503 cutterBias, ...). Synchronous; call from
+        an executor."""
+        from ..protocol.cfg_action import call_action_op
+
+        if self._protocol is None or not getattr(self._protocol, "connected", False):
+            _LOGGER.warning("call_action_opcode: protocol not connected")
+            return False
+        try:
+            call_action_op(self._protocol.action, op, extra)
+        except Exception as ex:
+            _LOGGER.warning("call_action_opcode(%d): %s", op, ex)
+            return False
+        return True
+
     @property
     def heartbeat(self):
         """Return the most recently decoded s1p1 heartbeat (Heartbeat or None)."""
