@@ -264,6 +264,74 @@ fresh data, leg-merge absorbs it, auto-finalize promotes the
 in-progress entry to a completed archive, and the picker shows
 the new entry without manual intervention.
 
+## ioBroker.dreame cross-reference — major new RE (2026-04-23)
+
+Cloned `https://github.com/TA2k/ioBroker.dreame` includes a full
+APK decompilation (`apk.md`) of the Dreame Smart Life app + React
+Native mower plugin. Targets g2568a firmware so binary-frame
+findings need g2408 cross-validation, but the action-routing /
+config schema is shared across mowers.
+
+**Full cross-reference**:
+`docs/research/2026-04-23-iobroker-dreame-cross-reference.md`
+
+Highlights:
+- **Settings via action call** — `siid:2 aiid:50` with
+  `{m:'g', t:'CFG'}` returns ALL settings including the PRE
+  array (cutting height, mow mode, edge mowing) we previously
+  thought BT-only. Setter is `{m:'s', t:'PRE', d:{value: array}}`.
+  Entire "BT-only inventory" turns out to be MQTT-accessible.
+- **PRE schema verified**: `[zone, mode, height_mm, obstacle_mm,
+  coverage%, direction_change, adaptive, ?, edge_detection,
+  auto_edge]`.
+- **s1p4 pose decoder differs** — apk says 12-bit packed across
+  bytes 1-6 (3 packed values: x24, y24, angle8). We decode as
+  int16_le. Likely "lucky" for small lawns but diverges beyond
+  ±32 m. Plus: we're missing the angle byte (mower heading).
+- **s1p4 task struct differs** — apk says bytes 22-31 hold
+  `{regionId, taskId, percent, total, finish}` with uint24
+  area fields. We treat as uint16+static — same low-2-bytes
+  truncation issue.
+- **Key piid corrections**: `s2p2` is *error code*, not state;
+  `s1p51`/`s2p52` are *re-fetch triggers*, not session
+  boundary markers. Our s1p52+s2p52 "session-end pair"
+  hypothesis needs revisit.
+- **More s1p4 frame lengths** — apk lists 7/10/13/22/33/44 byte
+  variants. We handle 8/10/33.
+- **NEW userData key**: `M_PATH.*` is a separate cloud blob
+  with the full mowing path coordinates (sentinel
+  `[32767, -32768]` = path break). Could hydrate trail layer
+  on boot when in_progress is empty.
+- **Many new actions / settings** — headlight (LIT 7-element),
+  GPS (LOCN), cruise points, blade calibration (cutterBias),
+  Find My Mower (findBot), suppressFault, etc.
+
+### Prioritized action items (extracted from cross-ref doc)
+
+**Immediate**:
+1. Implement `getCFG` action call at coordinator init →
+   read-only sensors for all settings.
+2. Cross-validate pose decoder (apk 12-bit packed vs our
+   int16_le) — write a side-by-side test with captured frames.
+3. Update protocol doc §4.7 — s1p51 + s2p52 are NOT session
+   markers (they're re-fetch triggers).
+4. Re-examine s2p1 / s2p2 interpretations against apk's
+   "1=Status, 2=Error".
+
+**Medium-term**:
+5. Number/Switch entities for PRE settings (cutting height,
+   mow mode, edge mowing, etc).
+6. Headlight entity group (LIT).
+7. Wear-meter sensors via CMS.
+8. Decode s1p4 task fields (regionId, taskId, percent).
+9. `getDockPos` action call → dock-connection status sensor.
+
+**Long-term**:
+10. Pose decoder cross-check on lawn >32 m.
+11. M_PATH userData fetch as alternate path source.
+12. Map remaining piid handlers (53, 57, 58, 61).
+13. cutterBias / suppressFault button entities.
+
 ## s1p4 phase byte semantics — protocol doc is wrong
 
 Field-captured 2026-04-22 across 4 probe logs shows the s1p4
