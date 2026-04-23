@@ -5690,6 +5690,45 @@ class DreameMowerDevice:
         )
         return True
 
+    def write_pre(self, index: int, value: int) -> bool:
+        """Read the current PRE array, replace one slot, and write the
+        updated array back via setPRE. Returns True on success.
+
+        `index` must be a valid PRE slot (0..9). Caller is responsible
+        for value validation (range, enum membership).
+        """
+        from ..protocol.cfg_action import set_pre, CfgActionError
+
+        if self._protocol is None or not getattr(self._protocol, "connected", False):
+            _LOGGER.warning("write_pre: protocol not connected")
+            return False
+        # Always read the freshest PRE before modifying — the cache may
+        # be seconds out of date if the user just toggled something via
+        # the app.
+        if not self.refresh_cfg():
+            _LOGGER.warning("write_pre: refresh_cfg failed; aborting")
+            return False
+        pre = self._cfg.get("PRE")
+        if not isinstance(pre, list) or len(pre) < 10:
+            _LOGGER.warning("write_pre: no PRE array in cfg")
+            return False
+        if not 0 <= index < len(pre):
+            _LOGGER.warning("write_pre: index %d out of range", index)
+            return False
+        new_pre = list(pre)
+        new_pre[index] = value
+        try:
+            set_pre(self._protocol.action, new_pre)
+        except (CfgActionError, ValueError) as ex:
+            _LOGGER.warning("write_pre: set_pre failed: %s", ex)
+            return False
+        # Update local cache immediately so the entity reflects the
+        # change without waiting for the next s2p52 push.
+        self._cfg = dict(self._cfg)
+        self._cfg["PRE"] = new_pre
+        _LOGGER.warning("write_pre: PRE[%d] = %r -> %r", index, pre[index], value)
+        return True
+
     @property
     def heartbeat(self):
         """Return the most recently decoded s1p1 heartbeat (Heartbeat or None)."""

@@ -46,6 +46,60 @@ NUMBERS: tuple[DreameMowerNumberEntityDescription, ...] = (
         entity_category=EntityCategory.CONFIG,
         post_action=DreameMowerAction.TEST_SOUND,
     ),
+    DreameMowerNumberEntityDescription(
+        key="set_cutting_height",
+        icon="mdi:scissors-cutting",
+        mode=NumberMode.SLIDER,
+        native_min_value=30,
+        native_max_value=70,
+        native_step=5,
+        native_unit_of_measurement="mm",
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda value, device: (
+            device.cfg.get("PRE", [None] * 10)[2]
+            if isinstance(device.cfg.get("PRE"), list)
+            and len(device.cfg.get("PRE", [])) >= 10
+            else None
+        ),
+        set_fn=lambda device, value: device.write_pre(2, int(value)),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerNumberEntityDescription(
+        key="set_obstacle_distance",
+        icon="mdi:ruler",
+        mode=NumberMode.SLIDER,
+        native_min_value=10,
+        native_max_value=20,
+        native_step=5,
+        native_unit_of_measurement="cm",
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda value, device: (
+            device.cfg.get("PRE", [None] * 10)[3]
+            if isinstance(device.cfg.get("PRE"), list)
+            and len(device.cfg.get("PRE", [])) >= 10
+            else None
+        ),
+        set_fn=lambda device, value: device.write_pre(3, int(value)),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerNumberEntityDescription(
+        key="set_mow_coverage",
+        icon="mdi:percent",
+        mode=NumberMode.SLIDER,
+        native_min_value=50,
+        native_max_value=100,
+        native_step=10,
+        native_unit_of_measurement="%",
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda value, device: (
+            device.cfg.get("PRE", [None] * 10)[4]
+            if isinstance(device.cfg.get("PRE"), list)
+            and len(device.cfg.get("PRE", [])) >= 10
+            else None
+        ),
+        set_fn=lambda device, value: device.write_pre(4, int(value)),
+        exists_fn=lambda description, device: True,
+    ),
 )
 
 
