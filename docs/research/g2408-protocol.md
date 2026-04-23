@@ -102,8 +102,8 @@ Siid/piid combinations observed on g2408. All properties arrive as JSON-encoded
 | 1.51 | — | `{}` | Empty dict at session boundaries |
 | 1.52 | — | `{}` | Empty dict at session boundaries |
 | 1.53 | `OBSTACLE_FLAG` | bool | Obstacle / person detected near mower (§5) |
-| 2.1 | (misc mode byte) | `{1, 2, 5}` | **Not STATE** — small enum, semantic TBD |
-| 2.2 | `STATE` (g2408) | `{27, 48, 50, 54, 70, ...}` | Mower state machine (§4) |
+| 2.1 | **Status enum** (g2408) — `1=Working/Mowing, 2=Standby, 3=Paused, 5=Returning, 6=Charging, 11=Mapping, 13=Charged, 14=Updating` per apk decompilation. **Correction:** previously hypothesized as `{1, 2, 5}` mystery enum; apk reveals the full mapping. | small enum mapping |
+| 2.2 | **Error code** per apk decompilation (NOT a state machine — the previous "STATE values {27, 43, 48, ...}" reading was wrong). Values map to fault indices catalogued in apk §FaultIndex (e.g. 0=HANGING, 24=BATTERY_LOW, 27=HUMAN_DETECTED, 56=BAD_WEATHER, 73=TOP_COVER_OPEN). | error code |
 | 2.50 | TASK envelope — multiple operation classes | shape varies by `d.o` | Session start (mowing): flat fields `{area_id, exe, o:100, region_id:[1], time, t:'TASK'}`. **Map-edit** (zone / exclusion-zone add/edit/delete): wrapped `{d:{exe, o, status, ...}, t:'TASK'}` with a pair of pushes per edit — request `o:204` then confirm `o:215` carrying `id` (edit-txn #), `ids` (affected zone ids), `error`. See §4.6. |
 | 2.51 | `MULTIPLEXED_CONFIG` | shape varies | App "More Settings" writes (§6) |
 | 2.56 | Cloud status push | `{status}` | Internal ack |
@@ -357,6 +357,13 @@ v2.0.0-alpha.7 each novel short-frame length also logs the raw bytes once at
 WARNING (`[PROTOCOL_NOVEL] s1p4 short frame len=…`) so contributors capturing
 future variants can see the undecoded bytes without running a separate probe
 script.
+
+**Other variants observed by apk decompilation (g2568a)**: 7, 13,
+22, 44 byte lengths exist on other mower models. We've only
+observed 8 / 10 / 33 on g2408. If a future capture surfaces a
+new length, the integration emits a one-shot `[PROTOCOL_NOVEL]
+s1p4 short frame len=N` warning with the raw bytes — see
+§7 PROTOCOL_NOVEL catalog.
 
 ### 3.3 `s1p4` — 10-byte BUILDING variant
 
@@ -744,19 +751,25 @@ session-START half (s1p50 + s1p51) and the session-END half
 | Slot | Role | Observed triggers |
 |---|---|---|
 | `s1p50` | "something changed, consider re-fetching" ping | Session start (paired with s1p51), BUILDING save (multiple pulses), zone/exclusion edit (paired with `s2p50 o=215`), maintenance-point save (two pulses, 1 s apart, no other context) |
-| `s1p51` | "new session — subscribe to fresh telemetry" | Always co-arrives with `s1p50` within the same second at session start / resume. Never fires standalone. |
+| `s1p51` | **Dock-position-update trigger** (apk decompilation) — fires when the dock pose changes; consumer should re-fetch via the routed `getDockPos` action (see §6.x). **Correction:** previously hypothesized as a session-start companion to `s1p50` based on observed co-occurrence at session-start. Co-occurrence is real (the firmware fires both within the same second when a mowing run begins) but the apk specifies `s1p51`'s primary semantic is dock-pose change. |
 | `s1p52` | "task ended — flush / commit" | Session complete (`s2p2 = 48`). Observed at natural end (12:33:09 on 2026-04-20) and user-cancel (18:06:19). Doesn't fire at BUILDING end. Also fires immediately before the cloud `event_occured siid=4 eiid=1` session-summary push (2026-04-22 16:35:17). |
-| `s2p52` | "cloud-side session-completion ping" — paired with `s1p52` | Co-fires with `s1p52` ~250 ms later at session end (2026-04-22 16:35:17.786 → 16:35:18.031). Hypothesis: `s1p52` is the firmware-side flush, `s2p52` is the cloud-mirrored "summary now available" notification. Together they mirror the `s1p50` + `s1p51` pair at session start. |
+| `s2p52` | **Mowing-preference-update trigger** (apk decompilation) — fires when PRE settings change; consumer should re-fetch via the routed `getCFG` action (see §6.x). **Correction:** previously hypothesized as a session-end companion to `s1p52` based on observed co-occurrence at session end (16:35:17.786 → 18.031). Per apk, the semantic is preference-change, not session-end. The earlier hypothesis predicting "s1p52 + s2p52 together bracket session ends" no longer holds; the firmware just happens to fire `s2p52` at session end because it's also re-emitting prefs as part of session teardown. |
 
 Practical implication: treat a standalone `s1p50` (no `s1p51`, no `s2p50`) as
 a "something edited server-side" signal and re-fetch whatever you cache from
 the cloud — in the integration's case, the MAP.* dataset. See §7.1.
 
-The `s1p52` + `s2p52` pair is the earliest *predictive* signal that the
-cloud's session-summary OSS object will appear shortly thereafter — the
-actual `event_occured siid=4 eiid=1` push for g2408 fires ~4 s later
-(see §7.4 below). Subscribers wanting the lowest-latency end-of-session
-signal can pre-arm on the empty-dict pair.
+**Note (2026-04-23 correction)**: an earlier hypothesis claimed
+`s1p52 + s2p52` together bracket session ends, mirroring
+`s1p50 + s1p51` at session start. The apk decompilation refutes
+this — `s1p51` is a dock-update trigger and `s2p52` is a
+preference-change trigger. The actual "session ended" signal
+is the cloud `event_occured siid=4 eiid=1` push (§7.4) plus
+the area-counter delta discriminator for blades-up/down (§3.1
+"Detecting blades-down"). The apparent co-occurrence at session
+boundaries is a side effect of firmware bookkeeping (re-emitting
+prefs and dock pose when a session changes phase), not a
+dedicated session-boundary signal.
 
 ### 4.8 Positioning-failed recovery via SLAM relocate
 
@@ -878,6 +891,61 @@ settings chosen by the app code itself; the user has no control over which
 transport is used. For the HA integration this means **entities for BT-only
 settings cannot exist** — users must be told explicitly in the README which
 settings will be missing.
+
+## 6.2 Routed action endpoint (siid:2 aiid:50)
+
+Per apk decompilation, the Dreame mower exposes most of its
+configuration + control surface through a single MIoT action
+call:
+
+```
+action {
+  siid: 2,
+  aiid: 50,
+  in: [{ m: 'g'|'s'|'a'|'r', t: <target>, d: <optional payload> }]
+}
+```
+
+`m` is the mode (`g`et / `s`et / `a`ction / `r`emote-control) and
+`t` is the target. Result lands at `result.out[0]`. The
+integration's `protocol/cfg_action.py` provides typed wrappers
+(`get_cfg`, `get_dock_pos`, `set_pre`, `call_action_op`).
+
+Most useful targets:
+
+| `m` `t` | Returns | Used in |
+|---|---|---|
+| `g CFG` | All settings dict (WRP, DND, BAT, CLS, VOL, LIT, AOP, REC, STUN, ATA, PATH, WRF, PROT, CMS, PRE) | `device.refresh_cfg` |
+| `g DOCK` | `{x, y, yaw, connect_status, path_connect, in_region}` | `device.refresh_dock_pos` |
+| `s PRE` | Write 10-element preferences array (read-modify-write) | `device.write_pre` |
+| `a` `o:OP` | Action opcode (100 globalMower, 101 edgeMower, 9 findBot, 11 suppressFault, 12 lockBot, 401 takePic, 503 cutterBias …) | `device.call_action_opcode` |
+
+The full opcode catalog and CFG-key schemas live in the apk
+cross-reference: `docs/research/2026-04-23-iobroker-dreame-cross-reference.md`.
+
+### PRE schema
+
+`PRE = [zone, mode, height_mm, obstacle_mm, coverage%, direction_change, adaptive, ?, edge_detection, auto_edge]`
+
+- PRE[0]: zone id
+- PRE[1]: mode (0=Standard, 1=Efficient)
+- PRE[2]: cutting height in mm
+- PRE[3]: obstacle distance in mm
+- PRE[4]: coverage %
+- PRE[5]: direction change (0=auto, 1=off)
+- PRE[6]: adaptive (semantic TBD)
+- PRE[7]: unknown (possibly EdgeMaster or Safe Edge Mowing)
+- PRE[8]: edge detection (0=off, 1=on)
+- PRE[9]: edge mowing / auto-edge (0=off, 1=on)
+
+### Empirical validation (Task 4 fixture)
+
+`tests/protocol/fixtures/captured_s1p4_frames.json` records the
+decoded uint24 task struct (region=1, task=3, percent=48.47%,
+total=339 m², finish=164.31 m²) for a documented mid-session
+capture. The total/finish values match the user's app reading
+exactly, validating the apk's task-struct interpretation on
+g2408.
 
 ---
 
