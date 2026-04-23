@@ -973,7 +973,7 @@ Recorded 2026-04-23, firmware `dreame.mower.g2408` (`_host=10000.mt.eu.iot.dream
 
 | Key | Shape / sample | Semantic (confirmed or best-guess) |
 |---|---|---|
-| `AOP` | `int=1` | scalar flag — Auto-Operation? (TBD) |
+| `AOP` | `int=1` | "Auto Operation" — best-guess config flag for whether scheduled mowing is honored (1=schedule active, 0=manual-only). Alternative: per-session manual-vs-scheduled flag (less likely since CFG is persistent and per-session info lives in `s2p2` enum like `SESSION_STARTING_SCHEDULED`). Disambiguate by toggling the app's schedule and watching `AOP` in the next CFG refetch. |
 | `ATA` | `list(3) [0,0,0]` | Auto-task-adjust (apk-catalogued) |
 | `BAT` | `list(6) [15, 95, 1, 0, 1080, 480]` | Charging schedule: `[min_pct, max_pct, enabled, custom, start_min, end_min]` = `[15%, 95%, on, off, 18:00, 08:00]` |
 | `BP` | `list(2) [1, 3]` | TBD (same shape as WRP) |
