@@ -982,7 +982,7 @@ Recorded 2026-04-23, firmware `dreame.mower.g2408` (`_host=10000.mt.eu.iot.dream
 | `DLS` | `int=0` | Daylight-savings? (TBD) |
 | `DND` | `list(3) [enabled, start_min, end_min]` | Do-not-disturb (apk-catalogued). Sample `[0, 21:00, 07:00]` = off. |
 | `FDP` | `int=1` | Fault-display / fallback-DP? (TBD) |
-| `LANG` | `list(2) [lang_id, variant]` | Language preference (`[2, 0]` = Norwegian on sample mower) |
+| `LANG` | `list(2) [lang_id, variant]` | Voice pack language + variant. Sample `[2, 0]` corresponds to the **first entry in the app's Voice→Language list (English)** — so the language IDs are firmware-specific ordinals, NOT ISO codes or alphabetical. Prior guess (Norwegian-by-timezone) was wrong. LANG[1]=0 likely a dialect/variant flag. Needs a mapping table of firmware-ids-to-names, obtainable by cycling through the app's language list and capturing each LANG value. |
 | `LIT` | `list(8) [enabled, start_min, end_min, l1, l2, l3, l4, reserved]` | Headlight (apk had 7; g2408 has 8 — extra byte likely reserved). |
 | `LOW` | `list(3) [enabled, start_min, end_min]` | Low-speed night mode. Same shape as DND. |
 | `MSG_ALERT` | `list(4) [anomaly, error, task, consumable]` | App's Notifications screen toggles. Sample `[1,1,1,1]` = all four enabled. Confirmed 2026-04-23 by user toggling correlation. |
@@ -993,7 +993,7 @@ Recorded 2026-04-23, firmware `dreame.mower.g2408` (`_host=10000.mt.eu.iot.dream
 | `STUN` | `int` | Anti-theft (0=off, 1=on) |
 | `TIME` | `str` | Timezone IANA name, e.g. `'Europe/Oslo'`. Exposed as `mower_timezone` sensor. |
 | `VER` | `int=141` | Config / firmware version. Note: distinct from the `550` in `Firmware Version` entity (different cloud fields). |
-| `VOICE` | `list(4) [1,1,1,1]` | 4 voice-pack toggles (TBD) |
+| `VOICE` | `list(4) [regular_notif, work_status, special_status, error_status]` | App's Voice screen 4 toggles. Sample `[1,1,1,1]` = all on. Confirmed 2026-04-23 by user correlation. |
 | `VOL` | `int` | Volume % (0..100) |
 | `WRF` | `int` | Weather reference (0=off, 1=on) |
 | `WRP` | `list(2) [1, 3]` | TBD (apk-catalogued but no schema) |
