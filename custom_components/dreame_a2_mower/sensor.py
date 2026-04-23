@@ -623,6 +623,46 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         value_fn=lambda value, device: _wear_health(device.cfg.get("CMS"), 2, 3600),
         exists_fn=lambda description, device: True,
     ),
+    DreameMowerSensorEntityDescription(
+        key="dock_x_cm",
+        icon="mdi:home-import-outline",
+        native_unit_of_measurement="cm",
+        value_fn=lambda value, device: (
+            device.dock_pos.get("x") if isinstance(device.dock_pos, dict) else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="dock_y_cm",
+        icon="mdi:home-import-outline",
+        native_unit_of_measurement="cm",
+        value_fn=lambda value, device: (
+            device.dock_pos.get("y") if isinstance(device.dock_pos, dict) else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="dock_yaw_deg",
+        icon="mdi:compass",
+        native_unit_of_measurement="°",
+        # apk says yaw / 10 -> degrees
+        value_fn=lambda value, device: (
+            (device.dock_pos.get("yaw", 0) / 10.0)
+            if isinstance(device.dock_pos, dict) and device.dock_pos.get("yaw") is not None
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="dock_lawn_connected",
+        icon="mdi:link-variant",
+        value_fn=lambda value, device: (
+            "yes" if isinstance(device.dock_pos, dict) and device.dock_pos.get("connect_status")
+            else "no" if isinstance(device.dock_pos, dict)
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
 )
 
 

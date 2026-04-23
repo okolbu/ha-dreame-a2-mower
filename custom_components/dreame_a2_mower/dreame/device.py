@@ -238,6 +238,10 @@ class DreameMowerDevice:
         # LIT, AOP, REC, STUN, ATA, PATH, WRF, PROT, CMS, PRE. Default empty
         # so consumers can rely on `device.cfg.get(...)` semantics.
         self._cfg: dict = {}
+        # Dock-position cache from getDockPos. Populated by
+        # `refresh_dock_pos()`; consumers read via `device.dock_pos`.
+        # Schema (per apk): {x, y, yaw, connect_status, path_connect, in_region}.
+        self._dock_pos: dict | None = None
         # Wall-clock timestamp of the last successful CFG fetch. Entity
         # availability gates use this to avoid surfacing stale-config-only
         # data.
@@ -706,6 +710,12 @@ class DreameMowerDevice:
                         # same pattern as _fetch_session_summary.
                         if (siid_int, piid_int) in ((2, 51), (2, 52)):
                             self.refresh_cfg()
+                        # Trigger a dock-position re-fetch on s1p51
+                        # (apk: dock-position-update trigger). Runs
+                        # synchronously on the MQTT thread, same
+                        # pattern as refresh_cfg above.
+                        if (siid_int, piid_int) == (1, 51):
+                            self.refresh_dock_pos()
                 if len(map_params) and self._map_manager:
                     self._map_manager.handle_properties(map_params)
 
@@ -5727,6 +5737,29 @@ class DreameMowerDevice:
         self._cfg = dict(self._cfg)
         self._cfg["PRE"] = new_pre
         _LOGGER.warning("write_pre: PRE[%d] = %r -> %r", index, pre[index], value)
+        return True
+
+    @property
+    def dock_pos(self) -> dict | None:
+        return self._dock_pos
+
+    def refresh_dock_pos(self) -> bool:
+        """Fetch dock position + lawn-connection via the routed getDockPos
+        action. Stores the result in `self._dock_pos` and returns True on
+        success. Synchronous; call from an executor."""
+        from ..protocol.cfg_action import get_dock_pos, CfgActionError
+
+        if self._protocol is None or not getattr(self._protocol, "connected", False):
+            return False
+        try:
+            self._dock_pos = get_dock_pos(self._protocol.action)
+        except CfgActionError as ex:
+            _LOGGER.warning("refresh_dock_pos: %s", ex)
+            return False
+        except Exception as ex:  # pragma: no cover — defensive
+            _LOGGER.warning("refresh_dock_pos: unexpected error %s", ex)
+            return False
+        _LOGGER.warning("[DOCK] %s", self._dock_pos)
         return True
 
     @property
