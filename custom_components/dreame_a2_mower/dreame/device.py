@@ -242,6 +242,12 @@ class DreameMowerDevice:
         # `refresh_dock_pos()`; consumers read via `device.dock_pos`.
         # Schema (per apk): {x, y, yaw, connect_status, path_connect, in_region}.
         self._dock_pos: dict | None = None
+        # Cloud M_PATH.* userData cache — populated alongside MAP.*
+        # by `_build_map_from_cloud_data`. Used by live_map's
+        # boot-time restore as a fallback when in_progress.json
+        # is missing. Per apk, M_PATH coords are ~10x smaller
+        # than MAP coords (MAP = mm, M_PATH ~= cm).
+        self._cloud_mpath: list | None = None
         # Wall-clock timestamp of the last successful CFG fetch. Entity
         # availability gates use this to avoid surfacing stale-config-only
         # data.
@@ -2032,6 +2038,30 @@ class DreameMowerDevice:
             if not response:
                 _LOGGER.warning("No MAP data from cloud")
                 return
+
+            # M_PATH.* userData — separate from MAP.* per apk. Array
+            # of [x, y] pairs or null (segment delimiters); sentinel
+            # [32767, -32768] = path break. Coordinates ~10x smaller
+            # than MAP coords.
+            mpath_keys = [f"M_PATH.{i}" for i in range(28)]
+            try:
+                mpath_response = self._protocol.cloud.get_batch_device_datas(mpath_keys)
+            except Exception as ex:
+                _LOGGER.debug("M_PATH fetch failed (non-fatal): %s", ex)
+                mpath_response = None
+            if mpath_response:
+                mpath_parts = [mpath_response.get(f"M_PATH.{i}", "") for i in range(28)]
+                mpath_raw = "".join(p for p in mpath_parts if p)
+                if mpath_raw:
+                    try:
+                        mpath = json.loads(mpath_raw)
+                        if isinstance(mpath, list):
+                            self._cloud_mpath = mpath
+                            _LOGGER.warning(
+                                "[M_PATH] received %d entries from cloud", len(mpath)
+                            )
+                    except (ValueError, TypeError) as ex:
+                        _LOGGER.debug("M_PATH parse failed: %s", ex)
 
             raw_parts = []
             for i in range(28):
@@ -5742,6 +5772,13 @@ class DreameMowerDevice:
     @property
     def dock_pos(self) -> dict | None:
         return self._dock_pos
+
+    @property
+    def cloud_mpath(self) -> list | None:
+        """Most recent M_PATH from the cloud userdata fetch. Set by
+        `_build_map_from_cloud_data`. Used by live_map's boot-time
+        restore when in_progress.json is missing or empty."""
+        return self._cloud_mpath
 
     def refresh_dock_pos(self) -> bool:
         """Fetch dock position + lawn-connection via the routed getDockPos

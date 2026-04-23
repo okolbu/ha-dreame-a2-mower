@@ -779,57 +779,101 @@ class DreameA2LiveMap:
         fresh-session wipe on the very next tick.
         """
         archive = getattr(self._coordinator, "session_archive", None)
-        if archive is None:
-            return False
-        data = archive.read_in_progress()
-        if data is None:
-            return False
-        try:
-            self._state.session_id = int(data.get("session_id", 0))
-            self._state.session_start = data.get("session_start")
-            self._state.path = [list(p) for p in data.get("live_path", [])]
-            self._state.obstacles = [list(p) for p in data.get("obstacles", [])]
-            # Self-heal: in-progress files written between the in-progress
-            # refactor (alpha.46) and the leg-merge timestamp gate
-            # (alpha.47) may carry the previous run's tracks merged
-            # into completed_track. If the persisted `summary_end_ts`
-            # falls *before* this session's start, the merge was bogus
-            # and we drop the overlay carry-over (the picker / Latest
-            # view will re-populate from the next legitimate leg).
-            sst = _iso_to_unix(self._state.session_start)
-            sumend = data.get("summary_end_ts") or 0
-            if sst and sumend and int(sumend) < sst:
-                self._state.completed_track = []
-                self._state.lawn_polygon = []
-                self._state.exclusion_zones = []
-                self._state.obstacle_polygons = []
-                self._state.dock_position = None
-                self._state.summary_md5 = None
-                self._state.summary_end_ts = None
-                self._in_progress_leg_md5s = []
-            else:
-                self._state.completed_track = [
-                    [list(p) for p in seg] for seg in data.get("completed_track", [])
-                ]
-                self._state.lawn_polygon = [
-                    list(p) for p in data.get("lawn_polygon", [])
-                ]
-                self._state.exclusion_zones = [
-                    [list(p) for p in z] for z in data.get("exclusion_zones", [])
-                ]
-                self._state.obstacle_polygons = [
-                    [list(p) for p in o] for o in data.get("obstacle_polygons", [])
-                ]
-                dock = data.get("dock_position")
-                self._state.dock_position = (
-                    [dock[0], dock[1]] if dock else None
+        data = archive.read_in_progress() if archive is not None else None
+        disk_restored = False
+        if data is not None:
+            try:
+                self._state.session_id = int(data.get("session_id", 0))
+                self._state.session_start = data.get("session_start")
+                self._state.path = [list(p) for p in data.get("live_path", [])]
+                self._state.obstacles = [list(p) for p in data.get("obstacles", [])]
+                # Self-heal: in-progress files written between the in-progress
+                # refactor (alpha.46) and the leg-merge timestamp gate
+                # (alpha.47) may carry the previous run's tracks merged
+                # into completed_track. If the persisted `summary_end_ts`
+                # falls *before* this session's start, the merge was bogus
+                # and we drop the overlay carry-over (the picker / Latest
+                # view will re-populate from the next legitimate leg).
+                sst = _iso_to_unix(self._state.session_start)
+                sumend = data.get("summary_end_ts") or 0
+                if sst and sumend and int(sumend) < sst:
+                    self._state.completed_track = []
+                    self._state.lawn_polygon = []
+                    self._state.exclusion_zones = []
+                    self._state.obstacle_polygons = []
+                    self._state.dock_position = None
+                    self._state.summary_md5 = None
+                    self._state.summary_end_ts = None
+                    self._in_progress_leg_md5s = []
+                else:
+                    self._state.completed_track = [
+                        [list(p) for p in seg] for seg in data.get("completed_track", [])
+                    ]
+                    self._state.lawn_polygon = [
+                        list(p) for p in data.get("lawn_polygon", [])
+                    ]
+                    self._state.exclusion_zones = [
+                        [list(p) for p in z] for z in data.get("exclusion_zones", [])
+                    ]
+                    self._state.obstacle_polygons = [
+                        [list(p) for p in o] for o in data.get("obstacle_polygons", [])
+                    ]
+                    dock = data.get("dock_position")
+                    self._state.dock_position = (
+                        [dock[0], dock[1]] if dock else None
+                    )
+                    self._state.summary_md5 = data.get("summary_md5")
+                    self._state.summary_end_ts = data.get("summary_end_ts")
+                    self._in_progress_leg_md5s = list(data.get("leg_md5s", []))
+                disk_restored = True
+            except (TypeError, ValueError):
+                disk_restored = False
+
+        # If the disk restore succeeded AND produced a non-empty live
+        # path, the existing behavior is preserved verbatim: return
+        # True, caller seeds `_prev_session_active = True`.
+        if disk_restored and self._state.path:
+            return True
+
+        # If on-disk in_progress is missing/empty, try the cloud
+        # M_PATH blob — apk says this is a separate path source
+        # populated independently of MAP.* geometry.
+        cloud_mpath = getattr(
+            getattr(self._coordinator, "device", None), "cloud_mpath", None
+        )
+        if cloud_mpath:
+            # Convert M_PATH coords to metres. Per apk, M_PATH coords
+            # are ~10x smaller than MAP coords; MAP coords are mm.
+            # So M_PATH * 10 = MAP_mm; / 1000 = m.
+            converted: list[list[float]] = []
+            for entry in cloud_mpath:
+                if entry is None:
+                    continue
+                if isinstance(entry, list) and len(entry) >= 2:
+                    if entry[0] == 32767 and entry[1] == -32768:
+                        # Path-break sentinel — skip rather than
+                        # introduce a discontinuity.
+                        continue
+                    x_m = (entry[0] * 10) / 1000.0
+                    y_m = (entry[1] * 10) / 1000.0
+                    converted.append([round(x_m, 3), round(y_m, 3)])
+            if converted:
+                self._state.path = converted
+                _LOGGER.warning(
+                    "live_map: restored %d points from cloud M_PATH "
+                    "(in_progress.json was empty)",
+                    len(converted),
                 )
-                self._state.summary_md5 = data.get("summary_md5")
-                self._state.summary_end_ts = data.get("summary_end_ts")
-                self._in_progress_leg_md5s = list(data.get("leg_md5s", []))
-        except (TypeError, ValueError):
-            return False
-        return True
+                return True
+
+        # Disk restore succeeded but path was empty AND no cloud
+        # fallback available — still return True so the caller
+        # knows there was a persisted entry. This preserves the
+        # original behavior where any successful disk-parse
+        # returned True.
+        if disk_restored:
+            return True
+        return False
 
     def _delete_in_progress(self) -> None:
         archive = getattr(self._coordinator, "session_archive", None)
