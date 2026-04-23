@@ -5815,11 +5815,27 @@ class DreameMowerDevice:
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("refresh_cfg: unexpected error %s", ex)
             return False
+        # Compute diff vs previous cfg — any key whose value changed
+        # is logged at WARNING so app-side toggles immediately reveal
+        # which CFG slot they drive. One-shot-per-toggle, quiet at
+        # steady state.
+        prev = self._cfg
+        changed = {}
+        if isinstance(prev, dict) and prev:
+            for k in sorted(set(prev.keys()) | set(cfg.keys())):
+                if prev.get(k) != cfg.get(k):
+                    changed[k] = (prev.get(k), cfg.get(k))
         self._cfg = cfg
         self._cfg_fetched_at = time.time()
         self._routed_actions_supported = True
         _LOGGER.info("[CFG] fetched %d settings keys", len(cfg))
         _LOGGER.debug("[CFG] payload: %r", cfg)
+        if changed:
+            _LOGGER.warning(
+                "[CFG_DIFF] %d key(s) changed since last fetch:\n%s",
+                len(changed),
+                "\n".join(f"  {k}: {old!r} -> {new!r}" for k, (old, new) in changed.items()),
+            )
         return True
 
     def write_pre(self, index: int, value: int) -> bool:
