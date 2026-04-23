@@ -2167,14 +2167,24 @@ class DreameMowerDevice:
                 _CONSUMED = {"boundary", "mowingAreas", "forbiddenAreas",
                              "md5sum", "mapIndex", "name", "hasBack",
                              "merged", "totalArea"}
+                # Single multi-line WARNING so the whole dump survives
+                # HA's log-UI dedupe (otherwise the 8 [MAP_KEY] lines
+                # collapse into one displayed entry).
+                map_lines = []
                 for k in sorted(map_json.keys()):
                     if k in _CONSUMED:
                         continue
                     v = map_json[k]
                     s = repr(v)
-                    if len(s) > 2000:
-                        s = s[:2000] + f"... (truncated, full len={len(repr(v))})"
-                    _LOGGER.warning("[MAP_KEY] %-16s = %s", k, s)
+                    if len(s) > 1500:
+                        s = s[:1500] + f"... (truncated, full len={len(repr(v))})"
+                    map_lines.append(f"  {k:<16} = {s}")
+                if map_lines:
+                    _LOGGER.warning(
+                        "[MAP_KEYS] %d unconsumed top-level keys:\n%s",
+                        len(map_lines),
+                        "\n".join(map_lines),
+                    )
                 if isinstance(map_json, list):
                     _LOGGER.warning("MAP JSON: no usable entry found in list")
                     return
@@ -5813,13 +5823,10 @@ class DreameMowerDevice:
         self._cfg = cfg
         self._cfg_fetched_at = time.time()
         self._routed_actions_supported = True
-        _LOGGER.warning("[CFG] fetched %d settings keys: %s", len(cfg), sorted(cfg.keys()))
-        # Per-key WARNING dump so HA's log UI shows each value as a
-        # distinct entry instead of collapsing one giant payload line.
-        # This is intentionally noisy for the duration of g2408 RE; will
-        # downgrade once the g2408-specific extras (BP/DLS/FDP/LANG/LOW/
-        # MSG_ALERT/TIME/VER/VOICE) are documented + the PRE schema is
-        # confirmed.
+        # Single multi-line WARNING so the whole payload survives HA's
+        # log-UI dedupe (which groups by message template, collapsing
+        # 24 per-key lines into one displayed entry).
+        lines = []
         for k in sorted(cfg.keys()):
             v = cfg[k]
             shape = type(v).__name__
@@ -5829,7 +5836,10 @@ class DreameMowerDevice:
                 shape = f"dict(keys={list(v.keys())[:8]})"
             elif isinstance(v, str):
                 shape = f"str(len={len(v)})"
-            _LOGGER.warning("[CFG] %-12s %-22s %r", k, shape, v)
+            lines.append(f"  {k:<12} {shape:<22} {v!r}")
+        _LOGGER.warning(
+            "[CFG] %d settings keys:\n%s", len(cfg), "\n".join(lines),
+        )
         return True
 
     def write_pre(self, index: int, value: int) -> bool:
