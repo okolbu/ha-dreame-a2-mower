@@ -483,13 +483,18 @@ class DreameMowerDevice:
             return
         _LOGGER.info("Requesting properties after connect")
         self.schedule_update(2, True)
-        # Fetch CFG now that the protocol is actually connected. The
-        # coordinator's init-time schedule fires too early (protocol
-        # not yet connected) and silently returns False at DEBUG.
-        # Run on a background thread so the connect callback isn't
-        # blocked by the cloud round-trip.
+        # Fetch CFG + dock pos now that the protocol is actually
+        # connected. The coordinator's init-time schedule fires too
+        # early (protocol not yet connected) and silently returns
+        # False. Run on a background thread so the connect callback
+        # isn't blocked by the cloud round-trip.
         import threading
-        threading.Thread(target=self.refresh_cfg, daemon=True).start()
+
+        def _initial_routed_fetches():
+            self.refresh_cfg()
+            self.refresh_dock_pos()
+
+        threading.Thread(target=_initial_routed_fetches, daemon=True).start()
 
     def _message_callback(self, message):
         if not self._ready:
@@ -5787,7 +5792,13 @@ class DreameMowerDevice:
         self._cfg_fetched_at = time.time()
         self._routed_actions_supported = True
         _LOGGER.info("[CFG] fetched %d settings keys", len(cfg))
-        _LOGGER.debug("[CFG] keys: %s", sorted(cfg.keys()))
+        # Log the full dict once at INFO so users/RE can see the actual
+        # shape of each key on their firmware (PRE array schema, CMS
+        # values, LIT schedule, plus g2408-specific extras like
+        # BP/DLS/FDP/LANG/LOW/MSG_ALERT/TIME/VER/VOICE whose semantics
+        # are unknown). This fires on every refetch so settings changes
+        # are visible too.
+        _LOGGER.info("[CFG] payload: %r", cfg)
         return True
 
     def write_pre(self, index: int, value: int) -> bool:
