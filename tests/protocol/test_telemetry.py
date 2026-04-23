@@ -128,6 +128,37 @@ def test_decode_s1p4_mowed_area_from_centiares():
     assert t.area_mowed_m2 == pytest.approx(12.50)
 
 
+# --- heading angle tests ----------------------------------------------
+# Per apk parseRobotPose, the byte immediately after the pose bytes encodes
+# a heading angle (uint8 → 0..360°). On g2408, the pose is int16_le at
+# [1-4], so the heading byte is at [6] (byte [5] is constantly 0xFF in all
+# captured frames, which would decode to a useless constant 360°). See
+# decode_s1p4 for full rationale. A rotating-mower capture is still needed
+# to fully verify the byte position; these tests just pin the contract.
+
+
+def test_decode_s1p4_extracts_heading_angle():
+    frame = bytearray(ACTIVE_MOW_FRAME)
+    frame[6] = 128
+    t = decode_s1p4(bytes(frame))
+    # (128 / 255) * 360 = 180.7058...
+    assert 180.0 < t.heading_deg < 181.5
+
+
+def test_decode_s1p4_heading_zero_for_zero_byte():
+    frame = bytearray(ACTIVE_MOW_FRAME)
+    frame[6] = 0
+    t = decode_s1p4(bytes(frame))
+    assert t.heading_deg == 0.0
+
+
+def test_decode_s1p4_heading_full_circle_just_under_360():
+    frame = bytearray(ACTIVE_MOW_FRAME)
+    frame[6] = 255
+    t = decode_s1p4(bytes(frame))
+    assert t.heading_deg == 360.0
+
+
 # --- 8-byte idle/beacon frame tests -----------------------------------
 
 # Captured live: X=737cm, Y=-5040mm, docked mower emitting minimal beacon.

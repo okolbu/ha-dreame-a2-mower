@@ -72,6 +72,7 @@ class MowingTelemetry:
     distance_m: float
     total_area_m2: float
     area_mowed_m2: float
+    heading_deg: float
 
     @property
     def x_m(self) -> float:
@@ -140,6 +141,22 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
         )
     x_cm, y_mm = struct.unpack_from("<hh", data, 1)
     seq = struct.unpack_from("<H", data, 6)[0]
+    # Heading angle (0..255 → 0..360°) per apk parseRobotPose. The apk places
+    # the angle byte immediately after the pose bytes; on g2408, the pose is
+    # int16_le at bytes [1-4] (see Task 1 analysis), so the apk's semantic
+    # "next byte after pose" falls at byte [6] — NOT byte [5]. Empirical
+    # evidence: during a westward dock-departure run (5 frames, fixtures/
+    # captured_s1p4_frames.json) byte[5] is constantly 0xFF while byte[6]
+    # varies 125-128 — consistent with a real heading around 176-181°
+    # ("facing west"), whereas byte[5]=0xFF would decode to a constant 360°.
+    #
+    # Note: bytes [6-7] overlap with the `sequence` little-endian uint16 read
+    # above. Whichever interpretation is correct, they can't both be — but
+    # refactoring `sequence` is out of scope for this change. Task 2 just
+    # exposes the heading byte; a rotating-mower capture is still needed for
+    # final verification of the byte position and the 0..255 → 0..360 scale.
+    heading_byte = data[6]
+    heading_deg = (heading_byte / 255.0) * 360.0
     phase_raw = data[8]
     phase = Phase(phase_raw) if phase_raw in Phase._value2member_map_ else Phase.UNKNOWN
     distance_deci = struct.unpack_from("<H", data, 24)[0]
@@ -154,4 +171,5 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
         distance_m=distance_deci / 10.0,
         total_area_m2=total_area_cent / 100.0,
         area_mowed_m2=area_mowed_cent / 100.0,
+        heading_deg=heading_deg,
     )
