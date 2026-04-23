@@ -582,3 +582,41 @@ runs on the event loop during `async_setup_entry`.
   earlier alpha iterations.
 
 **Reference**: https://developers.home-assistant.io/docs/asyncio_blocking_operations/#read_text
+
+## Render maintenance points + lawn contours on the base map
+
+Alpha.85's `[MAP_KEYS]` dump revealed two populated top-level
+keys the integration currently ignores:
+
+### Maintenance points (`cleanPoints`)
+User-pinned locations for spot cleaning/attention. One entry per
+marker, each with `{id, type, shapeType, path:[{x,y}]}`. On the
+sample mower: one point at (2820, 12760) after user created it in
+the Dreame app.
+
+**Acceptance**:
+- Render each maintenance point as a small icon/dot on
+  `camera.dreame_a2_mower_map` at its cloud coordinates.
+- Icon should be visually distinct from the dock marker and live
+  mower position. Consider a `mdi:wrench` or maintenance-flag-style
+  glyph.
+- Optional: expose count as a diagnostic sensor
+  `sensor.dreame_a2_mower_maintenance_points` with the point
+  coordinates in attributes.
+
+### Actual lawn contours (`contours`)
+A polyline (52 points on our capture) tracing the actual lawn
+boundary shape. The integration currently renders the axis-aligned
+`boundary` rectangle as the lawn outline — replacing it with
+`contours` would show the real-shape boundary users see in the
+app.
+
+**Acceptance**:
+- If `contours` is present, prefer its polygon over the `boundary`
+  bbox when rendering the lawn outline.
+- Preserve bbox-based pixel-grid math (pixel_type array) for
+  compatibility; only the rendered outline visualization switches.
+
+Both features tie into the same rendering function
+(`_build_map_from_cloud_data` in `dreame/device.py`). A combined
+PR is probably simpler than two.

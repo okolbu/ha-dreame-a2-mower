@@ -58,7 +58,7 @@ dashboard.
 
 After setup, a camera entity is created that serves the lawn map with the mower trail overlaid. Behind the scenes the integration:
 
-- Pulls the map JSON from the Dreame cloud (`MAP.0`–`MAP.27` in `getDeviceData`) — the `sendCommand` path that upstream A1 Pro uses is broken for the A2 (`80001 device unreachable`).
+- Pulls the map JSON from the Dreame cloud (`MAP.0`–`MAP.27` in `getDeviceData`). On g2408 the cloud's routed-action endpoint for CFG/PRE/DOCK/action opcodes ALSO works via `sendCommand` — see [`docs/research/g2408-protocol.md`](docs/research/g2408-protocol.md) §6.2 for the URL-construction gotcha (`-10000` iotComPrefix suffix + HTTPS) needed to avoid a 404.
 - Projects the lawn polygon, exclusion zones (rotated by their stored `angle` field), and dock icon onto a rendered PNG. All the coordinate-frame gotchas are in [`docs/research/cloud-map-geometry.md`](docs/research/cloud-map-geometry.md).
 - Composites the live mowing trail on top — one red segment per `s1p4` tick, with a pen-up filter at >5 m jumps so dock visits / telemetry drops don't draw ghost lines across the lawn.
 - Serves PNG as the camera's `entity_picture`, with extra attributes for card calibration.
@@ -219,32 +219,57 @@ Settings → Devices & Services → Dreame A2 Mower → Configure:
 - **Station Direction (° compass)** — the physical compass direction the charging station faces (0 = N, 90 = E, 180 = S, 270 = W). Projects the mower's X/Y into world North/East via the compass sensors. Also reachable as a regular number entity in the device Configuration card.
 - **Raw MQTT archive** — off by default. When on, writes every MQTT payload to a daily-rotating JSONL file under `<config>/dreame_a2_mower/mqtt_archive/` for reverse engineering.
 
-## Settings invisible to Home Assistant (Bluetooth-only)
+## Settings reachable from HA (cloud-visible)
 
-A subset of the Dreame app's configuration flows over **Bluetooth directly from the phone to the mower**, bypassing the cloud entirely. Those settings never appear on MQTT and can't be read or written from HA. Adjust them in the app with Bluetooth reach of the mower.
+Most of the Dreame app's settings flow through the cloud and are readable by HA. The integration fetches a 24-key `CFG` dict via the routed `getCFG` action (`siid:2 aiid:50 m:'g' t:'CFG'`) on every connect and whenever the firmware pushes `s2p51`/`s2p52` (settings-changed triggers).
 
-Confirmed BT-only on the Dreame A2:
+Confirmed cloud-visible and exposed as HA entities:
+
+- **Volume** (0–100, via CFG.VOL)
+- **Anti-theft** (on/off, CFG.STUN)
+- **Weather reference** (on/off, CFG.WRF)
+- **Grass protection** (on/off, CFG.PROT)
+- **Path display mode** (CFG.PATH)
+- **Headlight** (schedule + enable, CFG.LIT: `[enabled, start_min, end_min, l1…l4, reserved]`)
+- **Timezone** (IANA string, CFG.TIME e.g. `Europe/Oslo`)
+- **Wear meters** (CFG.CMS: blade / brush / robot maintenance % — confirmed matches app)
+- **Mow mode** (Standard / Efficient, CFG.PRE[1])
+- **Notification toggles** (CFG.MSG_ALERT: Anomaly / Error / Task / Consumable Messages)
+- **Voice prompts** (CFG.VOICE: Regular Notification / Work Status / Special Status / Error Status)
+- **Do-Not-Disturb schedule** (CFG.DND) and **Low-Speed Nighttime** (CFG.LOW)
+- **Battery/Charging schedule** (CFG.BAT: min%, max%, custom schedule times)
+- **Auto-Task-Adjust** (CFG.ATA), **Recharge config** (CFG.REC)
+- **Language** (CFG.LANG, firmware-internal ordinal)
+
+Plus the pre-existing `s2p51` settings (Child Lock, Rain Protection, Frost Protection, AI Obstacle Photos, Human Presence Detection, Charging Config, LED Period, Auto Recharge Standby, Navigation Path) — see [`docs/research/g2408-protocol.md`](docs/research/g2408-protocol.md) §6.1 for the full catalog.
+
+### Still Bluetooth-only (invisible to HA) on g2408
 
 - Mowing Direction (angle slider)
 - Mowing Height (cutting-blade height slider)
-- Mowing Efficiency
 - Edge Mowing / Safe Edge Mowing / EdgeMaster
 - Start from Stop Point
 - Obstacle Avoidance Distance / Height
 - Pathway Obstacle Avoidance
 - Obstacle Avoidance on Edges
 - LiDAR / AI Recognition detail toggles
-- Robot Voice / Volume
 
-Cloud-visible settings (DnD, Rain Protection, Frost Protection, Child Lock, Anti-Theft, Charging Config, Low-Speed Nighttime, LED schedule, AI Obstacle Photos, Human Presence Detection) are handled through `s2p51` MQTT multiplexed writes.
-
-See [`docs/research/g2408-protocol.md`](docs/research/g2408-protocol.md) §6.1 for the full reverse-engineering notes.
+These correspond to apk indexes `PRE[2..9]` which g2408's firmware doesn't expose in its 2-element `PRE` — they're BT-only on this model. A Dreame-app user with Bluetooth reach of the mower can still set them.
 
 ## Write commands
 
-**Most write actions currently fail** on the g2408. Every HTTPS `sendCommand` the cloud relays returns `80001 device unreachable` — during mowing, during charging, always. Verified in-the-wild 2026-04-19 with the `mower_request_map` service: three retries, all `80001`. The MQTT command channel isn't available from user credentials (Alibaba IoT ACLs).
+The routed-action endpoint (`siid:2 aiid:50`) works on g2408 once the URL-construction race is handled — see [`docs/research/g2408-protocol.md`](docs/research/g2408-protocol.md) §6.2. This enables:
 
-Net: the integration is read-mostly on this device. `lawn_mower.dreame_a2_mower.start` / `.pause` / `.dock` service calls exist (inherited from upstream) and will fire HTTP calls; they just won't reach the mower. Future work to find a working write path is in `docs/research/g2408-protocol.md`.
+- **`setPRE`** — writes the mow mode (Standard / Efficient) through the `mow_mode_efficient` switch.
+- **Action opcodes** — `find_bot` (ring mower), `lock_bot`, `suppress_fault` (clear warning), `take_pic`, `cutter_bias` (blade calibration). Exposed as button entities.
+- **`getDockPos`** — dock position readback (currently a diagnostic sensor, may drive a future auto-calibration path).
+
+Caveats:
+
+- **Cloud relay `80001` errors are transient** on g2408 (the Dreame cloud can't always wake the mower for a command even when it's online via MQTT). Retries are built in; persistent failure surfaces as the entity showing "Unavailable" until the next successful refetch.
+- `lawn_mower.dreame_a2_mower.start` / `.pause` / `.dock` service calls inherited from upstream still use the old un-prefixed URL and may fail — they predate the alpha.78 fix. Tracked in `TODO.md`.
+
+Up-to-date protocol research: [`docs/research/g2408-protocol.md`](docs/research/g2408-protocol.md).
 
 ## Reporting new firmware behaviour (`[PROTOCOL_NOVEL]` warnings)
 

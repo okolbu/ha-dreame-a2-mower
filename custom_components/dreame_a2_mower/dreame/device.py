@@ -5794,20 +5794,24 @@ class DreameMowerDevice:
         try:
             cfg = get_cfg(self._protocol.action)
         except CfgActionError as ex:
-            # The "unexpected result type: NoneType" message is what we
-            # get when the cloud HTTP layer returned a 404 (see
-            # protocol.py "Execute api call failed" warning that
-            # precedes this). That's the signal that g2408 doesn't
-            # route this siid/aiid pair.
+            # "unexpected result type: NoneType" = the cloud HTTP layer
+            # returned an error (404, 80001 device-offline, etc.). On
+            # g2408 the endpoint works once the URL carries the `-10000`
+            # iotComPrefix suffix (protocol.py send() handles this),
+            # but transient `80001 device unreachable` is common when
+            # the mower's MQTT session is idle. A hard 404 would
+            # indicate the endpoint itself isn't routed — unlikely on
+            # g2408 but kept as a one-shot disabler for future firmware
+            # variants where the apk-documented path genuinely doesn't
+            # apply.
             if "NoneType" in str(ex):
                 self._routed_actions_supported = False
                 _LOGGER.warning(
-                    "refresh_cfg: routed-action endpoint (siid:2 aiid:50) "
-                    "returned 404 — g2408 firmware does not support the apk's "
-                    "CFG/PRE/DOCK/action infrastructure. Disabling further "
-                    "attempts. CFG-derived entities (cutting height, mow mode, "
-                    "headlight, wear, dock position, action buttons) will "
-                    "remain Unavailable on this device."
+                    "refresh_cfg: routed action returned no data (404 "
+                    "or 80001 relay-timeout). Disabling further "
+                    "attempts for this HA process lifetime. Restart to "
+                    "retry — transient cloud-relay failures are common "
+                    "on g2408 when the mower's MQTT session is idle."
                 )
             else:
                 _LOGGER.warning("refresh_cfg: %s", ex)

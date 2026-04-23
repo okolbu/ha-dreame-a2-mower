@@ -398,15 +398,25 @@ class DreameMowerDreameHomeCloudProtocol:
         host = ""
         if self._host and len(self._host):
             host = f"-{self._host.split('.')[0]}"
+        # Mirror send()'s action-call URL fix (alpha.78/80): when the
+        # call is an action and derived host is empty or non-numeric,
+        # fall back to the apk-hardcoded Dreame iotComPrefix '-10000'
+        # + force HTTPS. Required to avoid 404 when action_async fires
+        # before _handle_device_info has populated _host.
+        if method == "action" and (not host or not host.lstrip("-").isdigit()):
+            host = "-10000"
 
         self._id = self._id + 1
+        url = f"{self._strings[37]}{host}/{self._strings[27]}/{self._strings[38]}"
+        if method == "action" and url.startswith("http://"):
+            url = "https://" + url[len("http://"):]
         self._api_call_async(
             lambda api_response: callback(
                 None
                 if api_response is None or "data" not in api_response or not api_response["data"] or "result" not in api_response["data"]
                 else api_response["data"]["result"]
             ),
-            f"{self._strings[37]}{host}/{self._strings[27]}/{self._strings[38]}",
+            url,
             {
                 "did": str(self._did),
                 "id": self._id,

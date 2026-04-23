@@ -870,19 +870,29 @@ Times are minutes from midnight. All confirmed via live toggle testing.
 
 ### 6.1 Cloud-visible vs Bluetooth-only settings
 
-**Cloud/MQTT (visible in `s2p51`):** Do Not Disturb, Low-Speed Nighttime,
+**Cloud/MQTT (visible in `s2p51` pushes):** Do Not Disturb, Low-Speed Nighttime,
 Navigation Path, Charging config, Auto Recharge Standby, LED Period, Anti-Theft,
 Child Lock, Rain Protection, Frost Protection, AI Obstacle Photos, Human Presence
 Detection Alert.
 
-**Bluetooth-only (completely invisible from cloud/HA):**
+**Cloud-readable via `getCFG` routed action (§6.2, confirmed on g2408 alpha.85):**
+All 24 keys in the CFG dict: AOP, ATA, BAT, BP, CLS, CMS, DLS, DND, FDP, LANG,
+LIT, LOW, MSG_ALERT, PATH, **PRE** (zone + mode — NOT the full apk schema —
+see §6.2), PROT, REC, STUN, TIME, VER, **VOICE** (4 prompt toggles), VOL,
+WRF, WRP. This includes settings previously thought to be BT-only:
+**Mowing Efficiency** (PRE[1]), **Robot Voice/Volume** (VOICE + VOL),
+**Notifications** (MSG_ALERT), **Language** (LANG), **Timezone** (TIME),
+**Anti-Theft** (STUN), **Weather/Grass/Path** (WRF/PROT/PATH).
+
+**Bluetooth-only (still invisible from cloud/HA on g2408):**
 - Obstacle Avoidance Distance
 - Obstacle Avoidance Height
 - Start from Stop Point
 - Pathway Obstacle Avoidance
 - Obstacle Avoidance on Edges
 - Mowing Direction — verified BT-only (toggled 180°↔90°, zero MQTT traffic)
-- Likely all General Mode settings: Mowing Efficiency, Mowing Height, Automatic
+- Mowing Height (cutting blade height) — not reachable via CFG on g2408; apk documents it at PRE[2] but g2408 PRE is only 2 elements
+- Edge Mowing / Safe Edge Mowing / EdgeMaster — apk PRE[7..9] don't exist on g2408
   Edge Mowing, Safe Edge Mowing, EdgeMaster, LiDAR Obstacle Recognition, AI
   Recognition sub-toggles, schedule changes, Robot Voice/Volume.
 
@@ -1281,6 +1291,31 @@ constant here).
 
 Off-repo helper `/data/claude/homeassistant/fetch_oss.py` can retrieve any
 object key on demand for ad-hoc inspection.
+
+### 7.8 MAP payload top-level keys (alpha.85 empirical dump)
+
+The cloud's MAP.* JSON blob decodes to a single top-level dict.
+`[MAP_SCHEMA]` + `[MAP_KEYS]` log lines on g2408 captured 17 keys;
+the integration consumes 9 (`boundary, mowingAreas, forbiddenAreas,
+md5sum, mapIndex, name, hasBack, merged, totalArea`). The other
+8 are documented here with their g2408-observed shapes:
+
+| Key | Shape (g2408) | Semantic |
+|---|---|---|
+| `contours` | `{dataType:'Map', value:[[[map_id, ?], {id, type, shapeType, path:[{x,y},…]}]]}` | **Actual lawn outline polyline** (52-point polygon on a ~384 m² lawn). More detailed than the axis-aligned `boundary` rectangle. Potential future entity: render `contours` on the base map for real-shape instead of bbox rectangle. |
+| `cleanPoints` | `{dataType:'Map', value:[[pt_id, {id, type, shapeType, path:[{x,y}]}]]}` | **Maintenance points** — single-point markers the user pins in the app for spot cleaning/attention. Confirmed 2026-04-23 by user creating a maintenance point and seeing one entry appear. |
+| `cruisePoints` | `{dataType:'Map', value:[]}` on our capture | Patrol/cruise points the mower visits in sequence. Empty when unused. |
+| `cut` | `[]` | Always empty on our captures. Purpose unknown — possibly cut-line geometry for zone boundaries. |
+| `notObsAreas` | `{dataType:'Map', value:[]}` | "No-obstacle-detection" zones — regions where the LiDAR obstacle-detection is disabled. Empty when unused. |
+| `obstacles` | `{dataType:'Map', value:[]}` | Obstacle markers (static obstacles registered on the map). Empty when unused. |
+| `paths` | `{dataType:'Map', value:[]}` | Historical/planned mow paths. Empty on our captures — may populate during an active mowing session (not verified). |
+| `spotAreas` | `{dataType:'Map', value:[]}` | Spot mowing areas (small targeted zones). Empty when unused. |
+
+The uniform `{dataType:'Map', value:[...]}` wrapper suggests a
+generic Map-with-entries container — each `value` is a list of
+`[key, record]` pairs (like `Map.entries()` in JS, since the
+cross-reference note in apk.md called these a serialized JS Map).
+For all but `cut` the container is present even when empty.
 
 ### 7.4 Diagnostic logging currently enabled
 
