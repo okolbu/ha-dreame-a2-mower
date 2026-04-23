@@ -663,6 +663,28 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         ),
         exists_fn=lambda description, device: True,
     ),
+    DreameMowerSensorEntityDescription(
+        key="voice_download_progress",
+        icon="mdi:download",
+        native_unit_of_measurement="%",
+        value_fn=lambda value, device: device.voice_dl_progress,
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="self_check_result",
+        icon="mdi:stethoscope",
+        # Show 'pass' when result == 0, else the raw result int as str.
+        # Full dict is available via device.self_check_result if an
+        # attribute-based entity is added later.
+        value_fn=lambda value, device: (
+            "pass" if isinstance(device.self_check_result, dict)
+            and device.self_check_result.get("result") == 0
+            else str(device.self_check_result.get("result"))
+            if isinstance(device.self_check_result, dict)
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
 )
 
 

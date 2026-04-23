@@ -248,6 +248,9 @@ class DreameMowerDevice:
         # is missing. Per apk, M_PATH coords are ~10x smaller
         # than MAP coords (MAP = mm, M_PATH ~= cm).
         self._cloud_mpath: list | None = None
+        # apk-documented SIID 2 piid values surfaced as sensors:
+        self._voice_dl_progress: int | None = None
+        self._self_check_result: dict | None = None
         # Wall-clock timestamp of the last successful CFG fetch. Entity
         # availability gates use this to avoid surfacing stale-config-only
         # data.
@@ -654,6 +657,11 @@ class DreameMowerDevice:
                                 (2, 54),    # LiDAR upload progress 0..100 (§7.3b)
                                 (2, 65),    # SLAM-task-type string (§4.8)
                                 (2, 66),    # pre-observed 2-element list
+                                # Per apk decompilation:
+                                (2, 53),    # Voice-pack download progress (%)
+                                (2, 57),    # Robot shutdown trigger (5s delay then off)
+                                (2, 58),    # Self-check result {d:{mode, id, result}}
+                                (2, 61),    # Map-update trigger — loadMap re-fetch
                                 (5, 104),   # SLAM relocate counter, unknown role
                                 (5, 105),   # mid-session = 1, unknown role
                                 (5, 106),   # 1..7 rolling counter
@@ -722,6 +730,17 @@ class DreameMowerDevice:
                         # pattern as refresh_cfg above.
                         if (siid_int, piid_int) == (1, 51):
                             self.refresh_dock_pos()
+                        # s2p53 (voice-pack download %) and s2p58 (self-
+                        # check result) — cache for sensor consumers.
+                        # Per apk decompilation.
+                        if (siid_int, piid_int) == (2, 53):
+                            value = param.get("value")
+                            if isinstance(value, (int, float)):
+                                self._voice_dl_progress = int(value)
+                        elif (siid_int, piid_int) == (2, 58):
+                            value = param.get("value")
+                            if isinstance(value, dict):
+                                self._self_check_result = value.get("d") if "d" in value else value
                 if len(map_params) and self._map_manager:
                     self._map_manager.handle_properties(map_params)
 
@@ -5779,6 +5798,16 @@ class DreameMowerDevice:
         `_build_map_from_cloud_data`. Used by live_map's boot-time
         restore when in_progress.json is missing or empty."""
         return self._cloud_mpath
+
+    @property
+    def voice_dl_progress(self) -> int | None:
+        """Voice-pack download progress 0..100 (%) from s2p53 per apk."""
+        return self._voice_dl_progress
+
+    @property
+    def self_check_result(self) -> dict | None:
+        """Self-check result dict {mode, id, result} from s2p58 per apk."""
+        return self._self_check_result
 
     def refresh_dock_pos(self) -> bool:
         """Fetch dock position + lawn-connection via the routed getDockPos
