@@ -447,3 +447,64 @@ Now that the rest of the protocol is mapped, expand this RE work.
 least one decoded value-shape example in the protocol doc, and
 the integration consciously chooses to ignore vs surface each one.
 
+
+## ioBroker findings adoption — alpha.76 follow-ups
+
+Items flagged by the final code review of the alpha.75 ioBroker
+findings adoption (commits `717c9ab..b48eae6`). None block the
+release; they're polish for the next pass.
+
+### Extract `_pre_slot(device, idx)` helper
+
+The PRE-array guard (`isinstance(device.cfg.get("PRE"), list) and
+len(device.cfg.get("PRE", [])) >= 10` followed by an index
+lookup) is copy-pasted ~10 times across `sensor.py`, `number.py`,
+and `switch.py`. A single helper would dedupe ~80 lines and
+prevent drift on later edits.
+
+**Acceptance**: a module-level helper imported by all three
+files; the lambdas read `_pre_slot(device, 2)` instead of the
+inline guard. No behavior change.
+
+### Test `_restore_in_progress` cloud M_PATH fallback
+
+The `live_map.py:774-876` rewrite (Task 13 of the adoption plan)
+preserves the on-disk path while adding a cloud `M_PATH` fallback.
+The disk path was already battle-tested via earlier alpha
+iterations; the cloud-fallback branch is untested. Given previous
+bugs in `_restore_in_progress` caused the "latest view stuck on
+old run" symptom, this code path deserves an explicit unit test.
+
+**Acceptance**: a pytest case with a fake coordinator exposing
+`device.cloud_mpath` populated with a sample list (including the
+`[32767, -32768]` sentinel) — assert that `_restore_in_progress`
+hydrates `state.path` from the cloud blob when on-disk is empty,
+and skips the sentinel correctly.
+
+### Tighten broad `except Exception` in cfg/action helpers
+
+`refresh_cfg`, `refresh_dock_pos`, and `call_action_opcode` each
+catch a bare `Exception` to keep cloud failures from killing the
+MQTT callback thread or button-press service call. That's the
+right shape, but it currently swallows things like
+`KeyboardInterrupt`-adjacent errors and silently downgrades real
+bugs (e.g. an `AttributeError` from a refactor) to a WARNING log.
+
+**Acceptance**: each helper catches the explicit set
+`(CfgActionError, ValueError, TypeError, ConnectionError,
+TimeoutError)` and re-raises (or logs at ERROR) anything else.
+
+### Refresh-after-write in `write_pre`
+
+`device.write_pre(index, value)` updates the local cache
+immediately after the `set_pre` cloud call returns success, but
+doesn't re-fetch CFG to confirm the firmware actually accepted
+the value. If the mower silently rejects an out-of-range value,
+the local cache will diverge from firmware truth until the next
+s2p52 push.
+
+**Acceptance**: after a successful `set_pre`, schedule a
+`refresh_cfg()` call (executor-offloaded) and reconcile the
+local cache from the fetched value. Log at WARNING if the
+firmware-reported PRE[index] differs from the requested value.
+
