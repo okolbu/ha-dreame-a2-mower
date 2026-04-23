@@ -46,5 +46,20 @@
       "2026-04-22 20:47:59  int16le=( -614,    -81)  packed12=(-5243494,      -81, 177.9 deg)",
       "2026-04-22 20:48:04  int16le=( -817,   -129)  packed12=(+8387791,     -129, 180.7 deg)"
     ]
+  },
+  "task_struct_verdict": {
+    "letter": "valid",
+    "summary": "The apk parseRobotTask layout over frame bytes [22-31] produces sensible, stable values on g2408. Across all 5 captured frames (20-second window mid-session post-recharge resume): region_id=1 (constant, plausible single-zone lawn), task_id=3 (constant, stable across frames as expected within a single ongoing task), percent=48.47% (constant and within 0..100), total=339.00 m² (constant, plausible for a residential lawn), finish=164.31 m² (constant, less than total as required). Bytes [22:32] are byte-for-byte identical across all 5 frames — no per-frame task_id churn, no nonsense values. The uint24 reads match the legacy uint16 reads exactly (high byte is 0x00 for both total and finish), consistent with a lawn < 655 m² where the uint16 reads haven't yet truncated. The task-struct interpretation is safe to expose downstream.",
+    "comparison": [
+      "2026-04-22 20:47:44  region=1 task=3 pct=48.47% total=339.00/339.00 finish=164.31/164.31",
+      "2026-04-22 20:47:49  region=1 task=3 pct=48.47% total=339.00/339.00 finish=164.31/164.31",
+      "2026-04-22 20:47:54  region=1 task=3 pct=48.47% total=339.00/339.00 finish=164.31/164.31",
+      "2026-04-22 20:47:59  region=1 task=3 pct=48.47% total=339.00/339.00 finish=164.31/164.31",
+      "2026-04-22 20:48:04  region=1 task=3 pct=48.47% total=339.00/339.00 finish=164.31/164.31"
+    ],
+    "caveats": [
+      "All 5 frames are within a 20-second window of steady mowing, so monotonic-progress over longer spans is not yet observed. A multi-minute or cross-session capture would strengthen the verdict but the per-frame stability + plausible absolute values are already sufficient to proceed.",
+      "region_id=1 (not 0) for a single-zone lawn is consistent with 1-indexed region IDs in the apk. region_id=0 may be reserved for 'dock' / 'global' contexts; no divergence implied."
+    ]
   }
 }

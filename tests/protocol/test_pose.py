@@ -13,6 +13,7 @@ from protocol.pose import (
     decode_pose_int16le,
     decode_pose_packed12,
 )
+from protocol.telemetry import decode_s1p4
 
 
 _FIXTURES = Path(__file__).parent / "fixtures" / "captured_s1p4_frames.json"
@@ -72,3 +73,25 @@ def test_verdict_recorded():
     assert letter in {"A", "B", "C"}, (
         f"fixture verdict must be A, B, or C — got {letter!r}"
     )
+
+
+def test_task_struct_field_sanity():
+    """Confirm the captured frames produce sensible task fields.
+    The verdict field in the fixture documents what 'sensible'
+    means for our captures."""
+    import json
+    from pathlib import Path
+    data = json.load(
+        (Path(__file__).parent / "fixtures" / "captured_s1p4_frames.json").open()
+    )
+    verdict_block = data.get("task_struct_verdict", {})
+    letter = verdict_block if isinstance(verdict_block, str) else verdict_block.get("letter", "unknown")
+    if letter == "diverges":
+        pytest.skip(f"task_struct decoder diverged on g2408 — see fixture verdict")
+    for f in data["frames"]:
+        t = decode_s1p4(bytes(f["bytes"]))
+        # Sane bounds for any g2408 telemetry frame.
+        assert 0 <= t.region_id < 32, f"unreasonable region_id {t.region_id}"
+        assert 0 <= t.percent <= 100, f"out-of-range percent {t.percent}"
+        assert 0 <= t.total_uint24_m2 < 10000
+        assert 0 <= t.finish_uint24_m2 <= t.total_uint24_m2 + 1.0  # finish ≤ total
