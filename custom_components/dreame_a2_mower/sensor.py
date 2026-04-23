@@ -62,6 +62,30 @@ def _project_to_compass(telemetry, device, axis: str):
         return round(x_m * math.sin(theta) + y_m * math.cos(theta), 2)
     return None
 
+
+def _format_time_window(lst, start_idx=1, end_idx=2):
+    """Format `[..., start_min, end_min, ...]` as 'HH:MM-HH:MM'.
+    Returns None when input is missing or malformed."""
+    if not isinstance(lst, list) or len(lst) <= max(start_idx, end_idx):
+        return None
+    s = lst[start_idx]
+    e = lst[end_idx]
+    if not (isinstance(s, int) and isinstance(e, int)):
+        return None
+    return f"{s // 60:02d}:{s % 60:02d}-{e // 60:02d}:{e % 60:02d}"
+
+
+def _wear_health(cms_list, idx, max_minutes):
+    """Convert wear minutes at `cms_list[idx]` to remaining-life %.
+    Returns None for missing/malformed input."""
+    if not isinstance(cms_list, list) or idx >= len(cms_list):
+        return None
+    minutes = cms_list[idx]
+    if not isinstance(minutes, (int, float)):
+        return None
+    return max(0, round((1 - minutes / max_minutes) * 100))
+
+
 from homeassistant.components.sensor import (
     ENTITY_ID_FORMAT,
     SensorDeviceClass,
@@ -512,6 +536,91 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             and len(device.cfg.get("PRE", [])) >= 10
             else None
         ),
+        exists_fn=lambda description, device: True,
+    ),
+    # --- Headlight (LIT = [enabled, start_min, end_min, ...])
+    DreameMowerSensorEntityDescription(
+        key="headlight_enabled",
+        icon="mdi:car-light-high",
+        value_fn=lambda value, device: (
+            "on" if (
+                isinstance(device.cfg.get("LIT"), list)
+                and len(device.cfg.get("LIT", [])) >= 1
+                and device.cfg["LIT"][0]
+            ) else "off" if isinstance(device.cfg.get("LIT"), list) else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="headlight_schedule",
+        icon="mdi:clock-outline",
+        value_fn=lambda value, device: _format_time_window(device.cfg.get("LIT")),
+        exists_fn=lambda description, device: True,
+    ),
+    # --- Anti-theft + other single-scalar CFG flags
+    DreameMowerSensorEntityDescription(
+        key="anti_theft",
+        icon="mdi:shield-lock",
+        value_fn=lambda value, device: (
+            "on" if device.cfg.get("STUN") == 1 else
+            "off" if device.cfg.get("STUN") == 0 else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="auto_task_adjust",
+        icon="mdi:tune",
+        # ATA schema unknown — surface raw repr until decoded.
+        value_fn=lambda value, device: (
+            str(device.cfg.get("ATA")) if device.cfg.get("ATA") is not None else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="weather_reference",
+        icon="mdi:weather-partly-cloudy",
+        value_fn=lambda value, device: (
+            "on" if device.cfg.get("WRF") else
+            "off" if device.cfg.get("WRF") is False else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="grass_protection",
+        icon="mdi:grass",
+        value_fn=lambda value, device: (
+            "on" if device.cfg.get("PROT") == 1 else
+            "off" if device.cfg.get("PROT") == 0 else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="path_display",
+        icon="mdi:map-marker-path",
+        value_fn=lambda value, device: device.cfg.get("PATH"),
+        exists_fn=lambda description, device: True,
+    ),
+    # --- Wear meters (CMS = [blade_min, brush_min, robot_min])
+    DreameMowerSensorEntityDescription(
+        key="blade_health_pct",
+        icon="mdi:scissors-cutting",
+        native_unit_of_measurement="%",
+        # apk: blade_max=6000 min, brush_max=30000 min, robot_max=3600 min.
+        value_fn=lambda value, device: _wear_health(device.cfg.get("CMS"), 0, 6000),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="brush_health_pct",
+        icon="mdi:broom",
+        native_unit_of_measurement="%",
+        value_fn=lambda value, device: _wear_health(device.cfg.get("CMS"), 1, 30000),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="robot_maintenance_health_pct",
+        icon="mdi:wrench",
+        native_unit_of_measurement="%",
+        value_fn=lambda value, device: _wear_health(device.cfg.get("CMS"), 2, 3600),
         exists_fn=lambda description, device: True,
     ),
 )
