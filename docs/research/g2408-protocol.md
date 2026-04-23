@@ -894,23 +894,31 @@ settings will be missing.
 
 ### 6.2 Routed action endpoint (siid:2 aiid:50)
 
-> **2026-04-23 empirical correction (g2408):** This endpoint **does
-> not exist on g2408 firmware**. Calling `siid:2 aiid:50` returns
-> `404 NOT_FOUND` from `eu.iot.dreame.tech:13267/dreame-iot-com/device/sendCommand`
-> on alpha.78. The integration's `device.refresh_cfg /
-> refresh_dock_pos / call_action_opcode` helpers detect the 404 once
-> and short-circuit further attempts (see
-> `device.routed_actions_supported` tri-state flag). All apk-derived
-> entities backed by this endpoint (cutting height, mow mode,
-> headlight, anti-theft, weather, grass-protection, path-display,
-> wear meters, dock x/y/yaw, voice-download progress, self-check
-> result, action buttons find/lock/clear/pic/calibrate, plus the
-> PRE-writable number/switch entities) remain Unavailable on g2408.
-> This appears to be a g2568a-only feature surface — none of it
-> appears in the g2408 cloud handler. The data the apk catalogs
-> (cutting height etc.) is reachable on g2408 via the existing
-> Bluetooth-only setting path (see §6.1) but not via cloud MQTT or
-> HTTPS as far as we can tell.
+> **2026-04-23 resolution (g2408):** Endpoint **confirmed working**
+> on g2408 after URL correction. The apk-documented URL shape is
+> `https://eu.iot.dreame.tech:13267/dreame-iot-com-10000/device/sendCommand`
+> (with `-10000` iotComPrefix suffix hardcoded for Dreame brand;
+> `-20000` for Mova brand). Our integration initially hit
+> `/dreame-iot-com/device/sendCommand` without the suffix and got
+> 404 NOT_FOUND. Root cause was a timing race: the first
+> `refresh_cfg` call fires from `_connected_callback`, which runs
+> BEFORE `_handle_device_info` populates `self._host` from the
+> bind info. Without `_host`, URL construction yielded an empty
+> prefix. Fix (alpha.80): when `method=='action'` and derived host
+> is empty, fall back to the apk-hardcoded `-10000`. The fallback
+> plus forced `https://` scheme unblocks the routed-action surface
+> on g2408.
+>
+> First getCFG on g2408 returned **24 settings keys**:
+> ```
+> AOP, ATA, BAT, BP, CLS, CMS, DLS, DND, FDP, LANG, LIT, LOW,
+> MSG_ALERT, PATH, PRE, PROT, REC, STUN, TIME, VER, VOICE, VOL,
+> WRF, WRP
+> ```
+> All 15 apk-documented keys are present (`WRP/DND/BAT/CLS/VOL/LIT/AOP/REC/STUN/ATA/PATH/WRF/PROT/CMS/PRE`).
+> The 9 extras (`BP, DLS, FDP, LANG, LOW, MSG_ALERT, TIME, VER, VOICE`)
+> are g2408-specific and not catalogued in the apk — their schemas
+> need further RE.
 
 Per apk decompilation, the Dreame mower exposes most of its
 configuration + control surface through a single MIoT action

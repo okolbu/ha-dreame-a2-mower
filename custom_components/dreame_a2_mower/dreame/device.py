@@ -5786,11 +5786,8 @@ class DreameMowerDevice:
         self._cfg = cfg
         self._cfg_fetched_at = time.time()
         self._routed_actions_supported = True
-        _LOGGER.warning(
-            "[CFG] fetched %d settings keys: %s",
-            len(cfg),
-            sorted(cfg.keys()),
-        )
+        _LOGGER.info("[CFG] fetched %d settings keys", len(cfg))
+        _LOGGER.debug("[CFG] keys: %s", sorted(cfg.keys()))
         return True
 
     def write_pre(self, index: int, value: int) -> bool:

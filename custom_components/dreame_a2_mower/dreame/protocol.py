@@ -220,12 +220,9 @@ class DreameMowerDreameHomeCloudProtocol:
         self._did = info["did"]
         self._model = info[self._strings[35]]
         self._host = info[self._strings[9]]
-        # Diagnostic: report what the bind info actually contained, so
-        # we can see why URL construction in send() may lack the
-        # iotComPrefix suffix (apk hardcodes '10000' for dreame brand).
-        _LOGGER.warning(
-            "cloud _handle_device_info: did=%r model=%r _host=%r info_keys=%s",
-            self._did, self._model, self._host, sorted(info.keys()),
+        _LOGGER.info(
+            "cloud _handle_device_info: did=%r model=%r _host=%r",
+            self._did, self._model, self._host,
         )
         prop = info[self._strings[10]]
         if prop and prop != "":
@@ -444,7 +441,7 @@ class DreameMowerDreameHomeCloudProtocol:
             # fetches are left untouched to avoid breaking them.
             if url.startswith("http://"):
                 url = "https://" + url[len("http://"):]
-            _LOGGER.warning(
+            _LOGGER.debug(
                 "cloud action URL: %s (derived host=%r final host=%r _host=%r)",
                 url, original_host, host, self._host,
             )
