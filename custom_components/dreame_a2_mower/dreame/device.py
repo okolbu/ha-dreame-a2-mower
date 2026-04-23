@@ -5739,19 +5739,10 @@ class DreameMowerDevice:
         if self._protocol is None:
             _LOGGER.warning("refresh_cfg: no protocol, skipping")
             return False
-        # Don't gate on `protocol.connected` here — that flag is False
-        # inside _connected_callback because the wrapper sets it AFTER
-        # the callback returns. Check cloud-readiness directly: the
-        # action call goes through `cloud.send` which only needs the
-        # cloud client to be logged in.
-        cloud = getattr(self._protocol, "cloud", None)
-        if cloud is None or not getattr(cloud, "logged_in", False):
-            _LOGGER.warning(
-                "refresh_cfg: cloud not logged in (cloud=%r, logged_in=%r); skipping",
-                cloud is not None,
-                getattr(cloud, "logged_in", None),
-            )
-            return False
+        # Don't gate on `connected` / `logged_in` here — those flags
+        # have race-y interactions with the connect callback chain.
+        # Just attempt the call; the existing exception handlers below
+        # surface any cloud-not-ready error.
         _LOGGER.warning("refresh_cfg: calling get_cfg via routed action siid=2 aiid=50")
         try:
             cfg = get_cfg(self._protocol.action)
