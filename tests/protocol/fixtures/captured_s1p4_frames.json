@@ -38,13 +38,13 @@
   ],
   "verdict": {
     "letter": "C",
-    "summary": "int16_le matches the documented westward dock-departure path (x: 0 -> -817 cm linearly, y near 0). packed12 produces values in the millions for both x and y, with no monotonic trend — clearly wrong for g2408. Keep telemetry.py's int16_le decoder; the apk's packed12 layout is g2568a-specific and does not apply.",
+    "summary": "int16_le matches the documented westward dock-departure path (x: 0 -> -817 cm linearly, y near 0). packed12 produces million-scale x values with no monotonic trend — clearly wrong for g2408. (packed12's y happens to match int16_le's y_mm because the apk's 24-bit y starts at the same byte offset as int16_le's y_lo, but that coincidence does not rescue the scheme — x is still nonsense.) Keep telemetry.py's int16_le decoder; the apk's packed12 layout is g2568a-specific and does not apply.",
     "comparison": [
-      "2026-04-22 20:47:44  int16le=(   +0,    -96)  packed12=(+10485760, +1048570, 180.7 deg)",
-      "2026-04-22 20:47:49  int16le=( -203,    -81)  packed12=(+11534133, +1048570, 177.9 deg)",
-      "2026-04-22 20:47:54  int16le=( -409,    -65)  packed12=(+12582503, +1048571, 176.5 deg)",
-      "2026-04-22 20:47:59  int16le=( -614,    -81)  packed12=(+11533722, +1048570, 177.9 deg)",
-      "2026-04-22 20:48:04  int16le=( -817,   -129)  packed12=(+8387791, +1048567, 180.7 deg)"
+      "2026-04-22 20:47:44  int16le=(   +0,    -96)  packed12=(-6291456,      -96, 180.7 deg)",
+      "2026-04-22 20:47:49  int16le=( -203,    -81)  packed12=(-5243083,      -81, 177.9 deg)",
+      "2026-04-22 20:47:54  int16le=( -409,    -65)  packed12=(-4194713,      -65, 176.5 deg)",
+      "2026-04-22 20:47:59  int16le=( -614,    -81)  packed12=(-5243494,      -81, 177.9 deg)",
+      "2026-04-22 20:48:04  int16le=( -817,   -129)  packed12=(+8387791,     -129, 180.7 deg)"
     ]
   }
 }

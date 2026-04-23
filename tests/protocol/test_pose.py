@@ -51,3 +51,24 @@ def test_decoders_agree_for_zero_position():
     assert decode_pose_int16le(payload).y_mm == 0
     assert decode_pose_packed12(payload).x_raw == 0
     assert decode_pose_packed12(payload).y_raw == 0
+
+
+def test_verdict_recorded():
+    """The fixture's verdict must be recorded (not pending) so the
+    pose.py decoder-choice question is decided in-repo. If this
+    trips after regenerating the fixture, update the verdict in
+    the fixture file to match the new empirical outcome."""
+    import json
+    from pathlib import Path
+    data = json.load(
+        (Path(__file__).parent / "fixtures" / "captured_s1p4_frames.json").open()
+    )
+    verdict = data.get("verdict")
+    # Allow either a string letter or a dict with a 'letter' field,
+    # depending on how Task 1 recorded it.
+    letter = verdict if isinstance(verdict, str) else (
+        verdict.get("letter") if isinstance(verdict, dict) else None
+    )
+    assert letter in {"A", "B", "C"}, (
+        f"fixture verdict must be A, B, or C — got {letter!r}"
+    )
