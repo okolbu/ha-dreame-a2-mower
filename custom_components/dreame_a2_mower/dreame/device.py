@@ -2158,6 +2158,23 @@ class DreameMowerDevice:
                     len(schema),
                     schema,
                 )
+                # Per-key deep dump for keys we don't yet consume in the
+                # decoder. The integration uses boundary / mowingAreas /
+                # forbiddenAreas / md5sum / mapIndex / name / hasBack /
+                # merged / totalArea — anything else is candidate RE.
+                # Truncate values >2k chars so we don't blow out the
+                # log buffer.
+                _CONSUMED = {"boundary", "mowingAreas", "forbiddenAreas",
+                             "md5sum", "mapIndex", "name", "hasBack",
+                             "merged", "totalArea"}
+                for k in sorted(map_json.keys()):
+                    if k in _CONSUMED:
+                        continue
+                    v = map_json[k]
+                    s = repr(v)
+                    if len(s) > 2000:
+                        s = s[:2000] + f"... (truncated, full len={len(repr(v))})"
+                    _LOGGER.warning("[MAP_KEY] %-16s = %s", k, s)
                 if isinstance(map_json, list):
                     _LOGGER.warning("MAP JSON: no usable entry found in list")
                     return
