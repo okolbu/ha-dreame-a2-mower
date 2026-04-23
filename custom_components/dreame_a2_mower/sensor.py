@@ -420,6 +420,100 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.distance_m if value is not None else None,
     ),
+    DreameMowerSensorEntityDescription(
+        key="cutting_height_mm",
+        icon="mdi:scissors-cutting",
+        native_unit_of_measurement="mm",
+        # PRE = [zone, mode, height_mm, obstacle_mm, coverage%,
+        #        direction_change, adaptive, ?, edge_detection, auto_edge]
+        value_fn=lambda value, device: (
+            device.cfg.get("PRE", [None] * 10)[2]
+            if isinstance(device.cfg.get("PRE"), list)
+            and len(device.cfg.get("PRE", [])) >= 10
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="obstacle_distance_mm",
+        icon="mdi:ruler",
+        native_unit_of_measurement="mm",
+        value_fn=lambda value, device: (
+            device.cfg.get("PRE", [None] * 10)[3]
+            if isinstance(device.cfg.get("PRE"), list)
+            and len(device.cfg.get("PRE", [])) >= 10
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="mow_coverage_pct",
+        icon="mdi:percent",
+        native_unit_of_measurement="%",
+        value_fn=lambda value, device: (
+            device.cfg.get("PRE", [None] * 10)[4]
+            if isinstance(device.cfg.get("PRE"), list)
+            and len(device.cfg.get("PRE", [])) >= 10
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="mow_mode",
+        icon="mdi:robot-mower",
+        # PRE[1]: 0=Standard, 1=Efficient
+        value_fn=lambda value, device: (
+            {0: "standard", 1: "efficient"}.get(
+                device.cfg.get("PRE", [None] * 10)[1]
+            )
+            if isinstance(device.cfg.get("PRE"), list)
+            and len(device.cfg.get("PRE", [])) >= 10
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="direction_change",
+        icon="mdi:rotate-3d-variant",
+        # PRE[5]: 0=auto, 1=off
+        value_fn=lambda value, device: (
+            {0: "auto", 1: "off"}.get(
+                device.cfg.get("PRE", [None] * 10)[5]
+            )
+            if isinstance(device.cfg.get("PRE"), list)
+            and len(device.cfg.get("PRE", [])) >= 10
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="edge_mowing",
+        icon="mdi:square-outline",
+        # PRE[9]: 0=off, 1=on (auto-edge / outer perimeter pass)
+        value_fn=lambda value, device: (
+            {0: "off", 1: "on"}.get(
+                device.cfg.get("PRE", [None] * 10)[9]
+            )
+            if isinstance(device.cfg.get("PRE"), list)
+            and len(device.cfg.get("PRE", [])) >= 10
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
+    DreameMowerSensorEntityDescription(
+        key="edge_detection",
+        icon="mdi:square-rounded-outline",
+        # PRE[8]: 0=off, 1=on
+        value_fn=lambda value, device: (
+            {0: "off", 1: "on"}.get(
+                device.cfg.get("PRE", [None] * 10)[8]
+            )
+            if isinstance(device.cfg.get("PRE"), list)
+            and len(device.cfg.get("PRE", [])) >= 10
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
 )
 
 
