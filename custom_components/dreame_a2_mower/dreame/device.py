@@ -2076,7 +2076,7 @@ class DreameMowerDevice:
                         mpath = json.loads(mpath_raw)
                         if isinstance(mpath, list):
                             self._cloud_mpath = mpath
-                            _LOGGER.warning(
+                            _LOGGER.info(
                                 "[M_PATH] received %d entries from cloud", len(mpath)
                             )
                     except (ValueError, TypeError) as ex:
@@ -5785,7 +5785,7 @@ class DreameMowerDevice:
         # change without waiting for the next s2p52 push.
         self._cfg = dict(self._cfg)
         self._cfg["PRE"] = new_pre
-        _LOGGER.warning("write_pre: PRE[%d] = %r -> %r", index, pre[index], value)
+        _LOGGER.info("write_pre: PRE[%d] = %r -> %r", index, pre[index], value)
         return True
 
     @property
