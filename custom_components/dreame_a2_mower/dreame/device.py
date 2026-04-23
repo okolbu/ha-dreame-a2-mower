@@ -476,6 +476,13 @@ class DreameMowerDevice:
             return
         _LOGGER.info("Requesting properties after connect")
         self.schedule_update(2, True)
+        # Fetch CFG now that the protocol is actually connected. The
+        # coordinator's init-time schedule fires too early (protocol
+        # not yet connected) and silently returns False at DEBUG.
+        # Run on a background thread so the connect callback isn't
+        # blocked by the cloud round-trip.
+        import threading
+        threading.Thread(target=self.refresh_cfg, daemon=True).start()
 
     def _message_callback(self, message):
         if not self._ready:
@@ -5730,8 +5737,9 @@ class DreameMowerDevice:
         from ..protocol.cfg_action import get_cfg, CfgActionError
 
         if self._protocol is None or not getattr(self._protocol, "connected", False):
-            _LOGGER.debug("refresh_cfg: protocol not connected, skipping")
+            _LOGGER.warning("refresh_cfg: protocol not connected, skipping")
             return False
+        _LOGGER.warning("refresh_cfg: calling get_cfg via routed action siid=2 aiid=50")
         try:
             cfg = get_cfg(self._protocol.action)
         except CfgActionError as ex:
