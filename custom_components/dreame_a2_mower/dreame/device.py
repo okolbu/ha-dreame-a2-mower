@@ -491,8 +491,13 @@ class DreameMowerDevice:
         import threading
 
         def _initial_routed_fetches():
-            self.refresh_cfg()
-            self.refresh_dock_pos()
+            _LOGGER.warning("_connected_callback: scheduling refresh_cfg + refresh_dock_pos")
+            cfg_ok = self.refresh_cfg()
+            dock_ok = self.refresh_dock_pos()
+            _LOGGER.warning(
+                "_connected_callback: refresh_cfg=%s refresh_dock_pos=%s",
+                cfg_ok, dock_ok,
+            )
 
         threading.Thread(target=_initial_routed_fetches, daemon=True).start()
 
@@ -5791,14 +5796,23 @@ class DreameMowerDevice:
         self._cfg = cfg
         self._cfg_fetched_at = time.time()
         self._routed_actions_supported = True
-        _LOGGER.info("[CFG] fetched %d settings keys", len(cfg))
-        # Log the full dict once at INFO so users/RE can see the actual
-        # shape of each key on their firmware (PRE array schema, CMS
-        # values, LIT schedule, plus g2408-specific extras like
-        # BP/DLS/FDP/LANG/LOW/MSG_ALERT/TIME/VER/VOICE whose semantics
-        # are unknown). This fires on every refetch so settings changes
-        # are visible too.
-        _LOGGER.info("[CFG] payload: %r", cfg)
+        _LOGGER.warning("[CFG] fetched %d settings keys: %s", len(cfg), sorted(cfg.keys()))
+        # Per-key WARNING dump so HA's log UI shows each value as a
+        # distinct entry instead of collapsing one giant payload line.
+        # This is intentionally noisy for the duration of g2408 RE; will
+        # downgrade once the g2408-specific extras (BP/DLS/FDP/LANG/LOW/
+        # MSG_ALERT/TIME/VER/VOICE) are documented + the PRE schema is
+        # confirmed.
+        for k in sorted(cfg.keys()):
+            v = cfg[k]
+            shape = type(v).__name__
+            if isinstance(v, list):
+                shape = f"list(len={len(v)})"
+            elif isinstance(v, dict):
+                shape = f"dict(keys={list(v.keys())[:8]})"
+            elif isinstance(v, str):
+                shape = f"str(len={len(v)})"
+            _LOGGER.warning("[CFG] %-12s %-22s %r", k, shape, v)
         return True
 
     def write_pre(self, index: int, value: int) -> bool:

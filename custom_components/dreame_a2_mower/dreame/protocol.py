@@ -220,7 +220,7 @@ class DreameMowerDreameHomeCloudProtocol:
         self._did = info["did"]
         self._model = info[self._strings[35]]
         self._host = info[self._strings[9]]
-        _LOGGER.info(
+        _LOGGER.warning(
             "cloud _handle_device_info: did=%r model=%r _host=%r",
             self._did, self._model, self._host,
         )
