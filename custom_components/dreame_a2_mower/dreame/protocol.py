@@ -220,6 +220,13 @@ class DreameMowerDreameHomeCloudProtocol:
         self._did = info["did"]
         self._model = info[self._strings[35]]
         self._host = info[self._strings[9]]
+        # Diagnostic: report what the bind info actually contained, so
+        # we can see why URL construction in send() may lack the
+        # iotComPrefix suffix (apk hardcodes '10000' for dreame brand).
+        _LOGGER.warning(
+            "cloud _handle_device_info: did=%r model=%r _host=%r info_keys=%s",
+            self._did, self._model, self._host, sorted(info.keys()),
+        )
         prop = info[self._strings[10]]
         if prop and prop != "":
             prop = json.loads(prop)
@@ -421,12 +428,32 @@ class DreameMowerDreameHomeCloudProtocol:
         host = ""
         if self._host and len(self._host):
             host = f"-{self._host.split('.')[0]}"
+        # Fallback for Dreame brand: apk hardcodes iotComPrefix='10000'
+        # in BRAND_CONFIG. If bind info didn't yield a numeric prefix,
+        # use it anyway — the /dreame-iot-com/ path (no suffix) returns
+        # 404 on g2408 for siid:2 aiid:50 calls; /dreame-iot-com-10000/
+        # is the apk-documented form. Only applies to action calls so
+        # existing property/data calls are unaffected.
+        original_host = host
+        if method == "action" and (not host or not host.lstrip("-").isdigit()):
+            host = "-10000"
+        url = f"{self._strings[37]}{host}/{self._strings[27]}/{self._strings[38]}"
+        if method == "action":
+            # Force HTTPS for action calls: apk uses https://, our
+            # strings[37] compiles to http://. Existing map/data
+            # fetches are left untouched to avoid breaking them.
+            if url.startswith("http://"):
+                url = "https://" + url[len("http://"):]
+            _LOGGER.warning(
+                "cloud action URL: %s (derived host=%r final host=%r _host=%r)",
+                url, original_host, host, self._host,
+            )
 
         attempts = 3 if method == "action" else 1
         for attempt in range(attempts):
             self._id = self._id + 1
             api_response = self._api_call(
-                f"{self._strings[37]}{host}/{self._strings[27]}/{self._strings[38]}",
+                url,
                 {
                     "did": str(self._did),
                     "id": self._id,
