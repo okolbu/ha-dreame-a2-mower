@@ -751,9 +751,9 @@ session-START half (s1p50 + s1p51) and the session-END half
 | Slot | Role | Observed triggers |
 |---|---|---|
 | `s1p50` | "something changed, consider re-fetching" ping | Session start (paired with s1p51), BUILDING save (multiple pulses), zone/exclusion edit (paired with `s2p50 o=215`), maintenance-point save (two pulses, 1 s apart, no other context) |
-| `s1p51` | **Dock-position-update trigger** (apk decompilation) — fires when the dock pose changes; consumer should re-fetch via the routed `getDockPos` action (see §6.x). **Correction:** previously hypothesized as a session-start companion to `s1p50` based on observed co-occurrence at session-start. Co-occurrence is real (the firmware fires both within the same second when a mowing run begins) but the apk specifies `s1p51`'s primary semantic is dock-pose change. |
+| `s1p51` | **Dock-position-update trigger** (apk decompilation) — fires when the dock pose changes; consumer should re-fetch via the routed `getDockPos` action (see §6.2). **Correction:** previously hypothesized as a session-start companion to `s1p50` based on observed co-occurrence at session-start. Co-occurrence is real (the firmware fires both within the same second when a mowing run begins) but the apk specifies `s1p51`'s primary semantic is dock-pose change. |
 | `s1p52` | "task ended — flush / commit" | Session complete (`s2p2 = 48`). Observed at natural end (12:33:09 on 2026-04-20) and user-cancel (18:06:19). Doesn't fire at BUILDING end. Also fires immediately before the cloud `event_occured siid=4 eiid=1` session-summary push (2026-04-22 16:35:17). |
-| `s2p52` | **Mowing-preference-update trigger** (apk decompilation) — fires when PRE settings change; consumer should re-fetch via the routed `getCFG` action (see §6.x). **Correction:** previously hypothesized as a session-end companion to `s1p52` based on observed co-occurrence at session end (16:35:17.786 → 18.031). Per apk, the semantic is preference-change, not session-end. The earlier hypothesis predicting "s1p52 + s2p52 together bracket session ends" no longer holds; the firmware just happens to fire `s2p52` at session end because it's also re-emitting prefs as part of session teardown. |
+| `s2p52` | **Mowing-preference-update trigger** (apk decompilation) — fires when PRE settings change; consumer should re-fetch via the routed `getCFG` action (see §6.2). **Correction:** previously hypothesized as a session-end companion to `s1p52` based on observed co-occurrence at session end (16:35:17.786 → 18.031). Per apk, the semantic is preference-change, not session-end. The earlier hypothesis predicting "s1p52 + s2p52 together bracket session ends" no longer holds; the firmware just happens to fire `s2p52` at session end because it's also re-emitting prefs as part of session teardown. |
 
 Practical implication: treat a standalone `s1p50` (no `s1p51`, no `s2p50`) as
 a "something edited server-side" signal and re-fetch whatever you cache from
@@ -892,7 +892,7 @@ transport is used. For the HA integration this means **entities for BT-only
 settings cannot exist** — users must be told explicitly in the README which
 settings will be missing.
 
-## 6.2 Routed action endpoint (siid:2 aiid:50)
+### 6.2 Routed action endpoint (siid:2 aiid:50)
 
 Per apk decompilation, the Dreame mower exposes most of its
 configuration + control surface through a single MIoT action
@@ -923,7 +923,7 @@ Most useful targets:
 The full opcode catalog and CFG-key schemas live in the apk
 cross-reference: `docs/research/2026-04-23-iobroker-dreame-cross-reference.md`.
 
-### PRE schema
+#### PRE schema
 
 `PRE = [zone, mode, height_mm, obstacle_mm, coverage%, direction_change, adaptive, ?, edge_detection, auto_edge]`
 
@@ -938,7 +938,7 @@ cross-reference: `docs/research/2026-04-23-iobroker-dreame-cross-reference.md`.
 - PRE[8]: edge detection (0=off, 1=on)
 - PRE[9]: edge mowing / auto-edge (0=off, 1=on)
 
-### Empirical validation (Task 4 fixture)
+#### Empirical validation (Task 4 fixture)
 
 `tests/protocol/fixtures/captured_s1p4_frames.json` records the
 decoded uint24 task struct (region=1, task=3, percent=48.47%,
