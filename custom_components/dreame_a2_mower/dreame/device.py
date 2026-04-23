@@ -255,6 +255,13 @@ class DreameMowerDevice:
         # availability gates use this to avoid surfacing stale-config-only
         # data.
         self._cfg_fetched_at: float | None = None
+        # Tri-state: None=untested, True=routed-action endpoint works on
+        # this firmware, False=cloud returned 404 (siid:2 aiid:50 not
+        # supported on g2408 — empirically confirmed alpha.78 / 2026-04-23).
+        # Once False, refresh_cfg / refresh_dock_pos / call_action_opcode
+        # short-circuit to avoid spamming the cloud with calls that will
+        # never work, and dependent entities hide via exists_fn.
+        self._routed_actions_supported: bool | None = None
         # OSS object key of the most recently *announced* session-summary
         # (from the event_occured push) that we have NOT yet successfully
         # downloaded. Cleared on a successful fetch. Used so a transient
@@ -5726,6 +5733,14 @@ class DreameMowerDevice:
     def cfg_fetched_at(self) -> float | None:
         return self._cfg_fetched_at
 
+    @property
+    def routed_actions_supported(self) -> bool | None:
+        """Tri-state probe of whether `siid:2 aiid:50` routed actions work
+        on this firmware. None until first call attempt; True on success;
+        False once the cloud returns a 404 (the apk's CFG/PRE/DOCK/action
+        infrastructure is firmware-dependent — confirmed absent on g2408)."""
+        return self._routed_actions_supported
+
     def refresh_cfg(self) -> bool:
         """Fetch the full settings dict via the routed action. Stores the
         result in `self._cfg` and returns True on success. Logs + returns
@@ -5733,27 +5748,44 @@ class DreameMowerDevice:
         the cache is preserved so transient errors don't blank existing
         entity state. Synchronous; call from an executor (e.g.
         `hass.async_add_executor_job`) to avoid blocking the event loop.
+
+        Once a 404 is observed, sets `_routed_actions_supported = False`
+        and short-circuits future calls so we don't spam the cloud.
         """
         from ..protocol.cfg_action import get_cfg, CfgActionError
 
         if self._protocol is None:
-            _LOGGER.warning("refresh_cfg: no protocol, skipping")
             return False
-        # Don't gate on `connected` / `logged_in` here — those flags
-        # have race-y interactions with the connect callback chain.
-        # Just attempt the call; the existing exception handlers below
-        # surface any cloud-not-ready error.
-        _LOGGER.warning("refresh_cfg: calling get_cfg via routed action siid=2 aiid=50")
+        if self._routed_actions_supported is False:
+            # Probed earlier and the cloud said no; don't keep retrying.
+            return False
         try:
             cfg = get_cfg(self._protocol.action)
         except CfgActionError as ex:
-            _LOGGER.warning("refresh_cfg: %s", ex)
+            # The "unexpected result type: NoneType" message is what we
+            # get when the cloud HTTP layer returned a 404 (see
+            # protocol.py "Execute api call failed" warning that
+            # precedes this). That's the signal that g2408 doesn't
+            # route this siid/aiid pair.
+            if "NoneType" in str(ex):
+                self._routed_actions_supported = False
+                _LOGGER.warning(
+                    "refresh_cfg: routed-action endpoint (siid:2 aiid:50) "
+                    "returned 404 — g2408 firmware does not support the apk's "
+                    "CFG/PRE/DOCK/action infrastructure. Disabling further "
+                    "attempts. CFG-derived entities (cutting height, mow mode, "
+                    "headlight, wear, dock position, action buttons) will "
+                    "remain Unavailable on this device."
+                )
+            else:
+                _LOGGER.warning("refresh_cfg: %s", ex)
             return False
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("refresh_cfg: unexpected error %s", ex)
             return False
         self._cfg = cfg
         self._cfg_fetched_at = time.time()
+        self._routed_actions_supported = True
         _LOGGER.warning(
             "[CFG] fetched %d settings keys: %s",
             len(cfg),
@@ -5827,12 +5859,21 @@ class DreameMowerDevice:
         success. Synchronous; call from an executor."""
         from ..protocol.cfg_action import get_dock_pos, CfgActionError
 
-        if self._protocol is None or not getattr(self._protocol, "connected", False):
+        if self._protocol is None:
+            return False
+        if self._routed_actions_supported is False:
             return False
         try:
             self._dock_pos = get_dock_pos(self._protocol.action)
         except CfgActionError as ex:
-            _LOGGER.warning("refresh_dock_pos: %s", ex)
+            if "NoneType" in str(ex):
+                self._routed_actions_supported = False
+                _LOGGER.warning(
+                    "refresh_dock_pos: routed-action endpoint returned 404; "
+                    "disabling further attempts (g2408 firmware doesn't support it)"
+                )
+            else:
+                _LOGGER.warning("refresh_dock_pos: %s", ex)
             return False
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("refresh_dock_pos: unexpected error %s", ex)
@@ -5849,13 +5890,30 @@ class DreameMowerDevice:
         an executor."""
         from ..protocol.cfg_action import call_action_op
 
-        if self._protocol is None or not getattr(self._protocol, "connected", False):
-            _LOGGER.warning("call_action_opcode: protocol not connected")
+        if self._protocol is None:
+            _LOGGER.warning("call_action_opcode: no protocol")
+            return False
+        if self._routed_actions_supported is False:
+            _LOGGER.warning(
+                "call_action_opcode(%d): routed actions disabled (cloud "
+                "returned 404 on prior probe — g2408 firmware doesn't "
+                "support siid:2 aiid:50). Use the existing native action "
+                "buttons instead.",
+                op,
+            )
             return False
         try:
             call_action_op(self._protocol.action, op, extra)
         except Exception as ex:
-            _LOGGER.warning("call_action_opcode(%d): %s", op, ex)
+            if "NoneType" in str(ex) or "404" in str(ex):
+                self._routed_actions_supported = False
+                _LOGGER.warning(
+                    "call_action_opcode(%d): cloud returned 404; disabling further "
+                    "routed-action attempts (g2408 firmware doesn't support it)",
+                    op,
+                )
+            else:
+                _LOGGER.warning("call_action_opcode(%d): %s", op, ex)
             return False
         return True
 

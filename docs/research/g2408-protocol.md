@@ -894,6 +894,24 @@ settings will be missing.
 
 ### 6.2 Routed action endpoint (siid:2 aiid:50)
 
+> **2026-04-23 empirical correction (g2408):** This endpoint **does
+> not exist on g2408 firmware**. Calling `siid:2 aiid:50` returns
+> `404 NOT_FOUND` from `eu.iot.dreame.tech:13267/dreame-iot-com/device/sendCommand`
+> on alpha.78. The integration's `device.refresh_cfg /
+> refresh_dock_pos / call_action_opcode` helpers detect the 404 once
+> and short-circuit further attempts (see
+> `device.routed_actions_supported` tri-state flag). All apk-derived
+> entities backed by this endpoint (cutting height, mow mode,
+> headlight, anti-theft, weather, grass-protection, path-display,
+> wear meters, dock x/y/yaw, voice-download progress, self-check
+> result, action buttons find/lock/clear/pic/calibrate, plus the
+> PRE-writable number/switch entities) remain Unavailable on g2408.
+> This appears to be a g2568a-only feature surface — none of it
+> appears in the g2408 cloud handler. The data the apk catalogs
+> (cutting height etc.) is reachable on g2408 via the existing
+> Bluetooth-only setting path (see §6.1) but not via cloud MQTT or
+> HTTPS as far as we can tell.
+
 Per apk decompilation, the Dreame mower exposes most of its
 configuration + control surface through a single MIoT action
 call:

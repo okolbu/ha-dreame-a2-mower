@@ -508,3 +508,51 @@ s2p52 push.
 local cache from the fetched value. Log at WARNING if the
 firmware-reported PRE[index] differs from the requested value.
 
+
+## g2408: hide routed-action entities when endpoint returns 404
+
+**Background**: alpha.78 confirmed empirically that `siid:2 aiid:50`
+(the apk's documented routed-action endpoint for CFG/PRE/DOCK/action
+opcodes) returns `404 NOT_FOUND` on g2408 firmware. Cloud HTTP layer
+rejects the POST. Documented in `docs/research/g2408-protocol.md`
+§6.2 correction.
+
+alpha.79 added `device.routed_actions_supported` tri-state flag
+(None=untested, True=works, False=cloud said no). When False, the
+helpers (`refresh_cfg`, `refresh_dock_pos`, `call_action_opcode`)
+short-circuit to avoid spamming the cloud with calls that will
+never work.
+
+**Remaining gap**: the dependent entities (17 sensors + 3 numbers +
+4 switches + 5 buttons from Tasks 7-11 of the apk-adoption plan)
+still appear in the HA UI as "Unavailable" forever on g2408. They
+should hide entirely when `routed_actions_supported is False`.
+
+**Tricky bit**: `exists_fn` is evaluated at entity setup time,
+which happens during `async_setup_entry` — typically BEFORE the
+first `refresh_cfg` attempt fires. So gating
+`exists_fn=lambda d, desc: d.routed_actions_supported is True`
+would hide the entities at first boot (when state is None) even
+on firmwares where they DO work.
+
+**Approach options**:
+- **(a)** Probe `siid:2 aiid:50` synchronously during `async_setup_entry`
+  before `async_add_entities`. Adds ~200ms to first boot but produces
+  a clean entity set.
+- **(b)** Register all entities at first boot, then on second-boot
+  use cached `routed_actions_supported` from disk to gate
+  `exists_fn`. Simpler logic but requires persistence and a
+  one-boot delay before entities disappear.
+- **(c)** Use HA's entity-registry-disable mechanism: register all
+  entities, then `entity_registry.async_update_entity(disabled_by=...)`
+  when we learn the endpoint isn't supported. Lets HA handle the
+  show/hide cleanly without re-registration.
+
+**Recommended**: (c). The HA-native way of saying "this entity is
+defined but not active for this device".
+
+**Acceptance**: on g2408, the 17+12 routed-action-backed entities
+do not appear in the device's entity list. On firmwares where the
+endpoint works, they appear and populate as usual. No regression
+to existing entities.
+
