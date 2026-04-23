@@ -171,6 +171,15 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
         self.live_map = DreameA2LiveMap(hass, entry, self)
         self.live_map.async_setup()
 
+        # Schedule an initial CFG fetch so all CFG-derived entities (cutting
+        # height, mow mode, headlight, wear meters, ...) have data on first
+        # state evaluation. get_cfg performs a blocking HTTP request via
+        # the cloud client, so offload.
+        try:
+            hass.async_add_executor_job(self._device.refresh_cfg)
+        except Exception:  # pragma: no cover — defensive
+            pass
+
         # LiDAR scan archive. Lives next to the session archive under
         # `<ha_config>/dreame_a2_mower/lidar/`. Each downloaded PCD blob
         # is content-addressed by md5 so re-downloading the same OSS key

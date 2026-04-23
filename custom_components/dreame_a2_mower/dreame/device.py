@@ -233,6 +233,15 @@ class DreameMowerDevice:
         # Raw JSON dict of the same summary, retained so the coordinator can
         # archive the authentic wire payload instead of a lossy rebuild.
         self._latest_session_raw = None
+        # CFG cache — populated by `refresh_cfg()` calls. Each key mirrors
+        # what the firmware returns from `getCFG`: WRP, DND, BAT, CLS, VOL,
+        # LIT, AOP, REC, STUN, ATA, PATH, WRF, PROT, CMS, PRE. Default empty
+        # so consumers can rely on `device.cfg.get(...)` semantics.
+        self._cfg: dict = {}
+        # Wall-clock timestamp of the last successful CFG fetch. Entity
+        # availability gates use this to avoid surfacing stale-config-only
+        # data.
+        self._cfg_fetched_at: float | None = None
         # OSS object key of the most recently *announced* session-summary
         # (from the event_occured push) that we have NOT yet successfully
         # downloaded. Cleared on a successful fetch. Used so a transient
@@ -690,6 +699,13 @@ class DreameMowerDevice:
                                 "protocol doc if a pattern emerges.",
                                 siid_int, piid_int, value,
                             )
+                        # Trigger a CFG re-fetch on settings/preference
+                        # updates (s2p51 = MULTIPLEXED_CONFIG, s2p52 =
+                        # mowing-prefs changed per apk decompilation).
+                        # Runs synchronously on the MQTT callback thread,
+                        # same pattern as _fetch_session_summary.
+                        if (siid_int, piid_int) in ((2, 51), (2, 52)):
+                            self.refresh_cfg()
                 if len(map_params) and self._map_manager:
                     self._map_manager.handle_properties(map_params)
 
@@ -5633,6 +5649,46 @@ class DreameMowerDevice:
         has been fetched yet.
         """
         return self._latest_session_raw
+
+    @property
+    def cfg(self) -> dict:
+        """Most recent settings dict from `getCFG`. Empty until first
+        successful fetch (see `refresh_cfg`)."""
+        return self._cfg
+
+    @property
+    def cfg_fetched_at(self) -> float | None:
+        return self._cfg_fetched_at
+
+    def refresh_cfg(self) -> bool:
+        """Fetch the full settings dict via the routed action. Stores the
+        result in `self._cfg` and returns True on success. Logs + returns
+        False on any error (cloud failure, malformed envelope, etc.) —
+        the cache is preserved so transient errors don't blank existing
+        entity state. Synchronous; call from an executor (e.g.
+        `hass.async_add_executor_job`) to avoid blocking the event loop.
+        """
+        from ..protocol.cfg_action import get_cfg, CfgActionError
+
+        if self._protocol is None or not getattr(self._protocol, "connected", False):
+            _LOGGER.debug("refresh_cfg: protocol not connected, skipping")
+            return False
+        try:
+            cfg = get_cfg(self._protocol.action)
+        except CfgActionError as ex:
+            _LOGGER.warning("refresh_cfg: %s", ex)
+            return False
+        except Exception as ex:  # pragma: no cover — defensive
+            _LOGGER.warning("refresh_cfg: unexpected error %s", ex)
+            return False
+        self._cfg = cfg
+        self._cfg_fetched_at = time.time()
+        _LOGGER.warning(
+            "[CFG] fetched %d settings keys: %s",
+            len(cfg),
+            sorted(cfg.keys()),
+        )
+        return True
 
     @property
     def heartbeat(self):
