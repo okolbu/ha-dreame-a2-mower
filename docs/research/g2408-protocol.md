@@ -985,7 +985,7 @@ Recorded 2026-04-23, firmware `dreame.mower.g2408` (`_host=10000.mt.eu.iot.dream
 | `LANG` | `list(2) [lang_id, variant]` | Language preference (`[2, 0]` = Norwegian on sample mower) |
 | `LIT` | `list(8) [enabled, start_min, end_min, l1, l2, l3, l4, reserved]` | Headlight (apk had 7; g2408 has 8 — extra byte likely reserved). |
 | `LOW` | `list(3) [enabled, start_min, end_min]` | Low-speed night mode. Same shape as DND. |
-| `MSG_ALERT` | `list(4) [1,1,1,1]` | 4 notification channels (push / email / in-app / ? — TBD) |
+| `MSG_ALERT` | `list(4) [anomaly, error, task, consumable]` | App's Notifications screen toggles. Sample `[1,1,1,1]` = all four enabled. Confirmed 2026-04-23 by user toggling correlation. |
 | `PATH` | `bool` | Path-display mode (apk-catalogued as scalar int; g2408 returns bool) |
 | `PRE` | `list(2) [zone_id, mode]` | See above. |
 | `PROT` | `int` | Grass protection (0=off, 1=on) |
