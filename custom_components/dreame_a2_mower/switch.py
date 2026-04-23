@@ -243,62 +243,25 @@ SWITCHES: tuple[DreameMowerSwitchEntityDescription, ...] = (
         format_fn=lambda value, device: 101 if value else 40,
         entity_category=EntityCategory.CONFIG,
     ),
-    DreameMowerSwitchEntityDescription(
-        key="edge_mowing_switch",
-        icon="mdi:square-outline",
-        entity_category=EntityCategory.CONFIG,
-        # PRE[9]: 0=off, 1=on
-        value_fn=lambda value, device: (
-            bool(device.cfg.get("PRE", [None] * 10)[9])
-            if isinstance(device.cfg.get("PRE"), list)
-            and len(device.cfg.get("PRE", [])) >= 10
-            else None
-        ),
-        set_fn=lambda device, value: device.write_pre(9, int(bool(value))),
-        exists_fn=lambda description, device: True,
-    ),
-    DreameMowerSwitchEntityDescription(
-        key="edge_detection_switch",
-        icon="mdi:square-rounded-outline",
-        entity_category=EntityCategory.CONFIG,
-        # PRE[8]: 0=off, 1=on
-        value_fn=lambda value, device: (
-            bool(device.cfg.get("PRE", [None] * 10)[8])
-            if isinstance(device.cfg.get("PRE"), list)
-            and len(device.cfg.get("PRE", [])) >= 10
-            else None
-        ),
-        set_fn=lambda device, value: device.write_pre(8, int(bool(value))),
-        exists_fn=lambda description, device: True,
-    ),
+    # PRE-backed mow_mode_efficient — g2408 PRE = [zone_id, mode], so
+    # PRE[1] is the mode index (0=Standard, 1=Efficient). write_pre
+    # writes the 2-element array back.
     DreameMowerSwitchEntityDescription(
         key="mow_mode_efficient",
         icon="mdi:robot-mower",
         entity_category=EntityCategory.CONFIG,
-        # PRE[1]: 0=Standard (off), 1=Efficient (on)
         value_fn=lambda value, device: (
-            device.cfg.get("PRE", [None] * 10)[1] == 1
+            device.cfg.get("PRE", [None, None])[1] == 1
             if isinstance(device.cfg.get("PRE"), list)
-            and len(device.cfg.get("PRE", [])) >= 10
+            and len(device.cfg.get("PRE", [])) >= 2
             else None
         ),
         set_fn=lambda device, value: device.write_pre(1, int(bool(value))),
         exists_fn=lambda description, device: True,
     ),
-    DreameMowerSwitchEntityDescription(
-        key="direction_change_off",
-        icon="mdi:rotate-3d-variant",
-        entity_category=EntityCategory.CONFIG,
-        # PRE[5]: 0=auto (switch off), 1=off (switch on)
-        value_fn=lambda value, device: (
-            device.cfg.get("PRE", [None] * 10)[5] == 1
-            if isinstance(device.cfg.get("PRE"), list)
-            and len(device.cfg.get("PRE", [])) >= 10
-            else None
-        ),
-        set_fn=lambda device, value: device.write_pre(5, int(bool(value))),
-        exists_fn=lambda description, device: True,
-    ),
+    # Removed in alpha.86: edge_mowing_switch / edge_detection_switch /
+    # direction_change_off — those apk PRE indexes (5/8/9) don't exist
+    # on g2408's 2-element PRE.
 )
 
 

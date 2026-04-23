@@ -556,3 +556,29 @@ do not appear in the device's entity list. On firmwares where the
 endpoint works, they appear and populate as usual. No regression
 to existing entities.
 
+
+## Fix blocking file I/O in archive __init__ methods
+
+HA 2025.x flags two blocking calls at coordinator init:
+
+```
+custom_components/dreame_a2_mower/session_archive.py:135
+  data = json.loads(path.read_text())
+custom_components/dreame_a2_mower/lidar_archive.py:90
+  data = json.loads(path.read_text())
+```
+
+Both are index-file reads that happen synchronously during
+`SessionArchive.__init__` / `LidarArchive.__init__`, which are
+called from `DreameMowerDataUpdateCoordinator.__init__`, which
+runs on the event loop during `async_setup_entry`.
+
+**Acceptance**:
+- Replace `path.read_text()` with an async-friendly equivalent,
+  OR move the index load into a separate `async def` method that
+  the coordinator awaits via `await hass.async_add_executor_job(...)`.
+- The indexes are small JSON files (~a few KB typically); the
+  fix is mechanical. Preserve the TTL-cache behavior added in
+  earlier alpha iterations.
+
+**Reference**: https://developers.home-assistant.io/docs/asyncio_blocking_operations/#read_text

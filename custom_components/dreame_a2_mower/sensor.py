@@ -444,96 +444,21 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.distance_m if value is not None else None,
     ),
-    DreameMowerSensorEntityDescription(
-        key="cutting_height_mm",
-        icon="mdi:scissors-cutting",
-        native_unit_of_measurement="mm",
-        # PRE = [zone, mode, height_mm, obstacle_mm, coverage%,
-        #        direction_change, adaptive, ?, edge_detection, auto_edge]
-        value_fn=lambda value, device: (
-            device.cfg.get("PRE", [None] * 10)[2]
-            if isinstance(device.cfg.get("PRE"), list)
-            and len(device.cfg.get("PRE", [])) >= 10
-            else None
-        ),
-        exists_fn=lambda description, device: True,
-    ),
-    DreameMowerSensorEntityDescription(
-        key="obstacle_distance_mm",
-        icon="mdi:ruler",
-        native_unit_of_measurement="mm",
-        value_fn=lambda value, device: (
-            device.cfg.get("PRE", [None] * 10)[3]
-            if isinstance(device.cfg.get("PRE"), list)
-            and len(device.cfg.get("PRE", [])) >= 10
-            else None
-        ),
-        exists_fn=lambda description, device: True,
-    ),
-    DreameMowerSensorEntityDescription(
-        key="mow_coverage_pct",
-        icon="mdi:percent",
-        native_unit_of_measurement="%",
-        value_fn=lambda value, device: (
-            device.cfg.get("PRE", [None] * 10)[4]
-            if isinstance(device.cfg.get("PRE"), list)
-            and len(device.cfg.get("PRE", [])) >= 10
-            else None
-        ),
-        exists_fn=lambda description, device: True,
-    ),
+    # PRE-backed mow_mode — g2408 PRE = [zone_id, mode] (2 elements,
+    # not the 10-element apk schema). PRE[1] is the mode index.
+    # Removed in alpha.86: cutting_height_mm / obstacle_distance_mm /
+    # mow_coverage_pct / direction_change / edge_mowing / edge_detection
+    # — those apk indexes (2-9) don't exist on g2408's PRE. They may
+    # be reachable via a different CFG key or Bluetooth-only path.
     DreameMowerSensorEntityDescription(
         key="mow_mode",
         icon="mdi:robot-mower",
-        # PRE[1]: 0=Standard, 1=Efficient
         value_fn=lambda value, device: (
             {0: "standard", 1: "efficient"}.get(
-                device.cfg.get("PRE", [None] * 10)[1]
+                device.cfg.get("PRE", [None, None])[1]
             )
             if isinstance(device.cfg.get("PRE"), list)
-            and len(device.cfg.get("PRE", [])) >= 10
-            else None
-        ),
-        exists_fn=lambda description, device: True,
-    ),
-    DreameMowerSensorEntityDescription(
-        key="direction_change",
-        icon="mdi:rotate-3d-variant",
-        # PRE[5]: 0=auto, 1=off
-        value_fn=lambda value, device: (
-            {0: "auto", 1: "off"}.get(
-                device.cfg.get("PRE", [None] * 10)[5]
-            )
-            if isinstance(device.cfg.get("PRE"), list)
-            and len(device.cfg.get("PRE", [])) >= 10
-            else None
-        ),
-        exists_fn=lambda description, device: True,
-    ),
-    DreameMowerSensorEntityDescription(
-        key="edge_mowing",
-        icon="mdi:square-outline",
-        # PRE[9]: 0=off, 1=on (auto-edge / outer perimeter pass)
-        value_fn=lambda value, device: (
-            {0: "off", 1: "on"}.get(
-                device.cfg.get("PRE", [None] * 10)[9]
-            )
-            if isinstance(device.cfg.get("PRE"), list)
-            and len(device.cfg.get("PRE", [])) >= 10
-            else None
-        ),
-        exists_fn=lambda description, device: True,
-    ),
-    DreameMowerSensorEntityDescription(
-        key="edge_detection",
-        icon="mdi:square-rounded-outline",
-        # PRE[8]: 0=off, 1=on
-        value_fn=lambda value, device: (
-            {0: "off", 1: "on"}.get(
-                device.cfg.get("PRE", [None] * 10)[8]
-            )
-            if isinstance(device.cfg.get("PRE"), list)
-            and len(device.cfg.get("PRE", [])) >= 10
+            and len(device.cfg.get("PRE", [])) >= 2
             else None
         ),
         exists_fn=lambda description, device: True,
@@ -600,12 +525,15 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         value_fn=lambda value, device: device.cfg.get("PATH"),
         exists_fn=lambda description, device: True,
     ),
-    # --- Wear meters (CMS = [blade_min, brush_min, robot_min])
+    # --- Wear meters. Apk catalogs CMS=[blade,brush,robot] but g2408
+    # returns CMS=[blade,brush,robot,aux]. Confirmed on g2408: all three
+    # shipped sensors match the app exactly (57% / 91% / 29%).
+    # Max-minute thresholds per apk; aux max-minute guess = 6000
+    # (matches blade; revise once schema confirmed).
     DreameMowerSensorEntityDescription(
         key="blade_health_pct",
         icon="mdi:scissors-cutting",
         native_unit_of_measurement="%",
-        # apk: blade_max=6000 min, brush_max=30000 min, robot_max=3600 min.
         value_fn=lambda value, device: _wear_health(device.cfg.get("CMS"), 0, 6000),
         exists_fn=lambda description, device: True,
     ),
@@ -621,6 +549,23 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         icon="mdi:wrench",
         native_unit_of_measurement="%",
         value_fn=lambda value, device: _wear_health(device.cfg.get("CMS"), 2, 3600),
+        exists_fn=lambda description, device: True,
+    ),
+    # 4th CMS slot — semantics TBD. On g2408 alpha.85 it was 0.
+    DreameMowerSensorEntityDescription(
+        key="aux_wear_health_pct",
+        icon="mdi:counter",
+        native_unit_of_measurement="%",
+        value_fn=lambda value, device: _wear_health(device.cfg.get("CMS"), 3, 6000),
+        exists_fn=lambda description, device: True,
+    ),
+    # --- Timezone (CFG.TIME str, e.g. "Europe/Oslo")
+    DreameMowerSensorEntityDescription(
+        key="mower_timezone",
+        icon="mdi:map-clock",
+        value_fn=lambda value, device: (
+            device.cfg.get("TIME") if isinstance(device.cfg.get("TIME"), str) else None
+        ),
         exists_fn=lambda description, device: True,
     ),
     DreameMowerSensorEntityDescription(

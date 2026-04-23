@@ -951,18 +951,52 @@ cross-reference: `docs/research/2026-04-23-iobroker-dreame-cross-reference.md`.
 
 #### PRE schema
 
+**Apk catalog (g2568a, 10 elements):**
 `PRE = [zone, mode, height_mm, obstacle_mm, coverage%, direction_change, adaptive, ?, edge_detection, auto_edge]`
+
+**g2408 (empirically, 2 elements):**
+`PRE = [zone_id, mode]`
 
 - PRE[0]: zone id
 - PRE[1]: mode (0=Standard, 1=Efficient)
-- PRE[2]: cutting height in mm
-- PRE[3]: obstacle distance in mm
-- PRE[4]: coverage %
-- PRE[5]: direction change (0=auto, 1=off)
-- PRE[6]: adaptive (semantic TBD)
-- PRE[7]: unknown (possibly EdgeMaster or Safe Edge Mowing)
-- PRE[8]: edge detection (0=off, 1=on)
-- PRE[9]: edge mowing / auto-edge (0=off, 1=on)
+
+Indexes 2-9 from the apk schema **do not exist on g2408**. Cutting
+height, obstacle distance, coverage %, direction change, edge
+detection, and auto-edge toggles likely live in a different key or
+are Bluetooth-only on g2408. Alpha.86 removed the entities that
+read PRE[2..9]; only `mow_mode` and `mow_mode_efficient` (both
+reading PRE[1]) remain.
+
+#### g2408 CFG schema (alpha.85 dump, 24 keys)
+
+Recorded 2026-04-23, firmware `dreame.mower.g2408` (`_host=10000.mt.eu.iot.dreame.tech:19973`):
+
+| Key | Shape / sample | Semantic (confirmed or best-guess) |
+|---|---|---|
+| `AOP` | `int=1` | scalar flag — Auto-Operation? (TBD) |
+| `ATA` | `list(3) [0,0,0]` | Auto-task-adjust (apk-catalogued) |
+| `BAT` | `list(6) [15, 95, 1, 0, 1080, 480]` | Charging schedule: `[min_pct, max_pct, enabled, custom, start_min, end_min]` = `[15%, 95%, on, off, 18:00, 08:00]` |
+| `BP` | `list(2) [1, 3]` | TBD (same shape as WRP) |
+| `CLS` | `int=0` | Auto-close / clean-slow? (TBD) |
+| `CMS` | `list(4) [blade_min, brush_min, robot_min, aux_min]` | Wear meters. Apk documents 3; g2408 has 4. Max-minutes: `[6000, 30000, 3600, ?]`. Blade/brush/robot confirmed vs app. |
+| `DLS` | `int=0` | Daylight-savings? (TBD) |
+| `DND` | `list(3) [enabled, start_min, end_min]` | Do-not-disturb (apk-catalogued). Sample `[0, 21:00, 07:00]` = off. |
+| `FDP` | `int=1` | Fault-display / fallback-DP? (TBD) |
+| `LANG` | `list(2) [lang_id, variant]` | Language preference (`[2, 0]` = Norwegian on sample mower) |
+| `LIT` | `list(8) [enabled, start_min, end_min, l1, l2, l3, l4, reserved]` | Headlight (apk had 7; g2408 has 8 — extra byte likely reserved). |
+| `LOW` | `list(3) [enabled, start_min, end_min]` | Low-speed night mode. Same shape as DND. |
+| `MSG_ALERT` | `list(4) [1,1,1,1]` | 4 notification channels (push / email / in-app / ? — TBD) |
+| `PATH` | `bool` | Path-display mode (apk-catalogued as scalar int; g2408 returns bool) |
+| `PRE` | `list(2) [zone_id, mode]` | See above. |
+| `PROT` | `int` | Grass protection (0=off, 1=on) |
+| `REC` | `list(9) [1,1,1,1,1,1,1,0,3]` | Recharge config. First 7 = days-of-week? (TBD) |
+| `STUN` | `int` | Anti-theft (0=off, 1=on) |
+| `TIME` | `str` | Timezone IANA name, e.g. `'Europe/Oslo'`. Exposed as `mower_timezone` sensor. |
+| `VER` | `int=141` | Config / firmware version. Note: distinct from the `550` in `Firmware Version` entity (different cloud fields). |
+| `VOICE` | `list(4) [1,1,1,1]` | 4 voice-pack toggles (TBD) |
+| `VOL` | `int` | Volume % (0..100) |
+| `WRF` | `int` | Weather reference (0=off, 1=on) |
+| `WRP` | `list(2) [1, 3]` | TBD (apk-catalogued but no schema) |
 
 #### Empirical validation (Task 4 fixture)
 

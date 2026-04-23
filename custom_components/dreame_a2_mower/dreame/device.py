@@ -491,13 +491,8 @@ class DreameMowerDevice:
         import threading
 
         def _initial_routed_fetches():
-            _LOGGER.warning("_connected_callback: scheduling refresh_cfg + refresh_dock_pos")
-            cfg_ok = self.refresh_cfg()
-            dock_ok = self.refresh_dock_pos()
-            _LOGGER.warning(
-                "_connected_callback: refresh_cfg=%s refresh_dock_pos=%s",
-                cfg_ok, dock_ok,
-            )
+            self.refresh_cfg()
+            self.refresh_dock_pos()
 
         threading.Thread(target=_initial_routed_fetches, daemon=True).start()
 
@@ -5823,23 +5818,8 @@ class DreameMowerDevice:
         self._cfg = cfg
         self._cfg_fetched_at = time.time()
         self._routed_actions_supported = True
-        # Single multi-line WARNING so the whole payload survives HA's
-        # log-UI dedupe (which groups by message template, collapsing
-        # 24 per-key lines into one displayed entry).
-        lines = []
-        for k in sorted(cfg.keys()):
-            v = cfg[k]
-            shape = type(v).__name__
-            if isinstance(v, list):
-                shape = f"list(len={len(v)})"
-            elif isinstance(v, dict):
-                shape = f"dict(keys={list(v.keys())[:8]})"
-            elif isinstance(v, str):
-                shape = f"str(len={len(v)})"
-            lines.append(f"  {k:<12} {shape:<22} {v!r}")
-        _LOGGER.warning(
-            "[CFG] %d settings keys:\n%s", len(cfg), "\n".join(lines),
-        )
+        _LOGGER.info("[CFG] fetched %d settings keys", len(cfg))
+        _LOGGER.debug("[CFG] payload: %r", cfg)
         return True
 
     def write_pre(self, index: int, value: int) -> bool:
@@ -5927,7 +5907,7 @@ class DreameMowerDevice:
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("refresh_dock_pos: unexpected error %s", ex)
             return False
-        _LOGGER.warning("[DOCK] %s", self._dock_pos)
+        _LOGGER.info("[DOCK] %s", self._dock_pos)
         return True
 
     def call_action_opcode(self, op: int, extra: dict | None = None) -> bool:
