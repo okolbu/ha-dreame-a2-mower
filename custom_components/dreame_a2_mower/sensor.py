@@ -637,6 +637,40 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("FDP"),
     ),
+    # CFG.LOW is Low-Speed Nighttime (confirmed 2026-04-24). Shape
+    # [enabled, start_min, end_min] matches the s2p51 LOW_SPEED_NIGHT
+    # decoder. State shows the time window ("20:00-08:00") when
+    # enabled, or "off" when disabled. Raw fields in attributes.
+    DreameMowerSensorEntityDescription(
+        key="low_speed_nighttime",
+        icon="mdi:speedometer-slow",
+        value_fn=lambda value, device: (
+            _format_time_window(device.cfg["LOW"], start_idx=1, end_idx=2)
+            if isinstance(device.cfg.get("LOW"), list)
+            and len(device.cfg["LOW"]) >= 3
+            and device.cfg["LOW"][0] == 1
+            else (
+                "off"
+                if isinstance(device.cfg.get("LOW"), list)
+                and len(device.cfg["LOW"]) >= 1
+                and device.cfg["LOW"][0] == 0
+                else None
+            )
+        ),
+        attrs_fn=lambda device: (
+            {
+                "enabled": bool(device.cfg["LOW"][0]),
+                "start_min": int(device.cfg["LOW"][1]),
+                "end_min": int(device.cfg["LOW"][2]),
+            }
+            if isinstance(device.cfg.get("LOW"), list)
+            and len(device.cfg["LOW"]) >= 3
+            and all(isinstance(x, int) for x in device.cfg["LOW"][:3])
+            else {}
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("LOW", min_len=3),
+    ),
     # CFG.WRP is Rain Protection — [enabled, resume_hours] (confirmed
     # 2026-04-24). Shape matches the s2p51 RAIN_PROTECTION decoder.
     # Hours: 0 means "Don't Mow After Rain" (no auto-resume); 1..24
