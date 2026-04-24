@@ -555,10 +555,13 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("LIT", min_len=3),
     ),
-    # --- Anti-theft + other single-scalar CFG flags
+    # CFG.STUN is Auto Recharge After Extended Standby (confirmed
+    # 2026-04-24 — previously mislabelled as "anti_theft" based on
+    # the upstream vacuum codebase's naming; that mapping was wrong
+    # on g2408). Mapping {0: off, 1: on}.
     DreameMowerSensorEntityDescription(
-        key="anti_theft",
-        icon="mdi:shield-lock",
+        key="auto_recharge_standby",
+        icon="mdi:battery-clock",
         value_fn=lambda value, device: (
             "on" if device.cfg.get("STUN") == 1 else
             "off" if device.cfg.get("STUN") == 0 else None
@@ -566,12 +569,30 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("STUN"),
     ),
+    # CFG.ATA is a 3-element int list [0,0,0] in current capture.
+    # Shape matches the s2p51 ANTI_THEFT decoder
+    # [lift_alarm, offmap_alarm, realtime_location] — strong
+    # candidate but pending direct toggle-confirmation. Exposed as a
+    # diagnostic with the raw list so that when the user toggles the
+    # three Anti-Theft sub-flags in the app we can see which index
+    # maps to which flag.
     DreameMowerSensorEntityDescription(
-        key="auto_task_adjust",
-        icon="mdi:tune",
-        # ATA schema unknown — surface raw repr until decoded.
+        key="anti_theft_raw",
+        icon="mdi:shield-search",
+        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda value, device: (
             str(device.cfg.get("ATA")) if device.cfg.get("ATA") is not None else None
+        ),
+        attrs_fn=lambda device: (
+            {
+                "lift_alarm_candidate": bool(device.cfg["ATA"][0]),
+                "offmap_alarm_candidate": bool(device.cfg["ATA"][1]),
+                "realtime_location_candidate": bool(device.cfg["ATA"][2]),
+            }
+            if isinstance(device.cfg.get("ATA"), list)
+            and len(device.cfg["ATA"]) >= 3
+            and all(isinstance(x, int) for x in device.cfg["ATA"][:3])
+            else {}
         ),
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("ATA"),
@@ -618,6 +639,18 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         value_fn=lambda value, device: device.cfg.get("PATH"),
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("PATH"),
+    ),
+    # CFG.AOP is "Capture Photos of AI-Detected Obstacles" (confirmed
+    # 2026-04-24). Mapping {0: off, 1: on}.
+    DreameMowerSensorEntityDescription(
+        key="ai_obstacle_photos",
+        icon="mdi:camera-image",
+        value_fn=lambda value, device: (
+            "on" if device.cfg.get("AOP") == 1 else
+            "off" if device.cfg.get("AOP") == 0 else None
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("AOP"),
     ),
     # CFG.FDP is Frost Protection (confirmed 2026-04-24 via isolated
     # single-toggle with cfg_keys_raw diff visible). Mapping {0: off,

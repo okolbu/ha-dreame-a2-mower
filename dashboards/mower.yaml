@@ -167,7 +167,8 @@ views:
               - entity: sensor.dreame_a2_mower_frost_protection
               - entity: sensor.dreame_a2_mower_rain_protection
               - entity: sensor.dreame_a2_mower_low_speed_nighttime
-              - entity: sensor.dreame_a2_mower_anti_theft
+              - entity: sensor.dreame_a2_mower_auto_recharge_standby
+              - entity: sensor.dreame_a2_mower_ai_obstacle_photos
               - entity: sensor.dreame_a2_mower_weather_reference
               - entity: sensor.dreame_a2_mower_headlight_enabled
               - entity: sensor.dreame_a2_mower_headlight_schedule
