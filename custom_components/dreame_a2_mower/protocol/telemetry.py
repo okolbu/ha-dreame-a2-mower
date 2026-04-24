@@ -74,6 +74,13 @@ class MowingTelemetry:
     total_area_m2: float
     area_mowed_m2: float
     heading_deg: float
+    # Path-point sequence counter from bytes [7-9] (uint24 LE). Ticks
+    # up once per internal path-point sample — much finer granularity
+    # than the s1p4 frame cadence (1 per ~1s average vs s1p4 every 3-5s).
+    # Bounded well below 2^24; never resets within a session. Useful
+    # for detecting dropped frames and aligning against cloud-exported
+    # path data.
+    trace_start_index: int
     # Task struct from frame bytes [22-31] per apk parseRobotTask.
     # On g2408 these fields may overlap with our current
     # distance_deci / total_area_cent / area_mowed_cent reads —
@@ -190,6 +197,10 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
         )
     x_mm, y_mm = _decode_pose(data, offset=1)
     seq = struct.unpack_from("<H", data, 6)[0]
+    # Path-point sequence counter (apk startIndex, validated on g2408:
+    # 14,684 consecutive-frame transitions show 5,796 increments vs 10
+    # decrements, no large jumps, no INT24 saturation).
+    trace_start_index = _read_uint24_le(data, 7)
     # Heading angle (0..255 → 0..360°), dock-relative frame. Confirmed
     # 2026-04-24 by cross-correlating 5586 consecutive-frame samples from
     # probe_log_20260419_130434.jsonl: motion direction derived from
@@ -238,6 +249,7 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
         total_area_m2=total_area_cent / 100.0,
         area_mowed_m2=area_mowed_cent / 100.0,
         heading_deg=heading_deg,
+        trace_start_index=trace_start_index,
         region_id=region_id,
         task_id=task_id,
         percent=percent,

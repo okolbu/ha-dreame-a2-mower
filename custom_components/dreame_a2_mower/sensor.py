@@ -404,6 +404,23 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.y_mm if value is not None else None,
     ),
+    # Path-point sequence counter from s1p4 bytes [7-9]. Monotonically
+    # increasing within a session, resets on new session. Diagnostic-only:
+    # useful for spotting dropped frames and cross-referencing cloud
+    # path data by index.
+    DreameMowerSensorEntityDescription(
+        key="mowing_trace_index",
+        property_key=DreameMowerProperty.MOWING_TELEMETRY,
+        name="Trace Index",
+        icon="mdi:counter",
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        exists_fn=lambda description, device: True,
+        value_fn=lambda value, device: (
+            value.trace_start_index if value is not None else None
+        ),
+    ),
     # Compass-projected sensors — useful when the user has oriented the
     # dock in a known compass direction (configured via the "Station
     # Direction (°)" option). Projects the mower-frame (x, y) into
