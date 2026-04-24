@@ -624,6 +624,23 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("PATH"),
     ),
+    # Raw CFG dump — disabled-by-default diagnostic. Enable from the
+    # device page to see every CFG key + value as entity attributes,
+    # useful for toggle-correlation research (which CFG key is Frost
+    # Protection / Child Lock / etc.). Sensor state = count of CFG
+    # keys so any "CFG refetched" tick is visible in the state
+    # history; attributes carry the full dict as (key → value) pairs.
+    DreameMowerSensorEntityDescription(
+        key="cfg_keys_raw",
+        icon="mdi:code-json",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda value, device: len(
+            getattr(device, "cfg", None) or {}
+        ),
+        attrs_fn=lambda device: dict(getattr(device, "cfg", None) or {}),
+        exists_fn=lambda description, device: True,
+    ),
     # --- Wear meters. Apk catalogs CMS=[blade,brush,robot] but g2408
     # returns CMS=[blade,brush,robot,aux]. Confirmed on g2408: all three
     # shipped sensors match the app exactly (57% / 91% / 29%).
