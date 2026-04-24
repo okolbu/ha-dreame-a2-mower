@@ -599,14 +599,26 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         available_fn=_cfg_key_present("PROT"),
     ),
     DreameMowerSensorEntityDescription(
-        # PATH = Navigation Path: Direct (0) vs Smart (1). User-confirmed
-        # 2026-04-24; see protocol doc §6.2.
+        # PATH = Navigation Path: Direct vs Smart (user-confirmed 2026-04-24
+        # via app's Navigation Path setting). The 0→direct, 1→smart mapping
+        # below is a **guess** — we know PATH is an int {0,1} on g2408 and
+        # we know it's "the Navigation Path setting", but the direction of
+        # the mapping hasn't been cross-checked with live toggles. 2026-04-25
+        # user reported app=Direct showing as "smart" in HA, suggesting the
+        # mapping may be inverted; a live toggle test is pending.
+        # Attribute `raw` exposes the actual int so disagreements between
+        # the app state and the decoded label can be diagnosed without
+        # enabling debug logging.
         key="navigation_path",
         icon="mdi:map-marker-path",
         value_fn=lambda value, device: (
             {0: "direct", 1: "smart"}.get(device.cfg.get("PATH"))
             if isinstance(device.cfg.get("PATH"), int)
             else None
+        ),
+        attrs_fn=lambda device: (
+            {"raw": device.cfg.get("PATH")}
+            if isinstance(device.cfg.get("PATH"), int) else {}
         ),
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("PATH"),
