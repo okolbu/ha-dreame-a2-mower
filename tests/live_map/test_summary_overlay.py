@@ -82,7 +82,7 @@ def test_overlay_cleared_by_set_mode_latest(summary):
 def test_to_attributes_includes_overlay(summary):
     s = LiveMapState()
     s.load_from_session_summary(summary)
-    attrs = s.to_attributes(position=[0.5, 0.5], x_factor=1.0, y_factor=0.625)
+    attrs = s.to_attributes(position=[0.5, 0.5])
 
     assert "lawn_polygon" in attrs
     assert len(attrs["lawn_polygon"]) == 481
@@ -96,7 +96,7 @@ def test_to_attributes_includes_overlay(summary):
 
 def test_to_attributes_omits_dock_when_unknown():
     s = LiveMapState()
-    attrs = s.to_attributes(position=None, x_factor=1.0, y_factor=0.625)
+    attrs = s.to_attributes(position=None)
     assert attrs["dock_position"] is None
     assert attrs["lawn_polygon"] == []
 

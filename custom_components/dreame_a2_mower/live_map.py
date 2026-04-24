@@ -40,8 +40,6 @@ class MapMode(str, Enum):
 def replay_from_archive_file(
     state: "LiveMapState",
     file_path,
-    x_factor: float,
-    y_factor: float,
 ) -> dict:
     """Load an archived session-summary JSON and replay it into
     ``state`` — populating both the overlay fields and the ``path`` list.
@@ -214,8 +212,6 @@ class LiveMapState:
     def to_attributes(
         self,
         position: list[float] | None,
-        x_factor: float,
-        y_factor: float,
         path_override: list[list[float]] | None = None,
         obstacles_override: list[list[float]] | None = None,
     ) -> dict:
@@ -239,7 +235,6 @@ class LiveMapState:
             "charger_position": [0.0, 0.0],
             "session_id": self.session_id,
             "session_start": self.session_start,
-            "calibration": {"x_factor": x_factor, "y_factor": y_factor},
             # Session-summary overlay — static once per completed session.
             "lawn_polygon": list(self.lawn_polygon),
             "exclusion_zones": [list(z) for z in self.exclusion_zones],
@@ -344,16 +339,14 @@ except ImportError:
 
 LIVE_MAP_UPDATE_SIGNAL = f"{DOMAIN}_live_map_update"
 
-OPT_X_FACTOR = "live_map_x_factor"
-OPT_Y_FACTOR = "live_map_y_factor"
-
-DEFAULT_X_FACTOR = 1.0
-# alpha.98 fixed the 20-bit pose decode so Y is now in true mm (same as X).
-# The old 0.625 default was compensating for a 16× overshoot in the
-# previous int16 Y decode. Reset to 1.0 now that decoder is honest;
-# existing installs that manually calibrated to 0.625 should clear the
-# option to pick up the new default (or the camera will render squished).
-DEFAULT_Y_FACTOR = 1.0
+# alpha.100 removed the `live_map_x_factor` / `live_map_y_factor`
+# user-config options. They existed purely to compensate for the
+# pre-alpha.98 int16 Y decode that was 16× too big (users would set
+# y_factor to 0.625 to cancel the overshoot). With the decoder fixed
+# at the source, the factors just add footguns — uneven factors
+# broke compass projections, and there's no firmware variant we
+# currently need to scale around. If such a need returns, add a
+# single uniform `scale_factor` (not two axes) then.
 
 # Cutting blade width in metres — used as the swath width when
 # estimating in-progress mowed area from the live path. Cloud-summary
@@ -703,14 +696,6 @@ class DreameA2LiveMap:
             legacy.rmdir()
         except OSError:
             pass
-
-    @property
-    def x_factor(self) -> float:
-        return float(self._entry.options.get(OPT_X_FACTOR, DEFAULT_X_FACTOR))
-
-    @property
-    def y_factor(self) -> float:
-        return float(self._entry.options.get(OPT_Y_FACTOR, DEFAULT_Y_FACTOR))
 
     @callback
     def async_setup(self) -> None:
@@ -1353,8 +1338,8 @@ class DreameA2LiveMap:
             # mowing (s1p4 still pushing, battery draining), because
             # `active` was stuck on stale state-property data.
             x_mm, y_mm = pos_source
-            x_m = (x_mm / 1000.0) * self.x_factor
-            y_m = (y_mm / 1000.0) * self.y_factor
+            x_m = x_mm / 1000.0
+            y_m = y_mm / 1000.0
             position = [round(x_m, 3), round(y_m, 3)]
             self._state.append_point(x_m, y_m, cutting=cutting)
 
@@ -1380,11 +1365,7 @@ class DreameA2LiveMap:
             _LOGGER.debug("live_map tick: mode=%s, skipping dispatch", self._state.mode.value)
             return
 
-        attrs = self._state.to_attributes(
-            position=position,
-            x_factor=self.x_factor,
-            y_factor=self.y_factor,
-        )
+        attrs = self._state.to_attributes(position=position)
         self._last_dispatched_attrs = attrs
         if not self._logged_first_dispatch and (
             attrs.get("path") or attrs.get("completed_track") or attrs.get("position")
@@ -1466,9 +1447,7 @@ class DreameA2LiveMap:
                     # readable as a SessionSummary.
                     path = archive.root / latest.filename
                     try:
-                        replay_from_archive_file(
-                            self._state, str(path), self.x_factor, self.y_factor
-                        )
+                        replay_from_archive_file(self._state, str(path))
                         self._state.pinned_md5 = None
                         result["md5"] = self._state.summary_md5
                     except (FileNotFoundError, ValueError) as ex:
@@ -1480,9 +1459,7 @@ class DreameA2LiveMap:
             if archive is None:
                 raise ValueError("session archive unavailable")
             path = archive.root / archive_entry.filename
-            replay_from_archive_file(
-                self._state, str(path), self.x_factor, self.y_factor
-            )
+            replay_from_archive_file(self._state, str(path))
             self._state.pinned_md5 = archive_entry.md5
             result["md5"] = archive_entry.md5
             # Camera should display the archived session, not the live
@@ -1495,8 +1472,6 @@ class DreameA2LiveMap:
 
         attrs = self._state.to_attributes(
             position=None,
-            x_factor=self.x_factor,
-            y_factor=self.y_factor,
             path_override=path_override,
             obstacles_override=obstacles_override,
         )
@@ -1549,16 +1524,12 @@ class DreameA2LiveMap:
                 telem = decode_s1p4(bytes(ev.value))
             except InvalidS1P4Frame:
                 continue
-            x_m = (telem.x_mm / 1000.0) * self.x_factor
-            y_m = (telem.y_mm / 1000.0) * self.y_factor
+            x_m = telem.x_mm / 1000.0
+            y_m = telem.y_mm / 1000.0
             self._state.append_point(x_m, y_m)
             last_position = [round(x_m, 3), round(y_m, 3)]
 
-        attrs = self._state.to_attributes(
-            position=last_position,
-            x_factor=self.x_factor,
-            y_factor=self.y_factor,
-        )
+        attrs = self._state.to_attributes(position=last_position)
         # Same thread-safety note as replay_session / clear_replay —
         # `import_path_from_probe_log` runs this through the executor.
         _send_update(self._hass, LIVE_MAP_UPDATE_SIGNAL, attrs)

@@ -71,7 +71,7 @@ def test_attributes_include_frozen_overlay(raw_summary_json):
     state = LiveMapState()
     summary = parse_session_summary(raw_summary_json)
     state.load_from_session_summary(summary)
-    attrs = state.to_attributes(position=None, x_factor=1.0, y_factor=1.0)
+    attrs = state.to_attributes(position=None)
 
     assert "lawn_polygon" in attrs
     assert "completed_track" in attrs
@@ -90,7 +90,7 @@ def test_replay_from_file_returns_summary_stats(tmp_path: Path, raw_summary_json
     fixture_file.write_text(json.dumps(raw_summary_json))
 
     state = LiveMapState()
-    result = replay_from_archive_file(state, fixture_file, x_factor=1.0, y_factor=1.0)
+    result = replay_from_archive_file(state, fixture_file)
 
     assert result["path_points"] > 0  # total points across all track segments
     assert result["md5"] == state.summary_md5
@@ -111,7 +111,7 @@ def test_replay_keeps_path_empty_to_avoid_ghost_segments(tmp_path: Path, raw_sum
     fixture_file.write_text(json.dumps(raw_summary_json))
 
     state = LiveMapState()
-    replay_from_archive_file(state, fixture_file, x_factor=1.0, y_factor=1.0)
+    replay_from_archive_file(state, fixture_file)
 
     assert state.path == []
     # completed_track is what carries the per-segment geometry.
@@ -123,9 +123,7 @@ def test_replay_from_missing_file_raises():
 
     state = LiveMapState()
     with pytest.raises(FileNotFoundError):
-        replay_from_archive_file(
-            state, Path("/nonexistent/nope.json"), x_factor=1.0, y_factor=1.0
-        )
+        replay_from_archive_file(state, Path("/nonexistent/nope.json"))
 
 
 def test_replay_from_malformed_file_raises(tmp_path: Path):
@@ -136,4 +134,4 @@ def test_replay_from_malformed_file_raises(tmp_path: Path):
 
     state = LiveMapState()
     with pytest.raises(ValueError):
-        replay_from_archive_file(state, bad, x_factor=1.0, y_factor=1.0)
+        replay_from_archive_file(state, bad)

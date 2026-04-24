@@ -55,7 +55,9 @@ from .const import (
     NOTIFICATION_2FA_LOGIN,
 )
 
-from .live_map import OPT_X_FACTOR, OPT_Y_FACTOR, DEFAULT_X_FACTOR, DEFAULT_Y_FACTOR
+# live_map.OPT_X_FACTOR/OPT_Y_FACTOR removed in alpha.100 — the pose
+# decoder in alpha.98 rendered them obsolete (they existed only to
+# compensate for a 16× Y decode bug that's now fixed at the source).
 
 DREAME_MODELS = [
     "dreame.mower.",
@@ -121,17 +123,8 @@ class DreameMowerOptionsFlowHandler(OptionsFlow):
             # now the only transport. Existing options values will be
             # ignored.
 
-            # Calibration factors for the live map.
             data_schema = data_schema.extend(
                 {
-                    vol.Optional(
-                        OPT_X_FACTOR,
-                        default=options.get(OPT_X_FACTOR, DEFAULT_X_FACTOR),
-                    ): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=10.0)),
-                    vol.Optional(
-                        OPT_Y_FACTOR,
-                        default=options.get(OPT_Y_FACTOR, DEFAULT_Y_FACTOR),
-                    ): vol.All(vol.Coerce(float), vol.Range(min=0.1, max=10.0)),
                     vol.Optional(
                         CONF_MQTT_ARCHIVE,
                         default=options.get(CONF_MQTT_ARCHIVE, False),

@@ -103,11 +103,7 @@ def test_start_session_increments_id_on_each_call():
 
 def test_to_attributes_matches_schema_when_empty():
     s = LiveMapState()
-    attrs = s.to_attributes(
-        position=None,
-        x_factor=1.0,
-        y_factor=0.625,
-    )
+    attrs = s.to_attributes(position=None)
     assert attrs == {
         "mode": "latest",
         "position": None,
@@ -116,7 +112,6 @@ def test_to_attributes_matches_schema_when_empty():
         "charger_position": [0.0, 0.0],
         "session_id": 0,
         "session_start": None,
-        "calibration": {"x_factor": 1.0, "y_factor": 0.625},
         # Session-summary overlay keys — all empty/None when no summary yet.
         "lawn_polygon": [],
         "exclusion_zones": [],
@@ -135,11 +130,7 @@ def test_to_attributes_includes_current_state():
     s.append_point(1.5, 2.5)
     s.append_obstacle(3.0, 4.0)
 
-    attrs = s.to_attributes(
-        position=[1.5, 2.5],
-        x_factor=1.0,
-        y_factor=0.625,
-    )
+    attrs = s.to_attributes(position=[1.5, 2.5])
 
     assert attrs["position"] == [1.5, 2.5]
     assert attrs["path"] == [[1.0, 2.0], [1.5, 2.5]]
@@ -147,7 +138,6 @@ def test_to_attributes_includes_current_state():
     assert attrs["charger_position"] == [0.0, 0.0]
     assert attrs["session_id"] == 1
     assert attrs["session_start"] == "2026-04-18T12:00:00"
-    assert attrs["calibration"] == {"x_factor": 1.0, "y_factor": 0.625}
 
 
 def test_new_state_defaults_to_latest_mode():
@@ -211,5 +201,5 @@ def test_set_mode_to_latest_clears_pinned_md5_and_preserves_live():
 def test_to_attributes_includes_mode():
     s = LiveMapState()
     s.set_mode(MapMode.BLANK)
-    attrs = s.to_attributes(position=None, x_factor=1.0, y_factor=1.0)
+    attrs = s.to_attributes(position=None)
     assert attrs["mode"] == "blank"
