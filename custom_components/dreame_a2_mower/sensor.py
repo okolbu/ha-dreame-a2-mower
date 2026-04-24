@@ -853,16 +853,16 @@ class DreameArchivedSessionsSensor(SensorEntity):
         self._attr_native_unit_of_measurement = UNIT_TIMES
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_should_poll = False
-        # Cached extra_state_attributes — recomputed only on coordinator
-        # update, returned on every other property access. The build
-        # involves list_sessions() (which now hits the alpha.57 disk
-        # cache) plus 20 to_dict() calls for the recent_sessions list;
-        # field-flagged 2026-04-22 as taking ~485 ms when called from
-        # HA's state-update path. Caching pins the cost to once-per-
-        # coordinator-tick instead of once-per-property-access.
-        self._cached_attrs: dict | None = None
-        # Last (count, in_progress_md5) signature we built for. Used
-        # to skip rebuild when the underlying archive hasn't changed.
+        # Cached extra_state_attributes — ONLY ever mutated from the
+        # executor-side rebuild path (`_rebuild_attrs_if_changed`).
+        # `extra_state_attributes` returns this dict directly without
+        # any disk I/O so HA's event-loop detector never trips on us,
+        # even at platform-setup time before the first coordinator tick
+        # lands (alpha.112 fix — earlier versions built on-demand here
+        # which triggered blocking-read warnings on slow disks).
+        self._cached_attrs: dict = {}
+        # Last (count, in_progress_start_ts) signature we built for.
+        # Skip rebuild when the underlying archive hasn't changed.
         self._cached_sig: tuple | None = None
 
     @property
@@ -875,6 +875,8 @@ class DreameArchivedSessionsSensor(SensorEntity):
         return archive.count if archive else 0
 
     def _build_attrs(self) -> dict:
+        """Build the attribute dict. Callable from an executor thread;
+        does disk I/O via archive.list_sessions / archive.latest."""
         archive = self._coordinator.session_archive
         if not archive:
             return {}
@@ -888,33 +890,46 @@ class DreameArchivedSessionsSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        if self._cached_attrs is None:
-            self._cached_attrs = self._build_attrs()
+        # NEVER touches disk. Returns whatever the latest executor-side
+        # rebuild wrote into `_cached_attrs`. Initial render (before
+        # first coordinator tick) returns {} which HA is happy with.
         return self._cached_attrs
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(
             self._coordinator.async_add_listener(self._handle_coordinator_update)
         )
+        # Kick a rebuild on the first tick after entity mount so we
+        # don't wait for the next coordinator refresh (which can be
+        # seconds away on a quiet mower).
+        self.hass.async_add_executor_job(self._rebuild_attrs_if_changed)
 
     def _handle_coordinator_update(self) -> None:
-        # Recompute attrs only when the archive's signature changed
-        # — count + in-progress entry's md5 (or absence). Dramatically
-        # reduces the per-tick to_dict() / list_sessions() work for
-        # users with many archived sessions.
+        # Offload the signature check + possible rebuild to the
+        # executor. `archive.in_progress_entry` reads in_progress.json
+        # from disk (with a 5 s TTL cache that may have expired during
+        # HA boot), so doing it inline here used to trip the event-loop
+        # blocking detector (alpha.112 fix).
+        self.hass.async_add_executor_job(self._rebuild_attrs_if_changed)
+
+    def _rebuild_attrs_if_changed(self) -> None:
+        """Executor-side: check archive signature, rebuild + dispatch
+        state if it changed. No-op if nothing moved."""
         archive = self._coordinator.session_archive
         if archive is not None:
             in_progress = archive.in_progress_entry()
-            sig = (
+            new_sig = (
                 archive.count,
                 in_progress.start_ts if in_progress else None,
             )
         else:
-            sig = (0, None)
-        if sig != self._cached_sig:
-            self._cached_sig = sig
-            self._cached_attrs = self._build_attrs()
-        self.async_write_ha_state()
+            new_sig = (0, None)
+        if new_sig == self._cached_sig:
+            return
+        self._cached_sig = new_sig
+        self._cached_attrs = self._build_attrs()
+        # Back to the event loop for the state write.
+        self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
 
 
 class DreameArchivedLidarScansSensor(SensorEntity):
@@ -932,6 +947,14 @@ class DreameArchivedLidarScansSensor(SensorEntity):
         self._attr_native_unit_of_measurement = UNIT_TIMES
         self._attr_state_class = SensorStateClass.MEASUREMENT
         self._attr_should_poll = False
+        # Same cached-via-executor pattern as DreameArchivedSessionsSensor
+        # (alpha.112). Lidar archive's `latest` / `list_scans` don't
+        # currently read disk (load_index is idempotent + in-memory after
+        # coordinator.async_setup warms it), but keeping the access
+        # pattern uniform across the two sensors prevents future
+        # refactors from accidentally re-introducing event-loop disk I/O.
+        self._cached_attrs: dict = {}
+        self._cached_sig: tuple | None = None
 
     @property
     def available(self) -> bool:
@@ -944,21 +967,30 @@ class DreameArchivedLidarScansSensor(SensorEntity):
 
     @property
     def extra_state_attributes(self) -> dict:
-        archive = self._coordinator.lidar_archive
-        if not archive:
-            return {}
-        latest = archive.latest()
-        scans = archive.list_scans()[: self.MAX_LISTED]
-        return {
-            "archive_root": str(archive.root),
-            "latest": latest.to_dict() if latest else None,
-            "recent_scans": [s.to_dict() for s in scans],
-        }
+        return self._cached_attrs
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(
             self._coordinator.async_add_listener(self._handle_coordinator_update)
         )
+        self.hass.async_add_executor_job(self._rebuild_attrs_if_changed)
 
     def _handle_coordinator_update(self) -> None:
-        self.async_write_ha_state()
+        self.hass.async_add_executor_job(self._rebuild_attrs_if_changed)
+
+    def _rebuild_attrs_if_changed(self) -> None:
+        archive = self._coordinator.lidar_archive
+        if archive is None:
+            return
+        latest = archive.latest()
+        new_sig = (archive.count, latest.md5 if latest else None)
+        if new_sig == self._cached_sig:
+            return
+        self._cached_sig = new_sig
+        scans = archive.list_scans()[: self.MAX_LISTED]
+        self._cached_attrs = {
+            "archive_root": str(archive.root),
+            "latest": latest.to_dict() if latest else None,
+            "recent_scans": [s.to_dict() for s in scans],
+        }
+        self.hass.loop.call_soon_threadsafe(self.async_write_ha_state)
