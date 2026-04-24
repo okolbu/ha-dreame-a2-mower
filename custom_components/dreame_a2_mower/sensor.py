@@ -667,7 +667,10 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         key="cfg_fetch_health",
         icon="mdi:cloud-sync",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        # Enabled by default — the whole point of this sensor is to make
+        # silent CFG-fetch failures visible; disabled-by-default defeats
+        # that. Ships under the Diagnostic category so it doesn't clutter
+        # the main device view.
         value_fn=lambda value, device: (
             "disabled" if getattr(device, "_routed_actions_supported", None) is False
             else ("backoff" if getattr(device, "_cfg_consecutive_failures", 0) > 0 else "ok")
