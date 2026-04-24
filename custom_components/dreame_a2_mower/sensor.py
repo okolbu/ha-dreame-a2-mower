@@ -642,7 +642,19 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         value_fn=lambda value, device: len(
             getattr(device, "cfg", None) or {}
         ),
-        attrs_fn=lambda device: dict(getattr(device, "cfg", None) or {}),
+        attrs_fn=lambda device: {
+            **dict(getattr(device, "cfg", None) or {}),
+            "_recent_changes": dict(
+                getattr(device, "_cfg_recent_changes", None) or {}
+            ),
+            "_last_diff": {
+                k: {"old": old, "new": new}
+                for k, (old, new) in (
+                    getattr(device, "_cfg_last_diff", None) or {}
+                ).items()
+            },
+            "_last_diff_at": getattr(device, "_cfg_last_diff_at", None),
+        },
         exists_fn=lambda description, device: True,
     ),
     # Routed-action fetch health. State is "ok" / "backoff" / "disabled";

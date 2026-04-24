@@ -214,3 +214,44 @@ views:
               full 3D inspection. Fresh scans are only downloaded when
               you tap *Download LiDAR map* in the Dreame app — see the
               README "Map & LiDAR freshness" section for why.
+          - type: markdown
+            title: CFG toggle-research view
+            content: |
+              {%- set ns = namespace(rows=[]) %}
+              {%- set all_attrs = states.sensor.dreame_a2_mower_cfg_keys_raw.attributes if states.sensor.dreame_a2_mower_cfg_keys_raw else {} %}
+              {%- set changes = all_attrs.get('_recent_changes', {}) %}
+              {%- set last_diff = all_attrs.get('_last_diff', {}) %}
+              {%- set now_ts = as_timestamp(now()) %}
+              {%- if all_attrs %}
+              | Key | Value | Last changed |
+              |---|---|---|
+              {%- for k in all_attrs | sort %}
+                {%- if not k.startswith('_') and k not in ('icon','friendly_name') %}
+                  {%- set changed = changes.get(k) %}
+                  {%- if changed %}
+                    {%- set age = (now_ts - changed.changed_at) | round(0) | int %}
+                    {%- if age < 60 %}
+                      {%- set tag = '🔴 ' ~ age ~ 's ago' %}
+                    {%- elif age < 300 %}
+                      {%- set tag = '🟠 ' ~ (age // 60) ~ 'm ago' %}
+                    {%- else %}
+                      {%- set tag = (age // 60) ~ 'm ago' %}
+                    {%- endif %}
+                    {%- set ns.rows = ns.rows + ['| `' ~ k ~ '` | `' ~ all_attrs[k] ~ '` | ' ~ tag ~ ' (was `' ~ changed.old ~ '`) |'] %}
+                  {%- else %}
+                    {%- set ns.rows = ns.rows + ['| `' ~ k ~ '` | `' ~ all_attrs[k] ~ '` | — |'] %}
+                  {%- endif %}
+                {%- endif %}
+              {%- endfor %}
+              {{ ns.rows | join('\n') }}
+              {%- else %}
+              _Enable `sensor.dreame_a2_mower_cfg_keys_raw` from the device
+              page (disabled-by-default diagnostic) to see CFG keys here._
+              {%- endif %}
+              {%- if last_diff %}
+
+              **Last refresh diff** ({{ last_diff | length }} key(s)):
+              {%- for k, v in last_diff.items() %}
+              - `{{ k }}`: `{{ v.old }}` → `{{ v.new }}`
+              {%- endfor %}
+              {%- endif %}

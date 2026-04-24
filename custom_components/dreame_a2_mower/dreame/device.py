@@ -307,6 +307,16 @@ class DreameMowerDevice:
         self._cfg_last_failure_ts: float | None = None
         self._cfg_success_count: int = 0
         self._cfg_failure_count: int = 0
+        # Per-CFG-key change log — populated on every successful
+        # refresh_cfg when a value differs from the previous snapshot.
+        # Keys never expire; the "recency" is derived at render time
+        # from (now - changed_at). Powers the cfg_keys_raw `_recent_
+        # changes` attribute used by toggle-correlation dashboards.
+        self._cfg_recent_changes: dict[str, dict] = {}
+        # The diff from the most recent refresh_cfg call, if any keys
+        # moved on that call. Reset-aware view of "what just flipped".
+        self._cfg_last_diff: dict[str, tuple] = {}
+        self._cfg_last_diff_at: float | None = None
         # OSS object key of the most recently *announced* session-summary
         # (from the event_occured push) that we have NOT yet successfully
         # downloaded. Cleared on a successful fetch. Used so a transient
@@ -6006,15 +6016,24 @@ class DreameMowerDevice:
         # Compute diff vs previous cfg — any key whose value changed
         # is logged at WARNING so app-side toggles immediately reveal
         # which CFG slot they drive. One-shot-per-toggle, quiet at
-        # steady state.
+        # steady state. Also persists per-key change timestamps in
+        # `_cfg_recent_changes` so the cfg_keys_raw sensor can expose
+        # a "which keys just moved" view without needing log tailing.
         prev = self._cfg
+        now = time.time()
         changed = {}
         if isinstance(prev, dict) and prev:
             for k in sorted(set(prev.keys()) | set(cfg.keys())):
                 if prev.get(k) != cfg.get(k):
                     changed[k] = (prev.get(k), cfg.get(k))
+        for k, (old, new) in changed.items():
+            self._cfg_recent_changes[k] = {
+                "old": old, "new": new, "changed_at": now
+            }
+        self._cfg_last_diff = dict(changed)
+        self._cfg_last_diff_at = now if changed else self._cfg_last_diff_at
         self._cfg = cfg
-        self._cfg_fetched_at = time.time()
+        self._cfg_fetched_at = now
         self._routed_actions_supported = True
         self._routed_action_note_success()
         _LOGGER.info("[CFG] fetched %d settings keys", len(cfg))
