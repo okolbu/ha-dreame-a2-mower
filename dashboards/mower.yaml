@@ -165,6 +165,7 @@ views:
                 name: Efficient mode
               - entity: sensor.dreame_a2_mower_navigation_path
               - entity: sensor.dreame_a2_mower_frost_protection
+              - entity: sensor.dreame_a2_mower_rain_protection
               - entity: sensor.dreame_a2_mower_anti_theft
               - entity: sensor.dreame_a2_mower_weather_reference
               - entity: sensor.dreame_a2_mower_headlight_enabled

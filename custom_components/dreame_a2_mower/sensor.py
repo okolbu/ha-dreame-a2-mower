@@ -637,6 +637,38 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("FDP"),
     ),
+    # CFG.WRP is Rain Protection — [enabled, resume_hours] (confirmed
+    # 2026-04-24). Shape matches the s2p51 RAIN_PROTECTION decoder.
+    # Hours: 0 means "Don't Mow After Rain" (no auto-resume); 1..24
+    # means resume N hours after rain ends. State shows off/on; the
+    # raw values are exposed as attributes.
+    #
+    # Distinct from binary_sensor.rain_protection_active which tracks
+    # whether it's raining right now (s2p2=56).
+    DreameMowerSensorEntityDescription(
+        key="rain_protection",
+        icon="mdi:weather-pouring",
+        value_fn=lambda value, device: (
+            ("on" if device.cfg.get("WRP")[0] else "off")
+            if isinstance(device.cfg.get("WRP"), list)
+            and len(device.cfg["WRP"]) >= 1
+            and isinstance(device.cfg["WRP"][0], int)
+            else None
+        ),
+        attrs_fn=lambda device: (
+            {
+                "enabled": bool(device.cfg["WRP"][0]),
+                "resume_hours": int(device.cfg["WRP"][1]),
+                "auto_resume": int(device.cfg["WRP"][1]) > 0,
+            }
+            if isinstance(device.cfg.get("WRP"), list)
+            and len(device.cfg["WRP"]) >= 2
+            and all(isinstance(x, int) for x in device.cfg["WRP"][:2])
+            else {}
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("WRP", min_len=2),
+    ),
     # Raw CFG dump — disabled-by-default diagnostic. Enable from the
     # device page to see every CFG key + value as entity attributes,
     # useful for toggle-correlation research (which CFG key is Frost
