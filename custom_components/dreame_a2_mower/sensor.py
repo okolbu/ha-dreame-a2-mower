@@ -718,6 +718,49 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("FDP"),
     ),
+    # CFG.REC is Human Presence Detection Alert (confirmed 2026-04-24).
+    # 9-element shape matches the s2p51 HUMAN_PRESENCE_ALERT decoder:
+    # - REC[0]: main toggle
+    # - REC[1]: detection sensitivity {0: low, 1: medium, 2: high}
+    # - REC[2]: activation scenario "In Standby"
+    # - REC[3]: activation scenario "In Mowing"
+    # - REC[4]: activation scenario "Recharge"
+    # - REC[5]: activation scenario "In Point Patrol"
+    # - REC[6]: voice prompts + in-app notifications
+    # - REC[7]: agreement for sending human photos (privacy consent)
+    # - REC[8]: push interval in minutes (observed 3 / 10 / 20)
+    DreameMowerSensorEntityDescription(
+        key="human_presence_alert",
+        icon="mdi:motion-sensor",
+        value_fn=lambda value, device: (
+            ("on" if device.cfg["REC"][0] else "off")
+            if isinstance(device.cfg.get("REC"), list)
+            and len(device.cfg["REC"]) >= 1
+            and isinstance(device.cfg["REC"][0], int)
+            else None
+        ),
+        attrs_fn=lambda device: (
+            {
+                "enabled": bool(device.cfg["REC"][0]),
+                "sensitivity": {0: "low", 1: "medium", 2: "high"}.get(
+                    int(device.cfg["REC"][1]), device.cfg["REC"][1]
+                ),
+                "scenario_standby": bool(device.cfg["REC"][2]),
+                "scenario_mowing": bool(device.cfg["REC"][3]),
+                "scenario_recharge": bool(device.cfg["REC"][4]),
+                "scenario_patrol": bool(device.cfg["REC"][5]),
+                "voice_and_notifications": bool(device.cfg["REC"][6]),
+                "photo_consent": bool(device.cfg["REC"][7]),
+                "push_interval_min": int(device.cfg["REC"][8]),
+            }
+            if isinstance(device.cfg.get("REC"), list)
+            and len(device.cfg["REC"]) >= 9
+            and all(isinstance(x, int) for x in device.cfg["REC"][:9])
+            else {}
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("REC", min_len=9),
+    ),
     # CFG.DND is Do Not Disturb (confirmed 2026-04-24). Shape
     # [enabled, start_min, end_min] with start/end in minutes-from-
     # midnight. Note the element ORDER differs from the s2p51 DND
