@@ -5998,12 +5998,21 @@ class DreameMowerDevice:
                 "entry or restart HA to retry.",
                 self._cfg_consecutive_failures,
             )
+        # Notify listeners so the cfg_fetch_health diagnostic sensor
+        # reflects the failure immediately instead of on the next
+        # unrelated MQTT property change.
+        self._property_changed()
 
     def _routed_action_note_success(self) -> None:
         """Reset backoff/strike tracking after any successful call."""
         self._cfg_consecutive_failures = 0
         self._cfg_next_retry_at = 0.0
         self._cfg_success_count += 1
+        # Notify listeners so cfg_keys_raw / cfg_fetch_health reflect
+        # the fresh fetch. Without this, CFG sensors only propagate on
+        # boot and every subsequent refresh is invisible until another
+        # mapped-property MQTT event happens to fire _property_changed.
+        self._property_changed()
 
     def refresh_cfg(self) -> bool:
         """Fetch the full settings dict via the routed action. Stores the
