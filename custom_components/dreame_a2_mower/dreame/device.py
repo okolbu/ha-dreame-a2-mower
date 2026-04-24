@@ -319,6 +319,17 @@ class DreameMowerDevice:
         self._cfg_last_failure_ts: float | None = None
         self._cfg_success_count: int = 0
         self._cfg_failure_count: int = 0
+        # Total refresh_cfg() call attempts — bumped before any
+        # early-return so we can distinguish "never called" from
+        # "called but short-circuited" during toggle-correlation
+        # research. Also tracks short-circuit reasons.
+        self._cfg_attempt_count: int = 0
+        self._cfg_short_circuit_counts: dict[str, int] = {
+            "no_protocol": 0,
+            "hard_disabled": 0,
+            "in_backoff": 0,
+        }
+        self._cfg_last_attempt_ts: float | None = None
         # Per-CFG-key change log — populated on every successful
         # refresh_cfg when a value differs from the previous snapshot.
         # Keys never expire; the "recency" is derived at render time
@@ -6024,12 +6035,24 @@ class DreameMowerDevice:
         """
         from ..protocol.cfg_action import get_cfg, CfgActionError
 
+        self._cfg_attempt_count += 1
+        self._cfg_last_attempt_ts = time.time()
         if self._protocol is None:
+            self._cfg_short_circuit_counts["no_protocol"] += 1
+            self._property_changed()
             return False
         if self._routed_actions_supported is False:
+            self._cfg_short_circuit_counts["hard_disabled"] += 1
+            self._property_changed()
             return False
         if self._routed_action_in_backoff():
+            self._cfg_short_circuit_counts["in_backoff"] += 1
+            self._property_changed()
             return False
+        _LOGGER.warning(
+            "[CFG_DEBUG] refresh_cfg entry (attempt=%d) — calling get_cfg()",
+            self._cfg_attempt_count,
+        )
         try:
             cfg = get_cfg(self._protocol.action)
         except CfgActionError as ex:
