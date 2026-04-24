@@ -186,7 +186,7 @@ def test_tick_in_blank_mode_accumulates_path_but_does_not_dispatch():
     # happens. Mode itself stays BLANK.
     device = SimpleNamespace(
         status=SimpleNamespace(started=True),
-        latest_position=(100, 100),
+        latest_position=(1000, 62),  # (x_mm, y_mm) yields [1.0, 0.062]
         obstacle_detected=False,
         latest_session_summary=None,
         _session_status_known=True,
@@ -213,7 +213,7 @@ def test_tick_in_session_mode_accumulates_path_but_overlay_frozen(tmp_path):
     archive = FakeArchive([entry], tmp_path)
     device = SimpleNamespace(
         status=SimpleNamespace(started=True),
-        latest_position=(100, 100),
+        latest_position=(1000, 62),  # (x_mm, y_mm) yields [1.0, 0.062]
         obstacle_detected=False,
         latest_session_summary=None,
         _session_status_known=True,
@@ -253,7 +253,7 @@ def test_latest_mode_session_start_wipes_overlay():
 
     # Mower starts.
     device.status = SimpleNamespace(started=True)
-    device.latest_position = (100, 100)  # 1 m, 0.1 m
+    device.latest_position = (1000, 62)  # 1.0 m, 0.062 m (post-alpha.98 mm semantics)
     lm._handle_coordinator_update()
 
     assert lm._state.lawn_polygon == []
@@ -277,7 +277,7 @@ def test_latest_mode_position_dispatched_whenever_telemetry_arrives():
     is set in the dispatched attrs, regardless of `started`."""
     device = SimpleNamespace(
         status=SimpleNamespace(started=False),
-        latest_position=(100, 100),
+        latest_position=(1000, 62),  # (x_mm, y_mm) yields [1.0, 0.062]
         obstacle_detected=False,
         latest_session_summary=None,
         _session_status_known=True,

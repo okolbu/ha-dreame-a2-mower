@@ -418,54 +418,39 @@ frame's pose.
 3. Only then modify `protocol/telemetry.py` and consider enriching
    live_map path accumulation.
 
-**Bytes [1-6] — position decode analysis (2026-04-24, open question)**:
-Our current `telemetry.py` treats bytes [1-4] as two int16 LE (`x_cm`,
-`y_mm`) and ignores byte [5]. ioBroker's apk reference describes a
-**20-bit signed packed representation** where X uses bytes
-`[1,2,3_low_nibble]` and Y uses bytes `[3_high_nibble,4,5]` — X and Y
-share byte [3]:
+**Bytes [1-6] — position decode CONFIRMED on g2408 (2026-04-24, alpha.98)**:
+`telemetry.py` now uses the apk's 20-bit signed packed decode for
+bytes [1-5], with X using bytes `[1,2,3_low_nibble]` and Y using bytes
+`[3_high_nibble,4,5]`. Results are scaled ×10 per the apk's "map
+coordinates" rule so both `x_mm` and `y_mm` are in map-scale
+millimetres (= same frame as MAP/cleanPoints/dock positions). Earlier
+versions used a broken int16 LE at [1-2]/[3-4] with a 16× Y overshoot
+compensated by scattered `0.625` / `0.000625` factors downstream; all
+of those are removed in alpha.98. Reference formulae:
 
 ```javascript
 x = (payload[2] << 28 | payload[1] << 20 | payload[0] << 12) >> 12
 y = (payload[4] << 24 | payload[3] << 16 | payload[2] << 8) >> 12
 ```
 
-**Validation on 5,000 g2408 frames** (probe-log corpus):
-- **X: int16 decode and 20-bit decode produce identical values in all
-  5,000 frames.** When b[3]'s low nibble is 0 (positive X) or 0xF (sign
-  extension for small negative X), the 20-bit formula collapses to the
-  same result as a plain int16 of bytes [1-2]. Our X decode is
-  coincidentally correct for our user's lawn.
-- **Y: int16 decode is consistently 16× the 20-bit decode.** Example
-  frame `bytes[1-5] = fe ff 6f 45 00`: int16 decode gives Y=+17775, 20-bit
-  decode gives Y=+1110 (ratio 16.01). The factor of 16 comes from the
-  apk's `>> 12` shift — we read b[3] as an 8-bit value when the 20-bit
-  formula only uses its high nibble.
+**Validation** (alpha.98 pre-landing):
+- **Fixture `captured_s1p4_frames.json`**: 5 dock-departure frames with
+  a documented ground-truth westward path. 20-bit decode reproduces
+  X: 0 → -203 → -409 → -614 → -817 cm (× 10 = mm) exactly matching
+  the old int16 decode (which works because for small coords bytes[3]'s
+  low nibble is 0 or 0xF = sign extension). Y small (-6 cm to -9 cm),
+  consistent with the mower hugging Y=0 during straight-line dock exit.
+- **Full probe corpus (14.7k frames)**: X always matches the old int16
+  × 10; Y is 1/16× the old int16 value (the old decoder was reading the
+  wrong bits of b[3]). Downstream `* 0.625` compensation is gone.
 
-**Why our working rendering still plots paths on the right spots**:
-`live_map.py:58` scales our decoded value with `y_mm * 0.000625`, i.e.
-dividing by 1600 rather than the expected 1000 for a mm→m conversion.
-Someone empirically calibrated that magic factor, effectively cancelling
-the 16× overshoot from our int16 decode (since 16/1600 = 1/100 ≈ a cm→m
-conversion). In other words: our raw Y is reported as `mm` in the
-variable name, but it's actually "(20-bit-Y-in-cm) × 16", and the
-downstream scale factor compensates. **The variable name is lying.**
-
-**Open questions, hence no decoder change yet**:
-- Is the apk layout right for g2408, or is g2408 actually sending
-  native int16-in-cm? The fact that the apk's Δ1 sign convention gives
-  median X error 13 mm but median Y error 656 mm suggests something
-  is still off — it isn't a clean match.
-- If we switch to the 20-bit decode, EVERY downstream user of
-  `telemetry.y_mm` + the compensating 0.000625 factor breaks
-  simultaneously. The rename + refactor is non-trivial.
-
-Decoder change deferred until either (a) a user reports Y rendering
-going wrong on a bigger lawn, (b) we find a second independent
-source confirming the 20-bit layout on g2408 specifically, or (c) we
-correlate the trace deltas against RECORDED RENDERED PATH points
-(rather than pose-to-pose) and see which decode choice produces a
-tight match.
+**Historical note for readers of older commits**: pre-alpha.98 code
+named the fields `x_cm` and `y_mm`; the X name was roughly honest
+(raw cm × 10 = mm), but the Y name lied — it was actually
+"(20-bit-Y-in-cm) × 16", and scattered magic factors (`* 0.000625`,
+`* 0.625`, `y_factor=0.625`) compensated for the decoder bug. All
+renamed to `x_mm` / `y_mm` (both in map-scale mm) + compensations
+removed in alpha.98.
 
 The integration decodes the position correctly via `decode_s1p4_position`. As of
 v2.0.0-alpha.7 each novel short-frame length also logs the raw bytes once at

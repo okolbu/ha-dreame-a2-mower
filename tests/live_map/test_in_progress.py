@@ -82,7 +82,7 @@ def test_restore_in_progress_on_init(tmp_path):
 
 def test_persist_in_progress_during_active_mow(tmp_path):
     archive = SessionArchive(tmp_path)
-    device = _make_device(started=True, session_known=True, position=(100, 100))
+    device = _make_device(started=True, session_known=True, position=(1000, 62))
     lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
 
     lm._handle_coordinator_update()
@@ -206,7 +206,7 @@ def test_telemetry_extends_path_when_active_is_stale_but_in_progress_exists(tmp_
     # — but real telemetry IS arriving (latest_position non-None).
     device = SimpleNamespace(
         status=SimpleNamespace(started=False),
-        latest_position=(500, 500),
+        latest_position=(5000, 312),  # post-alpha.98 (x_mm, y_mm) — matches old [5.0, 0.312]
         obstacle_detected=False,
         latest_session_summary=None,
         _session_status_known=False,
@@ -235,7 +235,7 @@ def test_telemetry_outside_session_does_not_persist_phantom(tmp_path):
 
     device = SimpleNamespace(
         status=SimpleNamespace(started=False),
-        latest_position=(500, 500),
+        latest_position=(5000, 312),  # post-alpha.98 (x_mm, y_mm) — matches old [5.0, 0.312]
         obstacle_detected=False,
         latest_session_summary=None,
         _session_status_known=True,  # known not active
@@ -620,7 +620,7 @@ def test_leg_merge_skips_stale_summary_from_previous_run(tmp_path):
         obstacles=[],
         dock=(0.0, 0.0),
     )
-    device = _make_device(started=True, session_known=True, position=(100, 100))
+    device = _make_device(started=True, session_known=True, position=(1000, 62))
     device.latest_session_summary = stale
     lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
 
@@ -653,7 +653,7 @@ def test_leg_merge_accepts_summary_inside_current_session(tmp_path):
         obstacles=[],
         dock=(0.0, 0.0),
     )
-    device = _make_device(started=True, session_known=True, position=(100, 100))
+    device = _make_device(started=True, session_known=True, position=(1000, 62))
     device.latest_session_summary = fresh
     lm = DreameA2LiveMap(_make_hass(), _make_entry(), _make_coordinator(archive, device))
     lm._prev_session_active = False

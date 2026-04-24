@@ -223,7 +223,7 @@ class DreameMowerDevice:
         # need to auto-clear after a timeout when the mower stops re-asserting
         # a latched boolean (e.g. s1p53 obstacle flag — no "all-clear" event).
         self._property_last_seen_at: dict[int, float] = {}
-        # Latest decoded position (x_cm, y_mm) from either the 33-byte full
+        # Latest decoded position (x_mm, y_mm) from either the 33-byte full
         # telemetry frame or the 8-byte idle beacon. Updated on every s1p4
         # arrival; independent of `mowing_telemetry` (which is only set for
         # full-shape frames so phase/area/distance sensors don't flicker).
@@ -1288,9 +1288,9 @@ class DreameMowerDevice:
                     raw = bytes(value)
                     # Always extract position — works on 8/10-byte variants too.
                     beacon = decode_s1p4_position(raw)
-                    self._latest_position = (beacon.x_cm, beacon.y_mm)
+                    self._latest_position = (beacon.x_mm, beacon.y_mm)
                     self._latest_position_ts = time.time()
-                    self._update_map_robot_position(beacon.x_cm, beacon.y_mm)
+                    self._update_map_robot_position(beacon.x_mm, beacon.y_mm)
                     if len(raw) == FRAME_LENGTH:
                         param["value"] = decode_s1p4(raw)
                     else:
@@ -1446,19 +1446,23 @@ class DreameMowerDevice:
             self._clear_manual_mode_overlay()
             self._mowing_state_entered_at = None
 
-    def _update_map_robot_position(self, x_cm: int, y_mm: int) -> None:
+    def _update_map_robot_position(self, x_mm: int, y_mm: int) -> None:
         """Project s1p4 charger-relative position into the cloud-frame map.
 
         Transform (see docs/research/g2408-protocol.md §Coordinates):
 
-            mower_cloud_x = charger_position.x - x_cm * 10
-            mower_cloud_y = charger_position.y - y_mm * 0.625
+            mower_cloud_x = charger_position.x - x_mm
+            mower_cloud_y = charger_position.y - y_mm
 
-        The cloud frame uses X+Y reflection through the midline that the
-        A2 station sits on, so a positive charger-relative x_cm (mower
-        moved forward out of the dock) becomes a *negative* delta in
-        cloud-X. The 0.625 factor on y_mm was tuned against overlay
-        path data (user 2026-04-19 session review).
+        Both axes are in map-scale mm (matches cloud-frame units), so
+        the projection is a straight subtraction. The cloud frame uses
+        X+Y reflection through the midline that the A2 station sits on,
+        so a positive charger-relative mower position becomes a
+        *negative* delta in the cloud frame.
+
+        Historical note: alphas prior to .98 had a 16× Y scaling bug in
+        the pose decoder compensated by a `* 0.625` factor here. alpha.98
+        fixed the decoder; both factors are now removed.
 
         Updates both the live `_map_data.robot_position` and the saved
         map copy that the camera renders from. No-op if the map hasn't
@@ -1472,8 +1476,8 @@ class DreameMowerDevice:
             return
         try:
             from .types import Point
-            mower_x = map_data.charger_position.x - x_cm * 10
-            mower_y = map_data.charger_position.y - y_mm * 0.625
+            mower_x = map_data.charger_position.x - x_mm
+            mower_y = map_data.charger_position.y - y_mm
             pt = Point(mower_x, mower_y, 0)
             map_data.robot_position = pt
             saved = getattr(self._map_manager, "_saved_map_data", None)

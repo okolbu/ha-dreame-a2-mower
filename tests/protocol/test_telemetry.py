@@ -14,13 +14,14 @@ from protocol.telemetry import (
 )
 
 
-# Fixture frame: raw x=-1562 (cm → -15.62m), y=2847 (mm → 2.85m), phase=2,
+# Fixture frame: 20-bit-packed pose (bytes [1-5]) decodes to
+# x=-15620mm (-15.62m), y=1770mm (1.77m), phase=2,
 # area_mowed=12.50m², total_area=321.00m², distance=45.4m, seq=1094.
 ACTIVE_MOW_FRAME = bytes([
     0xCE,                                     # [0] delimiter
-    0xE6, 0xF9,                               # [1-2] x = -1562 (int16_le, 0xF9E6)
-    0x1F, 0x0B,                               # [3-4] y = 2847 (int16_le, 0x0B1F)
-    0x00,                                     # [5] static
+    0xE6, 0xF9,                               # [1-2] x low bytes
+    0x1F, 0x0B,                               # [3-4] x-high-nibble + y low bytes
+    0x00,                                     # [5] y high byte
     0x46, 0x04,                               # [6-7] seq = 1094
     0x02,                                     # [8] phase = mowing
     0x00,                                     # [9] static
@@ -42,17 +43,17 @@ def test_decode_s1p4_valid_frame_returns_telemetry_dataclass():
     assert isinstance(t, MowingTelemetry)
 
 
-def test_decode_s1p4_position_raw_scales_are_cm_for_x_and_mm_for_y():
+def test_decode_s1p4_position_is_in_map_scale_millimetres():
     t = decode_s1p4(ACTIVE_MOW_FRAME)
-    assert t.x_cm == -1562
-    assert t.y_mm == 2847
+    assert t.x_mm == -15620
+    assert t.y_mm == 1770
 
 
-def test_decode_s1p4_position_exposed_in_metres_uses_per_axis_scale():
+def test_decode_s1p4_position_exposed_in_metres():
     t = decode_s1p4(ACTIVE_MOW_FRAME)
-    # X divides raw by 100 (cm → m); Y divides raw by 1000 (mm → m).
+    # Both axes in mm, both divided by 1000 for metres.
     assert t.x_m == pytest.approx(-15.62)
-    assert t.y_m == pytest.approx(2.847)
+    assert t.y_m == pytest.approx(1.77)
 
 
 def test_decode_s1p4_rejects_wrong_length():
@@ -161,33 +162,34 @@ def test_decode_s1p4_heading_full_circle_just_under_360():
 
 # --- 8-byte idle/beacon frame tests -----------------------------------
 
-# Captured live: X=737cm, Y=-5040mm, docked mower emitting minimal beacon.
+# Captured live: docked mower emitting minimal beacon
+# (decoded as X=7370mm, Y=-3150mm).
 BEACON_DOCKED = bytes([0xCE, 0xE1, 0x02, 0x50, 0xEC, 0xFF, 0x06, 0xCE])
 
-# Captured live during user remote-drive: X=1986cm, Y=2480mm.
+# Captured live during user remote-drive (decoded as X=19860mm, Y=1550mm).
 BEACON_DRIVE = bytes([0xCE, 0xC2, 0x07, 0xB0, 0x09, 0x00, 0xE9, 0xCE])
 
-# Captured live, near dock: X=25cm, Y=-112mm.
+# Captured live, near dock (decoded as X=250mm, Y=-70mm).
 BEACON_NEAR_DOCK = bytes([0xCE, 0x19, 0x00, 0x90, 0xFF, 0xFF, 0xFD, 0xCE])
 
 
 def test_decode_s1p4_position_from_beacon_returns_position():
     p = decode_s1p4_position(BEACON_DOCKED)
     assert isinstance(p, PositionBeacon)
-    assert p.x_cm == 737
-    assert p.y_mm == -5040
+    assert p.x_mm == 7370
+    assert p.y_mm == -3150
 
 
 def test_decode_s1p4_position_handles_positive_y():
     p = decode_s1p4_position(BEACON_DRIVE)
-    assert p.x_cm == 1986
-    assert p.y_mm == 2480
+    assert p.x_mm == 19860
+    assert p.y_mm == 1550
 
 
 def test_decode_s1p4_position_handles_small_negative_y():
     p = decode_s1p4_position(BEACON_NEAR_DOCK)
-    assert p.x_cm == 25
-    assert p.y_mm == -112
+    assert p.x_mm == 250
+    assert p.y_mm == -70
 
 
 def test_decode_s1p4_position_accepts_full_frame_too():
@@ -195,8 +197,8 @@ def test_decode_s1p4_position_accepts_full_frame_too():
     # a PositionBeacon with just X/Y (callers who want full telemetry
     # should call decode_s1p4 directly).
     p = decode_s1p4_position(ACTIVE_MOW_FRAME)
-    assert p.x_cm == -1562
-    assert p.y_mm == 2847
+    assert p.x_mm == -15620
+    assert p.y_mm == 1770
 
 
 def test_decode_s1p4_position_rejects_unexpected_length():
@@ -212,29 +214,29 @@ def test_decode_s1p4_position_rejects_missing_delimiters():
 def test_position_beacon_x_m_and_y_m_helpers():
     p = decode_s1p4_position(BEACON_DRIVE)
     assert p.x_m == pytest.approx(19.86)
-    assert p.y_m == pytest.approx(2.48)
+    assert p.y_m == pytest.approx(1.55)
 
 
 # --- 10-byte BUILDING frame tests --------------------------------------
 
-# Captured live during user's map-build zone-expansion (s2p1=11):
-# X=1915cm (19.15m), Y=3408mm (3.41m).
+# Captured live during user's map-build zone-expansion (s2p1=11)
+# — decoded as X=19150mm (19.15m), Y=2130mm (2.13m).
 BUILD_FRAME_1 = bytes([0xCE, 0x7B, 0x07, 0x50, 0x0D, 0x00, 0x0B, 0x08, 0x00, 0xCE])
 
-# Second build-frame capture: X=1158cm, Y=-4864mm.
+# Second build-frame capture (decoded as X=11580mm, Y=-3040mm).
 BUILD_FRAME_2 = bytes([0xCE, 0x86, 0x04, 0x00, 0xED, 0xFF, 0x4B, 0x1B, 0x00, 0xCE])
 
 
 def test_decode_s1p4_position_accepts_10_byte_building_frame():
     p = decode_s1p4_position(BUILD_FRAME_1)
-    assert p.x_cm == 1915
-    assert p.y_mm == 3408
+    assert p.x_mm == 19150
+    assert p.y_mm == 2130
 
 
 def test_decode_s1p4_position_10_byte_handles_negative_y():
     p = decode_s1p4_position(BUILD_FRAME_2)
-    assert p.x_cm == 1158
-    assert p.y_mm == -4864
+    assert p.x_mm == 11580
+    assert p.y_mm == -3040
 
 
 def test_decode_s1p4_position_rejects_9_byte_frame():

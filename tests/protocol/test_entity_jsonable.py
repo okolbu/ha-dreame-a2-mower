@@ -39,7 +39,7 @@ def _json_roundtrip(obj) -> str:
 
 def test_mowing_telemetry_is_serialized_to_dict():
     t = MowingTelemetry(
-        x_cm=47,
+        x_mm=47,
         y_mm=-80,
         sequence=28417,
         phase=Phase.ZONE_15,
@@ -56,24 +56,24 @@ def test_mowing_telemetry_is_serialized_to_dict():
     )
     serialized = _jsonable({"value": t})
     assert isinstance(serialized["value"], dict)
-    assert serialized["value"]["x_cm"] == 47
+    assert serialized["value"]["x_mm"] == 47
     assert serialized["value"]["phase_raw"] == 15
     # Must be a plain dict json.dumps can eat.
     _json_roundtrip(serialized)
 
 
 def test_position_beacon_is_serialized_to_dict():
-    b = PositionBeacon(x_cm=19, y_mm=-64)
+    b = PositionBeacon(x_mm=19, y_mm=-64)
     serialized = _jsonable({"value": b})
-    assert serialized == {"value": {"x_cm": 19, "y_mm": -64}}
+    assert serialized == {"value": {"x_mm": 19, "y_mm": -64}}
     _json_roundtrip(serialized)
 
 
 def test_nested_dataclass_inside_list_is_converted():
     t = MowingTelemetry(1, 2, 3, Phase.MOWING, 0, 0.0, 0.0, 0.0, 0.0, 0, 0, 0.0, 0.0, 0.0)
     serialized = _jsonable({"value": [t, {"nested": t}]})
-    assert serialized["value"][0]["x_cm"] == 1
-    assert serialized["value"][1]["nested"]["x_cm"] == 1
+    assert serialized["value"][0]["x_mm"] == 1
+    assert serialized["value"][1]["nested"]["x_mm"] == 1
     _json_roundtrip(serialized)
 
 

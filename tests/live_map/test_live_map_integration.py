@@ -63,11 +63,12 @@ def test_y_axis_session_reconstructs_with_calibrated_points():
     s.start_session(y_axis_session[0].timestamp)
 
     x_factor = 1.0
-    y_factor = 0.625
+    y_factor = 1.0  # was 0.625 before alpha.98 — compensated for the old
+                   # 16× Y decode scaling; no longer needed.
 
     for ev in y_axis_session:
         telem = decode_s1p4(bytes(ev.value))
-        x_m = (telem.x_cm / 100.0) * x_factor
+        x_m = (telem.x_mm / 1000.0) * x_factor
         y_m = (telem.y_mm / 1000.0) * y_factor
         s.append_point(x_m, y_m)
 

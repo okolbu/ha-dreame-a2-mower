@@ -55,7 +55,7 @@ def _project_to_compass(telemetry, device, axis: str):
     bearing = float(getattr(device, "station_bearing_deg", 0.0) or 0.0)
     theta = math.radians(bearing)
     x_m = telemetry.x_m
-    y_m = telemetry.y_mm * 0.000625  # same calibration factor as Position Y
+    y_m = telemetry.y_m
     if axis == "north":
         return round(x_m * math.cos(theta) - y_m * math.sin(theta), 2)
     if axis == "east":
@@ -373,38 +373,32 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         icon="mdi:axis-y-arrow",
         native_unit_of_measurement="m",
         exists_fn=lambda description, device: True,
-        value_fn=lambda value, device: round(value.y_mm * 0.000625, 2) if value is not None else None,
+        value_fn=lambda value, device: round(value.y_m, 2) if value is not None else None,
     ),
-    # Raw axis values for diagnostics — preserved alongside the calibrated
-    # sensors so future work can re-derive calibration factors from fresh
-    # data. X is reported by the firmware in cm, Y in mm.
-    #
+    # Raw axis values for diagnostics. Both X and Y are in map-scale mm
+    # (20-bit-packed pose decoded from s1p4 bytes [1-5], ×10 per apk).
     # Disabled by default: these flip on every s1p4 push (~5 s during
     # mowing) and otherwise flood the Activity / logbook views with
-    # pairs of `X (raw, cm): -742 → -738` lines. Existing installs
-    # can disable them manually from the device page if they upgrade;
-    # new installs get them off. Users doing calibration work can
-    # re-enable either one from the entity's config screen.
+    # pairs of `X (raw, mm): -7420 → -7380` lines. Users doing
+    # calibration work can re-enable either one from the entity's
+    # config screen.
     DreameMowerSensorEntityDescription(
         key="mowing_x_raw",
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
-        # Raw, uncalibrated. X is reported by the firmware as int16 cm
-        # at s1p4 bytes [1-2] but we don't assert a unit on the entity
-        # because Y uses a different scale with a 0.625 calibration
-        # factor, so "cm" / "mm" in the entity name would be misleading
-        # as a pair. See docs/research/g2408-protocol.md §3.1.
         name="X (raw)",
         icon="mdi:help-circle",
+        native_unit_of_measurement="mm",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         exists_fn=lambda description, device: True,
-        value_fn=lambda value, device: value.x_cm if value is not None else None,
+        value_fn=lambda value, device: value.x_mm if value is not None else None,
     ),
     DreameMowerSensorEntityDescription(
         key="mowing_y_raw",
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
         name="Y (raw)",
         icon="mdi:help-circle",
+        native_unit_of_measurement="mm",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
         exists_fn=lambda description, device: True,

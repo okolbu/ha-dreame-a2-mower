@@ -53,18 +53,19 @@ class Phase(IntEnum):
 class MowingTelemetry:
     """Decoded s1p4 frame.
 
-    Position is charger-relative, fixed to map cardinal directions
-    (no per-session rotation). **X and Y use different raw scales:**
-    X is centimetres, Y is millimetres. Verified live: max observed
-    X=900 → 9 m matches physical 9 m; Y=6976 at the same moment is
-    6.98 m (not 69.76 m — confirmed by lawn dimensions ≤ 25 m).
+    Position is charger-relative, in map-scale millimetres. Both X and
+    Y are produced by the apk's 20-bit-packed pose decode at frame bytes
+    [1-5] (see `_decode_pose`) then multiplied by 10 per the apk's "map
+    coordinate" convention, so units are uniform. Distance and area
+    counters reset at the start of each mowing session.
 
-    Consumers should prefer the `x_m` / `y_m` metre properties to avoid
-    the unit asymmetry. Distance and area counters reset at the start
-    of each mowing session.
+    Historical note: versions prior to alpha.98 published `x_cm` and
+    `y_mm` where Y was actually `true_mm × 16` — downstream consumers
+    compensated via scattered `* 0.625` / `* 0.000625` magic factors.
+    alpha.98 fixes the decode; the compensating factors are gone.
     """
 
-    x_cm: int
+    x_mm: int
     y_mm: int
     sequence: int
     phase: Phase
@@ -88,7 +89,7 @@ class MowingTelemetry:
     @property
     def x_m(self) -> float:
         """X position in metres (charger-relative)."""
-        return self.x_cm / 100.0
+        return self.x_mm / 1000.0
 
     @property
     def y_m(self) -> float:
@@ -103,12 +104,12 @@ class PositionBeacon:
     and area/distance are not transmitted in this variant.
     """
 
-    x_cm: int
+    x_mm: int
     y_mm: int
 
     @property
     def x_m(self) -> float:
-        return self.x_cm / 100.0
+        return self.x_mm / 1000.0
 
     @property
     def y_m(self) -> float:
@@ -118,6 +119,38 @@ class PositionBeacon:
 def _read_uint24_le(buf: bytes, offset: int) -> int:
     """Read a little-endian unsigned 24-bit integer from `buf` at `offset`."""
     return buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16)
+
+
+def _decode_pose(data: bytes, offset: int = 1) -> tuple[int, int]:
+    """Decode (x_mm, y_mm) from the 5 pose bytes at `data[offset..offset+4]`.
+
+    Uses the apk's 20-bit signed packed representation where X and Y
+    share the middle byte (different nibbles) — see
+    docs/research/g2408-protocol.md §"Bytes [1-6] — position decode".
+
+    Equivalent to the JS reference (rewritten for clarity; Python's
+    arbitrary-precision << would otherwise leak the high nibble of the
+    last byte past bit 31):
+        x_raw = (b[o+2] << 28 | b[o+1] << 20 | b[o+0] << 12) >> 12   # 20-bit signed
+        y_raw = (b[o+4] << 24 | b[o+3] << 16 | b[o+2] << 8) >> 12    # 20-bit signed
+
+    Raw values are ×10 per the apk's "×10 for map coordinates" rule,
+    producing map-scale millimetres.
+    """
+    b0 = data[offset + 0]
+    b1 = data[offset + 1]
+    b2 = data[offset + 2]
+    b3 = data[offset + 3]
+    b4 = data[offset + 4]
+    # X: 20-bit signed — bits 0-7 = b0, 8-15 = b1, 16-19 = low nibble of b2.
+    x20 = ((b2 & 0x0F) << 16) | (b1 << 8) | b0
+    if x20 & 0x80000:
+        x20 -= 0x100000
+    # Y: 20-bit signed — bits 0-3 = high nibble of b2, 4-11 = b3, 12-19 = b4.
+    y20 = (b4 << 12) | (b3 << 4) | ((b2 & 0xF0) >> 4)
+    if y20 & 0x80000:
+        y20 -= 0x100000
+    return x20 * 10, y20 * 10
 
 
 def decode_s1p4_position(data: bytes) -> PositionBeacon:
@@ -142,8 +175,8 @@ def decode_s1p4_position(data: bytes) -> PositionBeacon:
         raise InvalidS1P4Frame(
             f"expected 0x{FRAME_DELIMITER:02X} delimiters at first and last byte"
         )
-    x_cm, y_mm = struct.unpack_from("<hh", data, 1)
-    return PositionBeacon(x_cm=x_cm, y_mm=y_mm)
+    x_mm, y_mm = _decode_pose(data, offset=1)
+    return PositionBeacon(x_mm=x_mm, y_mm=y_mm)
 
 
 def decode_s1p4(data: bytes) -> MowingTelemetry:
@@ -155,7 +188,7 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
         raise InvalidS1P4Frame(
             f"expected 0x{FRAME_DELIMITER:02X} delimiters at [0] and [32]"
         )
-    x_cm, y_mm = struct.unpack_from("<hh", data, 1)
+    x_mm, y_mm = _decode_pose(data, offset=1)
     seq = struct.unpack_from("<H", data, 6)[0]
     # Heading angle (0..255 → 0..360°), dock-relative frame. Confirmed
     # 2026-04-24 by cross-correlating 5586 consecutive-frame samples from
@@ -196,7 +229,7 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
     total_u24_cent = _read_uint24_le(data, 26)
     finish_u24_cent = _read_uint24_le(data, 29)
     return MowingTelemetry(
-        x_cm=x_cm,
+        x_mm=x_mm,
         y_mm=y_mm,
         sequence=seq,
         phase=phase,

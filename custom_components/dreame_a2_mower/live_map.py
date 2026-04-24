@@ -348,7 +348,12 @@ OPT_X_FACTOR = "live_map_x_factor"
 OPT_Y_FACTOR = "live_map_y_factor"
 
 DEFAULT_X_FACTOR = 1.0
-DEFAULT_Y_FACTOR = 0.625
+# alpha.98 fixed the 20-bit pose decode so Y is now in true mm (same as X).
+# The old 0.625 default was compensating for a 16× overshoot in the
+# previous int16 Y decode. Reset to 1.0 now that decoder is honest;
+# existing installs that manually calibrated to 0.625 should clear the
+# option to pick up the new default (or the camera will render squished).
+DEFAULT_Y_FACTOR = 1.0
 
 # Cutting blade width in metres — used as the swath width when
 # estimating in-progress mowed area from the live path. Cloud-summary
@@ -1313,7 +1318,7 @@ class DreameA2LiveMap:
         pos_source = getattr(device, "latest_position", None)
         telem = getattr(device, "mowing_telemetry", None)
         if pos_source is None and telem is not None:
-            pos_source = (telem.x_cm, telem.y_mm)
+            pos_source = (telem.x_mm, telem.y_mm)
         # Cutting-now indicator: derived from the firmware's
         # area_mowed_m2 counter delta. The counter only increases
         # when blades are physically cutting — confirmed
@@ -1347,8 +1352,8 @@ class DreameA2LiveMap:
             # at 122 pts for 46 minutes while the mower was clearly
             # mowing (s1p4 still pushing, battery draining), because
             # `active` was stuck on stale state-property data.
-            x_cm, y_mm = pos_source
-            x_m = (x_cm / 100.0) * self.x_factor
+            x_mm, y_mm = pos_source
+            x_m = (x_mm / 1000.0) * self.x_factor
             y_m = (y_mm / 1000.0) * self.y_factor
             position = [round(x_m, 3), round(y_m, 3)]
             self._state.append_point(x_m, y_m, cutting=cutting)
@@ -1544,7 +1549,7 @@ class DreameA2LiveMap:
                 telem = decode_s1p4(bytes(ev.value))
             except InvalidS1P4Frame:
                 continue
-            x_m = (telem.x_cm / 100.0) * self.x_factor
+            x_m = (telem.x_mm / 1000.0) * self.x_factor
             y_m = (telem.y_mm / 1000.0) * self.y_factor
             self._state.append_point(x_m, y_m)
             last_position = [round(x_m, 3), round(y_m, 3)]
