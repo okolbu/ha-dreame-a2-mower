@@ -672,6 +672,22 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("PATH"),
     ),
+    # CFG.CLS is Child Lock (confirmed 2026-04-24). Mapping
+    # {0: off, 1: on}. There is also a switch.child_lock entity
+    # wired to DreameMowerProperty.CHILD_LOCK — on g2408 the
+    # authoritative read path is CFG.CLS, so this sensor provides
+    # the visible state regardless of whether the switch's s2p
+    # backing property is actually emitted on this firmware.
+    DreameMowerSensorEntityDescription(
+        key="child_lock_cfg",
+        icon="mdi:lock",
+        value_fn=lambda value, device: (
+            "on" if device.cfg.get("CLS") == 1 else
+            "off" if device.cfg.get("CLS") == 0 else None
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("CLS"),
+    ),
     # CFG.AOP is "Capture Photos of AI-Detected Obstacles" (confirmed
     # 2026-04-24). Mapping {0: off, 1: on}.
     DreameMowerSensorEntityDescription(
