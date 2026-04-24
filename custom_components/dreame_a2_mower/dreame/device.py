@@ -160,6 +160,18 @@ _EMPTY_DICT_SENTINEL_SLOTS: frozenset[tuple[int, int]] = frozenset({
     (2, 52),  # cloud-side session-completion ping
 })
 
+# Documented value sets for known-but-unmapped properties. When a value
+# in the set arrives, [PROTOCOL_VALUE_NOVEL] is suppressed (watchdog
+# resets per process and would otherwise re-fire on every HA restart).
+# Values OUTSIDE the set still fire the warning — that's real novelty.
+# Keep in sync with docs/research/g2408-protocol.md §2.1.
+_KNOWN_VALUE_CATALOGUE: dict[tuple[int, int], frozenset] = {
+    (5, 104): frozenset({7}),  # SLAM relocate counter — only 7 observed
+    (5, 105): frozenset({1}),  # mid-session marker
+    (5, 106): frozenset({1, 2, 3, 4, 5, 6, 7, 8, 9, 11}),  # small int, no 10 observed
+    (5, 107): frozenset({14, 15, 43, 56, 133, 158, 165, 176, 190, 196, 240, 250}),
+}
+
 # ioBroker.dreame documents start/stop/pause on siid=2 (not the siid=5
 # upstream MIoT vacuum spec). Used as a fallback when the primary
 # siid=5 path returns 80001. Dock stays on siid=5 because both the
@@ -796,13 +808,29 @@ class DreameMowerDevice:
                         elif self._unknown_watchdog.saw_value(
                             siid_int, piid_int, value
                         ):
-                            _LOGGER.warning(
-                                "[PROTOCOL_VALUE_NOVEL] siid=%d piid=%d "
-                                "value=%r — first time seeing this value "
-                                "for this property. Update §2.1 of the "
-                                "protocol doc if a pattern emerges.",
-                                siid_int, piid_int, value,
+                            # Suppress VALUE_NOVEL for values already in the
+                            # documented catalogue (see §2.1) — in-memory
+                            # watchdog resets per process and would otherwise
+                            # re-fire on every HA restart for known values.
+                            # Genuine *new* values not in the catalogue still
+                            # fire and drive research.
+                            known_values = _KNOWN_VALUE_CATALOGUE.get(
+                                (siid_int, piid_int)
                             )
+                            if known_values is not None and value in known_values:
+                                _LOGGER.debug(
+                                    "[PROTOCOL_OBSERVED_VALUE] siid=%d "
+                                    "piid=%d value=%r (known-set member)",
+                                    siid_int, piid_int, value,
+                                )
+                            else:
+                                _LOGGER.warning(
+                                    "[PROTOCOL_VALUE_NOVEL] siid=%d piid=%d "
+                                    "value=%r — first time seeing this value "
+                                    "for this property. Update §2.1 of the "
+                                    "protocol doc if a pattern emerges.",
+                                    siid_int, piid_int, value,
+                                )
                         # Trigger a CFG re-fetch on settings/preference
                         # updates (s2p51 = MULTIPLEXED_CONFIG, s2p52 =
                         # mowing-prefs changed per apk decompilation).
