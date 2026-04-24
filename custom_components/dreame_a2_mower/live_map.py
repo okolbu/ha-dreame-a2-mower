@@ -1231,6 +1231,45 @@ class DreameA2LiveMap:
         # telemetry, so a >6 h gap unambiguously means "no mower activity".
         STALE_SESSION_THRESHOLD_S = 6 * 3600
         archive = getattr(self._coordinator, "session_archive", None)
+
+        # Stronger signal: firmware's `area_mowed_m2` counter is
+        # monotonic within a session (can't un-mow). If it drops
+        # between frames, the firmware just started a fresh session.
+        # Noise threshold 1 m² rules out float jitter but any real
+        # session-reset produces a much bigger drop. Independent of
+        # wall-clock time, so it catches same-day-recurrence cases
+        # the 6-hour gate would miss (e.g. user runs two sessions
+        # back-to-back with the integration never hearing the end
+        # of the first).
+        if active and self._have_active_in_progress:
+            _boundary_telem = getattr(device, "mowing_telemetry", None)
+            _current_area = (
+                getattr(_boundary_telem, "area_mowed_m2", None)
+                if _boundary_telem is not None else None
+            )
+            if (
+                isinstance(_current_area, (int, float))
+                and self._last_area_m2 is not None
+                and _current_area + 1.0 < self._last_area_m2
+            ):
+                _LOGGER.warning(
+                    "live_map: area_mowed counter reset %.1f → %.1f m² — "
+                    "firmware started a new session; auto-finalizing the "
+                    "stale in-progress entry so the fresh run doesn't "
+                    "append on top",
+                    self._last_area_m2, _current_area,
+                )
+                self.finalize_session()
+
+        # Fallback: wall-time staleness. Fires when no telemetry was
+        # received during the gap (so the area-reset signal can't
+        # trigger on a fresh rising edge because _last_area_m2 is
+        # None). 6-hour threshold: longer than any plausible mow
+        # (including multi-leg overnight continuations the mower
+        # actually resumes), short enough to pick up same-day gaps.
+        # For reference: in_progress is persisted every ~10 s during
+        # active telemetry, so a >6 h gap unambiguously means "no
+        # mower activity".
         if (
             active
             and self._have_active_in_progress
