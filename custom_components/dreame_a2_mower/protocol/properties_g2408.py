@@ -49,19 +49,25 @@ def property_for(siid: int, piid: int) -> Property | None:
 
 
 class StateCode(IntEnum):
-    SESSION_STARTED = 50
+    SESSION_STARTED = 50          # manual start from app
+    SESSION_STARTED_SCHEDULED = 53  # scheduled start (confirmed 2026-04-20)
     MOWING = 70
     RETURNING = 54
     MOWING_COMPLETE = 48
     IDLE = 27
+    RAIN_PROTECTION = 56          # water detected on LiDAR → dock (2026-04-19)
+    POSITIONING_FAILED = 71       # SLAM relocate needed (2026-04-20)
 
 
 _STATE_LABELS: Final[dict[int, str]] = {
     StateCode.SESSION_STARTED: "session_started",
+    StateCode.SESSION_STARTED_SCHEDULED: "session_started_scheduled",
     StateCode.MOWING: "mowing",
     StateCode.RETURNING: "returning",
     StateCode.MOWING_COMPLETE: "mowing_complete",
     StateCode.IDLE: "idle",
+    StateCode.RAIN_PROTECTION: "rain_protection",
+    StateCode.POSITIONING_FAILED: "positioning_failed",
 }
 
 
