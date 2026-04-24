@@ -1206,6 +1206,56 @@ class DreameA2LiveMap:
                 except AttributeError:
                     pass
 
+        # Stale-session auto-recovery: the auto-finalize gate requires
+        # `truly_idle_at_dock`, which requires s2p56 to drop pending_resume.
+        # On some firmwares (user report 2026-04-25) s2p56 stays stuck at
+        # [[1, 4]] pending-resume even after the mow truly ended — the
+        # gate never opens, `_have_active_in_progress` stays True forever,
+        # and tomorrow's fresh run gets its points appended on top of
+        # yesterday's path + overlay.
+        #
+        # The escape hatch: if we're about to see an `active` rising edge
+        # AND the in-progress blob on disk hasn't been touched in >6 h,
+        # the persisted session is unrecoverably stale. Force-finalize it
+        # into the archive as "(incomplete, auto-recovered)" and fall
+        # through to the start_session path below.
+        #
+        # 6-hour threshold: longer than any plausible mow session
+        # (including multi-leg overnight continuations the mower actually
+        # resumes), short enough to pick up same-day-gap cases. For
+        # reference: in_progress is persisted every ~10 s during active
+        # telemetry, so a >6 h gap unambiguously means "no mower activity".
+        STALE_SESSION_THRESHOLD_S = 6 * 3600
+        archive = getattr(self._coordinator, "session_archive", None)
+        if (
+            active
+            and self._have_active_in_progress
+            and archive is not None
+        ):
+            try:
+                import time as _time
+                in_progress_data = archive.read_in_progress()
+                last_ts = (in_progress_data or {}).get("last_update_ts")
+                if isinstance(last_ts, (int, float)):
+                    age_s = _time.time() - float(last_ts)
+                    if age_s >= STALE_SESSION_THRESHOLD_S:
+                        _LOGGER.warning(
+                            "live_map: in_progress last touched %.1f h ago "
+                            "(>%.0f h threshold) — auto-finalizing stale "
+                            "session so the fresh run doesn't append on top",
+                            age_s / 3600.0,
+                            STALE_SESSION_THRESHOLD_S / 3600.0,
+                        )
+                        self.finalize_session()
+                        # After finalize_session, _have_active_in_progress
+                        # is cleared and _prev_session_active was reset
+                        # via the finalize path. The start_session block
+                        # below will fire on this same tick.
+            except Exception as ex:  # pragma: no cover — defensive
+                _LOGGER.warning(
+                    "live_map: stale-session auto-recovery failed: %s", ex
+                )
+
         # Session-boundary wipe: only clear the LATEST overlay when a
         # new session starts. In SESSION/BLANK mode this still resets
         # the accumulator so the buffered live path matches the new
@@ -1304,24 +1354,40 @@ class DreameA2LiveMap:
         telem = getattr(device, "mowing_telemetry", None)
         if pos_source is None and telem is not None:
             pos_source = (telem.x_mm, telem.y_mm)
-        # Cutting-now indicator: derived from the firmware's
-        # area_mowed_m2 counter delta. The counter only increases
-        # when blades are physically cutting — confirmed
-        # 2026-04-22 capture: a 30s straight-line drive from
-        # dock to mowing-resume position kept area constant at
-        # 164.31 m², then started incrementing the moment the
-        # mower started its first mowing pass. Much better
-        # discriminator than the s1p4 phase byte (which is
-        # constant during BOTH transit and mowing on this
-        # firmware). None when no full-frame telemetry available
-        # (cold boot beacon-only); rasteriser then defaults to
-        # painting the segment.
+        # Cutting-now indicator, two-signal heuristic:
+        #
+        #   1. Area growing between frames → cutting (blades-down, new
+        #      territory). Straightforward: firmware's `area_mowed_m2`
+        #      only goes up when unique lawn is being covered.
+        #   2. Area stable + session nearly complete (≥95% of total) →
+        #      still cutting (crisscross / cleanup pass). The firmware
+        #      counts UNIQUE area, so the second crisscross pass re-
+        #      traverses already-counted ground and `area_mowed` stays
+        #      flat even though blades are running. Without this branch
+        #      the whole second pass renders as blue "transit" — user
+        #      report 2026-04-25 with crisscross screenshot.
+        #   3. Area stable + session not yet done → genuine transit
+        #      (dock→mow-resume, between-zone movement). Renders blue.
+        #
+        # Threshold 95%: leaves headroom for the mower never quite
+        # hitting 100% on real lawns (edges, obstacle margins). The
+        # 30s straight-line dock-departure test from 2026-04-22
+        # (area stuck at 164 m² on a 321 m² lawn → ratio 0.51) still
+        # correctly reads as transit.
         cutting = None
         if telem is not None:
             current_area = getattr(telem, "area_mowed_m2", None)
+            total_area = getattr(telem, "total_area_m2", None)
             if isinstance(current_area, (int, float)):
                 if self._last_area_m2 is not None:
-                    cutting = 1 if current_area > self._last_area_m2 else 0
+                    if current_area > self._last_area_m2:
+                        cutting = 1
+                    elif (isinstance(total_area, (int, float))
+                          and total_area > 0
+                          and current_area >= total_area * 0.95):
+                        cutting = 1  # crisscross / cleanup over mowed ground
+                    else:
+                        cutting = 0  # genuine transit
                 self._last_area_m2 = float(current_area)
 
         position = None
