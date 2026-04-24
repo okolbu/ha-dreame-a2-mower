@@ -326,6 +326,13 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
             if latest is not None:
                 self._last_archived_lidar_md5 = latest.md5
 
+        # Restore any in-progress session overlay from disk. Runs on
+        # executor because `SessionArchive.read_in_progress` does a
+        # blocking `path.read_text()` + JSON parse, which HA flags if
+        # invoked from `live_map.__init__` (the old call site).
+        if self.live_map is not None:
+            await self.live_map.async_setup()
+
     def _heartbeat_changed(self, previous_value=None) -> None:
         """Rising-edge notifier for the s1p1 battery-temperature-low flag.
 

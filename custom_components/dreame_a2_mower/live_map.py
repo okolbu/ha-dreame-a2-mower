@@ -620,6 +620,29 @@ class DreameA2LiveMap:
             self._migrate_legacy_drafts(hass)
         except Exception:  # pragma: no cover — best-effort cleanup
             pass
+        # Boot-time restore of a persisted in-progress session. Reading
+        # `sessions/in_progress.json` is blocking disk I/O that HA's
+        # event-loop detector flags when invoked from `async_setup_entry`
+        # (see TODO §E8). When a running event loop is detected we defer
+        # the restore to `async_setup()`, which the coordinator awaits.
+        # When there is no loop (tests, scripts) we run inline so existing
+        # tests that assert state immediately after construction still
+        # pass.
+        import asyncio as _asyncio
+        try:
+            _asyncio.get_running_loop()
+            _on_loop = True
+        except RuntimeError:
+            _on_loop = False
+        if not _on_loop:
+            self._boot_restore_sync()
+
+    def _boot_restore_sync(self) -> None:
+        """Run the in-progress restore + live-in-progress flag mirroring
+        on the current thread. Idempotent: re-reading the file produces
+        the same state. Called directly (from __init__) when no event loop
+        is running, or via executor from `async_setup`.
+        """
         if self._restore_in_progress():
             # Seed `_prev_session_active = True` so the first
             # coordinator tick doesn't treat us as a fresh
@@ -641,6 +664,12 @@ class DreameA2LiveMap:
             )
         except AttributeError:
             pass
+
+    async def async_setup(self) -> None:
+        """Run boot-time restore of an in-progress session off the event
+        loop. Called by the coordinator's `async_setup` right after the
+        archive indices have been loaded."""
+        await self._hass.async_add_executor_job(self._boot_restore_sync)
 
     def _migrate_legacy_drafts(self, hass) -> None:
         """One-shot cleanup of the old `drafts/live_path_*.json` files.
