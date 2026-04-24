@@ -665,10 +665,13 @@ class DreameA2LiveMap:
         except AttributeError:
             pass
 
-    async def async_setup(self) -> None:
+    async def async_boot_restore(self) -> None:
         """Run boot-time restore of an in-progress session off the event
         loop. Called by the coordinator's `async_setup` right after the
-        archive indices have been loaded."""
+        archive indices have been loaded. Distinct from `async_setup`
+        (below), which is a `@callback` that wires the coordinator
+        listener and fires a synthetic tick — kept sync for compatibility
+        with the existing call site in `coordinator.__init__`."""
         await self._hass.async_add_executor_job(self._boot_restore_sync)
 
     def _migrate_legacy_drafts(self, hass) -> None:

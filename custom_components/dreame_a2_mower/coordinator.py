@@ -329,9 +329,12 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
         # Restore any in-progress session overlay from disk. Runs on
         # executor because `SessionArchive.read_in_progress` does a
         # blocking `path.read_text()` + JSON parse, which HA flags if
-        # invoked from `live_map.__init__` (the old call site).
+        # invoked from `live_map.__init__` (the old call site). This is
+        # `async_boot_restore`, not `async_setup` — the latter is a
+        # `@callback` sync method on DreameA2LiveMap that wires the
+        # coordinator listener and fires a synthetic tick.
         if self.live_map is not None:
-            await self.live_map.async_setup()
+            await self.live_map.async_boot_restore()
 
     def _heartbeat_changed(self, previous_value=None) -> None:
         """Rising-edge notifier for the s1p1 battery-temperature-low flag.
