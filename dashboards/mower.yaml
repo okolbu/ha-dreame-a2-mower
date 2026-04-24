@@ -123,19 +123,30 @@ views:
               - entity: sensor.dreame_a2_mower_dock_yaw_deg
               - entity: sensor.dreame_a2_mower_dock_lawn_connected
 
+          # Maintenance points — sensor state = count, attributes
+          # carry the full list as [{id, x, y}, ...]. Markdown card
+          # below renders them. "Go to" button sends the first point
+          # by default; to target a specific point call the service
+          # from Developer Tools with `point_id: N`.
           - type: entities
-            title: Maintenance point
+            title: Maintenance points
             entities:
               - entity: sensor.dreame_a2_mower_maintenance_points_count
                 name: Points placed
-              - entity: sensor.dreame_a2_mower_maintenance_point_x
-              - entity: sensor.dreame_a2_mower_maintenance_point_y
-          # Button invokes the service that dispatches
-          # device.go_to(x_mm, y_mm) to the first maintenance point.
-          # When multiple points exist, invoke the service from
-          # Developer Tools with `point_id` set explicitly.
+          - type: markdown
+            content: |
+              {% set pts = state_attr('sensor.dreame_a2_mower_maintenance_points_count', 'points') or [] %}
+              {% if pts %}
+              | # | X (m) | Y (m) |
+              | --- | --- | --- |
+              {% for p in pts -%}
+              | {{ p.id }} | {{ p.x }} | {{ p.y }} |
+              {% endfor %}
+              {% else %}
+              _No maintenance points set. Add one in the Dreame app._
+              {% endif %}
           - type: button
-            name: Go to maintenance point
+            name: Go to first maintenance point
             icon: mdi:map-marker-check
             tap_action:
               action: call-service

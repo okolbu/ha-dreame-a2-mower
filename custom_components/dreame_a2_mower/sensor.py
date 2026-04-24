@@ -705,15 +705,18 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     ),
     # Maintenance Points (cloud MAP.* cleanPoints). Set in the Dreame
     # app; multiple are allowed. `device.maintenance_points` stores raw
-    # cloud-frame mm (what `device.go_to` expects); sensors convert to
-    # metres for display consistency with Position X/Y and dock sensors.
+    # cloud-frame mm (what `device.go_to` expects); sensor attributes
+    # present metres for display consistency with Position X/Y and
+    # dock sensors.
     #
-    # State = count of points. Attributes carry the full list so a user
-    # with multiple points can see each id + coord to pick which one to
-    # target via the service's `point_id` parameter. Attribute coords
-    # are presented in metres too; the service reads from the device
-    # attribute directly (not from sensor state) so no mm→m round-trip
-    # is needed internally.
+    # State = count of points. Attributes carry the full list as
+    # (id, x, y) tuples — the authoritative representation. Dashboards
+    # render via a markdown card that iterates the list (example in
+    # dashboards/mower.yaml). Alpha.93–101 also shipped first-point
+    # convenience sensors (`maintenance_point_x`, `_y`) but those
+    # only ever mirrored point 1, which turned out misleading on
+    # multi-point setups. Removed alpha.113 — pull from the list
+    # attribute instead.
     DreameMowerSensorEntityDescription(
         key="maintenance_points_count",
         icon="mdi:map-marker-multiple",
@@ -732,34 +735,6 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             ],
         },
         exists_fn=lambda description, device: True,
-    ),
-    # First-point convenience sensors (x, y) in metres. For multiple
-    # points consult the `maintenance_points_count` sensor's attributes.
-    DreameMowerSensorEntityDescription(
-        key="maintenance_point_x",
-        icon="mdi:map-marker",
-        native_unit_of_measurement="m",
-        value_fn=lambda value, device: (
-            round(device.maintenance_point.get("x_mm", 0) / 1000.0, 3)
-            if isinstance(device.maintenance_point, dict) else None
-        ),
-        exists_fn=lambda description, device: True,
-        available_fn=lambda device: isinstance(
-            getattr(device, "maintenance_point", None), dict
-        ),
-    ),
-    DreameMowerSensorEntityDescription(
-        key="maintenance_point_y",
-        icon="mdi:map-marker",
-        native_unit_of_measurement="m",
-        value_fn=lambda value, device: (
-            round(device.maintenance_point.get("y_mm", 0) / 1000.0, 3)
-            if isinstance(device.maintenance_point, dict) else None
-        ),
-        exists_fn=lambda description, device: True,
-        available_fn=lambda device: isinstance(
-            getattr(device, "maintenance_point", None), dict
-        ),
     ),
     DreameMowerSensorEntityDescription(
         key="voice_download_progress",
