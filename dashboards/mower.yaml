@@ -219,9 +219,36 @@ views:
             content: |
               {%- set ns = namespace(rows=[]) %}
               {%- set all_attrs = states.sensor.dreame_a2_mower_cfg_keys_raw.attributes if states.sensor.dreame_a2_mower_cfg_keys_raw else {} %}
+              {%- set health = states.sensor.dreame_a2_mower_cfg_fetch_health %}
+              {%- set health_state = health.state if health else 'unknown' %}
+              {%- set health_attrs = health.attributes if health else {} %}
+              {%- set fetched_at = health_attrs.get('cfg_fetched_at') %}
               {%- set changes = all_attrs.get('_recent_changes', {}) %}
               {%- set last_diff = all_attrs.get('_last_diff', {}) %}
               {%- set now_ts = as_timestamp(now()) %}
+              {%- if fetched_at %}
+                {%- set age = (now_ts - fetched_at) | round(0) | int %}
+                {%- if age < 60 %}
+                  {%- set fetch_label = age ~ 's ago' %}
+                {%- elif age < 3600 %}
+                  {%- set fetch_label = (age // 60) ~ 'm ' ~ (age % 60) ~ 's ago' %}
+                {%- else %}
+                  {%- set fetch_label = (age // 3600) ~ 'h ' ~ ((age % 3600) // 60) ~ 'm ago' %}
+                {%- endif %}
+              {%- else %}
+                {%- set fetch_label = 'never' %}
+              {%- endif %}
+              {%- set emoji = {'ok':'🟢','backoff':'🟠','disabled':'🔴'}.get(health_state, '⚫') %}
+              **{{ emoji }} Fetch health:** `{{ health_state }}` ·
+              **last successful fetch:** {{ fetch_label }}
+              {%- if health_attrs.get('consecutive_failures', 0) > 0 %}
+               · **consecutive failures:** {{ health_attrs.consecutive_failures }}
+               (retry in {{ health_attrs.get('next_retry_in_s', 0) }}s)
+              {%- endif %}
+              {%- if health_state == 'disabled' %}
+               · **⚠ hard-disabled — reload integration to retry**
+              {%- endif %}
+
               {%- if all_attrs %}
               | Key | Value | Last changed |
               |---|---|---|
