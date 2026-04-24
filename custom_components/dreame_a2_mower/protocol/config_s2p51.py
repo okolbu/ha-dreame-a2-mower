@@ -30,6 +30,7 @@ class Setting(StrEnum):
     ANTI_THEFT = "anti_theft"
     RAIN_PROTECTION = "rain_protection"
     HUMAN_PRESENCE_ALERT = "human_presence_alert"
+    LANGUAGE = "language"
 
 
 @dataclass(frozen=True)
@@ -46,6 +47,21 @@ def decode_s2p51(payload: dict[str, Any]) -> S2P51Event:
         return S2P51Event(
             setting=Setting.TIMESTAMP,
             values={"time": int(payload["time"]), "tz": payload["tz"]},
+        )
+
+    # Language event — fires when the user changes app text language
+    # and/or robot voice language. Confirmed 2026-04-24 via a Robot
+    # Voice change on g2408: payload `{'text': 2, 'voice': 7}` drove
+    # CFG.LANG from [2, 0] to [2, 7] (text_idx unchanged, voice_idx
+    # flipped to 7 = Norwegian). See docs/research/g2408-protocol.md
+    # §6.2 for the LANG index catalogue.
+    if set(payload.keys()) == {"text", "voice"}:
+        return S2P51Event(
+            setting=Setting.LANGUAGE,
+            values={
+                "text_idx": int(payload["text"]),
+                "voice_idx": int(payload["voice"]),
+            },
         )
 
     # DnD sends three keys and is unambiguous.
@@ -181,6 +197,8 @@ def encode_s2p51(event: S2P51Event) -> dict[str, Any]:
 
     if setting is Setting.TIMESTAMP:
         return {"time": str(v["time"]), "tz": v["tz"]}
+    if setting is Setting.LANGUAGE:
+        return {"text": int(v["text_idx"]), "voice": int(v["voice_idx"])}
     if setting is Setting.DND:
         return {
             "end": int(v["end_min"]),

@@ -871,6 +871,51 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # Protection / Child Lock / etc.). Sensor state = count of CFG
     # keys so any "CFG refetched" tick is visible in the state
     # history; attributes carry the full dict as (key → value) pairs.
+    # CFG.LANG is [text_idx, voice_idx] (confirmed 2026-04-24 via live
+    # Robot Voice toggle). text_idx drives the app / UI language;
+    # voice_idx drives the robot's spoken voice. Observed: voice_idx=7
+    # = Norwegian. Matches the s2p51 LANGUAGE event shape
+    # `{"text": N, "voice": M}`. The full index → name mapping is
+    # firmware-side — we surface the raw ints and a human-readable
+    # Norwegian label where known.
+    DreameMowerSensorEntityDescription(
+        key="robot_voice",
+        icon="mdi:account-voice",
+        value_fn=lambda value, device: (
+            {0: "default", 7: "Norwegian"}.get(
+                device.cfg["LANG"][1], f"index_{device.cfg['LANG'][1]}"
+            )
+            if isinstance(device.cfg.get("LANG"), list)
+            and len(device.cfg["LANG"]) >= 2
+            and isinstance(device.cfg["LANG"][1], int)
+            else None
+        ),
+        attrs_fn=lambda device: (
+            {
+                "text_idx": int(device.cfg["LANG"][0]),
+                "voice_idx": int(device.cfg["LANG"][1]),
+            }
+            if isinstance(device.cfg.get("LANG"), list)
+            and len(device.cfg["LANG"]) >= 2
+            and all(isinstance(x, int) for x in device.cfg["LANG"][:2])
+            else {}
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("LANG", min_len=2),
+    ),
+    # CFG.VOL is Robot Voice volume 0-100 (confirmed 2026-04-24).
+    DreameMowerSensorEntityDescription(
+        key="robot_voice_volume",
+        icon="mdi:volume-high",
+        native_unit_of_measurement="%",
+        value_fn=lambda value, device: (
+            int(device.cfg["VOL"])
+            if isinstance(device.cfg.get("VOL"), int)
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("VOL"),
+    ),
     # CFG.VER is a CFG-update revision counter (confirmed 2026-04-24,
     # NOT firmware version as previously documented). Bumps by 1 on
     # every successful CFG write; useful as a tripwire to correlate
