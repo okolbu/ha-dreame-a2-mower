@@ -172,6 +172,154 @@ _KNOWN_VALUE_CATALOGUE: dict[tuple[int, int], frozenset] = {
     (5, 107): frozenset({14, 15, 43, 56, 133, 158, 165, 176, 190, 196, 240, 250}),
 }
 
+# Known enumerations for inline caches.
+_KNOWN_S2P2_STATES: frozenset[int] = frozenset({
+    27, 31, 33, 43, 48, 50, 53, 54, 56, 70, 71, 75
+})
+
+# (siid, piid) slots we've observed but not mapped to an enum entry.
+# Novelty logging for these stays at DEBUG so HA reloads don't spam
+# WARNING; truly new unmapped slots still produce WARNING.
+# Keep in sync with docs/research/g2408-protocol.md §2.1.
+_KNOWN_UNMAPPED_QUIET_SLOTS: frozenset[tuple[int, int]] = frozenset({
+    (2, 54),   # LiDAR upload progress 0..100 (§7.3b)
+    (2, 65),   # SLAM-task-type string (§4.8)
+    (2, 66),   # pre-observed 2-element list
+    (2, 53),   # Voice-pack download progress (%)
+    (2, 57),   # Robot shutdown trigger (5s delay then off)
+    (2, 58),   # Self-check result {d:{mode, id, result}}
+    (2, 61),   # Map-update trigger — loadMap re-fetch
+    (5, 104),  # SLAM relocate counter, unknown role
+    (5, 105),  # mid-session = 1, unknown role
+    (5, 106),  # small int, purpose unknown
+    (5, 107),  # dynamic, values catalogued
+    (1, 50),   # "something changed" ping
+    (1, 51),   # "new session — subscribe to telemetry"
+    (1, 52),   # "task ended — flush / commit"
+    (2, 52),   # cloud-side session-completion ping
+})
+
+# Routed-action backoff — exp-backoff schedule base + ceiling in seconds.
+_CFG_BACKOFF_BASE_S = 30
+_CFG_BACKOFF_CAP_S = 600
+
+# Enum properties that should route to the map manager instead of the
+# default property stream. Declarative so the routing decision is
+# visible at module scope.
+_MAP_PROPERTIES: frozenset = frozenset({
+    DreameMowerProperty.OBJECT_NAME,
+    DreameMowerProperty.MAP_DATA,
+    DreameMowerProperty.ROBOT_TIME,
+    DreameMowerProperty.OLD_MAP_DATA,
+})
+
+
+# ---------------------------------------------------------------------------
+# MQTT side-effect dispatch table.
+#
+# For every incoming properties_changed param, one optional handler runs
+# regardless of whether the (siid, piid) is known to DreameMowerProperty.
+# This is the correct place to trigger API re-fetches (refresh_cfg on
+# s2p51), update inline caches (s2p2 phase code, s2p53 voice-dl %), or
+# invoke dedicated handlers (s2p56 session-status, s2p50 map-edit).
+#
+# Handlers take (device, value) and should be idempotent — MQTT can
+# redeliver a param and the mower frequently re-publishes unchanged
+# values. Any exception is caught by the caller so one bad payload
+# can't break the whole batch.
+#
+# The novelty-logging path skips piids listed here (they're handled,
+# not research material).
+# ---------------------------------------------------------------------------
+
+def _side_effect_refresh_cfg(dev, value):
+    dev.refresh_cfg()
+
+
+def _side_effect_refresh_dock_pos(dev, value):
+    dev.refresh_dock_pos()
+
+
+def _side_effect_lidar_object_name(dev, value):
+    if isinstance(value, str) and value:
+        dev._handle_lidar_object_name(value)
+
+
+def _side_effect_session_status(dev, value):
+    dev._handle_session_status(value)
+
+
+def _side_effect_map_edit(dev, value):
+    # s2p50 wraps multiple operation classes. Map edits carry
+    # {d:{..., o:215}, t:'TASK'}; only 215 means "map edit confirmed
+    # server-side" and needs a camera rebuild.
+    if not (
+        isinstance(value, dict)
+        and value.get("t") == "TASK"
+        and isinstance(value.get("d"), dict)
+        and value["d"].get("o") == 215
+    ):
+        return
+    _LOGGER.info(
+        "[MAP_EDIT] s2p50 confirmed map edit (ids=%s, id=%s); rebuilding camera map from cloud",
+        value["d"].get("ids"), value["d"].get("id"),
+    )
+    try:
+        dev._build_map_from_cloud_data()
+        if dev._map_manager:
+            dev._map_manager._map_data_changed()
+        dev._property_changed()
+    except Exception as ex:  # pragma: no cover — defensive
+        _LOGGER.warning("[MAP_EDIT] cloud-map rebuild failed: %s", ex)
+
+
+def _side_effect_s2p2_phase(dev, value):
+    # s2p2 is g2408's secondary phase-code channel (not the error enum
+    # upstream models use). Cache the latest + surface novelty once per
+    # unseen code. Session-start codes (50, 53) trigger a cloud map
+    # refresh since no s6p1=300 is emitted.
+    if isinstance(value, int):
+        dev._s2p2_last = value
+        if value not in _KNOWN_S2P2_STATES and value not in dev._protocol_novelty:
+            dev._protocol_novelty.add(value)
+            _LOGGER.warning(
+                "[PROTOCOL_NOVEL] s2p2 carried unknown value=%r on g2408 "
+                "(known: %s). Please report at "
+                "https://github.com/okolbu/ha-dreame-a2-mower/issues",
+                value, sorted(_KNOWN_S2P2_STATES),
+            )
+        if value in (50, 53):
+            dev._schedule_cloud_map_poll(reason=f"session-start s2p2={value}")
+
+
+def _side_effect_s2p65_slam_label(dev, value):
+    if isinstance(value, str):
+        dev._s2p65_last = value
+
+
+def _side_effect_voice_dl_progress(dev, value):
+    if isinstance(value, (int, float)):
+        dev._voice_dl_progress = int(value)
+
+
+def _side_effect_self_check(dev, value):
+    if isinstance(value, dict):
+        dev._self_check_result = value.get("d") if "d" in value else value
+
+
+_SIDE_EFFECTS: dict[tuple[int, int], callable] = {
+    (2, 51): _side_effect_refresh_cfg,        # MULTIPLEXED_CONFIG (mapped) — settings changed
+    (2, 52): _side_effect_refresh_cfg,        # mowing-prefs changed
+    (1, 51): _side_effect_refresh_dock_pos,   # dock-pos-update hint (mapped)
+    (99, 20): _side_effect_lidar_object_name,
+    (2, 56): _side_effect_session_status,
+    (2, 50): _side_effect_map_edit,
+    (2, 2):  _side_effect_s2p2_phase,
+    (2, 65): _side_effect_s2p65_slam_label,
+    (2, 53): _side_effect_voice_dl_progress,
+    (2, 58): _side_effect_self_check,
+}
+
 # ioBroker.dreame documents start/stop/pause on siid=2 (not the siid=5
 # upstream MIoT vacuum spec). Used as a fallback when the primary
 # siid=5 path returns 80001. Dock stays on siid=5 because both the
@@ -319,17 +467,6 @@ class DreameMowerDevice:
         self._cfg_last_failure_ts: float | None = None
         self._cfg_success_count: int = 0
         self._cfg_failure_count: int = 0
-        # Total refresh_cfg() call attempts — bumped before any
-        # early-return so we can distinguish "never called" from
-        # "called but short-circuited" during toggle-correlation
-        # research. Also tracks short-circuit reasons.
-        self._cfg_attempt_count: int = 0
-        self._cfg_short_circuit_counts: dict[str, int] = {
-            "no_protocol": 0,
-            "hard_disabled": 0,
-            "in_backoff": 0,
-        }
-        self._cfg_last_attempt_ts: float | None = None
         # Per-CFG-key change log — populated on every successful
         # refresh_cfg when a value differs from the previous snapshot.
         # Keys never expire; the "recency" is derived at render time
@@ -584,293 +721,7 @@ class DreameMowerDevice:
             self.available = True
             method = message["method"]
             if method == "properties_changed" and "params" in message:
-                params = []
-                map_params = []
-                for param in message["params"]:
-                    matched = False
-                    properties = [prop for prop in DreameMowerProperty]
-                    for prop in properties:
-                        if prop in self.property_mapping:
-                            mapping = self.property_mapping[prop]
-                            _LOGGER.debug("Mapping: %s", mapping)
-                            if (
-                                "aiid" not in mapping
-                                and param["siid"] == mapping["siid"]
-                                and param["piid"] == mapping["piid"]
-                            ):
-                                matched = True
-                                if prop in self._default_properties:
-                                    param["did"] = str(prop.value)
-                                    param["code"] = 0
-                                    params.append(param)
-                                else:
-                                    if (
-                                        prop is DreameMowerProperty.OBJECT_NAME
-                                        or prop is DreameMowerProperty.MAP_DATA
-                                        or prop is DreameMowerProperty.ROBOT_TIME
-                                        or prop is DreameMowerProperty.OLD_MAP_DATA
-                                    ):
-                                        map_params.append(param)
-                                break
-                    if not matched and "siid" in param and "piid" in param:
-                        # s99p20 = OSS object key for a LiDAR point-cloud upload.
-                        # Fires when the user taps "Download LiDAR map" in the
-                        # app and a fresh scan is produced. Treated as known
-                        # (not unknown) so the watchdog doesn't log it.
-                        if param["siid"] == 99 and param["piid"] == 20:
-                            value = param.get("value")
-                            if isinstance(value, str) and value:
-                                self._handle_lidar_object_name(value)
-                            continue
-                        # s2p56 = session-task status on g2408. Shape:
-                        #   `{"status": []}`         — no active task
-                        #   `{"status": [[1, 0]]}`   — task running
-                        #   `{"status": [[1, 4]]}`   — task paused, pending
-                        #                              resume (dock-charging
-                        #                              mid-session, rain-
-                        #                              paused, etc.)
-                        # The upstream TASK_STATUS property (s4p7) is never
-                        # emitted on the g2408, so the "session active but
-                        # not currently mowing" state (e.g. rain-pause) was
-                        # invisible to HA. Track it here so the
-                        # `mowing_session_active` binary sensor can reflect
-                        # the app's "Continue / End" state correctly.
-                        if param["siid"] == 2 and param["piid"] == 56:
-                            self._handle_session_status(param.get("value"))
-                            continue
-                        # s2p50 on g2408 wraps multiple operation classes:
-                        #   session-start (mowing):  flat fields {area_id, exe, o:100, region_id, time, t:'TASK'}
-                        #   map edit (zone add/remove, exclusion-zone edit):
-                        #     {d:{exe, o, status, ...}, t:'TASK'} with 204 (request) + 215 (confirm)
-                        # A confirmed map edit (o=215) means the cloud's
-                        # MAP.* dataset has changed server-side — our
-                        # cached camera image is now stale. Re-fetch +
-                        # rebuild so the Mower dashboard reflects the
-                        # new zones without waiting for the next HA
-                        # restart. See docs/research/g2408-protocol.md
-                        # §4.6.
-                        if param["siid"] == 2 and param["piid"] == 50:
-                            value = param.get("value")
-                            if (
-                                isinstance(value, dict)
-                                and value.get("t") == "TASK"
-                                and isinstance(value.get("d"), dict)
-                                and value["d"].get("o") == 215
-                            ):
-                                _LOGGER.info(
-                                    "[MAP_EDIT] s2p50 confirmed map edit "
-                                    "(ids=%s, id=%s); rebuilding camera "
-                                    "map from cloud",
-                                    value["d"].get("ids"),
-                                    value["d"].get("id"),
-                                )
-                                try:
-                                    self._build_map_from_cloud_data()
-                                    # Fire the standard map-changed hook
-                                    # so the camera entity picks up the
-                                    # new `last_updated` and redraws on
-                                    # the next coordinator tick.
-                                    if self._map_manager:
-                                        self._map_manager._map_data_changed()
-                                    self._property_changed()
-                                except Exception as ex:  # pragma: no cover
-                                    _LOGGER.warning(
-                                        "[MAP_EDIT] cloud-map rebuild failed: %s", ex
-                                    )
-                            continue
-                        # s2p2 on g2408 is the "secondary phase code" channel
-                        # (not the error enum other models use). Known codes
-                        # observed so far: 27, 43 (battery-temp-low), 48
-                        # (mowing complete), 50, 53 (scheduled-start,
-                        # provisional), 54 (returning), 56 (rain-protection),
-                        # 70 (mowing). Anything outside this set is
-                        # firmware-novel — worth a one-shot WARNING so the
-                        # user can report it back.
-                        if param["siid"] == 2 and param["piid"] == 2:
-                            value = param.get("value")
-                            # Cache so HA sensors (positioning_failed,
-                            # rain_protection_active, …) can read the
-                            # most-recent code via
-                            # `device.s2p2_last`.
-                            if isinstance(value, int):
-                                self._s2p2_last = value
-                            known = {27, 31, 33, 43, 48, 50, 53, 54, 56, 70, 71, 75}
-                            if (
-                                value not in known
-                                and value not in self._protocol_novelty
-                            ):
-                                self._protocol_novelty.add(value)
-                                _LOGGER.warning(
-                                    "[PROTOCOL_NOVEL] s2p2 carried unknown value=%r "
-                                    "on g2408 (known: %s). Please report at "
-                                    "https://github.com/okolbu/ha-dreame-a2-mower/issues",
-                                    value,
-                                    sorted(known),
-                                )
-                            # Session-start codes — 50 = manual start,
-                            # 53 = scheduled start. Neither fires a map-
-                            # ready MQTT signal (no s6p1=300, no
-                            # event_occured until session-end), so
-                            # anything edited since the last rebuild —
-                            # exclusion zones, BUILDING-derived zone
-                            # additions, app-side tweaks — would leave
-                            # the HA camera showing a stale polygon
-                            # during the whole run. Proactively poll
-                            # the cloud MAP.* dataset here; the md5sum
-                            # dedupe inside `_build_map_from_cloud_data`
-                            # makes this a no-op if nothing actually
-                            # changed. See docs/research/g2408-protocol.md
-                            # §7.1 for the full list of map-refresh
-                            # triggers the integration now handles.
-                            if value in (50, 53):
-                                self._schedule_cloud_map_poll(
-                                    reason=f"session-start s2p2={value}"
-                                )
-                            continue
-                        # s2p65 on g2408 is a string-valued SLAM task
-                        # label — observed `'TASK_SLAM_RELOCATE'` during
-                        # LiDAR relocalization (see §4.8). Cache the
-                        # most recent value so HA sensors can surface
-                        # it. Other label values likely exist for
-                        # other SLAM modes; we store whatever string
-                        # arrives.
-                        if param["siid"] == 2 and param["piid"] == 65:
-                            value = param.get("value")
-                            if isinstance(value, str):
-                                self._s2p65_last = value
-                            continue
-                        if self._unknown_watchdog.saw_property(
-                            param["siid"], param["piid"]
-                        ):
-                            # Known-unmapped slots whose existence we've
-                            # already characterised (see
-                            # docs/research/g2408-protocol.md §2.1) — no
-                            # point surfacing at WARNING every HA reload
-                            # when the watchdog's in-memory dedup resets.
-                            # Downgrade to DEBUG so genuine novelty
-                            # (anything NOT in this set) still produces
-                            # the one-shot WARNING.
-                            known_quiet = {
-                                (2, 54),    # LiDAR upload progress 0..100 (§7.3b)
-                                (2, 65),    # SLAM-task-type string (§4.8)
-                                (2, 66),    # pre-observed 2-element list
-                                # Per apk decompilation:
-                                (2, 53),    # Voice-pack download progress (%)
-                                (2, 57),    # Robot shutdown trigger (5s delay then off)
-                                (2, 58),    # Self-check result {d:{mode, id, result}}
-                                (2, 61),    # Map-update trigger — loadMap re-fetch
-                                (5, 104),   # SLAM relocate counter, unknown role
-                                (5, 105),   # mid-session = 1, unknown role
-                                (5, 106),   # small int, observed 1-9 and 11 (no 10), purpose unknown
-                                (5, 107),   # dynamic, values catalogued
-                                # Session-boundary empty-dict pings, all
-                                # carry value={}. Per protocol §4.7:
-                                (1, 50),    # "something changed" ping (session start, edits)
-                                (1, 51),    # "new session — subscribe to telemetry"
-                                (1, 52),    # "task ended — flush / commit"
-                                (2, 52),    # cloud-side session-completion ping
-                            }
-                            key = (int(param["siid"]), int(param["piid"]))
-                            if key in known_quiet:
-                                _LOGGER.debug(
-                                    "[PROTOCOL_OBSERVED] properties_changed "
-                                    "siid=%s piid=%s value=%r (known-unmapped slot, "
-                                    "see docs/research/g2408-protocol.md §2.1)",
-                                    param["siid"],
-                                    param["piid"],
-                                    param.get("value"),
-                                )
-                            else:
-                                # Genuine novelty — not yet catalogued.
-                                _LOGGER.warning(
-                                    "[PROTOCOL_NOVEL] properties_changed carried an "
-                                    "unmapped siid=%s piid=%s value=%r — add to "
-                                    "property mapping if this field turns out to be "
-                                    "meaningful. Please report at "
-                                    "https://github.com/okolbu/ha-dreame-a2-mower/issues",
-                                    param["siid"],
-                                    param["piid"],
-                                    param.get("value"),
-                                )
-                        # Value-history capture: independent of the
-                        # first-seen-property hook above, log each
-                        # distinct value of an unmapped property at
-                        # WARNING. Lets us derive semantics from the
-                        # value pattern without manual probe analysis
-                        # (e.g. s5p107 cycles a 10-value enum we want
-                        # to catalogue; s2p2 state codes accumulate
-                        # over time). Capped at MAX_VALUES_PER_PROP
-                        # so high-entropy slots can't flood the log.
-                        siid_int = int(param["siid"])
-                        piid_int = int(param["piid"])
-                        value = param.get("value")
-                        # Empty-dict sentinel slots (protocol §4.7) always
-                        # carry value={} by design. Their first-observation
-                        # hook above already logs at DEBUG; skip the
-                        # value-novelty warning for the documented sentinel
-                        # payload so HA reloads don't emit noise. If one of
-                        # these slots ever carries something non-empty,
-                        # THAT is the novelty we want surfaced.
-                        if (
-                            (siid_int, piid_int) in _EMPTY_DICT_SENTINEL_SLOTS
-                            and value == {}
-                        ):
-                            pass
-                        elif self._unknown_watchdog.saw_value(
-                            siid_int, piid_int, value
-                        ):
-                            # Suppress VALUE_NOVEL for values already in the
-                            # documented catalogue (see §2.1) — in-memory
-                            # watchdog resets per process and would otherwise
-                            # re-fire on every HA restart for known values.
-                            # Genuine *new* values not in the catalogue still
-                            # fire and drive research.
-                            known_values = _KNOWN_VALUE_CATALOGUE.get(
-                                (siid_int, piid_int)
-                            )
-                            if known_values is not None and value in known_values:
-                                _LOGGER.debug(
-                                    "[PROTOCOL_OBSERVED_VALUE] siid=%d "
-                                    "piid=%d value=%r (known-set member)",
-                                    siid_int, piid_int, value,
-                                )
-                            else:
-                                _LOGGER.warning(
-                                    "[PROTOCOL_VALUE_NOVEL] siid=%d piid=%d "
-                                    "value=%r — first time seeing this value "
-                                    "for this property. Update §2.1 of the "
-                                    "protocol doc if a pattern emerges.",
-                                    siid_int, piid_int, value,
-                                )
-                        # Trigger a CFG re-fetch on settings/preference
-                        # updates (s2p51 = MULTIPLEXED_CONFIG, s2p52 =
-                        # mowing-prefs changed per apk decompilation).
-                        # Runs synchronously on the MQTT callback thread,
-                        # same pattern as _fetch_session_summary.
-                        if (siid_int, piid_int) in ((2, 51), (2, 52)):
-                            self.refresh_cfg()
-                        # Trigger a dock-position re-fetch on s1p51
-                        # (apk: dock-position-update trigger). Runs
-                        # synchronously on the MQTT thread, same
-                        # pattern as refresh_cfg above.
-                        if (siid_int, piid_int) == (1, 51):
-                            self.refresh_dock_pos()
-                        # s2p53 (voice-pack download %) and s2p58 (self-
-                        # check result) — cache for sensor consumers.
-                        # Per apk decompilation.
-                        if (siid_int, piid_int) == (2, 53):
-                            value = param.get("value")
-                            if isinstance(value, (int, float)):
-                                self._voice_dl_progress = int(value)
-                        elif (siid_int, piid_int) == (2, 58):
-                            value = param.get("value")
-                            if isinstance(value, dict):
-                                self._self_check_result = value.get("d") if "d" in value else value
-                if len(map_params) and self._map_manager:
-                    self._map_manager.handle_properties(map_params)
-
-                self._decode_blob_properties(params)
-                self._handle_properties(params)
+                self._handle_properties_changed(message["params"])
             elif method == "event_occured" and "params" in message:
                 # Dreame A2 (g2408) fires this at session-complete with the
                 # OSS object key for the session-summary JSON in piid=9.
@@ -892,6 +743,126 @@ class DreameMowerDevice:
                         method,
                         message,
                     )
+
+    def _reverse_property_mapping(self) -> dict[tuple[int, int], DreameMowerProperty]:
+        """Build-once, O(1) reverse lookup: (siid, piid) -> DreameMowerProperty.
+
+        Cached per-instance on first access. The upstream `property_mapping`
+        is keyed by enum member, so matching an incoming param used to scan
+        the whole enum. This flips the lookup direction for clarity.
+        """
+        cached = getattr(self, "_rprop_cache", None)
+        if cached is not None:
+            return cached
+        rprop: dict[tuple[int, int], DreameMowerProperty] = {}
+        for prop, mapping in self.property_mapping.items():
+            if "aiid" in mapping:
+                continue
+            key = (mapping["siid"], mapping["piid"])
+            # If two enum entries collide on the same (siid, piid) the
+            # first wins — deterministic and mirrors the previous
+            # break-out-of-loop behaviour.
+            rprop.setdefault(key, prop)
+        self._rprop_cache = rprop
+        return rprop
+
+    def _handle_properties_changed(self, raw_params) -> None:
+        """Process a `properties_changed` MQTT batch in a single pass.
+
+        Each incoming param runs through three independent stages:
+          A. Side-effect trigger (API re-fetch or inline cache update).
+             Fires regardless of whether the piid is in DreameMowerProperty.
+          B. Enum match — collected into `params` (default properties) or
+             `map_params` (routed to the map manager).
+          C. Research logging — novelty tracking for piids that don't have
+             a dedicated handler.
+
+        Stages are independent so a piid can be both "mapped to an enum
+        entry" and "needs a side-effect trigger" (s2p51 MULTIPLEXED_CONFIG
+        is exactly this case).
+        """
+        params: list[dict] = []
+        map_params: list[dict] = []
+        rprop = self._reverse_property_mapping()
+
+        for param in raw_params:
+            if "siid" not in param or "piid" not in param:
+                continue
+            siid = int(param["siid"])
+            piid = int(param["piid"])
+            key = (siid, piid)
+            value = param.get("value")
+
+            # Stage A — side-effect trigger.
+            effect = _SIDE_EFFECTS.get(key)
+            if effect is not None:
+                try:
+                    effect(self, value)
+                except Exception as ex:  # pragma: no cover — defensive
+                    _LOGGER.exception(
+                        "side-effect for siid=%d piid=%d raised: %s",
+                        siid, piid, ex,
+                    )
+
+            # Stage B — enum match + routing.
+            prop = rprop.get(key)
+            if prop is not None:
+                if prop in self._default_properties:
+                    param["did"] = str(prop.value)
+                    param["code"] = 0
+                    params.append(param)
+                elif prop in _MAP_PROPERTIES:
+                    map_params.append(param)
+
+            # Stage C — research logging (skip handled & mapped slots).
+            if prop is None and key not in _SIDE_EFFECTS:
+                self._log_property_novelty(siid, piid, value)
+
+        if map_params and self._map_manager:
+            self._map_manager.handle_properties(map_params)
+        self._decode_blob_properties(params)
+        self._handle_properties(params)
+
+    def _log_property_novelty(self, siid: int, piid: int, value) -> None:
+        """Watchdog + value-novelty logging for unmapped, unhandled piids."""
+        if self._unknown_watchdog.saw_property(siid, piid):
+            key = (siid, piid)
+            known_quiet = _KNOWN_UNMAPPED_QUIET_SLOTS
+            if key in known_quiet:
+                _LOGGER.debug(
+                    "[PROTOCOL_OBSERVED] properties_changed siid=%d piid=%d "
+                    "value=%r (known-unmapped slot)",
+                    siid, piid, value,
+                )
+            else:
+                _LOGGER.warning(
+                    "[PROTOCOL_NOVEL] properties_changed carried an unmapped "
+                    "siid=%d piid=%d value=%r — add to property mapping if "
+                    "meaningful. Report at "
+                    "https://github.com/okolbu/ha-dreame-a2-mower/issues",
+                    siid, piid, value,
+                )
+        # Value-novelty: suppress sentinel-shaped payloads, suppress values
+        # already in the documented catalogue, otherwise fire one-shot at
+        # WARNING so genuine new values drive research.
+        if (siid, piid) in _EMPTY_DICT_SENTINEL_SLOTS and value == {}:
+            return
+        if not self._unknown_watchdog.saw_value(siid, piid, value):
+            return
+        known_values = _KNOWN_VALUE_CATALOGUE.get((siid, piid))
+        if known_values is not None and value in known_values:
+            _LOGGER.debug(
+                "[PROTOCOL_OBSERVED_VALUE] siid=%d piid=%d value=%r "
+                "(known-set member)",
+                siid, piid, value,
+            )
+        else:
+            _LOGGER.warning(
+                "[PROTOCOL_VALUE_NOVEL] siid=%d piid=%d value=%r — first "
+                "time seeing this value for this property. Update §2.1 of "
+                "the protocol doc if a pattern emerges.",
+                siid, piid, value,
+            )
 
     @property
     def session_end_detected_at(self) -> float | None:
@@ -5979,39 +5950,27 @@ class DreameMowerDevice:
         infrastructure is firmware-dependent — confirmed absent on g2408)."""
         return self._routed_actions_supported
 
-    # Routed-action retry/backoff tuning. A single transient 80001 no
-    # longer permanently disables CFG fetching — we exp-back-off and only
-    # hard-disable after _CFG_HARD_DISABLE_AFTER consecutive failures.
-    _CFG_HARD_DISABLE_AFTER = 10
-    _CFG_BACKOFF_CAP_S = 600  # 10 min
-
+    # Routed-action retry/backoff. Transient cloud relay timeouts are
+    # recoverable — we back off and keep trying. The previous "hard
+    # disable after N failures" branch has been removed: g2408 is
+    # confirmed to route these actions, and a permanent disable hides
+    # CFG entities in a way that's worse than intermittent freshness.
     def _routed_action_in_backoff(self) -> bool:
         """True while the next routed-action attempt should be skipped."""
         return time.time() < self._cfg_next_retry_at
 
-    def _routed_action_note_failure(self, reason: str, is_nonetype: bool) -> None:
-        """Record a failure, schedule exp-backoff, and hard-disable the
-        tri-state flag once a long run of consecutive failures suggests
-        the firmware actually doesn't support the endpoint (vs. a cloud
-        relay being flaky)."""
+    def _routed_action_note_failure(self, reason: str) -> None:
+        """Record a failure and schedule the next retry with exp-backoff."""
         now = time.time()
         self._cfg_consecutive_failures += 1
         self._cfg_failure_count += 1
         self._cfg_last_failure_reason = reason
         self._cfg_last_failure_ts = now
-        delay = min(30 * (2 ** (self._cfg_consecutive_failures - 1)), self._CFG_BACKOFF_CAP_S)
+        delay = min(
+            _CFG_BACKOFF_BASE_S * (2 ** (self._cfg_consecutive_failures - 1)),
+            _CFG_BACKOFF_CAP_S,
+        )
         self._cfg_next_retry_at = now + delay
-        if is_nonetype and self._cfg_consecutive_failures >= self._CFG_HARD_DISABLE_AFTER:
-            self._routed_actions_supported = False
-            _LOGGER.warning(
-                "[routed-action] %d consecutive NoneType failures — "
-                "hard-disabling for this HA process. Reload the config "
-                "entry or restart HA to retry.",
-                self._cfg_consecutive_failures,
-            )
-        # Notify listeners so the cfg_fetch_health diagnostic sensor
-        # reflects the failure immediately instead of on the next
-        # unrelated MQTT property change.
         self._property_changed()
 
     def _routed_action_note_success(self) -> None:
@@ -6019,58 +5978,31 @@ class DreameMowerDevice:
         self._cfg_consecutive_failures = 0
         self._cfg_next_retry_at = 0.0
         self._cfg_success_count += 1
-        # Notify listeners so cfg_keys_raw / cfg_fetch_health reflect
-        # the fresh fetch. Without this, CFG sensors only propagate on
-        # boot and every subsequent refresh is invisible until another
-        # mapped-property MQTT event happens to fire _property_changed.
         self._property_changed()
 
     def refresh_cfg(self) -> bool:
         """Fetch the full settings dict via the routed action. Stores the
         result in `self._cfg` and returns True on success. Logs + returns
-        False on any error (cloud failure, malformed envelope, etc.) —
-        the cache is preserved so transient errors don't blank existing
-        entity state. Synchronous; call from an executor (e.g.
-        `hass.async_add_executor_job`) to avoid blocking the event loop.
-        """
+        False on any error — the cache is preserved so transient errors
+        don't blank existing entity state. Synchronous; safe to call
+        from the MQTT callback thread or an executor."""
         from ..protocol.cfg_action import get_cfg, CfgActionError
 
-        self._cfg_attempt_count += 1
-        self._cfg_last_attempt_ts = time.time()
         if self._protocol is None:
-            self._cfg_short_circuit_counts["no_protocol"] += 1
-            self._property_changed()
-            return False
-        if self._routed_actions_supported is False:
-            self._cfg_short_circuit_counts["hard_disabled"] += 1
-            self._property_changed()
             return False
         if self._routed_action_in_backoff():
-            self._cfg_short_circuit_counts["in_backoff"] += 1
-            self._property_changed()
             return False
-        _LOGGER.warning(
-            "[CFG_DEBUG] refresh_cfg entry (attempt=%d) — calling get_cfg()",
-            self._cfg_attempt_count,
-        )
         try:
             cfg = get_cfg(self._protocol.action)
         except CfgActionError as ex:
-            is_nonetype = "NoneType" in str(ex)
-            self._routed_action_note_failure(str(ex), is_nonetype)
-            if is_nonetype:
-                _LOGGER.warning(
-                    "refresh_cfg: routed action returned no data "
-                    "(80001 relay-timeout or 404). Retry #%d scheduled "
-                    "in %ds.",
-                    self._cfg_consecutive_failures,
-                    int(self._cfg_next_retry_at - time.time()),
-                )
-            else:
-                _LOGGER.warning("refresh_cfg: %s", ex)
+            self._routed_action_note_failure(str(ex))
+            _LOGGER.warning(
+                "refresh_cfg: %s (retry in %ds)",
+                ex, int(self._cfg_next_retry_at - time.time()),
+            )
             return False
         except Exception as ex:  # pragma: no cover — defensive
-            self._routed_action_note_failure(repr(ex), False)
+            self._routed_action_note_failure(repr(ex))
             _LOGGER.warning("refresh_cfg: unexpected error %s", ex)
             return False
         # Compute diff vs previous cfg — any key whose value changed
@@ -6191,34 +6123,24 @@ class DreameMowerDevice:
         return self._self_check_result
 
     def refresh_dock_pos(self) -> bool:
-        """Fetch dock position + lawn-connection via the routed getDockPos
-        action. Stores the result in `self._dock_pos` and returns True on
-        success. Synchronous; call from an executor."""
+        """Fetch dock position + lawn-connection via getDockPos."""
         from ..protocol.cfg_action import get_dock_pos, CfgActionError
 
         if self._protocol is None:
-            return False
-        if self._routed_actions_supported is False:
             return False
         if self._routed_action_in_backoff():
             return False
         try:
             self._dock_pos = get_dock_pos(self._protocol.action)
         except CfgActionError as ex:
-            is_nonetype = "NoneType" in str(ex)
-            self._routed_action_note_failure(str(ex), is_nonetype)
-            if is_nonetype:
-                _LOGGER.warning(
-                    "refresh_dock_pos: routed action returned no data "
-                    "(retry #%d in %ds).",
-                    self._cfg_consecutive_failures,
-                    int(self._cfg_next_retry_at - time.time()),
-                )
-            else:
-                _LOGGER.warning("refresh_dock_pos: %s", ex)
+            self._routed_action_note_failure(str(ex))
+            _LOGGER.warning(
+                "refresh_dock_pos: %s (retry in %ds)",
+                ex, int(self._cfg_next_retry_at - time.time()),
+            )
             return False
         except Exception as ex:  # pragma: no cover — defensive
-            self._routed_action_note_failure(repr(ex), False)
+            self._routed_action_note_failure(repr(ex))
             _LOGGER.warning("refresh_dock_pos: unexpected error %s", ex)
             return False
         self._routed_action_note_success()
@@ -6226,47 +6148,27 @@ class DreameMowerDevice:
         return True
 
     def call_action_opcode(self, op: int, extra: dict | None = None) -> bool:
-        """Invoke a routed action opcode via siid:2 aiid:50. See
-        protocol/cfg_action.py and apk.md for the opcode catalog
-        (9 findBot, 11 suppressFault, 12 lockBot, 100 globalMower,
-        101 edgeMower, 102 zoneMower, 110 startLearningMap,
-        401 takePic, 503 cutterBias, ...). Synchronous; call from
-        an executor."""
+        """Invoke a routed action opcode via siid:2 aiid:50 (findBot,
+        suppressFault, zoneMower, takePic, …)."""
         from ..protocol.cfg_action import call_action_op
 
         if self._protocol is None:
             _LOGGER.warning("call_action_opcode: no protocol")
             return False
-        if self._routed_actions_supported is False:
-            _LOGGER.warning(
-                "call_action_opcode(%d): routed actions disabled (cloud "
-                "returned 404 on prior probe — g2408 firmware doesn't "
-                "support siid:2 aiid:50). Use the existing native action "
-                "buttons instead.",
-                op,
-            )
-            return False
         if self._routed_action_in_backoff():
             _LOGGER.warning(
-                "call_action_opcode(%d): in backoff window after recent "
-                "failure (retry in %ds)",
+                "call_action_opcode(%d): in backoff (retry in %ds)",
                 op, int(self._cfg_next_retry_at - time.time()),
             )
             return False
         try:
             call_action_op(self._protocol.action, op, extra)
         except Exception as ex:
-            is_nonetype = "NoneType" in str(ex) or "404" in str(ex)
-            self._routed_action_note_failure(str(ex), is_nonetype)
-            if is_nonetype:
-                _LOGGER.warning(
-                    "call_action_opcode(%d): cloud returned no data "
-                    "(retry #%d in %ds)",
-                    op, self._cfg_consecutive_failures,
-                    int(self._cfg_next_retry_at - time.time()),
-                )
-            else:
-                _LOGGER.warning("call_action_opcode(%d): %s", op, ex)
+            self._routed_action_note_failure(str(ex))
+            _LOGGER.warning(
+                "call_action_opcode(%d): %s (retry in %ds)",
+                op, ex, int(self._cfg_next_retry_at - time.time()),
+            )
             return False
         self._routed_action_note_success()
         return True

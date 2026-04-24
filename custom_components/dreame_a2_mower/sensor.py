@@ -680,11 +680,6 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             "consecutive_failures": getattr(device, "_cfg_consecutive_failures", 0),
             "success_count": getattr(device, "_cfg_success_count", 0),
             "failure_count": getattr(device, "_cfg_failure_count", 0),
-            "attempt_count": getattr(device, "_cfg_attempt_count", 0),
-            "short_circuit_counts": dict(
-                getattr(device, "_cfg_short_circuit_counts", None) or {}
-            ),
-            "last_attempt_ts": getattr(device, "_cfg_last_attempt_ts", None),
             "last_failure_reason": getattr(device, "_cfg_last_failure_reason", None),
             "last_failure_ts": getattr(device, "_cfg_last_failure_ts", None),
             "cfg_fetched_at": getattr(device, "_cfg_fetched_at", None),
