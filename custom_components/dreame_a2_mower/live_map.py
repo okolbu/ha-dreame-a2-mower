@@ -601,6 +601,10 @@ class DreameA2LiveMap:
         # more reliable than the s1p4 phase byte, which sits at
         # constant values during both mowing and transit.
         self._last_area_m2: float | None = None
+        # Monotonic time (seconds) of the last tick where we observed a
+        # position. Used together with consecutive-frame distance to derive
+        # segment speed for the cutting-vs-transit classifier.
+        self._last_tick_monotonic: float | None = None
         # The most recent snapshot dispatched via LIVE_MAP_UPDATE_SIGNAL,
         # cached so a camera entity that subscribes *after* the first
         # dispatch (which is the actual order on HA boot — first_refresh
@@ -1354,41 +1358,73 @@ class DreameA2LiveMap:
         telem = getattr(device, "mowing_telemetry", None)
         if pos_source is None and telem is not None:
             pos_source = (telem.x_mm, telem.y_mm)
-        # Cutting-now indicator, two-signal heuristic:
+        # Cutting-now indicator, three-signal heuristic. No firmware
+        # attribute carries a direct "blades on/off" flag — Dreame's
+        # protocol elides it because the app drives blade state
+        # directly and doesn't need to observe it. So we infer from:
         #
-        #   1. Area growing between frames → cutting (blades-down, new
-        #      territory). Straightforward: firmware's `area_mowed_m2`
-        #      only goes up when unique lawn is being covered.
-        #   2. Area stable + session nearly complete (≥95% of total) →
-        #      still cutting (crisscross / cleanup pass). The firmware
-        #      counts UNIQUE area, so the second crisscross pass re-
-        #      traverses already-counted ground and `area_mowed` stays
-        #      flat even though blades are running. Without this branch
-        #      the whole second pass renders as blue "transit" — user
-        #      report 2026-04-25 with crisscross screenshot.
-        #   3. Area stable + session not yet done → genuine transit
-        #      (dock→mow-resume, between-zone movement). Renders blue.
+        #   A. `area_mowed_m2` delta — only grows over fresh ground.
+        #   B. Speed — mowing is ~0.25–0.4 m/s; transit is ~0.8+ m/s
+        #      (derived from consecutive-frame displacement over dt).
+        #   C. `area_mowed_m2 / total_area_m2` — when near 100% the
+        #      session is in cleanup / crisscross mode and any stable-
+        #      area stretch is over already-counted ground.
         #
-        # Threshold 95%: leaves headroom for the mower never quite
-        # hitting 100% on real lawns (edges, obstacle margins). The
-        # 30s straight-line dock-departure test from 2026-04-22
-        # (area stuck at 164 m² on a 321 m² lawn → ratio 0.51) still
-        # correctly reads as transit.
+        # Decision table (area-stable = current_area == last area):
+        #   area growing                            → cutting (A)
+        #   area stable, speed slow                 → cutting (B) — second
+        #                                             pass, dense patch
+        #   area stable, speed fast, near total     → cutting (C) — cleanup
+        #   area stable, speed fast, not near total → transit
+        #
+        # The second branch catches the user's 2026-04-25 case: a
+        # zone got double-mowed mid-session (area counter flat because
+        # already covered, but mower's still slowly cutting over the
+        # dense patch). The third branch catches the final-crisscross
+        # case. The fourth remains blue for real dock→mow transits.
+        now_monotonic = None
+        segment_speed_mps = None
+        if self._state.path and self._last_tick_monotonic is not None:
+            import time as _tm
+            now_monotonic = _tm.monotonic()
+            dt = now_monotonic - self._last_tick_monotonic
+            if dt > 0 and pos_source is not None:
+                x_mm, y_mm = pos_source
+                last_pt = self._state.path[-1]
+                last_x_m, last_y_m = last_pt[0], last_pt[1]
+                dist_m = ((x_mm / 1000.0 - last_x_m) ** 2
+                          + (y_mm / 1000.0 - last_y_m) ** 2) ** 0.5
+                segment_speed_mps = dist_m / dt
+
         cutting = None
         if telem is not None:
             current_area = getattr(telem, "area_mowed_m2", None)
             total_area = getattr(telem, "total_area_m2", None)
             if isinstance(current_area, (int, float)):
                 if self._last_area_m2 is not None:
+                    near_total = (
+                        isinstance(total_area, (int, float))
+                        and total_area > 0
+                        and current_area >= total_area * 0.95
+                    )
+                    slow = (
+                        segment_speed_mps is not None
+                        and segment_speed_mps < 0.5
+                    )
                     if current_area > self._last_area_m2:
-                        cutting = 1
-                    elif (isinstance(total_area, (int, float))
-                          and total_area > 0
-                          and current_area >= total_area * 0.95):
-                        cutting = 1  # crisscross / cleanup over mowed ground
+                        cutting = 1                     # (A) fresh territory
+                    elif slow:
+                        cutting = 1                     # (B) slow → cutting
+                    elif near_total:
+                        cutting = 1                     # (C) cleanup pass
                     else:
-                        cutting = 0  # genuine transit
+                        cutting = 0                     # fast + open → transit
                 self._last_area_m2 = float(current_area)
+        if now_monotonic is not None:
+            self._last_tick_monotonic = now_monotonic
+        elif pos_source is not None:
+            import time as _tm
+            self._last_tick_monotonic = _tm.monotonic()
 
         position = None
         if pos_source is not None:
