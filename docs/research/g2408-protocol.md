@@ -1287,7 +1287,7 @@ Decoded fields across six captures (2026-04-17..2026-04-20, incl. one user-cance
 | piid | guess | observed values |
 |---|---|---|
 | 1 | constant / flag | always 100 |
-| 2 | end-code | 31, 36, 69, 128, 170, 195 — the 36 comes from the 2026-04-20 18:06 user-cancel; the 31–195 band is from natural completions. So **36 appears to be the "user cancelled" marker**; further cancels will confirm. |
+| 2 | end-code | 31, 36, 69, 128, 170, 195, 217 — 36 = user-cancel (2026-04-20 18:06). Natural completions span 31/69/128/170/195/217; 2026-04-24 13:27 natural-end with ~16% of lawn unmowed (323/384 m²) added 217 to the set. No obvious bit-pattern. Hypothesis: enum encodes finish-quality (full coverage / partial / weather-interrupted / etc) rather than just "user vs natural". Needs more captures. |
 | 3 | area mowed × 100 (m² × 100) | 5232, 6647 (cancel, 66.47 m²), 10759, 19613, 28744, 31133 — matches the final `s1p4` `area_mowed_m2` reading at session end to within recharge-leg-transit overhead. |
 | 7 | stop-reason-ish | 1 = natural completion; 3 = user-cancel (confirmed by the 2026-04-20 abort). |
 | 8 | unix timestamp of session **start** | 2026-04-20 morning run: 1776664681 → 05:58:01 UTC = 07:58:01 local, exact match to `s2p1 → 1` at 07:58:03. The 18:06 user-cancel emitted 1776699000 = 15:30:00 UTC = 17:30:00 local — again session-start, not cancel-time. Confirms piid 8 is session-start, independent of end reason. |

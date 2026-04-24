@@ -53,8 +53,11 @@ class StateCode(IntEnum):
     SESSION_STARTED_SCHEDULED = 53  # scheduled start (confirmed 2026-04-20)
     MOWING = 70
     RETURNING = 54
-    MOWING_COMPLETE = 48
-    IDLE = 27
+    MOWING_COMPLETE = 48          # transient, ~5 s before POST_SESSION_IDLE
+    IDLE = 27                     # powered but no session yet (pre-start)
+    POST_SESSION_IDLE = 31        # parked at dock after mowing_complete;
+                                  # persists until next session_started.
+                                  # Confirmed 2026-04-24 at end-of-run.
     RAIN_PROTECTION = 56          # water detected on LiDAR → dock (2026-04-19)
     POSITIONING_FAILED = 71       # SLAM relocate needed (2026-04-20)
 
@@ -66,6 +69,7 @@ _STATE_LABELS: Final[dict[int, str]] = {
     StateCode.RETURNING: "returning",
     StateCode.MOWING_COMPLETE: "mowing_complete",
     StateCode.IDLE: "idle",
+    StateCode.POST_SESSION_IDLE: "post_session_idle",
     StateCode.RAIN_PROTECTION: "rain_protection",
     StateCode.POSITIONING_FAILED: "positioning_failed",
 }
