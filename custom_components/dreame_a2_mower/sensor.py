@@ -314,14 +314,51 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # lens brush, no squeegee — these properties never fire on
     # g2408 and the corresponding entities were permanently
     # "Unavailable" on the device page.
-    # Legacy `first_cleaning_date` / `total_cleaning_time` /
-    # `cleaning_count` / `total_cleaned_area` — vacuum-era names that
-    # the g2408-specific mowing_* siblings below supersede. Removed
-    # 2026-04-20 (v2.0.0-alpha.27) per user preference: this fork is
-    # A2-only, backward-compat with the upstream vacuum integration is
-    # a non-goal. The "mowing" variants are defined a few entries
-    # above and pull from the same underlying properties via the
-    # `*_name` computed attributes on `device.status`.
+    # Lifetime-totals from siid=12 (cleaning-history service).
+    # - FIRST_CLEANING_DATE → sensor.first_mowing_date (timestamp)
+    # - TOTAL_CLEANING_TIME → sensor.total_mowing_time  (minutes)
+    # - CLEANING_COUNT      → sensor.mowing_count       (count)
+    # - TOTAL_CLEANED_AREA  → sensor.total_mowed_area   (m²)
+    # Entity keys come from PROPERTY_TO_NAME (mower-themed names).
+    # Removed in alpha.27 because siid=12 wasn't returning data; re-added
+    # in alpha.102 after the alpha.78-81 cloud-URL breakthrough that
+    # unblocked a whole category of previously-failing RPCs. If siid=12
+    # still returns nothing on g2408 firmware, these will show as
+    # Unavailable — safe to leave in place either way.
+    DreameMowerSensorEntityDescription(
+        property_key=DreameMowerProperty.FIRST_CLEANING_DATE,
+        icon="mdi:calendar-start",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda value, device: (
+            datetime.fromtimestamp(value).replace(
+                tzinfo=datetime.now().astimezone().tzinfo
+            )
+            if isinstance(value, (int, float)) and value > 0 else None
+        ),
+    ),
+    DreameMowerSensorEntityDescription(
+        property_key=DreameMowerProperty.TOTAL_CLEANING_TIME,
+        icon="mdi:timer-outline",
+        native_unit_of_measurement=UNIT_MINUTES,
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    DreameMowerSensorEntityDescription(
+        property_key=DreameMowerProperty.CLEANING_COUNT,
+        icon="mdi:counter",
+        native_unit_of_measurement=UNIT_TIMES,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
+    DreameMowerSensorEntityDescription(
+        property_key=DreameMowerProperty.TOTAL_CLEANED_AREA,
+        icon="mdi:set-square",
+        native_unit_of_measurement=UNIT_AREA,
+        state_class=SensorStateClass.TOTAL_INCREASING,
+        entity_category=EntityCategory.DIAGNOSTIC,
+    ),
     DreameMowerSensorEntityDescription(
         key="cruising_history",
         icon="mdi:map-marker-path",
