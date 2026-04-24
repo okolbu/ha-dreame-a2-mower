@@ -272,3 +272,29 @@ def test_promote_in_progress_archives_and_clears(tmp_path, summary, raw_json):
     assert a.has(summary.md5)
     assert a.in_progress_entry() is None
     assert not (tmp_path / IN_PROGRESS_NAME).exists()
+
+
+def test_find_covering_session_matches_within_window(tmp_path, summary, raw_json):
+    """Archive-based dedup (alpha.94): `find_covering_session` returns
+    the archived entry whose start_ts is within ±window_s of the query."""
+    a = SessionArchive(tmp_path)
+    a.archive(summary, raw_json=raw_json)
+    # Exact match.
+    hit = a.find_covering_session(int(summary.start_ts))
+    assert hit is not None and hit.md5 == summary.md5
+    # Within window (default 120 s).
+    hit = a.find_covering_session(int(summary.start_ts) + 60)
+    assert hit is not None and hit.md5 == summary.md5
+    hit = a.find_covering_session(int(summary.start_ts) - 119)
+    assert hit is not None and hit.md5 == summary.md5
+    # Outside window — no match.
+    hit = a.find_covering_session(int(summary.start_ts) + 500)
+    assert hit is None
+    # Invalid input — no match, no error.
+    assert a.find_covering_session(0) is None
+    assert a.find_covering_session(-1) is None
+
+
+def test_find_covering_session_with_empty_archive(tmp_path):
+    a = SessionArchive(tmp_path)
+    assert a.find_covering_session(1_700_000_000) is None

@@ -211,6 +211,35 @@ class SessionArchive:
         self.load_index()
         return any(s.md5 == md5 for s in self._index)
 
+    def find_covering_session(
+        self, start_ts: int, window_s: int = 120
+    ) -> ArchivedSession | None:
+        """Return an archived session whose `start_ts` is within ±window_s
+        seconds of the supplied timestamp, or None.
+
+        Used at boot to detect the "HA offline while the session ended"
+        case: the cloud writes the session-summary JSON, the normal
+        archive path picks it up, but the stale `in_progress.json`
+        persisted before HA went down still describes the same run. If
+        we find a matching archive entry, the session is complete and
+        the in_progress blob should be dropped — otherwise today's new
+        mow renders on top of yesterday's path.
+
+        Window default 120 s: session-summary JSON's `start_ts` and the
+        live tracker's `session_start_ts` both come from the firmware's
+        mow-start event but may differ by a few seconds (cloud parse
+        time, leg boundaries, clock drift). 120 s is loose enough to
+        absorb that jitter and still tight enough that two genuinely-
+        different mows never collide (minimum gap in real use is many
+        minutes)."""
+        self.load_index()
+        if start_ts <= 0:
+            return None
+        for s in self._index:
+            if abs(int(s.start_ts) - int(start_ts)) <= window_s:
+                return s
+        return None
+
     # ------------------ in-progress entry I/O ------------------
 
     def _in_progress_path(self) -> Path:

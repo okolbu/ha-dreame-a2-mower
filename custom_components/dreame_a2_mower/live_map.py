@@ -809,9 +809,44 @@ class DreameA2LiveMap:
         Returns True if an entry was loaded so the caller can seed
         `_prev_session_active = True` and avoid re-firing the
         fresh-session wipe on the very next tick.
+
+        Before restoring we reconcile the on-disk in-progress blob against
+        the session archive: if an archived session's `start_ts` matches
+        our `session_start_ts` (within 120 s), the run ended while HA was
+        offline — the cloud session-summary upload was captured by the
+        normal archive path but the stale in_progress blob from before the
+        outage is still there. Drop it so today's new mow doesn't render
+        on top of yesterday's path.
         """
         archive = getattr(self._coordinator, "session_archive", None)
         data = archive.read_in_progress() if archive is not None else None
+        if data is not None and archive is not None:
+            try:
+                sst = int(data.get("session_start_ts", 0) or 0)
+                if sst <= 0:
+                    # Older in_progress files may store only session_start
+                    # (ISO str). Convert so the archive lookup works.
+                    sst = int(_iso_to_unix(data.get("session_start")) or 0)
+            except (TypeError, ValueError):
+                sst = 0
+            if sst > 0:
+                covering = archive.find_covering_session(sst, window_s=120)
+                if covering is not None:
+                    _LOGGER.warning(
+                        "live_map: in_progress session_start_ts=%d matches "
+                        "archived session %s (start_ts=%d, md5=%s) — the "
+                        "run finalised while HA was offline. Dropping the "
+                        "stale in_progress blob.",
+                        sst, covering.filename, covering.start_ts,
+                        covering.md5,
+                    )
+                    try:
+                        archive.delete_in_progress()
+                    except Exception as ex:  # pragma: no cover — defensive
+                        _LOGGER.warning(
+                            "live_map: delete_in_progress failed: %s", ex
+                        )
+                    return False
         disk_restored = False
         if data is not None:
             try:
