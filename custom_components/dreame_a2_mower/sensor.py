@@ -375,35 +375,12 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         value_fn=lambda value, device: round(value.y_m, 2) if value is not None else None,
     ),
-    # Raw axis values for diagnostics. Both X and Y are in map-scale mm
-    # (20-bit-packed pose decoded from s1p4 bytes [1-5], ×10 per apk).
-    # Disabled by default: these flip on every s1p4 push (~5 s during
-    # mowing) and otherwise flood the Activity / logbook views with
-    # pairs of `X (raw, mm): -7420 → -7380` lines. Users doing
-    # calibration work can re-enable either one from the entity's
-    # config screen.
-    DreameMowerSensorEntityDescription(
-        key="mowing_x_raw",
-        property_key=DreameMowerProperty.MOWING_TELEMETRY,
-        name="X (raw)",
-        icon="mdi:help-circle",
-        native_unit_of_measurement="mm",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        exists_fn=lambda description, device: True,
-        value_fn=lambda value, device: value.x_mm if value is not None else None,
-    ),
-    DreameMowerSensorEntityDescription(
-        key="mowing_y_raw",
-        property_key=DreameMowerProperty.MOWING_TELEMETRY,
-        name="Y (raw)",
-        icon="mdi:help-circle",
-        native_unit_of_measurement="mm",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        exists_fn=lambda description, device: True,
-        value_fn=lambda value, device: value.y_mm if value is not None else None,
-    ),
+    # X/Y raw diagnostic sensors removed in alpha.101 — they existed
+    # during the pre-alpha.98 decoder-bug-hunting period (user watching
+    # the 16× overshoot live). With the decoder now correct and matching
+    # the apk spec, the metres-scale `Position X` / `Position Y` sensors
+    # above are sufficient.
+
     # Path-point sequence counter from s1p4 bytes [7-9]. Monotonically
     # increasing within a session, resets on new session. Diagnostic-only:
     # useful for spotting dropped frames and cross-referencing cloud
@@ -690,12 +667,16 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         available_fn=_dock_pos_present,
     ),
     # Maintenance Points (cloud MAP.* cleanPoints). Set in the Dreame
-    # app; multiple are allowed. Coordinates are raw cloud-frame mm —
-    # feed directly into `mower_go_to_maintenance_point`.
+    # app; multiple are allowed. `device.maintenance_points` stores raw
+    # cloud-frame mm (what `device.go_to` expects); sensors convert to
+    # metres for display consistency with Position X/Y and dock sensors.
     #
-    # Sensor state = count of points. Attributes carry the full list so
-    # a user with multiple points can see each id + coordinate to pick
-    # which one to target via the service's `point_id` parameter.
+    # State = count of points. Attributes carry the full list so a user
+    # with multiple points can see each id + coord to pick which one to
+    # target via the service's `point_id` parameter. Attribute coords
+    # are presented in metres too; the service reads from the device
+    # attribute directly (not from sensor state) so no mm→m round-trip
+    # is needed internally.
     DreameMowerSensorEntityDescription(
         key="maintenance_points_count",
         icon="mdi:map-marker-multiple",
@@ -704,20 +685,25 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             getattr(device, "maintenance_points", []) or []
         ),
         attrs_fn=lambda device: {
-            "points": list(getattr(device, "maintenance_points", []) or []),
+            "points": [
+                {
+                    "id": p.get("id"),
+                    "x": round(p.get("x_mm", 0) / 1000.0, 3),
+                    "y": round(p.get("y_mm", 0) / 1000.0, 3),
+                }
+                for p in (getattr(device, "maintenance_points", []) or [])
+            ],
         },
         exists_fn=lambda description, device: True,
     ),
-    # First-point convenience sensors (x, y). When there's only one point
-    # (the common case), these show its coords directly in the entity
-    # card — no attribute-drilling needed. For multiple points consult
-    # the `maintenance_points_count` sensor's attributes.
+    # First-point convenience sensors (x, y) in metres. For multiple
+    # points consult the `maintenance_points_count` sensor's attributes.
     DreameMowerSensorEntityDescription(
-        key="maintenance_point_x_mm",
+        key="maintenance_point_x",
         icon="mdi:map-marker",
-        native_unit_of_measurement="mm",
+        native_unit_of_measurement="m",
         value_fn=lambda value, device: (
-            device.maintenance_point.get("x_mm")
+            round(device.maintenance_point.get("x_mm", 0) / 1000.0, 3)
             if isinstance(device.maintenance_point, dict) else None
         ),
         exists_fn=lambda description, device: True,
@@ -726,11 +712,11 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         ),
     ),
     DreameMowerSensorEntityDescription(
-        key="maintenance_point_y_mm",
+        key="maintenance_point_y",
         icon="mdi:map-marker",
-        native_unit_of_measurement="mm",
+        native_unit_of_measurement="m",
         value_fn=lambda value, device: (
-            device.maintenance_point.get("y_mm")
+            round(device.maintenance_point.get("y_mm", 0) / 1000.0, 3)
             if isinstance(device.maintenance_point, dict) else None
         ),
         exists_fn=lambda description, device: True,
