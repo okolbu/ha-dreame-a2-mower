@@ -702,6 +702,44 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("FDP"),
     ),
+    # CFG.DND is Do Not Disturb (confirmed 2026-04-24). Shape
+    # [enabled, start_min, end_min] with start/end in minutes-from-
+    # midnight. Note the element ORDER differs from the s2p51 DND
+    # event-payload shape, which uses a dict `{end, start, value}`;
+    # here it's a positional list. State shows the time window
+    # ("21:00-07:00") when enabled, "off" when disabled. The existing
+    # switch.dnd is the on/off control; this sensor surfaces the
+    # schedule + full state.
+    DreameMowerSensorEntityDescription(
+        key="dnd_schedule",
+        icon="mdi:sleep",
+        value_fn=lambda value, device: (
+            _format_time_window(device.cfg["DND"], start_idx=1, end_idx=2)
+            if isinstance(device.cfg.get("DND"), list)
+            and len(device.cfg["DND"]) >= 3
+            and device.cfg["DND"][0] == 1
+            else (
+                "off"
+                if isinstance(device.cfg.get("DND"), list)
+                and len(device.cfg["DND"]) >= 1
+                and device.cfg["DND"][0] == 0
+                else None
+            )
+        ),
+        attrs_fn=lambda device: (
+            {
+                "enabled": bool(device.cfg["DND"][0]),
+                "start_min": int(device.cfg["DND"][1]),
+                "end_min": int(device.cfg["DND"][2]),
+            }
+            if isinstance(device.cfg.get("DND"), list)
+            and len(device.cfg["DND"]) >= 3
+            and all(isinstance(x, int) for x in device.cfg["DND"][:3])
+            else {}
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("DND", min_len=3),
+    ),
     # CFG.LOW is Low-Speed Nighttime (confirmed 2026-04-24). Shape
     # [enabled, start_min, end_min] matches the s2p51 LOW_SPEED_NIGHT
     # decoder. State shows the time window ("20:00-08:00") when
@@ -774,6 +812,23 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # Protection / Child Lock / etc.). Sensor state = count of CFG
     # keys so any "CFG refetched" tick is visible in the state
     # history; attributes carry the full dict as (key → value) pairs.
+    # CFG.VER is a CFG-update revision counter (confirmed 2026-04-24,
+    # NOT firmware version as previously documented). Bumps by 1 on
+    # every successful CFG write; useful as a tripwire to correlate
+    # toggle activity. Exposed as a diagnostic sensor so the change
+    # history is visible in HA's state history graph.
+    DreameMowerSensorEntityDescription(
+        key="cfg_version",
+        icon="mdi:counter",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda value, device: (
+            int(device.cfg.get("VER"))
+            if isinstance(device.cfg.get("VER"), int)
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("VER"),
+    ),
     DreameMowerSensorEntityDescription(
         key="cfg_keys_raw",
         icon="mdi:code-json",

@@ -1121,7 +1121,7 @@ Recorded 2026-04-23, firmware `dreame.mower.g2408` (`_host=10000.mt.eu.iot.dream
 | `REC` | `list(9) [1,1,1,1,1,1,1,0,3]` | Recharge config. First 7 = days-of-week? (TBD) |
 | `STUN` | `int` | Anti-theft (0=off, 1=on) |
 | `TIME` | `str` | Timezone IANA name, e.g. `'Europe/Oslo'`. Exposed as `mower_timezone` sensor. |
-| `VER` | `int=141` | Config / firmware version. Note: distinct from the `550` in `Firmware Version` entity (different cloud fields). |
+| `VER` | `int` | **CFG-update revision counter** (corrected 2026-04-24 — was previously mis-labelled "firmware version"). Monotonic increment on every successful CFG write; useful as a tripwire for toggle-correlation research. Distinct from the actual firmware version surfaced by `sensor.firmware_version` (which reads `device.info.version`, a separate cloud field). Surfaced as diagnostic `sensor.cfg_version`. |
 | `VOICE` | `list(4) [regular_notif, work_status, special_status, error_status]` | App's Voice screen 4 toggles. Sample `[1,1,1,1]` = all on. Confirmed 2026-04-23 by user correlation. |
 | `VOL` | `int` | Volume % (0..100) |
 | `WRF` | `int` | Weather reference (0=off, 1=on) |

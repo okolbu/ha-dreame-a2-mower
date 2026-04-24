@@ -175,6 +175,8 @@ views:
               - entity: sensor.dreame_a2_mower_headlight_schedule
               - entity: switch.dreame_a2_mower_dnd
                 name: Do-Not-Disturb
+              - entity: sensor.dreame_a2_mower_dnd_schedule
+                name: DnD schedule
               - entity: sensor.dreame_a2_mower_mower_timezone
 
           - type: entities
