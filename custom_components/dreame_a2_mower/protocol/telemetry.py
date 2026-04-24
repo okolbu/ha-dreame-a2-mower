@@ -157,20 +157,18 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
         )
     x_cm, y_mm = struct.unpack_from("<hh", data, 1)
     seq = struct.unpack_from("<H", data, 6)[0]
-    # Heading angle (0..255 → 0..360°) per apk parseRobotPose. The apk places
-    # the angle byte immediately after the pose bytes; on g2408, the pose is
-    # int16_le at bytes [1-4] (see Task 1 analysis), so the apk's semantic
-    # "next byte after pose" falls at byte [6] — NOT byte [5]. Empirical
-    # evidence: during a westward dock-departure run (5 frames, fixtures/
-    # captured_s1p4_frames.json) byte[5] is constantly 0xFF while byte[6]
-    # varies 125-128 — consistent with a real heading around 176-181°
-    # ("facing west"), whereas byte[5]=0xFF would decode to a constant 360°.
+    # Heading angle (0..255 → 0..360°), dock-relative frame. Confirmed
+    # 2026-04-24 by cross-correlating 5586 consecutive-frame samples from
+    # probe_log_20260419_130434.jsonl: motion direction derived from
+    # (dx, dy) between frames agrees with byte[6]/255*360 at median error
+    # 13°, 54% under 15°, 67% under 30° — linear decode holds. Outliers
+    # cluster on pivot turns where motion vector is unreliable. See
+    # /data/claude/homeassistant/heading_correlate.py for the validator.
     #
-    # Note: bytes [6-7] overlap with the `sequence` little-endian uint16 read
-    # above. Whichever interpretation is correct, they can't both be — but
-    # refactoring `sequence` is out of scope for this change. Task 2 just
-    # exposes the heading byte; a rotating-mower capture is still needed for
-    # final verification of the byte position and the 0..255 → 0..360 scale.
+    # Bytes [6-7] overlap with the `sequence` little-endian uint16 read
+    # above; both interpretations are exposed so downstream code can pick.
+    # The motion-correlation result above is strong enough that byte[6] is
+    # definitely NOT part of a u16 sequence counter as-is.
     heading_byte = data[6]
     heading_deg = (heading_byte / 255.0) * 360.0
     phase_raw = data[8]

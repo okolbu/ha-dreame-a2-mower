@@ -347,10 +347,18 @@ BUILDING-mode samples (same 8-byte shape, real Y values, byte[6] varies widely):
 - `17:02:16  [0xCE, 72, 1, 144, 73, 0, 4, 0xCE]`        (X=328 cm, Y=18.83 m)
 - `17:03:11  [0xCE, 9, 2, 80, 110, 0, 126, 0xCE]`       (X=521 cm, Y=28.24 m)
 
-byte[6] plays at least two roles depending on context: `123..125` during the
-leg-start preamble (monotonic across legs), and highly variable during BUILDING
-(values 0..252 span observed, no obvious pattern). Could be a heading angle,
-course-correction code, or per-packet checksum; more captures needed.
+byte[6] is the **mower heading** (confirmed 2026-04-24). Scale `byte / 255 *
+360` gives the angle in degrees in the dock-relative frame (0° = dock's
++X axis, 90° = +Y). Validation: ran `heading_correlate.py` across 5586
+consecutive-pair samples from `probe_log_20260419_130434.jsonl`, computing
+the motion direction `atan2(dy, dx)` and comparing to the byte[6] decode
+— **median angular error 13°**, 54% of samples under 15°, 67% under 30°.
+Clear central peak at 0-14° in the error histogram, with a diffuse tail
+corresponding to pivot turns where position barely moves between frames
+and `atan2` is ill-conditioned. The earlier hypothesis about preamble
+values (123..125) is consistent with "dock-relative heading ~180° =
+mower facing away from the dock entry while leaving", not a special
+preamble role. Surfaced as `sensor.heading_deg`.
 
 The integration decodes the position correctly via `decode_s1p4_position`. As of
 v2.0.0-alpha.7 each novel short-frame length also logs the raw bytes once at

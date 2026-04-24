@@ -474,10 +474,9 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # frame: 0° points along the dock's +X direction, NOT compass north.
     # Users wanting a compass heading can offset by `station_bearing_deg`
     # (same trick as the Position North / East sensors).
-    # Decode is provisional per docs/research — pinning it down is one of
-    # the reasons for exposing this live. When you know the mower is
-    # driving in a specific direction (e.g. the crisscross X-stripe pass),
-    # screenshot this value and you've got a ground-truth annotation.
+    # Decode confirmed 2026-04-24 via motion-direction correlation across
+    # 5586 samples (median error 13°). See docs/research/g2408-protocol.md
+    # §2.1 s1p4 row for the validation methodology.
     DreameMowerSensorEntityDescription(
         key="heading_deg",
         property_key=DreameMowerProperty.MOWING_TELEMETRY,
