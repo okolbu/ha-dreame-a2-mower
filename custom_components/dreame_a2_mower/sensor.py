@@ -470,6 +470,25 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         value_fn=lambda value, device: value.distance_m if value is not None else None,
     ),
+    # Mower heading from s1p4 byte [6] (0..255 -> 0..360°). Dock-relative
+    # frame: 0° points along the dock's +X direction, NOT compass north.
+    # Users wanting a compass heading can offset by `station_bearing_deg`
+    # (same trick as the Position North / East sensors).
+    # Decode is provisional per docs/research — pinning it down is one of
+    # the reasons for exposing this live. When you know the mower is
+    # driving in a specific direction (e.g. the crisscross X-stripe pass),
+    # screenshot this value and you've got a ground-truth annotation.
+    DreameMowerSensorEntityDescription(
+        key="heading_deg",
+        property_key=DreameMowerProperty.MOWING_TELEMETRY,
+        name="Heading",
+        icon="mdi:compass",
+        native_unit_of_measurement="°",
+        exists_fn=lambda description, device: True,
+        value_fn=lambda value, device: (
+            round(value.heading_deg, 1) if value is not None else None
+        ),
+    ),
     # PRE-backed mow_mode — g2408 PRE = [zone_id, mode] (2 elements,
     # not the 10-element apk schema). PRE[1] is the mode index.
     # Removed in alpha.86: cutting_height_mm / obstacle_distance_mm /
