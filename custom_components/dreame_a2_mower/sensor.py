@@ -660,8 +660,29 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_dock_pos_present,
     ),
-    # Maintenance Point (cloud MAP.* cleanPoints). Set in the Dreame app.
-    # Coordinates are raw cloud-frame mm — feed directly into `mower_go_to_maintenance_point`.
+    # Maintenance Points (cloud MAP.* cleanPoints). Set in the Dreame
+    # app; multiple are allowed. Coordinates are raw cloud-frame mm —
+    # feed directly into `mower_go_to_maintenance_point`.
+    #
+    # Sensor state = count of points. Attributes carry the full list so
+    # a user with multiple points can see each id + coordinate to pick
+    # which one to target via the service's `point_id` parameter.
+    DreameMowerSensorEntityDescription(
+        key="maintenance_points_count",
+        icon="mdi:map-marker-multiple",
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=lambda value, device: len(
+            getattr(device, "maintenance_points", []) or []
+        ),
+        attrs_fn=lambda device: {
+            "points": list(getattr(device, "maintenance_points", []) or []),
+        },
+        exists_fn=lambda description, device: True,
+    ),
+    # First-point convenience sensors (x, y). When there's only one point
+    # (the common case), these show its coords directly in the entity
+    # card — no attribute-drilling needed. For multiple points consult
+    # the `maintenance_points_count` sensor's attributes.
     DreameMowerSensorEntityDescription(
         key="maintenance_point_x_mm",
         icon="mdi:map-marker",

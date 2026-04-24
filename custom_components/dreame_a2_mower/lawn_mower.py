@@ -289,7 +289,9 @@ async def async_setup_entry(
 
     platform.async_register_entity_service(
         SERVICE_GO_TO_MAINTENANCE_POINT,
-        {},
+        {
+            vol.Optional("point_id"): vol.All(vol.Coerce(int)),
+        },
         DreameMower.async_go_to_maintenance_point.__name__,
     )
 
@@ -703,21 +705,42 @@ class DreameMower(DreameMowerEntity, LawnMowerEntity):
         if x is not None and y is not None and x != "" and y != "":
             await self._try_command("Unable to call go_to: %s", self.device.go_to, x, y)
 
-    async def async_go_to_maintenance_point(self) -> None:
-        """Dispatch go_to to the user-placed Maintenance Point.
+    async def async_go_to_maintenance_point(self, point_id=None) -> None:
+        """Dispatch go_to to a user-placed Maintenance Point.
 
-        Coordinates come from `device.maintenance_point`, populated by the
-        cloud MAP fetch (`cleanPoints`). Fails cleanly with
-        HomeAssistantError if the user hasn't set a point yet or if the
-        map hasn't been fetched.
+        With no `point_id`, defaults to the first point in the list (fine
+        when the user has only placed one — common case). When multiple
+        points exist, pass `point_id` matching the firmware-assigned id
+        shown in the `maintenance_points_count` sensor's
+        `extra_state_attributes`. Fails cleanly with HomeAssistantError
+        if no points are set or the requested id isn't in the list.
         """
-        mp = self.device.maintenance_point
-        if not mp:
-            from homeassistant.exceptions import HomeAssistantError
+        from homeassistant.exceptions import HomeAssistantError
+
+        points = self.device.maintenance_points
+        if not points:
             raise HomeAssistantError(
-                "No Maintenance Point set — place one in the Dreame app "
+                "No Maintenance Points set — place one in the Dreame app "
                 "first, then retry after the next cloud-map refresh."
             )
+
+        if point_id is None or point_id == "":
+            mp = points[0]
+        else:
+            try:
+                requested = int(point_id)
+            except (TypeError, ValueError):
+                raise HomeAssistantError(
+                    f"Maintenance Point id must be an integer, got {point_id!r}"
+                )
+            mp = self.device.maintenance_point_by_id(requested)
+            if mp is None:
+                known = ", ".join(str(p["id"]) for p in points)
+                raise HomeAssistantError(
+                    f"No Maintenance Point with id={requested}. "
+                    f"Known ids: {known}"
+                )
+
         await self._try_command(
             "Unable to call go_to_maintenance_point: %s",
             self.device.go_to,

@@ -93,6 +93,13 @@ mower_go_to_maintenance_point:
     entity:
       integration: dreame_a2_mower
       domain: lawn_mower
+  fields:
+    point_id:
+      example: 1
+      required: false
+      selector:
+        number:
+          mode: box
 
 mower_follow_path:
   target:

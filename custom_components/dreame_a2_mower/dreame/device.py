@@ -256,11 +256,13 @@ class DreameMowerDevice:
         # `refresh_dock_pos()`; consumers read via `device.dock_pos`.
         # Schema (per apk): {x, y, yaw, connect_status, path_connect, in_region}.
         self._dock_pos: dict | None = None
-        # Maintenance Point (cloud MAP.* `cleanPoints` key). A user-placed
-        # "go here" marker. Populated by `_build_map_from_cloud_data`.
-        # Shape: `{"id": int, "x_mm": int, "y_mm": int}` in cloud frame
-        # (same as charger/obstacles), or None if not set.
-        self._maintenance_point: dict | None = None
+        # Maintenance Points (cloud MAP.* `cleanPoints` key). User-placed
+        # "go here" markers. Populated by `_build_map_from_cloud_data`.
+        # List of `{"id": int, "x_mm": int, "y_mm": int}` in cloud frame
+        # (same as charger/obstacles). Empty list when no points placed.
+        # The app supports multiple; the user picks which one to visit
+        # via the `point_id` param to `mower_go_to_maintenance_point`.
+        self._maintenance_points: list[dict] = []
         # Cloud M_PATH.* userData cache — populated alongside MAP.*
         # by `_build_map_from_cloud_data`. Used by live_map's
         # boot-time restore as a fallback when in_progress.json
@@ -2403,13 +2405,14 @@ class DreameMowerDevice:
                 mask = np.array(img).T
                 pixel_type[mask > 0] = MapPixelType.WALL.value
 
-            # cleanPoints: user-placed Maintenance Point (single entry per
-            # captures so far — firmware may support multiples). We expose
-            # only the first one as `device.maintenance_point`. Coords stay
-            # in raw cloud-frame mm so the go-to service can feed them
-            # straight into `device.go_to(x, y)` without re-reflecting.
+            # cleanPoints: user-placed Maintenance Points. The app allows
+            # multiple points and the user picks which one to visit when
+            # dispatching a maintenance run — so we collect ALL of them.
+            # Coords stay in raw cloud-frame mm so the go-to service can
+            # feed them straight into `device.go_to(x, y)` without
+            # re-reflecting.
             clean_points = map_json.get("cleanPoints", {}).get("value", [])
-            mp: dict | None = None
+            mps: list[dict] = []
             for entry in clean_points:
                 if isinstance(entry, list) and len(entry) >= 2:
                     point_id = entry[0]
@@ -2424,15 +2427,19 @@ class DreameMowerDevice:
                     continue
                 try:
                     pt = point_path[0]
-                    mp = {
-                        "id": int(point_id) if isinstance(point_id, (int, float)) else 1,
+                    resolved_id = (
+                        int(point_id)
+                        if isinstance(point_id, (int, float))
+                        else int(point_data.get("id", len(mps) + 1))
+                    )
+                    mps.append({
+                        "id": resolved_id,
                         "x_mm": int(pt["x"]),
                         "y_mm": int(pt["y"]),
-                    }
+                    })
                 except (KeyError, TypeError, ValueError):
                     continue
-                break  # first-only
-            self._maintenance_point = mp
+            self._maintenance_points = mps
 
             dimensions = MapImageDimensions(
                 top=by1,
@@ -5951,12 +5958,28 @@ class DreameMowerDevice:
         return self._dock_pos
 
     @property
+    def maintenance_points(self) -> list[dict]:
+        """All user-placed Maintenance Points, parsed from the cloud MAP
+        `cleanPoints` key. List of `{id, x_mm, y_mm}` in cloud-frame mm
+        (same frame as `device.go_to`). Empty list until the map has
+        been fetched and the user has placed at least one point."""
+        return list(self._maintenance_points)
+
+    @property
     def maintenance_point(self) -> dict | None:
-        """User-placed "Head to Maintenance Point" target, parsed from
-        the cloud MAP `cleanPoints` key. Dict: `{id, x_mm, y_mm}` in
-        cloud-frame mm (same frame as `device.go_to`). None until the
-        map has been fetched and the user has placed a point."""
-        return self._maintenance_point
+        """Convenience accessor for the first Maintenance Point, or None
+        if no points exist. Used by `maintenance_point_x_mm` / `_y_mm`
+        sensors to show the most likely target at a glance. See
+        `maintenance_points` for the full list."""
+        return self._maintenance_points[0] if self._maintenance_points else None
+
+    def maintenance_point_by_id(self, point_id: int) -> dict | None:
+        """Look up a Maintenance Point by its firmware-assigned id.
+        Returns None if no point with that id exists."""
+        for pt in self._maintenance_points:
+            if pt.get("id") == point_id:
+                return pt
+        return None
 
     @property
     def cloud_mpath(self) -> list | None:
