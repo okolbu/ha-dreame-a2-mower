@@ -139,6 +139,32 @@ class DreameMowerSensorEntityDescription(DreameMowerEntityDescription, SensorEnt
     """Describes DreameMower sensor entity."""
 
 
+def _cfg_key_present(key: str, min_len: int = 0):
+    """available_fn factory: gate an entity on the named CFG key actually
+    being present in the device's last getCFG snapshot.
+
+    Without this gate CFG-derived sensors would materialise immediately and
+    sit with state=None until the first successful `refresh_cfg`, which HA
+    renders as "Unknown". Using `available=False` instead shows the clearer
+    "Unavailable" until data arrives, and also hides the entity on
+    firmwares that simply don't return the key.
+    """
+    def _check(device) -> bool:
+        cfg = getattr(device, "cfg", None) or {}
+        val = cfg.get(key)
+        if val is None:
+            return False
+        if min_len > 0:
+            return isinstance(val, (list, tuple)) and len(val) >= min_len
+        return True
+    return _check
+
+
+def _dock_pos_present(device) -> bool:
+    """available_fn: dock-position dict populated by the getDockPos action."""
+    return isinstance(getattr(device, "dock_pos", None), dict) and bool(device.dock_pos)
+
+
 SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     DreameMowerSensorEntityDescription(
         property_key=DreameMowerProperty.CLEANING_TIME,
@@ -462,6 +488,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             else None
         ),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("PRE", min_len=2),
     ),
     # --- Headlight (LIT = [enabled, start_min, end_min, ...])
     DreameMowerSensorEntityDescription(
@@ -475,12 +502,14 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             ) else "off" if isinstance(device.cfg.get("LIT"), list) else None
         ),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("LIT", min_len=1),
     ),
     DreameMowerSensorEntityDescription(
         key="headlight_schedule",
         icon="mdi:clock-outline",
         value_fn=lambda value, device: _format_time_window(device.cfg.get("LIT")),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("LIT", min_len=3),
     ),
     # --- Anti-theft + other single-scalar CFG flags
     DreameMowerSensorEntityDescription(
@@ -491,6 +520,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             "off" if device.cfg.get("STUN") == 0 else None
         ),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("STUN"),
     ),
     DreameMowerSensorEntityDescription(
         key="auto_task_adjust",
@@ -500,6 +530,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             str(device.cfg.get("ATA")) if device.cfg.get("ATA") is not None else None
         ),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("ATA"),
     ),
     DreameMowerSensorEntityDescription(
         key="weather_reference",
@@ -509,21 +540,33 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             "off" if device.cfg.get("WRF") is False else None
         ),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("WRF"),
     ),
     DreameMowerSensorEntityDescription(
-        key="grass_protection",
-        icon="mdi:grass",
+        # PROT = Frost Protection (user-confirmed 2026-04-24 via the app's
+        # setting toggle; previous label "grass_protection" was a guess).
+        # See docs/research/g2408-protocol.md §6.2.
+        key="frost_protection",
+        icon="mdi:snowflake",
         value_fn=lambda value, device: (
             "on" if device.cfg.get("PROT") == 1 else
             "off" if device.cfg.get("PROT") == 0 else None
         ),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("PROT"),
     ),
     DreameMowerSensorEntityDescription(
-        key="path_display",
+        # PATH = Navigation Path: Direct (0) vs Smart (1). User-confirmed
+        # 2026-04-24; see protocol doc §6.2.
+        key="navigation_path",
         icon="mdi:map-marker-path",
-        value_fn=lambda value, device: device.cfg.get("PATH"),
+        value_fn=lambda value, device: (
+            {0: "direct", 1: "smart"}.get(device.cfg.get("PATH"))
+            if isinstance(device.cfg.get("PATH"), int)
+            else None
+        ),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("PATH"),
     ),
     # --- Wear meters. Apk catalogs CMS=[blade,brush,robot] but g2408
     # returns CMS=[blade,brush,robot,aux]. Confirmed on g2408: all three
@@ -536,6 +579,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         native_unit_of_measurement="%",
         value_fn=lambda value, device: _wear_health(device.cfg.get("CMS"), 0, 6000),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("CMS", min_len=1),
     ),
     DreameMowerSensorEntityDescription(
         key="brush_health_pct",
@@ -543,6 +587,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         native_unit_of_measurement="%",
         value_fn=lambda value, device: _wear_health(device.cfg.get("CMS"), 1, 30000),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("CMS", min_len=2),
     ),
     DreameMowerSensorEntityDescription(
         key="robot_maintenance_health_pct",
@@ -550,6 +595,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         native_unit_of_measurement="%",
         value_fn=lambda value, device: _wear_health(device.cfg.get("CMS"), 2, 3600),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("CMS", min_len=3),
     ),
     # 4th CMS slot — semantics TBD. On g2408 alpha.85 it was 0.
     DreameMowerSensorEntityDescription(
@@ -558,6 +604,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         native_unit_of_measurement="%",
         value_fn=lambda value, device: _wear_health(device.cfg.get("CMS"), 3, 6000),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("CMS", min_len=4),
     ),
     # --- Timezone (CFG.TIME str, e.g. "Europe/Oslo")
     DreameMowerSensorEntityDescription(
@@ -567,6 +614,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             device.cfg.get("TIME") if isinstance(device.cfg.get("TIME"), str) else None
         ),
         exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("TIME"),
     ),
     DreameMowerSensorEntityDescription(
         key="dock_x_cm",
@@ -576,6 +624,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             device.dock_pos.get("x") if isinstance(device.dock_pos, dict) else None
         ),
         exists_fn=lambda description, device: True,
+        available_fn=_dock_pos_present,
     ),
     DreameMowerSensorEntityDescription(
         key="dock_y_cm",
@@ -585,6 +634,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             device.dock_pos.get("y") if isinstance(device.dock_pos, dict) else None
         ),
         exists_fn=lambda description, device: True,
+        available_fn=_dock_pos_present,
     ),
     DreameMowerSensorEntityDescription(
         key="dock_yaw_deg",
@@ -597,6 +647,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             else None
         ),
         exists_fn=lambda description, device: True,
+        available_fn=_dock_pos_present,
     ),
     DreameMowerSensorEntityDescription(
         key="dock_lawn_connected",
@@ -607,6 +658,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             else None
         ),
         exists_fn=lambda description, device: True,
+        available_fn=_dock_pos_present,
     ),
     DreameMowerSensorEntityDescription(
         key="voice_download_progress",
@@ -614,6 +666,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         native_unit_of_measurement="%",
         value_fn=lambda value, device: device.voice_dl_progress,
         exists_fn=lambda description, device: True,
+        available_fn=lambda device: getattr(device, "voice_dl_progress", None) is not None,
     ),
     DreameMowerSensorEntityDescription(
         key="self_check_result",
@@ -629,6 +682,9 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             else None
         ),
         exists_fn=lambda description, device: True,
+        available_fn=lambda device: isinstance(
+            getattr(device, "self_check_result", None), dict
+        ),
     ),
 )
 

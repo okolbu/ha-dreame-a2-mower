@@ -112,6 +112,13 @@ class SessionArchive:
     def __init__(self, root: Path, retention: int = 0) -> None:
         """`retention` = max number of sessions to keep on disk. 0 means
         unlimited. Adjustable at runtime via `set_retention()`.
+
+        The on-disk index is NOT read here — this constructor is called from
+        the coordinator's sync `__init__`, which in turn runs on the HA
+        event loop. `load_index()` must be invoked explicitly via
+        `hass.async_add_executor_job` before any index-dependent accessor
+        (`list_sessions`, `latest`, `count`, `has`) is used. Accessors
+        return empty/None until then.
         """
         self._root = Path(root)
         self._root.mkdir(parents=True, exist_ok=True)
@@ -120,12 +127,21 @@ class SessionArchive:
         # In-progress cache: (read_at_monotonic, payload | None).
         # Sentinel `read_at = 0.0` means "not cached yet, read on next call".
         self._in_progress_cached: tuple[float, dict | None] = (0.0, None)
-        self._load_index()
+        self._index_loaded: bool = False
 
     # -------------------- index I/O --------------------
 
     def _index_path(self) -> Path:
         return self._root / INDEX_NAME
+
+    def load_index(self) -> None:
+        """Read `index.json` off disk into memory. Idempotent; safe to call
+        multiple times. Blocks on file I/O — call from an executor, not
+        the event loop."""
+        if self._index_loaded:
+            return
+        self._load_index()
+        self._index_loaded = True
 
     def _load_index(self) -> None:
         path = self._index_path()
@@ -159,6 +175,7 @@ class SessionArchive:
 
     @property
     def count(self) -> int:
+        self.load_index()
         return len(self._index)
 
     def latest(self) -> ArchivedSession | None:
@@ -168,6 +185,7 @@ class SessionArchive:
         outranks any completed archive, even one that finished seconds ago,
         because `last_update_ts` is bumped on every coordinator tick.
         """
+        self.load_index()
         in_progress = self.in_progress_entry()
         candidates = list(self._index)
         if in_progress is not None:
@@ -182,6 +200,7 @@ class SessionArchive:
         The in-progress entry, if any, sorts to the front because its
         `end_ts` is the most-recent persistence tick — i.e. always now.
         """
+        self.load_index()
         sessions = list(self._index)
         in_progress = self.in_progress_entry()
         if in_progress is not None:
@@ -189,6 +208,7 @@ class SessionArchive:
         return sorted(sessions, key=lambda s: s.end_ts, reverse=True)
 
     def has(self, md5: str) -> bool:
+        self.load_index()
         return any(s.md5 == md5 for s in self._index)
 
     # ------------------ in-progress entry I/O ------------------

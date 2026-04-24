@@ -72,15 +72,28 @@ class LidarArchive:
         unlimited. Each PCD is ~2-3 MB on this hardware, so an
         aggressive cap is sensible. Adjustable at runtime via
         `set_retention()`.
+
+        The on-disk index is NOT read here — `load_index()` must be invoked
+        via `hass.async_add_executor_job` from async context before any
+        index-dependent accessor is used. Mirrors `SessionArchive` so the
+        two archives can be set up with the same pattern.
         """
         self._root = Path(root)
         self._root.mkdir(parents=True, exist_ok=True)
         self._index: list[ArchivedLidarScan] = []
         self._retention = int(retention) if retention else 0
-        self._load_index()
+        self._index_loaded: bool = False
 
     def _index_path(self) -> Path:
         return self._root / INDEX_NAME
+
+    def load_index(self) -> None:
+        """Read `index.json` off disk. Idempotent; blocking — call from an
+        executor. See `SessionArchive.load_index` for the same pattern."""
+        if self._index_loaded:
+            return
+        self._load_index()
+        self._index_loaded = True
 
     def _load_index(self) -> None:
         path = self._index_path()
@@ -114,17 +127,21 @@ class LidarArchive:
 
     @property
     def count(self) -> int:
+        self.load_index()
         return len(self._index)
 
     def latest(self) -> ArchivedLidarScan | None:
+        self.load_index()
         if not self._index:
             return None
         return max(self._index, key=lambda s: s.unix_ts)
 
     def list_scans(self) -> list[ArchivedLidarScan]:
+        self.load_index()
         return sorted(self._index, key=lambda s: s.unix_ts, reverse=True)
 
     def has(self, md5: str) -> bool:
+        self.load_index()
         return any(s.md5 == md5 for s in self._index)
 
     def archive(

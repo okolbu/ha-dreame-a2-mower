@@ -163,9 +163,12 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
                 ex,
             )
             self.session_archive = None
-        self._last_archived_md5: str | None = (
-            self.session_archive.latest().md5 if self.session_archive and self.session_archive.latest() else None
-        )
+        # Deferred: the index is loaded from disk in `async_setup()`, so
+        # the dedup token below is None until that runs. `archive()` itself
+        # also dedupes via `has(md5)`, so a brief None window can't produce
+        # a duplicate; this just avoids a redundant "stored" log line on
+        # the first tick after HA boot.
+        self._last_archived_md5: str | None = None
 
         from .live_map import DreameA2LiveMap
         self.live_map = DreameA2LiveMap(hass, entry, self)
@@ -200,11 +203,8 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
                 ex,
             )
             self.lidar_archive = None
-        self._last_archived_lidar_md5: str | None = (
-            self.lidar_archive.latest().md5
-            if self.lidar_archive and self.lidar_archive.latest()
-            else None
-        )
+        # Same deferral as session_archive above — initialized in async_setup.
+        self._last_archived_lidar_md5: str | None = None
         # Throttle for the deferred-session-summary retry so repeated
         # failures during a cloud outage don't spam the executor pool.
         # Minimum seconds between retry attempts.
@@ -284,6 +284,47 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
                 timedelta(hours=6),
             )
         )
+
+    async def async_setup(self) -> None:
+        """Finish one-time coordinator setup that requires the event loop.
+
+        The constructor creates the archive objects but does NOT read their
+        on-disk indices — `read_text()` on a multi-KB JSON would otherwise
+        run on the event loop inside `async_setup_entry` and trip HA's
+        blocking-I/O detector (see TODO §E8). We do the reads via executor
+        here, then hydrate the dedup tokens that the first refresh will
+        check against.
+
+        Called from `async_setup_entry` after the coordinator is
+        constructed and before `async_config_entry_first_refresh()`.
+        """
+        if self.session_archive is not None:
+            try:
+                await self.hass.async_add_executor_job(
+                    self.session_archive.load_index
+                )
+            except Exception as ex:  # pragma: no cover — defensive
+                LOGGER.warning(
+                    "SessionArchive: load_index failed (%s); continuing with empty index",
+                    ex,
+                )
+            latest = self.session_archive.latest()
+            if latest is not None:
+                self._last_archived_md5 = latest.md5
+
+        if self.lidar_archive is not None:
+            try:
+                await self.hass.async_add_executor_job(
+                    self.lidar_archive.load_index
+                )
+            except Exception as ex:  # pragma: no cover — defensive
+                LOGGER.warning(
+                    "LidarArchive: load_index failed (%s); continuing with empty index",
+                    ex,
+                )
+            latest = self.lidar_archive.latest()
+            if latest is not None:
+                self._last_archived_lidar_md5 = latest.md5
 
     def _heartbeat_changed(self, previous_value=None) -> None:
         """Rising-edge notifier for the s1p1 battery-temperature-low flag.

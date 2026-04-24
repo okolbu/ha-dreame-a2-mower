@@ -146,6 +146,20 @@ from .map import DreameMapMowerMapManager, DreameMowerMapDecoder
 
 _LOGGER = logging.getLogger(__name__)
 
+# Slots that firmware pushes as value={} (session-boundary pings,
+# per protocol §4.7). The watchdog's first-observation hook already
+# logs these at DEBUG via `known_quiet`; this subset additionally
+# suppresses the value-novelty warning for the documented `{}`
+# payload, so HA reloads don't emit PROTOCOL_VALUE_NOVEL for an
+# expected sentinel. Non-empty values for these slots would still
+# be flagged.
+_EMPTY_DICT_SENTINEL_SLOTS: frozenset[tuple[int, int]] = frozenset({
+    (1, 50),  # "something changed" ping (session start, edits)
+    (1, 51),  # "new session — subscribe to telemetry"
+    (1, 52),  # "task ended — flush / commit"
+    (2, 52),  # cloud-side session-completion ping
+})
+
 
 class DreameMowerDevice:
     """Support for Dreame Mower"""
@@ -726,7 +740,19 @@ class DreameMowerDevice:
                         siid_int = int(param["siid"])
                         piid_int = int(param["piid"])
                         value = param.get("value")
-                        if self._unknown_watchdog.saw_value(
+                        # Empty-dict sentinel slots (protocol §4.7) always
+                        # carry value={} by design. Their first-observation
+                        # hook above already logs at DEBUG; skip the
+                        # value-novelty warning for the documented sentinel
+                        # payload so HA reloads don't emit noise. If one of
+                        # these slots ever carries something non-empty,
+                        # THAT is the novelty we want surfaced.
+                        if (
+                            (siid_int, piid_int) in _EMPTY_DICT_SENTINEL_SLOTS
+                            and value == {}
+                        ):
+                            pass
+                        elif self._unknown_watchdog.saw_value(
                             siid_int, piid_int, value
                         ):
                             _LOGGER.warning(

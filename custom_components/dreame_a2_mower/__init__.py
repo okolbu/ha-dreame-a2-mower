@@ -26,6 +26,10 @@ PLATFORMS = (
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Dreame Mower from a config entry."""
     coordinator = DreameMowerDataUpdateCoordinator(hass, entry=entry)
+    # Load archive indices off the event loop before the first refresh —
+    # `SessionArchive.__init__` and `LidarArchive.__init__` deliberately
+    # defer their `index.json` reads so this step can run on an executor.
+    await coordinator.async_setup()
     await coordinator.async_config_entry_first_refresh()
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator

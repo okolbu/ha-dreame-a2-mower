@@ -114,7 +114,7 @@ Siid/piid combinations observed on g2408. All properties arrive as JSON-encoded
 | 5.104 | **SLAM relocate counter** | `7` | Fires exclusively alongside `s2p65 = 'TASK_SLAM_RELOCATE'` bursts — three pushes in ~1 s at relocalization start. Value has been `7` in every capture; role unclear (retry count? relocate mode enum?). Quiet-listed so it doesn't re-fire `[PROTOCOL_NOVEL]` on every relocate. |
 | 5.105 | — | `1` | Mid-session appearance, unknown |
 | 5.106 | — | `1..7` | **Cycles 1→7 over ~3 hours**, ~30 min per step. Probably a rolling status-report counter (7 slots per cycle, one advance every ~30 min). Observed full 1-7 span across the 2026-04-20 run plus a spontaneous `value=7` push at 15:04:52 while the mower was docked. Not tied to mowing state. |
-| 5.107 | — | `{14, 15, 43, 133, 158, 165, 176, 190, 196, 250}` | Dynamic, changes at session boundaries and mid-mow. Unknown. |
+| 5.107 | — | `{14, 15, 43, 56, 133, 158, 165, 176, 190, 196, 240, 250}` | Dynamic, changes at session boundaries and mid-mow. Unknown. Live 2026-04-24 mowing run added `240`; `56` is observed at session teardown (see §4.9 example). |
 | 6.1 | `MAP_DATA` | `{200, 300}` | Map-readiness signal; `300` at auto-recharge-leg-start (§7.1). |
 | 6.2 | `FRAME_INFO` / **settings-saved tripwire** | list len 4 `[A, 0, True, 2]` | A∈{35, 60, 70, …} not monotonic — appears to be a session-class profile id, not a counter. Observed: `[70,…]` 2026-04-19 16:38, `[60,…]` 2026-04-20 17:03 (after Expand-Lawn / BUILDING session §2.1), `[70,…]` 2026-04-22 11:03 (back to normal mowing-mode setup). **Equally important: every BT-only settings change kicks the device into re-publishing `s6p2` over MQTT, even when the value itself is unchanged.** Confirmed 2026-04-22 11:03–11:08 — toggling Mowing Direction Crisscross/Chequerboard On→Off→On fired exactly two `s6p2` re-emissions per toggle (~1.5 s apart) with the unchanged `[70,0,True,2]`, and *no other property* moved. Lone cloud-visible signature that "the user changed something locally"; the integration could use it to invalidate cached settings even when the changed setting itself is BT-only. |
 | 6.3 | **WiFi signal push** (g2408) / `OBJECT_NAME` (upstream) | list `[bool, int]` on g2408 | `[cloud_connected, rssi_dbm]`. NOT the OSS object key — upstream's `OBJECT_NAME` slot is unused on g2408 (session-summary key arrives via `event_occured` instead, see §7.4). Our overlay remaps `OBJECT_NAME` to `999/998` so the map handler does not misinterpret s6p3 pushes. |
@@ -483,7 +483,9 @@ s2p56: [[1,4]] → []
 s2p2:   → 50                  ← manual-start code
 CHARGING → MOWING
 s2p50 gains {area_id, exe, o:100, region_id:[1], time:10510, t:'TASK'}
-s5p107 changes dynamically: 176 → 250 → 133 → 158 (driver unknown)
+s5p107 changes dynamically: 176 → 250 → 133 → 158 → 240 (driver unknown;
+cycling enum of ~5 known values, new values still surfacing mid-session —
+see §2.1's s5p107 value-catalogue and the `[PROTOCOL_VALUE_NOVEL]` logger)
 ```
 
 **Scheduled session start** (cloud fires schedule at configured time — confirmed
@@ -882,7 +884,7 @@ see §6.2), PROT, REC, STUN, TIME, VER, **VOICE** (4 prompt toggles), VOL,
 WRF, WRP. This includes settings previously thought to be BT-only:
 **Mowing Efficiency** (PRE[1]), **Robot Voice/Volume** (VOICE + VOL),
 **Notifications** (MSG_ALERT), **Language** (LANG), **Timezone** (TIME),
-**Anti-Theft** (STUN), **Weather/Grass/Path** (WRF/PROT/PATH).
+**Anti-Theft** (STUN), **Weather/Frost/Navigation-Path** (WRF/PROT/PATH).
 
 **Bluetooth-only (still invisible from cloud/HA on g2408):**
 - Obstacle Avoidance Distance
@@ -996,9 +998,9 @@ Recorded 2026-04-23, firmware `dreame.mower.g2408` (`_host=10000.mt.eu.iot.dream
 | `LIT` | `list(8) [enabled, start_min, end_min, l1, l2, l3, l4, reserved]` | Headlight (apk had 7; g2408 has 8 — extra byte likely reserved). |
 | `LOW` | `list(3) [enabled, start_min, end_min]` | Low-speed night mode. Same shape as DND. |
 | `MSG_ALERT` | `list(4) [anomaly, error, task, consumable]` | App's Notifications screen toggles. Sample `[1,1,1,1]` = all four enabled. Confirmed 2026-04-23 by user toggling correlation. |
-| `PATH` | `bool` | Path-display mode (apk-catalogued as scalar int; g2408 returns bool) |
+| `PATH` | `int {0,1}` | **Navigation Path** mode. `0 = Direct Path`, `1 = Smart Path` (user-confirmed 2026-04-24 via the app's Navigation Path setting — previously labelled `path_display` / `Path-display mode` as a guess). Surfaced as `sensor.navigation_path`. |
 | `PRE` | `list(2) [zone_id, mode]` | See above. |
-| `PROT` | `int` | Grass protection (0=off, 1=on) |
+| `PROT` | `int {0,1}` | **Frost Protection** (0=off, 1=on). User-confirmed 2026-04-24 via the app's Frost Protection toggle; previously labelled `grass_protection` as a guess. Surfaced as `sensor.frost_protection`. |
 | `REC` | `list(9) [1,1,1,1,1,1,1,0,3]` | Recharge config. First 7 = days-of-week? (TBD) |
 | `STUN` | `int` | Anti-theft (0=off, 1=on) |
 | `TIME` | `str` | Timezone IANA name, e.g. `'Europe/Oslo'`. Exposed as `mower_timezone` sensor. |
