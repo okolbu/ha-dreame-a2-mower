@@ -601,6 +601,15 @@ class DreameA2LiveMap:
         # more reliable than the s1p4 phase byte, which sits at
         # constant values during both mowing and transit.
         self._last_area_m2: float | None = None
+        # Session-high watermark for area_mowed_m2. Used by the cutting
+        # heuristic's "cleanup phase" detection instead of comparing
+        # against total_area_m2 — firmware's total_area counts area
+        # under exclusion zones too, so it's not the right reference
+        # for "session effectively done". The reachable maximum is
+        # whatever this counter actually plateaus at. Reset to None at
+        # session_start (manual reset in _handle_coordinator_update);
+        # rebuilds as the session progresses.
+        self._session_max_area_m2: float | None = None
         # Monotonic time (seconds) of the last tick where we observed a
         # position. Used together with consecutive-frame distance to derive
         # segment speed for the cutting-vs-transit classifier.
@@ -1316,6 +1325,11 @@ class DreameA2LiveMap:
             self._state.start_session(now_iso)
             self._in_progress_leg_md5s = []
             self._have_active_in_progress = True
+            # Reset per-session accumulators so cutting heuristic's
+            # session-max watermark tracks the NEW run, not a stale
+            # plateau from a previous session that bled through.
+            self._last_area_m2 = None
+            self._session_max_area_m2 = None
             try:
                 device.has_active_in_progress = True
             except AttributeError:
@@ -1438,13 +1452,25 @@ class DreameA2LiveMap:
         cutting = None
         if telem is not None:
             current_area = getattr(telem, "area_mowed_m2", None)
-            total_area = getattr(telem, "total_area_m2", None)
             if isinstance(current_area, (int, float)):
+                # Track the session's observed maximum area_mowed.
+                # The firmware's total_area_m2 counts EVERYTHING inside the
+                # lawn outline including exclusion zones — so a lawn with
+                # a big exclusion plateaus at (total - excluded), not at
+                # total. Comparing against total_area * 0.95 (our
+                # previous heuristic) never fires on such lawns.
+                # (User-confirmed 2026-04-25: 323 mowed / 384 total,
+                # threshold 0.95*384=364 unreachable; second-pass strokes
+                # mis-rendered as transit.) Observed-max is the right
+                # reference — once we're within 1% of it for a while,
+                # the unique-territory phase is done.
+                if self._session_max_area_m2 is None or current_area > self._session_max_area_m2:
+                    self._session_max_area_m2 = float(current_area)
                 if self._last_area_m2 is not None:
-                    near_total = (
-                        isinstance(total_area, (int, float))
-                        and total_area > 0
-                        and current_area >= total_area * 0.95
+                    near_session_max = (
+                        self._session_max_area_m2 is not None
+                        and self._session_max_area_m2 > 1.0
+                        and current_area >= self._session_max_area_m2 * 0.99
                     )
                     slow = (
                         segment_speed_mps is not None
@@ -1454,7 +1480,7 @@ class DreameA2LiveMap:
                         cutting = 1                     # (A) fresh territory
                     elif slow:
                         cutting = 1                     # (B) slow → cutting
-                    elif near_total:
+                    elif near_session_max:
                         cutting = 1                     # (C) cleanup pass
                     else:
                         cutting = 0                     # fast + open → transit
