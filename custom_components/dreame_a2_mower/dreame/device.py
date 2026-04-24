@@ -297,6 +297,16 @@ class DreameMowerDevice:
         # short-circuit to avoid spamming the cloud with calls that will
         # never work, and dependent entities hide via exists_fn.
         self._routed_actions_supported: bool | None = None
+        # Transient-failure backoff so one 80001 relay-timeout doesn't
+        # permanently blind CFG-derived entities. Flips to False (hard
+        # disable) only after _CFG_HARD_DISABLE_AFTER consecutive
+        # failures — until then we just skip until _cfg_next_retry_at.
+        self._cfg_next_retry_at: float = 0.0
+        self._cfg_consecutive_failures: int = 0
+        self._cfg_last_failure_reason: str | None = None
+        self._cfg_last_failure_ts: float | None = None
+        self._cfg_success_count: int = 0
+        self._cfg_failure_count: int = 0
         # OSS object key of the most recently *announced* session-summary
         # (from the event_occured push) that we have NOT yet successfully
         # downloaded. Cleared on a successful fetch. Used so a transient
@@ -718,7 +728,7 @@ class DreameMowerDevice:
                                 (2, 61),    # Map-update trigger — loadMap re-fetch
                                 (5, 104),   # SLAM relocate counter, unknown role
                                 (5, 105),   # mid-session = 1, unknown role
-                                (5, 106),   # 1..7 rolling counter
+                                (5, 106),   # small int, observed 1-9 and 11 (no 10), purpose unknown
                                 (5, 107),   # dynamic, values catalogued
                                 # Session-boundary empty-dict pings, all
                                 # carry value={}. Per protocol §4.7:
@@ -5920,6 +5930,43 @@ class DreameMowerDevice:
         infrastructure is firmware-dependent — confirmed absent on g2408)."""
         return self._routed_actions_supported
 
+    # Routed-action retry/backoff tuning. A single transient 80001 no
+    # longer permanently disables CFG fetching — we exp-back-off and only
+    # hard-disable after _CFG_HARD_DISABLE_AFTER consecutive failures.
+    _CFG_HARD_DISABLE_AFTER = 10
+    _CFG_BACKOFF_CAP_S = 600  # 10 min
+
+    def _routed_action_in_backoff(self) -> bool:
+        """True while the next routed-action attempt should be skipped."""
+        return time.time() < self._cfg_next_retry_at
+
+    def _routed_action_note_failure(self, reason: str, is_nonetype: bool) -> None:
+        """Record a failure, schedule exp-backoff, and hard-disable the
+        tri-state flag once a long run of consecutive failures suggests
+        the firmware actually doesn't support the endpoint (vs. a cloud
+        relay being flaky)."""
+        now = time.time()
+        self._cfg_consecutive_failures += 1
+        self._cfg_failure_count += 1
+        self._cfg_last_failure_reason = reason
+        self._cfg_last_failure_ts = now
+        delay = min(30 * (2 ** (self._cfg_consecutive_failures - 1)), self._CFG_BACKOFF_CAP_S)
+        self._cfg_next_retry_at = now + delay
+        if is_nonetype and self._cfg_consecutive_failures >= self._CFG_HARD_DISABLE_AFTER:
+            self._routed_actions_supported = False
+            _LOGGER.warning(
+                "[routed-action] %d consecutive NoneType failures — "
+                "hard-disabling for this HA process. Reload the config "
+                "entry or restart HA to retry.",
+                self._cfg_consecutive_failures,
+            )
+
+    def _routed_action_note_success(self) -> None:
+        """Reset backoff/strike tracking after any successful call."""
+        self._cfg_consecutive_failures = 0
+        self._cfg_next_retry_at = 0.0
+        self._cfg_success_count += 1
+
     def refresh_cfg(self) -> bool:
         """Fetch the full settings dict via the routed action. Stores the
         result in `self._cfg` and returns True on success. Logs + returns
@@ -5927,43 +5974,33 @@ class DreameMowerDevice:
         the cache is preserved so transient errors don't blank existing
         entity state. Synchronous; call from an executor (e.g.
         `hass.async_add_executor_job`) to avoid blocking the event loop.
-
-        Once a 404 is observed, sets `_routed_actions_supported = False`
-        and short-circuits future calls so we don't spam the cloud.
         """
         from ..protocol.cfg_action import get_cfg, CfgActionError
 
         if self._protocol is None:
             return False
         if self._routed_actions_supported is False:
-            # Probed earlier and the cloud said no; don't keep retrying.
+            return False
+        if self._routed_action_in_backoff():
             return False
         try:
             cfg = get_cfg(self._protocol.action)
         except CfgActionError as ex:
-            # "unexpected result type: NoneType" = the cloud HTTP layer
-            # returned an error (404, 80001 device-offline, etc.). On
-            # g2408 the endpoint works once the URL carries the `-10000`
-            # iotComPrefix suffix (protocol.py send() handles this),
-            # but transient `80001 device unreachable` is common when
-            # the mower's MQTT session is idle. A hard 404 would
-            # indicate the endpoint itself isn't routed — unlikely on
-            # g2408 but kept as a one-shot disabler for future firmware
-            # variants where the apk-documented path genuinely doesn't
-            # apply.
-            if "NoneType" in str(ex):
-                self._routed_actions_supported = False
+            is_nonetype = "NoneType" in str(ex)
+            self._routed_action_note_failure(str(ex), is_nonetype)
+            if is_nonetype:
                 _LOGGER.warning(
-                    "refresh_cfg: routed action returned no data (404 "
-                    "or 80001 relay-timeout). Disabling further "
-                    "attempts for this HA process lifetime. Restart to "
-                    "retry — transient cloud-relay failures are common "
-                    "on g2408 when the mower's MQTT session is idle."
+                    "refresh_cfg: routed action returned no data "
+                    "(80001 relay-timeout or 404). Retry #%d scheduled "
+                    "in %ds.",
+                    self._cfg_consecutive_failures,
+                    int(self._cfg_next_retry_at - time.time()),
                 )
             else:
                 _LOGGER.warning("refresh_cfg: %s", ex)
             return False
         except Exception as ex:  # pragma: no cover — defensive
+            self._routed_action_note_failure(repr(ex), False)
             _LOGGER.warning("refresh_cfg: unexpected error %s", ex)
             return False
         # Compute diff vs previous cfg — any key whose value changed
@@ -5979,6 +6016,7 @@ class DreameMowerDevice:
         self._cfg = cfg
         self._cfg_fetched_at = time.time()
         self._routed_actions_supported = True
+        self._routed_action_note_success()
         _LOGGER.info("[CFG] fetched %d settings keys", len(cfg))
         _LOGGER.debug("[CFG] payload: %r", cfg)
         if changed:
@@ -6083,21 +6121,28 @@ class DreameMowerDevice:
             return False
         if self._routed_actions_supported is False:
             return False
+        if self._routed_action_in_backoff():
+            return False
         try:
             self._dock_pos = get_dock_pos(self._protocol.action)
         except CfgActionError as ex:
-            if "NoneType" in str(ex):
-                self._routed_actions_supported = False
+            is_nonetype = "NoneType" in str(ex)
+            self._routed_action_note_failure(str(ex), is_nonetype)
+            if is_nonetype:
                 _LOGGER.warning(
-                    "refresh_dock_pos: routed-action endpoint returned 404; "
-                    "disabling further attempts (g2408 firmware doesn't support it)"
+                    "refresh_dock_pos: routed action returned no data "
+                    "(retry #%d in %ds).",
+                    self._cfg_consecutive_failures,
+                    int(self._cfg_next_retry_at - time.time()),
                 )
             else:
                 _LOGGER.warning("refresh_dock_pos: %s", ex)
             return False
         except Exception as ex:  # pragma: no cover — defensive
+            self._routed_action_note_failure(repr(ex), False)
             _LOGGER.warning("refresh_dock_pos: unexpected error %s", ex)
             return False
+        self._routed_action_note_success()
         _LOGGER.info("[DOCK] %s", self._dock_pos)
         return True
 
@@ -6122,19 +6167,29 @@ class DreameMowerDevice:
                 op,
             )
             return False
+        if self._routed_action_in_backoff():
+            _LOGGER.warning(
+                "call_action_opcode(%d): in backoff window after recent "
+                "failure (retry in %ds)",
+                op, int(self._cfg_next_retry_at - time.time()),
+            )
+            return False
         try:
             call_action_op(self._protocol.action, op, extra)
         except Exception as ex:
-            if "NoneType" in str(ex) or "404" in str(ex):
-                self._routed_actions_supported = False
+            is_nonetype = "NoneType" in str(ex) or "404" in str(ex)
+            self._routed_action_note_failure(str(ex), is_nonetype)
+            if is_nonetype:
                 _LOGGER.warning(
-                    "call_action_opcode(%d): cloud returned 404; disabling further "
-                    "routed-action attempts (g2408 firmware doesn't support it)",
-                    op,
+                    "call_action_opcode(%d): cloud returned no data "
+                    "(retry #%d in %ds)",
+                    op, self._cfg_consecutive_failures,
+                    int(self._cfg_next_retry_at - time.time()),
                 )
             else:
                 _LOGGER.warning("call_action_opcode(%d): %s", op, ex)
             return False
+        self._routed_action_note_success()
         return True
 
     @property

@@ -111,7 +111,7 @@ catalog of known/partial/unknown lives in
 `UnknownFieldWatchdog.saw_value(siid, piid, value)` drives
 `[PROTOCOL_VALUE_NOVEL]` WARNINGs for each new distinct value of
 an unmapped property. Capped at 32 distinct values per property.
-Lets us catalogue s5p106 (1..7 cycle), s5p107 (dynamic enum),
+Lets us catalogue s5p106 (1..9, 11 — purpose unknown), s5p107 (dynamic enum),
 s2p66[1] mystery integer, s6p2[0] profile id, and all other
 Tier 2 slots without manual probe analysis.
 
@@ -165,7 +165,7 @@ Switch (alphabetical; update protocol doc §2.1 as each completes):
 
 | # | Target | Experiment | Expected signal |
 |---|--------|-----------|-----------------|
-| 1 | `s5p106` cycle | Leave integration running overnight without interacting; correlate transitions with battery level and time-of-day | Confirm 30-min cadence + identify reset trigger (midnight? session boundary?) |
+| 1 | `s5p106` | Leave integration running overnight without interacting; correlate transitions with battery level and time-of-day. 5-day capture now shows values 1-9 and 11 (no 10) with ~30 min cadence but occasional multi-hour gaps and non-monotonic jumps (`1 → 11 → 4` on 2026-04-24), so it's *not* a 1-to-7 rolling counter as previously hypothesised | Identify what actually modulates the value — scheduled task slot? diagnostic heartbeat? watchdog strike counter? |
 | 2 | `s6p2[0]` profile id | Visit BUILDING mode ("Expand Lawn"), run normal mow, run scheduled mow, run manual mow — capture s6p2 value at each | Map value → session class |
 | 3 | `s2p2` state codes | Trigger every app action: Head to Maintenance, Cancel, Return to Base, manual drive, Find My Mower | Pin down `27`, `43`, `56`, `69`, `128`, `170` triggers |
 | 4 | `s5p107` bitfield | Mow with Rain Protection on/off; Frost Protection on/off; AI Obstacle Photos on/off; obstacle-avoidance variants | Look for value bands per mode toggle |

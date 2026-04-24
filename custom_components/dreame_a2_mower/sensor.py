@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import time
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -642,6 +643,36 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             getattr(device, "cfg", None) or {}
         ),
         attrs_fn=lambda device: dict(getattr(device, "cfg", None) or {}),
+        exists_fn=lambda description, device: True,
+    ),
+    # Routed-action fetch health. State is "ok" / "backoff" / "disabled";
+    # attributes expose counters and the pending retry window so toggle-
+    # research users can tell at a glance whether CFG fetching is alive.
+    # Matters because a silent hard-disable previously blinded all
+    # CFG-derived entities with no user-visible signal (see device.py
+    # _routed_action_note_failure).
+    DreameMowerSensorEntityDescription(
+        key="cfg_fetch_health",
+        icon="mdi:cloud-sync",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda value, device: (
+            "disabled" if getattr(device, "_routed_actions_supported", None) is False
+            else ("backoff" if getattr(device, "_cfg_consecutive_failures", 0) > 0 else "ok")
+        ),
+        attrs_fn=lambda device: {
+            "routed_actions_supported": getattr(device, "_routed_actions_supported", None),
+            "consecutive_failures": getattr(device, "_cfg_consecutive_failures", 0),
+            "success_count": getattr(device, "_cfg_success_count", 0),
+            "failure_count": getattr(device, "_cfg_failure_count", 0),
+            "last_failure_reason": getattr(device, "_cfg_last_failure_reason", None),
+            "last_failure_ts": getattr(device, "_cfg_last_failure_ts", None),
+            "cfg_fetched_at": getattr(device, "_cfg_fetched_at", None),
+            "next_retry_in_s": max(
+                0,
+                int(getattr(device, "_cfg_next_retry_at", 0.0) - time.time())
+            ),
+        },
         exists_fn=lambda description, device: True,
     ),
     # --- Wear meters. Apk catalogs CMS=[blade,brush,robot] but g2408
