@@ -534,7 +534,22 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("PRE", min_len=2),
     ),
-    # --- Headlight (LIT = [enabled, start_min, end_min, ...])
+    # CFG.LIT is the app's "Lights" setting (confirmed 2026-04-24).
+    # Shape [enabled, start_min, end_min, standby, working, charging,
+    # error, unknown] matches the s2p51 LED_PERIOD decoder exactly.
+    # - LIT[0]: Custom LED Activation Period on/off
+    # - LIT[1]: start_min (window start)
+    # - LIT[2]: end_min (window end)
+    # - LIT[3]: scenario "In Standby"
+    # - LIT[4]: scenario "In Working"
+    # - LIT[5]: scenario "In Charging"
+    # - LIT[6]: scenario "In Error State"
+    # - LIT[7]: unknown toggle — user reported a last field in the app
+    #   whose purpose isn't clear; watch for changes during toggle tests.
+    #
+    # Entity keys kept as "headlight_*" for backward-compat with
+    # existing dashboards; the app term is "Lights". Consider a
+    # future rename cycle once entity aliases are in place.
     DreameMowerSensorEntityDescription(
         key="headlight_enabled",
         icon="mdi:car-light-high",
@@ -552,6 +567,22 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         key="headlight_schedule",
         icon="mdi:clock-outline",
         value_fn=lambda value, device: _format_time_window(device.cfg.get("LIT")),
+        attrs_fn=lambda device: (
+            {
+                "enabled": bool(device.cfg["LIT"][0]),
+                "start_min": int(device.cfg["LIT"][1]),
+                "end_min": int(device.cfg["LIT"][2]),
+                "scenario_standby": bool(device.cfg["LIT"][3]),
+                "scenario_working": bool(device.cfg["LIT"][4]),
+                "scenario_charging": bool(device.cfg["LIT"][5]),
+                "scenario_error": bool(device.cfg["LIT"][6]),
+                "reserved_unknown": int(device.cfg["LIT"][7]),
+            }
+            if isinstance(device.cfg.get("LIT"), list)
+            and len(device.cfg["LIT"]) >= 8
+            and all(isinstance(x, int) for x in device.cfg["LIT"][:8])
+            else {}
+        ),
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("LIT", min_len=3),
     ),
@@ -569,25 +600,26 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("STUN"),
     ),
-    # CFG.ATA is a 3-element int list [0,0,0] in current capture.
-    # Shape matches the s2p51 ANTI_THEFT decoder
-    # [lift_alarm, offmap_alarm, realtime_location] — strong
-    # candidate but pending direct toggle-confirmation. Exposed as a
-    # diagnostic with the raw list so that when the user toggles the
-    # three Anti-Theft sub-flags in the app we can see which index
-    # maps to which flag.
+    # CFG.ATA is Anti-Theft Alarm (confirmed 2026-04-24). Shape
+    # [lift_alarm, offmap_alarm, realtime_location] — matches the
+    # s2p51 ANTI_THEFT decoder exactly. State shows "on" if any sub-
+    # flag is enabled, "off" if all are zero. Per-flag state in
+    # attributes.
     DreameMowerSensorEntityDescription(
-        key="anti_theft_raw",
-        icon="mdi:shield-search",
-        entity_category=EntityCategory.DIAGNOSTIC,
+        key="anti_theft",
+        icon="mdi:shield-lock",
         value_fn=lambda value, device: (
-            str(device.cfg.get("ATA")) if device.cfg.get("ATA") is not None else None
+            ("on" if any(device.cfg["ATA"][:3]) else "off")
+            if isinstance(device.cfg.get("ATA"), list)
+            and len(device.cfg["ATA"]) >= 3
+            and all(isinstance(x, int) for x in device.cfg["ATA"][:3])
+            else None
         ),
         attrs_fn=lambda device: (
             {
-                "lift_alarm_candidate": bool(device.cfg["ATA"][0]),
-                "offmap_alarm_candidate": bool(device.cfg["ATA"][1]),
-                "realtime_location_candidate": bool(device.cfg["ATA"][2]),
+                "lift_alarm": bool(device.cfg["ATA"][0]),
+                "offmap_alarm": bool(device.cfg["ATA"][1]),
+                "realtime_location": bool(device.cfg["ATA"][2]),
             }
             if isinstance(device.cfg.get("ATA"), list)
             and len(device.cfg["ATA"]) >= 3
