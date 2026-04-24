@@ -903,6 +903,35 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("LANG", min_len=2),
     ),
+    # CFG.VOICE is the 4 Voice Prompt Mode toggles (confirmed
+    # 2026-04-24). Shape [regular, work_status, special_status,
+    # error_status] — all bools. State = enabled-count (0..4);
+    # per-mode detail in attributes.
+    DreameMowerSensorEntityDescription(
+        key="voice_prompt_modes",
+        icon="mdi:bullhorn",
+        value_fn=lambda value, device: (
+            sum(bool(x) for x in device.cfg["VOICE"][:4])
+            if isinstance(device.cfg.get("VOICE"), list)
+            and len(device.cfg["VOICE"]) >= 4
+            and all(isinstance(x, int) for x in device.cfg["VOICE"][:4])
+            else None
+        ),
+        attrs_fn=lambda device: (
+            {
+                "regular_notification": bool(device.cfg["VOICE"][0]),
+                "work_status": bool(device.cfg["VOICE"][1]),
+                "special_status": bool(device.cfg["VOICE"][2]),
+                "error_status": bool(device.cfg["VOICE"][3]),
+            }
+            if isinstance(device.cfg.get("VOICE"), list)
+            and len(device.cfg["VOICE"]) >= 4
+            and all(isinstance(x, int) for x in device.cfg["VOICE"][:4])
+            else {}
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("VOICE", min_len=4),
+    ),
     # CFG.VOL is Robot Voice volume 0-100 (confirmed 2026-04-24).
     DreameMowerSensorEntityDescription(
         key="robot_voice_volume",
