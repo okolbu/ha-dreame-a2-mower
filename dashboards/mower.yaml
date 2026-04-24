@@ -164,11 +164,7 @@ views:
               - entity: switch.dreame_a2_mower_mow_mode_efficient
                 name: Efficient mode
               - entity: sensor.dreame_a2_mower_navigation_path
-              # sensor.frost_protection removed in alpha.115 — earlier
-              # alpha.89 labelling assumed CFG.PROT was Frost Protection
-              # but a 2026-04-25 toggle test showed PROT is actually
-              # Navigation Path. Frost Protection's CFG key is unknown;
-              # add the correct entity here once we identify it.
+              - entity: sensor.dreame_a2_mower_frost_protection
               - entity: sensor.dreame_a2_mower_anti_theft
               - entity: sensor.dreame_a2_mower_weather_reference
               - entity: sensor.dreame_a2_mower_headlight_enabled

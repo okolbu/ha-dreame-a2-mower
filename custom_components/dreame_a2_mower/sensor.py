@@ -607,12 +607,9 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         available_fn=_cfg_key_present("PROT"),
     ),
     # CFG.PATH — known int {0,1} on g2408 but observed stable at 1
-    # through a Navigation Path toggle test, so NOT the Navigation Path
-    # setting. Semantic TBD. Surfaced as a diagnostic-only sensor with
-    # the raw int so future toggle tests can spot what flips it. The
-    # earlier "sensor.frost_protection" entity is removed — it was
-    # misnamed (PROT turned out to be Navigation Path). Actual Frost
-    # Protection's CFG key is still unknown.
+    # through the Navigation Path toggle test, so NOT the Navigation
+    # Path setting. Semantic TBD. Surfaced as a diagnostic sensor so
+    # future toggle tests can spot what flips it.
     DreameMowerSensorEntityDescription(
         key="cfg_path_raw",
         icon="mdi:help-circle-outline",
@@ -621,6 +618,24 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         value_fn=lambda value, device: device.cfg.get("PATH"),
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("PATH"),
+    ),
+    # CFG.FDP is Frost Protection (confirmed 2026-04-24 via isolated
+    # single-toggle with cfg_keys_raw diff visible). Mapping {0: off,
+    # 1: on} matches the app's switch.
+    DreameMowerSensorEntityDescription(
+        key="frost_protection",
+        icon="mdi:snowflake",
+        value_fn=lambda value, device: (
+            {0: "off", 1: "on"}.get(device.cfg.get("FDP"))
+            if isinstance(device.cfg.get("FDP"), int)
+            else None
+        ),
+        attrs_fn=lambda device: (
+            {"raw_fdp": device.cfg.get("FDP")}
+            if isinstance(device.cfg.get("FDP"), int) else {}
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("FDP"),
     ),
     # Raw CFG dump — disabled-by-default diagnostic. Enable from the
     # device page to see every CFG key + value as entity attributes,
