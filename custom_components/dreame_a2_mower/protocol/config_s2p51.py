@@ -64,8 +64,9 @@ def decode_s2p51(payload: dict[str, Any]) -> S2P51Event:
         if isinstance(value, int):
             # Ambiguous — this shape is used by multiple settings and the
             # envelope doesn't name which one. Confirmed senders so far:
-            # - Navigation Path (→ CFG.PROT, confirmed 2026-04-25 via
-            #   toggle correlation)
+            # - Navigation Path (→ CFG.PROT, confirmed 2026-04-24 via
+            #   isolated single-toggle with cfg_keys_raw diff visible;
+            #   mapping is {0: direct, 1: smart})
             # Other apk-listed candidates (not yet toggle-confirmed):
             # Child Lock, Frost Protection, AI Obstacle Photo,
             # Auto-Recharge-Standby. Caller can resolve via a getCFG

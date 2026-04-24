@@ -587,17 +587,11 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         available_fn=_cfg_key_present("WRF"),
     ),
     DreameMowerSensorEntityDescription(
-        # **Tentative** Navigation Path label. Two toggle-test
-        # correlations (2026-04-25) showed CFG.PROT flipping when the
-        # user toggled Navigation Path in the app, while CFG.PATH
-        # stayed stable. But the field name "PROT" is suspiciously
-        # cryptic for such a user-visible setting, so this mapping
-        # warrants repeat toggle-tests before being treated as
-        # authoritative. Previous alpha.89 "PROT = Frost Protection"
-        # guess already proved wrong via the same methodology; a
-        # similar surprise here is still possible. Diagnostic:
-        # `sensor.cfg_keys_raw` (alpha.116+) dumps the full CFG so
-        # any mislabelling is one attribute-compare away from visible.
+        # CFG.PROT is Navigation Path. Confirmed 2026-04-24 via
+        # isolated single-toggle with cfg_keys_raw diff visible:
+        # nav smart → direct flipped PROT 1 → 0 with no other CFG key
+        # moving. Value mapping {0: "direct", 1: "smart"} matches the
+        # order shown in the app.
         key="navigation_path",
         icon="mdi:map-marker-path",
         value_fn=lambda value, device: (
