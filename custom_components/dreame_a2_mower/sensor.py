@@ -871,6 +871,49 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # Protection / Child Lock / etc.). Sensor state = count of CFG
     # keys so any "CFG refetched" tick is visible in the state
     # history; attributes carry the full dict as (key → value) pairs.
+    # CFG.BAT is the Charging config (confirmed 2026-04-24). 6-element
+    # shape matches the s2p51 CHARGING decoder:
+    # - BAT[0]: recharge_pct (auto-recharge when battery below this)
+    # - BAT[1]: resume_pct (resume mowing when battery above this)
+    # - BAT[2]: unknown flag (observed =1)
+    # - BAT[3]: custom charging period toggle
+    # - BAT[4]: custom charging window start_min
+    # - BAT[5]: custom charging window end_min
+    # State shows the time window when custom charging is enabled
+    # ("18:00-08:00"), "off" when disabled. Per-field values in attrs.
+    DreameMowerSensorEntityDescription(
+        key="charging_config",
+        icon="mdi:battery-charging-80",
+        value_fn=lambda value, device: (
+            _format_time_window(device.cfg["BAT"], start_idx=4, end_idx=5)
+            if isinstance(device.cfg.get("BAT"), list)
+            and len(device.cfg["BAT"]) >= 6
+            and device.cfg["BAT"][3] == 1
+            else (
+                "off"
+                if isinstance(device.cfg.get("BAT"), list)
+                and len(device.cfg["BAT"]) >= 4
+                and device.cfg["BAT"][3] == 0
+                else None
+            )
+        ),
+        attrs_fn=lambda device: (
+            {
+                "recharge_pct": int(device.cfg["BAT"][0]),
+                "resume_pct": int(device.cfg["BAT"][1]),
+                "unknown_flag": int(device.cfg["BAT"][2]),
+                "custom_charging_enabled": bool(device.cfg["BAT"][3]),
+                "start_min": int(device.cfg["BAT"][4]),
+                "end_min": int(device.cfg["BAT"][5]),
+            }
+            if isinstance(device.cfg.get("BAT"), list)
+            and len(device.cfg["BAT"]) >= 6
+            and all(isinstance(x, int) for x in device.cfg["BAT"][:6])
+            else {}
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=_cfg_key_present("BAT", min_len=6),
+    ),
     # CFG.LANG is [text_idx, voice_idx] (confirmed 2026-04-24 via live
     # Robot Voice toggle). text_idx drives the app / UI language;
     # voice_idx drives the robot's spoken voice. Observed: voice_idx=7
