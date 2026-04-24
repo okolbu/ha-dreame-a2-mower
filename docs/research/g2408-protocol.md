@@ -996,7 +996,12 @@ WRF, WRP. This includes settings previously thought to be BT-only:
 - Obstacle Avoidance Distance
 - Obstacle Avoidance Height
 - Start from Stop Point
-- Pathway Obstacle Avoidance
+- Pathway Obstacle Avoidance — **re-confirmed 2026-04-24** on alpha.124
+  with `cfg_keys_raw` + `_last_diff` attrs: toggling the switch produced
+  zero MQTT traffic and zero CFG diff. Note the app pairs the toggle
+  with a map-draw component (per-pathway zone geometry); that zone data
+  may still live in the cloud MAP.* dataset, but the on/off state of
+  the feature itself is BT-local.
 - Obstacle Avoidance on Edges
 - Mowing Direction — verified BT-only (toggled 180°↔90°, zero MQTT traffic)
 - Mowing Height (cutting blade height) — not reachable via CFG on g2408; apk documents it at PRE[2] but g2408 PRE is only 2 elements
