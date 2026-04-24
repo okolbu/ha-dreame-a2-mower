@@ -360,6 +360,113 @@ values (123..125) is consistent with "dock-relative heading ~180° =
 mower facing away from the dock entry while leaving", not a special
 preamble role. Surfaced as `sensor.heading_deg`.
 
+**Bytes [7-21] — trace data on g2408 (2026-04-24, partially validated
+against the probe-log corpus).** Derived from the ioBroker.dreame
+`apk.md` reference at `/data/claude/homeassistant/ioBroker.dreame/apk.md`
+§"parseRobotTrace". ioBroker.dreame is not g2408-specific (it targets
+the whole Dreame/Mova line), so the layout was validated against our
+14.6k-frame probe-log corpus before being adopted. Validation results
+are recorded inline below.
+
+**Byte [7-9] start_index — CONFIRMED on g2408**. One-off script ran
+over all 14,684 consecutive-frame transitions and found 5,796
+increments vs only 10 decrements, zero large jumps, zero INT24-MAX
+saturation, distribution concentrated in 0..10k (never reaching 10k+
+over a full session). The 10 decrements all look like new-session
+resets. Matches "uint24 LE path-point sequence counter" perfectly.
+
+```
+Bytes 7-9:   start_index   uint24 LE  — path-point sequence id
+Bytes 10-13: Δ1 = (dx1, dy1)          — 2 × int16 LE
+Bytes 14-17: Δ2 = (dx2, dy2)          — 2 × int16 LE
+Bytes 18-21: Δ3 = (dx3, dy3)          — 2 × int16 LE
+
+  if |dx_i| > 32766 AND |dy_i| > 32766 → that Δ_i is ABSOLUTE, not relative.
+```
+
+So each s1p4 frame carries the current pose PLUS the last 3 path-point
+offsets, which is why the motion-vector correlator couldn't fit a simple
+velocity model: the fields aren't motion vectors at all, they're **four
+points of recent path history per frame**. The ±INT16 saturation pattern
+we observed across ~14.6k frames (`motion_vectors_correlate.py` run)
+matches the documented absolute-vs-relative sentinel exactly — when the
+mower jumps (relocalisation, start-of-run), the firmware sets all four
+bytes to ±0xFFFF/0x8000 and stores the absolute coordinate in the next
+frame's pose.
+
+**Caveats that fall out of the raw-value dump** (see
+`motion_vectors_correlate.py`):
+- Δ2 at bytes [14-17] is often `(+INT16_MAX, -INT16_MIN)` during steady
+  motion — the apk describes this as "absolute" sentinel but Δ2 appears
+  to saturate more regularly than Δ1/Δ3, which is suspicious. Could be
+  a reserved slot on g2408 (only Δ1 + Δ3 carry data), or a different
+  sentinel semantic than the apk describes.
+- In row 2 of the sample (vx=+378 mm/s steady), Δ1.dx=-267 and
+  Δ3.dx=-262 — almost the same magnitude, not monotonically decreasing
+  as "oldest → newest" would predict. That could mean Δ1/Δ3 point to
+  the SAME prior point under different references, or the layout is
+  genuinely different on g2408.
+
+**Validation steps before shipping a decoder change**:
+1. Pick a mid-session frame from `probe_log_20260419_130434.jsonl` with
+   known pose `(x, y)`. Apply the apk decode to bytes [7-21]. Plot
+   `(pose + Δ1, pose + Δ2, pose + Δ3)` against the session's rendered
+   path. If the points land on recent path segments, decoder is valid.
+2. Correlate the uint24 start_index at bytes [7-9] across consecutive
+   frames — should increment monotonically if it's a path-point sequence
+   counter. If it jitters or wraps, the layout is different.
+3. Only then modify `protocol/telemetry.py` and consider enriching
+   live_map path accumulation.
+
+**Bytes [1-6] — position decode analysis (2026-04-24, open question)**:
+Our current `telemetry.py` treats bytes [1-4] as two int16 LE (`x_cm`,
+`y_mm`) and ignores byte [5]. ioBroker's apk reference describes a
+**20-bit signed packed representation** where X uses bytes
+`[1,2,3_low_nibble]` and Y uses bytes `[3_high_nibble,4,5]` — X and Y
+share byte [3]:
+
+```javascript
+x = (payload[2] << 28 | payload[1] << 20 | payload[0] << 12) >> 12
+y = (payload[4] << 24 | payload[3] << 16 | payload[2] << 8) >> 12
+```
+
+**Validation on 5,000 g2408 frames** (probe-log corpus):
+- **X: int16 decode and 20-bit decode produce identical values in all
+  5,000 frames.** When b[3]'s low nibble is 0 (positive X) or 0xF (sign
+  extension for small negative X), the 20-bit formula collapses to the
+  same result as a plain int16 of bytes [1-2]. Our X decode is
+  coincidentally correct for our user's lawn.
+- **Y: int16 decode is consistently 16× the 20-bit decode.** Example
+  frame `bytes[1-5] = fe ff 6f 45 00`: int16 decode gives Y=+17775, 20-bit
+  decode gives Y=+1110 (ratio 16.01). The factor of 16 comes from the
+  apk's `>> 12` shift — we read b[3] as an 8-bit value when the 20-bit
+  formula only uses its high nibble.
+
+**Why our working rendering still plots paths on the right spots**:
+`live_map.py:58` scales our decoded value with `y_mm * 0.000625`, i.e.
+dividing by 1600 rather than the expected 1000 for a mm→m conversion.
+Someone empirically calibrated that magic factor, effectively cancelling
+the 16× overshoot from our int16 decode (since 16/1600 = 1/100 ≈ a cm→m
+conversion). In other words: our raw Y is reported as `mm` in the
+variable name, but it's actually "(20-bit-Y-in-cm) × 16", and the
+downstream scale factor compensates. **The variable name is lying.**
+
+**Open questions, hence no decoder change yet**:
+- Is the apk layout right for g2408, or is g2408 actually sending
+  native int16-in-cm? The fact that the apk's Δ1 sign convention gives
+  median X error 13 mm but median Y error 656 mm suggests something
+  is still off — it isn't a clean match.
+- If we switch to the 20-bit decode, EVERY downstream user of
+  `telemetry.y_mm` + the compensating 0.000625 factor breaks
+  simultaneously. The rename + refactor is non-trivial.
+
+Decoder change deferred until either (a) a user reports Y rendering
+going wrong on a bigger lawn, (b) we find a second independent
+source confirming the 20-bit layout on g2408 specifically, or (c) we
+correlate the trace deltas against RECORDED RENDERED PATH points
+(rather than pose-to-pose) and see which decode choice produces a
+tight match.
+
 The integration decodes the position correctly via `decode_s1p4_position`. As of
 v2.0.0-alpha.7 each novel short-frame length also logs the raw bytes once at
 WARNING (`[PROTOCOL_NOVEL] s1p4 short frame len=…`) so contributors capturing
