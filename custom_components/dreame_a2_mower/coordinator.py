@@ -308,7 +308,12 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
                     "SessionArchive: load_index failed (%s); continuing with empty index",
                     ex,
                 )
-            latest = self.session_archive.latest()
+            # `latest()` internally consults `in_progress_entry()` →
+            # `read_in_progress()` which reads in_progress.json from
+            # disk. That must run off the event loop.
+            latest = await self.hass.async_add_executor_job(
+                self.session_archive.latest
+            )
             if latest is not None:
                 self._last_archived_md5 = latest.md5
 
@@ -322,7 +327,12 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
                     "LidarArchive: load_index failed (%s); continuing with empty index",
                     ex,
                 )
-            latest = self.lidar_archive.latest()
+            # LidarArchive.latest() doesn't read in_progress-style files
+            # (there's no such concept for LiDAR scans), but keep it on
+            # the executor for symmetry + to shield against future churn.
+            latest = await self.hass.async_add_executor_job(
+                self.lidar_archive.latest
+            )
             if latest is not None:
                 self._last_archived_lidar_md5 = latest.md5
 

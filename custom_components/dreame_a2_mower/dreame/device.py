@@ -160,6 +160,20 @@ _EMPTY_DICT_SENTINEL_SLOTS: frozenset[tuple[int, int]] = frozenset({
     (2, 52),  # cloud-side session-completion ping
 })
 
+# ioBroker.dreame documents start/stop/pause on siid=2 (not the siid=5
+# upstream MIoT vacuum spec). Used as a fallback when the primary
+# siid=5 path returns 80001. Dock stays on siid=5 because both the
+# upstream mapping and ioBroker agree. See B2 in TODO.md.
+_ALT_ACTION_SIID_MAP: dict = {}  # populated after DreameMowerAction import
+def _init_alt_action_siid_map() -> None:
+    global _ALT_ACTION_SIID_MAP
+    _ALT_ACTION_SIID_MAP = {
+        DreameMowerAction.START_MOWING: (2, 1),
+        DreameMowerAction.STOP: (2, 2),
+        DreameMowerAction.PAUSE: (2, 4),
+    }
+_init_alt_action_siid_map()
+
 
 class DreameMowerDevice:
     """Support for Dreame Mower"""
@@ -3974,6 +3988,63 @@ class DreameMowerDevice:
             _LOGGER.error("Send action failed %s: %s", action.name, ex)
             self.schedule_update(1, True)
             return
+
+        # Alternate-siid fallback for motion commands (alpha.105).
+        # ioBroker.dreame documents start/stop/pause as siid=2 aiid=1/2/4
+        # (rather than siid=5 that upstream MIoT vacuum spec defines). On
+        # g2408 our siid=5 path has historically returned 80001 ("device
+        # unreachable via cloud relay") — B1 test 2026-04-19 confirmed.
+        # siid=2 aiid=50 (routed action) is known to work on this mower
+        # thanks to the alpha.78-81 URL fix, suggesting siid=2 is the
+        # live endpoint. Retry the motion commands on the alt siid when
+        # the primary returns 80001, then cache which path worked.
+        if (
+            isinstance(result, dict)
+            and result.get("code") == 80001
+            and action in _ALT_ACTION_SIID_MAP
+            and getattr(self, "_action_alt_path_preferred", {}).get(action) is not True
+        ):
+            alt_siid, alt_aiid = _ALT_ACTION_SIID_MAP[action]
+            _LOGGER.info(
+                "Send action %s primary path (siid=%d aiid=%d) returned "
+                "80001; retrying via ioBroker-documented siid=%d aiid=%d",
+                action.name, mapping["siid"], mapping["aiid"],
+                alt_siid, alt_aiid,
+            )
+            try:
+                alt_result = self._protocol.action(alt_siid, alt_aiid, parameters)
+            except Exception as ex:
+                _LOGGER.warning(
+                    "Send action %s alternate path raised: %s",
+                    action.name, ex,
+                )
+                alt_result = None
+            if isinstance(alt_result, dict) and alt_result.get("code") == 0:
+                _LOGGER.info(
+                    "Send action %s succeeded via alternate siid=%d aiid=%d — "
+                    "caching preference so future calls skip the failing primary",
+                    action.name, alt_siid, alt_aiid,
+                )
+                if not hasattr(self, "_action_alt_path_preferred"):
+                    self._action_alt_path_preferred = {}
+                self._action_alt_path_preferred[action] = True
+                result = alt_result
+            else:
+                _LOGGER.info(
+                    "Send action %s alternate path also failed: %r",
+                    action.name, alt_result,
+                )
+
+        # If this action previously succeeded via the alt path, prefer it
+        # directly on subsequent calls (skip the failing primary).
+        elif getattr(self, "_action_alt_path_preferred", {}).get(action) is True:
+            alt_siid, alt_aiid = _ALT_ACTION_SIID_MAP[action]
+            try:
+                result = self._protocol.action(alt_siid, alt_aiid, parameters)
+            except Exception as ex:
+                _LOGGER.warning(
+                    "Send action %s (cached-alt) raised: %s", action.name, ex
+                )
 
         # Schedule update for retrieving new properties after action sent
         self.schedule_update(6, bool(not map_action and self._protocol.dreame_cloud))
