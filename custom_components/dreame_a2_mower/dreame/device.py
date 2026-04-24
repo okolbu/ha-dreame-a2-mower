@@ -256,6 +256,11 @@ class DreameMowerDevice:
         # `refresh_dock_pos()`; consumers read via `device.dock_pos`.
         # Schema (per apk): {x, y, yaw, connect_status, path_connect, in_region}.
         self._dock_pos: dict | None = None
+        # Maintenance Point (cloud MAP.* `cleanPoints` key). A user-placed
+        # "go here" marker. Populated by `_build_map_from_cloud_data`.
+        # Shape: `{"id": int, "x_mm": int, "y_mm": int}` in cloud frame
+        # (same as charger/obstacles), or None if not set.
+        self._maintenance_point: dict | None = None
         # Cloud M_PATH.* userData cache — populated alongside MAP.*
         # by `_build_map_from_cloud_data`. Used by live_map's
         # boot-time restore as a fallback when in_progress.json
@@ -2180,14 +2185,14 @@ class DreameMowerDevice:
                     schema,
                 )
                 # Per-key deep dump for keys we don't yet consume in the
-                # decoder. The integration uses boundary / mowingAreas /
-                # forbiddenAreas / md5sum / mapIndex / name / hasBack /
-                # merged / totalArea — anything else is candidate RE.
-                # Truncate values >2k chars so we don't blow out the
-                # log buffer.
+                # decoder. Truncate values >2k chars so we don't blow out
+                # the log buffer.
                 _CONSUMED = {"boundary", "mowingAreas", "forbiddenAreas",
                              "md5sum", "mapIndex", "name", "hasBack",
-                             "merged", "totalArea"}
+                             "merged", "totalArea",
+                             # Added 2026-04-24:
+                             "contours",      # drawn as WALL outline (below)
+                             "cleanPoints"}   # maintenance-point marker
                 # Single multi-line WARNING so the whole dump survives
                 # HA's log-UI dedupe (otherwise the 8 [MAP_KEY] lines
                 # collapse into one displayed entry).
@@ -2391,9 +2396,43 @@ class DreameMowerDevice:
                 for i in range(len(line_points)):
                     p1 = line_points[i]
                     p2 = line_points[(i + 1) % len(line_points)]
-                    draw.line([p1, p2], fill=255, width=1)
+                    # 2 px wide so the real grass outline stays visible over
+                    # top of the coarser mowingAreas zone fills. 1 px got
+                    # swallowed by zone colour on steep contour segments.
+                    draw.line([p1, p2], fill=255, width=2)
                 mask = np.array(img).T
                 pixel_type[mask > 0] = MapPixelType.WALL.value
+
+            # cleanPoints: user-placed Maintenance Point (single entry per
+            # captures so far — firmware may support multiples). We expose
+            # only the first one as `device.maintenance_point`. Coords stay
+            # in raw cloud-frame mm so the go-to service can feed them
+            # straight into `device.go_to(x, y)` without re-reflecting.
+            clean_points = map_json.get("cleanPoints", {}).get("value", [])
+            mp: dict | None = None
+            for entry in clean_points:
+                if isinstance(entry, list) and len(entry) >= 2:
+                    point_id = entry[0]
+                    point_data = entry[1]
+                elif isinstance(entry, dict):
+                    point_id = entry.get("id", 1)
+                    point_data = entry
+                else:
+                    continue
+                point_path = point_data.get("path") or []
+                if not point_path:
+                    continue
+                try:
+                    pt = point_path[0]
+                    mp = {
+                        "id": int(point_id) if isinstance(point_id, (int, float)) else 1,
+                        "x_mm": int(pt["x"]),
+                        "y_mm": int(pt["y"]),
+                    }
+                except (KeyError, TypeError, ValueError):
+                    continue
+                break  # first-only
+            self._maintenance_point = mp
 
             dimensions = MapImageDimensions(
                 top=by1,
@@ -5910,6 +5949,14 @@ class DreameMowerDevice:
     @property
     def dock_pos(self) -> dict | None:
         return self._dock_pos
+
+    @property
+    def maintenance_point(self) -> dict | None:
+        """User-placed "Head to Maintenance Point" target, parsed from
+        the cloud MAP `cleanPoints` key. Dict: `{id, x_mm, y_mm}` in
+        cloud-frame mm (same frame as `device.go_to`). None until the
+        map has been fetched and the user has placed a point."""
+        return self._maintenance_point
 
     @property
     def cloud_mpath(self) -> list | None:

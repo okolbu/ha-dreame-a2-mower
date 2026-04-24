@@ -1304,8 +1304,8 @@ md5sum, mapIndex, name, hasBack, merged, totalArea`). The other
 
 | Key | Shape (g2408) | Semantic |
 |---|---|---|
-| `contours` | `{dataType:'Map', value:[[[map_id, ?], {id, type, shapeType, path:[{x,y},…]}]]}` | **Actual lawn outline polyline** (52-point polygon on a ~384 m² lawn). More detailed than the axis-aligned `boundary` rectangle. Potential future entity: render `contours` on the base map for real-shape instead of bbox rectangle. |
-| `cleanPoints` | `{dataType:'Map', value:[[pt_id, {id, type, shapeType, path:[{x,y}]}]]}` | **Maintenance points** — single-point markers the user pins in the app for spot cleaning/attention. Confirmed 2026-04-23 by user creating a maintenance point and seeing one entry appear. |
+| `contours` | `{dataType:'Map', value:[[[map_id, ?], {id, type, shapeType, path:[{x,y},…]}]]}` | **Actual lawn outline polyline** (52-point polygon on a ~384 m² lawn). More detailed than the axis-aligned `boundary` rectangle. **Consumed since alpha.91**: drawn on the base-map PNG as a 2-px `WALL` outline in `_build_map_from_cloud_data` so the real grass perimeter is visible over zone fills. |
+| `cleanPoints` | `{dataType:'Map', value:[[pt_id, {id, type, shapeType, path:[{x,y}]}]]}` | **Maintenance Point** — single-point marker the user pins in the app. Confirmed 2026-04-23; live sample 2026-04-24 has one entry at `(2820, 12760)` mm in cloud frame. **Consumed since alpha.91**: surfaced as `sensor.maintenance_point_x_mm` / `sensor.maintenance_point_y_mm` and actionable via the `dreame_a2_mower.mower_go_to_maintenance_point` service (dispatches to `device.go_to`). |
 | `cruisePoints` | `{dataType:'Map', value:[]}` on our capture | Patrol/cruise points the mower visits in sequence. Empty when unused. |
 | `cut` | `[]` | Always empty on our captures. Purpose unknown — possibly cut-line geometry for zone boundaries. |
 | `notObsAreas` | `{dataType:'Map', value:[]}` | "No-obstacle-detection" zones — regions where the LiDAR obstacle-detection is disabled. Empty when unused. |

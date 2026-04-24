@@ -88,6 +88,12 @@ mower_goto:
         number:
           mode: box
 
+mower_go_to_maintenance_point:
+  target:
+    entity:
+      integration: dreame_a2_mower
+      domain: lawn_mower
+
 mower_follow_path:
   target:
     entity:

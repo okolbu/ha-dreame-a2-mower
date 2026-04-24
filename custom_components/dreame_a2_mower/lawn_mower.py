@@ -67,6 +67,7 @@ from .const import (
     SERVICE_CLEAN_SEGMENT,
     SERVICE_CLEAN_SPOT,
     SERVICE_GOTO,
+    SERVICE_GO_TO_MAINTENANCE_POINT,
     SERVICE_FOLLOW_PATH,
     SERVICE_INSTALL_VOICE_PACK,
     SERVICE_MERGE_SEGMENTS,
@@ -284,6 +285,12 @@ async def async_setup_entry(
             vol.Required(INPUT_Y): vol.All(vol.Coerce(int)),
         },
         DreameMower.async_goto.__name__,
+    )
+
+    platform.async_register_entity_service(
+        SERVICE_GO_TO_MAINTENANCE_POINT,
+        {},
+        DreameMower.async_go_to_maintenance_point.__name__,
     )
 
     platform.async_register_entity_service(
@@ -695,6 +702,28 @@ class DreameMower(DreameMowerEntity, LawnMowerEntity):
         """Go to a point and take pictures around."""
         if x is not None and y is not None and x != "" and y != "":
             await self._try_command("Unable to call go_to: %s", self.device.go_to, x, y)
+
+    async def async_go_to_maintenance_point(self) -> None:
+        """Dispatch go_to to the user-placed Maintenance Point.
+
+        Coordinates come from `device.maintenance_point`, populated by the
+        cloud MAP fetch (`cleanPoints`). Fails cleanly with
+        HomeAssistantError if the user hasn't set a point yet or if the
+        map hasn't been fetched.
+        """
+        mp = self.device.maintenance_point
+        if not mp:
+            from homeassistant.exceptions import HomeAssistantError
+            raise HomeAssistantError(
+                "No Maintenance Point set — place one in the Dreame app "
+                "first, then retry after the next cloud-map refresh."
+            )
+        await self._try_command(
+            "Unable to call go_to_maintenance_point: %s",
+            self.device.go_to,
+            mp["x_mm"],
+            mp["y_mm"],
+        )
 
     async def async_follow_path(self, points="") -> None:
         """Start a survaliance job."""

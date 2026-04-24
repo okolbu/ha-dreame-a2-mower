@@ -660,6 +660,34 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_dock_pos_present,
     ),
+    # Maintenance Point (cloud MAP.* cleanPoints). Set in the Dreame app.
+    # Coordinates are raw cloud-frame mm — feed directly into `mower_go_to_maintenance_point`.
+    DreameMowerSensorEntityDescription(
+        key="maintenance_point_x_mm",
+        icon="mdi:map-marker",
+        native_unit_of_measurement="mm",
+        value_fn=lambda value, device: (
+            device.maintenance_point.get("x_mm")
+            if isinstance(device.maintenance_point, dict) else None
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=lambda device: isinstance(
+            getattr(device, "maintenance_point", None), dict
+        ),
+    ),
+    DreameMowerSensorEntityDescription(
+        key="maintenance_point_y_mm",
+        icon="mdi:map-marker",
+        native_unit_of_measurement="mm",
+        value_fn=lambda value, device: (
+            device.maintenance_point.get("y_mm")
+            if isinstance(device.maintenance_point, dict) else None
+        ),
+        exists_fn=lambda description, device: True,
+        available_fn=lambda device: isinstance(
+            getattr(device, "maintenance_point", None), dict
+        ),
+    ),
     DreameMowerSensorEntityDescription(
         key="voice_download_progress",
         icon="mdi:download",
