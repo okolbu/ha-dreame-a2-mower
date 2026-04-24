@@ -62,6 +62,14 @@ def decode_s2p51(payload: dict[str, Any]) -> S2P51Event:
     if set(payload.keys()) == {"value"}:
         value = payload["value"]
         if isinstance(value, int):
+            # Ambiguous — this shape is used by multiple settings and the
+            # envelope doesn't name which one. Confirmed senders so far:
+            # - Navigation Path (→ CFG.PROT, confirmed 2026-04-25 via
+            #   toggle correlation)
+            # Other apk-listed candidates (not yet toggle-confirmed):
+            # Child Lock, Frost Protection, AI Obstacle Photo,
+            # Auto-Recharge-Standby. Caller can resolve via a getCFG
+            # routed action + diff — see sensor.cfg_keys_raw (alpha.116+).
             return S2P51Event(
                 setting=Setting.AMBIGUOUS_TOGGLE,
                 values={"value": value},
