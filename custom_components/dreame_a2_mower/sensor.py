@@ -586,40 +586,41 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         available_fn=_cfg_key_present("WRF"),
     ),
     DreameMowerSensorEntityDescription(
-        # PROT = Frost Protection (user-confirmed 2026-04-24 via the app's
-        # setting toggle; previous label "grass_protection" was a guess).
-        # See docs/research/g2408-protocol.md §6.2.
-        key="frost_protection",
-        icon="mdi:snowflake",
+        # Navigation Path (Direct / Smart) — lives in CFG.PROT, NOT CFG.PATH
+        # as previously assumed. Confirmed 2026-04-25 by toggling the
+        # Navigation Path setting in the app while watching HA state
+        # history: CFG.PROT flipped 0→1 on Direct→Smart, CFG.PATH did
+        # not change. Earlier alpha.89 labels ("sensor.frost_protection"
+        # tied to PROT, "sensor.navigation_path" tied to PATH) were both
+        # derived from a user guess that turned out to be wrong on PROT.
+        # Corrected in alpha.115.
+        key="navigation_path",
+        icon="mdi:map-marker-path",
         value_fn=lambda value, device: (
-            "on" if device.cfg.get("PROT") == 1 else
-            "off" if device.cfg.get("PROT") == 0 else None
+            {0: "direct", 1: "smart"}.get(device.cfg.get("PROT"))
+            if isinstance(device.cfg.get("PROT"), int)
+            else None
+        ),
+        attrs_fn=lambda device: (
+            {"raw_prot": device.cfg.get("PROT")}
+            if isinstance(device.cfg.get("PROT"), int) else {}
         ),
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("PROT"),
     ),
+    # CFG.PATH — known int {0,1} on g2408 but observed stable at 1
+    # through a Navigation Path toggle test, so NOT the Navigation Path
+    # setting. Semantic TBD. Surfaced as a diagnostic-only sensor with
+    # the raw int so future toggle tests can spot what flips it. The
+    # earlier "sensor.frost_protection" entity is removed — it was
+    # misnamed (PROT turned out to be Navigation Path). Actual Frost
+    # Protection's CFG key is still unknown.
     DreameMowerSensorEntityDescription(
-        # PATH = Navigation Path: Direct vs Smart (user-confirmed 2026-04-24
-        # via app's Navigation Path setting). The 0→direct, 1→smart mapping
-        # below is a **guess** — we know PATH is an int {0,1} on g2408 and
-        # we know it's "the Navigation Path setting", but the direction of
-        # the mapping hasn't been cross-checked with live toggles. 2026-04-25
-        # user reported app=Direct showing as "smart" in HA, suggesting the
-        # mapping may be inverted; a live toggle test is pending.
-        # Attribute `raw` exposes the actual int so disagreements between
-        # the app state and the decoded label can be diagnosed without
-        # enabling debug logging.
-        key="navigation_path",
-        icon="mdi:map-marker-path",
-        value_fn=lambda value, device: (
-            {0: "direct", 1: "smart"}.get(device.cfg.get("PATH"))
-            if isinstance(device.cfg.get("PATH"), int)
-            else None
-        ),
-        attrs_fn=lambda device: (
-            {"raw": device.cfg.get("PATH")}
-            if isinstance(device.cfg.get("PATH"), int) else {}
-        ),
+        key="cfg_path_raw",
+        icon="mdi:help-circle-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda value, device: device.cfg.get("PATH"),
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("PATH"),
     ),

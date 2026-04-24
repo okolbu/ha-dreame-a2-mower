@@ -1104,9 +1104,9 @@ Recorded 2026-04-23, firmware `dreame.mower.g2408` (`_host=10000.mt.eu.iot.dream
 | `LIT` | `list(8) [enabled, start_min, end_min, l1, l2, l3, l4, reserved]` | Headlight (apk had 7; g2408 has 8 — extra byte likely reserved). |
 | `LOW` | `list(3) [enabled, start_min, end_min]` | Low-speed night mode. Same shape as DND. |
 | `MSG_ALERT` | `list(4) [anomaly, error, task, consumable]` | App's Notifications screen toggles. Sample `[1,1,1,1]` = all four enabled. Confirmed 2026-04-23 by user toggling correlation. |
-| `PATH` | `int {0,1}` | **Navigation Path** mode. `0 = Direct Path`, `1 = Smart Path` (user-confirmed 2026-04-24 via the app's Navigation Path setting — previously labelled `path_display` / `Path-display mode` as a guess). Surfaced as `sensor.navigation_path`. |
+| `PATH` | `int {0,1}` | **Unknown on g2408.** Observed stable at `1` through a Navigation Path toggle test 2026-04-25, so NOT the Navigation Path setting despite earlier user guess. Semantic TBD; exposed as `sensor.cfg_path_raw` (disabled-by-default diagnostic) so the raw int is visible for future toggle-correlation tests. |
 | `PRE` | `list(2) [zone_id, mode]` | See above. |
-| `PROT` | `int {0,1}` | **Frost Protection** (0=off, 1=on). User-confirmed 2026-04-24 via the app's Frost Protection toggle; previously labelled `grass_protection` as a guess. Surfaced as `sensor.frost_protection`. |
+| `PROT` | `int {0,1}` | **Navigation Path** (0 = Direct, 1 = Smart). Confirmed 2026-04-25 via toggle test: app's Navigation Path flipped Direct→Smart correlated with PROT going 0→1 on the next CFG refetch, while PATH stayed at 1 across the same toggle. Earlier alpha.89 labelling (PROT = Frost Protection) was based on a user guess that turned out wrong. Frost Protection's actual CFG key is still unknown — a separate toggle test for the Frost Protection switch is needed to find it. Surfaced as `sensor.navigation_path`. |
 | `REC` | `list(9) [1,1,1,1,1,1,1,0,3]` | Recharge config. First 7 = days-of-week? (TBD) |
 | `STUN` | `int` | Anti-theft (0=off, 1=on) |
 | `TIME` | `str` | Timezone IANA name, e.g. `'Europe/Oslo'`. Exposed as `mower_timezone` sensor. |
