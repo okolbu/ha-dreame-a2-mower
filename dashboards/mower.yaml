@@ -338,10 +338,14 @@ views:
               {%- set obs_real_keys = [] %}
               {%- for k in obs_keys %}{%- if not k.startswith('_') and k not in ('icon','friendly_name') %}{%- set _ = obs_real_keys.append(k) %}{%- endif %}{%- endfor %}
               {%- if obs_real_keys %}
-              | Key | Value |
-              |---|---|
               {%- for k in obs_real_keys | sort %}
-              | `{{ k }}` | `{{ obs_keys[k] }}` |
+              {%- set v = obs_keys[k] %}
+              {%- set vstr = (v | to_json) if (v is mapping or (v is iterable and v is not string)) else (v | string) %}
+
+              **`{{ k }}`**
+              ```json
+              {{ vstr[:600] }}{% if vstr | length > 600 %}… (truncated){% endif %}
+              ```
               {%- endfor %}
               {%- elif obs.attributes.get('_last_error') %}
               _last error: `{{ obs.attributes._last_error }}`_
@@ -357,10 +361,14 @@ views:
               {%- set aiobs_real_keys = [] %}
               {%- for k in aiobs_keys %}{%- if not k.startswith('_') and k not in ('icon','friendly_name') %}{%- set _ = aiobs_real_keys.append(k) %}{%- endif %}{%- endfor %}
               {%- if aiobs_real_keys %}
-              | Key | Value |
-              |---|---|
               {%- for k in aiobs_real_keys | sort %}
-              | `{{ k }}` | `{{ aiobs_keys[k] }}` |
+              {%- set v = aiobs_keys[k] %}
+              {%- set vstr = (v | to_json) if (v is mapping or (v is iterable and v is not string)) else (v | string) %}
+
+              **`{{ k }}`**
+              ```json
+              {{ vstr[:600] }}{% if vstr | length > 600 %}… (truncated){% endif %}
+              ```
               {%- endfor %}
               {%- elif aiobs.attributes.get('_last_error') %}
               _last error: `{{ aiobs.attributes._last_error }}`_
@@ -382,20 +390,14 @@ views:
                   rebuild — anything else is research territory. -#}
               {%- set known_map_keys = ['boundary','mowingAreas','forbiddenAreas','contours','cleanPoints','md5sum','mapIndex','name','hasBack','merged','totalArea'] %}
               {%- if attrs %}
-              | Key | Type / Value | Last changed |
-              |---|---|---|
+              {%- set max_chars = 600 %}
               {%- for k in attrs | sort %}
                 {%- if not k.startswith('_') and k not in ('icon','friendly_name') %}
                   {%- set is_unknown = k not in known_map_keys %}
                   {%- set marker = '🔴 ' if is_unknown else '' %}
                   {%- set v = attrs[k] %}
-                  {%- if v is mapping %}
-                    {%- set vshow = 'dict(len=' ~ (v | length) ~ ')' %}
-                  {%- elif v is iterable and v is not string %}
-                    {%- set vshow = 'list(len=' ~ (v | length) ~ ')' %}
-                  {%- else %}
-                    {%- set vshow = (v | string)[:80] %}
-                  {%- endif %}
+                  {%- set vstr = (v | to_json) if (v is mapping or (v is iterable and v is not string)) else (v | string) %}
+                  {%- set vstr = vstr[:max_chars] ~ ('… (truncated, full len=' ~ vstr | length ~ ')' if vstr | length > max_chars else '') %}
                   {%- set rc = recent.get(k) %}
                   {%- if rc %}
                     {%- set age = (now_ts - rc.changed_at) | round(0) | int %}
@@ -405,7 +407,11 @@ views:
                   {%- else %}
                     {%- set tag = '—' %}
                   {%- endif %}
-              | {{ marker }}`{{ k }}` | `{{ vshow }}` | {{ tag }} |
+
+              **{{ marker }}`{{ k }}`** — _{{ tag }}_
+              ```json
+              {{ vstr }}
+              ```
                 {%- endif %}
               {%- endfor %}
 
