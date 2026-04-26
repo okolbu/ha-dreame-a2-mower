@@ -264,6 +264,16 @@ def _side_effect_refresh_dock_pos(dev, value):
     dev.refresh_dock_pos()
 
 
+def _side_effect_cloud_map_poll(dev, value):
+    """Trigger a cloud MAP refetch + camera rebuild. Wired to s1p50
+    (the empty-dict "something changed" tripwire — fires for
+    Maintenance Point placement, Spot placement, and other server-
+    side state changes that don't carry a per-key signal). The md5
+    dedupe inside _build_map_from_cloud_data makes a no-change refetch
+    cheap, so the bursty 2-pings-per-edit pattern is safe."""
+    dev._schedule_cloud_map_poll(reason="s1p50 something-changed ping")
+
+
 def _side_effect_lidar_object_name(dev, value):
     if isinstance(value, str) and value:
         dev._handle_lidar_object_name(value)
@@ -355,6 +365,13 @@ _SIDE_EFFECTS: dict[tuple[int, int], callable] = {
     # OBS holds Obstacle Avoidance Distance/Height/Pathway/etc and
     # AIOBS holds AI Obstacle Recognition sub-toggles).
     (6, 2): _side_effect_refresh_settings_bundle,
+    # s1p50 = "something changed on cloud side" empty-dict ping —
+    # fires for Maintenance Point and Spot placement (and other
+    # server-side state changes that don't carry a per-key signal).
+    # No useful payload, so we use it as a generic trigger to refetch
+    # the cloud MAP.* dataset (md5 dedupe inside makes no-change
+    # refetches cheap).
+    (1, 50): _side_effect_cloud_map_poll,
     (1, 51): _side_effect_refresh_dock_pos,   # dock-pos-update hint (mapped)
     (99, 20): _side_effect_lidar_object_name,
     (2, 56): _side_effect_session_status,
