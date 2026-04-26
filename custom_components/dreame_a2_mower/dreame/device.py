@@ -2483,11 +2483,16 @@ class DreameMowerDevice:
                 raw_angle = zdata.get("angle")
                 rot_angle = -raw_angle if raw_angle is not None else None
                 rp = _rotate_path_around_centroid(path, rot_angle)
-                # Discriminate area subtype: type=2 is Designated
-                # Ignore Obstacle (rendered green); other types
-                # (presumed 0/1 = classic no-go) render red.
-                ztype = zdata.get("type") if isinstance(zdata, dict) else None
-                subtype = "ignore" if ztype == 2 else None
+                # NOTE: alpha.147 hypothesised type=2 was the Designated
+                # Ignore Obstacle marker (would render green) but live
+                # testing on user's setup showed their classic exclusion
+                # zone ALSO has type=2 — so type alone is not the
+                # discriminator. Reverted to None (red) for now until
+                # we find the real distinguisher (likely shapeType, an
+                # owner field, or the cloud-side category which may
+                # not be in MAP.* at all). Subtype field on Area is
+                # preserved so the future fix is one line here.
+                subtype = None
                 rotated_forbidden.append((zid, rp, subtype))
 
             # Expand the bbox to include every rotated exclusion corner.
