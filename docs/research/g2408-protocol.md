@@ -1008,6 +1008,7 @@ WRF, WRP. This includes settings previously thought to be BT-only:
 - **Obstacle Avoidance on Edges** — confirmed BT-only 2026-04-26 alpha.140 via toggle test. Same signature (s6p2 tripwire, no frame element flips).
 - **LiDAR Obstacle Recognition** (incl. sub-setting "Obstacle Avoidance Height") — confirmed BT-only 2026-04-26 alpha.140 via toggle test. Same signature. Note that the height sub-setting having multiple values (5/10/15/20 cm) didn't reveal anything in `s6p2[3]` either — that hypothesis is dead.
 - **AI Obstacle Recognition** (3 sub-toggles: Humans, Animals, Objects) — all three confirmed BT-only 2026-04-26 alpha.140 via toggle test. Each fires the s6p2 tripwire with no CFG diff and no frame element change.
+- **Obstacle Avoidance Distance** (3-state: 10cm / 15cm / 20cm) — confirmed BT-only 2026-04-26 alpha.140 via toggle test stepping all three values. Each step fires the s6p2 tripwire with no CFG diff and no frame element change. This is the second multi-band setting that doesn't move `s6p2[3]` — strong evidence that `[3]` is not a user-toggleable multi-state at all.
 
 **Reclassified to cloud-visible 2026-04-26 (originally listed as BT-only):**
 - Mowing Height — `s6p2[0]` in mm.
