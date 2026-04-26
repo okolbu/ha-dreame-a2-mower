@@ -514,6 +514,29 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             round(value.heading_deg, 1) if value is not None else None
         ),
     ),
+    # mowing_height is in s6p2 element[0] on g2408 (confirmed 2026-04-26):
+    # value is height in millimetres (range 30-70mm = 3.0-7.0cm in 5mm
+    # steps). The earlier "profile_id" hypothesis was wrong — it always
+    # was the height. Surfaced in cm as a float for app-matching.
+    DreameMowerSensorEntityDescription(
+        key="mowing_height",
+        icon="mdi:ruler",
+        native_unit_of_measurement="cm",
+        value_fn=lambda value, device: (
+            device.get_property(DreameMowerProperty.FRAME_INFO)[0] / 10.0
+            if isinstance(device.get_property(DreameMowerProperty.FRAME_INFO), list)
+            and len(device.get_property(DreameMowerProperty.FRAME_INFO)) >= 1
+            and isinstance(device.get_property(DreameMowerProperty.FRAME_INFO)[0], int)
+            else None
+        ),
+        attrs_fn=lambda device: (
+            {"raw_mm": device.get_property(DreameMowerProperty.FRAME_INFO)[0]}
+            if isinstance(device.get_property(DreameMowerProperty.FRAME_INFO), list)
+            and len(device.get_property(DreameMowerProperty.FRAME_INFO)) >= 1
+            else {}
+        ),
+        exists_fn=lambda description, device: True,
+    ),
     # mow_mode is in s6p2 element[1] on g2408 (confirmed 2026-04-26):
     #   s6p2 = [profile_id, mow_mode, True, 2]
     # where mow_mode 0=Standard, 1=Efficient. The apk's PRE[1] mapping

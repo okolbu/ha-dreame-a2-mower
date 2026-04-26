@@ -160,10 +160,11 @@ views:
           - type: entities
             title: Settings (from getCFG)
             entities:
-              # mow_mode now reads s6p2[1] (FRAME_INFO frame) — confirmed
-              # 2026-04-26 to track Standard/Efficient correctly.
-              # switch.mow_mode_efficient still hidden (write path unknown).
+              # mow_mode + mowing_height both read from s6p2 (FRAME_INFO)
+              # — confirmed 2026-04-26. switch.mow_mode_efficient still
+              # hidden (write path unknown).
               - entity: sensor.dreame_a2_mower_mow_mode
+              - entity: sensor.dreame_a2_mower_mowing_height
               - entity: sensor.dreame_a2_mower_navigation_path
               - entity: sensor.dreame_a2_mower_frost_protection
               - entity: sensor.dreame_a2_mower_rain_protection
