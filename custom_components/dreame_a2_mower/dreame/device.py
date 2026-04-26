@@ -240,10 +240,24 @@ def _side_effect_refresh_settings_bundle(dev, value):
     """Refresh CFG + OBS + AIOBS on every settings-saved tripwire.
     OBS / AIOBS cover obstacle-avoidance + AI recognition settings
     that are NOT in CFG (per apk endpoint catalogue) — many of
-    today's "BT-only" findings should turn out to live there."""
+    today's "BT-only" findings should turn out to live there.
+
+    Also re-runs the one-shot endpoint probe if it's never succeeded
+    on at least one endpoint — handles the case where the mower was
+    offline at boot and the probe came back all-errors. Once a probe
+    yields any successes the dict is preserved and not re-run."""
     dev.refresh_cfg()
     dev.refresh_obs()
     dev.refresh_aiobs()
+    probe = getattr(dev, "_routed_endpoint_probe", None) or {}
+    has_success = any(
+        not (isinstance(v, dict) and "_error" in v) for v in probe.values()
+    )
+    if not has_success:
+        try:
+            dev.probe_routed_endpoints()
+        except Exception:  # pragma: no cover — defensive
+            pass
 
 
 def _side_effect_refresh_dock_pos(dev, value):
