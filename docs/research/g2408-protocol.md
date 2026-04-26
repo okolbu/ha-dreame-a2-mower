@@ -993,6 +993,7 @@ WRF, WRP. This includes settings previously thought to be BT-only:
 **Anti-Theft** (STUN), **Weather/Frost/Navigation-Path** (WRF/PROT/PATH).
 
 **Bluetooth-only (still invisible from cloud/HA on g2408):**
+- **Mowing Efficiency** (Standard / Efficient) — **confirmed 2026-04-26** with `cfg_keys_raw` + `_last_diff` visible: toggling Standard → Efficient re-emitted `s6p2` and bumped `CFG.VER` by 1 (proving the change was persisted server-side), but **no CFG key flipped**, including `PRE` which the apk claims is `mow_mode`. Implication: the integration's `sensor.mow_mode` and `switch.mow_mode_efficient` (both read `PRE[1]`) report stale values on g2408 — they'll always show "Standard" / off. Should be removed or re-wired once we identify the actual storage (none in current 24-key CFG, possibly per-zone in MAP.* or a different routed-action endpoint).
 - Obstacle Avoidance Distance
 - Obstacle Avoidance Height
 - Start from Stop Point

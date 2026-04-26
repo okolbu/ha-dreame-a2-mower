@@ -243,9 +243,14 @@ SWITCHES: tuple[DreameMowerSwitchEntityDescription, ...] = (
         format_fn=lambda value, device: 101 if value else 40,
         entity_category=EntityCategory.CONFIG,
     ),
-    # PRE-backed mow_mode_efficient — g2408 PRE = [zone_id, mode], so
-    # PRE[1] is the mode index (0=Standard, 1=Efficient). write_pre
-    # writes the 2-element array back.
+    # PRE-backed mow_mode_efficient — DISABLED 2026-04-26. The apk
+    # claim that PRE[1] = mowing efficiency mode is wrong on g2408:
+    # toggling Standard ↔ Efficient in the app re-emits s6p2 and bumps
+    # CFG.VER but PRE stays unchanged. Both read AND write would be
+    # silently broken (read returns stale 0; write would set PRE[1]=1
+    # but the firmware would ignore it because that's not where the
+    # setting lives). Hidden via exists_fn until we find the right
+    # transport.
     DreameMowerSwitchEntityDescription(
         key="mow_mode_efficient",
         icon="mdi:robot-mower",
@@ -257,7 +262,7 @@ SWITCHES: tuple[DreameMowerSwitchEntityDescription, ...] = (
             else None
         ),
         set_fn=lambda device, value: device.write_pre(1, int(bool(value))),
-        exists_fn=lambda description, device: True,
+        exists_fn=lambda description, device: False,  # broken on g2408 — see comment
     ),
     # Removed in alpha.86: edge_mowing_switch / edge_detection_switch /
     # direction_change_off — those apk PRE indexes (5/8/9) don't exist

@@ -514,12 +514,16 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             round(value.heading_deg, 1) if value is not None else None
         ),
     ),
-    # PRE-backed mow_mode — g2408 PRE = [zone_id, mode] (2 elements,
-    # not the 10-element apk schema). PRE[1] is the mode index.
-    # Removed in alpha.86: cutting_height_mm / obstacle_distance_mm /
-    # mow_coverage_pct / direction_change / edge_mowing / edge_detection
-    # — those apk indexes (2-9) don't exist on g2408's PRE. They may
-    # be reachable via a different CFG key or Bluetooth-only path.
+    # PRE-backed mow_mode — apk hypothesis was that PRE[1] = mowing
+    # efficiency mode (0=Standard, 1=Efficient), but a 2026-04-26
+    # toggle test confirmed this is WRONG on g2408: toggling the
+    # setting in the app re-emitted s6p2 and bumped CFG.VER, but
+    # PRE stayed at [0, 0] — the value isn't stored in any visible
+    # CFG key. The sensor below would always report "standard"
+    # regardless of the actual app state, so it's been disabled by
+    # making exists_fn return False. Re-enable once we identify the
+    # actual storage (none in current 24-key CFG; possibly per-zone
+    # in MAP.* or a different routed-action endpoint).
     DreameMowerSensorEntityDescription(
         key="mow_mode",
         icon="mdi:robot-mower",
@@ -531,7 +535,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             and len(device.cfg.get("PRE", [])) >= 2
             else None
         ),
-        exists_fn=lambda description, device: True,
+        exists_fn=lambda description, device: False,  # broken on g2408 — see comment
         available_fn=_cfg_key_present("PRE", min_len=2),
     ),
     # CFG.LIT is the app's "Lights" setting (confirmed 2026-04-24).

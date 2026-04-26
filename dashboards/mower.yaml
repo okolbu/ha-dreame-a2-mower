@@ -160,9 +160,12 @@ views:
           - type: entities
             title: Settings (from getCFG)
             entities:
-              - entity: sensor.dreame_a2_mower_mow_mode
-              - entity: switch.dreame_a2_mower_mow_mode_efficient
-                name: Efficient mode
+              # Mow Mode entities removed from dashboard 2026-04-26 —
+              # toggle test confirmed PRE[1] is NOT mowing efficiency
+              # on g2408 (re-emits s6p2 + bumps VER but doesn't change
+              # any visible CFG key). Sensor + switch are now hidden
+              # via exists_fn=False in sensor.py / switch.py until we
+              # identify the actual storage path.
               - entity: sensor.dreame_a2_mower_navigation_path
               - entity: sensor.dreame_a2_mower_frost_protection
               - entity: sensor.dreame_a2_mower_rain_protection
