@@ -514,6 +514,21 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             round(value.heading_deg, 1) if value is not None else None
         ),
     ),
+    # edgemaster is s6p2 element[2] on g2408 (confirmed 2026-04-26 by
+    # toggle: True → False → True → False with no other change). Was
+    # previously thought to be a constant "True" frame validity flag —
+    # all earlier captures had EdgeMaster ON. Bool, no further decode.
+    DreameMowerSensorEntityDescription(
+        key="edgemaster",
+        icon="mdi:vector-square",
+        value_fn=lambda value, device: (
+            ("on" if device.get_property(DreameMowerProperty.FRAME_INFO)[2] else "off")
+            if isinstance(device.get_property(DreameMowerProperty.FRAME_INFO), list)
+            and len(device.get_property(DreameMowerProperty.FRAME_INFO)) >= 3
+            else None
+        ),
+        exists_fn=lambda description, device: True,
+    ),
     # mowing_height is in s6p2 element[0] on g2408 (confirmed 2026-04-26):
     # value is height in millimetres (range 30-70mm = 3.0-7.0cm in 5mm
     # steps). The earlier "profile_id" hypothesis was wrong — it always
