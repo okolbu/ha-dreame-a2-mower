@@ -274,19 +274,33 @@ def _side_effect_session_status(dev, value):
 
 
 def _side_effect_map_edit(dev, value):
-    # s2p50 wraps multiple operation classes. Map edits carry
-    # {d:{..., o:215}, t:'TASK'}; only 215 means "map edit confirmed
-    # server-side" and needs a camera rebuild.
+    # s2p50 wraps multiple operation classes. Several opcodes signal
+    # a server-side map change that the integration's cached camera
+    # image won't reflect until we re-fetch + rebuild:
+    #   o:215 — edit-existing-zone confirmed (original handler)
+    #   o:201 — operation completed with status:true & error:0 — fires
+    #           at the end of new-zone creation flows like Designated
+    #           Ignore Obstacle Zone, observed sequence 204→234→201→-1
+    # Both are treated the same way: refetch MAP.* and rebuild.
+    # Any other opcode (204 = request, 234 = ack with id, -1 =
+    # cleanup) is informational only.
     if not (
         isinstance(value, dict)
         and value.get("t") == "TASK"
         and isinstance(value.get("d"), dict)
-        and value["d"].get("o") == 215
     ):
         return
+    d = value["d"]
+    op = d.get("o")
+    triggers_rebuild = (
+        op == 215
+        or (op == 201 and d.get("status") is True and d.get("error") == 0)
+    )
+    if not triggers_rebuild:
+        return
     _LOGGER.info(
-        "[MAP_EDIT] s2p50 confirmed map edit (ids=%s, id=%s); rebuilding camera map from cloud",
-        value["d"].get("ids"), value["d"].get("id"),
+        "[MAP_EDIT] s2p50 op=%s confirmed (ids=%s, id=%s); rebuilding camera map from cloud",
+        op, d.get("ids"), d.get("id"),
     )
     try:
         dev._build_map_from_cloud_data()
