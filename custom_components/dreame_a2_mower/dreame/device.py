@@ -315,9 +315,8 @@ _SIDE_EFFECTS: dict[tuple[int, int], callable] = {
     # catalogue was written before we could fetch CFG at all (wrong URL
     # path), so any of those settings might actually persist to CFG and
     # we just never noticed. Refreshing CFG on every s6p2 lets the
-    # cfg_keys_raw _last_diff dashboard surface the change immediately.
-    # The 5s min-interval gate inside refresh_cfg dedupes the 2-3 rapid
-    # tripwire emissions per single user toggle.
+    # cfg_keys_raw _last_diff dashboard surface the change immediately
+    # for clean per-toggle attribution during research.
     (6, 2): _side_effect_refresh_cfg,
     (1, 51): _side_effect_refresh_dock_pos,   # dock-pos-update hint (mapped)
     (99, 20): _side_effect_lidar_object_name,
@@ -5989,32 +5988,24 @@ class DreameMowerDevice:
         self._cfg_success_count += 1
         self._property_changed()
 
-    # Minimum interval between successful CFG fetches — dedupes the
-    # 2-3 rapid s6p2 tripwire emissions per single user toggle. Tuned
-    # to be longer than typical s6p2 burst spacing (~1.5 s) but well
-    # under any plausible polling cadence.
-    _CFG_MIN_INTERVAL_S = 5
-
     def refresh_cfg(self) -> bool:
         """Fetch the full settings dict via the routed action. Stores the
         result in `self._cfg` and returns True on success. Logs + returns
         False on any error — the cache is preserved so transient errors
         don't blank existing entity state. Synchronous; safe to call
-        from the MQTT callback thread or an executor."""
+        from the MQTT callback thread or an executor.
+
+        No min-interval debounce: rapid s6p2 bursts (whether from one
+        firmware tripwire emission or several user-driven toggles in a
+        row) each get their own fetch so per-toggle attribution stays
+        clean during settings-correlation research. Cost is a few
+        extra HTTP round-trips per active research session."""
         from ..protocol.cfg_action import get_cfg, CfgActionError
 
         if self._protocol is None:
             return False
         if self._routed_action_in_backoff():
             return False
-        if (
-            self._cfg_fetched_at is not None
-            and time.time() - self._cfg_fetched_at < self._CFG_MIN_INTERVAL_S
-        ):
-            # Debounce — recent fetch is still authoritative. Return
-            # True so callers that interpret the result don't think
-            # this was a failure.
-            return True
         try:
             cfg = get_cfg(self._protocol.action)
         except CfgActionError as ex:
