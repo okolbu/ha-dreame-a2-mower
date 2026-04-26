@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json as _json
 import math
 import time
 from dataclasses import dataclass
@@ -138,6 +139,53 @@ RELOCATION_STATUS_TO_ICON = {
 @dataclass
 class DreameMowerSensorEntityDescription(DreameMowerEntityDescription, SensorEntityDescription):
     """Describes DreameMower sensor entity."""
+
+
+def _truncate_map_attrs_fn(device):
+    """Build the map_keys_raw attrs dict, truncating each per-key
+    value to a JSON string of at most 800 chars so the total fits
+    under HA's 16 KB recorder limit. The dashboard renders code
+    blocks at the same 800-char truncation, so no visual loss.
+
+    Small scalar values pass through unchanged. Bulky dicts/lists
+    (mowingAreas, contours, paths) become JSON strings — still
+    Markdown-friendly in the dashboard.
+    """
+    payload = getattr(device, "_latest_cloud_map_payload", None) or {}
+    out: dict = {}
+    for k, v in payload.items():
+        if isinstance(v, (int, float, bool, str)) or v is None:
+            out[k] = v
+            continue
+        try:
+            s = _json.dumps(v, default=str)
+        except Exception:
+            s = repr(v)
+        if len(s) > 800:
+            out[k] = s[:800] + f"… (truncated, full len={len(s)})"
+        else:
+            out[k] = v  # small enough to keep native
+    # Truncate old/new values inside _recent_changes the same way as
+    # top-level keys, otherwise a single big-key edit can blow past
+    # the 16 KB attrs limit on its own. Dashboard renders 800-char
+    # code blocks so no visual loss.
+    def _trunc(v):
+        if isinstance(v, (int, float, bool, str)) or v is None:
+            return v
+        try:
+            s = _json.dumps(v, default=str)
+        except Exception:
+            s = repr(v)
+        if len(s) > 800:
+            return s[:800] + f"… (truncated, full len={len(s)})"
+        return v
+    out["_recent_changes"] = {
+        k: {**d, "old": _trunc(d.get("old")), "new": _trunc(d.get("new"))}
+        for k, d in (getattr(device, "_map_recent_changes", None) or {}).items()
+    }
+    out["_last_diff"] = list(getattr(device, "_map_last_diff", None) or [])
+    out["_last_diff_at"] = getattr(device, "_map_last_diff_at", None)
+    return out
 
 
 def _cfg_key_present(key: str, min_len: int = 0):
@@ -1165,20 +1213,15 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         key="map_keys_raw",
         icon="mdi:map-search",
         entity_category=EntityCategory.DIAGNOSTIC,
-        # Enabled by default — research-active. Attributes carry the
-        # full ~150-300 KB cloud-map payload; HA handles this fine but
-        # be aware if you're parsing this externally.
+        # Enabled by default — research-active. The raw cloud-map
+        # payload can be 50-300 KB; HA's recorder rejects state
+        # attributes over 16 KB, so we serialise each key to JSON
+        # and truncate at 800 chars. The dashboard markdown card
+        # already truncates display at 800 too, so no visual loss.
         value_fn=lambda value, device: len(
             getattr(device, "_latest_cloud_map_payload", None) or {}
         ),
-        attrs_fn=lambda device: {
-            **(dict(getattr(device, "_latest_cloud_map_payload", None) or {})),
-            "_recent_changes": dict(
-                getattr(device, "_map_recent_changes", None) or {}
-            ),
-            "_last_diff": list(getattr(device, "_map_last_diff", None) or []),
-            "_last_diff_at": getattr(device, "_map_last_diff_at", None),
-        },
+        attrs_fn=lambda device: _truncate_map_attrs_fn(device),
         exists_fn=lambda description, device: True,
     ),
     # One-shot startup probe of every apk-listed routed-action GET

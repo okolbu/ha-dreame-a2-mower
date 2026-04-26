@@ -13,6 +13,16 @@ import numpy as np
 import hashlib
 import textwrap
 from datetime import datetime
+# Suppress py_mini_racer's pkg_resources DeprecationWarning. py_mini_racer
+# uses the deprecated setuptools pkg_resources API at import time; the warning
+# is upstream and irrelevant to integration users.
+import warnings
+warnings.filterwarnings(
+    "ignore",
+    message=r"pkg_resources is deprecated",
+    category=UserWarning,
+    module=r"py_mini_racer.*",
+)
 from py_mini_racer import MiniRacer
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
