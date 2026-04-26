@@ -236,6 +236,16 @@ def _side_effect_refresh_cfg(dev, value):
     dev.refresh_cfg()
 
 
+def _side_effect_refresh_settings_bundle(dev, value):
+    """Refresh CFG + OBS + AIOBS on every settings-saved tripwire.
+    OBS / AIOBS cover obstacle-avoidance + AI recognition settings
+    that are NOT in CFG (per apk endpoint catalogue) — many of
+    today's "BT-only" findings should turn out to live there."""
+    dev.refresh_cfg()
+    dev.refresh_obs()
+    dev.refresh_aiobs()
+
+
 def _side_effect_refresh_dock_pos(dev, value):
     dev.refresh_dock_pos()
 
@@ -311,13 +321,12 @@ _SIDE_EFFECTS: dict[tuple[int, int], callable] = {
     (2, 51): _side_effect_refresh_cfg,        # MULTIPLEXED_CONFIG (mapped) — settings changed
     (2, 52): _side_effect_refresh_cfg,        # mowing-prefs changed
     # s6p2 (FRAME_INFO) is the "settings-saved tripwire" — fires on
-    # every settings change including BT-only ones. Most of the BT-only
-    # catalogue was written before we could fetch CFG at all (wrong URL
-    # path), so any of those settings might actually persist to CFG and
-    # we just never noticed. Refreshing CFG on every s6p2 lets the
-    # cfg_keys_raw _last_diff dashboard surface the change immediately
-    # for clean per-toggle attribution during research.
-    (6, 2): _side_effect_refresh_cfg,
+    # every settings change including BT-only ones. Refreshes CFG +
+    # OBS + AIOBS so the toggle-research dashboard sees every config
+    # surface that might have changed (per apk endpoint catalogue,
+    # OBS holds Obstacle Avoidance Distance/Height/Pathway/etc and
+    # AIOBS holds AI Obstacle Recognition sub-toggles).
+    (6, 2): _side_effect_refresh_settings_bundle,
     (1, 51): _side_effect_refresh_dock_pos,   # dock-pos-update hint (mapped)
     (99, 20): _side_effect_lidar_object_name,
     (2, 56): _side_effect_session_status,
@@ -485,6 +494,24 @@ class DreameMowerDevice:
         # moved on that call. Reset-aware view of "what just flipped".
         self._cfg_last_diff: dict[str, tuple] = {}
         self._cfg_last_diff_at: float | None = None
+        # Same pattern for getOBS and getAIOBS (per apk: obstacle
+        # avoidance + AI obstacle recognition settings). g2408 has not
+        # been confirmed to support these endpoints; the wrappers will
+        # error-and-log on the first call if not, and the failure path
+        # short-circuits future attempts via the routed-action backoff.
+        self._obs: dict = {}
+        self._obs_fetched_at: float | None = None
+        self._aiobs: dict = {}
+        self._aiobs_fetched_at: float | None = None
+        # Per-endpoint probe results from the one-shot startup sweep.
+        # Keyed by apk endpoint name (CFG, OBS, AIOBS, LOCN, ...);
+        # value is one of:
+        #   - dict / list / scalar — the unwrapped payload
+        #   - {"_error": "<reason>"} — the call failed (404, timeout, etc.)
+        # Lets us learn empirically which apk-listed endpoints g2408
+        # actually supports without wiring each one to a sensor.
+        self._routed_endpoint_probe: dict[str, Any] = {}
+        self._routed_endpoint_probe_at: float | None = None
         # OSS object key of the most recently *announced* session-summary
         # (from the event_occured push) that we have NOT yet successfully
         # downloaded. Cleared on a successful fetch. Used so a transient
@@ -716,6 +743,13 @@ class DreameMowerDevice:
         def _initial_routed_fetches():
             self.refresh_cfg()
             self.refresh_dock_pos()
+            # One-shot endpoint discovery — learns which apk-listed
+            # routed actions g2408 actually supports. Quiet at steady
+            # state; the result populates a diagnostic sensor.
+            try:
+                self.probe_routed_endpoints()
+            except Exception as ex:  # pragma: no cover — defensive
+                _LOGGER.warning("probe_routed_endpoints failed: %s", ex)
 
         threading.Thread(target=_initial_routed_fetches, daemon=True).start()
 
@@ -6159,6 +6193,105 @@ class DreameMowerDevice:
             return False
         self._routed_action_note_success()
         _LOGGER.info("[DOCK] %s", self._dock_pos)
+        return True
+
+    def refresh_obs(self) -> bool:
+        """Fetch obstacle-avoidance settings via getOBS. Stores result
+        in self._obs and notifies listeners. Same pattern as refresh_cfg
+        — synchronous, safe from MQTT thread, governed by the shared
+        routed-action backoff."""
+        from ..protocol.cfg_action import get_obs, CfgActionError
+
+        if self._protocol is None:
+            return False
+        if self._routed_action_in_backoff():
+            return False
+        try:
+            self._obs = get_obs(self._protocol.action)
+        except CfgActionError as ex:
+            self._routed_action_note_failure(str(ex))
+            _LOGGER.warning(
+                "refresh_obs: %s (retry in %ds)",
+                ex, int(self._cfg_next_retry_at - time.time()),
+            )
+            return False
+        except Exception as ex:  # pragma: no cover — defensive
+            self._routed_action_note_failure(repr(ex))
+            _LOGGER.warning("refresh_obs: unexpected error %s", ex)
+            return False
+        self._obs_fetched_at = time.time()
+        self._routed_action_note_success()
+        _LOGGER.info("[OBS] %s", self._obs)
+        return True
+
+    def probe_routed_endpoints(self) -> None:
+        """One-shot probe of every apk-listed GET endpoint.
+
+        Calls each `m:'g', t:<target>` once and records the result
+        (or error) in `self._routed_endpoint_probe`. Does NOT update
+        the failure backoff counters because some endpoints are
+        legitimately not supported on g2408 — we want to learn that
+        without poisoning the regular fetches' health state.
+
+        Synchronous; call from an executor."""
+        from ..protocol.cfg_action import (
+            _GET_ENDPOINT_CATALOGUE,
+            probe_get,
+            CfgActionError,
+        )
+
+        if self._protocol is None:
+            return
+        results: dict = {}
+        for target in _GET_ENDPOINT_CATALOGUE:
+            try:
+                payload = probe_get(self._protocol.action, target)
+                # Unwrap one more level (most have a `d` subkey)
+                results[target] = (
+                    payload.get("d") if isinstance(payload, dict) and "d" in payload
+                    else payload
+                )
+            except CfgActionError as ex:
+                results[target] = {"_error": str(ex)}
+            except Exception as ex:  # pragma: no cover — defensive
+                results[target] = {"_error": repr(ex)}
+        self._routed_endpoint_probe = results
+        self._routed_endpoint_probe_at = time.time()
+        # Log a one-line summary at WARNING so it surfaces without
+        # log-level changes.
+        ok = [t for t, r in results.items() if not (isinstance(r, dict) and "_error" in r)]
+        fail = [t for t, r in results.items() if isinstance(r, dict) and "_error" in r]
+        _LOGGER.warning(
+            "[ROUTED_PROBE] supported=%s | failed=%s",
+            ",".join(ok), ",".join(fail),
+        )
+        self._property_changed()
+
+    def refresh_aiobs(self) -> bool:
+        """Fetch AI-obstacle settings via getAIOBS. Same pattern as
+        refresh_obs."""
+        from ..protocol.cfg_action import get_aiobs, CfgActionError
+
+        if self._protocol is None:
+            return False
+        if self._routed_action_in_backoff():
+            return False
+        try:
+            self._aiobs = get_aiobs(self._protocol.action)
+        except CfgActionError as ex:
+            self._routed_action_note_failure(str(ex))
+            _LOGGER.warning(
+                "refresh_aiobs: %s (retry in %ds)",
+                ex, int(self._cfg_next_retry_at - time.time()),
+            )
+            return False
+        except Exception as ex:  # pragma: no cover — defensive
+            self._routed_action_note_failure(repr(ex))
+            _LOGGER.warning("refresh_aiobs: unexpected error %s", ex)
+            return False
+        self._aiobs_fetched_at = time.time()
+        self._routed_action_note_success()
+        _LOGGER.info("[AIOBS] %s", self._aiobs)
         return True
 
     def call_action_opcode(self, op: int, extra: dict | None = None) -> bool:

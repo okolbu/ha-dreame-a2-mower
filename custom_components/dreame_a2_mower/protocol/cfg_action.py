@@ -72,6 +72,74 @@ def get_dock_pos(send_action) -> dict:
     return dock
 
 
+def get_obs(send_action) -> dict:
+    """Fetch obstacle-avoidance settings (Pathway Obstacle Avoidance,
+    Obstacle Avoidance Distance / Height, etc.).
+
+    Per apk catalogue (g2408 unconfirmed). Returns the raw `d` dict
+    so the caller can label keys as toggle-correlation evidence
+    accumulates."""
+    raw = send_action(
+        ROUTED_ACTION_SIID, ROUTED_ACTION_AIID, [{"m": "g", "t": "OBS"}]
+    )
+    payload = _unwrap(raw)
+    d = payload.get("d") if isinstance(payload, dict) else None
+    if not isinstance(d, dict):
+        raise CfgActionError(f"getOBS returned no `d` dict: {payload!r}")
+    return d
+
+
+def get_aiobs(send_action) -> dict:
+    """Fetch AI obstacle settings (AI Obstacle Recognition: Humans /
+    Animals / Objects, possibly Capture Photos AI Obstacles).
+
+    Per apk catalogue (g2408 unconfirmed)."""
+    raw = send_action(
+        ROUTED_ACTION_SIID, ROUTED_ACTION_AIID, [{"m": "g", "t": "AIOBS"}]
+    )
+    payload = _unwrap(raw)
+    d = payload.get("d") if isinstance(payload, dict) else None
+    if not isinstance(d, dict):
+        raise CfgActionError(f"getAIOBS returned no `d` dict: {payload!r}")
+    return d
+
+
+# All GET endpoints listed in apk.md §"GET-Befehle" that we have NOT
+# yet wired explicitly. The probe call below tries each at startup so
+# we learn empirically which ones g2408 supports.
+_GET_ENDPOINT_CATALOGUE: tuple[str, ...] = (
+    "DEV",    # device info (SN, MAC, FW)
+    "CFG",    # full settings dict (already wired separately)
+    "NET",    # network/wifi info
+    "IOT",    # IoT connection info
+    "MAPL",   # map list
+    "MAPI",   # map info for index
+    "MAPD",   # map data (chunked — may not return on a single call)
+    "DOCK",   # dock position (already wired separately)
+    "MISTA",  # current mission status
+    "MITRC",  # mission track
+    "MIHIS",  # mission history
+    "CMS",    # wear meters
+    "PIN",    # PIN status
+    "OBS",    # obstacle data (already wired separately)
+    "AIOBS",  # AI obstacle data (already wired separately)
+    "LOCN",   # GPS location (lon, lat)
+    "RPET",   # Rain Protection End Time
+    "PRE",    # preference data per-zone
+    "PREI",   # preference info
+)
+
+
+def probe_get(send_action, target: str) -> Any:
+    """Fire a generic getX routed action and return the raw payload
+    (unwrapped one level). Caller handles the per-endpoint shape;
+    this is intentionally tolerant for probe/discovery purposes."""
+    raw = send_action(
+        ROUTED_ACTION_SIID, ROUTED_ACTION_AIID, [{"m": "g", "t": target}]
+    )
+    return _unwrap(raw)
+
+
 def set_pre(send_action, pre_array: list) -> Any:
     """Write the PRE preferences array. Caller is responsible for
     read-modify-write semantics (read CFG.PRE, modify the slot,

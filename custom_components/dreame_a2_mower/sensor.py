@@ -1053,6 +1053,51 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         exists_fn=lambda description, device: True,
         available_fn=_cfg_key_present("VER"),
     ),
+    # Raw OBS dump — same pattern as cfg_keys_raw. Populated by
+    # device.refresh_obs() (apk endpoint getOBS = obstacle-avoidance
+    # settings: Pathway Obstacle Avoidance, Obstacle Avoidance
+    # Distance / Height / On Edges, etc.). Will be empty until
+    # refresh_obs runs successfully on g2408 (endpoint support is
+    # unconfirmed). Disabled-by-default diagnostic.
+    DreameMowerSensorEntityDescription(
+        key="obs_keys_raw",
+        icon="mdi:wall",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda value, device: len(getattr(device, "_obs", None) or {}),
+        attrs_fn=lambda device: dict(getattr(device, "_obs", None) or {}),
+        exists_fn=lambda description, device: True,
+    ),
+    # Raw AIOBS dump — apk endpoint getAIOBS = AI obstacle settings
+    # (AI Obstacle Recognition: Humans / Animals / Objects, photo
+    # consent, etc.). Disabled-by-default diagnostic.
+    DreameMowerSensorEntityDescription(
+        key="aiobs_keys_raw",
+        icon="mdi:eye",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda value, device: len(getattr(device, "_aiobs", None) or {}),
+        attrs_fn=lambda device: dict(getattr(device, "_aiobs", None) or {}),
+        exists_fn=lambda description, device: True,
+    ),
+    # One-shot startup probe of every apk-listed routed-action GET
+    # endpoint. State = count of endpoints that returned a non-error
+    # payload. Attributes carry the per-endpoint result (or _error
+    # marker). Lets us see at a glance which apk endpoints g2408
+    # supports without wiring each to a dedicated sensor.
+    DreameMowerSensorEntityDescription(
+        key="routed_endpoints_probe",
+        icon="mdi:radar",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda value, device: sum(
+            1 for v in (getattr(device, "_routed_endpoint_probe", None) or {}).values()
+            if not (isinstance(v, dict) and "_error" in v)
+        ),
+        attrs_fn=lambda device: dict(
+            getattr(device, "_routed_endpoint_probe", None) or {}
+        ),
+        exists_fn=lambda description, device: True,
+    ),
     DreameMowerSensorEntityDescription(
         key="cfg_keys_raw",
         icon="mdi:code-json",
