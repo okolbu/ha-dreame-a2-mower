@@ -301,3 +301,124 @@ views:
               - `{{ k }}`: `{{ v.old }}` → `{{ v.new }}`
               {%- endfor %}
               {%- endif %}
+
+          - type: markdown
+            title: OBS / AIOBS routed-action probe
+            content: |
+              {%- set obs = states.sensor.dreame_a2_mower_obs_keys_raw %}
+              {%- set aiobs = states.sensor.dreame_a2_mower_aiobs_keys_raw %}
+              {%- set probe = states.sensor.dreame_a2_mower_routed_endpoints_probe %}
+              {%- set now_ts = as_timestamp(now()) %}
+              {%- set probe_state = probe.state if probe else 'unknown' %}
+              {%- set probe_attrs = probe.attributes if probe else {} %}
+              **Routed-endpoint probe:** {{ probe_state }} of 19 endpoints accepted
+
+              {%- set ok_endpoints = [] %}
+              {%- set fail_endpoints = [] %}
+              {%- for k, v in probe_attrs.items() %}
+                {%- if k not in ('icon','friendly_name') %}
+                  {%- if v is mapping and '_error' in v %}
+                    {%- set _ = fail_endpoints.append(k) %}
+                  {%- else %}
+                    {%- set _ = ok_endpoints.append(k) %}
+                  {%- endif %}
+                {%- endif %}
+              {%- endfor %}
+              {%- if ok_endpoints %}
+              ✅ **Supported:** {{ ok_endpoints | join(', ') }}
+              {%- endif %}
+              {%- if fail_endpoints %}
+              ❌ **Failed:** {{ fail_endpoints | join(', ') }}
+              {%- endif %}
+
+              ---
+              **OBS** (Obstacle settings) — state: `{{ obs.state if obs else 'n/a' }}`
+              {%- if obs and obs.attributes %}
+              {%- set obs_keys = obs.attributes | dict %}
+              {%- set obs_real_keys = [] %}
+              {%- for k in obs_keys %}{%- if not k.startswith('_') and k not in ('icon','friendly_name') %}{%- set _ = obs_real_keys.append(k) %}{%- endif %}{%- endfor %}
+              {%- if obs_real_keys %}
+              | Key | Value |
+              |---|---|
+              {%- for k in obs_real_keys | sort %}
+              | `{{ k }}` | `{{ obs_keys[k] }}` |
+              {%- endfor %}
+              {%- elif obs.attributes.get('_last_error') %}
+              _last error: `{{ obs.attributes._last_error }}`_
+              {%- else %}
+              _no payload yet — waiting for first successful refresh_obs_
+              {%- endif %}
+              {%- endif %}
+
+              ---
+              **AIOBS** (AI obstacle settings) — state: `{{ aiobs.state if aiobs else 'n/a' }}`
+              {%- if aiobs and aiobs.attributes %}
+              {%- set aiobs_keys = aiobs.attributes | dict %}
+              {%- set aiobs_real_keys = [] %}
+              {%- for k in aiobs_keys %}{%- if not k.startswith('_') and k not in ('icon','friendly_name') %}{%- set _ = aiobs_real_keys.append(k) %}{%- endif %}{%- endfor %}
+              {%- if aiobs_real_keys %}
+              | Key | Value |
+              |---|---|
+              {%- for k in aiobs_real_keys | sort %}
+              | `{{ k }}` | `{{ aiobs_keys[k] }}` |
+              {%- endfor %}
+              {%- elif aiobs.attributes.get('_last_error') %}
+              _last error: `{{ aiobs.attributes._last_error }}`_
+              {%- else %}
+              _no payload yet — waiting for first successful refresh_aiobs_
+              {%- endif %}
+              {%- endif %}
+
+          - type: markdown
+            title: Cloud MAP toggle-research view
+            content: |
+              {%- set m = states.sensor.dreame_a2_mower_map_keys_raw %}
+              {%- set attrs = m.attributes if m else {} %}
+              {%- set recent = attrs.get('_recent_changes', {}) %}
+              {%- set last_diff = attrs.get('_last_diff', []) %}
+              {%- set diff_at = attrs.get('_last_diff_at') %}
+              {%- set now_ts = as_timestamp(now()) %}
+              {#- Identified MAP keys we already consume in the camera
+                  rebuild — anything else is research territory. -#}
+              {%- set known_map_keys = ['boundary','mowingAreas','forbiddenAreas','contours','cleanPoints','md5sum','mapIndex','name','hasBack','merged','totalArea'] %}
+              {%- if attrs %}
+              | Key | Type / Value | Last changed |
+              |---|---|---|
+              {%- for k in attrs | sort %}
+                {%- if not k.startswith('_') and k not in ('icon','friendly_name') %}
+                  {%- set is_unknown = k not in known_map_keys %}
+                  {%- set marker = '🔴 ' if is_unknown else '' %}
+                  {%- set v = attrs[k] %}
+                  {%- if v is mapping %}
+                    {%- set vshow = 'dict(len=' ~ (v | length) ~ ')' %}
+                  {%- elif v is iterable and v is not string %}
+                    {%- set vshow = 'list(len=' ~ (v | length) ~ ')' %}
+                  {%- else %}
+                    {%- set vshow = (v | string)[:80] %}
+                  {%- endif %}
+                  {%- set rc = recent.get(k) %}
+                  {%- if rc %}
+                    {%- set age = (now_ts - rc.changed_at) | round(0) | int %}
+                    {%- if age < 60 %}{%- set tag = '🔴 ' ~ age ~ 's ago' %}
+                    {%- elif age < 300 %}{%- set tag = '🟠 ' ~ (age // 60) ~ 'm ago' %}
+                    {%- else %}{%- set tag = (age // 60) ~ 'm ago' %}{%- endif %}
+                  {%- else %}
+                    {%- set tag = '—' %}
+                  {%- endif %}
+              | {{ marker }}`{{ k }}` | `{{ vshow }}` | {{ tag }} |
+                {%- endif %}
+              {%- endfor %}
+
+              🔴 = unknown / unconsumed key (toggle-research target).
+              {%- if last_diff %}
+
+              **Last MAP refetch diff** ({{ last_diff | length }} key(s)):
+              {%- for k in last_diff %}
+              - `{{ k }}`{% if recent.get(k) %} — was `{{ recent[k].old_kind }}`, now `{{ recent[k].new_kind }}`{% endif %}
+              {%- endfor %}
+              {%- else %}
+              _No diff seen yet (map hasn't been refetched since boot)._
+              {%- endif %}
+              {%- else %}
+              _Enable `sensor.map_keys_raw` from the device page to populate this view._
+              {%- endif %}
