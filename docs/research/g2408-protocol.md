@@ -1002,10 +1002,10 @@ WRF, WRP. This includes settings previously thought to be BT-only:
   with a map-draw component (per-pathway zone geometry); that zone data
   may still live in the cloud MAP.* dataset, but the on/off state of
   the feature itself is BT-local.
-- Obstacle Avoidance on Edges
 - **Mowing Direction** (incl. sub-settings — Crisscross / Chequerboard / 180°/90°) — re-confirmed 2026-04-26 alpha.140 with both `cfg_keys_raw _last_diff` and `s6p2` element-decode visible. Toggle fires `s6p2` as the "settings-saved tripwire" but every element of the frame stays unchanged — the value is BT-local.
 - **Automatic Edge Mowing** — confirmed BT-only 2026-04-26 alpha.140 via toggle test. Same signature as Mowing Direction: s6p2 tripwire fires, no frame element flips.
 - **Safe Edge Mowing** — confirmed BT-only 2026-04-26 alpha.140 via toggle test. Same signature.
+- **Obstacle Avoidance on Edges** — confirmed BT-only 2026-04-26 alpha.140 via toggle test. Same signature (s6p2 tripwire, no frame element flips).
 - LiDAR Obstacle Recognition — not yet re-tested.
 - AI Obstacle Recognition sub-toggles (Humans / Animals / Objects) — not yet re-tested.
 
