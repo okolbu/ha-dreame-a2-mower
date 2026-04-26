@@ -179,6 +179,8 @@ views:
               - entity: sensor.dreame_a2_mower_robot_voice_volume
               - entity: sensor.dreame_a2_mower_voice_prompt_modes
               - entity: sensor.dreame_a2_mower_charging_config
+              - entity: sensor.dreame_a2_mower_designated_ignore_zones
+                name: Designated Ignore Zones
               - entity: sensor.dreame_a2_mower_weather_reference
               - entity: sensor.dreame_a2_mower_headlight_enabled
               - entity: sensor.dreame_a2_mower_headlight_schedule
@@ -418,9 +420,28 @@ views:
               🔴 = unknown / unconsumed key (toggle-research target).
               {%- if last_diff %}
 
-              **Last MAP refetch diff** ({{ last_diff | length }} key(s)):
+              **Last MAP refetch diff** ({{ last_diff | length }} key(s) changed):
               {%- for k in last_diff %}
-              - `{{ k }}`{% if recent.get(k) %} — was `{{ recent[k].old_kind }}`, now `{{ recent[k].new_kind }}`{% endif %}
+              {%- set rc = recent.get(k) %}
+              {%- if rc %}
+
+              ### `{{ k }}`
+              _was `{{ rc.old_kind }}`, now `{{ rc.new_kind }}`_
+
+              **before:**
+              ```json
+              {%- set old_str = (rc.old | to_json) %}
+              {{ old_str[:800] }}{% if old_str | length > 800 %}… (truncated, full len={{ old_str | length }}){% endif %}
+              ```
+
+              **after:**
+              ```json
+              {%- set new_str = (rc.new | to_json) %}
+              {{ new_str[:800] }}{% if new_str | length > 800 %}… (truncated, full len={{ new_str | length }}){% endif %}
+              ```
+              {%- else %}
+              - `{{ k }}` (no diff details)
+              {%- endif %}
               {%- endfor %}
               {%- else %}
               _No diff seen yet (map hasn't been refetched since boot)._

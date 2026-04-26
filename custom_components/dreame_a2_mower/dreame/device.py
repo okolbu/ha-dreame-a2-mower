@@ -2315,10 +2315,18 @@ class DreameMowerDevice:
                 for k in sorted(set(prev.keys()) | set(map_json.keys())):
                     if prev.get(k) != map_json.get(k):
                         changed_keys.append(k)
+                        # Store both kind summary AND actual old/new
+                        # values so the dashboard can render a real
+                        # deep diff (length-only summaries miss
+                        # in-place edits like resize/move where the
+                        # outer length stays the same but nested
+                        # coords change).
                         self._map_recent_changes[k] = {
                             "changed_at": now,
                             "old_kind": _kind(prev.get(k)) if k in prev else "<missing>",
                             "new_kind": _kind(map_json.get(k)) if k in map_json else "<missing>",
+                            "old": prev.get(k),
+                            "new": map_json.get(k),
                         }
                 self._latest_cloud_map_payload = dict(map_json)
                 self._latest_cloud_map_payload_at = now

@@ -1103,6 +1103,64 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # see which keys flip when settings or zones change. Disabled-by-
     # default diagnostic; expect ~150-300 KB of attribute data when
     # enabled.
+    # Designated Ignore Obstacle Zones — read from the cloud MAP.*
+    # forbiddenAreas key (confirmed 2026-04-26). Each zone is a
+    # 2-element [id, {id, type, shapeType, path, angle}] entry.
+    # The `id` here matches the s2p50 entity id from the create
+    # event, so this sensor + the s2p50 opcode log together give
+    # full lifecycle visibility.
+    #
+    # State = number of zones currently defined.
+    # Attributes:
+    #   zones: list of {id, type, shape_type, corner_count, angle_deg,
+    #          path: [...]} — full geometry preserved for downstream
+    #          consumers (automations, custom cards).
+    DreameMowerSensorEntityDescription(
+        key="designated_ignore_zones",
+        icon="mdi:shape-polygon-plus",
+        value_fn=lambda value, device: len(
+            (
+                getattr(device, "_latest_cloud_map_payload", None)
+                or {}
+            ).get("forbiddenAreas", {}).get("value", [])
+            if isinstance(
+                (
+                    getattr(device, "_latest_cloud_map_payload", None)
+                    or {}
+                ).get("forbiddenAreas"),
+                dict,
+            )
+            else []
+        ),
+        attrs_fn=lambda device: {
+            "zones": [
+                {
+                    "id": (entry[1] if isinstance(entry, list) else entry).get("id"),
+                    "type": (entry[1] if isinstance(entry, list) else entry).get("type"),
+                    "shape_type": (entry[1] if isinstance(entry, list) else entry).get("shapeType"),
+                    "corner_count": len(
+                        (entry[1] if isinstance(entry, list) else entry).get("path") or []
+                    ),
+                    "angle_deg": (entry[1] if isinstance(entry, list) else entry).get("angle"),
+                    "path": (entry[1] if isinstance(entry, list) else entry).get("path", []),
+                }
+                for entry in (
+                    (
+                        getattr(device, "_latest_cloud_map_payload", None) or {}
+                    ).get("forbiddenAreas", {}).get("value", [])
+                    if isinstance(
+                        (
+                            getattr(device, "_latest_cloud_map_payload", None) or {}
+                        ).get("forbiddenAreas"),
+                        dict,
+                    )
+                    else []
+                )
+                if isinstance(entry, (list, dict))
+            ],
+        },
+        exists_fn=lambda description, device: True,
+    ),
     DreameMowerSensorEntityDescription(
         key="map_keys_raw",
         icon="mdi:map-search",

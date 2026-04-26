@@ -1436,14 +1436,26 @@ md5sum, mapIndex, name, hasBack, merged, totalArea`). The other
 
 | Key | Shape (g2408) | Semantic |
 |---|---|---|
+| `forbiddenAreas` | `{dataType:'Map', value:[[zone_id, {id, type, shapeType, path:[{x,y}…], angle}]…]}` | **All cloud-stored "ignore obstacle" + classic exclusion zones**. Confirmed 2026-04-26: drawing a Designated Ignore Obstacle Zone in the app produced an `s2p50 o:234 id=101` followed by a `forbiddenAreas` entry keyed by 101 with the rotated-rectangle geometry. The `id` field always matches the s2p50 entity id from create / delete events, so `s2p50` opcodes + `forbiddenAreas` content together give full lifecycle visibility. `type` is presumed to enumerate zone subclass (observed `2` for an Ignore Obstacle zone — other types likely include classic no-go zones, slope warnings). `shapeType` enumerates polygon kind (observed `2` for rotated rectangle — other values for free-form polygons / circles likely). `path` is a list of `{x,y}` mm corners in cloud frame; `angle` is the rotation of the bounding rectangle in degrees. Surfaced as `sensor.designated_ignore_zones` (state = zone count, attrs.zones carries per-zone `{id, type, shape_type, corner_count, angle_deg, path}`). |
 | `contours` | `{dataType:'Map', value:[[[map_id, ?], {id, type, shapeType, path:[{x,y},…]}]]}` | **Actual lawn outline polyline** (52-point polygon on a ~384 m² lawn). More detailed than the axis-aligned `boundary` rectangle. **Consumed since alpha.91**: drawn on the base-map PNG as a 2-px `WALL` outline in `_build_map_from_cloud_data` so the real grass perimeter is visible over zone fills. |
 | `cleanPoints` | `{dataType:'Map', value:[[pt_id, {id, type, shapeType, path:[{x,y}]}]…]}` | **Maintenance Points** — one or more user-pinned markers in the app. Live sample 2026-04-24 has one entry at `(2820, 12760)` mm in cloud frame; user confirmed the app supports multiple per map and the operator picks which one to target when dispatching a maintenance run. **Consumed since alpha.91 (multi-point support since alpha.93)**: `sensor.maintenance_points_count` carries the full list in attributes (each `{id, x_mm, y_mm}`); `sensor.maintenance_point_x_mm` / `_y_mm` show the first point's coords for quick reference. The `dreame_a2_mower.mower_go_to_maintenance_point` service takes an optional `point_id` to select a specific point, or defaults to the first. |
 | `cruisePoints` | `{dataType:'Map', value:[]}` on our capture | Patrol/cruise points the mower visits in sequence. Empty when unused. |
 | `cut` | `[]` | Always empty on our captures. Purpose unknown — possibly cut-line geometry for zone boundaries. |
-| `notObsAreas` | `{dataType:'Map', value:[]}` | "No-obstacle-detection" zones — regions where the LiDAR obstacle-detection is disabled. Empty when unused. |
-| `obstacles` | `{dataType:'Map', value:[]}` | Obstacle markers (static obstacles registered on the map). Empty when unused. |
+| `notObsAreas` | `{dataType:'Map', value:[]}` empty on our captures | Originally hypothesised as the Designated Ignore Obstacle storage, but empirically wrong — those go in `forbiddenAreas` (above). Best remaining guess: storage for Pathway Obstacle Avoidance zones (only set when the user has defined a multi-lawn blades-up traversal path, which we haven't tested). |
+| `obstacles` | `{dataType:'Map', value:[]}` | Auto-detected runtime obstacles (typically populated during/after a mow run, not by user drawings). |
 | `paths` | `{dataType:'Map', value:[]}` | Historical/planned mow paths. Empty on our captures — may populate during an active mowing session (not verified). |
 | `spotAreas` | `{dataType:'Map', value:[]}` | Spot mowing areas (small targeted zones). Empty when unused. |
+
+**`s2p50` ↔ `forbiddenAreas` correlation table** (2026-04-26 captures):
+
+| Action | s2p50 opcode | Effect on `forbiddenAreas` |
+|---|---|---|
+| Create new ignore zone | `o:234 id=N ids:[]` | New entry added at key N (the firmware-assigned id) |
+| Resize existing zone | `o:234 id=N ids:[]` | Existing entry at key N updated with new `path` / `angle` |
+| Delete zone | `o:218 id=N ids:[]` | Entry at key N removed |
+| Move existing zone | (different opcode pattern, not yet captured) | Likely entry at key N updated with new `path` |
+
+Every saved op trails an `o:201 status:true error:0` completion push that the integration uses as the universal "refetch + rebuild map" trigger.
 
 The uniform `{dataType:'Map', value:[...]}` wrapper suggests a
 generic Map-with-entries container — each `value` is a list of
