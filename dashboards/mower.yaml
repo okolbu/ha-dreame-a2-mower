@@ -260,10 +260,16 @@ views:
               {%- endif %}
 
               {%- if all_attrs %}
+              {#- Keys whose semantic meaning is identified. Anything
+                  outside this set gets a 🔴 marker so the unknown ones
+                  stand out as toggle-research targets. -#}
+              {%- set known_keys = ['AOP','ATA','BAT','CLS','CMS','DND','FDP','LANG','LIT','LOW','PROT','REC','STUN','TIME','VER','VOICE','VOL','WRF','WRP'] %}
               | Key | Value | Last changed |
               |---|---|---|
               {%- for k in all_attrs | sort %}
                 {%- if not k.startswith('_') and k not in ('icon','friendly_name') %}
+                  {%- set is_unknown = k not in known_keys %}
+                  {%- set key_label = ('🔴 `' ~ k ~ '`') if is_unknown else ('`' ~ k ~ '`') %}
                   {%- set changed = changes.get(k) %}
                   {%- if changed %}
                     {%- set age = (now_ts - changed.changed_at) | round(0) | int %}
@@ -274,13 +280,15 @@ views:
                     {%- else %}
                       {%- set tag = (age // 60) ~ 'm ago' %}
                     {%- endif %}
-                    {%- set ns.rows = ns.rows + ['| `' ~ k ~ '` | `' ~ all_attrs[k] ~ '` | ' ~ tag ~ ' (was `' ~ changed.old ~ '`) |'] %}
+                    {%- set ns.rows = ns.rows + ['| ' ~ key_label ~ ' | `' ~ all_attrs[k] ~ '` | ' ~ tag ~ ' (was `' ~ changed.old ~ '`) |'] %}
                   {%- else %}
-                    {%- set ns.rows = ns.rows + ['| `' ~ k ~ '` | `' ~ all_attrs[k] ~ '` | — |'] %}
+                    {%- set ns.rows = ns.rows + ['| ' ~ key_label ~ ' | `' ~ all_attrs[k] ~ '` | — |'] %}
                   {%- endif %}
                 {%- endif %}
               {%- endfor %}
               {{ ns.rows | join('\n') }}
+
+              🔴 = unknown key — a candidate for toggle-correlation research.
               {%- else %}
               _Enable `sensor.dreame_a2_mower_cfg_keys_raw` from the device
               page (disabled-by-default diagnostic) to see CFG keys here._
