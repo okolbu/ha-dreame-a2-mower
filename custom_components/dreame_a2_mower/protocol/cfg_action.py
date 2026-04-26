@@ -30,14 +30,33 @@ def _unwrap(result: Any) -> Any:
     """Unwrap the cloud envelope. The protocol's send-action path
     returns `{"result": {"out": [<payload>]}}` on success and various
     error shapes on failure. We accept any shape that yields an
-    `out[0]` mapping; everything else raises."""
+    `out[0]` mapping; everything else raises.
+
+    The unwrapped payload may itself be a Dreame application-level
+    error: `{'m': 'r', 'q': <id>, 'r': <code>}` where `r != 0` means
+    the endpoint rejected the request (e.g. unsupported on this
+    firmware, missing parameters). We surface this with a specific
+    error message so callers can distinguish it from a transport
+    failure and skip wasteful retries."""
     if not isinstance(result, dict):
         raise CfgActionError(f"unexpected result type: {type(result).__name__}")
     inner = result.get("result", result)  # tolerate flat or nested
     out = inner.get("out") if isinstance(inner, dict) else None
     if not isinstance(out, list) or not out:
         raise CfgActionError(f"action returned no `out`: {result!r}")
-    return out[0]
+    payload = out[0]
+    # Dreame error envelope detection.
+    if (
+        isinstance(payload, dict)
+        and payload.get("m") == "r"
+        and "r" in payload
+        and payload["r"] != 0
+    ):
+        raise CfgActionError(
+            f"endpoint returned Dreame error r={payload['r']} "
+            f"(likely not supported on this firmware): {payload!r}"
+        )
+    return payload
 
 
 def get_cfg(send_action) -> dict:

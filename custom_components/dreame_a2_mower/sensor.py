@@ -1056,28 +1056,62 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # Raw OBS dump — same pattern as cfg_keys_raw. Populated by
     # device.refresh_obs() (apk endpoint getOBS = obstacle-avoidance
     # settings: Pathway Obstacle Avoidance, Obstacle Avoidance
-    # Distance / Height / On Edges, etc.). Will be empty until
-    # refresh_obs runs successfully on g2408 (endpoint support is
-    # unconfirmed). Disabled-by-default diagnostic.
+    # Distance / Height / On Edges, etc.). State = key count when
+    # populated, else the last app-level error message. Disabled-by-
+    # default diagnostic.
     DreameMowerSensorEntityDescription(
         key="obs_keys_raw",
         icon="mdi:wall",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        value_fn=lambda value, device: len(getattr(device, "_obs", None) or {}),
-        attrs_fn=lambda device: dict(getattr(device, "_obs", None) or {}),
+        value_fn=lambda value, device: (
+            len(getattr(device, "_obs", None) or {})
+            if (getattr(device, "_obs", None) or getattr(device, "_obs_fetched_at", None))
+            else (getattr(device, "_obs_last_error", None) or "no_data")
+        ),
+        attrs_fn=lambda device: {
+            **(dict(getattr(device, "_obs", None) or {})),
+            "_last_error": getattr(device, "_obs_last_error", None),
+            "_fetched_at": getattr(device, "_obs_fetched_at", None),
+        },
         exists_fn=lambda description, device: True,
     ),
     # Raw AIOBS dump — apk endpoint getAIOBS = AI obstacle settings
     # (AI Obstacle Recognition: Humans / Animals / Objects, photo
-    # consent, etc.). Disabled-by-default diagnostic.
+    # consent, etc.). Same state semantics as obs_keys_raw.
     DreameMowerSensorEntityDescription(
         key="aiobs_keys_raw",
         icon="mdi:eye",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        value_fn=lambda value, device: len(getattr(device, "_aiobs", None) or {}),
-        attrs_fn=lambda device: dict(getattr(device, "_aiobs", None) or {}),
+        value_fn=lambda value, device: (
+            len(getattr(device, "_aiobs", None) or {})
+            if (getattr(device, "_aiobs", None) or getattr(device, "_aiobs_fetched_at", None))
+            else (getattr(device, "_aiobs_last_error", None) or "no_data")
+        ),
+        attrs_fn=lambda device: {
+            **(dict(getattr(device, "_aiobs", None) or {})),
+            "_last_error": getattr(device, "_aiobs_last_error", None),
+            "_fetched_at": getattr(device, "_aiobs_fetched_at", None),
+        },
+        exists_fn=lambda description, device: True,
+    ),
+    # Raw cloud MAP.* payload dump — exposes all 17 top-level keys
+    # the Dreame cloud returns so toggle-correlation research can
+    # see which keys flip when settings or zones change. Disabled-by-
+    # default diagnostic; expect ~150-300 KB of attribute data when
+    # enabled.
+    DreameMowerSensorEntityDescription(
+        key="map_keys_raw",
+        icon="mdi:map-search",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=lambda value, device: len(
+            getattr(device, "_latest_cloud_map_payload", None) or {}
+        ),
+        attrs_fn=lambda device: dict(
+            getattr(device, "_latest_cloud_map_payload", None) or {}
+        ),
         exists_fn=lambda description, device: True,
     ),
     # One-shot startup probe of every apk-listed routed-action GET

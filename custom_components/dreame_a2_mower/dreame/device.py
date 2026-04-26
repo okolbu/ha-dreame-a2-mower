@@ -515,8 +515,16 @@ class DreameMowerDevice:
         # short-circuits future attempts via the routed-action backoff.
         self._obs: dict = {}
         self._obs_fetched_at: float | None = None
+        self._obs_last_error: str | None = None
         self._aiobs: dict = {}
         self._aiobs_fetched_at: float | None = None
+        self._aiobs_last_error: str | None = None
+        # Cached cloud MAP.* payload (parsed JSON dict, all 17 keys).
+        # Populated by _build_map_from_cloud_data after each MAP fetch.
+        # Powers the map_keys_raw diagnostic sensor for unconsumed-
+        # key research (cruisePoints / notObsAreas / obstacles / etc.).
+        self._latest_cloud_map_payload: dict = {}
+        self._latest_cloud_map_payload_at: float | None = None
         # Per-endpoint probe results from the one-shot startup sweep.
         # Keyed by apk endpoint name (CFG, OBS, AIOBS, LOCN, ...);
         # value is one of:
@@ -2263,6 +2271,13 @@ class DreameMowerDevice:
                     elif isinstance(item, dict) and ("boundary" in item or "mowingAreas" in item):
                         map_json = item
                         break
+
+            # Cache the parsed cloud map JSON so diagnostic sensors
+            # (map_keys_raw) can expose unconsumed top-level keys for
+            # toggle-correlation research without re-fetching.
+            if isinstance(map_json, dict):
+                self._latest_cloud_map_payload = dict(map_json)
+                self._latest_cloud_map_payload_at = time.time()
 
             # One-shot schema dump per HA process, WARNING-level so users
             # running at `logger.default: warning` see it without bumping
@@ -6211,9 +6226,12 @@ class DreameMowerDevice:
 
     def refresh_obs(self) -> bool:
         """Fetch obstacle-avoidance settings via getOBS. Stores result
-        in self._obs and notifies listeners. Same pattern as refresh_cfg
-        — synchronous, safe from MQTT thread, governed by the shared
-        routed-action backoff."""
+        in self._obs and notifies listeners. Application-level errors
+        (Dreame `r != 0`) record the last error code on the device but
+        do NOT trigger transport backoff — `r=-3` may simply mean
+        "no manually-drawn obstacles configured yet" rather than a
+        true endpoint failure, so we want to keep retrying on each
+        s6p2 trigger in case the user adds data via the app."""
         from ..protocol.cfg_action import get_obs, CfgActionError
 
         if self._protocol is None:
@@ -6223,6 +6241,11 @@ class DreameMowerDevice:
         try:
             self._obs = get_obs(self._protocol.action)
         except CfgActionError as ex:
+            if "Dreame error r=" in str(ex):
+                self._obs_last_error = str(ex)
+                _LOGGER.info("refresh_obs: app-level error %s (will retry on next trigger)", ex)
+                self._property_changed()
+                return False
             self._routed_action_note_failure(str(ex))
             _LOGGER.warning(
                 "refresh_obs: %s (retry in %ds)",
@@ -6234,6 +6257,7 @@ class DreameMowerDevice:
             _LOGGER.warning("refresh_obs: unexpected error %s", ex)
             return False
         self._obs_fetched_at = time.time()
+        self._obs_last_error = None
         self._routed_action_note_success()
         _LOGGER.info("[OBS] %s", self._obs)
         return True
@@ -6282,8 +6306,9 @@ class DreameMowerDevice:
         self._property_changed()
 
     def refresh_aiobs(self) -> bool:
-        """Fetch AI-obstacle settings via getAIOBS. Same pattern as
-        refresh_obs."""
+        """Fetch AI-obstacle settings via getAIOBS. Same retry semantics
+        as refresh_obs — Dreame app-level errors don't trigger transport
+        backoff so we keep trying on every settings-saved tripwire."""
         from ..protocol.cfg_action import get_aiobs, CfgActionError
 
         if self._protocol is None:
@@ -6293,6 +6318,11 @@ class DreameMowerDevice:
         try:
             self._aiobs = get_aiobs(self._protocol.action)
         except CfgActionError as ex:
+            if "Dreame error r=" in str(ex):
+                self._aiobs_last_error = str(ex)
+                _LOGGER.info("refresh_aiobs: app-level error %s (will retry on next trigger)", ex)
+                self._property_changed()
+                return False
             self._routed_action_note_failure(str(ex))
             _LOGGER.warning(
                 "refresh_aiobs: %s (retry in %ds)",
