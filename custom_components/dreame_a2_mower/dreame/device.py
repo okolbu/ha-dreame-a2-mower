@@ -310,6 +310,15 @@ def _side_effect_self_check(dev, value):
 _SIDE_EFFECTS: dict[tuple[int, int], callable] = {
     (2, 51): _side_effect_refresh_cfg,        # MULTIPLEXED_CONFIG (mapped) — settings changed
     (2, 52): _side_effect_refresh_cfg,        # mowing-prefs changed
+    # s6p2 (FRAME_INFO) is the "settings-saved tripwire" — fires on
+    # every settings change including BT-only ones. Most of the BT-only
+    # catalogue was written before we could fetch CFG at all (wrong URL
+    # path), so any of those settings might actually persist to CFG and
+    # we just never noticed. Refreshing CFG on every s6p2 lets the
+    # cfg_keys_raw _last_diff dashboard surface the change immediately.
+    # The 5s min-interval gate inside refresh_cfg dedupes the 2-3 rapid
+    # tripwire emissions per single user toggle.
+    (6, 2): _side_effect_refresh_cfg,
     (1, 51): _side_effect_refresh_dock_pos,   # dock-pos-update hint (mapped)
     (99, 20): _side_effect_lidar_object_name,
     (2, 56): _side_effect_session_status,
@@ -5980,6 +5989,12 @@ class DreameMowerDevice:
         self._cfg_success_count += 1
         self._property_changed()
 
+    # Minimum interval between successful CFG fetches — dedupes the
+    # 2-3 rapid s6p2 tripwire emissions per single user toggle. Tuned
+    # to be longer than typical s6p2 burst spacing (~1.5 s) but well
+    # under any plausible polling cadence.
+    _CFG_MIN_INTERVAL_S = 5
+
     def refresh_cfg(self) -> bool:
         """Fetch the full settings dict via the routed action. Stores the
         result in `self._cfg` and returns True on success. Logs + returns
@@ -5992,6 +6007,14 @@ class DreameMowerDevice:
             return False
         if self._routed_action_in_backoff():
             return False
+        if (
+            self._cfg_fetched_at is not None
+            and time.time() - self._cfg_fetched_at < self._CFG_MIN_INTERVAL_S
+        ):
+            # Debounce — recent fetch is still authoritative. Return
+            # True so callers that interpret the result don't think
+            # this was a failure.
+            return True
         try:
             cfg = get_cfg(self._protocol.action)
         except CfgActionError as ex:
