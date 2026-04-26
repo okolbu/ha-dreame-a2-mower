@@ -1848,6 +1848,7 @@ class Area:
         y2: float,
         x3: float,
         y3: float,
+        subtype: str | None = None,
     ) -> None:
         self.x0 = x0
         self.y0 = y0
@@ -1857,6 +1858,12 @@ class Area:
         self.y2 = y2
         self.x3 = x3
         self.y3 = y3
+        # Optional discriminator so the renderer can colour subgroups
+        # of forbidden areas differently (e.g. "ignore" for Designated
+        # Ignore Obstacle zones, drawn green; None / "no_go" for
+        # classic exclusion zones, drawn red). Defaults to None to
+        # preserve equality semantics for existing callers.
+        self.subtype = subtype
 
     def __eq__(self, other) -> bool:
         if not isinstance(other, Area):
@@ -2622,6 +2629,11 @@ class MapRendererColorScheme:
     neglected_segment: tuple[int] = (255, 159, 10, 110)
     no_go: tuple[int] = (177, 0, 0, 50)
     no_go_outline: tuple[int] = (199, 0, 0, 200)
+    # Designated Ignore Obstacle zones (forbiddenAreas with type=2).
+    # The Dreame app draws them green to distinguish from regular
+    # red exclusion zones — matches user expectation.
+    ignore_obstacle: tuple[int] = (0, 177, 0, 50)
+    ignore_obstacle_outline: tuple[int] = (0, 149, 0, 200)
     virtual_wall: tuple[int] = (199, 0, 0, 200)
     pathway: tuple[int] = (23, 111, 244, 200)
     active_area: tuple[int] = (255, 255, 255, 80)

@@ -2422,7 +2422,11 @@ class DreameMowerDevice:
             # the tilt direction before reflection so final output
             # matches the app.
             forbidden_pre = map_json.get("forbiddenAreas", {}).get("value", [])
-            rotated_forbidden: list[tuple[int, list[dict]]] = []
+            # Tuples carry (zone_id, rotated_path, subtype) so the
+            # downstream renderer can colour Designated Ignore zones
+            # (forbiddenAreas type=2) green and classic exclusion
+            # zones red. type field is per the cloud schema (§7.8).
+            rotated_forbidden: list[tuple[int, list[dict], str | None]] = []
             for entry in forbidden_pre:
                 if isinstance(entry, list) and len(entry) >= 2:
                     zid = entry[0]
@@ -2438,14 +2442,19 @@ class DreameMowerDevice:
                 raw_angle = zdata.get("angle")
                 rot_angle = -raw_angle if raw_angle is not None else None
                 rp = _rotate_path_around_centroid(path, rot_angle)
-                rotated_forbidden.append((zid, rp))
+                # Discriminate area subtype: type=2 is Designated
+                # Ignore Obstacle (rendered green); other types
+                # (presumed 0/1 = classic no-go) render red.
+                ztype = zdata.get("type") if isinstance(zdata, dict) else None
+                subtype = "ignore" if ztype == 2 else None
+                rotated_forbidden.append((zid, rp, subtype))
 
             # Expand the bbox to include every rotated exclusion corner.
             bx1 = bx1_raw
             by1 = by1_raw
             bx2 = bx2_raw
             by2 = by2_raw
-            for _zid, rp in rotated_forbidden:
+            for _zid, rp, _sub in rotated_forbidden:
                 for pt in rp:
                     x, y = int(pt["x"]), int(pt["y"])
                     if x < bx1:
@@ -2525,7 +2534,7 @@ class DreameMowerDevice:
             x_reflect = bx1 + bx2
             y_reflect = by1 + by2
             no_go_areas = []
-            for _zid, rotated_path in rotated_forbidden:
+            for _zid, rotated_path, subtype in rotated_forbidden:
                 if len(rotated_path) >= 4:
                     # Area objects drive the renderer's semi-transparent
                     # `no_go` colour (so the lawn zone below stays
@@ -2536,6 +2545,7 @@ class DreameMowerDevice:
                         int(x_reflect - rotated_path[1]["x"]), int(y_reflect - rotated_path[1]["y"]),
                         int(x_reflect - rotated_path[2]["x"]), int(y_reflect - rotated_path[2]["y"]),
                         int(x_reflect - rotated_path[3]["x"]), int(y_reflect - rotated_path[3]["y"]),
+                        subtype=subtype,
                     ))
                 # However, the renderer also auto-crops the canvas to
                 # the bbox of non-OUTSIDE pixels in pixel_type — so if we

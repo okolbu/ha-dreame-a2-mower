@@ -4457,15 +4457,47 @@ class DreameMowerMapRenderer:
                 or not cached_layers.get(layer)
             ):
                 changes.append(layer)
-                cached_layers[layer] = self.render_areas(
-                    map_data.no_go_areas,
-                    self.color_scheme.no_go_outline,
-                    self.color_scheme.no_go,
-                    layer_size,
-                    map_data.dimensions,
-                    border_width,
-                    scale,
-                )
+                # Split forbidden areas by subtype: classic exclusion
+                # (red) vs Designated Ignore Obstacle (green). Render
+                # in two passes onto the same layer canvas so a single
+                # layer cache holds both. See Area.subtype + the
+                # `ignore_obstacle` colour scheme entry (types.py).
+                normal_areas = [
+                    a for a in map_data.no_go_areas
+                    if getattr(a, "subtype", None) != "ignore"
+                ]
+                ignore_areas = [
+                    a for a in map_data.no_go_areas
+                    if getattr(a, "subtype", None) == "ignore"
+                ]
+                rendered = None
+                if normal_areas:
+                    rendered = self.render_areas(
+                        normal_areas,
+                        self.color_scheme.no_go_outline,
+                        self.color_scheme.no_go,
+                        layer_size,
+                        map_data.dimensions,
+                        border_width,
+                        scale,
+                    )
+                if ignore_areas:
+                    ignore_rendered = self.render_areas(
+                        ignore_areas,
+                        getattr(self.color_scheme, "ignore_obstacle_outline",
+                                self.color_scheme.no_go_outline),
+                        getattr(self.color_scheme, "ignore_obstacle",
+                                self.color_scheme.no_go),
+                        layer_size,
+                        map_data.dimensions,
+                        border_width,
+                        scale,
+                    )
+                    if rendered is not None and ignore_rendered is not None:
+                        rendered = Image.alpha_composite(rendered, ignore_rendered)
+                    else:
+                        rendered = ignore_rendered
+                cached_layers[layer] = rendered
         elif self._cache and cached_layers.get(layer):
             changes.append(layer)
             del cached_layers[layer]
