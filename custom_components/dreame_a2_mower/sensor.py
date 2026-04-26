@@ -1272,6 +1272,40 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # Matters because a silent hard-disable previously blinded all
     # CFG-derived entities with no user-visible signal (see device.py
     # _routed_action_note_failure).
+    # MAP fetch health — explicit instrumentation so the user can tell
+    # whether the integration's cloud-MAP refetches are succeeding (and
+    # returning unchanged md5 = no new data) vs failing silently. The
+    # alpha.148 s1p50 → cloud-map-poll wiring relies on this surface
+    # being healthy. Enabled by default since silent-failure is the
+    # whole bug class this sensor exists to surface.
+    DreameMowerSensorEntityDescription(
+        key="map_fetch_health",
+        icon="mdi:map-clock",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda value, device: (
+            "ok"
+            if (
+                getattr(device, "_map_fetch_attempts", 0) > 0
+                and getattr(device, "_map_fetch_last_error", None) is None
+            )
+            else (
+                "error"
+                if getattr(device, "_map_fetch_last_error", None)
+                else "no_data"
+            )
+        ),
+        attrs_fn=lambda device: {
+            "attempts": getattr(device, "_map_fetch_attempts", 0),
+            "successes": getattr(device, "_map_fetch_successes", 0),
+            "unchanged": getattr(device, "_map_fetch_unchanged", 0),
+            "failures": getattr(device, "_map_fetch_failures", 0),
+            "last_md5": getattr(device, "_map_fetch_last_md5", None),
+            "last_error": getattr(device, "_map_fetch_last_error", None),
+            "last_error_ts": getattr(device, "_map_fetch_last_error_ts", None),
+            "last_attempt_ts": getattr(device, "_map_fetch_last_attempt_ts", None),
+        },
+        exists_fn=lambda description, device: True,
+    ),
     DreameMowerSensorEntityDescription(
         key="cfg_fetch_health",
         icon="mdi:cloud-sync",

@@ -556,6 +556,19 @@ class DreameMowerDevice:
         # key research (cruisePoints / notObsAreas / obstacles / etc.).
         self._latest_cloud_map_payload: dict = {}
         self._latest_cloud_map_payload_at: float | None = None
+        # MAP fetch health counters — explicit instrumentation so the
+        # user can tell whether the integration's cloud-MAP refetches
+        # are succeeding (and returning unchanged md5 = no new data)
+        # vs failing silently (cloud unreachable on the getDeviceData
+        # surface). Powers sensor.map_fetch_health.
+        self._map_fetch_attempts: int = 0
+        self._map_fetch_successes: int = 0
+        self._map_fetch_failures: int = 0
+        self._map_fetch_unchanged: int = 0   # md5-same skip-rebuild path
+        self._map_fetch_last_md5: str | None = None
+        self._map_fetch_last_error: str | None = None
+        self._map_fetch_last_error_ts: float | None = None
+        self._map_fetch_last_attempt_ts: float | None = None
         # Per-key change log for the cloud MAP payload — mirrors the
         # cfg_recent_changes pattern. Keyed by map key name; value is
         # {changed_at, old_kind, new_kind} where *_kind is a short
@@ -2255,11 +2268,22 @@ class DreameMowerDevice:
 
         from ..protocol.cloud_map_geom import _rotate_path_around_centroid  # noqa: F401 — imported at top of try for clarity
 
+        # Instrumentation: bump attempts before any early-return so the
+        # health sensor distinguishes "never tried" from "tried and
+        # failed silently". Successes / unchanged / failures are
+        # bumped further down based on the outcome.
+        self._map_fetch_attempts += 1
+        self._map_fetch_last_attempt_ts = time.time()
+
         try:
             map_keys = [f"MAP.{i}" for i in range(28)]
             response = self._protocol.cloud.get_batch_device_datas(map_keys)
             if not response:
+                self._map_fetch_failures += 1
+                self._map_fetch_last_error = "empty cloud response"
+                self._map_fetch_last_error_ts = time.time()
                 _LOGGER.warning("No MAP data from cloud")
+                self._property_changed()
                 return
 
             # M_PATH.* userData — separate from MAP.* per apk. Array
@@ -2724,15 +2748,18 @@ class DreameMowerDevice:
             }, sort_keys=True).encode()
             new_md5 = hashlib.md5(stable_repr).hexdigest()
             prior_md5 = getattr(self, "_last_cloud_map_md5", None)
+            self._map_fetch_last_md5 = new_md5
             if prior_md5 == new_md5 and self._map_manager and getattr(
                 self._map_manager._map_data, "last_updated", None
             ):
                 # Content unchanged → preserve the prior timestamp so
                 # HA doesn't log a spurious state change.
                 map_data.last_updated = self._map_manager._map_data.last_updated
+                self._map_fetch_unchanged += 1
             else:
                 map_data.last_updated = time.time()
                 self._last_cloud_map_md5 = new_md5
+                self._map_fetch_successes += 1
             map_data.rotation = 0
             # Cloud-frame (0, 0) is where the mower's nose meets the
             # charging station as it enters the dock — NOT the physical
@@ -2803,7 +2830,14 @@ class DreameMowerDevice:
                 )
 
         except Exception as ex:
+            self._map_fetch_failures += 1
+            self._map_fetch_last_error = repr(ex)
+            self._map_fetch_last_error_ts = time.time()
             _LOGGER.warning("Failed to build map from cloud data: %s", ex)
+        finally:
+            # Notify listeners so map_fetch_health updates whatever the
+            # outcome (success / unchanged / failure).
+            self._property_changed()
 
     def _schedule_cloud_map_poll(self, reason: str) -> None:
         """Re-pull the cloud MAP.* dataset and rebuild the camera image.
