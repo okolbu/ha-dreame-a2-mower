@@ -539,6 +539,15 @@ class DreameMowerDevice:
         # key research (cruisePoints / notObsAreas / obstacles / etc.).
         self._latest_cloud_map_payload: dict = {}
         self._latest_cloud_map_payload_at: float | None = None
+        # Per-key change log for the cloud MAP payload — mirrors the
+        # cfg_recent_changes pattern. Keyed by map key name; value is
+        # {changed_at, old_kind, new_kind} where *_kind is a short
+        # type/length descriptor (full values are too large to store).
+        # Lets toggle research see which top-level map key flipped on
+        # the last MAP refetch.
+        self._map_recent_changes: dict[str, dict] = {}
+        self._map_last_diff: list[str] = []
+        self._map_last_diff_at: float | None = None
         # Per-endpoint probe results from the one-shot startup sweep.
         # Keyed by apk endpoint name (CFG, OBS, AIOBS, LOCN, ...);
         # value is one of:
@@ -2288,10 +2297,38 @@ class DreameMowerDevice:
 
             # Cache the parsed cloud map JSON so diagnostic sensors
             # (map_keys_raw) can expose unconsumed top-level keys for
-            # toggle-correlation research without re-fetching.
+            # toggle-correlation research without re-fetching. Also
+            # compute a per-key diff vs the previous fetch so the
+            # research dashboard can highlight which key flipped.
             if isinstance(map_json, dict):
+                def _kind(v):
+                    if isinstance(v, dict):
+                        return f"dict(len={len(v)})"
+                    if isinstance(v, list):
+                        return f"list(len={len(v)})"
+                    if isinstance(v, str):
+                        return f"str(len={len(v)})" if len(v) > 40 else f"str={v!r}"
+                    return f"{type(v).__name__}={v!r}"
+                prev = self._latest_cloud_map_payload or {}
+                now = time.time()
+                changed_keys = []
+                for k in sorted(set(prev.keys()) | set(map_json.keys())):
+                    if prev.get(k) != map_json.get(k):
+                        changed_keys.append(k)
+                        self._map_recent_changes[k] = {
+                            "changed_at": now,
+                            "old_kind": _kind(prev.get(k)) if k in prev else "<missing>",
+                            "new_kind": _kind(map_json.get(k)) if k in map_json else "<missing>",
+                        }
                 self._latest_cloud_map_payload = dict(map_json)
-                self._latest_cloud_map_payload_at = time.time()
+                self._latest_cloud_map_payload_at = now
+                if changed_keys:
+                    self._map_last_diff = changed_keys
+                    self._map_last_diff_at = now
+                    _LOGGER.warning(
+                        "[MAP_DIFF] %d key(s) changed since last MAP fetch: %s",
+                        len(changed_keys), ", ".join(changed_keys),
+                    )
 
             # One-shot schema dump per HA process, WARNING-level so users
             # running at `logger.default: warning` see it without bumping

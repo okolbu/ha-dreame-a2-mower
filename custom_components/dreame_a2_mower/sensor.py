@@ -1063,7 +1063,9 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         key="obs_keys_raw",
         icon="mdi:wall",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        # Enabled by default — this is research-active territory; the
+        # whole point is to surface OBS payload to the user. Diagnostic
+        # category keeps it out of the main entity list.
         value_fn=lambda value, device: (
             len(getattr(device, "_obs", None) or {})
             if (getattr(device, "_obs", None) or getattr(device, "_obs_fetched_at", None))
@@ -1083,7 +1085,7 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         key="aiobs_keys_raw",
         icon="mdi:eye",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        # Enabled by default — research-active.
         value_fn=lambda value, device: (
             len(getattr(device, "_aiobs", None) or {})
             if (getattr(device, "_aiobs", None) or getattr(device, "_aiobs_fetched_at", None))
@@ -1105,13 +1107,20 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         key="map_keys_raw",
         icon="mdi:map-search",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        # Enabled by default — research-active. Attributes carry the
+        # full ~150-300 KB cloud-map payload; HA handles this fine but
+        # be aware if you're parsing this externally.
         value_fn=lambda value, device: len(
             getattr(device, "_latest_cloud_map_payload", None) or {}
         ),
-        attrs_fn=lambda device: dict(
-            getattr(device, "_latest_cloud_map_payload", None) or {}
-        ),
+        attrs_fn=lambda device: {
+            **(dict(getattr(device, "_latest_cloud_map_payload", None) or {})),
+            "_recent_changes": dict(
+                getattr(device, "_map_recent_changes", None) or {}
+            ),
+            "_last_diff": list(getattr(device, "_map_last_diff", None) or []),
+            "_last_diff_at": getattr(device, "_map_last_diff_at", None),
+        },
         exists_fn=lambda description, device: True,
     ),
     # One-shot startup probe of every apk-listed routed-action GET
@@ -1136,7 +1145,8 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         key="cfg_keys_raw",
         icon="mdi:code-json",
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
+        # Enabled by default — research-active and feeds the
+        # CFG toggle-research dashboard card.
         value_fn=lambda value, device: len(
             getattr(device, "cfg", None) or {}
         ),
