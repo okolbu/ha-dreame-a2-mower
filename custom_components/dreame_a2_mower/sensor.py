@@ -514,29 +514,35 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
             round(value.heading_deg, 1) if value is not None else None
         ),
     ),
-    # PRE-backed mow_mode — apk hypothesis was that PRE[1] = mowing
-    # efficiency mode (0=Standard, 1=Efficient), but a 2026-04-26
-    # toggle test confirmed this is WRONG on g2408: toggling the
-    # setting in the app re-emitted s6p2 and bumped CFG.VER, but
-    # PRE stayed at [0, 0] — the value isn't stored in any visible
-    # CFG key. The sensor below would always report "standard"
-    # regardless of the actual app state, so it's been disabled by
-    # making exists_fn return False. Re-enable once we identify the
-    # actual storage (none in current 24-key CFG; possibly per-zone
-    # in MAP.* or a different routed-action endpoint).
+    # mow_mode is in s6p2 element[1] on g2408 (confirmed 2026-04-26):
+    #   s6p2 = [profile_id, mow_mode, True, 2]
+    # where mow_mode 0=Standard, 1=Efficient. The apk's PRE[1] mapping
+    # is wrong on g2408 — PRE stays [0,0] regardless of efficiency
+    # setting; only s6p2[1] tracks it. s6p2 is mapped as
+    # DreameMowerProperty.FRAME_INFO and stored in device.data, so
+    # we read it directly without an inline cache.
     DreameMowerSensorEntityDescription(
         key="mow_mode",
         icon="mdi:robot-mower",
         value_fn=lambda value, device: (
             {0: "standard", 1: "efficient"}.get(
-                device.cfg.get("PRE", [None, None])[1]
+                device.get_property(DreameMowerProperty.FRAME_INFO)[1]
             )
-            if isinstance(device.cfg.get("PRE"), list)
-            and len(device.cfg.get("PRE", [])) >= 2
+            if isinstance(device.get_property(DreameMowerProperty.FRAME_INFO), list)
+            and len(device.get_property(DreameMowerProperty.FRAME_INFO)) >= 2
+            and isinstance(device.get_property(DreameMowerProperty.FRAME_INFO)[1], int)
             else None
         ),
-        exists_fn=lambda description, device: False,  # broken on g2408 — see comment
-        available_fn=_cfg_key_present("PRE", min_len=2),
+        attrs_fn=lambda device: (
+            {
+                "frame_profile_id": device.get_property(DreameMowerProperty.FRAME_INFO)[0],
+                "frame_raw": list(device.get_property(DreameMowerProperty.FRAME_INFO)),
+            }
+            if isinstance(device.get_property(DreameMowerProperty.FRAME_INFO), list)
+            and len(device.get_property(DreameMowerProperty.FRAME_INFO)) >= 2
+            else {}
+        ),
+        exists_fn=lambda description, device: True,
     ),
     # CFG.LIT is the app's "Lights" setting (confirmed 2026-04-24).
     # Shape [enabled, start_min, end_min, standby, working, charging,
