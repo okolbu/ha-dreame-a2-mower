@@ -562,7 +562,7 @@ without flooding the log.
 | 6 | CHARGING |
 | 11 | **BUILDING** — manual map-learn / zone-expand. Confirmed 2026-04-20 17:00:09 when user triggered "Expand Lawn" from the Dreame app. Mower left the dock, drove the new perimeter for ~4 min, then returned. See §4.3 "Manual lawn expansion". |
 | 13 | CHARGING_COMPLETED |
-| 16 | STATION_RESET (battery-temp-low pause, see §4.4) |
+| 16 | **BATT_TEMP_HOLD** — docked, refusing to charge because the battery is below its safe-charge temperature. *Misnamed `STATION_RESET` in the legacy upstream enum (still used in `lawn_mower.py` for now); the actual semantics are pause-for-cold, not station-reset.* Re-confirmed 2026-04-26: 5 occurrences between 03:45–07:00 local (cold morning hours), every entry coincident with `s1p1[6]=0x08` (the "charging paused — temp low" event flag from §5.3), every exit coincident with `s1p1[6]=0`. Brief 2 s flicker entries are common ("battery cold-check that immediately cleared"); longer 1 h holds occur when the cell needs to warm before charging can resume. Always transitions to either `6` (CHARGING — cell warm enough now, top-up starts) or `13` (CHARGING_COMPLETED — false alarm, no top-up needed). |
 
 ### 4.3 Observed session transitions
 
