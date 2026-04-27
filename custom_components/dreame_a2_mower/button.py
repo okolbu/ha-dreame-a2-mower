@@ -33,6 +33,11 @@ from .dreame import DreameMowerAction
 _OP_FIND_BOT = 9
 _OP_LOCK_BOT = 12
 _OP_SUPPRESS_FAULT = 11
+_OP_GLOBAL_MOWER = 100        # start mowing entire saved lawn
+_OP_EDGE_MOWER = 101          # mow only the lawn perimeter
+_OP_ZONE_MOWER = 102          # zone mow — needs `{region: [zone_id]}` (use service)
+_OP_SPOT_MOWER = 103          # spot mow — needs `{region: [spot_id]}` (use service)
+_OP_START_LEARNING_MAP = 110  # manual map-build / Expand Lawn
 _OP_TAKE_PIC = 401
 _OP_CUTTER_BIAS = 503
 
@@ -45,6 +50,52 @@ class DreameMowerButtonEntityDescription(DreameMowerEntityDescription, ButtonEnt
 
 
 BUTTONS: tuple[ButtonEntityDescription, ...] = (
+    DreameMowerButtonEntityDescription(
+        key="start_mowing",
+        name="Start Mowing",
+        icon="mdi:play",
+        action_fn=lambda device: device.start_mowing(),
+        # Greys out while a task is active. start_mowing() also
+        # transparently handles "resume" when the mower is paused.
+        available_fn=lambda device: not bool(device.status.started),
+    ),
+    DreameMowerButtonEntityDescription(
+        key="start_edge_mowing",
+        name="Start Edge Mowing",
+        icon="mdi:vector-square",
+        action_fn=lambda device: device.call_action_opcode(_OP_EDGE_MOWER),
+        # Same gate as start_mowing — only when nothing else running.
+        available_fn=lambda device: not bool(device.status.started),
+    ),
+    DreameMowerButtonEntityDescription(
+        key="pause_mowing",
+        name="Pause Mowing",
+        icon="mdi:pause",
+        action_fn=lambda device: device.pause(),
+        available_fn=lambda device: bool(device.status.started)
+            and not bool(getattr(device.status, "paused", False)),
+    ),
+    DreameMowerButtonEntityDescription(
+        key="dock",
+        name="Return to Dock",
+        icon="mdi:home-import-outline",
+        action_fn=lambda device: device.return_to_base(),
+        # Visible whenever the mower is somewhere other than the dock —
+        # mowing, paused, or stopped-on-lawn after a manual session.
+        available_fn=lambda device: bool(getattr(device.status, "started", False))
+            or bool(getattr(device.status, "paused", False)),
+    ),
+    DreameMowerButtonEntityDescription(
+        key="start_learning_map",
+        name="Start Map Learning",
+        icon="mdi:vector-polyline-edit",
+        entity_category=EntityCategory.CONFIG,
+        action_fn=lambda device: device.call_action_opcode(_OP_START_LEARNING_MAP),
+        # Triggers the manual lawn-perimeter walk (BUILDING mode,
+        # s2p1=11). Confirmed against the Dreame app's "Expand Lawn"
+        # action 2026-04-20.
+        available_fn=lambda device: not bool(device.status.started),
+    ),
     DreameMowerButtonEntityDescription(
         key="stop_mowing",
         name="Stop Mowing",
