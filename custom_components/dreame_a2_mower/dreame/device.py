@@ -6539,12 +6539,18 @@ class DreameMowerDevice:
             self._routed_action_note_failure(repr(ex))
             _LOGGER.warning("refresh_locn: unexpected error %s", ex)
             return False
-        # Log the raw response at WARNING so it surfaces without log-
-        # level changes — HA's default logger is `default: warning`,
-        # so `_LOGGER.info` calls from custom_components are invisible
-        # unless the user opts into a custom_components.* override.
-        # See reference_ha_integration_gotchas memory.
-        _LOGGER.warning("[LOCN raw] %s", payload)
+        # Log the raw response at WARNING the FIRST time we see a
+        # given shape, then drop to INFO on repeats so the log doesn't
+        # fill up with the same `[-1, -1]` sentinel every hour. HA's
+        # default `default: warning` logger drops INFO from custom_
+        # components (see reference_ha_integration_gotchas memory),
+        # so we only ride WARNING when something actually changed.
+        prev_payload = getattr(self, "_locn_last_raw", None)
+        self._locn_last_raw = payload
+        if payload != prev_payload:
+            _LOGGER.warning("[LOCN raw] %s", payload)
+        else:
+            _LOGGER.info("[LOCN raw] %s (unchanged)", payload)
         d = payload.get("d") if isinstance(payload, dict) else None
         new_locn = d if isinstance(d, dict) else (
             payload if isinstance(payload, dict) else None
@@ -6562,46 +6568,106 @@ class DreameMowerDevice:
         # (otherwise the user sees `latitude=None, longitude=None,
         # last_error=None, fetched_at=<recent>` with no clue why).
         if self.gps_latitude is None or self.gps_longitude is None:
-            self._locn_last_error = (
-                f"no lat/lon keys in payload: {new_locn!r} "
-                "(expected one of lat/latitude and lon/lng/longitude)"
-            )
-            _LOGGER.warning("refresh_locn: %s", self._locn_last_error)
+            # Distinguish "sentinel `[-1, -1]`" from genuinely
+            # unrecognised shapes — the former is the boring
+            # "endpoint not initialised" path, the latter is a
+            # research event that warrants attention.
+            pos = new_locn.get("pos") if isinstance(new_locn, dict) else None
+            if (
+                isinstance(pos, (list, tuple))
+                and len(pos) >= 2
+                and pos[0] == -1
+                and pos[1] == -1
+            ):
+                self._locn_last_error = (
+                    "dock GPS origin not configured (`pos: [-1, -1]`) — "
+                    "g2408 firmware does not deliver real-time mower "
+                    "position via this endpoint, even with ATA[2] on"
+                )
+            else:
+                self._locn_last_error = (
+                    f"no lat/lon keys in payload: {new_locn!r} "
+                    "(expected `pos: [lon, lat]` or `{lat, lon}`)"
+                )
+            # Demote to INFO when the value hasn't changed — only
+            # WARNING when something new arrives.
+            if payload != prev_payload:
+                _LOGGER.warning("refresh_locn: %s", self._locn_last_error)
+            else:
+                _LOGGER.info("refresh_locn: %s", self._locn_last_error)
         else:
             self._locn_last_error = None
         self._routed_action_note_success()
-        _LOGGER.warning(
-            "[LOCN] lat=%s lon=%s raw=%s",
-            self.gps_latitude, self.gps_longitude, self._locn,
-        )
+        if payload != prev_payload:
+            _LOGGER.warning(
+                "[LOCN] lat=%s lon=%s raw=%s",
+                self.gps_latitude, self.gps_longitude, self._locn,
+            )
+        else:
+            _LOGGER.info(
+                "[LOCN] lat=%s lon=%s (unchanged)",
+                self.gps_latitude, self.gps_longitude,
+            )
         self._property_changed()
         return True
+
+    @staticmethod
+    def _extract_lon_lat(locn: object) -> tuple[float | None, float | None]:
+        """Pull (lon, lat) out of whatever shape the firmware uses.
+
+        Observed g2408 shape (2026-04-27): `{"pos": [lon, lat]}` where
+        `[-1, -1]` is the "not configured" sentinel — returned when the
+        dock's GPS origin has never been written via the `setLOCN`
+        path. Per the apk catalogue, `LOCN` stores the *dock origin*
+        and is NOT the real-time mower position; the app's live map
+        view is computed client-side from this origin plus the mower's
+        local-frame xy in mm.
+
+        Also tolerates the iobroker-documented dict shape
+        `{"lon": ..., "lat": ...}` in case other firmware revisions
+        deliver it directly.
+        """
+        if not isinstance(locn, dict):
+            return None, None
+        pos = locn.get("pos")
+        if isinstance(pos, (list, tuple)) and len(pos) >= 2:
+            try:
+                lon_v = float(pos[0])
+                lat_v = float(pos[1])
+            except (TypeError, ValueError):
+                return None, None
+            # Sentinel — dock origin never written.
+            if lon_v == -1 and lat_v == -1:
+                return None, None
+            return lon_v, lat_v
+        # Fallback to dict-keyed shape.
+        lat_v = None
+        lon_v = None
+        for k in ("lat", "latitude"):
+            if k in locn:
+                try:
+                    lat_v = float(locn[k])
+                except (TypeError, ValueError):
+                    pass
+                break
+        for k in ("lon", "lng", "longitude"):
+            if k in locn:
+                try:
+                    lon_v = float(locn[k])
+                except (TypeError, ValueError):
+                    pass
+                break
+        return lon_v, lat_v
 
     @property
     def gps_latitude(self) -> float | None:
         """Latitude in WGS84 from the most recent LOCN fetch, or None."""
-        if not isinstance(self._locn, dict):
-            return None
-        for k in ("lat", "latitude"):
-            if k in self._locn:
-                try:
-                    return float(self._locn[k])
-                except (TypeError, ValueError):
-                    return None
-        return None
+        return self._extract_lon_lat(self._locn)[1]
 
     @property
     def gps_longitude(self) -> float | None:
         """Longitude in WGS84 from the most recent LOCN fetch, or None."""
-        if not isinstance(self._locn, dict):
-            return None
-        for k in ("lon", "lng", "longitude"):
-            if k in self._locn:
-                try:
-                    return float(self._locn[k])
-                except (TypeError, ValueError):
-                    return None
-        return None
+        return self._extract_lon_lat(self._locn)[0]
 
     def call_action_opcode(self, op: int, extra: dict | None = None) -> bool:
         """Invoke a routed action opcode via siid:2 aiid:50 (findBot,

@@ -285,12 +285,14 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
             )
         )
 
-        # Periodic LOCN poll. The mower's RTK GNSS reads regardless of
-        # mowing state, and the user-facing "Real-Time Location" anti-
-        # theft toggle (CFG.ATA[2]) is the gate the firmware uses to
-        # decide whether to expose this. We poll on a 60s cadence so
-        # the device_tracker / sensor stays current for theft tracking
-        # and the in-app live-map view, while keeping cloud load light.
+        # Periodic LOCN poll. Confirmed 2026-04-27 that g2408's
+        # `getCFG t:'LOCN'` returns `{pos: [-1, -1]}` (sentinel for
+        # "dock origin not configured") even with ATA[2] Real-Time
+        # Location enabled — meaning this endpoint is NOT the path
+        # the Dreame app uses for its live-map view. Keep a low-rate
+        # poll so we'd notice if the firmware ever started delivering
+        # real coords (e.g. after a future setLOCN), but don't burn
+        # cloud bandwidth at 60s on what is currently a no-op.
         async def _periodic_locn_refresh(_now):
             dev = self._device
             if dev is None:
@@ -307,9 +309,8 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
                 timedelta(seconds=60),
             )
         )
-        # Fire one LOCN refresh immediately so the user sees a wire-
-        # level result in the log within seconds of integration start
-        # rather than after the 60s timer's first tick.
+        # Fire one LOCN refresh immediately so the wire-level result
+        # appears in the log within seconds of integration start.
         hass.async_create_task(_periodic_locn_refresh(None))
 
     async def async_setup(self) -> None:
