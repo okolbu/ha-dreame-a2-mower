@@ -83,8 +83,6 @@ from .const import (
     SECOND_CLEANING_TO_NAME,
     CLEANING_ROUTE_TO_NAME,
     CLEANGENIUS_TO_NAME,
-    FLOOR_MATERIAL_CODE_TO_NAME,
-    FLOOR_MATERIAL_DIRECTION_CODE_TO_NAME,
     SEGMENT_VISIBILITY_CODE_TO_NAME,
     VOICE_ASSISTANT_LANGUAGE_TO_NAME,
     TASK_TYPE_TO_NAME,
@@ -6836,8 +6834,6 @@ class DreameMowerDeviceStatus:
         self.second_cleaning_list = {v: k for k, v in SECOND_CLEANING_TO_NAME.items()}
         self.cleaning_route_list = {v: k for k, v in CLEANING_ROUTE_TO_NAME.items()}
         self.cleangenius_list = {v: k for k, v in CLEANGENIUS_TO_NAME.items()}
-        self.floor_material_list = {v: k for k, v in FLOOR_MATERIAL_CODE_TO_NAME.items()}
-        self.floor_material_direction_list = {v: k for k, v in FLOOR_MATERIAL_DIRECTION_CODE_TO_NAME.items()}
         self.visibility_list = {v: k for k, v in SEGMENT_VISIBILITY_CODE_TO_NAME.items()}
         self.voice_assistant_language_list = {v: k for k, v in VOICE_ASSISTANT_LANGUAGE_TO_NAME.items()}
         self.segment_cleaning_mode_list = {}

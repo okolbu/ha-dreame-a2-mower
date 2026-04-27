@@ -14,8 +14,6 @@ from .types import (
     DreameMowerSecondCleaning,
     DreameMowerCleaningRoute,
     DreameMowerCleanGenius,
-    DreameMowerFloorMaterial,
-    DreameMowerFloorMaterialDirection,
     DreameMowerSegmentVisibility,
     DreameMowerTaskType,
     PROPERTY_AVAILABILITY,
@@ -25,8 +23,6 @@ from .types import (
 )
 from .const import (
     CLEANING_MODE_CODE_TO_NAME,
-    FLOOR_MATERIAL_CODE_TO_NAME,
-    FLOOR_MATERIAL_DIRECTION_CODE_TO_NAME,
     SEGMENT_VISIBILITY_CODE_TO_NAME,
     PROPERTY_TO_NAME,
     ACTION_TO_NAME,

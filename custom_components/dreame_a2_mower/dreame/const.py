@@ -13,8 +13,6 @@ from .types import (
     DreameMowerSecondCleaning,
     DreameMowerCleaningRoute,
     DreameMowerCleanGenius,
-    DreameMowerFloorMaterial,
-    DreameMowerFloorMaterialDirection,
     DreameMowerSegmentVisibility,
     DreameMowerTaskType,
     DreameMowerProperty,
@@ -129,13 +127,6 @@ ROUTE_OFF: Final = "off"
 
 CLEANGENIUS_ROUTINE_CLEANING: Final = "routine_cleaning"
 CLEANGENIUS_DEEP_CLEANING: Final = "deep_cleaning"
-
-FLOOR_MATERIAL_NONE: Final = "none"
-FLOOR_MATERIAL_TILE: Final = "tile"
-FLOOR_MATERIAL_WOOD: Final = "wood"
-
-FLOOR_MATERIAL_DIRECTION_VERTICAL: Final = "vertical"
-FLOOR_MATERIAL_DIRECTION_HORIZONTAL: Final = "horizontal"
 
 SEGMENT_VISIBILITY_VISIBLE: Final = "visible"
 SEGMENT_VISIBILITY_HIDDEN: Final = "hidden"
@@ -585,17 +576,6 @@ STATE_CODE_TO_STATE: Final = {
 # Dreame Mower cleaning mode names
 CLEANING_MODE_CODE_TO_NAME: Final = {
     DreameMowerCleaningMode.MOWING: CLEANING_MODE_MOWING,
-}
-
-FLOOR_MATERIAL_CODE_TO_NAME: Final = {
-    DreameMowerFloorMaterial.NONE: FLOOR_MATERIAL_NONE,
-    DreameMowerFloorMaterial.TILE: FLOOR_MATERIAL_TILE,
-    DreameMowerFloorMaterial.WOOD: FLOOR_MATERIAL_WOOD,
-}
-
-FLOOR_MATERIAL_DIRECTION_CODE_TO_NAME: Final = {
-    DreameMowerFloorMaterialDirection.VERTICAL: FLOOR_MATERIAL_DIRECTION_VERTICAL,
-    DreameMowerFloorMaterialDirection.HORIZONTAL: FLOOR_MATERIAL_DIRECTION_HORIZONTAL,
 }
 
 SEGMENT_VISIBILITY_CODE_TO_NAME: Final = {

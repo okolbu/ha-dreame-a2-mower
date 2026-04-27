@@ -99,8 +99,6 @@ ATTR_MAP_INDEX: Final = "map_index"
 ATTR_ZONE_ID: Final = "zone_id"
 ATTR_ZONE_ICON: Final = "zone_icon"
 ATTR_UNIQUE_ID: Final = "unique_id"
-ATTR_FLOOR_MATERIAL: Final = "floor_material"
-ATTR_FLOOR_MATERIAL_DIRECTION: Final = "floor_material_direction"
 ATTR_VISIBILITY: Final = "visibility"
 ATTR_NAME: Final = "name"
 ATTR_OUTLINE: Final = "outline"
@@ -365,23 +363,6 @@ class DreameMowerSecondCleaning(IntEnum):
     OFF = 0
     IN_DEEP_MODE = 1
     IN_ALL_MODES = 2
-
-
-class DreameMowerFloorMaterial(IntEnum):
-    """Dreame Mower floor material"""
-
-    UNKNOWN = -1
-    NONE = 0
-    WOOD = 1
-    TILE = 2
-
-
-class DreameMowerFloorMaterialDirection(IntEnum):
-    """Dreame Mower floor direction"""
-
-    UNKNOWN = -1
-    HORIZONTAL = 0
-    VERTICAL = 90
 
 
 class DreameMowerSegmentVisibility(IntEnum):
@@ -1723,12 +1704,6 @@ class Segment(Zone):
             attributes[ATTR_COLOR_INDEX] = self.color_index
         if self.unique_id is not None:
             attributes[ATTR_UNIQUE_ID] = self.unique_id
-        if self.floor_material is not None:
-            attributes[ATTR_FLOOR_MATERIAL] = self.floor_material
-        if self.floor_material_rotated_direction is not None:
-            attributes[ATTR_FLOOR_MATERIAL_DIRECTION] = DreameMowerFloorMaterialDirection(
-                self.floor_material_rotated_direction
-            ).name.title()
         if self.visibility is not None:
             attributes[ATTR_VISIBILITY] = DreameMowerSegmentVisibility(
                 int(self.visibility)).name.title()
