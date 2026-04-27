@@ -105,6 +105,19 @@ DOCK_OUTLINE = (255, 255, 255, 255)
 OBSTACLE_COLOR = (90, 140, 230, 170)         # blue — matches app
 OBSTACLE_OUTLINE = (40, 80, 200, 230)
 
+# Edge-mow visualisation — engaged when device._active_task_kind == "edge"
+# (set by the op:101 firings in button.py). Mirrors the Dreame app's
+# convention reported by the user 2026-04-27: light-green wash over the
+# whole map, dotted-green perimeter on the unmowed edge, solid wider
+# green for the mower's actual path-so-far.
+EDGE_MOW_TINT_COLOR = (140, 220, 140, 50)        # light green wash
+EDGE_MOW_PERIMETER_COLOR = (40, 160, 40, 230)    # dotted-line green
+EDGE_MOW_PERIMETER_WIDTH = 3
+EDGE_MOW_PERIMETER_DASH_ON_PX = 10
+EDGE_MOW_PERIMETER_DASH_OFF_PX = 8
+EDGE_MOW_TRAIL_COLOR = (40, 160, 40, 240)        # solid bright green
+EDGE_MOW_TRAIL_WIDTH_PX = 6                      # marginally wider than 4
+
 
 def _affine_from_calibration(
     calibration_points: Sequence[dict],
@@ -186,6 +199,15 @@ class TrailLayer:
         # value is interpreted as the same convention the s1p4 byte[6]
         # decoder uses (see protocol/telemetry.py).
         self.last_heading_deg: float | None = None
+        # Edge-mow visualisation flag and per-zone perimeter polygons
+        # in PIXEL coords. When active, compose() applies a light-green
+        # wash + dotted perimeter and `extend_live` paints in solid
+        # bright green / wider stroke. See `set_edge_mow_active` and
+        # `set_zone_perimeters`.
+        self._edge_mow_active: bool = False
+        self._zone_perimeters_px: list[list[tuple[float, float]]] = []
+        self._default_trail_color = trail_color
+        self._default_trail_width = trail_width_px
         # Version bumped on every mutation; used by callers to cache
         # composed PNG bytes.
         self.version: int = 0
@@ -330,6 +352,56 @@ class TrailLayer:
                     self._obstacle_polys.append(pts)
         self.version += 1
 
+    def set_zone_perimeters(
+        self,
+        zones_m: Iterable[Iterable[Sequence[float]]] | None,
+    ) -> None:
+        """Store zone polygons (in metres) as pixel coords for the
+        edge-mow dotted-perimeter render. Caller passes one polygon
+        per zone — no need to close (the polygon draw closes itself).
+
+        Idempotent / cheap: if `compose()` re-runs without `set_*`
+        calls in between, the already-converted pixel polygons are
+        reused.
+        """
+        self._zone_perimeters_px = []
+        if zones_m:
+            for poly in zones_m:
+                pts = [
+                    self._m_to_px(p[0], p[1])
+                    for p in poly
+                    if isinstance(p, (list, tuple)) and len(p) >= 2
+                ]
+                if len(pts) >= 3:
+                    self._zone_perimeters_px.append(pts)
+        self.version += 1
+
+    def set_edge_mow_active(self, active: bool) -> None:
+        """Toggle the edge-mow visualisation mode.
+
+        While active:
+          - `compose()` paints a light-green wash over the base PNG
+            and draws each stored zone perimeter as a dotted green
+            line (the "unmowed edge" effect).
+          - `extend_live` paints new segments with a brighter green
+            and a slightly wider stroke (the "solid line where mowed"
+            effect — past segments stay in their original colour).
+
+        Toggling off restores the default trail colour / width for
+        future strokes; existing strokes keep whatever colour they
+        were drawn with.
+        """
+        if bool(active) == self._edge_mow_active:
+            return
+        self._edge_mow_active = bool(active)
+        if self._edge_mow_active:
+            self._trail_color = EDGE_MOW_TRAIL_COLOR
+            self._trail_width = EDGE_MOW_TRAIL_WIDTH_PX
+        else:
+            self._trail_color = self._default_trail_color
+            self._trail_width = self._default_trail_width
+        self.version += 1
+
     # ------------------- compose -------------------
 
     def compose(self, base_png: bytes) -> bytes:
@@ -342,6 +414,25 @@ class TrailLayer:
             # geometry will be slightly off until the next reset.
             self._trail = self._trail.resize(base.size, Image.Resampling.BILINEAR)
             self._size = base.size
+
+        # Edge-mow visualisation — translucent green wash painted on
+        # the base, then each zone perimeter drawn as a dotted line.
+        # Done before the trail composite so the trail strokes ride
+        # on top of the wash and read as "what's been covered so far".
+        if self._edge_mow_active:
+            wash = Image.new("RGBA", base.size, EDGE_MOW_TINT_COLOR)
+            base = Image.alpha_composite(base, wash)
+            if self._zone_perimeters_px:
+                perim_draw = ImageDraw.Draw(base, "RGBA")
+                for poly in self._zone_perimeters_px:
+                    self._draw_dotted_polygon(
+                        perim_draw,
+                        poly,
+                        EDGE_MOW_PERIMETER_COLOR,
+                        EDGE_MOW_PERIMETER_WIDTH,
+                        EDGE_MOW_PERIMETER_DASH_ON_PX,
+                        EDGE_MOW_PERIMETER_DASH_OFF_PX,
+                    )
 
         # Single alpha-composite per layer — `paste` with mask would
         # dim the colours a second time (trail alpha gets multiplied
@@ -430,6 +521,54 @@ class TrailLayer:
         return buf.getvalue()
 
     # ------------------- helpers -------------------
+
+    @staticmethod
+    def _draw_dotted_polygon(
+        draw: ImageDraw.ImageDraw,
+        pts: Sequence[tuple[float, float]],
+        color: tuple[int, int, int, int],
+        width: int,
+        dash_on_px: int,
+        dash_off_px: int,
+    ) -> None:
+        """Draw a closed polygon as a dotted line using PIL primitives.
+
+        PIL's `ImageDraw.line` doesn't support dashes natively; we walk
+        each polygon edge and emit short line segments at `dash_on_px`
+        intervals separated by `dash_off_px` gaps. Cheap (a few hundred
+        segments per zone perimeter at most) and avoids dragging in a
+        heavier dependency just for this visual flourish.
+        """
+        if len(pts) < 2:
+            return
+        period = dash_on_px + dash_off_px
+        loop = list(pts) + [pts[0]]  # close the polygon
+        carry = 0.0  # leftover dash budget across edges so dashes
+                    # don't visually reset at every vertex
+        for (x1, y1), (x2, y2) in zip(loop[:-1], loop[1:]):
+            dx = x2 - x1
+            dy = y2 - y1
+            edge_len = (dx * dx + dy * dy) ** 0.5
+            if edge_len < 1e-3:
+                continue
+            ux = dx / edge_len
+            uy = dy / edge_len
+            t = -carry  # negative t means we still owe a dash from the
+                       # previous edge — start mid-cycle
+            while t < edge_len:
+                seg_start = max(t, 0.0)
+                seg_end = min(t + dash_on_px, edge_len)
+                if seg_end > seg_start:
+                    sx = x1 + ux * seg_start
+                    sy = y1 + uy * seg_start
+                    ex = x1 + ux * seg_end
+                    ey = y1 + uy * seg_end
+                    draw.line([(sx, sy), (ex, ey)], fill=color, width=width)
+                t += period
+            # `t` is now the position of the next dash start; the
+            # carry-over for the next edge is how far past edge_len
+            # that next dash start is.
+            carry = t - edge_len
 
     def _m_to_px(self, x_m: float, y_m: float) -> tuple[float, float]:
         a, b, c, d, tx, ty = self._aff

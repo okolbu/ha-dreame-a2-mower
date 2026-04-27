@@ -588,6 +588,16 @@ class DreameMowerDevice:
         # zoneMower (op:102), and the per-zone "Edge (mow next)"
         # switches in switch.py populate this list in toggle order.
         self._edge_mow_selection: list[int] = []
+        # Last task kind we fired via routed actions (op:100=mow,
+        # 101=edge, 102=zone, 103=spot). Set when call_action_opcode
+        # succeeds for one of those, cleared when the mower transitions
+        # to an idle-like state. Drives edge-mow visualisation in the
+        # camera renderer (light-green lawn tint, dotted perimeter,
+        # solid-green wider trail) — see `TrailLayer.set_edge_mow_active`.
+        # NOTE: only catches edge mows started from HA. Edge mows
+        # initiated from the Dreame app won't flip this until we
+        # identify the firmware status code for edge mode.
+        self._active_task_kind: str | None = None
         # MAP fetch health counters — explicit instrumentation so the
         # user can tell whether the integration's cloud-MAP refetches
         # are succeeding (and returning unchanged md5 = no new data)

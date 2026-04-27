@@ -920,6 +920,58 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         base = self._image
         if base is None or self._trail_layer is None or self.map_index != 0 or self.map_data_json:
             return base
+        # Push edge-mow visualisation state. The flag is set by the
+        # op:101 firings in button.py; clear when the task is no
+        # longer running so the wash + dotted perimeter goes away.
+        try:
+            active = (
+                getattr(self.device, "_active_task_kind", None) == "edge"
+                and bool(getattr(self.device.status, "started", False))
+            )
+            self._trail_layer.set_edge_mow_active(active)
+            if active and not getattr(self, "_edge_perimeters_pushed", False):
+                # Pull `mowingAreas` polygons from the latest cloud
+                # MAP and feed them as metre-coords to the layer.
+                payload = getattr(self.device, "_latest_cloud_map_payload", None) or {}
+                container = payload.get("mowingAreas")
+                zones_m: list[list[tuple[float, float]]] = []
+                if isinstance(container, dict):
+                    raw = container.get("value") or []
+                    for entry in raw:
+                        if isinstance(entry, list) and len(entry) >= 2:
+                            zdata = entry[1]
+                        elif isinstance(entry, dict):
+                            zdata = entry
+                        else:
+                            continue
+                        if not isinstance(zdata, dict):
+                            continue
+                        path = zdata.get("path") or []
+                        poly = []
+                        for pt in path:
+                            if not isinstance(pt, dict):
+                                continue
+                            try:
+                                poly.append(
+                                    (float(pt["x"]) / 1000.0, float(pt["y"]) / 1000.0)
+                                )
+                            except (KeyError, TypeError, ValueError):
+                                continue
+                        if len(poly) >= 3:
+                            zones_m.append(poly)
+                if zones_m:
+                    self._trail_layer.set_zone_perimeters(zones_m)
+                    self._edge_perimeters_pushed = True
+            elif not active:
+                self._edge_perimeters_pushed = False
+        except Exception:  # pragma: no cover — defensive, never block compose
+            pass
+        # Clear the active task kind once the mower is no longer
+        # running, so future state checks reflect "idle" promptly.
+        if getattr(self.device, "_active_task_kind", None) is not None and not bool(
+            getattr(self.device.status, "started", False)
+        ):
+            self.device._active_task_kind = None
         # Push the latest heading from the device's MOWING_TELEMETRY
         # into the trail layer so compose() can draw the live-icon
         # direction triangle. Heading freshness is tied to s1p4

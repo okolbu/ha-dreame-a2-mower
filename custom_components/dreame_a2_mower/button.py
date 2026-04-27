@@ -63,6 +63,7 @@ def _fire_zone_mow_selection(device):
     ok = device.call_action_opcode(_OP_ZONE_MOWER, {"region": selection})
     if ok:
         device._zone_mow_selection = []
+        device._active_task_kind = "zone"
     return ok
 
 
@@ -75,6 +76,7 @@ def _fire_spot_mow_selection(device):
     ok = device.call_action_opcode(_OP_SPOT_MOWER, {"region": selection})
     if ok:
         device._spot_mow_selection = []
+        device._active_task_kind = "spot"
     return ok
 
 
@@ -84,13 +86,15 @@ def _fire_edge_mow_selection(device):
     The Dreame app's "Edge" mode prompts the user to pick which zone's
     perimeter to mow — confirmed 2026-04-27 via UI inspection — so the
     routed-action call mirrors zoneMower's `region: [zone_id, ...]`
-    payload but with the edge opcode. Clears the list on success."""
+    payload but with the edge opcode. Clears the list on success and
+    flags the device as edge-mowing for the camera renderer."""
     selection = list(getattr(device, "_edge_mow_selection", None) or [])
     if not selection:
         return None
     ok = device.call_action_opcode(_OP_EDGE_MOWER, {"region": selection})
     if ok:
         device._edge_mow_selection = []
+        device._active_task_kind = "edge"
     return ok
 
 
@@ -174,7 +178,10 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
         key="start_edge_mowing",
         name="Start Edge Mowing",
         icon="mdi:vector-square",
-        action_fn=lambda device: device.call_action_opcode(_OP_EDGE_MOWER),
+        action_fn=lambda device: (
+            device.call_action_opcode(_OP_EDGE_MOWER)
+            and (setattr(device, "_active_task_kind", "edge") or True)
+        ),
         # Edge mow doesn't have a "resume" semantic — only enable when
         # there's no live task at all (returning / docked / idle ok).
         available_fn=lambda device: (
