@@ -352,7 +352,13 @@ class DreameReplaySessionSelect(SelectEntity):
         # start_ts (in-progress, no md5 yet). Survives label drift.
         self._pinned_md5: str | None = None
         self._pinned_start_ts: int | None = None
-        self._refresh_options()
+        # Safe defaults so the entity registers immediately. The full
+        # option list (which requires reading in_progress.json from
+        # disk) is populated by async_added_to_hass via an executor
+        # job — _refresh_options() does blocking I/O and must NOT run
+        # on the event loop.
+        self._label_to_entry: dict = {}
+        self._attr_options = [self._OPT_LATEST, self._OPT_BLANK]
 
     @staticmethod
     def _format_label(entry) -> str:
@@ -406,16 +412,33 @@ class DreameReplaySessionSelect(SelectEntity):
         return self._coordinator.session_archive is not None
 
     async def async_added_to_hass(self) -> None:
+        # Initial disk read happens here, off the event loop, since
+        # archive.list_sessions() reads in_progress.json from disk.
+        await self.hass.async_add_executor_job(self._refresh_options)
+        self.async_write_ha_state()
         self.async_on_remove(
             self._coordinator.async_add_listener(self._handle_coordinator_update)
         )
 
     @callback
     def _handle_coordinator_update(self) -> None:
+        # Refresh options on the executor — the disk read of
+        # in_progress.json (~5 KB JSON) blocks the event loop if run
+        # inline.
+        self.hass.async_add_executor_job(self._refresh_options_and_dispatch)
+
+    def _refresh_options_and_dispatch(self) -> None:
+        """Executor-side: refresh options, then schedule the state
+        write back on the event loop."""
         prev_opts = tuple(self._attr_options)
         self._refresh_options()
         if tuple(self._attr_options) == prev_opts:
             return
+        # Hand back to the event loop for state updates.
+        self.hass.loop.call_soon_threadsafe(self._post_refresh_dispatch)
+
+    @callback
+    def _post_refresh_dispatch(self) -> None:
 
         # Sticky pin: keep the user's selection alive across label drift
         # (in-progress entries change every tick as duration grows) and

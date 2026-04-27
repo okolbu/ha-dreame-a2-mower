@@ -47,11 +47,11 @@ class DreameMowerButtonEntityDescription(DreameMowerEntityDescription, ButtonEnt
     """Describes Dreame Mower Button entity."""
 
     action_fn: Callable[[object]] = None
-    # Optional dynamic-name callback. Returns the user-facing button
-    # label given the current device state. Used by Stop to switch
-    # between "Stop Mowing" / "Stop Returning" / "Stop Patrolling" /
-    # etc. without needing a separate button per state.
-    name_fn: Callable[[object], str] = None
+    # Note: name_fn(value, device) is inherited from
+    # DreameMowerEntityDescription. Buttons that want a dynamic
+    # label populate it. The DreameMowerButtonEntity class below
+    # overrides `name` so the label re-evaluates per access (the
+    # base _set_id only runs once at __init__).
 
 
 def _active_action_label(device) -> str:
@@ -198,7 +198,7 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
             or getattr(device.status, "returning", False)
             or getattr(device.status, "paused", False)
         ),
-        name_fn=lambda device: f"Stop {_active_action_label(device)}",
+        name_fn=lambda value, device: f"Stop {_active_action_label(device)}",
     ),
     DreameMowerButtonEntityDescription(
         action_key=DreameMowerAction.RESET_BLADES,
@@ -395,11 +395,12 @@ class DreameMowerButtonEntity(DreameMowerEntity, ButtonEntity):
         """Return the entity name. Defers to name_fn when the
         description provides one (so e.g. Stop Mowing can become
         "Stop Returning" mid-trip), otherwise falls back to the
-        static base-class name."""
+        static base-class name. Mirrors the base _set_id call
+        signature `(native_value, device)`."""
         name_fn = getattr(self.entity_description, "name_fn", None)
         if name_fn is not None:
             try:
-                dynamic = name_fn(self.device)
+                dynamic = name_fn(None, self.device)
             except Exception:  # pragma: no cover — defensive
                 dynamic = None
             if dynamic:
