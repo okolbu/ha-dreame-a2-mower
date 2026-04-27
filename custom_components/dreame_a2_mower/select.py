@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from enum import IntEnum
 import voluptuous as vol
 from typing import Any
@@ -46,6 +47,8 @@ from .dreame import (
     DreameMowerCleaningRoute,
     DreameMowerCleanGenius,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 CLEANING_MODE_TO_ICON = {
     DreameMowerCleaningMode.MOWING: "mdi:broom",
@@ -142,6 +145,14 @@ async def async_setup_entry(
     # filename into a service call.
     if getattr(coordinator, "session_archive", None) is not None:
         async_add_entities([DreameReplaySessionSelect(coordinator)])
+    # Zone-mow + Spot-mow pickers. Picking an option launches the
+    # corresponding routed-action immediately. Default to the only
+    # zone/spot when one is defined; "(pick one)" placeholder when
+    # multiple are defined and the user hasn't chosen yet.
+    async_add_entities([
+        DreameZoneMowSelect(coordinator),
+        DreameSpotMowSelect(coordinator),
+    ])
     platform = entity_platform.current_platform.get()
     platform.async_register_entity_service(
         SERVICE_SELECT_NEXT,
@@ -488,3 +499,144 @@ class DreameReplaySessionSelect(SelectEntity):
         if self._attr_current_option in (self._OPT_LATEST, self._OPT_BLANK):
             return {"pinned_md5": None}
         return {"pinned_md5": self._pinned_md5}
+
+
+class _DreameRoutedActionPicker(SelectEntity):
+    """Base class for the zone-mow / spot-mow pickers.
+
+    Reads a list of map entities from the cloud MAP.* payload, exposes
+    them as select options keyed by id (e.g. "Zone 1", "Spot 2"), and
+    on `select_option` fires a routed-action with `{region: [id]}`.
+
+    Behaviour requested 2026-04-27 by user:
+      - Default to the only entry when one is defined.
+      - "(pick one)" placeholder when multiple are defined.
+      - Selecting an option triggers the action immediately;
+        selecting the placeholder is a no-op.
+    """
+
+    _PLACEHOLDER = "(pick one)"
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    # Subclass overrides — see DreameZoneMowSelect / DreameSpotMowSelect.
+    _MAP_KEY: str = ""
+    _LABEL_PREFIX: str = ""
+    _OP_CODE: int = 0
+    _ICON: str = "mdi:select"
+    _NAME: str = ""
+
+    def __init__(self, coordinator: DreameMowerDataUpdateCoordinator) -> None:
+        self._coordinator = coordinator
+        self._attr_name = self._NAME
+        self._attr_icon = self._ICON
+        self._attr_unique_id = f"{coordinator.device.mac}_{self._MAP_KEY.lower()}_picker"
+        device = coordinator.device
+        info = getattr(device, "info", None)
+        from homeassistant.helpers.entity import DeviceInfo
+        from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
+        self._attr_device_info = DeviceInfo(
+            connections={(CONNECTION_NETWORK_MAC, device.mac)},
+            identifiers={(DOMAIN, device.mac)},
+            name=device.name,
+            manufacturer=getattr(info, "manufacturer", None),
+            model=getattr(info, "model", None),
+            sw_version=getattr(info, "firmware_version", None),
+            hw_version=getattr(info, "hardware_version", None),
+        )
+        self._refresh_options()
+        # Listen for cloud-MAP updates so the option list re-syncs
+        # when the user adds / removes zones via the app.
+        coordinator.async_add_listener(self._refresh_options)
+
+    def _entries(self) -> list[tuple[int, str]]:
+        """Return [(zone_id, label), ...] from the cloud MAP payload."""
+        device = self._coordinator.device
+        payload = getattr(device, "_latest_cloud_map_payload", None) or {}
+        container = payload.get(self._MAP_KEY)
+        if not isinstance(container, dict):
+            return []
+        raw = container.get("value")
+        if not isinstance(raw, list):
+            return []
+        out: list[tuple[int, str]] = []
+        for entry in raw:
+            if isinstance(entry, list) and len(entry) >= 2:
+                eid, zdata = entry[0], entry[1]
+            elif isinstance(entry, dict):
+                eid, zdata = entry.get("id"), entry
+            else:
+                continue
+            if not isinstance(eid, int) or not isinstance(zdata, dict):
+                continue
+            name = zdata.get("name") or f"{self._LABEL_PREFIX} {eid}"
+            out.append((eid, name))
+        return out
+
+    def _refresh_options(self) -> None:
+        entries = self._entries()
+        labels = [label for _id, label in entries]
+        if len(entries) == 1:
+            # Single entry — default to it so user can press once
+            # without picking. Re-selecting the same option still
+            # triggers the action.
+            self._attr_options = labels
+            if self._attr_current_option not in labels:
+                self._attr_current_option = labels[0]
+        elif len(entries) > 1:
+            # Multiple entries — placeholder default so the user has
+            # to make an explicit pick.
+            self._attr_options = [self._PLACEHOLDER] + labels
+            if self._attr_current_option not in self._attr_options:
+                self._attr_current_option = self._PLACEHOLDER
+        else:
+            self._attr_options = [self._PLACEHOLDER]
+            self._attr_current_option = self._PLACEHOLDER
+        if self.hass is not None:
+            self.async_write_ha_state()
+
+    async def async_select_option(self, option: str) -> None:
+        if option == self._PLACEHOLDER:
+            self._attr_current_option = option
+            self.async_write_ha_state()
+            return
+        # Resolve the option label back to a zone/spot id.
+        zone_id = next(
+            (eid for eid, label in self._entries() if label == option),
+            None,
+        )
+        if zone_id is None:
+            _LOGGER.warning(
+                "%s: option %r doesn't match any current map entry — refusing to fire %d",
+                self._NAME, option, self._OP_CODE,
+            )
+            return
+        device = self._coordinator.device
+        ok = await self.hass.async_add_executor_job(
+            device.call_action_opcode, self._OP_CODE, {"region": [zone_id]}
+        )
+        if not ok:
+            _LOGGER.warning(
+                "%s: routed-action op %d for region=[%d] failed (see device log)",
+                self._NAME, self._OP_CODE, zone_id,
+            )
+        self._attr_current_option = option
+        self.async_write_ha_state()
+
+
+class DreameZoneMowSelect(_DreameRoutedActionPicker):
+    """Pick a mowing zone (mowingAreas) and launch zoneMower (op 102)."""
+    _MAP_KEY = "mowingAreas"
+    _LABEL_PREFIX = "Zone"
+    _OP_CODE = 102
+    _ICON = "mdi:select-marker"
+    _NAME = "Zone Mow"
+
+
+class DreameSpotMowSelect(_DreameRoutedActionPicker):
+    """Pick a Spot (spotAreas) and launch spotMower (op 103)."""
+    _MAP_KEY = "spotAreas"
+    _LABEL_PREFIX = "Spot"
+    _OP_CODE = 103
+    _ICON = "mdi:bullseye-arrow"
+    _NAME = "Spot Mow"
