@@ -111,8 +111,28 @@ direction — invest below the GUI line.
 
 ### Cross-cutting commitments
 
-- **Single source of truth for siid/piid mapping**: one Python
-  dict, one place, no overlay/merge gymnastics.
+- **Single source of truth for siid/piid mapping, with named
+  ambiguity handlers**: one Python dict, one place, no
+  overlay/merge gymnastics. **However**, at least one (siid,
+  piid) pair on g2408 is multi-purpose — the same slot carries
+  either "robot voice" or "notification type" depending on
+  payload shape or device state, and there may be more such
+  pairs in the protocol that haven't been catalogued yet.
+  Pattern: each mapping entry has a primary `field_name` plus
+  an optional `disambiguator` callable that inspects the
+  payload and returns an alternate field name when the primary
+  isn't right. Disambiguators are explicit, named, and tested.
+  The `mower/property_mapping.py` table stays the single
+  source — disambiguation is data, not scattered logic.
+- **Async-first I/O discipline**: any disk read/write
+  (archive index reads, archive entry writes, in-progress.json,
+  PCD downloads, MQTT-archive append) goes through
+  `hass.async_add_executor_job`. The `protocol/` layer is
+  pure CPU work — no disk I/O — so it doesn't need this
+  discipline; the HA-glue and `archive/` layers do. HA's
+  blocking-I/O detector is the linter; if it logs a warning
+  during integration setup, that's a bug to fix, not a noise
+  source to ignore.
 - **Lessons from legacy referenced inline, not extracted
   upfront**: when a new module is being built, the planner
   refers to the corresponding legacy module to crib edge-case
@@ -393,7 +413,38 @@ from legacy `www/`, updated to point at the new entities.
 Service `dreame_a2_mower.show_lidar_fullscreen` is a
 convenience wrapper a Lovelace card can invoke.
 
-### 5.8 Credential discipline
+### 5.8 Archive retention policy
+
+LiDAR PCD files can be large (megabytes each); session JSONs
+are smaller but a multi-month accumulation produces dropdown
+lists that crash Lovelace selector cards. Each archive class
+needs both retention caps **and** user-configurable limits via
+the config_flow options.
+
+| Archive | Default cap | Default size cap | Config option |
+|---|---:|---:|---|
+| Session archive | 50 entries | unbounded by default | `CONF_SESSION_ARCHIVE_KEEP` (count) — already exists in legacy, carry forward |
+| LiDAR archive | 20 entries | 200 MB | `CONF_LIDAR_ARCHIVE_KEEP` (count), `CONF_LIDAR_ARCHIVE_MAX_MB` (size) — count exists, add size cap |
+| MQTT archive | 14 days (rotation) | unbounded | `CONF_MQTT_ARCHIVE_RETAIN_DAYS` — already exists |
+| In-progress | 1 entry (always) | n/a | not user-configurable; the in-progress entry is the working set |
+
+**Eviction policy**: oldest-first by `last_update_ts`. When
+either cap is reached, evict the oldest entry until both caps
+are satisfied. Eviction logs at INFO so users see what's
+disappearing.
+
+**UI safeguards**: the replay-session select entity caps its
+options at the configured count even if the on-disk archive
+has more (a paranoia layer; the eviction policy should keep
+on-disk count in sync, but if a user manually drops files in
+the archive dir, the dropdown stays sane).
+
+**Config-flow surface**: each cap appears in the options flow
+with sensible bounds (e.g., session count 1..200, LiDAR count
+1..50, LiDAR MB 50..2000, MQTT retention 1..90 days). Defaults
+chosen so a fresh install never crashes the UI.
+
+### 5.9 Credential discipline
 
 - Cloud creds (`username`, `password`, `country`) entered via
   config_flow, stored in HA's encrypted-at-rest config-entry
@@ -470,6 +521,9 @@ target.
 - [ ] LiDAR archive: every `s99.20` OSS key triggers fetch + dedup + write to `<config>/dreame_a2_mower/lidar/`.
 - [ ] MQTT archive when enabled: every MQTT message appends to `<config>/dreame_a2_mower/mqtt_archive/YYYY-MM-DD.jsonl`, daily rotation.
 - [ ] Archive count sensors increment correctly.
+- [ ] **Retention caps enforced**: when `CONF_SESSION_ARCHIVE_KEEP=N` is reached, oldest session evicted; replay-session dropdown never exceeds N options.
+- [ ] **LiDAR size cap enforced**: when `CONF_LIDAR_ARCHIVE_MAX_MB` is exceeded, oldest scans evicted until under cap.
+- [ ] **All archive disk I/O is async**: integration setup completes without HA logging "blocking call to … in event loop". Confirmed via `pytest-homeassistant-custom-component`'s blocking-I/O detector.
 
 ### Settings reflection
 
@@ -486,7 +540,7 @@ target.
 - [ ] `sensor.novel_observations` count increments on each novel hit.
 - [ ] `download_diagnostics` produces a file with state + capabilities + novel-token list + recent log lines, with creds redacted.
 
-**Total: 45 acceptance items.** Each gets a corresponding
+**Total: 48 acceptance items.** Each gets a corresponding
 integration test using `pytest-homeassistant-custom-component`
 or, where automation isn't feasible, a manual checklist entry.
 
@@ -615,8 +669,7 @@ LiDAR card. No `xiaomi-vacuum-map-card` (per memory).
 
 ## 11. Open questions for review
 
-None. All eight architectural sections converged during
-brainstorm:
+None. All architectural sections converged during brainstorm:
 
 1. Repo strategy → new repo, no fork. ✅
 2. Lift posture → lift-on-demand, legacy stays as reference. ✅
@@ -627,5 +680,13 @@ brainstorm:
 7. Authoritative-data policy → §8. ✅
 8. Identifier renames → no rename pass; vacuum-flavored names
    in internal Python identifiers are fine. ✅
+9. Multi-purpose siid/piid pairs (e.g., the robot-voice /
+   notification-type slot) → primary `field_name` + named
+   `disambiguator` callable, in a single mapping table. §3. ✅
+10. Async I/O discipline → all archive/disk reads + writes go
+    through `hass.async_add_executor_job`. §3 + §6. ✅
+11. Archive retention caps → per-archive count and (LiDAR-only)
+    size caps with config-flow options; UI dropdown safeguards.
+    §5.8. ✅
 
 Implementation plan to follow via writing-plans skill.
