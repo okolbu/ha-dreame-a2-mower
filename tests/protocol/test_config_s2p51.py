@@ -111,6 +111,25 @@ def test_decode_led_period_eight_element_list():
     }
 
 
+def test_decode_four_bool_list_is_ambiguous():
+    # Both CFG.MSG_ALERT (Notification Prefs) and CFG.VOICE (Voice
+    # Prompt Modes) ride this 4-bool shape with no envelope key to
+    # distinguish them. Decoder must surface AMBIGUOUS_4LIST so the
+    # caller resolves via CFG diff.
+    ev = decode_s2p51({"value": [1, 0, 1, 1]})
+    assert ev.setting is Setting.AMBIGUOUS_4LIST
+    assert ev.values == {"value": [True, False, True, True]}
+
+
+def test_encode_rejects_ambiguous_4list():
+    ev = S2P51Event(
+        setting=Setting.AMBIGUOUS_4LIST,
+        values={"value": [True, True, True, True]},
+    )
+    with pytest.raises(S2P51DecodeError, match="ambiguous"):
+        encode_s2p51(ev)
+
+
 def test_decode_human_presence_nine_element_list():
     # [enabled, sensitivity, standby, mowing, recharge, patrol, alert, photos, push_min]
     # Example from probe log at 2026-04-17 11:13:57: [0,1,1,1,1,1,1,0,3]

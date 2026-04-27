@@ -20,6 +20,7 @@ PLATFORMS = (
     Platform.NUMBER,
     Platform.SELECT,
     Platform.TIME,
+    Platform.DEVICE_TRACKER,
 )
 
 

@@ -1252,6 +1252,30 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # payload. Attributes carry the per-endpoint result (or _error
     # marker). Lets us see at a glance which apk endpoints g2408
     # supports without wiring each to a dedicated sensor.
+    # GPS lat/lon from the mower's onboard RTK GNSS, fetched via the
+    # routed `getCFG t:'LOCN'` endpoint. State is a "lat,lon" string when
+    # available (so HA's history graph card can show "fix? yes/no" via
+    # the `_fetched_at` timestamp). Use the device_tracker entity for
+    # the actual map view; this sensor is the diagnostic surface.
+    DreameMowerSensorEntityDescription(
+        key="gps_position",
+        icon="mdi:crosshairs-gps",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda value, device: (
+            f"{device.gps_latitude:.6f},{device.gps_longitude:.6f}"
+            if device.gps_latitude is not None
+            and device.gps_longitude is not None
+            else None
+        ),
+        attrs_fn=lambda device: {
+            "latitude": device.gps_latitude,
+            "longitude": device.gps_longitude,
+            "raw": dict(getattr(device, "_locn", None) or {}),
+            "fetched_at": getattr(device, "_locn_fetched_at", None),
+            "last_error": getattr(device, "_locn_last_error", None),
+        },
+        exists_fn=lambda description, device: True,
+    ),
     DreameMowerSensorEntityDescription(
         key="routed_endpoints_probe",
         icon="mdi:radar",

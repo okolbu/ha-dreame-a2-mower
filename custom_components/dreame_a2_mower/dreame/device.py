@@ -550,6 +550,15 @@ class DreameMowerDevice:
         self._aiobs: dict = {}
         self._aiobs_fetched_at: float | None = None
         self._aiobs_last_error: str | None = None
+        # Cached GPS position from getCFG t:'LOCN'. Per the iobroker
+        # cross-reference (docs/research/2026-04-23-iobroker-dreame-
+        # cross-reference.md:52), this returns `{lon, lat}` in WGS84.
+        # The mower's RTK GNSS reads regardless of mowing state, so a
+        # periodic poll covers the "Real-Time Location" anti-theft use
+        # case (CFG.ATA[2]) — see refresh_locn().
+        self._locn: dict | None = None
+        self._locn_fetched_at: float | None = None
+        self._locn_last_error: str | None = None
         # Cached cloud MAP.* payload (parsed JSON dict, all 17 keys).
         # Populated by _build_map_from_cloud_data after each MAP fetch.
         # Powers the map_keys_raw diagnostic sensor for unconsumed-
@@ -6485,6 +6494,92 @@ class DreameMowerDevice:
         self._routed_action_note_success()
         _LOGGER.info("[AIOBS] %s", self._aiobs)
         return True
+
+    def refresh_locn(self) -> bool:
+        """Fetch GPS lat/lon via getCFG t:'LOCN'.
+
+        Per the iobroker cross-reference, the response is `{lon, lat}`
+        in WGS84. Stored in `self._locn`; consumers read via
+        `device.gps_latitude` / `device.gps_longitude` (None until the
+        first successful poll, or after an error response).
+
+        App-level errors (e.g. firmware refusing the endpoint or the
+        ATA[2] "Real-Time Location" toggle being off) are recorded in
+        `_locn_last_error` and do NOT trigger transport backoff so we
+        keep polling — the toggle state can flip at any time and the
+        firmware will start responding without further provocation.
+
+        Synchronous; call from an executor.
+        """
+        from ..protocol.cfg_action import probe_get, CfgActionError
+
+        if self._protocol is None:
+            return False
+        if self._routed_action_in_backoff():
+            return False
+        try:
+            payload = probe_get(self._protocol.action, "LOCN")
+        except CfgActionError as ex:
+            if "Dreame error r=" in str(ex):
+                self._locn_last_error = str(ex)
+                _LOGGER.info(
+                    "refresh_locn: app-level error %s "
+                    "(ATA[2] off? endpoint not yet authorised?)",
+                    ex,
+                )
+                self._property_changed()
+                return False
+            self._routed_action_note_failure(str(ex))
+            _LOGGER.warning(
+                "refresh_locn: %s (retry in %ds)",
+                ex, int(self._cfg_next_retry_at - time.time()),
+            )
+            return False
+        except Exception as ex:  # pragma: no cover — defensive
+            self._routed_action_note_failure(repr(ex))
+            _LOGGER.warning("refresh_locn: unexpected error %s", ex)
+            return False
+        d = payload.get("d") if isinstance(payload, dict) else None
+        new_locn = d if isinstance(d, dict) else (
+            payload if isinstance(payload, dict) else None
+        )
+        if new_locn is None:
+            self._locn_last_error = f"unexpected payload shape: {payload!r}"
+            _LOGGER.info("refresh_locn: %s", self._locn_last_error)
+            return False
+        self._locn = new_locn
+        self._locn_fetched_at = time.time()
+        self._locn_last_error = None
+        self._routed_action_note_success()
+        _LOGGER.info("[LOCN] %s", self._locn)
+        self._property_changed()
+        return True
+
+    @property
+    def gps_latitude(self) -> float | None:
+        """Latitude in WGS84 from the most recent LOCN fetch, or None."""
+        if not isinstance(self._locn, dict):
+            return None
+        for k in ("lat", "latitude"):
+            if k in self._locn:
+                try:
+                    return float(self._locn[k])
+                except (TypeError, ValueError):
+                    return None
+        return None
+
+    @property
+    def gps_longitude(self) -> float | None:
+        """Longitude in WGS84 from the most recent LOCN fetch, or None."""
+        if not isinstance(self._locn, dict):
+            return None
+        for k in ("lon", "lng", "longitude"):
+            if k in self._locn:
+                try:
+                    return float(self._locn[k])
+                except (TypeError, ValueError):
+                    return None
+        return None
 
     def call_action_opcode(self, op: int, extra: dict | None = None) -> bool:
         """Invoke a routed action opcode via siid:2 aiid:50 (findBot,

@@ -285,6 +285,29 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
             )
         )
 
+        # Periodic LOCN poll. The mower's RTK GNSS reads regardless of
+        # mowing state, and the user-facing "Real-Time Location" anti-
+        # theft toggle (CFG.ATA[2]) is the gate the firmware uses to
+        # decide whether to expose this. We poll on a 60s cadence so
+        # the device_tracker / sensor stays current for theft tracking
+        # and the in-app live-map view, while keeping cloud load light.
+        async def _periodic_locn_refresh(_now):
+            dev = self._device
+            if dev is None:
+                return
+            try:
+                await self.hass.async_add_executor_job(dev.refresh_locn)
+            except Exception as ex:  # pragma: no cover — defensive
+                LOGGER.debug("periodic LOCN refresh failed: %s", ex)
+
+        entry.async_on_unload(
+            async_track_time_interval(
+                hass,
+                _periodic_locn_refresh,
+                timedelta(seconds=60),
+            )
+        )
+
     async def async_setup(self) -> None:
         """Finish one-time coordinator setup that requires the event loop.
 
