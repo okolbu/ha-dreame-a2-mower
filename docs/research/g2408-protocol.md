@@ -993,7 +993,9 @@ WRF, WRP. This includes settings previously thought to be BT-only:
 **Notifications** (MSG_ALERT), **Language** (LANG), **Timezone** (TIME),
 **Anti-Theft** (STUN), **Weather/Frost/Navigation-Path** (WRF/PROT/PATH).
 
-**Bluetooth-only (still invisible from cloud/HA on g2408):**
+> ⚠ **Naming caveat (corrected 2026-04-27):** the label "Bluetooth-only" is misleading. The HA integration successfully started an Edge Mow on 2026-04-27 09:42:58 via cloud routed-action `siid:2 aiid:50 op:101` with **zero BT connectivity to the mower** — the integration is purely cloud + MQTT. So the Dreame app's BT link almost certainly isn't carrying basic settings either; it's a side channel for bulk diagnostic / OTA / voice-pack data, not a parallel control protocol. The settings below are more accurately **"cloud-write-invisible-on-MQTT"**: the app probably writes them via routed-action `setX` calls (`m:'s'`) we haven't enumerated, which trigger only an `s6p2` tripwire as visible side-effect. They're *readable nowhere* on MQTT (CFG, OBS, AIOBS, MAP all stay clean), but probably *writable* via an unknown `setX` target. Worth probing the apk for the missing target names and trying writes from HA.
+
+**Cloud-write-invisible-on-MQTT settings (formerly "Bluetooth-only", still invisible from cloud/HA on g2408):**
 - Obstacle Avoidance Distance
 - Obstacle Avoidance Height
 - Start from Stop Point
