@@ -4468,45 +4468,47 @@ class DreameMowerMapRenderer:
             ):
                 changes.append(layer)
                 # Split forbidden areas by subtype: classic exclusion
-                # (red) vs Designated Ignore Obstacle (green). Render
-                # in two passes onto the same layer canvas so a single
-                # layer cache holds both. See Area.subtype + the
-                # `ignore_obstacle` colour scheme entry (types.py).
-                normal_areas = [
-                    a for a in map_data.no_go_areas
-                    if getattr(a, "subtype", None) != "ignore"
-                ]
-                ignore_areas = [
-                    a for a in map_data.no_go_areas
-                    if getattr(a, "subtype", None) == "ignore"
-                ]
+                # (red), Designated Ignore Obstacle (green), Spot
+                # overlay (grey, opt-in). Render each subset onto the
+                # same layer canvas via alpha_composite. See
+                # Area.subtype + the colour scheme entries (types.py).
+                normal_areas = [a for a in map_data.no_go_areas if getattr(a, "subtype", None) is None]
+                ignore_areas = [a for a in map_data.no_go_areas if getattr(a, "subtype", None) == "ignore"]
+                spot_areas = [a for a in map_data.no_go_areas if getattr(a, "subtype", None) == "spot"]
                 rendered = None
+
+                def _compose(existing, sub_render):
+                    if existing is None:
+                        return sub_render
+                    if sub_render is None:
+                        return existing
+                    return Image.alpha_composite(existing, sub_render)
+
                 if normal_areas:
-                    rendered = self.render_areas(
+                    rendered = _compose(rendered, self.render_areas(
                         normal_areas,
                         self.color_scheme.no_go_outline,
                         self.color_scheme.no_go,
-                        layer_size,
-                        map_data.dimensions,
-                        border_width,
-                        scale,
-                    )
+                        layer_size, map_data.dimensions, border_width, scale,
+                    ))
                 if ignore_areas:
-                    ignore_rendered = self.render_areas(
+                    rendered = _compose(rendered, self.render_areas(
                         ignore_areas,
                         getattr(self.color_scheme, "ignore_obstacle_outline",
                                 self.color_scheme.no_go_outline),
                         getattr(self.color_scheme, "ignore_obstacle",
                                 self.color_scheme.no_go),
-                        layer_size,
-                        map_data.dimensions,
-                        border_width,
-                        scale,
-                    )
-                    if rendered is not None and ignore_rendered is not None:
-                        rendered = Image.alpha_composite(rendered, ignore_rendered)
-                    else:
-                        rendered = ignore_rendered
+                        layer_size, map_data.dimensions, border_width, scale,
+                    ))
+                if spot_areas:
+                    rendered = _compose(rendered, self.render_areas(
+                        spot_areas,
+                        getattr(self.color_scheme, "spot_zone_outline",
+                                self.color_scheme.no_go_outline),
+                        getattr(self.color_scheme, "spot_zone",
+                                self.color_scheme.no_go),
+                        layer_size, map_data.dimensions, border_width, scale,
+                    ))
                 cached_layers[layer] = rendered
         elif self._cache and cached_layers.get(layer):
             changes.append(layer)

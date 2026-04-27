@@ -556,6 +556,14 @@ class DreameMowerDevice:
         # key research (cruisePoints / notObsAreas / obstacles / etc.).
         self._latest_cloud_map_payload: dict = {}
         self._latest_cloud_map_payload_at: float | None = None
+        # Spot-zone overlay toggle. When True, _build_map_from_cloud_data
+        # also collects entries from `spotAreas` and tags them with
+        # subtype="spot" so the renderer paints them light grey on
+        # the camera image. Default False — spots aren't part of the
+        # passive map view in the Dreame app either; they only appear
+        # when the user picks "Spot mow" mode. switch.show_spot_zones
+        # toggles this and triggers a map rebuild.
+        self._show_spot_zones_overlay: bool = False
         # MAP fetch health counters — explicit instrumentation so the
         # user can tell whether the integration's cloud-MAP refetches
         # are succeeding (and returning unchanged md5 = no new data)
@@ -2493,6 +2501,14 @@ class DreameMowerDevice:
 
             _accumulate_forbidden(forbidden_pre, None)            # red
             _accumulate_forbidden(ignore_pre, "ignore")           # green
+            # Spot overlay — opt-in via switch.show_spot_zones. When
+            # off (default), spots are excluded from the camera image
+            # to keep the passive view uncluttered. spotAreas entries
+            # have shapeType=7 (axis-aligned, no `angle` field), so
+            # _rotate_path_around_centroid is a no-op for them.
+            if getattr(self, "_show_spot_zones_overlay", False):
+                spot_pre = map_json.get("spotAreas", {}).get("value", [])
+                _accumulate_forbidden(spot_pre, "spot")           # grey
 
             # Expand the bbox to include every rotated exclusion corner.
             bx1 = bx1_raw

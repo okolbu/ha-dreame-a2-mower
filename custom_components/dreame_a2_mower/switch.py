@@ -267,7 +267,34 @@ SWITCHES: tuple[DreameMowerSwitchEntityDescription, ...] = (
     # Removed in alpha.86: edge_mowing_switch / edge_detection_switch /
     # direction_change_off — those apk PRE indexes (5/8/9) don't exist
     # on g2408's 2-element PRE.
+    # Camera-overlay toggle for spot zones. Off by default — spots
+    # only relevant during a spot-mow command. When on, spotAreas
+    # entries are drawn light grey on the camera image.
+    DreameMowerSwitchEntityDescription(
+        key="show_spot_zones",
+        icon_fn=lambda value, device: "mdi:bullseye-arrow" if value else "mdi:bullseye",
+        entity_category=EntityCategory.CONFIG,
+        value_fn=lambda value, device: bool(
+            getattr(device, "_show_spot_zones_overlay", False)
+        ),
+        set_fn=lambda device, value: _set_spot_zones_overlay(device, bool(value)),
+        exists_fn=lambda description, device: True,
+    ),
 )
+
+
+def _set_spot_zones_overlay(device, enabled: bool) -> None:
+    """Toggle the spot-zone overlay flag and trigger an immediate
+    camera rebuild so the change is visible without waiting for the
+    next cloud-MAP refetch."""
+    device._show_spot_zones_overlay = enabled
+    try:
+        device._build_map_from_cloud_data()
+        if device._map_manager:
+            device._map_manager._map_data_changed()
+        device._property_changed()
+    except Exception:  # pragma: no cover — defensive
+        pass
 
 
 async def async_setup_entry(

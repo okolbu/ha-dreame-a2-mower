@@ -2629,11 +2629,17 @@ class MapRendererColorScheme:
     neglected_segment: tuple[int] = (255, 159, 10, 110)
     no_go: tuple[int] = (177, 0, 0, 50)
     no_go_outline: tuple[int] = (199, 0, 0, 200)
-    # Designated Ignore Obstacle zones (forbiddenAreas with type=2).
-    # The Dreame app draws them green to distinguish from regular
-    # red exclusion zones — matches user expectation.
+    # Designated Ignore Obstacle zones (cloud `notObsAreas`). The
+    # Dreame app draws them green to distinguish from regular red
+    # exclusion zones (cloud `forbiddenAreas`).
     ignore_obstacle: tuple[int] = (0, 177, 0, 50)
     ignore_obstacle_outline: tuple[int] = (0, 149, 0, 200)
+    # Spot zones (cloud `spotAreas`) — only drawn when the user
+    # explicitly enables the overlay via switch.show_spot_zones.
+    # Light-grey to match the Dreame app's "muted" rendering when
+    # spot mode isn't the active task.
+    spot_zone: tuple[int] = (160, 160, 160, 50)
+    spot_zone_outline: tuple[int] = (96, 96, 96, 200)
     virtual_wall: tuple[int] = (199, 0, 0, 200)
     pathway: tuple[int] = (23, 111, 244, 200)
     active_area: tuple[int] = (255, 255, 255, 80)
