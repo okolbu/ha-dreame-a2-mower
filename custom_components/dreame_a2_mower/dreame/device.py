@@ -564,6 +564,14 @@ class DreameMowerDevice:
         # when the user picks "Spot mow" mode. switch.show_spot_zones
         # toggles this and triggers a map rebuild.
         self._show_spot_zones_overlay: bool = False
+        # Ordered selection lists for multi-zone / multi-spot mowing.
+        # Per-zone / per-spot switches add their id to the list when
+        # toggled ON (in toggle order); the Start Spot/Zone Mow
+        # buttons read these lists and fire routed-action op 103 / 102
+        # with `region: <list>`. Cleared on successful start. See
+        # switch.py / button.py for the wire-up.
+        self._zone_mow_selection: list[int] = []
+        self._spot_mow_selection: list[int] = []
         # MAP fetch health counters — explicit instrumentation so the
         # user can tell whether the integration's cloud-MAP refetches
         # are succeeding (and returning unchanged md5 = no new data)

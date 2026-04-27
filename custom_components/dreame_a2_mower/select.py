@@ -145,14 +145,11 @@ async def async_setup_entry(
     # filename into a service call.
     if getattr(coordinator, "session_archive", None) is not None:
         async_add_entities([DreameReplaySessionSelect(coordinator)])
-    # Zone-mow + Spot-mow pickers. Picking an option launches the
-    # corresponding routed-action immediately. Default to the only
-    # zone/spot when one is defined; "(pick one)" placeholder when
-    # multiple are defined and the user hasn't chosen yet.
-    async_add_entities([
-        DreameZoneMowSelect(coordinator),
-        DreameSpotMowSelect(coordinator),
-    ])
+    # Zone/Spot mow selection moved to switches + start buttons so
+    # the user can pick multiple in order (alpha.163). The single-
+    # pick selects from alpha.161 are gone — use the per-zone /
+    # per-spot switches under the device page, then press the
+    # "Start Selected" button.
     platform = entity_platform.current_platform.get()
     platform.async_register_entity_service(
         SERVICE_SELECT_NEXT,
@@ -524,7 +521,7 @@ class DreameReplaySessionSelect(SelectEntity):
         return {"pinned_md5": self._pinned_md5}
 
 
-class _DreameRoutedActionPicker(SelectEntity):
+class _DreameRoutedActionPicker_DEPRECATED(SelectEntity):
     """Base class for the zone-mow / spot-mow pickers.
 
     Reads a list of map entities from the cloud MAP.* payload, exposes
@@ -647,19 +644,7 @@ class _DreameRoutedActionPicker(SelectEntity):
         self.async_write_ha_state()
 
 
-class DreameZoneMowSelect(_DreameRoutedActionPicker):
-    """Pick a mowing zone (mowingAreas) and launch zoneMower (op 102)."""
-    _MAP_KEY = "mowingAreas"
-    _LABEL_PREFIX = "Zone"
-    _OP_CODE = 102
-    _ICON = "mdi:select-marker"
-    _NAME = "Zone Mow"
-
-
-class DreameSpotMowSelect(_DreameRoutedActionPicker):
-    """Pick a Spot (spotAreas) and launch spotMower (op 103)."""
-    _MAP_KEY = "spotAreas"
-    _LABEL_PREFIX = "Spot"
-    _OP_CODE = 103
-    _ICON = "mdi:bullseye-arrow"
-    _NAME = "Spot Mow"
+# DreameZoneMowSelect / DreameSpotMowSelect from alpha.161 removed
+# 2026-04-27 — replaced with per-zone / per-spot switches in switch.py
+# plus "Start Selected" buttons in button.py so the user can pick
+# multiple zones / spots in order before kicking off the mow.

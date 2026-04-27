@@ -309,6 +309,39 @@ async def async_setup_entry(
         for description in SWITCHES
         if description.exists_fn(description, coordinator.device)
     )
+    # Dynamic per-zone / per-spot selection switches. One switch per
+    # entity in the cloud MAP.* mowingAreas / spotAreas at setup time.
+    # ON = include in the next "Start Selected …" mow run; OFF =
+    # exclude. Toggle ordering preserved on the device-side selection
+    # list. New zones/spots added later need an integration reload to
+    # surface their switch (cheap trade-off: zones don't change often
+    # and dynamic add-on-cloud-MAP-update would proliferate state).
+    device = coordinator.device
+    payload = getattr(device, "_latest_cloud_map_payload", None) or {}
+    selection_switches = []
+    for kind, map_key, label_prefix, list_attr in (
+        ("zone", "mowingAreas", "Zone", "_zone_mow_selection"),
+        ("spot", "spotAreas", "Spot", "_spot_mow_selection"),
+    ):
+        container = payload.get(map_key)
+        if not isinstance(container, dict):
+            continue
+        raw = container.get("value") or []
+        for entry in raw:
+            if isinstance(entry, list) and len(entry) >= 2:
+                eid, zdata = entry[0], entry[1]
+            elif isinstance(entry, dict):
+                eid, zdata = entry.get("id"), entry
+            else:
+                continue
+            if not isinstance(eid, int) or not isinstance(zdata, dict):
+                continue
+            label = zdata.get("name") or f"{label_prefix} {eid}"
+            selection_switches.append(
+                DreameMowSelectionSwitch(coordinator, kind, eid, label, list_attr)
+            )
+    if selection_switches:
+        async_add_entities(selection_switches)
 
 
 class DreameMowerSwitchEntity(DreameMowerEntity, SwitchEntity):
@@ -365,3 +398,74 @@ class DreameMowerSwitchEntity(DreameMowerEntity, SwitchEntity):
                 self.entity_description.property_key,
                 value,
             )
+
+
+class DreameMowSelectionSwitch(SwitchEntity):
+    """Per-zone / per-spot "include in next mow" toggle.
+
+    State semantics:
+      ON  → entity_id is present in device.<list_attr> (the ordered
+            selection list). Toggle order preserved — first-toggled
+            ON ends up first in the list.
+      OFF → entity_id removed from the list.
+
+    Cleared automatically by the matching "Start Selected …" button
+    after a successful op:102 / op:103 dispatch.
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+
+    def __init__(
+        self,
+        coordinator: DreameMowerDataUpdateCoordinator,
+        kind: str,
+        entity_id: int,
+        label: str,
+        list_attr: str,
+    ) -> None:
+        self._coordinator = coordinator
+        self._kind = kind                # "zone" or "spot"
+        self._target_id = entity_id
+        self._list_attr = list_attr      # "_zone_mow_selection" / "_spot_mow_selection"
+        self._attr_name = f"{label} (mow next)"
+        self._attr_icon = "mdi:select-marker" if kind == "zone" else "mdi:bullseye-arrow"
+        self._attr_unique_id = (
+            f"{coordinator.device.mac}_{kind}_select_{entity_id}"
+        )
+        self._attr_entity_category = EntityCategory.CONFIG
+        device = coordinator.device
+        info = getattr(device, "info", None)
+        from homeassistant.helpers.entity import DeviceInfo
+        from homeassistant.helpers.device_registry import CONNECTION_NETWORK_MAC
+        self._attr_device_info = DeviceInfo(
+            connections={(CONNECTION_NETWORK_MAC, device.mac)},
+            identifiers={(DOMAIN, device.mac)},
+            name=device.name,
+            manufacturer=getattr(info, "manufacturer", None),
+            model=getattr(info, "model", None),
+            sw_version=getattr(info, "firmware_version", None),
+            hw_version=getattr(info, "hardware_version", None),
+        )
+
+    def _selection(self) -> list[int]:
+        return getattr(self._coordinator.device, self._list_attr, []) or []
+
+    @property
+    def is_on(self) -> bool:
+        return self._target_id in self._selection()
+
+    async def async_turn_on(self, **kwargs) -> None:
+        sel = self._selection()
+        if self._target_id not in sel:
+            sel.append(self._target_id)
+        # Re-set in case the attr was None.
+        setattr(self._coordinator.device, self._list_attr, sel)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs) -> None:
+        sel = self._selection()
+        if self._target_id in sel:
+            sel.remove(self._target_id)
+        setattr(self._coordinator.device, self._list_attr, sel)
+        self.async_write_ha_state()

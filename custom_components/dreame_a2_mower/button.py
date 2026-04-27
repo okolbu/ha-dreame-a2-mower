@@ -54,6 +54,30 @@ class DreameMowerButtonEntityDescription(DreameMowerEntityDescription, ButtonEnt
     # base _set_id only runs once at __init__).
 
 
+def _fire_zone_mow_selection(device):
+    """Launch zoneMower (op 102) with device._zone_mow_selection.
+    Clears the list on success so the selection switches reset."""
+    selection = list(getattr(device, "_zone_mow_selection", None) or [])
+    if not selection:
+        return None
+    ok = device.call_action_opcode(_OP_ZONE_MOWER, {"region": selection})
+    if ok:
+        device._zone_mow_selection = []
+    return ok
+
+
+def _fire_spot_mow_selection(device):
+    """Launch spotMower (op 103) with device._spot_mow_selection.
+    Clears the list on success so the selection switches reset."""
+    selection = list(getattr(device, "_spot_mow_selection", None) or [])
+    if not selection:
+        return None
+    ok = device.call_action_opcode(_OP_SPOT_MOWER, {"region": selection})
+    if ok:
+        device._spot_mow_selection = []
+    return ok
+
+
 def _active_action_label(device) -> str:
     """Map the current activity to a verb-noun label so Stop can read
     "Stop Mowing", "Stop Returning", "Stop Patrolling", etc.
@@ -111,8 +135,14 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
     #   Dock             YES     YES     grey       grey    YES
     #   MapLearn         grey    grey    YES        YES     YES
     DreameMowerButtonEntityDescription(
+        # Renamed 2026-04-27 from "Start Mowing" → "Start All-Area
+        # Mowing" so the label distinguishes from the new
+        # Start Selected Zone / Spot Mow buttons. The native
+        # device.start_mowing() action drives the firmware's default
+        # all-area mow (apk WorkingMode.ALL_AREA = 0). Manual mode
+        # is BT-only and not exposable from HA.
         key="start_mowing",
-        name="Start Mowing",
+        name="Start All-Area Mowing",
         icon="mdi:play",
         action_fn=lambda device: device.start_mowing(),
         # Greys only while an active running task is in progress.
@@ -134,6 +164,37 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
         available_fn=lambda device: (
             not bool(device.status.started)
             or bool(getattr(device.status, "returning", False))
+        ),
+    ),
+    # Start the accumulated zone selection (the per-zone "(mow next)"
+    # switches in switch.py populate device._zone_mow_selection in
+    # toggle order). Greyed out when the selection is empty so we
+    # don't waste a routed-action call. Selection is cleared on a
+    # successful start.
+    DreameMowerButtonEntityDescription(
+        key="start_selected_zone_mow",
+        name="Start Selected Zone Mow",
+        icon="mdi:select-multiple-marker",
+        action_fn=lambda device: _fire_zone_mow_selection(device),
+        available_fn=lambda device: (
+            bool(getattr(device, "_zone_mow_selection", None))
+            and (
+                not bool(device.status.started)
+                or bool(getattr(device.status, "returning", False))
+            )
+        ),
+    ),
+    DreameMowerButtonEntityDescription(
+        key="start_selected_spot_mow",
+        name="Start Selected Spot Mow",
+        icon="mdi:bullseye-arrow",
+        action_fn=lambda device: _fire_spot_mow_selection(device),
+        available_fn=lambda device: (
+            bool(getattr(device, "_spot_mow_selection", None))
+            and (
+                not bool(device.status.started)
+                or bool(getattr(device.status, "returning", False))
+            )
         ),
     ),
     DreameMowerButtonEntityDescription(
