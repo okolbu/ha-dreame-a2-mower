@@ -581,6 +581,13 @@ class DreameMowerDevice:
         # switch.py / button.py for the wire-up.
         self._zone_mow_selection: list[int] = []
         self._spot_mow_selection: list[int] = []
+        # Edge-mow selection — user observed 2026-04-27 that the app's
+        # "Edge" mode prompts for which edge to mow, drawn from the
+        # same `mowingAreas` zone list used by Zone mow. So edgeMower
+        # (op:101) takes a `region: [zone_id, ...]` param mirroring
+        # zoneMower (op:102), and the per-zone "Edge (mow next)"
+        # switches in switch.py populate this list in toggle order.
+        self._edge_mow_selection: list[int] = []
         # MAP fetch health counters — explicit instrumentation so the
         # user can tell whether the integration's cloud-MAP refetches
         # are succeeding (and returning unchanged md5 = no new data)

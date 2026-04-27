@@ -78,6 +78,22 @@ def _fire_spot_mow_selection(device):
     return ok
 
 
+def _fire_edge_mow_selection(device):
+    """Launch edgeMower (op 101) scoped to device._edge_mow_selection.
+
+    The Dreame app's "Edge" mode prompts the user to pick which zone's
+    perimeter to mow — confirmed 2026-04-27 via UI inspection — so the
+    routed-action call mirrors zoneMower's `region: [zone_id, ...]`
+    payload but with the edge opcode. Clears the list on success."""
+    selection = list(getattr(device, "_edge_mow_selection", None) or [])
+    if not selection:
+        return None
+    ok = device.call_action_opcode(_OP_EDGE_MOWER, {"region": selection})
+    if ok:
+        device._edge_mow_selection = []
+    return ok
+
+
 def _active_action_label(device) -> str:
     """Map the current activity to a verb-noun label so Stop can read
     "Stop Mowing", "Stop Returning", "Stop Patrolling", etc.
@@ -191,6 +207,19 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
         action_fn=lambda device: _fire_spot_mow_selection(device),
         available_fn=lambda device: (
             bool(getattr(device, "_spot_mow_selection", None))
+            and (
+                not bool(device.status.started)
+                or bool(getattr(device.status, "returning", False))
+            )
+        ),
+    ),
+    DreameMowerButtonEntityDescription(
+        key="start_selected_edge_mow",
+        name="Start Selected Edge Mow",
+        icon="mdi:vector-square",
+        action_fn=lambda device: _fire_edge_mow_selection(device),
+        available_fn=lambda device: (
+            bool(getattr(device, "_edge_mow_selection", None))
             and (
                 not bool(device.status.started)
                 or bool(getattr(device.status, "returning", False))

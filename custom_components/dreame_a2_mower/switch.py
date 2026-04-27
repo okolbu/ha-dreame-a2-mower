@@ -322,6 +322,9 @@ async def async_setup_entry(
     for kind, map_key, label_prefix, list_attr in (
         ("zone", "mowingAreas", "Zone", "_zone_mow_selection"),
         ("spot", "spotAreas", "Spot", "_spot_mow_selection"),
+        # Edge mow — same source as Zone mow (`mowingAreas`); each
+        # zone gets a sibling "Edge (mow next)" toggle.
+        ("edge", "mowingAreas", "Zone Edge", "_edge_mow_selection"),
     ):
         container = payload.get(map_key)
         if not isinstance(container, dict):
@@ -429,7 +432,11 @@ class DreameMowSelectionSwitch(SwitchEntity):
         self._target_id = entity_id
         self._list_attr = list_attr      # "_zone_mow_selection" / "_spot_mow_selection"
         self._attr_name = f"{label} (mow next)"
-        self._attr_icon = "mdi:select-marker" if kind == "zone" else "mdi:bullseye-arrow"
+        self._attr_icon = {
+            "zone": "mdi:select-marker",
+            "spot": "mdi:bullseye-arrow",
+            "edge": "mdi:vector-square",
+        }.get(kind, "mdi:select-marker")
         self._attr_unique_id = (
             f"{coordinator.device.mac}_{kind}_select_{entity_id}"
         )
