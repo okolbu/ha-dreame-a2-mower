@@ -26,10 +26,35 @@ renderer) are ``{mower:{x,y}, map:{x,y}}`` tuples — mower coords are
 
 from __future__ import annotations
 
+import base64
 import io
 from typing import Iterable, Sequence
 
 from PIL import Image, ImageDraw
+
+# Lazy-loaded shared cache for the decoded mower top-down icon. The
+# base renderer (DreameMowerMapRenderer.render_mower) uses the same
+# asset; loading once at module level avoids repeated base64 decode
+# + PIL image instantiation per camera fetch.
+_MOWER_ICON_CACHE: dict[int, Image.Image] = {}
+
+
+def _get_mower_icon(target_size_px: int) -> Image.Image:
+    """Return a cached, square-resized RGBA Image of the mower icon.
+
+    Decodes `MAP_ROBOT_LIDAR_IMAGE_DREAME_DARK` once at first call and
+    keeps a per-size cache so the trail overlay can paste it on every
+    compose without a fresh resize-and-decode per call."""
+    if target_size_px not in _MOWER_ICON_CACHE:
+        from ..dreame.resources import MAP_ROBOT_LIDAR_IMAGE_DREAME_DARK
+        raw = Image.open(
+            io.BytesIO(base64.b64decode(MAP_ROBOT_LIDAR_IMAGE_DREAME_DARK))
+        ).convert("RGBA")
+        _MOWER_ICON_CACHE[target_size_px] = raw.resize(
+            (target_size_px, target_size_px),
+            resample=Image.Resampling.LANCZOS,
+        )
+    return _MOWER_ICON_CACHE[target_size_px]
 
 
 TRAIL_COLOR = (70, 70, 70, 220)             # dark grey — matches app
@@ -44,13 +69,13 @@ TRAIL_WIDTH_PX = 4
 # Live mower-position marker painted on the overlay at the end of the
 # trail. The base renderer also paints a mower icon but only updates
 # when the camera entity re-runs `update()` (heavy, throttled), so a
-# live dot on the overlay — which recomposes on every telemetry frame
+# live icon on the overlay — which recomposes on every telemetry frame
 # via `extend_live` → `version++` — is the cheapest way to get real-
-# time icon movement. Picked a saturated orange-red so it pops
-# against both the dark-grey trail and the green lawn base.
-MOWER_MARKER_COLOR = (230, 75, 40, 240)
-MOWER_MARKER_OUTLINE = (255, 255, 255, 255)
-MOWER_MARKER_RADIUS_PX = 10
+# time movement. Was previously a saturated orange-red dot; the user
+# requested a larger icon (matching the dock's top-down photograph)
+# 2026-04-27 for visibility on a busy lawn map.
+MOWER_MARKER_ICON_SIZE_PX = 32     # noticeable but doesn't dominate
+MOWER_MARKER_OUTLINE_RADIUS_PX = 18  # white halo behind the icon for contrast
 # Live-trail pen-up threshold — consecutive s1p4 samples more than this
 # far apart (metres) are treated as a session boundary / dock visit
 # rather than a connected segment. Mower mow speed is <0.5 m/s over 5 s
@@ -301,21 +326,27 @@ class TrailLayer:
         overlay = self._trail.copy()
         draw = ImageDraw.Draw(overlay, "RGBA")
 
-        # Live mower position: paint a filled circle at the last
+        # Live mower position: paste the mower icon at the last
         # telemetry point. Updates on every `extend_live` call, so
         # the icon follows the mower without waiting for the heavy
         # base-PNG re-render. The base renderer's mower icon may
         # lag wherever update() last painted it (typically dock)
         # until the camera's next throttled refresh — this overlay
-        # dot is what actually shows the current position.
+        # icon is what actually shows the current position.
+        # White halo behind for contrast against grass/trail.
         if self._last_point is not None:
             px, py = self._last_point
-            r = MOWER_MARKER_RADIUS_PX
+            halo_r = MOWER_MARKER_OUTLINE_RADIUS_PX
             draw.ellipse(
-                [(px - r, py - r), (px + r, py + r)],
-                fill=MOWER_MARKER_COLOR,
-                outline=MOWER_MARKER_OUTLINE,
-                width=2,
+                [(px - halo_r, py - halo_r), (px + halo_r, py + halo_r)],
+                fill=(255, 255, 255, 220),
+            )
+            icon = _get_mower_icon(MOWER_MARKER_ICON_SIZE_PX)
+            half = MOWER_MARKER_ICON_SIZE_PX // 2
+            overlay.paste(
+                icon,
+                (int(px) - half, int(py) - half),
+                icon,
             )
 
         for poly in self._obstacle_polys:
