@@ -210,3 +210,93 @@
 | sensor.py | `self_check_result` (key) | `sensor.dreame_a2_mower_self_check_result` | `value_fn` → "pass" if result==0 else str(result); `available_fn` gates on non-None `device.self_check_result` dict; sourced from s2p58 | s2.58 (partial — §2.1 table: "2.58 self-check result, partial, observed") | OBSERVABILITY | — | `None` | `True` | Self-check result from partially-confirmed s2p58. Shows "pass" or raw result int. OBSERVABILITY — useful for diagnosing hardware issues but not a regular dashboard metric. `available_fn` ensures entity is only available after a self-check has been run (s2p58 push received). |
 | sensor.py | `DreameArchivedSessionsSensor` (standalone class) | `sensor.<device_name>_archived_mowing_sessions` (unique_id: `<mac>_archived_sessions`) | HA-internal: reads `coordinator.session_archive.count` + `archive.list_sessions()` + `archive.latest()`; no MQTT property; registered only when `coordinator.session_archive is not None` | session-summary (confirmed — event_occured siid=4 eiid=1 piid=9 = OSS key; the archive is populated by the coordinator when the OSS JSON is downloaded; §2.1 §"session-summary") | PRODUCTION | — | `EntityCategory.DIAGNOSTIC` | `True` | Primary session-history sensor: count of archived mowing sessions with most-recent session and full N-session list in attributes. The core of the user's mowing history view (protocol doc §7.4 session-summary flow confirmed). Built from confirmed session-summary OSS JSON downloads. Correctly gated on `session_archive is not None` (sensor.py:1560–1561). DIAGNOSTIC category keeps it out of the main entity card without hiding it. |
 | sensor.py | `DreameArchivedLidarScansSensor` (standalone class) | `sensor.<device_name>_archived_lidar_scans` (unique_id: `<mac>_archived_lidar`) | HA-internal: reads `coordinator.lidar_archive.count` + `archive.list_scans()` + `archive.latest()`; no MQTT property; registered only when `coordinator.lidar_archive is not None` | 99.20 (confirmed — §2.1: "99.20 LiDAR PCD, confirmed, OSS key"; the lidar archive is populated when the coordinator downloads PCD blobs from the confirmed 99.20 OSS key) | OBSERVABILITY | — | `EntityCategory.DIAGNOSTIC` | `True` | Count of archived LiDAR point-cloud scans. OBSERVABILITY because the LiDAR scan archive is a protocol-RE / power-user feature (the camera.lidar_top_down entity renders the actual point cloud). Attributes carry scan list with MD5 hashes. Correctly gated on `lidar_archive is not None` (sensor.py:1564–1565). |
+
+---
+
+## Summary (P2.2 consolidation)
+
+**Audit complete: 2026-04-27**. Five sections (1.1–1.5), 158 entities classified.
+
+### Classification tally
+
+| Classification | Count | % of total |
+|---|---:|---:|
+| PRODUCTION | 76 | 48% |
+| OBSERVABILITY | 24 | 15% |
+| EXPERIMENTAL | 13 | 8% |
+| **Surviving (P+O+E)** | **113** | **72%** |
+| DELETE | 45 | 28% |
+
+### Per-section breakdown
+
+| Section | File(s) | Total | P | O | E | D |
+|---|---|---:|---:|---:|---:|---:|
+| 1.1 | binary_sensor + camera + lawn_mower + device_tracker | 12 | 8 | 3 | 0 | 0 (note: 1 listed as PRODUCTION read like camera/wifi_map could be re-tiered) |
+| 1.2 | select + number + time | 12 | 4 | 0 | 0 | 8 |
+| 1.3 | button | 19 | 12 | 1 | 3 | 3 |
+| 1.4 | switch | 35 | 5 | 0 | 1 | 29 |
+| 1.5 | sensor | 80 | 47 | 19 | 9 | 5 |
+
+The 35-row switch.py audit is the bulk of the deletion target — most upstream-vacuum sub-switches inside multiplexed properties (AUTO_SWITCH_SETTINGS, STR_AI_PROPERTY) live there.
+
+### Vacuum-vocabulary noise in surviving code (top files by raw grep count)
+
+Surveyed pattern: `\b(clean|cleaning|carpet|mop|water_tank|dust|vacuum|silver_ion|squeegee|tank_filter|cruise|stream|customized|customised|dnd|wifi_map|dustcollect|auto_empty|self_clean|fluid|cleangenius|pet_furniture|pet_detective|voice_assistant)\b` across `custom_components/`.
+
+| File | Hits |
+|---|---:|
+| `dreame/device.py` | 80 |
+| `dreame/const.py` | 43 |
+| `camera.py` | 26 |
+| `dreame/map.py` | 19 |
+| `dreame/types.py` | 17 |
+| `lawn_mower.py` | 6 |
+| `const.py` | 6 |
+| `switch.py` | 5 |
+| `sensor.py` | 5 |
+| `live_map.py` | 3 |
+| `button.py` | 3 |
+| (rest single digits) |  |
+
+**Total: ~219 vacuum-vocab references across the integration's `.py` files.**
+
+**Total integration LOC: 35,087** (custom_components only, includes dreame/, protocol/, entity files, translations excluded).
+
+### Three ambiguous entries flagged for user decision
+
+1. **Vacuum-era unavailable sensors (sensor.py: CLEANING_TIME, CLEANED_AREA, STATUS)** — currently EXPERIMENTAL. Vacuum-era s4p2/s4p3/s4p1 properties not in §2.1, not observed on g2408. Could be EXPERIMENTAL (keep for "other firmware variants we might never see") or DELETE (less clutter). **Recommend DELETE** — single-model integration permanently.
+
+2. **Shadow consumable sensors (sensor.py)**: BLADES_LEFT/SIDE_BRUSH_LEFT exist twice — once via s9p1/s9p2/s10p1/s10p2 (never observed on g2408) and once via CFG.CMS-derived `blade_health_pct` / `brush_health_pct`. The s9/s10 sensors shadow the CFG ones. **Recommend DELETE the s9/s10 variants** — CFG path is the working one.
+
+3. **Research-active raw-protocol sensors (`obs_keys_raw`, `aiobs_keys_raw`)** — currently OBSERVABILITY enabled by default. Appropriate during RE phase but cluttery for users at launch. **Recommend flip to disabled-by-default** for the launch cutover.
+
+### Estimated post-cutover state
+
+- Entity count: 113 (76 PRODUCTION + 24 OBSERVABILITY + 13 EXPERIMENTAL)
+- Vacuum-vocab references: most of the ~219 will persist in helper functions and scaffolding even after entity deletion. Entity-deletion alone won't sweep them — they'd need P5 decomposition as a side effect, OR a separate vocabulary-rename pass.
+
+### Decision frame (per plan §Phase 2 Step 1)
+
+Plan heuristic:
+- If P+O+E ≤ 50 entities and >40% of vocab grep hits are vacuum-only → **greenfield**
+- If P+O+E > 80 entities OR mower-relevant keywords dominate → **surgical**
+
+**P+O+E = 113. The heuristic recommends surgical.**
+
+But the vocab-noise concern is real. Surgical-only path leaves ~219 references scattered through the integration; only P5 decomposition would sweep them as a side effect of moving code into focused modules.
+
+### Decision (2026-04-27)
+
+_Awaiting user input. Two paths:_
+
+**A) Surgical cutover (P2.3 + continue with P3–P7)**
+- Apply audit decisions in one cutover commit (delete 45 entities + their property/action enum entries + their translation strings + their helper paths).
+- Continue with P3 (observability), P4 (finalize), P5 (decompose dreame/device.py + map.py — sweeps the bulk of the remaining vocab references as a side effect), P6 (tests), P7 (package reconcile).
+- Total spec already written; predictable execution.
+
+**B) Greenfield extract**
+- Stop here. Write a new spec for a from-scratch integration that imports only the `protocol/` codecs and the surviving 113 entities.
+- The audit table becomes the surface specification.
+- Replace P3–P7 with "build the new integration" — one spec + one big plan.
+- Larger upfront cost, much cleaner final result, ~30K LOC reduction in one move.
+
