@@ -1252,6 +1252,31 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # payload. Attributes carry the per-endpoint result (or _error
     # marker). Lets us see at a glance which apk endpoints g2408
     # supports without wiring each to a dedicated sensor.
+    # Raw DreameMowerStatus enum value as an int + name. The
+    # lawn_mower entity exposes derived bools (segment_cleaning,
+    # zone_cleaning, etc.) but never the underlying integer, which
+    # makes it impossible to identify *new* status codes (e.g. the
+    # firmware status during edge mowing — currently unconfirmed —
+    # or any future task type) without instrumenting the device.
+    # This sensor surfaces the raw int as state and the enum name as
+    # `status_name` attribute so we can correlate observed app
+    # behaviour with firmware codes via the HA REST API.
+    DreameMowerSensorEntityDescription(
+        key="mower_status_raw",
+        icon="mdi:state-machine",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda value, device: (
+            int(getattr(device.status, "status", -1))
+            if getattr(device.status, "status", None) is not None
+            else None
+        ),
+        attrs_fn=lambda device: {
+            "status_name": (
+                getattr(getattr(device.status, "status", None), "name", None)
+            ),
+        },
+        exists_fn=lambda description, device: True,
+    ),
     # GPS lat/lon from the mower's onboard RTK GNSS, fetched via the
     # routed `getCFG t:'LOCN'` endpoint. State is a "lat,lon" string when
     # available (so HA's history graph card can show "fix? yes/no" via
