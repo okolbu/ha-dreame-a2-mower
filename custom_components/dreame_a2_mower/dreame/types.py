@@ -1185,7 +1185,6 @@ class DreameMowerDeviceCapability:
         self.segment_slow_clean_route = False
         self.pet_furniture = False
         self.task_type = False
-        self.disable_sensor_cleaning = True
         self.auto_rename_segment = False
         self.saved_furnitures = False
         self.extended_furnitures = False

@@ -323,12 +323,6 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
             DreameMowerEntityDescription().exists_fn(description, device) and device.status.filter_life is not None
         ),
     ),
-    DreameMowerButtonEntityDescription(
-        action_key=DreameMowerAction.RESET_SENSOR,
-        icon="mdi:radar",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        exists_fn=lambda description, device: not device.capability.disable_sensor_cleaning,
-    ),
     # Removed vacuum-only consumable-reset buttons (Cleanup Phase 1,
     # v2.0.0-alpha.32): RESET_SILVER_ION, RESET_LENSBRUSH,
     # RESET_SQUEEGEE. A2 has none of these consumables.

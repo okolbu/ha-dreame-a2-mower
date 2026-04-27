@@ -383,22 +383,6 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         # entity_registry_enabled_default=False,
     ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.SENSOR_DIRTY_LEFT,
-        icon="mdi:radar",
-        native_unit_of_measurement=UNIT_PERCENT,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        # entity_registry_enabled_default=False,
-        exists_fn=lambda description, device: not device.capability.disable_sensor_cleaning,
-    ),
-    DreameMowerSensorEntityDescription(
-        property_key=DreameMowerProperty.SENSOR_DIRTY_TIME_LEFT,
-        icon="mdi:radar",
-        native_unit_of_measurement=UNIT_HOURS,
-        entity_category=EntityCategory.DIAGNOSTIC,
-        # entity_registry_enabled_default=False,
-        exists_fn=lambda description, device: not device.capability.disable_sensor_cleaning,
-    ),
     # Removed vacuum-only consumable sensors (Cleanup Phase 1,
     # v2.0.0-alpha.32): TANK_FILTER_LEFT / TANK_FILTER_TIME_LEFT,
     # SILVER_ION_LEFT / SILVER_ION_TIME_LEFT, LENSBRUSH_LEFT /

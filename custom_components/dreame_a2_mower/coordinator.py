@@ -587,12 +587,6 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
             NOTIFICATION_ID_REPLACE_TANK_FILTER,
             DreameMowerProperty.TANK_FILTER_LEFT,
         )
-        if not self.device.capability.disable_sensor_cleaning:
-            self._check_consumable(
-                CONSUMABLE_SENSOR,
-                NOTIFICATION_ID_CLEAN_SENSOR,
-                DreameMowerProperty.SENSOR_DIRTY_LEFT,
-            )
         self._check_consumable(
             CONSUMABLE_SQUEEGEE,
             NOTIFICATION_ID_REPLACE_SQUEEGEE,

@@ -45,7 +45,6 @@ G2408_CAPABILITY_SNAPSHOT = {
     'cleangenius_auto': False,
     'cleaning_route': False,
     'customized_cleaning': False,
-    'disable_sensor_cleaning': True,
     'dnd': False,
     'dnd_task': False,
     'extended_furnitures': False,

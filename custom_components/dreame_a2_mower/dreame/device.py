@@ -2005,14 +2005,6 @@ class DreameMowerDevice:
                     DreameMowerProperty.CRUISE_SCHEDULE,
                 ]
 
-                if not self.capability.disable_sensor_cleaning:
-                    properties.extend(
-                        [
-                            DreameMowerProperty.SENSOR_DIRTY_LEFT,
-                            DreameMowerProperty.SENSOR_DIRTY_TIME_LEFT,
-                        ]
-                    )
-
                 if self._map_manager is not None:
                     properties.extend(
                         [
@@ -4037,14 +4029,6 @@ class DreameMowerDevice:
                     DreameMowerProperty.TANK_FILTER_TIME_LEFT,
                 ]
             )
-
-            if not self.capability.disable_sensor_cleaning:
-                properties.extend(
-                    [
-                        DreameMowerProperty.SENSOR_DIRTY_LEFT,
-                        DreameMowerProperty.SENSOR_DIRTY_TIME_LEFT,
-                    ]
-                )
 
         if now - self._last_settings_request > 9.5:
             self._last_settings_request = now
@@ -8026,14 +8010,6 @@ class DreameMowerDeviceStatus:
             DreameMowerProperty.SCHEDULED_CLEAN,
             DreameMowerProperty.VOICE_ASSISTANT_LANGUAGE,
         ]
-
-        if not self._capability.disable_sensor_cleaning:
-            properties.extend(
-                [
-                    DreameMowerProperty.SENSOR_DIRTY_LEFT,
-                    DreameMowerProperty.SENSOR_DIRTY_TIME_LEFT,
-                ]
-            )
 
         if not self._capability.dnd_task:
             properties.extend(

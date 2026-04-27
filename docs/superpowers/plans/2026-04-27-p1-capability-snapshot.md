@@ -39,8 +39,8 @@ Notable absences relevant to the capability flags (none observed):
 - `s6p7` (MULTI_FLOOR_MAP), `s6p14` (MAP_BACKUP_STATUS), `s6p15` (WIFI_MAP)
 - `s7p5` (VOICE_ASSISTANT), `s10001p9` (CAMERA_LIGHT_BRIGHTNESS)
 - `s13p1` (MAP_SAVING) — its absence drives `lidar_navigation = True`
-- `s16p1` (SENSOR_DIRTY_LEFT) — its absence drives `disable_sensor_cleaning = True`
-- `s4p21` (OBSTACLE_AVOIDANCE) — also drives `disable_sensor_cleaning`
+- `s16p1` (SENSOR_DIRTY_LEFT) — its absence drove `disable_sensor_cleaning = True` (flag and all gated code deleted in P1.5)
+- `s4p21` (OBSTACLE_AVOIDANCE) — also drove `disable_sensor_cleaning`
 - `s3p3` (OFF_PEAK_CHARGING)
 
 ## Resolved capability flags (the snapshot)
@@ -57,7 +57,6 @@ G2408_CAPABILITY_SNAPSHOT = {
     'cleangenius_auto': False,
     'cleaning_route': False,
     'customized_cleaning': False,
-    'disable_sensor_cleaning': True,    # SENSOR_DIRTY_LEFT not observed
     'dnd': False,
     'dnd_task': False,
     'extended_furnitures': False,
@@ -96,7 +95,7 @@ G2408_CAPABILITY_SNAPSHOT = {
 
 - **P1.4.3 (flatten)**: `__init__` becomes a hard-coded constants list set to the values above. `refresh()` becomes a no-op preserved for call-site compatibility.
 - **P1.4.4 (delete blob)**: the blob has no g2408 entry; decode call is provably dead. Safe to delete.
-- **P1.5 (drop dead branches)**: `disable_sensor_cleaning = True` means the **"always-disabled"** branch of the plan applies — entities gated by `not capability.disable_sensor_cleaning` are always-NOT-created (currently invisible to the user); they should be **deleted** along with the gates rather than the gates simplified to no-ops. Per the spec's "no §2.1 citation = delete" rule, an unreachable entity is also a deletion candidate.
+- **P1.5 (drop dead branches)**: `disable_sensor_cleaning = True` confirmed the **"always-disabled"** branch — entities gated by `not capability.disable_sensor_cleaning` were always-NOT-created (invisible to the user). Per the spec's "no §2.1 citation = delete" rule, all gated code (sensor.py, button.py, coordinator.py, three device.py blocks) and the flag itself were deleted. `disable_sensor_cleaning` no longer exists in the class or snapshot.
 
 ## Caveats
 
