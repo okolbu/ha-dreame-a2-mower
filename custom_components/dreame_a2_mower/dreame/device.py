@@ -6539,6 +6539,11 @@ class DreameMowerDevice:
             self._routed_action_note_failure(repr(ex))
             _LOGGER.warning("refresh_locn: unexpected error %s", ex)
             return False
+        # Log the raw response unconditionally — when the user reports
+        # "no info in the GPS entities" we want the wire-level shape in
+        # the HA log so we can see whether the firmware answered with
+        # an empty payload, an envelope-only response, or actual coords.
+        _LOGGER.info("[LOCN raw] %s", payload)
         d = payload.get("d") if isinstance(payload, dict) else None
         new_locn = d if isinstance(d, dict) else (
             payload if isinstance(payload, dict) else None
@@ -6546,12 +6551,28 @@ class DreameMowerDevice:
         if new_locn is None:
             self._locn_last_error = f"unexpected payload shape: {payload!r}"
             _LOGGER.info("refresh_locn: %s", self._locn_last_error)
+            self._property_changed()
             return False
         self._locn = new_locn
         self._locn_fetched_at = time.time()
-        self._locn_last_error = None
+        # If the response was structurally fine but didn't contain
+        # recognisable lat/lon keys, surface that as last_error so the
+        # diagnostic sensor / device_tracker UI explains the silence
+        # (otherwise the user sees `latitude=None, longitude=None,
+        # last_error=None, fetched_at=<recent>` with no clue why).
+        if self.gps_latitude is None or self.gps_longitude is None:
+            self._locn_last_error = (
+                f"no lat/lon keys in payload: {new_locn!r} "
+                "(expected one of lat/latitude and lon/lng/longitude)"
+            )
+            _LOGGER.info("refresh_locn: %s", self._locn_last_error)
+        else:
+            self._locn_last_error = None
         self._routed_action_note_success()
-        _LOGGER.info("[LOCN] %s", self._locn)
+        _LOGGER.info(
+            "[LOCN] lat=%s lon=%s raw=%s",
+            self.gps_latitude, self.gps_longitude, self._locn,
+        )
         self._property_changed()
         return True
 
