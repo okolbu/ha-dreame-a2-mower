@@ -317,18 +317,16 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
         action_fn=lambda device: device.call_action_opcode(_OP_SUPPRESS_FAULT),
         exists_fn=lambda description, device: True,
     ),
-    DreameMowerButtonEntityDescription(
-        key="take_pic",
-        name="Take Picture",
-        icon="mdi:camera",
-        action_fn=lambda device: device.call_action_opcode(_OP_TAKE_PIC),
-        # Mirrors the Dreame app's behavior — the camera is obscured
-        # at the dock, so the firmware silently skips the capture
-        # there. Disable in HA too to avoid the no-op press
-        # surprise.
-        available_fn=lambda device: not bool(getattr(device.status, "docked", False)),
-        exists_fn=lambda description, device: True,
-    ),
+    # Take Picture button removed 2026-04-27 (alpha.164). Op 401 is
+    # the MIoT takePic opcode but the Dreame app's actual photo capture
+    # bypasses it entirely — A/B test showed the app produced "Image
+    # uploaded successful" with zero MQTT footprint while op 401 from
+    # HA returned status:false. Real photo upload lives on a separate
+    # cloud HTTP / OSS surface we haven't characterised. Re-add when
+    # the apk's takePic flow handler is reverse-engineered or actual
+    # cloud HTTPS traffic is sniffed via SSL-decrypt on the app.
+    # _OP_TAKE_PIC = 401 constant kept at the top of this file for
+    # the future re-add.
     DreameMowerButtonEntityDescription(
         key="cutter_bias",
         name="Calibrate Blade",
