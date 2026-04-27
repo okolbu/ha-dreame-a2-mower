@@ -174,7 +174,7 @@ _KNOWN_VALUE_CATALOGUE: dict[tuple[int, int], frozenset] = {
 
 # Known enumerations for inline caches.
 _KNOWN_S2P2_STATES: frozenset[int] = frozenset({
-    27, 31, 33, 43, 48, 50, 53, 54, 56, 70, 71, 75
+    27, 31, 33, 43, 48, 50, 53, 54, 56, 60, 70, 71, 75
 })
 
 # (siid, piid) slots we've observed but not mapped to an enum entry.
