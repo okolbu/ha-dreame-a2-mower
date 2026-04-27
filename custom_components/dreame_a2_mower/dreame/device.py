@@ -284,21 +284,54 @@ def _side_effect_session_status(dev, value):
 
 
 def _side_effect_map_edit(dev, value):
-    # s2p50 wraps multiple operation classes. Several opcodes signal
-    # a server-side map change that the integration's cached camera
-    # image won't reflect until we re-fetch + rebuild:
-    #   o:215 — edit-existing-zone confirmed (original handler)
-    #   o:201 — operation completed with status:true & error:0 — fires
-    #           at the end of new-zone creation flows like Designated
-    #           Ignore Obstacle Zone, observed sequence 204→234→201→-1
-    # Both are treated the same way: refetch MAP.* and rebuild.
-    # Any other opcode (204 = request, 234 = ack with id, -1 =
-    # cleanup) is informational only.
-    if not (
-        isinstance(value, dict)
-        and value.get("t") == "TASK"
-        and isinstance(value.get("d"), dict)
-    ):
+    # s2p50 wraps multiple operation classes:
+    #
+    # 1. Session-start envelope (flat): `{o, region_id, area_id, exe,
+    #    time, t:'TASK'}` — fires when a mow task starts. The flat
+    #    `o:` value names the task type:
+    #      100=globalMower, 101=edgeMower, 102=zoneMower, 103=spotMower,
+    #      104=planMower (scheduled), 107=startCruisePoint, etc.
+    #    Tracked into `dev._active_task_kind` so the camera renderer's
+    #    edge-mow visualisation engages for app-initiated mows too,
+    #    not just HA-initiated ones (the button.py firings already
+    #    set this directly).
+    #
+    # 2. Map-edit envelope (wrapped): `{d:{o, status, error, ...}, t:'TASK'}`
+    #    — server-side map change opcodes. Several signal that the
+    #    integration's cached camera image won't reflect the change
+    #    until we re-fetch + rebuild MAP.*:
+    #      o:215 — edit-existing-zone confirmed (original handler)
+    #      o:201 — operation completed with status:true & error:0 —
+    #              fires at the end of new-zone creation flows like
+    #              Designated Ignore Obstacle Zone, sequence 204→234→201→-1
+    #    Other map-edit opcodes (204 = request, 234 = ack with id,
+    #    -1 = cleanup) are informational only.
+    if not (isinstance(value, dict) and value.get("t") == "TASK"):
+        return
+
+    # Session-start path — flat envelope with top-level `o`.
+    if "o" in value and not isinstance(value.get("d"), dict):
+        op = value.get("o")
+        kind = {
+            100: "mow",
+            101: "edge",
+            102: "zone",
+            103: "spot",
+            104: "schedule",
+            107: "patrol",
+        }.get(op)
+        if kind is not None:
+            dev._active_task_kind = kind
+            _LOGGER.warning(
+                "[TASK_START] s2p50 o=%s → _active_task_kind=%s "
+                "(region=%s area=%s)",
+                op, kind, value.get("region_id"), value.get("area_id"),
+            )
+            dev._property_changed()
+        return
+
+    # Map-edit path — wrapped envelope with d.o.
+    if not isinstance(value.get("d"), dict):
         return
     d = value["d"]
     op = d.get("o")
