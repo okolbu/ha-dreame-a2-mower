@@ -6075,45 +6075,6 @@ class DreameMowerDevice:
         if self._map_manager and not self.status.has_temporary_map:
             return self.set_cleanset(self._map_manager.editor.set_segment_cleaning_times(segment_id, cleaning_times))
 
-    def set_segment_floor_material(
-        self, segment_id: int, floor_material: int, direction: int = None
-    ) -> dict[str, Any] | None:
-        """Update floor material of a segment on current map"""
-        if self._map_manager and not self.status.has_temporary_map:
-            if not self.capability.floor_direction_cleaning:
-                direction = None
-            else:
-                if floor_material != 1:
-                    direction = None
-                elif direction is None:
-                    segment = self.status.segments[segment_id]
-                    direction = (
-                        segment.floor_material_rotated_direction
-                        if segment.floor_material_rotated_direction is not None
-                        else (
-                            0
-                            if self.status.current_map.rotation == 0 or self.status.current_map.rotation == 90
-                            else 90
-                        )
-                    )
-
-            data = {"nsm": self._map_manager.editor.set_segment_floor_material(segment_id, floor_material, direction)}
-            if self.status.selected_map:
-                data["map_id"] = self.status.selected_map.map_id
-            return self.update_map_data_async(data)
-
-    def set_segment_floor_material_direction(
-        self, segment_id: int, floor_material_direction: int
-    ) -> dict[str, Any] | None:
-        """Update floor material direction of a segment on current map"""
-        if self.capability.floor_direction_cleaning and self._map_manager and not self.status.has_temporary_map:
-            data = {
-                "nsm": self._map_manager.editor.set_segment_floor_material(segment_id, 1, floor_material_direction)
-            }
-            if self.status.selected_map:
-                data["map_id"] = self.status.selected_map.map_id
-            return self.update_map_data_async(data)
-
     def set_segment_visibility(self, segment_id: int, visibility: int) -> dict[str, Any] | None:
         """Update visibility a segment on current map"""
         if self.capability.segment_visibility and self._map_manager and not self.status.has_temporary_map:

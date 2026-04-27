@@ -1610,9 +1610,6 @@ class Segment(Zone):
         self.cleaning_mode = cleaning_mode
         self.cleaning_route = None
         self.color_index = None
-        self.floor_material = None
-        self.floor_material_direction = None
-        self.floor_material_rotated_direction = None
         self.visibility = None
         self.cleanset_type = CleansetType.NONE
         self.set_name()
@@ -1732,9 +1729,6 @@ class Segment(Zone):
             or self.order != other.order
             or self.cleaning_times != other.cleaning_times
             or self.cleaning_mode != other.cleaning_mode
-            or self.floor_material != other.floor_material
-            or self.floor_material_direction != other.floor_material_direction
-            or self.floor_material_rotated_direction != other.floor_material_rotated_direction
             or self.visibility != other.visibility
         )
 
@@ -2293,8 +2287,6 @@ class MapData:
         self.combined_pixel_type: Optional[Any] = None
         # Generated segments from pixel_type
         self.segments: Optional[Dict[int, Segment]] = None
-        # Generated from seg_inf.material
-        self.floor_material: Optional[Dict[int, int]] = None
         self.saved_map: Optional[bool] = None  # Generated for rism map
         self.empty_map: Optional[bool] = None  # Generated from pixel_type
         self.wifi_map_data: Optional[MapData] = None  # Generated from whm
@@ -2812,7 +2804,6 @@ class MapRendererData:
     obstacles: list[list[int | float]] = field(default_factory=lambda: [])
     furnitures: list[list[int | float]] | None = None
     path: list[list[int]] = field(default_factory=lambda: [])
-    floor_material: Dict[int, list[int]] | None = None
     hidden_segments: Dict[int, list[int]] | None = None
     neglected_segments: Dict[int, list[int]] | None = None
     robot_position: list[int] | None = None

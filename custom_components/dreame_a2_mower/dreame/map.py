@@ -930,7 +930,6 @@ class DreameMapMowerMapManager:
                                 map_data.active_cruise_points = self._map_data.active_cruise_points
                                 map_data.path = self._map_data.path
                                 map_data.segments = self._map_data.segments
-                                map_data.floor_material = self._map_data.floor_material
                                 map_data.hidden_segments = self._map_data.hidden_segments
                                 map_data.cleanset = self._map_data.cleanset
                                 changed = map_data != self._map_data
@@ -1730,7 +1729,6 @@ class DreameMapMowerMapEditor:
             map_data.dimensions.width = 0
             map_data.dimensions.height = 0
             map_data.segments = {}
-            map_data.floor_material = None
             map_data.hidden_segments = None
             map_data.path = None
             map_data.obstacles = None
@@ -1742,10 +1740,8 @@ class DreameMapMowerMapEditor:
     def set_rotation(self, map_id: int, rotation: int) -> None:
         if map_id in self._saved_map_data:
             self._saved_map_data[map_id].rotation = rotation
-            DreameMowerMapDecoder.set_floor_material(self._saved_map_data[map_id])
             if self._map_data is not None and map_id == self._selected_map_id:
                 self._map_data.rotation = rotation
-                DreameMowerMapDecoder.set_floor_material(self._map_data)
                 self.refresh_map()
             self.refresh_map(map_id)
 
@@ -1924,7 +1920,6 @@ class DreameMapMowerMapEditor:
                 if map_data.hidden_segments and segments[1] in map_data.hidden_segments:
                     map_data.hidden_segments.remove(segments[1])
 
-                DreameMowerMapDecoder.set_floor_material(map_data)
                 for k, v in map_data.segments.items():
                     if segments[1] in v.neighbors:
                         map_data.segments[k].neighbors.remove(segments[1])
@@ -2013,7 +2008,6 @@ class DreameMapMowerMapEditor:
             if recovery_map_info.map_id == self._selected_map_id:
                 self.set_current_map(recovery_map_info.map_id)
                 # self._map_data.restored_map = False
-                DreameMowerMapDecoder.set_floor_material(self._map_data)
 
             self.map_manager._map_request_count = 0
             self.map_manager._map_request_time = None
@@ -2166,50 +2160,6 @@ class DreameMapMowerMapEditor:
                 self._set_updated_frame_id(map_data.frame_id)
                 self.refresh_map()
                 return self.cleanset(map_data)
-
-    def set_segment_floor_material(
-        self, segment_id: int, floor_material: int, direction: int = None
-    ) -> list[list[int]] | None:
-        map_data = self._map_data
-        if map_data and map_data.segments and segment_id in map_data.segments and not map_data.temporary_map:
-            if direction is not None:
-                if floor_material != 1:
-                    direction = None
-                elif map_data.rotation == 90 or map_data.rotation == 270:
-                    direction = 0 if direction else 90
-
-            map_data.segments[segment_id].floor_material = floor_material
-            map_data.segments[segment_id].floor_material_direction = direction
-            if (
-                self._saved_map_data
-                and self._selected_map_id is not None
-                and self._selected_map_id in self._saved_map_data
-                and segment_id in self._saved_map_data[self._selected_map_id].segments
-            ):
-                self._saved_map_data[self._selected_map_id].segments[segment_id].floor_material = floor_material
-                self._saved_map_data[self._selected_map_id].segments[segment_id].floor_material_direction = direction
-                DreameMowerMapDecoder.set_segment_floor_material(
-                    self._saved_map_data[self._selected_map_id],
-                    segment_id,
-                    self._saved_map_data[self._selected_map_id].floor_material,
-                )
-                self.refresh_map(self._selected_map_id)
-
-            DreameMowerMapDecoder.set_segment_floor_material(map_data, segment_id, map_data.floor_material)
-            self._set_updated_frame_id(map_data.frame_id)
-            self.refresh_map()
-            return {
-                str(k): (
-                    {
-                        "material": v.floor_material,
-                        "direction": v.floor_material_direction,
-                    }
-                    if v.floor_material_direction is not None
-                    else {"material": v.floor_material}
-                )
-                for k, v in map_data.segments.items()
-            }
-        return {}
 
     def set_segment_visibility(self, segment_id: int, visibility: int) -> list[list[int]] | None:
         map_data = self._map_data
@@ -2414,15 +2364,7 @@ class DreameMowerMapDecoder:
         return None
 
     @staticmethod
-    def set_floor_material(map_data):
-        return None
-
-    @staticmethod
     def set_segment_color_index(map_data):
-        return None
-
-    @staticmethod
-    def set_segment_floor_material(map_data, segment_id, floor_material):
         return None
 
     @staticmethod
@@ -3394,7 +3336,6 @@ class DreameMowerMapRenderer:
             active_segments=map_data.active_segments,
             cleanset=bool(map_data.cleanset) if not map_data.saved_map and not map_data.wifi_map else False,
             docked=map_data.docked,
-            floor_material=map_data.floor_material,
             hidden_segments=map_data.hidden_segments,
             neglected_segments=map_data.neglected_segments,
             robot_status=robot_status if not map_data.saved_map and not map_data.wifi_map else 0,
@@ -3460,8 +3401,6 @@ class DreameMowerMapRenderer:
                         v.order,
                         v.cleaning_times,
                         v.cleaning_mode if v.cleanset_type != CleansetType.DEFAULT else None,
-                        v.floor_material,
-                        v.floor_material_direction,
                         v.visibility,
                         [v.x0, v.y0, v.x1, v.y1],
                     ]
@@ -3784,13 +3723,6 @@ class DreameMowerMapRenderer:
             )
             object_scale = 2
 
-            render_material = False
-            if (map_data.saved_map_status == 2 or map_data.saved_map) and not map_data.wifi_map:
-                render_material = self.config.material and map_data.floor_material
-
-            if scale == 3 and (render_material):
-                scale = 2 if info_text else 4
-
             if not map_data.saved_map:
                 if (
                     self._map_data is None
@@ -3889,7 +3821,6 @@ class DreameMowerMapRenderer:
                 or self._map_data.segments != map_data.segments
                 or self._map_data.data != map_data.data
                 or (self._has_mask and not cached_layers.get(MapRendererLayer.PATH_MASK))
-                or (render_material and self._map_data.floor_material != map_data.floor_material)
             ):
                 area_colors = {}
                 # as implemented on the app
@@ -4005,26 +3936,7 @@ class DreameMowerMapRenderer:
                                 if px_type in map_data.neglected_segments:
                                     segment_mask[y, x] = self.color_scheme.neglected_segment
 
-                if render_material:
-                    floor_scale = 2
-                    pixels = pixels.repeat(floor_scale, axis=0).repeat(floor_scale, axis=1)
-                    if render_material:
-                        floor_material = self.render_floor_material(
-                            pixels,
-                            map_data.floor_material,
-                            map_data.pixel_type,
-                            self.color_scheme.material_color,
-                            map_data.dimensions,
-                            floor_scale,
-                        )
-                        if floor_material is not None:
-                            pixels = floor_material
-                            _LOGGER.debug("Render MATERIAL")
-
-                    if scale != floor_scale:
-                        pixels = pixels.repeat(scale / floor_scale, axis=0).repeat(scale / floor_scale, axis=1)
-                else:
-                    pixels = pixels.repeat(scale, axis=0).repeat(scale, axis=1)
+                pixels = pixels.repeat(scale, axis=0).repeat(scale, axis=1)
 
                 if self._has_mask:
                     mask = mask.repeat(scale, axis=0).repeat(scale, axis=1)
@@ -6248,94 +6160,6 @@ class DreameMowerMapRenderer:
         )
 
         return new_layer
-
-    def render_floor_material(self, image, floor_material, pixel_type, color, dimensions, scale):
-        tile_w = 12
-        floor_w = 4
-        floor_h = 16
-
-        height = dimensions.height * scale
-        tiles = {}
-        for k, v in floor_material.items():
-            if v > 0 and v < 4:
-                if v not in tiles:
-                    tiles[v] = [k]
-                else:
-                    tiles[v].append(k)
-
-        if tiles:
-            color_map = {}
-            for floor_type, tile in tiles.items():
-                if tile:
-                    if floor_type == 1:
-                        w = math.floor(2 * dimensions.width / floor_h)
-                        h = math.floor(dimensions.height / floor_w)
-                        y_start = 1
-                        x_start = 0
-                        x_multiplier = floor_h / 2
-                        y_multiplier = floor_w
-                    elif floor_type == 2:
-                        w = math.floor(dimensions.width / floor_w)
-                        h = math.floor(2 * dimensions.height / floor_h)
-                        y_start = 0
-                        x_start = 1
-                        x_multiplier = floor_w
-                        y_multiplier = floor_h / 2
-                    else:
-                        w = math.floor(dimensions.width / tile_w)
-                        h = math.floor(dimensions.height / tile_w)
-                        y_start = 0
-                        x_start = 0
-                        x_multiplier = tile_w
-                        y_multiplier = tile_w
-
-                    for x in range(1, w + 1):
-                        for y in range(y_start, dimensions.height):
-                            xx = int(x * x_multiplier)
-                            if xx < dimensions.width and (
-                                floor_type != 1
-                                or (
-                                    (math.floor((y - 1) / floor_w) % 2 == 0 and x % 2 == 0)
-                                    or (math.floor((y - 1) / floor_w) % 2 == 1 and x % 2 == 1)
-                                )
-                            ):
-                                val = int(pixel_type[xx, y])
-                                if val > 0 and val < 63 and val in tile:
-                                    x_index = (xx * scale) + 1
-                                    y_index = (height - 1) - (y * scale) - 1
-
-                                    if val not in color_map:
-                                        cc = DreameMowerMapRenderer._alpha_composite(color, image[y_index, x_index])
-                                        color_map[val] = cc
-                                    else:
-                                        cc = color_map[val]
-                                    image[y_index, x_index] = cc
-                                    y_index = y_index + 1
-                                    image[y_index, x_index] = cc
-
-                    for x in range(x_start, dimensions.width):
-                        for y in range(1, h + 1):
-                            yy = int(y * y_multiplier)
-                            if yy < dimensions.height and (
-                                floor_type != 2
-                                or (
-                                    (math.floor((x - 1) / floor_w) % 2 == 0 and y % 2 == 0)
-                                    or (math.floor((x - 1) / floor_w) % 2 == 1 and y % 2 == 1)
-                                )
-                            ):
-                                val = int(pixel_type[x, yy])
-                                if val > 0 and val < 63 and val in tile:
-                                    x_index = x * scale
-                                    y_index = (height - 1) - ((yy * scale) + 1)
-                                    if val not in color_map:
-                                        cc = DreameMowerMapRenderer._alpha_composite(color, image[y_index, x_index])
-                                        color_map[val] = cc
-                                    else:
-                                        cc = color_map[val]
-                                    image[y_index, x_index] = cc
-                                    x_index = x_index + 1
-                                    image[y_index, x_index] = cc
-            return image
 
     def render_neglected_segments(
         self,
