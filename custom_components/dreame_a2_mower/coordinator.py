@@ -307,6 +307,10 @@ class DreameMowerDataUpdateCoordinator(DataUpdateCoordinator[DreameMowerDevice])
                 timedelta(seconds=60),
             )
         )
+        # Fire one LOCN refresh immediately so the user sees a wire-
+        # level result in the log within seconds of integration start
+        # rather than after the 60s timer's first tick.
+        hass.async_create_task(_periodic_locn_refresh(None))
 
     async def async_setup(self) -> None:
         """Finish one-time coordinator setup that requires the event loop.

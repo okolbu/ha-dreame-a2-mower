@@ -6522,7 +6522,7 @@ class DreameMowerDevice:
         except CfgActionError as ex:
             if "Dreame error r=" in str(ex):
                 self._locn_last_error = str(ex)
-                _LOGGER.info(
+                _LOGGER.warning(
                     "refresh_locn: app-level error %s "
                     "(ATA[2] off? endpoint not yet authorised?)",
                     ex,
@@ -6539,18 +6539,19 @@ class DreameMowerDevice:
             self._routed_action_note_failure(repr(ex))
             _LOGGER.warning("refresh_locn: unexpected error %s", ex)
             return False
-        # Log the raw response unconditionally — when the user reports
-        # "no info in the GPS entities" we want the wire-level shape in
-        # the HA log so we can see whether the firmware answered with
-        # an empty payload, an envelope-only response, or actual coords.
-        _LOGGER.info("[LOCN raw] %s", payload)
+        # Log the raw response at WARNING so it surfaces without log-
+        # level changes — HA's default logger is `default: warning`,
+        # so `_LOGGER.info` calls from custom_components are invisible
+        # unless the user opts into a custom_components.* override.
+        # See reference_ha_integration_gotchas memory.
+        _LOGGER.warning("[LOCN raw] %s", payload)
         d = payload.get("d") if isinstance(payload, dict) else None
         new_locn = d if isinstance(d, dict) else (
             payload if isinstance(payload, dict) else None
         )
         if new_locn is None:
             self._locn_last_error = f"unexpected payload shape: {payload!r}"
-            _LOGGER.info("refresh_locn: %s", self._locn_last_error)
+            _LOGGER.warning("refresh_locn: %s", self._locn_last_error)
             self._property_changed()
             return False
         self._locn = new_locn
@@ -6565,11 +6566,11 @@ class DreameMowerDevice:
                 f"no lat/lon keys in payload: {new_locn!r} "
                 "(expected one of lat/latitude and lon/lng/longitude)"
             )
-            _LOGGER.info("refresh_locn: %s", self._locn_last_error)
+            _LOGGER.warning("refresh_locn: %s", self._locn_last_error)
         else:
             self._locn_last_error = None
         self._routed_action_note_success()
-        _LOGGER.info(
+        _LOGGER.warning(
             "[LOCN] lat=%s lon=%s raw=%s",
             self.gps_latitude, self.gps_longitude, self._locn,
         )

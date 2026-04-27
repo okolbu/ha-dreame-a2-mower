@@ -336,7 +336,7 @@ views:
               ---
               **OBS** (Obstacle settings) — state: `{{ obs.state if obs else 'n/a' }}`
               {%- if obs and obs.attributes %}
-              {%- set obs_keys = obs.attributes | dict %}
+              {%- set obs_keys = obs.attributes %}
               {%- set obs_real_keys = [] %}
               {%- for k in obs_keys %}{%- if not k.startswith('_') and k not in ('icon','friendly_name') %}{%- set _ = obs_real_keys.append(k) %}{%- endif %}{%- endfor %}
               {%- if obs_real_keys %}
@@ -359,7 +359,7 @@ views:
               ---
               **AIOBS** (AI obstacle settings) — state: `{{ aiobs.state if aiobs else 'n/a' }}`
               {%- if aiobs and aiobs.attributes %}
-              {%- set aiobs_keys = aiobs.attributes | dict %}
+              {%- set aiobs_keys = aiobs.attributes %}
               {%- set aiobs_real_keys = [] %}
               {%- for k in aiobs_keys %}{%- if not k.startswith('_') and k not in ('icon','friendly_name') %}{%- set _ = aiobs_real_keys.append(k) %}{%- endif %}{%- endfor %}
               {%- if aiobs_real_keys %}
