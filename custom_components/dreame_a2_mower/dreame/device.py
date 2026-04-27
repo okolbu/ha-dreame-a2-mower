@@ -90,7 +90,6 @@ from .const import (
     CONSUMABLE_TO_LIFE_WARNING_DESCRIPTION,
     PROPERTY_TO_NAME,
     DEVICE_KEY,
-    DREAME_MODEL_CAPABILITIES,
     ATTR_CHARGING,
     ATTR_MOWER_STATE,
     ATTR_DND,
@@ -1449,9 +1448,7 @@ class DreameMowerDevice:
                 _LOGGER.debug("Property %s Not Available", DreameMowerProperty(did).name)
 
         if not self._ready:
-            self.capability.refresh(
-                json.loads(zlib.decompress(base64.b64decode(DREAME_MODEL_CAPABILITIES), zlib.MAX_WBITS | 32))
-            )
+            self.capability.refresh()
 
         for callback in callbacks:
             callback[0](callback[1])
