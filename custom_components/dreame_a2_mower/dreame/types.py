@@ -1170,10 +1170,19 @@ class DeviceCapability(IntEnum):
 
 
 class DreameMowerDeviceCapability:
-    def __init__(self, device) -> None:
+    """Capability flags for the Dreame A2 mower (g2408).
+
+    This integration is permanently single-model. Each flag is a
+    constant derived from the live snapshot captured during P1.4
+    (see docs/superpowers/plans/2026-04-27-p1-capability-snapshot.md).
+    """
+
+    def __init__(self, device=None) -> None:
+        # `device` is retained for call-site compatibility with the
+        # previous multi-model API and is unused now.
         self.list = None
         self.lidar_navigation = True
-        self.multi_floor_map = True
+        self.multi_floor_map = False
         self.ai_detection = False
         self.customized_cleaning = False
         self.auto_switch_settings = False
@@ -1188,7 +1197,7 @@ class DreameMowerDeviceCapability:
         self.off_peak_charging = False
         self.max_suction_power = False
         self.obstacle_image_crop = False
-        self.map_object_offset = True
+        self.map_object_offset = False
         self.robot_type = RobotType.LIDAR
         self.floor_material = False
         self.floor_direction_cleaning = False
@@ -1198,10 +1207,10 @@ class DreameMowerDeviceCapability:
         self.large_particles_boost = False
         self.fluid_detection = False
         self.cleaning_route = False
-        self.segment_slow_clean_route = True
+        self.segment_slow_clean_route = False
         self.pet_furniture = False
         self.task_type = False
-        self.disable_sensor_cleaning = False
+        self.disable_sensor_cleaning = True
         self.auto_rename_segment = False
         self.saved_furnitures = False
         self.extended_furnitures = False
@@ -1216,124 +1225,41 @@ class DreameMowerDeviceCapability:
         self._custom_cleaning_mode = False
         self._device = device
 
-    def refresh(self, device_capabilities):
-        self.lidar_navigation = bool(self._device.get_property(
-            DreameMowerProperty.MAP_SAVING) is None)
-        self.multi_floor_map = bool(
-            self._device.get_property(
-                DreameMowerProperty.MULTI_FLOOR_MAP) is not None and self.lidar_navigation
-        )
-        self.ai_detection = bool(self._device.get_property(
-            DreameMowerProperty.AI_DETECTION) is not None)
-        self.customized_cleaning = bool(
-            self._device.get_property(
-                DreameMowerProperty.CUSTOMIZED_CLEANING) is not None
-        )
-        self.auto_switch_settings = bool(
-            self._device.get_property(
-                DreameMowerProperty.AUTO_SWITCH_SETTINGS) is not None
-        )
-        self.wifi_map = bool(self._device.get_property(
-            DreameMowerProperty.WIFI_MAP) is not None)
-        self.backup_map = bool(self._device.get_property(
-            DreameMowerProperty.MAP_BACKUP_STATUS) is not None)
-        self.dnd_task = bool(self._device.get_property(
-            DreameMowerProperty.DND_TASK) is not None)
-        self.dnd = bool(self.dnd_task or self._device.get_property(
-            DreameMowerProperty.DND) is not None)
-        self.shortcuts = bool(self._device.get_property(
-            DreameMowerProperty.SHORTCUTS) is not None)
-        self.off_peak_charging = bool(self._device.get_property(
-            DreameMowerProperty.OFF_PEAK_CHARGING) is not None)
-        camera_light = self._device.get_property(
-            DreameMowerProperty.CAMERA_LIGHT_BRIGHTNESS)
-        self.voice_assistant = bool(self._device.get_property(
-            DreameMowerProperty.VOICE_ASSISTANT) is not None)
+    def refresh(self, device_capabilities=None) -> None:
+        """No-op preserved for call-site compatibility.
 
-        model = ""
-        if self._device.info and self._device.info.model:
-            model = self._device.info.model.replace("mower.", "").replace(
-                "dreame.", "").replace("xiaomi.", "")
-            device_capability = device_capabilities.get(model)
-            while device_capability and isinstance(device_capability, str):
-                device_capability = device_capabilities.get(device_capability)
-            if device_capability:
-                version = self._device.info.version if self._device.info.version else 1
-                for v in device_capability:
-                    capability = v[0]
-                    if capability in DeviceCapability._value2member_map_:
-                        capability = DeviceCapability(capability)
-                        param = capability.name.lower()
-                        if param and hasattr(self, param):
-                            setattr(self, param, bool(version >= v[1]))
-
-        # self.camera_streaming = bool(
-        #    self.camera_streaming and (camera_light is not None or self._device.get_property(DreameMowerProperty.CRUISE_SCHEDULE) is not None)
-        # )
-        self.lensbrush = bool(self.lensbrush or self._device.get_property(
-            DreameMowerProperty.LENSBRUSH_LEFT))
-        self.fill_light = bool(
-            self.camera_streaming
-            and camera_light is not None
-            and len(camera_light) < 5
-            and str(camera_light).isnumeric()
-        )
-        self.pet_detective = bool(
-            self.pet_detective and self._device.get_property(
-                DreameMowerProperty.PET_DETECTIVE) is not None
-        )
-        self.task_type = bool(self.task_type and self._device.get_property(
-            DreameMowerProperty.TASK_TYPE) is not None)
-        if not self.cleaning_route:
-            self.segment_slow_clean_route = False
-        self.disable_sensor_cleaning = (
-            self.disable_sensor_cleaning
-            or not self.lidar_navigation
-            or self._device.get_property(DreameMowerProperty.SENSOR_DIRTY_LEFT) is None
-            or (
-                not self.camera_streaming
-                and self._device.get_property(DreameMowerProperty.OBSTACLE_AVOIDANCE) is None
-            )
-        )
-        self.lensbrush = bool(
-            "p2255" in model
-        )
-        self.map_object_offset = bool(self.lidar_navigation and "p20" in model)
-        self.robot_type = RobotType.LIDAR
-
-        self.list = [
-            key
-            for key, value in self.__dict__.items()
-            if not callable(value) and not key.startswith("_") and value == True
-        ]
-        if self.custom_cleaning_mode:
-            self.list.append("custom_cleaning_mode")
-        if self.cruising:
-            self.list.append("cruising")
-        if self.map:
-            self.list.append("map")
+        Capability flags are now constants for g2408. This method
+        accepts but ignores `device_capabilities` so existing callers
+        do not need to change.
+        """
 
     @property
     def map(self) -> bool:
         """Returns true when mapping feature is available."""
-        return bool(self._device._map_manager is not None)
+        return bool(self._device is not None and self._device._map_manager is not None)
 
     @property
     def custom_cleaning_mode(self) -> bool:
         """Returns true if customized cleaning mode can be set to segments."""
         if self.auto_switch_settings:
             return True
+        if self._device is None:
+            return self._custom_cleaning_mode
         segments = self._device.status.current_segments
         if not self._custom_cleaning_mode:
             if segments:
                 if next(iter(segments.values())).cleaning_mode is not None:
                     self._custom_cleaning_mode = True
                     return True
-        return self._custom_cleaning_mode and (not segments or next(iter(segments.values())).cleaning_mode is not None)
+        return self._custom_cleaning_mode and (
+            not segments or next(iter(segments.values())).cleaning_mode is not None
+        )
 
     @property
     def cruising(self) -> bool:
         if not self.lidar_navigation:
+            return False
+        if self._device is None:
             return False
         return bool(
             (self._device.status.current_map and self._device.status.current_map.predefined_points is not None)
