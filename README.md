@@ -223,46 +223,62 @@ Settings → Devices & Services → Dreame A2 Mower → Configure:
 
 Most of the Dreame app's settings flow through the cloud and are readable by HA. The integration fetches a 24-key `CFG` dict via the routed `getCFG` action (`siid:2 aiid:50 m:'g' t:'CFG'`) on every connect and whenever the firmware pushes `s2p51`/`s2p52` (settings-changed triggers).
 
-Confirmed cloud-visible and exposed as HA entities:
+Confirmed cloud-visible and exposed as HA entities (CFG-derived unless noted):
 
-- **Volume** (0–100, via CFG.VOL)
-- **Anti-theft** (on/off, CFG.STUN)
-- **Weather reference** (on/off, CFG.WRF)
-- **Grass protection** (on/off, CFG.PROT)
-- **Path display mode** (CFG.PATH)
-- **Headlight** (schedule + enable, CFG.LIT: `[enabled, start_min, end_min, l1…l4, reserved]`)
-- **Timezone** (IANA string, CFG.TIME e.g. `Europe/Oslo`)
-- **Wear meters** (CFG.CMS: blade / brush / robot maintenance % — confirmed matches app)
-- **Mow mode** (Standard / Efficient, CFG.PRE[1])
-- **Notification toggles** (CFG.MSG_ALERT: Anomaly / Error / Task / Consumable Messages)
-- **Voice prompts** (CFG.VOICE: Regular Notification / Work Status / Special Status / Error Status)
-- **Do-Not-Disturb schedule** (CFG.DND) and **Low-Speed Nighttime** (CFG.LOW)
-- **Battery/Charging schedule** (CFG.BAT: min%, max%, custom schedule times)
-- **Auto-Task-Adjust** (CFG.ATA), **Recharge config** (CFG.REC)
-- **Language** (CFG.LANG, firmware-internal ordinal)
+- **Navigation Path** (Direct/Smart, CFG.PROT) — confirmed via toggle correlation
+- **Frost Protection** (on/off, CFG.FDP)
+- **Rain Protection** (CFG.WRP `[enabled, resume_hours]` — resume_hours 0 = "Don't Mow After Rain")
+- **Low-Speed Nighttime** (CFG.LOW `[enabled, start_min, end_min]`)
+- **Auto-Recharge after Extended Standby** (CFG.STUN — fires auto-return ~1h after idle)
+- **AI Obstacle Photos** (capture switch, CFG.AOP)
+- **Lights schedule** (CFG.LIT 8-element, `[enabled, start_min, end_min, standby, working, charging, error, ?]`)
+- **Anti-Theft Alarm** (CFG.ATA `[lift_alarm, offmap_alarm, realtime_location]`)
+- **Do Not Disturb** (CFG.DND `[enabled, start_min, end_min]`)
+- **Child Lock** (CFG.CLS)
+- **Human Presence Alert** (CFG.REC 9-element, sensitivity + scenarios + photo consent + push interval)
+- **Language** (CFG.LANG `[text_idx, voice_idx]`)
+- **Voice volume** (0–100, CFG.VOL)
+- **Voice prompt modes** (CFG.VOICE 4-element `[regular, work, special, error]`)
+- **Charging config** (CFG.BAT 6-element `[recharge_pct, resume_pct, ?, custom_charging, start_min, end_min]`)
+- **Notification preferences** (CFG.MSG_ALERT 4-element — `[0]=Anomaly Messages`, `[2]=Task Messages` confirmed; `[1]` and `[3]` are the other two app rows)
+- **Mowing Height** (3-7 cm, `s6p2[0]` in mm)
+- **Mowing Efficiency** (Standard/Efficient, `s6p2[1]`)
+- **EdgeMaster** (`s6p2[2]` bool)
+- **Mowing zones** (cloud `MAP.* mowingAreas`)
+- **Designated Ignore Obstacle zones** (cloud `MAP.* notObsAreas` — green on map)
+- **Classic exclusion zones** (cloud `MAP.* forbiddenAreas` — red on map)
+- **Spots** for spot-mow (cloud `MAP.* spotAreas` — opt-in grey overlay via `switch.show_spot_zones`)
+- **CFG version counter** (CFG.VER monotonic — useful as a tripwire)
+- **Wear meters** (CFG.CMS `[blade, brush, robot, aux]`)
+- **Timezone** (CFG.TIME IANA string)
 
-Plus the pre-existing `s2p51` settings (Child Lock, Rain Protection, Frost Protection, AI Obstacle Photos, Human Presence Detection, Charging Config, LED Period, Auto Recharge Standby, Navigation Path) — see [`docs/research/g2408-protocol.md`](docs/research/g2408-protocol.md) §6.1 for the full catalog.
+Five CFG keys still mystery as of 2026-04-27: **`BP`, `DLS`, `PATH`, `PRE`** (g2408 only returns 2 elements where apk says 9), plus the unknown trailing fields on a few of the lists above. The `cfg_keys_raw` diagnostic sensor + dashboard MAP card make further toggle-research one click each.
 
-### Still Bluetooth-only (invisible to HA) on g2408
+### Cloud-write-invisible-on-MQTT (still un-readable on g2408)
 
-- Mowing Direction (angle slider)
-- Mowing Height (cutting-blade height slider)
-- Edge Mowing / Safe Edge Mowing / EdgeMaster
-- Start from Stop Point
-- Obstacle Avoidance Distance / Height
-- Pathway Obstacle Avoidance
+These settings travel through cloud-write paths the integration hasn't reverse-engineered (`s6p2` tripwire fires but no readable side effect; the apk likely has dedicated `setX` endpoints we haven't enumerated):
+
+- Mowing Direction (angle slider, incl. Crisscross / Chequerboard sub-options)
+- Automatic Edge Mowing / Safe Edge Mowing
 - Obstacle Avoidance on Edges
-- LiDAR / AI Recognition detail toggles
+- LiDAR Obstacle Recognition (incl. Obstacle Avoidance Height sub-band)
+- AI Obstacle Recognition: Humans / Animals / Objects (3 individual toggles)
+- Obstacle Avoidance Distance (10/15/20 cm bands)
+- Pathway Obstacle Avoidance (toggle + map-draw component)
+- Stop Point Term, Start from Stop Point
 
-These correspond to apk indexes `PRE[2..9]` which g2408's firmware doesn't expose in its 2-element `PRE` — they're BT-only on this model. A Dreame-app user with Bluetooth reach of the mower can still set them.
+These were originally labelled "Bluetooth-only" but the 2026-04-27 cloud-only Edge Mow start proved the mower is reachable via cloud HTTP without any BT hop. The settings ARE going through the cloud — just via `setX` targets we haven't identified. SSL-decrypt of the Dreame app's HTTPS traffic would surface the `t:` values in one session.
 
 ## Write commands
 
 The routed-action endpoint (`siid:2 aiid:50`) works on g2408 once the URL-construction race is handled — see [`docs/research/g2408-protocol.md`](docs/research/g2408-protocol.md) §6.2. This enables:
 
-- **`setPRE`** — writes the mow mode (Standard / Efficient) through the `mow_mode_efficient` switch.
-- **Action opcodes** — `find_bot` (ring mower), `lock_bot`, `suppress_fault` (clear warning), `take_pic`, `cutter_bias` (blade calibration). Exposed as button entities.
+- **`setPRE`** — wraps the mowing-prefs write (caveat: g2408's PRE is only 2 elements vs apk's 9, so most slots aren't reachable).
+- **Action opcodes** — `start_mowing` (op 100 = all-area), `start_edge_mowing` (op 101), `find_bot` (op 9), `lock_bot` (op 12), `suppress_fault` (op 11), `cutter_bias` (op 503), `start_learning_map` (op 110 = manual perimeter walk), `pause`, `stop`, `recharge`. Plus the new multi-select **`Start Selected Zone Mow`** (op 102) and **`Start Selected Spot Mow`** (op 103) — pick zones/spots via per-entry "(mow next)" switches, then press the start button.
 - **`getDockPos`** — dock position readback (currently a diagnostic sensor, may drive a future auto-calibration path).
+- **`getOBS` / `getAIOBS`** — wrappers exist; on g2408 these return `r=-3` (no-data / not-supported), so the actual obstacle settings probably live in a different cloud surface.
+
+Take Picture (op 401) was removed in alpha.164: the firmware accepts the routed-action but doesn't actually capture or upload — the Dreame app uses a separate cloud media-upload endpoint we haven't reverse-engineered.
 
 Caveats:
 
