@@ -47,6 +47,47 @@ class DreameMowerButtonEntityDescription(DreameMowerEntityDescription, ButtonEnt
     """Describes Dreame Mower Button entity."""
 
     action_fn: Callable[[object]] = None
+    # Optional dynamic-name callback. Returns the user-facing button
+    # label given the current device state. Used by Stop to switch
+    # between "Stop Mowing" / "Stop Returning" / "Stop Patrolling" /
+    # etc. without needing a separate button per state.
+    name_fn: Callable[[object], str] = None
+
+
+def _active_action_label(device) -> str:
+    """Map the current activity to a verb-noun label so Stop can read
+    "Stop Mowing", "Stop Returning", "Stop Patrolling", etc.
+
+    Discriminator order — most-specific first, generic fallback last:
+      DreameMowerStatus.SPOT_CLEANING / ZONE_CLEANING / SEGMENT_CLEANING
+        / FAST_MAPPING / CRUISING_PATH / CRUISING_POINT — sub-task types
+      device.status.returning — returning to dock (any path)
+      device.status.cleaning_paused — task paused on lawn
+      DreameMowerStatus.CLEANING (generic mow) — fallback verb
+    Returns just "Mowing" if no specific activity matches; the caller
+    prefixes it with the action verb (e.g. "Stop "). Always returns
+    something so the label is never empty.
+    """
+    from .dreame.types import DreameMowerStatus
+
+    if getattr(device.status, "returning", False):
+        return "Returning"
+    status = getattr(device.status, "status", None)
+    label_by_status = {
+        DreameMowerStatus.SPOT_CLEANING: "Spot Mow",
+        DreameMowerStatus.ZONE_CLEANING: "Zone Mow",
+        DreameMowerStatus.SEGMENT_CLEANING: "Segment Mow",
+        DreameMowerStatus.FAST_MAPPING: "Map Learning",
+        DreameMowerStatus.CRUISING_PATH: "Patrolling",
+        DreameMowerStatus.CRUISING_POINT: "Patrolling",
+        DreameMowerStatus.SHORTCUT: "Shortcut",
+        DreameMowerStatus.PART_CLEANING: "Mowing",
+    }
+    if status in label_by_status:
+        return label_by_status[status]
+    if getattr(device.status, "cleaning_paused", False) or getattr(device.status, "paused", False):
+        return "Mowing"
+    return "Mowing"
 
 
 BUTTONS: tuple[ButtonEntityDescription, ...] = (
@@ -139,16 +180,25 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
         ),
     ),
     DreameMowerButtonEntityDescription(
+        # Adaptive label — see name_fn. The default "Stop Mowing"
+        # below is what HA shows before the device-state context
+        # is loaded; once the integration is up, name_fn takes over
+        # and rewrites it per the current activity.
         key="stop_mowing",
         name="Stop Mowing",
         icon="mdi:stop",
         action_fn=lambda device: device.stop(),
-        # Greys out once Stop has been pressed (mower is returning) so
-        # the user doesn't repeat an in-flight cancel.
-        available_fn=lambda device: (
-            bool(device.status.started)
-            and not bool(getattr(device.status, "returning", False))
+        # Available whenever the mower is doing SOMETHING — mowing,
+        # returning, patrolling, map-learning, paused, etc. The user
+        # may want to cancel a return mid-trip ("Stop Returning")
+        # exactly as the Dreame app's "End Returning to Station"
+        # button supports.
+        available_fn=lambda device: bool(
+            getattr(device.status, "started", False)
+            or getattr(device.status, "returning", False)
+            or getattr(device.status, "paused", False)
         ),
+        name_fn=lambda device: f"Stop {_active_action_label(device)}",
     ),
     DreameMowerButtonEntityDescription(
         action_key=DreameMowerAction.RESET_BLADES,
@@ -334,6 +384,22 @@ class DreameMowerButtonEntity(DreameMowerEntity, ButtonEntity):
         """Initialize a Dreame Mower Button entity."""
         super().__init__(coordinator, description)
         self._generate_entity_id(ENTITY_ID_FORMAT)
+
+    @property
+    def name(self) -> str | None:
+        """Return the entity name. Defers to name_fn when the
+        description provides one (so e.g. Stop Mowing can become
+        "Stop Returning" mid-trip), otherwise falls back to the
+        static base-class name."""
+        name_fn = getattr(self.entity_description, "name_fn", None)
+        if name_fn is not None:
+            try:
+                dynamic = name_fn(self.device)
+            except Exception:  # pragma: no cover — defensive
+                dynamic = None
+            if dynamic:
+                return f"{self.device.name} {dynamic}"
+        return super().name
 
     async def async_press(self, **kwargs: Any) -> None:
         """Press the button."""

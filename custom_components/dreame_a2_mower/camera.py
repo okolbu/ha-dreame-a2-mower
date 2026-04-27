@@ -920,6 +920,20 @@ class DreameMowerCameraEntity(DreameMowerEntity, Camera):
         base = self._image
         if base is None or self._trail_layer is None or self.map_index != 0 or self.map_data_json:
             return base
+        # Push the latest heading from the device's MOWING_TELEMETRY
+        # into the trail layer so compose() can draw the live-icon
+        # direction triangle. Heading freshness is tied to s1p4
+        # arrival cadence (≈5 s), so this is best-effort — stale
+        # heading is fine, missing heading just hides the triangle.
+        try:
+            from .dreame import DreameMowerProperty
+            telemetry = self.device.get_property(DreameMowerProperty.MOWING_TELEMETRY)
+            if telemetry is not None:
+                heading = getattr(telemetry, "heading_deg", None)
+                if isinstance(heading, (int, float)):
+                    self._trail_layer.last_heading_deg = float(heading)
+        except Exception:  # pragma: no cover — defensive, never block compose
+            pass
         base_id = id(base)
         version = self._trail_layer.version
         cached = self._composed_cache

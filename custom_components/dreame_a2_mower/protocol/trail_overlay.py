@@ -76,6 +76,16 @@ TRAIL_WIDTH_PX = 4
 # 2026-04-27 for visibility on a busy lawn map.
 MOWER_MARKER_ICON_SIZE_PX = 32     # noticeable but doesn't dominate
 MOWER_MARKER_OUTLINE_RADIUS_PX = 18  # white halo behind the icon for contrast
+# Direction triangle — small orange tag at the icon's "front" so the
+# user can see which way the mower is facing without the icon
+# rotating (icons are static top-down photographs and would require
+# careful asset prep to look right at every angle). Matches the
+# Dreame app's visual convention.
+DIRECTION_TRIANGLE_COLOR = (255, 140, 30, 255)
+DIRECTION_TRIANGLE_OUTLINE = (255, 255, 255, 255)
+DIRECTION_TRIANGLE_SIZE_PX = 10
+# Distance from icon centre out to the triangle apex.
+DIRECTION_TRIANGLE_OFFSET_PX = (MOWER_MARKER_ICON_SIZE_PX // 2) + 2
 # Live-trail pen-up threshold — consecutive s1p4 samples more than this
 # far apart (metres) are treated as a session boundary / dock visit
 # rather than a connected segment. Mower mow speed is <0.5 m/s over 5 s
@@ -162,6 +172,12 @@ class TrailLayer:
         self._last_point_m: tuple[float, float] | None = None
         self._dock: tuple[float, float] | None = None
         self._obstacle_polys: list[list[tuple[float, float]]] = []
+        # Latest mower heading in degrees, populated externally by the
+        # camera entity from MOWING_TELEMETRY.heading_deg. None hides
+        # the direction-triangle on the live-icon overlay; any float
+        # value is interpreted as the same convention the s1p4 byte[6]
+        # decoder uses (see protocol/telemetry.py).
+        self.last_heading_deg: float | None = None
         # Version bumped on every mutation; used by callers to cache
         # composed PNG bytes.
         self.version: int = 0
@@ -333,7 +349,8 @@ class TrailLayer:
         # lag wherever update() last painted it (typically dock)
         # until the camera's next throttled refresh — this overlay
         # icon is what actually shows the current position.
-        # White halo behind for contrast against grass/trail.
+        # White halo behind for contrast against grass/trail. Small
+        # orange triangle at the heading direction shows facing.
         if self._last_point is not None:
             px, py = self._last_point
             halo_r = MOWER_MARKER_OUTLINE_RADIUS_PX
@@ -348,6 +365,36 @@ class TrailLayer:
                 (int(px) - half, int(py) - half),
                 icon,
             )
+            heading = self.last_heading_deg
+            if heading is not None:
+                import math
+                # Heading convention: byte[6] is `(byte/255)*360` per
+                # protocol/telemetry.py. PIL Y axis grows downward, so
+                # for "0° = north / up" we use (sin, -cos). If the
+                # triangle ends up pointing the wrong way the user
+                # will spot it immediately and we rotate the
+                # convention by 90/180.
+                rad = math.radians(heading)
+                dx = math.sin(rad)
+                dy = -math.cos(rad)
+                cx = px + dx * DIRECTION_TRIANGLE_OFFSET_PX
+                cy = py + dy * DIRECTION_TRIANGLE_OFFSET_PX
+                # Triangle apex at (cx, cy) projected forward another
+                # half-size; base at (cx, cy) with two corners
+                # perpendicular to the heading vector.
+                apex_x = cx + dx * (DIRECTION_TRIANGLE_SIZE_PX * 0.7)
+                apex_y = cy + dy * (DIRECTION_TRIANGLE_SIZE_PX * 0.7)
+                # Perpendicular direction for the triangle base.
+                perp_x = -dy
+                perp_y = dx
+                base_half = DIRECTION_TRIANGLE_SIZE_PX * 0.5
+                base_l = (cx + perp_x * base_half, cy + perp_y * base_half)
+                base_r = (cx - perp_x * base_half, cy - perp_y * base_half)
+                draw.polygon(
+                    [(apex_x, apex_y), base_l, base_r],
+                    fill=DIRECTION_TRIANGLE_COLOR,
+                    outline=DIRECTION_TRIANGLE_OUTLINE,
+                )
 
         for poly in self._obstacle_polys:
             draw.polygon(poly, fill=OBSTACLE_COLOR, outline=OBSTACLE_OUTLINE)
