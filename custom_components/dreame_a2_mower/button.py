@@ -50,40 +50,75 @@ class DreameMowerButtonEntityDescription(DreameMowerEntityDescription, ButtonEnt
 
 
 BUTTONS: tuple[ButtonEntityDescription, ...] = (
+    # Availability gates — same state model used by all five action
+    # buttons so behaviour stays coherent. Notes on the underlying flags:
+    #   device.status.started   = task lifecycle is active (covers
+    #                             actively-mowing, paused, AND returning-
+    #                             to-dock-after-stop). NOT a "currently
+    #                             driving" signal.
+    #   device.status.paused    = task is paused on the lawn.
+    #   device.status.returning = task is winding down (post-Stop or
+    #                             auto-recharge).
+    #   device.status.docked    = at the charging station.
+    #
+    # State→gate matrix:
+    #                    Mowing  Paused  Returning  Docked  Idle-on-lawn
+    #   Start            grey    YES     YES        YES     YES
+    #   Edge             grey    grey    YES        YES     YES
+    #   Stop             YES     YES     grey       grey    grey
+    #   Pause            YES     grey    grey       grey    grey
+    #   Dock             YES     YES     grey       grey    YES
+    #   MapLearn         grey    grey    YES        YES     YES
     DreameMowerButtonEntityDescription(
         key="start_mowing",
         name="Start Mowing",
         icon="mdi:play",
         action_fn=lambda device: device.start_mowing(),
-        # Greys out while a task is active. start_mowing() also
-        # transparently handles "resume" when the mower is paused.
-        available_fn=lambda device: not bool(device.status.started),
+        # Greys only while an active running task is in progress.
+        # Paused/returning/docked/idle all permit start (start_mowing
+        # handles resume transparently when paused).
+        available_fn=lambda device: not (
+            bool(device.status.started)
+            and not bool(getattr(device.status, "paused", False))
+            and not bool(getattr(device.status, "returning", False))
+        ),
     ),
     DreameMowerButtonEntityDescription(
         key="start_edge_mowing",
         name="Start Edge Mowing",
         icon="mdi:vector-square",
         action_fn=lambda device: device.call_action_opcode(_OP_EDGE_MOWER),
-        # Same gate as start_mowing — only when nothing else running.
-        available_fn=lambda device: not bool(device.status.started),
+        # Edge mow doesn't have a "resume" semantic — only enable when
+        # there's no live task at all (returning / docked / idle ok).
+        available_fn=lambda device: (
+            not bool(device.status.started)
+            or bool(getattr(device.status, "returning", False))
+        ),
     ),
     DreameMowerButtonEntityDescription(
         key="pause_mowing",
         name="Pause Mowing",
         icon="mdi:pause",
         action_fn=lambda device: device.pause(),
-        available_fn=lambda device: bool(device.status.started)
-            and not bool(getattr(device.status, "paused", False)),
+        # Only when actively running (not paused, not returning).
+        available_fn=lambda device: (
+            bool(device.status.started)
+            and not bool(getattr(device.status, "paused", False))
+            and not bool(getattr(device.status, "returning", False))
+        ),
     ),
     DreameMowerButtonEntityDescription(
         key="dock",
         name="Return to Dock",
         icon="mdi:home-import-outline",
         action_fn=lambda device: device.return_to_base(),
-        # Visible whenever the mower is somewhere other than the dock —
-        # mowing, paused, or stopped-on-lawn after a manual session.
-        available_fn=lambda device: bool(getattr(device.status, "started", False))
-            or bool(getattr(device.status, "paused", False)),
+        # Available whenever the mower is somewhere other than the dock
+        # AND not already returning. Covers mowing / paused / idle-on-
+        # lawn cases without flapping during the actual return.
+        available_fn=lambda device: (
+            not bool(getattr(device.status, "docked", False))
+            and not bool(getattr(device.status, "returning", False))
+        ),
     ),
     DreameMowerButtonEntityDescription(
         key="start_learning_map",
@@ -91,19 +126,24 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
         icon="mdi:vector-polyline-edit",
         entity_category=EntityCategory.CONFIG,
         action_fn=lambda device: device.call_action_opcode(_OP_START_LEARNING_MAP),
-        # Triggers the manual lawn-perimeter walk (BUILDING mode,
-        # s2p1=11). Confirmed against the Dreame app's "Expand Lawn"
-        # action 2026-04-20.
-        available_fn=lambda device: not bool(device.status.started),
+        # Manual lawn-perimeter walk (BUILDING mode, s2p1=11). Same
+        # gate as Edge Mow — needs a clean slate to start.
+        available_fn=lambda device: (
+            not bool(device.status.started)
+            or bool(getattr(device.status, "returning", False))
+        ),
     ),
     DreameMowerButtonEntityDescription(
         key="stop_mowing",
         name="Stop Mowing",
         icon="mdi:stop",
         action_fn=lambda device: device.stop(),
-        # Always-visible button entity — gate availability on `started` so it
-        # greys out when there's no task to stop. Press is a no-op otherwise.
-        available_fn=lambda device: bool(device.status.started),
+        # Greys out once Stop has been pressed (mower is returning) so
+        # the user doesn't repeat an in-flight cancel.
+        available_fn=lambda device: (
+            bool(device.status.started)
+            and not bool(getattr(device.status, "returning", False))
+        ),
     ),
     DreameMowerButtonEntityDescription(
         action_key=DreameMowerAction.RESET_BLADES,
