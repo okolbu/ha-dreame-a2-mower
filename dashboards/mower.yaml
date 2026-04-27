@@ -390,7 +390,7 @@ views:
               {%- set now_ts = as_timestamp(now()) %}
               {#- Identified MAP keys we already consume in the camera
                   rebuild — anything else is research territory. -#}
-              {%- set known_map_keys = ['boundary','mowingAreas','forbiddenAreas','contours','cleanPoints','md5sum','mapIndex','name','hasBack','merged','totalArea'] %}
+              {%- set known_map_keys = ['boundary','mowingAreas','forbiddenAreas','notObsAreas','spotAreas','contours','cleanPoints','md5sum','mapIndex','name','hasBack','merged','totalArea'] %}
               {%- if attrs %}
               {%- set max_chars = 600 %}
               {%- for k in attrs | sort %}
