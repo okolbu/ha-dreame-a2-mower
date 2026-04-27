@@ -31,6 +31,7 @@ class Setting(StrEnum):
     RAIN_PROTECTION = "rain_protection"
     HUMAN_PRESENCE_ALERT = "human_presence_alert"
     LANGUAGE = "language"
+    NOTIFICATION_PREFS = "notification_prefs"
 
 
 @dataclass(frozen=True)
@@ -139,6 +140,22 @@ def _decode_list_payload(value: list[int]) -> S2P51Event:
                     "realtime_location": bool(value[2]),
                 },
             )
+        if n == 4:
+            # MSG_ALERT (Notification Preferences) — confirmed
+            # 2026-04-27: a 4-element list of bools matches the
+            # 4-row Notifications screen in the Dreame app.
+            # [0] = Anomaly Messages, [2] = Task Messages
+            # confirmed by isolated toggles; [1] and [3] are the
+            # other two app rows (labels not yet captured).
+            return S2P51Event(
+                setting=Setting.NOTIFICATION_PREFS,
+                values={
+                    "anomaly_messages": bool(value[0]),
+                    "row_2": bool(value[1]),
+                    "task_messages": bool(value[2]),
+                    "row_4": bool(value[3]),
+                },
+            )
         if n == 6:
             return S2P51Event(
                 setting=Setting.CHARGING,
@@ -199,6 +216,13 @@ def encode_s2p51(event: S2P51Event) -> dict[str, Any]:
         return {"time": str(v["time"]), "tz": v["tz"]}
     if setting is Setting.LANGUAGE:
         return {"text": int(v["text_idx"]), "voice": int(v["voice_idx"])}
+    if setting is Setting.NOTIFICATION_PREFS:
+        return {"value": [
+            int(bool(v["anomaly_messages"])),
+            int(bool(v["row_2"])),
+            int(bool(v["task_messages"])),
+            int(bool(v["row_4"])),
+        ]}
     if setting is Setting.DND:
         return {
             "end": int(v["end_min"]),
