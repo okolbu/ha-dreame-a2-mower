@@ -89,8 +89,16 @@ DIRECTION_TRIANGLE_OFFSET_PX = (MOWER_MARKER_ICON_SIZE_PX // 2) + 2
 # Live-trail pen-up threshold — consecutive s1p4 samples more than this
 # far apart (metres) are treated as a session boundary / dock visit
 # rather than a connected segment. Mower mow speed is <0.5 m/s over 5 s
-# telemetry; 5 m leaves comfortable margin before ghost-segment noise.
-LIVE_GAP_PENUP_M = 5.0
+# telemetry; normal frame-to-frame travel is ~2 m. Lowered from 5.0 to
+# 3.0 (alpha.165) after user reported return-to-dock paths drawing
+# straight lines through indoor regions — at the old 5 m threshold,
+# frames where the mower's actual route curved around the lawn
+# perimeter still connected as straight lines that crossed walls.
+# At 3 m we err on breaking more often (= visible gaps where the
+# return path is segmented) which the user prefers over plausible-but-
+# wrong lines. Slightly above the typical-frame distance to avoid
+# false pen-ups during sharp turns.
+LIVE_GAP_PENUP_M = 3.0
 DOCK_RADIUS_PX = 14
 DOCK_COLOR = (50, 180, 50, 255)
 DOCK_OUTLINE = (255, 255, 255, 255)
