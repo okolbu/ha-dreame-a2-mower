@@ -112,7 +112,7 @@
       },
       "cleaning_mode": {
         "state": {
-          "sweeping": "Aspirado",
+          "mowing": "Siega",
           "mopping": "Fregado",
           "sweeping_and_mopping": "Aspirado y fregado",
           "mopping_after_sweeping": "Fregado después de aspirado"

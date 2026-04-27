@@ -112,7 +112,7 @@
       },
       "cleaning_mode": {
         "state": {
-          "sweeping": "Подметание",
+          "mowing": "Кошение",
           "mopping": "Протирание",
           "sweeping_and_mopping": "Подметание и протирание",
           "mopping_after_sweeping": "Мытье после подметания"

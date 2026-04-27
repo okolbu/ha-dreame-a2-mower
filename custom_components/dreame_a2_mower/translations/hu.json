@@ -112,7 +112,7 @@
       },
       "cleaning_mode": {
         "state": {
-          "sweeping": "Porszívózás",
+          "mowing": "Fűnyírás",
           "mopping": "Felmosás",
           "sweeping_and_mopping": "Porszívózás és felmosás",
           "mopping_after_sweeping": "Felmosás, a porszívózás után"

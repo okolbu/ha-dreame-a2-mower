@@ -112,7 +112,7 @@
       },
       "cleaning_mode": {
         "state": {
-          "sweeping": "Vegen",
+          "mowing": "Maaien",
           "mopping": "Dweilen",
           "sweeping_and_mopping": "Vegen en dweilen",
           "mopping_after_sweeping": "Dweilen na vegen"

@@ -112,7 +112,7 @@
       },
       "cleaning_mode": {
         "state": {
-          "sweeping": "Zamiatanie",
+          "mowing": "Koszenie",
           "mopping": "Mopowanie",
           "sweeping_and_mopping": "Zamiatanie i mopowanie",
           "mopping_after_sweeping": "Mycie po zamiataniu"

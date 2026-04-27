@@ -23,7 +23,7 @@ from .types import (
 )
 
 
-CLEANING_MODE_MOWING: Final = "sweeping"
+CLEANING_MODE_MOWING: Final = "mowing"
 
 
 STATE_NOT_SET: Final = "not_set"

@@ -112,7 +112,7 @@
       },
       "cleaning_mode": {
         "state": {
-          "sweeping": "Aspirar",
+          "mowing": "Cortar relva",
           "mopping": "Lavar",
           "sweeping_and_mopping": "Aspirar e Lavar",
           "mopping_after_sweeping": "Lavar depois de Aspirar"

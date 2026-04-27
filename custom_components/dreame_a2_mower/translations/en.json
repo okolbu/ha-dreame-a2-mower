@@ -109,7 +109,7 @@
       },
       "cleaning_mode": {
         "state": {
-          "sweeping": "Sweeping",
+          "mowing": "Mowing",
           "mopping": "Mopping",
           "sweeping_and_mopping": "Sweeping and mopping",
           "mopping_after_sweeping": "Mopping after sweeping"

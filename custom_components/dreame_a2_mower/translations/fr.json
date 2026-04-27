@@ -112,7 +112,7 @@
       },
       "cleaning_mode": {
         "state": {
-          "sweeping": "Balayage",
+          "mowing": "Tonte",
           "mopping": "Serpillière",
           "sweeping_and_mopping": "Balayage avec serpillière",
           "mopping_after_sweeping": "Passer la serpillière après le balayage"

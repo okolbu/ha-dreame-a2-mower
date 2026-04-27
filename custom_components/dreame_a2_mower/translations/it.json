@@ -112,7 +112,7 @@
       },
       "cleaning_mode": {
         "state": {
-          "sweeping": "Aspirazione",
+          "mowing": "Taglio erba",
           "mopping": "Pulizia con panno",
           "sweeping_and_mopping": "Pulizia con panno e aspirazione",
           "mopping_after_sweeping": "Mopping dopo aver spazzato"

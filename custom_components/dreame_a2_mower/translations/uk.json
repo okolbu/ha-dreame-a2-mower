@@ -112,7 +112,7 @@
       },
       "cleaning_mode": {
         "state": {
-          "sweeping": "Підмітання",
+          "mowing": "Косіння",
           "mopping": "Миття",
           "sweeping_and_mopping": "Підмітання та миття",
           "mopping_after_sweeping": "Миття після підмітання"

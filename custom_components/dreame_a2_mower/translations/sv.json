@@ -112,7 +112,7 @@
       },
       "cleaning_mode": {
         "state": {
-          "sweeping": "Dammsugning",
+          "mowing": "Klippning",
           "mopping": "Moppning",
           "sweeping_and_mopping": "Dammsugning och moppning",
           "mopping_after_sweeping": "Moppning efter dammsugning"

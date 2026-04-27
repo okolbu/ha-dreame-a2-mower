@@ -103,7 +103,7 @@
     "select": {
       "cleaning_mode": {
         "state": {
-          "sweeping": "Sweeping"
+          "mowing": "Mowing"
         }
       },
       "wider_corner_coverage": {
