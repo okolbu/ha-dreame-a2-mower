@@ -108,9 +108,14 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
         ),
     ),
     DreameMowerButtonEntityDescription(
+        # Entity key kept as "dock" for backward-compat with any
+        # existing dashboard / automation references; the user-facing
+        # name "Recharge" matches the Dreame app's wording (the
+        # firmware auto-charges on dock arrival, so semantically
+        # identical).
         key="dock",
-        name="Return to Dock",
-        icon="mdi:home-import-outline",
+        name="Recharge",
+        icon="mdi:battery-charging-50",
         action_fn=lambda device: device.return_to_base(),
         # Available whenever the mower is somewhere other than the dock
         # AND not already returning. Covers mowing / paused / idle-on-
