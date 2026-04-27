@@ -329,33 +329,6 @@ class DreameMowerStatus(IntEnum):
     PERSON_FOLLOW = 26
 
 
-class DreameMowerDustCollection(IntEnum):
-    """Dreame Mower dust collection availability"""
-
-    UNKNOWN = -1
-    NOT_AVAILABLE = 0
-    AVAILABLE = 1
-
-
-class DreameMowerAutoEmptyStatus(IntEnum):
-    """Dreame Mower dust collection status"""
-
-    UNKNOWN = -1
-    IDLE = 0
-    ACTIVE = 1
-    NOT_PERFORMED = 2
-
-
-class DreameMowerSelfCleanArea(IntEnum):
-    """Dreame Mower self clean area"""
-
-    UNKNOWN = -1
-    SINGLE_ZONE = 0
-    FIVE_SQUARE_METERS = 5
-    TEN_SQUARE_METERS = 10
-    FIFTEEN_SQUARE_METERS = 15
-
-
 class DreameMowerCleaningRoute(IntEnum):
     """Dreame Mower Cleaning route"""
 
