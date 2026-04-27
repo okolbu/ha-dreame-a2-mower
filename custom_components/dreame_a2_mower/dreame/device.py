@@ -2462,38 +2462,37 @@ class DreameMowerDevice:
             # along-X-axis rectangle. Negating the angle up front fixes
             # the tilt direction before reflection so final output
             # matches the app.
+            # Discriminator for green vs red rendering is the cloud
+            # MAP top-level KEY, not any per-entry field (confirmed
+            # 2026-04-27 once notObsAreas synced — turned out the
+            # user's classic exclusion + Designated Ignore zones live
+            # in DIFFERENT keys, both could happen to share `type=2`):
+            #   forbiddenAreas → classic no-go zones (red in app)
+            #   notObsAreas    → Designated Ignore Obstacle zones (green)
             forbidden_pre = map_json.get("forbiddenAreas", {}).get("value", [])
-            # Tuples carry (zone_id, rotated_path, subtype) so the
-            # downstream renderer can colour Designated Ignore zones
-            # (forbiddenAreas type=2) green and classic exclusion
-            # zones red. type field is per the cloud schema (§7.8).
+            ignore_pre = map_json.get("notObsAreas", {}).get("value", [])
             rotated_forbidden: list[tuple[int, list[dict], str | None]] = []
-            for entry in forbidden_pre:
-                if isinstance(entry, list) and len(entry) >= 2:
-                    zid = entry[0]
-                    zdata = entry[1]
-                elif isinstance(entry, dict):
-                    zid = entry.get("id", 0)
-                    zdata = entry
-                else:
-                    continue
-                path = zdata.get("path", [])
-                if not path:
-                    continue
-                raw_angle = zdata.get("angle")
-                rot_angle = -raw_angle if raw_angle is not None else None
-                rp = _rotate_path_around_centroid(path, rot_angle)
-                # NOTE: alpha.147 hypothesised type=2 was the Designated
-                # Ignore Obstacle marker (would render green) but live
-                # testing on user's setup showed their classic exclusion
-                # zone ALSO has type=2 — so type alone is not the
-                # discriminator. Reverted to None (red) for now until
-                # we find the real distinguisher (likely shapeType, an
-                # owner field, or the cloud-side category which may
-                # not be in MAP.* at all). Subtype field on Area is
-                # preserved so the future fix is one line here.
-                subtype = None
-                rotated_forbidden.append((zid, rp, subtype))
+
+            def _accumulate_forbidden(raw_entries, subtype: str | None):
+                for entry in raw_entries:
+                    if isinstance(entry, list) and len(entry) >= 2:
+                        zid = entry[0]
+                        zdata = entry[1]
+                    elif isinstance(entry, dict):
+                        zid = entry.get("id", 0)
+                        zdata = entry
+                    else:
+                        continue
+                    path = zdata.get("path", [])
+                    if not path:
+                        continue
+                    raw_angle = zdata.get("angle")
+                    rot_angle = -raw_angle if raw_angle is not None else None
+                    rp = _rotate_path_around_centroid(path, rot_angle)
+                    rotated_forbidden.append((zid, rp, subtype))
+
+            _accumulate_forbidden(forbidden_pre, None)            # red
+            _accumulate_forbidden(ignore_pre, "ignore")           # green
 
             # Expand the bbox to include every rotated exclusion corner.
             bx1 = bx1_raw

@@ -141,6 +141,50 @@ class DreameMowerSensorEntityDescription(DreameMowerEntityDescription, SensorEnt
     """Describes DreameMower sensor entity."""
 
 
+def _count_map_zones(device, map_key: str) -> int:
+    """Count entries in a cloud MAP.* zone-list key."""
+    payload = getattr(device, "_latest_cloud_map_payload", None) or {}
+    container = payload.get(map_key)
+    if not isinstance(container, dict):
+        return 0
+    value = container.get("value")
+    return len(value) if isinstance(value, list) else 0
+
+
+def _list_map_zones(device, map_key: str) -> list:
+    """Project a cloud MAP.* zone-list (forbiddenAreas / notObsAreas /
+    spotAreas) into a flat per-zone attribute list. Captures id, type,
+    shapeType, corner-count, angle, and the full path coords so
+    automations and custom cards can render them."""
+    payload = getattr(device, "_latest_cloud_map_payload", None) or {}
+    container = payload.get(map_key)
+    if not isinstance(container, dict):
+        return []
+    raw = container.get("value")
+    if not isinstance(raw, list):
+        return []
+    out = []
+    for entry in raw:
+        if isinstance(entry, list) and len(entry) >= 2:
+            zdata = entry[1]
+        elif isinstance(entry, dict):
+            zdata = entry
+        else:
+            continue
+        if not isinstance(zdata, dict):
+            continue
+        path = zdata.get("path") or []
+        out.append({
+            "id": zdata.get("id"),
+            "type": zdata.get("type"),
+            "shape_type": zdata.get("shapeType"),
+            "corner_count": len(path),
+            "angle_deg": zdata.get("angle"),
+            "path": path,
+        })
+    return out
+
+
 def _truncate_map_attrs_fn(device):
     """Build the map_keys_raw attrs dict, truncating each per-key
     value to a JSON string of at most 800 chars so the total fits
@@ -1151,62 +1195,41 @@ SENSORS: tuple[DreameMowerSensorEntityDescription, ...] = (
     # see which keys flip when settings or zones change. Disabled-by-
     # default diagnostic; expect ~150-300 KB of attribute data when
     # enabled.
-    # Designated Ignore Obstacle Zones — read from the cloud MAP.*
-    # forbiddenAreas key (confirmed 2026-04-26). Each zone is a
-    # 2-element [id, {id, type, shapeType, path, angle}] entry.
-    # The `id` here matches the s2p50 entity id from the create
-    # event, so this sensor + the s2p50 opcode log together give
-    # full lifecycle visibility.
-    #
-    # State = number of zones currently defined.
-    # Attributes:
-    #   zones: list of {id, type, shape_type, corner_count, angle_deg,
-    #          path: [...]} — full geometry preserved for downstream
-    #          consumers (automations, custom cards).
+    # Designated Ignore Obstacle Zones — read from cloud MAP.*
+    # notObsAreas key (confirmed 2026-04-27 once the cloud sync
+    # caught up; yesterday's claim that they were in forbiddenAreas
+    # was wrong because we hadn't yet seen notObsAreas populated).
+    # forbiddenAreas vs notObsAreas is the actual discriminator:
+    #   forbiddenAreas = classic exclusion zones (red in app)
+    #   notObsAreas   = Designated Ignore Obstacle zones (green)
+    # Both can carry overlapping `type` enum values, so the top-
+    # level key is what counts.
     DreameMowerSensorEntityDescription(
         key="designated_ignore_zones",
         icon="mdi:shape-polygon-plus",
-        value_fn=lambda value, device: len(
-            (
-                getattr(device, "_latest_cloud_map_payload", None)
-                or {}
-            ).get("forbiddenAreas", {}).get("value", [])
-            if isinstance(
-                (
-                    getattr(device, "_latest_cloud_map_payload", None)
-                    or {}
-                ).get("forbiddenAreas"),
-                dict,
-            )
-            else []
-        ),
-        attrs_fn=lambda device: {
-            "zones": [
-                {
-                    "id": (entry[1] if isinstance(entry, list) else entry).get("id"),
-                    "type": (entry[1] if isinstance(entry, list) else entry).get("type"),
-                    "shape_type": (entry[1] if isinstance(entry, list) else entry).get("shapeType"),
-                    "corner_count": len(
-                        (entry[1] if isinstance(entry, list) else entry).get("path") or []
-                    ),
-                    "angle_deg": (entry[1] if isinstance(entry, list) else entry).get("angle"),
-                    "path": (entry[1] if isinstance(entry, list) else entry).get("path", []),
-                }
-                for entry in (
-                    (
-                        getattr(device, "_latest_cloud_map_payload", None) or {}
-                    ).get("forbiddenAreas", {}).get("value", [])
-                    if isinstance(
-                        (
-                            getattr(device, "_latest_cloud_map_payload", None) or {}
-                        ).get("forbiddenAreas"),
-                        dict,
-                    )
-                    else []
-                )
-                if isinstance(entry, (list, dict))
-            ],
-        },
+        value_fn=lambda value, device: _count_map_zones(device, "notObsAreas"),
+        attrs_fn=lambda device: {"zones": _list_map_zones(device, "notObsAreas")},
+        exists_fn=lambda description, device: True,
+    ),
+    # Classic exclusion / no-go zones — read from cloud MAP.*
+    # forbiddenAreas. State = count, attrs.zones = per-zone
+    # geometry. Mirrors the designated_ignore_zones sensor pattern.
+    DreameMowerSensorEntityDescription(
+        key="exclusion_zones",
+        icon="mdi:shape-polygon-plus",
+        value_fn=lambda value, device: _count_map_zones(device, "forbiddenAreas"),
+        attrs_fn=lambda device: {"zones": _list_map_zones(device, "forbiddenAreas")},
+        exists_fn=lambda description, device: True,
+    ),
+    # Spot zones — read from cloud MAP.* spotAreas. Confirmed
+    # 2026-04-27: each entry has type=3 (apk WorkingMode.SPOT) and
+    # shapeType=7 (axis-aligned rectangle). Populated after a spot
+    # mow has actually run; cloud sync can lag by hours.
+    DreameMowerSensorEntityDescription(
+        key="spot_zones",
+        icon="mdi:bullseye-arrow",
+        value_fn=lambda value, device: _count_map_zones(device, "spotAreas"),
+        attrs_fn=lambda device: {"zones": _list_map_zones(device, "spotAreas")},
         exists_fn=lambda description, device: True,
     ),
     DreameMowerSensorEntityDescription(
