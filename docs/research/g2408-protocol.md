@@ -827,6 +827,7 @@ from the cloud API separately (not yet wired).
 | 109 | **Task start failed** — `status: False` (first observed `False` in any `s2p50` op-code). Fires when a cloud-issued task command (typically *Recharge* or *Start*) cannot be honoured because the mower is in a bad state, e.g. *Positioning Failed* (§4.1 code 71). Confirmed 2026-04-20 19:34:20 when the user's Recharge request failed while the mower was outside the known map. |
 | 204 | map-edit request | zone / exclusion add / edit / delete: first of the pair |
 | 215 | map-edit confirm | same edit: second of the pair, carries `id` and `ids` |
+| 401 | **takePic** — fires after a routed-action `m:'a' o:401` request reaches the mower; s2p50 echo `{o:401, status:true, error:0}` is the firmware's "command received" ack. Confirmed 2026-04-27 via HA-integration button press: pressing Take Picture while docked produced exactly one s2p50 with `o:401`. The actual capture is gated by firmware-level conditions — most notably the dock obscures the camera, so the firmware skips the capture in that state (mirrors the Dreame app's behavior of disabling its Take Picture button while docked). Auto-capture on AI human detection is a separate (still uncatalogued) flow that uploads photos to Dreame cloud OSS without any visible MQTT signal — neither s2p50, event_occured, nor s99 are emitted around the capture timestamp. |
 
 Flat-fields variants without the `d` wrapper are the session-task metadata
 described under §4.3 "Session start" (`o: 100`).

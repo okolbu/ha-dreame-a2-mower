@@ -261,6 +261,11 @@ BUTTONS: tuple[ButtonEntityDescription, ...] = (
         name="Take Picture",
         icon="mdi:camera",
         action_fn=lambda device: device.call_action_opcode(_OP_TAKE_PIC),
+        # Mirrors the Dreame app's behavior — the camera is obscured
+        # at the dock, so the firmware silently skips the capture
+        # there. Disable in HA too to avoid the no-op press
+        # surprise.
+        available_fn=lambda device: not bool(getattr(device.status, "docked", False)),
         exists_fn=lambda description, device: True,
     ),
     DreameMowerButtonEntityDescription(
