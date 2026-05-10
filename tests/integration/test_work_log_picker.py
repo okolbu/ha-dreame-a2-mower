@@ -68,6 +68,7 @@ def test_partial_trail_marker_preserved():
 def test_unique_id_uses_work_log_suffix():
     coord = MagicMock()
     coord.entry.entry_id = "abc123"
+    coord.sn = "G2408000TESTSN0000"
     coord._cloud = None
     picker = DreameA2WorkLogSelect(coord)
-    assert picker._attr_unique_id == "abc123_work_log"
+    assert picker._attr_unique_id == "G2408000TESTSN0000_work_log"
