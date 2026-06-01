@@ -390,7 +390,7 @@ class _MqttHandlersMixin:
             self.live_map.begin_session(now_unix)
             # Reset the published live position stream so the new session's
             # trail starts clean on the client card.
-            self._begin_live_stream(t=float(now_unix))
+            self._begin_live_stream()
             # Snapshot battery % at session start so the archive consumer
             # has a cheap start/end SoC pair without scanning the full
             # battery_samples list. None when battery_level isn't known

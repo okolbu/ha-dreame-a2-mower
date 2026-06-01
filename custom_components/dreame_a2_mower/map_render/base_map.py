@@ -27,6 +27,12 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# NOTE (live-map rehaul): _mower_icon / _MOWER_ICON_SIZE_PX / _MOWER_ICON_CACHE
+# are no longer called by any server-side render path — the client card draws
+# the mower icon from the position-stream attributes published by DreameA2MapCamera.
+# Retained here as the source of the bundled raster asset (MOWER_ICON_PNG_B64 in
+# _resources.py); Task 9 will copy it to www/ for the client card. Remove once
+# the asset extraction is complete.
 #: Mower position marker. v1.0.0a19 lifts the legacy top-down
 #: photograph of the A2 mower (originally
 #: ``MAP_ROBOT_LIDAR_IMAGE_DREAME_LIGHT`` from

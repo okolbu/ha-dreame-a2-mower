@@ -48,15 +48,15 @@ entities:
   - id: "camera.dreame_a2_mower_map"
     platform: camera
     class: "DreameA2MapCamera"
-    class_file: "custom_components/dreame_a2_mower/camera.py:61"
+    class_file: "custom_components/dreame_a2_mower/_camera_map.py:14"
     device: parent
     source:
-      wire: "rendered from cloud MAP + s1p4 trail"
-      state_path: "coordinator._main_view_png"
+      wire: "rendered from cloud MAP (lawn + background only); trail + mower icon drawn client-side by the map card from published position-stream attributes"
+      state_path: "coordinator._base_png"
     write_path: read-only
     status:
       seen_working: true
-      last_verified: "2026-05-14"
+      last_verified: "2026-06-01"
     verifications:
       - date: "2026-05-14"
         status: verified
@@ -74,14 +74,20 @@ entities:
         status: retracted
         retracts: "obstacles overlay always appears on the live map"
         reason: "v1.0.11a1 regressed this — the new early-render-on-MAPL path triggered _load_last_session_obstacles before session_archive.load_index() had completed at coordinator setup line 991. Empty index → cached `[]` for the active map → cache stayed poisoned until session-finalize invalidation. v1.0.11a2 guarded the empty-cache write on `_index_loaded`, but didn't re-trigger _render_main_view; the PNG produced earlier (with no obstacles) was still served until the next periodic refresh or live-trail event. v1.0.11a3 added an explicit _render_main_view after load_index completes."
+      - date: "2026-06-01"
+        status: presumed
+        claim: "map camera serves coordinator._base_png (lawn + background only); trail+icon are client-side; publishes map_projection/point_seq/latest_point/track_snapshot/background_mode; calibration_points removed"
     references:
-      code: "custom_components/dreame_a2_mower/camera.py:61"
+      code: "custom_components/dreame_a2_mower/_camera_map.py:14"
       wire_entry: "MAPL"
     notes: |
       Active-map follower — the PNG content depends on _active_map_id.
-      Map 1 renders at 637x717, Map 2 at 291x287. Dashboard live-map
-      card is a single non-conditional picture-entity with no
-      aspect_ratio; both maps display at their natural aspect.
+      Serves coordinator._base_png (base lawn + background stripe/green only);
+      trail + mower icon are drawn client-side by the map card from the
+      published position stream (point_seq, latest_point, track_snapshot).
+      map_projection exposes the coordinate transform; background_mode
+      indicates the current render mode. calibration_points was removed.
+      Map 1 renders at 637x717, Map 2 at 291x287.
 
   - id: "camera.dreame_a2_mower_map_N_base"
     platform: camera
@@ -1644,15 +1650,18 @@ entities:
     source:
       wire: "integration state — MowerState.action_mode"
       state_path: "coordinator.data.action_mode.value (ActionMode enum)"
-    write_path: "coordinator.async_set_updated_data(dataclasses.replace(data, action_mode=ActionMode(option))) + coordinator._render_main_view() — integration-state mutation + camera re-render; no device write"
+    write_path: "coordinator.async_set_updated_data(dataclasses.replace(data, action_mode=ActionMode(option))) + coordinator._render_base() — integration-state mutation + camera re-render; no device write"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-01"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads coordinator.data.action_mode.value; async_select_option sets ActionMode on MowerState, re-renders live map, broadcasts twice (camera access_token rotation). Restores state across HA restarts via RestoreEntity. Read from select_global.py:921-1009; not re-confirmed live."
         evidence: "select_global.py:980-982 (current_option → data.action_mode.value); select_global.py:984-1009 (async_select_option → set_updated_data + _render_main_view + update_listeners)"
+      - date: "2026-06-01"
+        status: presumed
+        claim: "re-render call repointed from _render_main_view to _render_base (live-map rehaul: server now renders base PNG only; trail+icon are client-side)"
     references:
       code: "custom_components/dreame_a2_mower/select_global.py:921"
     notes: |

@@ -186,7 +186,7 @@ class _RenderingMixin:
             self._active_map_base_png = png
             self._active_map_base_md5 = current_md5
 
-    def _begin_live_stream(self, *, t: float) -> None:
+    def _begin_live_stream(self) -> None:
         """Reset the published live stream at session begin / cold-start."""
         self._live_point_seq = 0
         self._latest_point = None

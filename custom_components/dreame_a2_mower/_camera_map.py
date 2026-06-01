@@ -1,6 +1,7 @@
 """Map camera entities — live map, per-map static, and work-log."""
 from __future__ import annotations
 
+import hashlib
 from typing import Any
 
 from homeassistant.components.camera import Camera
@@ -19,6 +20,19 @@ class DreameA2MapCamera(
     _attr_has_entity_name = True
     _attr_name = "Map"
     _attr_content_type = "image/png"
+    # Keep the volatile/large live-stream attributes out of HA's recorder DB.
+    # track_snapshot grows to O(thousands) of points during a mow; point_seq
+    # and latest_point change on every telemetry push (~1 Hz). Persisting them
+    # would generate large DB writes with no restore value.
+    # NOTE: nav_paths_pt_count_by_map and settings_dual_level_diagnostic are
+    # diagnostic-only attrs that are also large; calibration_points is the
+    # legacy name kept here so it stays excluded if ever re-added.
+    # (Hard cap on track_snapshot length is deferred — see Task 9 spec.)
+    _unrecorded_attributes = frozenset({
+        "track_snapshot", "latest_point", "point_seq",
+        "settings_dual_level_diagnostic", "nav_paths_pt_count_by_map",
+        "calibration_points",  # legacy name; harmless if ever re-added
+    })
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         Camera.__init__(self)
@@ -62,7 +76,6 @@ class DreameA2MapCamera(
         png = self.coordinator._base_png
         if not png:
             return None
-        import hashlib
         v = hashlib.sha1(png).hexdigest()[:12]
         return f"/api/dreame_a2_mower/map.png?v={v}"
 
@@ -75,7 +88,6 @@ class DreameA2MapCamera(
         attrs: dict[str, Any] = {}
         png = self.coordinator._base_png
         if png:
-            import hashlib
             attrs["image_version"] = hashlib.sha1(png).hexdigest()[:12]
         md = self.coordinator.cloud_state.maps_by_id.get(self.coordinator._active_map_id)
         if md is not None:
@@ -190,7 +202,6 @@ class DreameA2PerMapCamera(
         png = self.coordinator._static_map_pngs_by_id.get(self._map_id)
         if not png:
             return None
-        import hashlib
         v = hashlib.sha1(png).hexdigest()[:12]
         return f"/api/dreame_a2_mower/map.png?map_id={self._map_id}&v={v}"
 
@@ -241,7 +252,6 @@ class DreameA2WorkLogCamera(
         png = self._resolve_png()
         if not png:
             return None
-        import hashlib
         v = hashlib.sha1(png).hexdigest()[:12]
         return f"/api/dreame_a2_mower/work_log.png?v={v}"
 

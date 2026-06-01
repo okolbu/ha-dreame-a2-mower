@@ -217,7 +217,7 @@ keep their imports unchanged.
 ### Cross-mixin type hints
 
 A mixin method may call into another mixin's method (e.g., `_apply_mapl`
-in `_MqttHandlersMixin` schedules `self._render_main_view()` which
+in `_MqttHandlersMixin` schedules `self._render_base()` which
 lives in `_RenderingMixin`). Use `TYPE_CHECKING` blocks to satisfy
 static analysis:
 
@@ -320,24 +320,24 @@ platform is a thin entry file with domain-grouped siblings.
 | `__init__.py` | Re-export shim — the public surface only |
 | `_geometry.py` | Coord transforms (`_cloud_to_px`, `_renderer_to_px`), `extract_projection`, palette + shared consts (`_DEFAULT_PALETTE`, `_DOCK_RADIUS_PX`, `_OBSTACLE_FILL`, `_OBSTACLE_OUTLINE`) |
 | `base_map.py` | `render_base_map` (+ `_composite_polygon`) + mower-icon (`_mower_icon`, `_MOWER_ICON_*`) |
-| `main_view.py` | `render_main_view` + pre-start previews (`_render_pre_start_*`, `STRIPE_WIDTH_MM`) |
-| `work_log.py` | `render_work_log` (archived-session render) |
-| `trail.py` | `render_with_trail` (+ `_TRAIL_LINE_WIDTH`) |
+| `main_view.py` | `render_base` + pre-start previews (`_render_pre_start_*`, `STRIPE_WIDTH_MM`) |
+| `work_log.py` | `render_work_log` (archived-session render) + `_render_archived_trail` + `_TRAIL_LINE_WIDTH` |
 
-- **Acyclic imports:** `_geometry` ← `base_map` ← {`main_view`, `work_log`,
-  `trail`} ← `__init__`. `_geometry` imports nothing internal; never add a
-  back-edge.
+- **Acyclic imports:** `_geometry` ← `base_map` ← {`main_view`, `work_log`}
+  ← `__init__`. `_geometry` imports nothing internal; never add a back-edge.
 - A module-level constant used by functions landing in ≥2 modules lives in
   `_geometry.py` (e.g. `_OBSTACLE_FILL`/`_OBSTACLE_OUTLINE`, used by both
-  `base_map` and `trail`).
+  `base_map` and `work_log`).
 - **Public surface = `__init__.py` re-exports ONLY** the names real callers
-  import (`render_base_map`, `render_main_view`, `render_work_log`,
-  `render_with_trail`, `extract_projection`, `_DEFAULT_PALETTE`,
-  `_OBSTACLE_FILL`, `_OBSTACLE_OUTLINE`, `_cloud_to_px`, `_renderer_to_px`).
+  import (`render_base`, `render_base_map`, `render_work_log`,
+  `extract_projection`, `BackgroundMode`, `background_mode_for`,
+  `_DEFAULT_PALETTE`, `_OBSTACLE_FILL`, `_OBSTACLE_OUTLINE`,
+  `_cloud_to_px`, `_renderer_to_px`).
   Keep `from ..map_render import …` working. No "just in case" re-exports.
-- `render_work_log` calls `render_with_trail` via the package
-  (`from . import render_with_trail` inside the function) so test mocks on
-  `map_render.render_with_trail` still intercept across the module boundary.
+- `render_work_log` calls its own module-local `_render_archived_trail`
+  (moved from the deleted `trail.py` in the live-map rehaul). The live map
+  no longer renders a trail server-side — the map card draws it client-side
+  from the coordinator's published position stream.
 - Do NOT reintroduce a single `map_render.py`. The package is the contract.
 
 ### camera platform
