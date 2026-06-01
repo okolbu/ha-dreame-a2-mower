@@ -1,9 +1,12 @@
 // Dreame A2 Mower — shared client-side map core
 //
-// Pure projection / icon-rotation math shared by the live-map card and the
-// replay card. Loaded as an ES module by cards that import it, and also
-// attached to window.DreameMapCore so non-module cards can reach the same
-// functions.
+// Pure projection / icon-rotation math used by the live-map card and (pending
+// Task 10) the replay card. This file is an ES module (`export function`), so
+// it can only be loaded with type="module"; a plain <script src> would throw a
+// SyntaxError. It is ALSO attached to window.DreameMapCore so other ES module
+// cards that load it as a side-effect import can reach the same functions
+// without a named import. (The replay card still has its own duplicate
+// _projectPoint as of this commit; Task 10 wires it to import from here.)
 //
 // THE ICON-ROTATION CONVENTION IS CORPUS-VALIDATED.
 // The byte-heading rotation formula below is character-equivalent to the
@@ -65,9 +68,13 @@ export function iconRotation(headingDeg, prevScreenXY, curScreenXY) {
 // the projected screen position. Starts hidden until first positioned.
 export function buildMowerIconSvg(iconUrl, sizePx) {
   const half = sizePx / 2;
+  // Escape double-quotes in the URL so it can't break out of the href="" attr
+  // (this string is inserted via innerHTML by the cards). In practice iconUrl
+  // is a hass static path, but the util shouldn't assume that.
+  const safeUrl = String(iconUrl).replace(/"/g, "&quot;");
   return (
     `<g id="mower" visibility="hidden">` +
-    `<image href="${iconUrl}" width="${sizePx}" height="${sizePx}" ` +
+    `<image href="${safeUrl}" width="${sizePx}" height="${sizePx}" ` +
     `x="${-half}" y="${-half}" />` +
     `</g>`
   );

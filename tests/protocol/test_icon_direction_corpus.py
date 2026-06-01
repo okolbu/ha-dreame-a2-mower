@@ -65,8 +65,11 @@ def _pose(v):
 
 
 def _project(x_mm, y_mm, proj):
-    """CANONICAL projection -- must match the replay card's _projectPoint and
-    the shared JS projectPoint() exactly (cloud-mm in)."""
+    """CANONICAL projection -- SAME FORMULA SHAPE as the replay card's
+    _projectPoint and the shared JS projectPoint(), but note the unit
+    contract differs: this takes cloud-MM, the JS takes cloud-METRES (it
+    multiplies by 1000 internally). The angle this test measures is
+    scale-invariant, so the mm-vs-m difference does not affect the result."""
     px = (proj["bx2_mm"] - x_mm) / proj["pixel_size_mm"]
     py = proj["height_px"] - (proj["by2_mm"] - y_mm) / proj["pixel_size_mm"]
     return px, py
@@ -146,12 +149,13 @@ def test_icon_rotation_matches_corpus_motion():
         for x, y, H in _iter_s1p4_frames(path):
             px, py = _project(x, y, _PROJ)
             if prev is not None:
-                ppx, ppy, px0, py0, pH = prev
-                dmm = abs(x - px0) + abs(y - py0)
+                # prev screen-px (spx0,spy0) and prev cloud-mm (x0_mm,y0_mm).
+                spx0, spy0, x0_mm, y0_mm, pH = prev
+                dmm = abs(x - x0_mm) + abs(y - y0_mm)
                 straight = _fold180(pH - H) <= _STRAIGHT_HEADING_DELTA
                 if _MOTION_LO_MM <= dmm <= _MOTION_HI_MM and straight:
                     # Screen motion vector this interval.
-                    dpx, dpy = px - ppx, py - ppy
+                    dpx, dpy = px - spx0, py - spy0
                     travel_svg = _screen_travel_svg(dpx, dpy)
                     # Icon rotation from the EARLIER frame's byte heading.
                     icon_svg = _icon_rotation(pH)
