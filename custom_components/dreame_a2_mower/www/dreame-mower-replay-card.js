@@ -29,6 +29,7 @@ class DreameMowerReplayCard extends HTMLElement {
     this.attachShadow({ mode: "open" });
     this._entityId = null;
     this._lastStateKey = null;
+    this._iconAngle = 0;  // mower-icon heading (deg); retained between frames
   }
 
   setConfig(config) {
