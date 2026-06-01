@@ -63,9 +63,20 @@ export function iconRotation(headingDeg, prevScreenXY, curScreenXY) {
   return null;
 }
 
-// Build the mower-icon SVG group. The <image> source art points UP; the
-// caller rotates the <g> by iconRotation(...) about (0,0) and translates it to
-// the projected screen position. Starts hidden until first positioned.
+// Build the mower-icon SVG group. The caller rotates the <g> by
+// iconRotation(...) about (0,0) and translates it to the projected screen
+// position. Starts hidden until first positioned.
+//
+// ART-ORIENTATION COMPENSATION (ICON_ART_FORWARD_DEG):
+// iconRotation assumes the art's FORWARD points screen-UP (-y). The shipped
+// mower-icon.png is authored with its forward pointing LEFT (-x) — front
+// (lidar) at screen-left, red lid-lift at screen-right. Measured render error
+// was a constant 90deg anticlockwise on every replay (and live). We correct it
+// HERE, at the art layer, by pre-rotating the <image> +90deg (clockwise) about
+// the icon centre so its forward becomes screen-UP — keeping iconRotation the
+// pure, corpus-validated heading->angle function (test unchanged). If a future
+// icon asset is re-authored pointing up, set this to 0.
+export const ICON_ART_FORWARD_DEG = 90;
 export function buildMowerIconSvg(iconUrl, sizePx) {
   const half = sizePx / 2;
   // Escape double-quotes in the URL so it can't break out of the href="" attr
@@ -75,11 +86,16 @@ export function buildMowerIconSvg(iconUrl, sizePx) {
   return (
     `<g id="mower" visibility="hidden">` +
     `<image href="${safeUrl}" width="${sizePx}" height="${sizePx}" ` +
-    `x="${-half}" y="${-half}" />` +
+    `x="${-half}" y="${-half}" transform="rotate(${ICON_ART_FORWARD_DEG})" />` +
     `</g>`
   );
 }
 
 if (typeof window !== "undefined") {
-  window.DreameMapCore = { projectPoint, iconRotation, buildMowerIconSvg };
+  window.DreameMapCore = {
+    projectPoint,
+    iconRotation,
+    buildMowerIconSvg,
+    ICON_ART_FORWARD_DEG,
+  };
 }
