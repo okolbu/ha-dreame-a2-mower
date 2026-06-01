@@ -23,6 +23,61 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
+### s2p2 fault-surfacing — follow-ups after the FAULT_CODES partition
+
+**Why:** The fault-partition feature shipped on branch `fix/s2p2-fault-partition`
+(2026-06-01): `FAULT_CODES={2,4,5,23,31,36}` (verified, intervention-only) latches
+into `snapshot.errors`, clears on movement/undock/mow-start, drives the Error
+sensor + `lawn_mower` ERROR (+ `pin_required`), and fires `fault_detected` /
+`fault_cleared` lifecycle events (plus a local entry for unknown codes). These
+loose ends remain:
+- **Deferred borderline codes:** revisit `9` (lifted — s1p1 bit too), `24`/`43`
+  (battery — now Lifecycle), `33` (positioning — owned by `positioning_health`),
+  `46`/`59`/`64-67`/`78` (navigational/self-recover) for FAULT_CODES membership if
+  a live app-fault correlation shows the app surfacing them as faults.
+- **24 vs 54 rename:** `24 "Battery low"` is vague vs `54 "Low battery — returning
+  to station"`. Hypothesis: 24 = warning threshold, 54 = the return trigger.
+  (Recorded as an `inventory.yaml § s2p2` open_question; needs a capture of both
+  firing in one session, then rename 24.)
+- **Vacuum-lineage descriptions** for the excluded codes (37/38/39/40/41/45/49/
+  57/58/61/62/117) still sit in `ERROR_CODE_DESCRIPTIONS` and read as authoritative
+  — fold into the existing cleanup TODO below ("audit hypothesized vacuum-lineage
+  state_codes / error_codes").
+**Done when:** borderline codes are decided against live evidence, 24 renamed,
+and the vacuum descriptions are pruned/marked.
+**Status:** open (feature shipped; these are refinements)
+**Cross-refs:** `docs/superpowers/plans/2026-06-01-s2p2-fault-partition.md` (moved
+to OLD on branch finish); `inventory.yaml § s2p2`; `mower/error_codes.py FAULT_CODES`.
+
+### Mower-state coherence investigations (#2/#3/#4 from the 2026-06-01 rain/stuck incident)
+
+**Why:** The same incident that motivated the fault partition exposed three other
+defects (root-caused but NOT yet fixed):
+- **#2 Location reverts to AT_DOCK during the undock REPOSITIONING window.**
+  `_apply_cloud_dock`'s stale-cloud-DOCK guard only protects `ON_LAWN` when
+  `mow_session==IN_SESSION`; during REPOSITIONING the session is still
+  BETWEEN_SESSIONS, so a 5-10-min-lagged cloud `connect_status=1` reverts
+  ON_LAWN→AT_DOCK. Normally self-heals when mowing starts, but a fault during
+  reorientation freezes the contradiction (entity says Mowing, dock=Yes,
+  session=No, activity=Repositioning). Fix: extend the guard to also protect
+  ON_LAWN during REPOSITIONING (and/or let an active fault/STUCK override the
+  activity projection).
+- **#3 Invisible mower icon on a flat live map.** The map-card draws the icon only
+  from a published position point; `_begin_live_stream` resets the stream empty and
+  the stuck mower emitted no s1p4 position, so `_iconAt` stays null. Fix: seed the
+  icon from the persisted `snapshot.position_x/y` (last-known) when the live stream
+  has no points yet.
+- **#4 Rain-interrupted mow classified as "To Point".** `classify_session_type`
+  defaults to `maintenance_run` ("[To Point]") via `last_task_op==109` fallthrough
+  when both mow-evidence signals are false at finalize. Fix: treat op=109 as
+  non-overriding and fall back to the track's own mowing-role points (area-delta
+  authority).
+**Done when:** each defect has a fix + regression test (separate plans).
+**Status:** open (root-caused 2026-06-01; fixes not started)
+**Cross-refs:** `coordinator/_session.py` / `live_map/classify.py` (#4);
+`mower/state_machine.py:_apply_cloud_dock` (#2); `www/dreame-mower-map-card.js`
++ `coordinator/_rendering.py` (#3).
+
 ### Probe for the AI-photo / obstacle-photo cloud endpoint
 
 **Why:** The app shows AI obstacle photos with a confidence overlay (e.g. "human 80%"
