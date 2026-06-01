@@ -880,20 +880,25 @@ entities:
       state_path: "coordinator.data.active_selection_point — available only when sel[0] == map_id"
     write_path: "coordinator.start_go_to_point(map_id=, point_id=) → op=109 (go-to-point)"
     status:
-      seen_working: false
-      last_verified: "2026-05-31"
+      seen_working: true
+      last_verified: "2026-06-01"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Button is available iff MowerState.active_selection_point is set for this map; press dispatches coordinator.start_go_to_point(map_id, point_id); op=109 wire format confirmed in inventory.yaml"
         evidence: "button.py:334-369 (class definition + available property + async_press); tests/integration/test_head_to_point_button.py (4 passing unit tests)"
+      - date: "2026-06-01"
+        status: verified
+        claim: "End-to-end live: the per-map button appears, its companion maintenance-point select follows the active map, pressing it drives the mower to the correct maintenance point, and the resulting run is stored as a session whose replay shows the pathing correctly."
+        evidence: "user-confirmed live end-to-end 2026-06-01 (button press → correct maintenance point reached → session archived → replay pathing correct)"
     references:
       code: "custom_components/dreame_a2_mower/button.py:334"
     notes: |
       Reads selection from DreameA2MaintenancePointSelect (the per-map picker).
-      op=109 (go-to-point) is confirmed in inventory.yaml; entity wiring is
-      live-validation-pending — needs a mow session with maintenance_points
-      populated to exercise the full path end-to-end.
+      op=109 (go-to-point) is confirmed in inventory.yaml. Live-validated
+      end-to-end 2026-06-01: button + select follow the active map, press drives
+      the mower to the selected maintenance point, and the run is archived as a
+      session that replays with correct pathing.
 
   - id: "sensor.dreame_a2_mower_picked_session"
     platform: sensor
