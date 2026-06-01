@@ -107,6 +107,27 @@ def test_options_flow_schema_includes_session_keep_with_bounds():
         assert out[CONF_SESSION_ARCHIVE_KEEP] == good
 
 
+def test_options_flow_schema_includes_wifi_keep_with_bounds():
+    from custom_components.dreame_a2_mower.const import (
+        CONF_WIFI_ARCHIVE_KEEP,
+    )
+
+    handler, entry, patcher = _make_handler({})
+    try:
+        schema = handler._build_schema()
+    finally:
+        patcher.stop()
+    keys = {str(k) for k in schema.schema.keys()}
+    assert CONF_WIFI_ARCHIVE_KEEP in keys
+
+    for bad in (0, 201):
+        with pytest_raises_invalid(schema, {CONF_WIFI_ARCHIVE_KEEP: bad}):
+            pass
+    for good in (1, 20, 200):
+        out = schema({CONF_WIFI_ARCHIVE_KEEP: good})
+        assert out[CONF_WIFI_ARCHIVE_KEEP] == good
+
+
 def test_options_flow_uses_existing_options_as_defaults():
     """Re-opening the options flow shows the user's previously-saved
     values, not the integration defaults."""

@@ -9,7 +9,19 @@ for ``get_interim_file_url``), and derive a flat disk-safe filename
 by replacing ``/`` with ``__`` (reversible).
 
 Dedup: ``object_name`` is unique per cloud-side generation, so
-"already on disk?" is a sufficient identity check. No content hash.
+"already on disk?" is a sufficient identity check. A second
+``(unix_ts, geometry-signature)`` check in :meth:`WifiArchiveStore.archive`
+collapses the case where the cloud re-emits the same heatmap under a
+freshly-rotated object_name.
+
+No content hash (md5) is computed, by design: unlike LiDAR point clouds
+(stable scene geometry, content-addressed by md5), a WiFi heatmap captures
+the RF environment at scan time and legitimately varies between two scans of
+the same area, so a content hash would almost never collapse two entries and
+would only add cost. The ``(unix_ts, geometry)`` signature is the correct
+dedup granularity; unbounded accumulation is bounded instead by the per-map
+retention cap (:meth:`WifiArchiveStore.set_retention` /
+:meth:`enforce_retention`), not by content hashing.
 
 Path layout:
 
@@ -76,6 +88,8 @@ class WifiArchiveStore:
         self._root = Path(root)
         self._root.mkdir(parents=True, exist_ok=True)
         self._lock = threading.Lock()
+        # Per-map keep-newest-N retention. 0 = unlimited (until set_retention).
+        self._retention: int = 0
 
     @property
     def index_path(self) -> Path:
@@ -259,6 +273,61 @@ class WifiArchiveStore:
                     json.dumps([asdict(e) for e in new_list], indent=2)
                 )
             return modified
+
+    def set_retention(self, keep: int) -> None:
+        """Set the per-map keep-newest-N cap (0 = unlimited).
+
+        Does not prune on its own — call :meth:`enforce_retention` after
+        map_ids have been resolved (i.e. after the fingerprint matcher runs),
+        so pruning buckets by the correct map rather than by the placeholder
+        ``-1``.
+        """
+        self._retention = int(keep) if keep else 0
+
+    def enforce_retention(self) -> int:
+        """Prune so each map_id keeps at most ``_retention`` newest heatmaps.
+
+        Bucketed by ``map_id`` (the untagged ``-1`` bucket is capped the same
+        way) so a busy map's churn never evicts an infrequently-scanned map's
+        only heatmap — the failure mode a single global oldest-first cap would
+        have. Mirrors ``LidarArchive._enforce_retention`` but bucket-aware,
+        because the WiFi store is one flat directory tagged by map_id rather
+        than per-map subdirectories.
+
+        Returns the number of entries pruned. Deletes each pruned entry's body
+        file and drops its index row. No-op when retention is 0 (unlimited).
+        """
+        keep = self._retention
+        if not keep or keep <= 0:
+            return 0
+        with self._lock:
+            entries = self.load_index()
+            buckets: dict[int, list[WifiArchiveEntry]] = {}
+            for e in entries:
+                buckets.setdefault(int(e.map_id), []).append(e)
+            drop: list[WifiArchiveEntry] = []
+            for group in buckets.values():
+                if len(group) <= keep:
+                    continue
+                newest_first = sorted(
+                    group, key=lambda e: e.unix_ts, reverse=True
+                )
+                drop.extend(newest_first[keep:])
+            if not drop:
+                return 0
+            drop_names = {e.object_name for e in drop}
+            for e in drop:
+                try:
+                    (self._root / self._disk_filename(e.object_name)).unlink(
+                        missing_ok=True
+                    )
+                except OSError:
+                    pass  # best-effort; the index row is dropped regardless
+            survivors = [e for e in entries if e.object_name not in drop_names]
+            self.index_path.write_text(
+                json.dumps([asdict(e) for e in survivors], indent=2)
+            )
+            return len(drop)
 
     @staticmethod
     def _parse_unix_ts(object_name: str) -> int:

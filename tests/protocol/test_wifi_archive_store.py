@@ -118,6 +118,82 @@ def test_archive_accepts_nested_oss_path(tmp_path: Path):
     assert store.load_body(oss_name) == body
 
 
+# ---------------------------------------------------------------------------
+# Retention (per-map keep-newest-N) — mirrors LidarArchive's count cap, but
+# bucketed by map_id so an infrequently-scanned map never loses its only
+# heatmap to a busy map's churn.
+# ---------------------------------------------------------------------------
+
+
+def _wifi_body(geom: int = 1) -> dict:
+    """A minimal valid heatmap body. `geom` varies the geometry signature so
+    distinct entries are not collapsed by the (unix_ts, geometry) dedup."""
+    return {"data": [-50], "width": geom, "height": geom, "resolution": 2,
+            "startX": 0, "startY": 0}
+
+
+def _archive_tagged(store: WifiArchiveStore, ts: int, map_id: int) -> str:
+    name = f"wifimap_{ts}.json"
+    store.archive(name, _wifi_body(geom=ts % 7 + 1), first_seen_unix=ts)
+    store.set_map_id(name, map_id)
+    return name
+
+
+def test_enforce_retention_keeps_newest_per_map(tmp_path: Path):
+    store = WifiArchiveStore(tmp_path)
+    # Map 1: three scans (oldest → newest).
+    _archive_tagged(store, 1700000001, 1)
+    _archive_tagged(store, 1700000002, 1)
+    _archive_tagged(store, 1700000003, 1)
+    # Map 2: a single, older scan that must survive a busy Map 1.
+    _archive_tagged(store, 1700000000, 2)
+
+    store.set_retention(2)
+    pruned = store.enforce_retention()
+
+    assert pruned == 1  # only Map 1's oldest is over the cap
+    names = {e.object_name for e in store.load_index()}
+    assert "wifimap_1700000001.json" not in names  # Map 1 oldest pruned
+    assert "wifimap_1700000002.json" in names
+    assert "wifimap_1700000003.json" in names
+    assert "wifimap_1700000000.json" in names  # Map 2's lone scan untouched
+    # Pruned entry's body file is removed from disk.
+    assert not (tmp_path / "wifimap_1700000001.json").is_file()
+    # Survivors' bodies remain.
+    assert (tmp_path / "wifimap_1700000003.json").is_file()
+
+
+def test_enforce_retention_caps_untagged_bucket(tmp_path: Path):
+    """Untagged (map_id == -1) entries are their own bucket, also capped, so a
+    matcher that never resolves can't grow the archive without bound."""
+    store = WifiArchiveStore(tmp_path)
+    store.archive("wifimap_1700000001.json", _wifi_body(1), first_seen_unix=1)
+    store.archive("wifimap_1700000002.json", _wifi_body(2), first_seen_unix=2)
+    store.archive("wifimap_1700000003.json", _wifi_body(3), first_seen_unix=3)
+    # All map_id == -1 (never tagged).
+
+    store.set_retention(2)
+    pruned = store.enforce_retention()
+
+    assert pruned == 1
+    names = {e.object_name for e in store.load_index()}
+    assert "wifimap_1700000001.json" not in names  # oldest untagged pruned
+    assert names == {"wifimap_1700000002.json", "wifimap_1700000003.json"}
+
+
+def test_enforce_retention_zero_is_unlimited(tmp_path: Path):
+    store = WifiArchiveStore(tmp_path)
+    for ts in (1, 2, 3, 4, 5):
+        store.archive(f"wifimap_{ts}.json", _wifi_body(ts), first_seen_unix=ts)
+    # Default retention is 0 (unlimited) — no set_retention call.
+    assert store.enforce_retention() == 0
+    assert len(store.load_index()) == 5
+    # Explicit 0 is also a no-op.
+    store.set_retention(0)
+    assert store.enforce_retention() == 0
+    assert len(store.load_index()) == 5
+
+
 def test_parse_unix_ts_from_date_partition(tmp_path: Path):
     """When the filename has no parsable HH:MM:SS prefix, fall back to YYYY/MM/DD midnight UTC."""
     store = WifiArchiveStore(tmp_path)

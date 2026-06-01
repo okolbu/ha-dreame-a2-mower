@@ -24,11 +24,13 @@ from .const import (
     CONF_SESSION_ARCHIVE_KEEP,
     CONF_STATION_BEARING_DEG,
     CONF_USERNAME,
+    CONF_WIFI_ARCHIVE_KEEP,
     DEFAULT_COUNTRY,
     DEFAULT_LIDAR_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_MAX_MB,
     DEFAULT_NAME,
     DEFAULT_SESSION_ARCHIVE_KEEP,
+    DEFAULT_WIFI_ARCHIVE_KEEP,
     DOMAIN,
 )
 
@@ -120,6 +122,14 @@ class DreameA2MowerOptionsFlow(config_entries.OptionsFlow):
                     CONF_SESSION_ARCHIVE_KEEP,
                     default=opts.get(
                         CONF_SESSION_ARCHIVE_KEEP, DEFAULT_SESSION_ARCHIVE_KEEP
+                    ),
+                ): vol.All(int, vol.Range(min=1, max=200)),
+                # WiFi heatmap archive: keep newest-N per map (enforced after
+                # fingerprint tagging). Bounds the picker + disk growth.
+                vol.Optional(
+                    CONF_WIFI_ARCHIVE_KEEP,
+                    default=opts.get(
+                        CONF_WIFI_ARCHIVE_KEEP, DEFAULT_WIFI_ARCHIVE_KEEP
                     ),
                 ): vol.All(int, vol.Range(min=1, max=200)),
                 # Position-fix P2: dock compass bearing used to project

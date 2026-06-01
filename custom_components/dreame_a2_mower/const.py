@@ -108,6 +108,7 @@ CONF_COUNTRY: Final = "country"
 CONF_LIDAR_ARCHIVE_KEEP: Final = "lidar_archive_keep"
 CONF_LIDAR_ARCHIVE_MAX_MB: Final = "lidar_archive_max_mb"
 CONF_SESSION_ARCHIVE_KEEP: Final = "session_archive_keep"
+CONF_WIFI_ARCHIVE_KEEP: Final = "wifi_archive_keep"
 
 # Bearing (degrees clockwise from north) of the dock's local X axis.
 # Used to project dock-frame (x_m, y_m) telemetry into global compass-frame
@@ -133,6 +134,12 @@ DEFAULT_COUNTRY: Final = "eu"
 DEFAULT_LIDAR_ARCHIVE_KEEP: Final = 20
 DEFAULT_LIDAR_ARCHIVE_MAX_MB: Final = 200
 DEFAULT_SESSION_ARCHIVE_KEEP: Final = 50
+# Per-map keep-newest-N for the WiFi heatmap archive. WiFi JSONs are tiny
+# (a few KB) so a byte cap is pointless — count is the meaningful lever; the
+# cap exists to bound the picker dropdown and unbounded accumulation. Per-map
+# (see WifiArchiveStore.enforce_retention), so this is 20 *per map*, matching
+# DEFAULT_LIDAR_ARCHIVE_KEEP.
+DEFAULT_WIFI_ARCHIVE_KEEP: Final = 20
 
 # UI strings
 WORK_LOG_PLACEHOLDER: Final = "(pick a session)"
