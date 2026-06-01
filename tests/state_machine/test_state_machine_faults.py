@@ -45,3 +45,38 @@ def test_latched_fault_survives_persist_roundtrip():
     m.handle_mqtt_property(siid=2, piid=2, value=5, now_unix=1000)
     restored = StateSnapshot.from_dict(m.snapshot().to_dict())
     assert 5 in restored.errors
+
+
+def test_movement_clears_faults():
+    m = MowerStateMachine()
+    m.handle_mqtt_property(siid=2, piid=2, value=5, now_unix=1000)
+    m.handle_position(x_m=0.0, y_m=0.0, north_m=None, east_m=None, now_unix=1001)
+    # Mower physically moves > 0.3 m → recovery proof per design.
+    m.handle_position(x_m=1.0, y_m=0.0, north_m=None, east_m=None, now_unix=1002)
+    assert m.snapshot().errors == frozenset()
+
+
+def test_tiny_jitter_does_not_clear_faults():
+    m = MowerStateMachine()
+    m.handle_mqtt_property(siid=2, piid=2, value=5, now_unix=1000)
+    m.handle_position(x_m=0.0, y_m=0.0, north_m=None, east_m=None, now_unix=1001)
+    m.handle_position(x_m=0.05, y_m=0.0, north_m=None, east_m=None, now_unix=1002)
+    assert 5 in m.snapshot().errors  # 5 cm jitter is not recovery
+
+
+def test_undock_clears_faults():
+    m = MowerStateMachine()
+    # Seed a docked prior state (s2p1=6 charging) then latch a fault.
+    m.handle_mqtt_property(siid=2, piid=1, value=6, now_unix=1000)
+    m.handle_mqtt_property(siid=2, piid=2, value=31, now_unix=1001)  # failed-to-return
+    assert 31 in m.snapshot().errors
+    # Undock: s2p1 → 1 (working) from docked while BETWEEN_SESSIONS.
+    m.handle_mqtt_property(siid=2, piid=1, value=1, now_unix=1002)
+    assert m.snapshot().errors == frozenset()
+
+
+def test_mow_start_clears_faults():
+    m = MowerStateMachine()
+    m.handle_mqtt_property(siid=2, piid=2, value=5, now_unix=1000)
+    m.handle_mqtt_property(siid=2, piid=2, value=50, now_unix=1001)  # mowing_started
+    assert m.snapshot().errors == frozenset()
