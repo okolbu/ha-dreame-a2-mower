@@ -17,7 +17,7 @@ from ._geometry import (
 )
 from .background import BackgroundMode, background_mode_for
 from .base_map import render_base_map
-from .main_view import render_main_view
+from .main_view import render_base, render_main_view
 from .trail import render_with_trail
 from .work_log import render_work_log
 
@@ -30,6 +30,7 @@ __all__ = [
     "_renderer_to_px",
     "background_mode_for",
     "extract_projection",
+    "render_base",
     "render_base_map",
     "render_main_view",
     "render_with_trail",
