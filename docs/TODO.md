@@ -648,30 +648,45 @@ apk/vacuum-derived identifiers that read as fact while the meaning is unverified
 wrong. Confirmed instances this session: s2p2=28 (off-dock-marker → blade-wear),
 s2p2=71 (positioning_failure → standby-return), s1p1 byte[14] (startup_state_machine
 → locomotion_state), CMS[3] (Link Module → unidentified). Standing risks:
-- The hypothesized `s2p2` fault catalog (state_codes `s2p2_37`=RIGHT_MAGNET, 38=FLOW_ERROR,
-  40=CAMERA_FAULT, 49=LDS_BUMPER, 59=NO_GO_ZONE, …) — vacuum/apk names, **never observed
-  on g2408**, but the NAME reads authoritative.
 - `s2p2=20` is correctly flagged "NOT battery" in inventory + probe_a2_mqtt.py, BUT old
   probe jsonl entries have the stale `BATTERY_LOW` label baked in at capture time — a
   reader scanning a 05-25 log sees a wrong label with no caveat.
 - Vacuum-side s4p* names (cleaning_mode, pet_detective…) for slots g2408 never emits.
-**Done when:** a sweep of `inventory.yaml` (state_codes/mode_enum), `mower/error_codes.py`,
-`probe_a2_*.py`, and the mova/apk cross-check docs flags every authoritative-looking
-name whose meaning is `hypothesized`/`unknown`/contradicted, and either neutralizes it
-(e.g. `s2p2_40_unverified` / "apk-name, unobserved on g2408") or annotates it inline so
-it can't be mistaken for a confirmed g2408 fact. Decide a convention for marking
-unverified names (the `decoded:` status helps but the bare identifier still misleads).
+- Hypothesized names in `mode_enum` / `s2p1 value_catalog` / other surfaces that aren't
+  covered by the error_codes CI gate (see below).
+- Analyzer labels in `probe_a2_mqtt.py` — unverified names baked into log output.
+
+**DONE (2026-06-01) — `mower/error_codes.py` + `inventory.yaml § state_codes`:**
+The 20 vacuum/apk-lineage s2p2 names (37/38/39/40/41/44/45/46/49/57/58/59/61/62/
+64/65/66/67/78/117) that were never observed on g2408 have been deleted from
+`ERROR_CODE_DESCRIPTIONS` and `S2P2_EVENT_TYPES`. `inventory.yaml § state_codes` is
+now fully reconciled — complete per-code confidence, confirmed rows for 1/2/9/23/
+28/30/36/74/76, partial rows for 0/24/47, corrected 63/73. A CI gate
+(`tests/inventory/test_error_codes_confidence_gate.py`) now enforces that every
+s2p2 code described in `error_codes.py` must have a `state_codes` row with
+`decoded: confirmed` or `partial`; a `hypothesized`/`unknown`/absent code must NOT
+appear — see `CLAUDE.md § error_codes confidence gate` for the durable rule.
+
+**Still open:** the same misleading-name pattern in `inventory.yaml § mode_enum` /
+`s2p1 value_catalog`, vacuum-side s4p* slots, `probe_a2_mqtt.py` analyzer labels,
+and the old-probe-log stale `BATTERY_LOW` caveat. The gate PATTERN (cross-check
+code-surfaced names against `inventory.yaml decoded` status) can be extended to
+those surfaces when they're next touched.
+
+**Done when (remaining):** a sweep of `inventory.yaml` (mode_enum / other non-state_codes
+surfaces) and `probe_a2_*.py` flags every authoritative-looking name whose meaning is
+`hypothesized`/`unknown`/contradicted and either neutralizes it or annotates it inline.
 **Also (housekeeping, bundle while touching the probe tools):** the probe scripts
 write log files (`probe_log_*.jsonl`) into `/data/claude/homeassistant/` root, which
 is cluttered with test/log/temp files. Update the probe tooling to write into a
 subdirectory (e.g. `probe_logs/`), and consider the same for the throwaway analysis
 scripts (`_corpus.py`, `_reorient.py`, `_s1p1.py`, `_win.py`, …). Keep paths the
 analysis scripts read in sync.
-**Status:** open
+**Status:** in-progress — `error_codes.py` + `state_codes` done (CI-gated); other surfaces remain open
 **Cross-refs:** `inventory.yaml` § state_codes (s2p2_37..117 hypothesized names);
 `mower/error_codes.py`; `probe_a2_mqtt.py` (+ log-path); `docs/research/mova-mower-a1-crosscheck-2026-05-25.md`;
-sibling: "Audit protocol docs for debunked-knowledge leakage"; memory
-`feedback_corpus_validate_protocol_claims`.
+`tests/inventory/test_error_codes_confidence_gate.py`; sibling: "Audit protocol docs
+for debunked-knowledge leakage"; memory `feedback_corpus_validate_protocol_claims`.
 
 ---
 

@@ -96,6 +96,26 @@ inventory entries are the only thing that survives that cycle — they
 keep prior claims (including retracted ones) addressable, so the agent
 doesn't have to rediscover what was already learned.
 
+### `error_codes.py` confidence gate (durable guard)
+
+`mower/error_codes.py` (`ERROR_CODE_DESCRIPTIONS`, `S2P2_EVENT_TYPES`) is CI-gated
+against `inventory.yaml § state_codes` by
+`tests/inventory/test_error_codes_confidence_gate.py`.
+
+**Rule:** a code may carry a description in `error_codes.py` ONLY if its
+`state_codes` row has `decoded: confirmed` or `decoded: partial`. A code whose row
+is `decoded: hypothesized`, `decoded: unknown`, or absent must NOT appear in those
+dicts — delete it. Unobserved codes that fire at runtime surface automatically as
+`[PROTOCOL_NOVEL]` log entries and via the `unknown_s2p2` activity entry, so
+removing a hypothesized name loses nothing while removing the risk of the name being
+mistaken for a confirmed g2408 fact.
+
+This is the durable answer to the recurring "vacuum-lineage / unvalidated names
+creep into the code" failure (root causes: the s2p2=28 "blade-wear" debunk and the
+s2p2=71 "standby-return" rename). If CI goes red here, it means a code was added to
+`error_codes.py` without a matching confirmed/partial `state_codes` entry — fix by
+adding the inventory row first, or by removing the code from `error_codes.py`.
+
 ---
 
 ## Per-map naming convention (load-bearing)
