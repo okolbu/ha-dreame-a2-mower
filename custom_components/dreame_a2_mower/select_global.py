@@ -535,9 +535,9 @@ class DreameA2WorkLogSelect(
     Options are human-readable labels:
         ``[Mowing] [Map N] YYYY-MM-DD HH:MM — N.N m² / Mmin``
 
-    The ``[Mowing]`` prefix tags every entry by category — when Patrol Logs
-    become available, ``[Patrol]``-prefixed entries can be merged into the
-    same picker.
+    The bracket prefix tags every entry by category: ``[Mowing]`` for mows and
+    ``[Patrol]`` / ``[To Point]`` / ``[Manual]`` for the non-mow session types,
+    all surfaced through the same picker (see ``session_card.format_session_label``).
 
     The label maps back to a session filename via an internal dict.
     Newest session first; capped at the most recent 50.

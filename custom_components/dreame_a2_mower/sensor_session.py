@@ -14,7 +14,10 @@ from ._sensor_base import _DreameA2PerMapSessionSensorBase
 
 
 class DreameA2MapSessionAreaTotalSensor(_DreameA2PerMapSessionSensorBase):
-    """Sum of mowed area (m²) across all sessions for this map."""
+    """Sum of mowed area (m²) across all mowing sessions for this map.
+
+    Non-mow move types (patrol, maintenance_run, manual_drive) are excluded.
+    """
 
     _attr_name = "Total area mowed"
     _attr_translation_key = "map_session_area_total"
@@ -25,13 +28,16 @@ class DreameA2MapSessionAreaTotalSensor(_DreameA2PerMapSessionSensorBase):
 
     def _compute_value(self, m):
         total = 0.0
-        for s in self._sessions_for_map():
+        for s in self._mow_sessions_for_map():
             total += float(getattr(s, "area_mowed_m2", 0) or 0)
         return round(total, 1)
 
 
 class DreameA2MapSessionTimeTotalSensor(_DreameA2PerMapSessionSensorBase):
-    """Sum of mowing duration (minutes) across all sessions for this map."""
+    """Sum of mowing duration (minutes) across all mowing sessions for this map.
+
+    Non-mow move types (patrol, maintenance_run, manual_drive) are excluded.
+    """
 
     _attr_name = "Total mowing time"
     _attr_translation_key = "map_session_time_total"
@@ -41,7 +47,7 @@ class DreameA2MapSessionTimeTotalSensor(_DreameA2PerMapSessionSensorBase):
     _KEY = "session_time_total"
 
     def _compute_value(self, m):
-        return sum(int(getattr(s, "duration_min", 0) or 0) for s in self._sessions_for_map())
+        return sum(int(getattr(s, "duration_min", 0) or 0) for s in self._mow_sessions_for_map())
 
 
 class DreameA2MapSessionCountSensor(_DreameA2PerMapSessionSensorBase):
@@ -54,4 +60,4 @@ class DreameA2MapSessionCountSensor(_DreameA2PerMapSessionSensorBase):
     _KEY = "session_count"
 
     def _compute_value(self, m):
-        return len(self._sessions_for_map())
+        return len(self._mow_sessions_for_map())

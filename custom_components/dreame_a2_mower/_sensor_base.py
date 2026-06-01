@@ -22,6 +22,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._devices import map_device_info, map_unique_id, mower_device_info, mower_unique_id
+from .const import NON_MOW_SESSION_TYPES
 from .coordinator import DreameA2MowerCoordinator
 from .mower.state import MowerState
 
@@ -170,3 +171,17 @@ class _DreameA2PerMapSessionSensorBase(_DreameA2PerMapSensorBase):
         archive = getattr(self.coordinator, "session_archive", None)
         index = getattr(archive, "_index", None) or []
         return [s for s in index if getattr(s, "map_id", None) == self._map_id]
+
+    def _mow_sessions_for_map(self):
+        """Mow-only subset of `_sessions_for_map` for the "Mowing" aggregates.
+
+        Non-mow move types (patrol, maintenance_run, manual_drive) leave the
+        dock but never engage the blades, so they must not inflate the per-map
+        Mowing-sessions count / Total-mowing-time. Untyped (None) legacy entries
+        pre-date session typing and were always mows, so they count as mow.
+        """
+        return [
+            s
+            for s in self._sessions_for_map()
+            if (getattr(s, "session_type", None) or "mow") not in NON_MOW_SESSION_TYPES
+        ]

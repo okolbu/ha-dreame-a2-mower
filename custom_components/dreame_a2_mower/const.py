@@ -149,6 +149,12 @@ LOG_EVENT: Final = "[EVENT]"
 LOG_SESSION: Final = "[SESSION]"
 LOG_MAP: Final = "[MAP]"
 
+# Session-type taxonomy. A session is a "mow" (blades-down work) unless its
+# session_type is one of these non-mow move types (blades-up: patrol cruise,
+# head-to-maintenance-point, manual drive). Untyped (None) legacy entries
+# pre-date session typing and were always mows, so they count as mow.
+NON_MOW_SESSION_TYPES: Final = frozenset({"patrol", "maintenance_run", "manual_drive"})
+
 # Dreame cloud obfuscated-strings blob.
 # gzip-compressed, base64-encoded JSON array of API endpoint fragments,
 # header names, and field keys.  Decoded at runtime by DreameA2CloudClient.

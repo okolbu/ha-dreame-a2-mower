@@ -10,11 +10,12 @@ Step 0 findings:
 from unittest.mock import MagicMock
 
 
-def _make_session(map_id, area_mowed_m2, duration_min):
+def _make_session(map_id, area_mowed_m2, duration_min, session_type="mow"):
     s = MagicMock()
     s.map_id = map_id
     s.area_mowed_m2 = area_mowed_m2
     s.duration_min = duration_min
+    s.session_type = session_type
     return s
 
 
@@ -80,6 +81,42 @@ def test_per_map_totals_zero_when_no_sessions():
     assert DreameA2MapSessionAreaTotalSensor(coord, map_id=0).native_value == 0
     assert DreameA2MapSessionTimeTotalSensor(coord, map_id=0).native_value == 0
     assert DreameA2MapSessionCountSensor(coord, map_id=0).native_value == 0
+
+
+def _make_coord_with_non_mow_sessions():
+    """Map 0: two real mows plus one of each non-mow move type, all same map."""
+    coord = MagicMock()
+    coord.entry.entry_id = "fake"
+    map0 = MagicMock()
+    map0.name = "M0"
+    coord.cloud_state.maps_by_id = {0: map0}
+
+    archive = MagicMock()
+    archive._index = [
+        _make_session(map_id=0, area_mowed_m2=100.0, duration_min=30),  # mow
+        _make_session(map_id=0, area_mowed_m2=120.0, duration_min=40),  # mow
+        _make_session(map_id=0, area_mowed_m2=0.0, duration_min=12, session_type="patrol"),
+        _make_session(map_id=0, area_mowed_m2=0.0, duration_min=8, session_type="maintenance_run"),
+        _make_session(map_id=0, area_mowed_m2=0.0, duration_min=5, session_type="manual_drive"),
+        _make_session(map_id=0, area_mowed_m2=90.0, duration_min=25, session_type=None),  # legacy → mow
+    ]
+    coord.session_archive = archive
+    return coord
+
+
+def test_non_mow_sessions_excluded_from_mowing_aggregates():
+    """Patrol / maintenance_run / manual_drive must not count toward the
+    "Mowing" per-map sensors; legacy untyped (None) entries count as mow."""
+    from custom_components.dreame_a2_mower.sensor import (
+        DreameA2MapSessionAreaTotalSensor,
+        DreameA2MapSessionCountSensor,
+        DreameA2MapSessionTimeTotalSensor,
+    )
+    coord = _make_coord_with_non_mow_sessions()
+    # Only the 3 mow sessions (incl. the legacy None one) count.
+    assert DreameA2MapSessionCountSensor(coord, map_id=0).native_value == 3
+    assert DreameA2MapSessionTimeTotalSensor(coord, map_id=0).native_value == 30 + 40 + 25
+    assert DreameA2MapSessionAreaTotalSensor(coord, map_id=0).native_value == 310.0
 
 
 def test_per_map_session_sensors_unique_ids_differ():

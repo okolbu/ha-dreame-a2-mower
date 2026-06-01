@@ -565,15 +565,19 @@ entities:
     device: per-map
     source:
       wire: "session archive index (coordinator.session_archive._index)"
-      state_path: "sum(s.area_mowed_m2 for s in coordinator.session_archive._index if s.map_id == map_id)"
+      state_path: "sum(s.area_mowed_m2 for s in _mow_sessions_for_map())  # map_id == map_id AND (s.session_type or 'mow') not in NON_MOW_SESSION_TYPES"
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-01"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "aggregates area_mowed_m2 across all ArchivedSession index entries matching this map_id; rounded to 1 dp"
+      - date: "2026-06-01"
+        status: verified
+        claim: "now aggregates over _mow_sessions_for_map() — excludes non-mow types (patrol/maintenance_run/manual_drive); legacy None session_type counts as mow"
+        evidence: "tests/integration/test_per_map_session_totals.py::test_non_mow_sessions_excluded_from_mowing_aggregates"
     references:
       wire_entry: "archive_track"
       code: "custom_components/dreame_a2_mower/sensor_session.py:16"
@@ -581,7 +585,8 @@ entities:
       State class TOTAL_INCREASING, unit m². Reads coordinator.session_archive._index
       directly (preloaded at boot, safe on the event loop) rather than the
       executor-only list_sessions(). The map_id == -1 legacy entries are
-      naturally excluded by the equality filter.
+      naturally excluded by the equality filter. Non-mow move types are excluded
+      via _mow_sessions_for_map() (const.NON_MOW_SESSION_TYPES).
 
   - id: "sensor.dreame_a2_mower_map_N_session_time_total"
     platform: sensor
@@ -590,21 +595,26 @@ entities:
     device: per-map
     source:
       wire: "session archive index (coordinator.session_archive._index)"
-      state_path: "sum(s.duration_min for s in coordinator.session_archive._index if s.map_id == map_id)"
+      state_path: "sum(s.duration_min for s in _mow_sessions_for_map())  # map_id == map_id AND (s.session_type or 'mow') not in NON_MOW_SESSION_TYPES"
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-01"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "aggregates duration_min across all ArchivedSession index entries matching this map_id; integer sum"
+      - date: "2026-06-01"
+        status: verified
+        claim: "now aggregates over _mow_sessions_for_map() — non-mow runs (patrol/maintenance_run/manual_drive) no longer inflate Total mowing time; legacy None counts as mow"
+        evidence: "tests/integration/test_per_map_session_totals.py::test_non_mow_sessions_excluded_from_mowing_aggregates"
     references:
       wire_entry: "archive_track"
-      code: "custom_components/dreame_a2_mower/sensor_session.py:33"
+      code: "custom_components/dreame_a2_mower/sensor_session.py:36"
     notes: |
       State class TOTAL_INCREASING, unit min. Same _index read pattern as
-      session_area_total — safe on the event loop, excludes map_id == -1.
+      session_area_total — safe on the event loop, excludes map_id == -1 and
+      non-mow move types (via _mow_sessions_for_map()).
 
   - id: "sensor.dreame_a2_mower_map_N_session_count"
     platform: sensor
@@ -613,22 +623,27 @@ entities:
     device: per-map
     source:
       wire: "session archive index (coordinator.session_archive._index)"
-      state_path: "len([s for s in coordinator.session_archive._index if s.map_id == map_id])"
+      state_path: "len(_mow_sessions_for_map())  # map_id == map_id AND (s.session_type or 'mow') not in NON_MOW_SESSION_TYPES"
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-01"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "counts ArchivedSession index entries matching this map_id"
+      - date: "2026-06-01"
+        status: verified
+        claim: "now counts _mow_sessions_for_map() only — 'Mowing sessions' excludes patrol/maintenance_run/manual_drive; legacy None counts as mow"
+        evidence: "tests/integration/test_per_map_session_totals.py::test_non_mow_sessions_excluded_from_mowing_aggregates"
     references:
       wire_entry: "archive_track"
-      code: "custom_components/dreame_a2_mower/sensor_session.py:47"
+      code: "custom_components/dreame_a2_mower/sensor_session.py:53"
     notes: |
-      State class TOTAL_INCREASING. Counts completed mowing sessions archived
-      for this map. Grows only when the session_archive receives a new finalized
-      session for this map_id.
+      State class TOTAL_INCREASING. Counts completed MOWING sessions archived
+      for this map (non-mow move types excluded via _mow_sessions_for_map()).
+      Grows only when the session_archive receives a new finalized mow for this
+      map_id.
 
   # ------------------------------------------------------------------
   # Cloud-SETTINGS-backed per-map switches (write-back cloud-cache-only)

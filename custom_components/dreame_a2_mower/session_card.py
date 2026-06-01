@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
+from .const import NON_MOW_SESSION_TYPES
 from .protocol.mode_enum import MODE_BY_CODE
 
 MODE_LABELS: dict[int, str] = {code: info.label for code, info in MODE_BY_CODE.items()}
@@ -655,7 +656,7 @@ def build_picked_session_summary(
     # Patrol is cloud-finalized (it has a real OSS summary) but blades-up with
     # area≈0, so it suppresses mow-stats like the other non-mow types — showing
     # "0.0 m² mowed (0% coverage)" for a patrol would be misleading.
-    is_non_mow = session_type in ("maintenance_run", "manual_drive", "patrol")
+    is_non_mow = session_type in NON_MOW_SESSION_TYPES
 
     out: dict[str, Any] = {}
     out.update(_summary_identity(summary, entry, picker_label, md5))
