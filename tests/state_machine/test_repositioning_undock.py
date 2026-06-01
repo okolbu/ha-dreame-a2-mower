@@ -1,9 +1,21 @@
 """REPOSITIONING on undock: s2p1→working(1) from a docked prior state.
 
+Corpus-validated dock cluster: _DOCKED_STATES = {6, 13, 15, 16}
+  6  = charging
+  13 = charge-completed
+  15 = standby (at-dock, no active task)
+  16 = batt-temp-hold
+
 Spec: when s2p1 transitions INTO working(1) FROM a stationary/docked prior
-state (raw_s2p1 ∈ {6 charging, 13 charging-completed, 2 idle, 16 batt-temp-hold}),
-the state machine enters REPOSITIONING + ON_LAWN and clears any stale last_task_op
-so a previous task type can't corrupt the label.
+state (raw_s2p1 ∈ {6, 13, 15, 16}), the state machine enters
+REPOSITIONING + ON_LAWN and clears any stale last_task_op so a previous
+task type can't corrupt the label.
+
+s2p1=2 (idle) is a LAWN state, not an at-dock state.  Corpus evidence: the
+mower emits s2p1=2 while sitting at rest on the lawn between tasks (e.g.
+after a spot-mow finishes but before returning to dock).  A 2→1 transition
+is therefore a "lawn-resume" — the mower continues mowing from where it
+stopped — NOT an undock.  It must NOT enter REPOSITIONING.
 
 The op echo (~42s later) sets the real task activity (MOWING / CRUISING_TO_POINT)
 via _apply_s2p50_task_envelope — that handler already sets current_activity
@@ -31,7 +43,9 @@ T0 = 1_748_900_000  # arbitrary baseline unix (approx 2026-06-01)
 # (1) Undock-repro: docked prior state → REPOSITIONING
 # ---------------------------------------------------------------------------
 
-_DOCKED_STATES = [6, 13, 2, 16]  # charging / charge-completed / idle / batt-temp-hold
+_DOCKED_STATES = [6, 13, 15, 16]  # charging / charge-completed / standby / batt-temp-hold
+# NOTE: s2p1=2 (idle) is a LAWN state, not a dock state — it is intentionally
+# absent from this list and from _DOCKED_STATES in state_machine.py.
 
 
 def test_s2p1_working_from_charging_enters_repositioning():
@@ -58,19 +72,32 @@ def test_s2p1_working_from_charging_completed_enters_repositioning():
     assert snap.location == Location.ON_LAWN
 
 
-def test_s2p1_working_from_idle_enters_repositioning():
-    """s2p1=2(idle) → 1(working) → REPOSITIONING.
+def test_s2p1_working_from_idle_is_lawn_resume_not_repositioning():
+    """s2p1=2(idle) → 1(working) must NOT enter REPOSITIONING.
 
-    This covers a schedule-triggered mow where the mower is in idle (not
-    actively charging) but still docked.
+    s2p1=2 is a LAWN state (corpus-validated): the mower emits 2 while at
+    rest on the lawn between tasks, not while at the dock.  A 2→1 transition
+    is a "lawn-resume" — the mower continues a task from its current lawn
+    position — so REPOSITIONING (which is the at-dock reorientation window
+    for a genuine undock from {6, 13, 15, 16}) must NOT fire.
+
+    This test encodes the CORRECTED model.  The OLD assumption was that 2 was
+    an at-dock idle state; that was debunked by corpus analysis and removed
+    from _DOCKED_STATES on 2026-06-01.
     """
     sm = MowerStateMachine()
     sm.handle_mqtt_property(siid=2, piid=1, value=2, now_unix=T0 - 60)
     snap = sm.handle_mqtt_property(siid=2, piid=1, value=1, now_unix=T0)
-    assert snap.current_activity == CurrentActivity.REPOSITIONING, (
-        f"s2p1: 2→1 must enter REPOSITIONING (got {snap.current_activity!r})"
+    assert snap.current_activity != CurrentActivity.REPOSITIONING, (
+        f"s2p1: 2→1 is a lawn-resume and must NOT enter REPOSITIONING "
+        f"(got {snap.current_activity!r})"
     )
-    assert snap.location == Location.ON_LAWN
+    # The mower stays on the lawn (or resumes the prior location context) —
+    # it does NOT transition to AT_DOCK.
+    assert snap.location != Location.AT_DOCK, (
+        f"s2p1: 2→1 must keep the mower ON_LAWN or UNKNOWN, not AT_DOCK "
+        f"(got {snap.location!r})"
+    )
 
 
 def test_s2p1_working_from_batt_temp_hold_enters_repositioning():
@@ -80,6 +107,22 @@ def test_s2p1_working_from_batt_temp_hold_enters_repositioning():
     snap = sm.handle_mqtt_property(siid=2, piid=1, value=1, now_unix=T0)
     assert snap.current_activity == CurrentActivity.REPOSITIONING, (
         f"s2p1: 16→1 must enter REPOSITIONING (got {snap.current_activity!r})"
+    )
+    assert snap.location == Location.ON_LAWN
+
+
+def test_s2p1_working_from_standby_enters_repositioning():
+    """s2p1=15(standby/at-dock) → 1(working) → REPOSITIONING.
+
+    s2p1=15 is standby-at-dock (added to _DOCKED_STATES 2026-06-01
+    alongside the removal of 2/idle which is a LAWN state, not a dock state).
+    A 15→1 transition is a genuine undock and must arm REPOSITIONING.
+    """
+    sm = MowerStateMachine()
+    sm.handle_mqtt_property(siid=2, piid=1, value=15, now_unix=T0 - 60)
+    snap = sm.handle_mqtt_property(siid=2, piid=1, value=1, now_unix=T0)
+    assert snap.current_activity == CurrentActivity.REPOSITIONING, (
+        f"s2p1: 15→1 must enter REPOSITIONING (got {snap.current_activity!r})"
     )
     assert snap.location == Location.ON_LAWN
 

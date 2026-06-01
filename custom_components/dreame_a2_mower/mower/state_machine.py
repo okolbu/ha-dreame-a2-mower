@@ -77,12 +77,13 @@ class MowerStateMachine:
         )
         return self._snapshot
 
-    # Prior s2p1 codes that indicate the mower is stationary/docked.
-    # When s2p1 transitions INTO working(1) FROM one of these states, it is a
-    # genuine undock — enter REPOSITIONING for the ~42s reorientation window.
-    # Values: 6=CHARGING, 13=CHARGING_COMPLETED, 2=IDLE, 16=BATT_TEMP_HOLD.
+    # s2p1 codes that mean the mower is on the dock (charging/charged/
+    # charge-paused/temp-hold) — used both to detect undock (prior==docked)
+    # and as the AT_DOCK location authority (current==docked).
+    # dock cluster 6/13 (main) + 16 (temp-hold, verified dock-only cycle) +
+    # 15 (charging-paused, presumed docked, unobserved); idle 2 is a lawn state.
     # (See inventory.yaml § s2p1 value_catalog for the full enum.)
-    _DOCKED_PRIOR_STATES: frozenset[int] = frozenset({2, 6, 13, 16})
+    _DOCKED_STATES: frozenset[int] = frozenset({6, 13, 15, 16})
 
     # Minimum distance (metres) the mower must move from its REPOSITIONING
     # origin before handle_position exits REPOSITIONING → RETURNING on the
@@ -113,7 +114,7 @@ class MowerStateMachine:
 
         Undock detection (REPOSITIONING):
           When task_state transitions INTO 1 ("Exiting the station") FROM a
-          stationary/docked prior state (raw_s2p1 ∈ _DOCKED_PRIOR_STATES) AND
+          stationary/docked prior state (raw_s2p1 ∈ _DOCKED_STATES) AND
           mow_session is BETWEEN_SESSIONS (i.e. not a mid-mow recharge return),
           set current_activity=REPOSITIONING + location=ON_LAWN and clear any
           stale last_task_op. The op echo (~42s later) refines this to the real
@@ -134,19 +135,29 @@ class MowerStateMachine:
         freshness["raw_s2p1"] = now_unix
         updates: dict[str, Any] = {"raw_s2p1": task_state}
 
+        # ── Location authority (single source): s2p1 owns the dock↔off-dock
+        # axis. {6,13,15,16} = on the contacts (charging/charged/temp-hold/
+        # charge-paused; 15 presumed/unobserved). Any other s2p1 ⇒ off-dock.
+        # We only set ON_LAWN on the LEAVE transition (was AT_DOCK) so we
+        # never clobber an off-dock sub-state (AT_POINT/OUTSIDE set by s2p2). ──
+        if task_state in self._DOCKED_STATES:
+            if self._snapshot.location != Location.AT_DOCK:
+                updates["location"] = Location.AT_DOCK
+                freshness["location"] = now_unix
+        elif self._snapshot.location == Location.AT_DOCK:
+            updates["location"] = Location.ON_LAWN
+            freshness["location"] = now_unix
+
         # ---- REPOSITIONING entry: undock transition only ----
         if (
             task_state == 1
-            and self._snapshot.raw_s2p1 in self._DOCKED_PRIOR_STATES
+            and self._snapshot.raw_s2p1 in self._DOCKED_STATES
             and self._snapshot.mow_session == MowSession.BETWEEN_SESSIONS
         ):
             updates["current_activity"] = CurrentActivity.REPOSITIONING
             freshness["current_activity"] = now_unix
-            # ON_LAWN at undock (same freshness approach as _apply_s2p50_task_envelope
-            # so a stale cloud DOCK poll can't immediately revert it).
-            if self._snapshot.location != Location.ON_LAWN:
-                updates["location"] = Location.ON_LAWN
-                freshness["location"] = now_unix
+            # ON_LAWN is already set by the location-authority block above
+            # (was AT_DOCK → leave → ON_LAWN). No duplicate needed here.
             # Clear stale last_task_op so a prior run's type (e.g. op=109
             # from a to-point session) doesn't corrupt the REPOSITIONING label
             # or make s2p1=1 route to CRUISING_TO_POINT on the next push.
