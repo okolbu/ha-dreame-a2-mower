@@ -726,7 +726,8 @@ class _CoreMixin:
                 # Cold-boot telemetry reconciliation. MQTT properties_changed
                 # only fires on change, so a mid-session integration restart
                 # never receives the start events. Use continuous telemetry
-                # (area_mowed + position) to infer the right state.
+                # (area_mowed + live_map) to infer the mow session/activity.
+                # (Location is NOT reconciled here — s2p1 is its sole authority.)
                 try:
                     data = self.data
                     self.state_machine.reconcile_from_telemetry(
