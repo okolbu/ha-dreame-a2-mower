@@ -191,40 +191,37 @@ To use the WebGL LiDAR view:
 3. Add `type: custom:dreame-a2-lidar-card` to a card. Example in
    `dashboards/mower/dashboard.yaml`'s LiDAR view.
 
-### Live map / static replay refresh speed
+### Animated live map
 
-The Mower-tab live map and the Sessions-tab static replay image are
-served by HA `camera` entities. HA's built-in `picture-entity` card
-delegates to `<hui-image>`, which **polls cameras every 10 seconds**
-(`UPDATE_INTERVAL = 10000` in `hui-image.ts`) and ignores
-`entity_picture` state-change events. That makes mode/preference
-changes (e.g. picking a new Mowing target) appear to take ~5 s on
-average before the preview updates.
+The Mower-tab live map is drawn by the bundled custom card
+`custom:dreame-mower-map-card`. It renders the base PNG as an SVG
+backdrop and then, reading the position stream the integration publishes
+on `camera.dreame_a2_mower_map` (`map_projection`, `point_seq`,
+`latest_point`, `track_snapshot`), accumulates the mowing trail
+client-side and glides a directional mower icon between the ~5 s position
+pushes. No more waiting on `<hui-image>`'s 10 s camera poll.
 
-The integration also bundles an **experimental** custom card —
-`custom:dreame-mower-live-image-card` — that listens for state pushes
-directly and swaps `<img src>` on every change for sub-second refresh.
-It is **not registered automatically** — an earlier `add_extra_js_url`
-auto-registration proved unreliable (on YAML-mode dashboards the card
-rendered a red "Configuration error" because it never landed in the
-dashboard's element registry), so the bundled
-`dashboards/mower/dashboard.yaml` uses `picture-entity` for the live-map
-and work-log images. To try the faster card on a storage-mode dashboard,
-register it as a normal Lovelace resource (Settings → Dashboards →
-Resources → Add:
-`/dreame_a2_mower/dreame-mower-live-image-card.js`, type
-`JavaScript Module`) and use:
+Register it as a Lovelace resource (Settings → Dashboards → Resources →
+Add):
+
+- URL: `/dreame_a2_mower/dreame-mower-map-card.js`
+- Type: `JavaScript Module`
+
+Then use:
 
 ```yaml
-- type: custom:dreame-mower-live-image-card
+- type: custom:dreame-mower-map-card
   entity: camera.dreame_a2_mower_map
-  max_width: "50%"            # optional
-  # aspect_ratio: "1 / 1"     # optional; for the work-log square
-  # object_fit: contain       # optional; pairs with aspect_ratio
 ```
 
-If it shows "Configuration error", use `picture-entity` instead (the
-~5 s poll lag is purely cosmetic).
+The card imports `/dreame_a2_mower/_dreame-map-core.js` (shared
+projection / icon-rotation math) as an ES module — it is pulled in
+automatically, so it needs **no** separate resource entry. Do not
+register either file via `add_extra_js_url`; that proved unreliable on
+YAML-mode dashboards (the card rendered a red "Configuration error"
+because it never landed in the dashboard's element registry). The
+bundled `dashboards/mower/dashboard.yaml` uses this card for the hero
+live map.
 
 ### Animated session replay
 

@@ -22,6 +22,14 @@
 #   - card-mod      (for WiFi overlay opacity binding)
 #   - dreame-a2-lidar-card  (bundled with the integration)
 #
+# Required Lovelace resources (Settings → Dashboards → Resources → Add,
+# type "JavaScript Module" — NOT add_extra_js_url, which is unreliable on
+# YAML-mode dashboards):
+#   - /dreame_a2_mower/dreame-mower-map-card.js     (animated live map)
+#   - /dreame_a2_mower/dreame-mower-replay-card.js  (animated session replay)
+# Both import /dreame_a2_mower/_dreame-map-core.js as an ES module — it is
+# pulled in automatically, so it needs NO separate resource entry.
+#
 # Map count is 2 (live mower). Adding a 3rd map: copy any
 # `conditional` block, change the state value to 2, and update
 # entity references to match that map's registered naming.
@@ -179,19 +187,19 @@ views:
                     name: Session area mowed (m²)
                   - entity: number.dreame_a2_mower_trail_render_width
                     name: Trail width (px)
-              # Hero: live map for the active map. Built-in picture-entity
-              # (reliable). The custom dreame-mower-live-image-card was
-              # tried for sub-second refresh, but its add_extra_js_url
-              # auto-registration proved unreliable (rendered "Configuration
-              # error" on this YAML-mode dashboard — see README); reverted
-              # to picture-entity, which refreshes on <hui-image>'s ~10s poll.
-              - type: picture-entity
+              # Hero: animated live map for the active map. The custom
+              # dreame-mower-map-card draws the base PNG + a client-side
+              # accumulated trail + a directional mower icon animated
+              # between the coordinator's ~5s position pushes (reading
+              # camera.dreame_a2_mower_map's published stream attributes).
+              # REQUIRES the Lovelace resource (type: module):
+              #   /dreame_a2_mower/dreame-mower-map-card.js
+              # (it imports _dreame-map-core.js; no separate resource entry
+              # needed). Registered as a normal resource — NOT via
+              # add_extra_js_url (that proved unreliable on YAML-mode
+              # dashboards — see README).
+              - type: custom:dreame-mower-map-card
                 entity: camera.dreame_a2_mower_map
-                show_state: false
-                show_name: false
-                camera_view: auto
-                tap_action:
-                  action: more-info
 
           # Mowing target — single dropdown bound to the action mode; the
           # per-type target picker shows below based on the chosen mode.

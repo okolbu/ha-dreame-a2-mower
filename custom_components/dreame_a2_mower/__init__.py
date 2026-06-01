@@ -143,15 +143,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         "(unsupported HA version). Copy %s into /config/www/ "
                         "manually if you want the bundled card.", _www,
                     )
-        # NOTE: the live-image card (dreame-mower-live-image-card.js) is
-        # SERVED by the static path above but is NOT auto-registered via
+        # NOTE: the bundled frontend cards (dreame-mower-map-card.js,
+        # dreame-mower-replay-card.js, dreame-a2-lidar-card.js, and the
+        # shared _dreame-map-core.js they import) are SERVED by the static
+        # path above but are NOT auto-registered via
         # frontend.add_extra_js_url. That auto-registration proved
         # unreliable — on YAML-mode dashboards the card rendered a red
         # "Configuration error" because it never landed in the dashboard's
         # element registry (customElements.get() returned undefined at
-        # render time). The bundled dashboard uses picture-entity instead;
-        # users who want the faster card add it as a Lovelace resource
-        # manually (see README).
+        # render time). Users register the cards they want as Lovelace
+        # resources manually (type: module — see README). The shared core
+        # is pulled in via the cards' ES `import` and needs no resource entry.
         _static_registered = True
 
     # F7.7.1: apply runtime archive-cap changes without reloading the entry.
