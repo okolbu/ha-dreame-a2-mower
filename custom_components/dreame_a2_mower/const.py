@@ -59,6 +59,7 @@ NOTIFICATION_EVENT_TYPES: Final[tuple[str, ...]] = (
     "hanging",
     "robot_trapped",                    # s2p2=2 (verified 2026-05-30)
     "left_wheel_error",                 # s2p2=4 (verified 2026-05-30)
+    "right_wheel_error",                # s2p2=5 (verified 2026-06-01)
     "emergency_stop",
     "human_detected",
     "blades_worn",                      # s2p2=28

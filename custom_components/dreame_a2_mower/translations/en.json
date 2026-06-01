@@ -70,6 +70,7 @@
               "hanging": "Hanging (lifted off the ground)",
               "robot_trapped": "Robot trapped — tap to view the solution",
               "left_wheel_error": "Left drive wheel error",
+              "right_wheel_error": "Right drive wheel error",
               "emergency_stop": "Emergency stop activated",
               "human_detected": "Person detected nearby",
               "blades_worn": "Blades severely worn — replace soon",

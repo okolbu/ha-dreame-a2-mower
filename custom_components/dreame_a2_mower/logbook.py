@@ -49,6 +49,7 @@ _NOTIFICATION_MESSAGES: dict[str, str] = {
     "hanging": "is hanging (lifted off the ground)",
     "robot_trapped": "is trapped — tap to view the solution",
     "left_wheel_error": "left drive wheel error",
+    "right_wheel_error": "right drive wheel error",
     "emergency_stop": "emergency stop activated",
     "human_detected": "detected a person nearby",
     "blades_worn": "blades severely worn — replace soon",

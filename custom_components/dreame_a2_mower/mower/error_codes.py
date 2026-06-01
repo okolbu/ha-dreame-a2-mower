@@ -37,6 +37,9 @@ ERROR_CODE_DESCRIPTIONS: dict[int, str] = {
     # single observation each; apk had these unmapped/vacuum-derived). inventory § s2p2.
     2: "Robot trapped",
     4: "Left drive wheel error",
+    # 5: first wire occurrence 2026-06-01 (probe_log_20260520) + user-confirmed
+    # app text "Right drive wheel error" — the symmetric sibling of 4. inventory § s2p2.
+    5: "Right drive wheel error",
     9: "Robot lifted",
     23: "Lift lockout — PIN required on device (event slug: emergency_stop)",
     24: "Battery low",
@@ -146,6 +149,7 @@ S2P2_EVENT_TYPES: dict[int, str] = {
     0:   "hanging",
     2:   "robot_trapped",                   # verified 2026-05-30 (stuck on hose; user-confirmed app text)
     4:   "left_wheel_error",                # verified 2026-05-30 (left wheel spinning on a ledge)
+    5:   "right_wheel_error",               # verified 2026-06-01 (wire s2p2=5 + user-confirmed app text "Right drive wheel error")
     23:  "emergency_stop",
     27:  "human_detected",
     28:  "blades_worn",                     # cloud-verified 2026-05-26
