@@ -31,11 +31,19 @@ _UNIT_VOCAB: frozenset[str] = frozenset(
         "minutes_from_midnight", "unix_seconds",
         "percent", "percent_x100",
         "degrees", "degrees_x256",
-        "bool", "enum", "raw_bytes", "string",
+        "bool", "enum", "raw_bytes", "raw_byte", "string",
+        # composite/bitfield wire layouts (a single byte carrying >1 field)
+        "uint7 + bit",
     }
 )
 
-_DECODED_VALUES: frozenset[str] = frozenset({"confirmed", "hypothesized", "unknown"})
+# decoded: confirmed (wire-verified) | partial (decoded with known gaps) |
+# hypothesized (guess, no evidence) | unknown. "partial" mirrors the
+# verifications-status taxonomy in CLAUDE.md for fields where some — but not
+# all — bits/bytes are understood.
+_DECODED_VALUES: frozenset[str] = frozenset(
+    {"confirmed", "partial", "hypothesized", "unknown"}
+)
 
 _REQUIRED_TOP_LEVEL_KEYS: tuple[str, ...] = (
     "_sources", "properties", "events", "actions", "opcodes",

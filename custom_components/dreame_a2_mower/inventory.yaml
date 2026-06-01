@@ -3264,7 +3264,7 @@ opcodes:
       seen_on_wire: true
       first_seen: "2026-05-30"
       last_seen: "2026-05-30"
-      decoded: verified
+      decoded: confirmed
       bt_only: false
       not_on_g2408: false
     open_questions:
@@ -7577,7 +7577,7 @@ state_codes:
       seen_on_wire: true
       first_seen: "2026-05-30"
       last_seen: "2026-05-30"
-      decoded: verified
+      decoded: confirmed
       bt_only: false
       not_on_g2408: false
     verifications:
@@ -9107,7 +9107,7 @@ session_summary_fields:
       seen_on_wire: true
       first_seen: "2026-04-17"
       last_seen: "2026-05-30"
-      decoded: verified
+      decoded: confirmed
       bt_only: false
       not_on_g2408: false
     references:
@@ -9258,7 +9258,7 @@ session_summary_fields:
       seen_on_wire: true
       first_seen: "2026-05-30"
       last_seen: "2026-05-30"
-      decoded: verified
+      decoded: confirmed
       bt_only: false
       not_on_g2408: false
     references:
