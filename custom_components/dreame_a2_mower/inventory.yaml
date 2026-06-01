@@ -789,6 +789,8 @@ properties:
       - "s2p2=71 = idle-too-long-return vs broader non-battery return? Core meaning text-confirmed (standby-too-long → auto-return) and the slug/sensor are fixed. Still open: is 71 strictly the idle-timeout reason, or ANY non-battery return? 3 of 5 corpus occurrences fire while already returning (prev=5). Capture other return triggers (user-recall, end-of-task) to see if they also carry 71; if 71 is broader than idle-timeout, broaden the slug name accordingly."
       - "Remaining single-observation fault codes from the 2026-05-30 stuck-patrol (user-confirmed app text; confirm exact string via device-messages/v2): s2p2=2 = 'Robot trapped. Tap to view the solution' (22:44:40, stuck on hose); s2p2=74 = patrol ended/cancelled (23:02:12, fired with s2p1→2 when the user cancelled the patrol → return to dock). Both co-incident with a pause/end (s2p1=4/2, s2p56=[[1,0,4]] paused) and present in the s4 eiid1 arg13 fault timeline. apk FaultIndex 2 was unmapped/vacuum-derived on g2408 — this is the real g2408 meaning. RESOLVED out of this list: the drive-wheel pair 4='Left drive wheel error' (2026-05-30) and 5='Right drive wheel error' (2026-06-01) are now in the state_codes table + error_codes.py (decoded: confirmed)."
       - "s2p2 24 'Battery low' vs 54 'Low battery — returning to station' overlap: confirm the distinction (hypothesis: 24 = low-battery WARNING threshold, informational; 54 = the low-battery event that TRIGGERS return-to-dock). Capture both firing in one session to pin the trigger points, then rename 24 to something unambiguous (tentative: 'Battery low (warning)'). presumed until a capture confirms."
+      - "s2p2 codes 0/1/9/23 are the s2p2 echoes of the s1p1 safety bits (bumper/tilt/lift/PIN), confirmed by the 2026-04-30 19:37–19:39 controlled test. Open: redundant with the s1p1 binary_sensors, or do they carry extra info worth a dedicated surface?"
+      - "s2p2=0: strictly the bumper/hanging event, or also the post-event return-to-idle value? Corpus has only 6 transitions-to-0; need captures that disambiguate a bumper press from a generic clear-to-0."
     siid: 2
     piid: 50
     name: "task_envelope"
@@ -7030,6 +7032,167 @@ state_codes:
 
   # ── §4.1 wire-confirmed codes ─────────────────────────────────────────────
 
+  - id: "s2p2_0"
+    code: 0
+    name: "BUMPER_HANGING"
+    category: "state_code"
+    semantic: |
+      Bumper / hanging — s2p2 echo of the s1p1 bumper bit. The 2026-04-30
+      19:37:13 controlled-safety test shows s2p2 transitioning 1→0 at the
+      exact moment the HB bumper bit was SET. Corpus has only 6
+      transitions-to-0, indicating this is an event code, NOT the resting
+      idle baseline.
+
+      Status is partial because it is ambiguous whether 0 also marks the
+      post-event return-to-idle: only 6 corpus transitions-to-0 exist and
+      they may include both bumper-event arrivals and generic clear-to-0
+      recoveries. Disambiguation requires targeted captures with known
+      bumper presses.
+    status:
+      seen_on_wire: true
+      first_seen: "2026-04-30"
+      last_seen: "2026-04-30"
+      decoded: partial
+      bt_only: false
+      not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: partial
+        claim: "s2p2=0 is event-shaped (6 corpus transitions-to-0); the 2026-04-30 19:37:13 test ties it to the bumper bit (s2p2 transitioned 1→0 as HB bumper bit SET). NOT the resting idle baseline."
+        retracts: "s2p2=0 is the resting baseline / No error"
+        reason: "0 is event-shaped (6 corpus transitions) and the 2026-04-30 test ties it to the bumper bit; idle/rest uses values like 27"
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
+  - id: "s2p2_1"
+    code: 1
+    name: "ROBOT_TILTED"
+    category: "state_code"
+    semantic: |
+      Robot tilted — s2p2 echo of the s1p1 drop/tilt bit. Confirmed by the
+      2026-04-30 19:37:05 controlled-safety test: s2p2 transitioned 48→1 at
+      the exact moment the HB drop/tilt bit was SET. Also present in the
+      probe corpus (probe_log_20260514_211550.jsonl).
+    status:
+      seen_on_wire: true
+      first_seen: "2026-04-30"
+      last_seen: "2026-04-30"
+      decoded: confirmed
+      bt_only: false
+      not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: verified
+        claim: "s2p2=1 = Robot tilted; co-fired with HB drop/tilt bit SET at 2026-04-30 19:37:05 (controlled safety test, s2p2 48→1). s2p2 echo of the s1p1 drop_tilt bit."
+        evidence: "probe_log_20260514_211550.jsonl (corpus); 2026-04-30 19:37:05 controlled safety test (co-fired with HB drop/tilt)"
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
+  - id: "s2p2_2"
+    code: 2
+    name: "ROBOT_TRAPPED"
+    category: "state_code"
+    semantic: |
+      Robot trapped — mower is stuck and cannot self-recover. User-confirmed
+      app notification text 2026-05-30. Present in the probe corpus
+      (probe_log_20260520_131350.jsonl).
+    status:
+      seen_on_wire: true
+      first_seen: "2026-05-20"
+      last_seen: "2026-05-20"
+      decoded: confirmed
+      bt_only: false
+      not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: verified
+        claim: "s2p2=2 = Robot trapped. User-confirmed app notification text 2026-05-30."
+        evidence: "probe_log_20260520_131350.jsonl (corpus); user-confirmed app text 2026-05-30"
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
+  - id: "s2p2_9"
+    code: 9
+    name: "ROBOT_LIFTED"
+    category: "state_code"
+    semantic: |
+      Robot lifted — s2p2 echo of the s1p1 lift bit. Confirmed by the
+      2026-04-30 19:37:57 controlled-safety test: s2p2 transitioned 0→9 at
+      the exact moment the HB lift bit was SET. Also present in the probe
+      corpus (probe_log_20260419_130434.jsonl).
+    status:
+      seen_on_wire: true
+      first_seen: "2026-04-19"
+      last_seen: "2026-04-30"
+      decoded: confirmed
+      bt_only: false
+      not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: verified
+        claim: "s2p2=9 = Robot lifted; co-fired with HB lift bit SET at 2026-04-30 19:37:57 (controlled safety test, s2p2 0→9). s2p2 echo of the s1p1 lift bit."
+        evidence: "probe_log_20260419_130434.jsonl (corpus); 2026-04-30 19:37:57 controlled safety test (co-fired with HB lift)"
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
+  - id: "s2p2_23"
+    code: 23
+    name: "LIFT_LOCKOUT_PIN_REQUIRED"
+    category: "state_code"
+    semantic: |
+      Lift lockout / PIN required (emergency stop) — s2p2 echo of the s1p1
+      emergency-stop/PIN bit. Confirmed by the 2026-04-30 19:39:35 controlled-
+      safety test: s2p2 transitioned 9→23 at the exact moment the HB PIN-
+      required bit was SET. Also present in the probe corpus
+      (probe_log_20260514_211550.jsonl).
+    status:
+      seen_on_wire: true
+      first_seen: "2026-04-30"
+      last_seen: "2026-04-30"
+      decoded: confirmed
+      bt_only: false
+      not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: verified
+        claim: "s2p2=23 = Lift lockout / PIN required (emergency stop); co-fired with HB PIN-required bit SET at 2026-04-30 19:39:35 (controlled safety test, s2p2 9→23). s2p2 echo of the s1p1 emergency-stop/PIN bit."
+        evidence: "probe_log_20260514_211550.jsonl (corpus); 2026-04-30 19:39:35 controlled safety test (co-fired with HB PIN-required)"
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
+  - id: "s2p2_24"
+    code: 24
+    name: "BATTERY_LOW"
+    category: "state_code"
+    semantic: |
+      Battery low — apk FaultIndex BATTERY_LOW. NOT observed on the g2408
+      wire (0 corpus hits across all 9 probe logs). Kept pending resolution
+      of the 24-vs-54 relationship: s2p2=54 is the confirmed low-battery
+      returning code; it is unclear whether 24 is a distinct low-battery
+      WARNING threshold (distinct from 54 = low-battery RETURNING) or
+      simply the vacuum FaultIndex label for the same event on a different
+      device model.
+    status:
+      seen_on_wire: false
+      first_seen: null
+      last_seen: null
+      decoded: partial
+      bt_only: false
+      not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: partial
+        claim: "s2p2=24 has 0 corpus hits across all 9 probe logs. apk FaultIndex BATTERY_LOW. Kept pending 24-vs-54 disambiguation."
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+      apk: "ioBroker.dreame/apk.md §FaultIndex"
+
   - id: "s2p2_4"
     code: 4
     name: "LEFT_DRIVE_WHEEL_ERROR"
@@ -7094,6 +7257,87 @@ state_codes:
       decoded: confirmed
       bt_only: false
       not_on_g2408: false
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
+  - id: "s2p2_28"
+    code: 28
+    name: "BLADES_SEVERELY_WORN"
+    category: "state_code"
+    semantic: |
+      Blades severely worn — cloud wear%-gated push. Cloud device-messages/v2
+      maps this to "Blades are severely worn. Replace them soon." The cloud
+      only emits the push when blade wear% justifies (server-side gate);
+      integrations must NOT key blades_worn off s2p2=28 wire transitions
+      alone — relay only what the cloud actually pushes. Wire-present but
+      timing is cloud-gated (fires while docked in the worn-blade window,
+      not on every undock as previously hypothesized; see 2026-05-30
+      retraction in the s2p2 property verifications).
+    status:
+      seen_on_wire: true
+      first_seen: "2026-05-15"
+      last_seen: "2026-05-25"
+      decoded: confirmed
+      bt_only: false
+      not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: verified
+        claim: "s2p2=28 = Blades severely worn. Cloud device-messages/v2 confirmed 2026-05-26: maps to 'Blades are severely worn. Replace them soon.' Cloud-gated; also probe corpus (probe_log_20260514_211550.jsonl)."
+        evidence: "cloud device-messages/v2, 2026-05-26; probe_log_20260514_211550.jsonl (corpus)"
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
+  - id: "s2p2_30"
+    code: 30
+    name: "MAINTENANCE_REMINDER"
+    category: "state_code"
+    semantic: |
+      Maintenance reminder — cloud-gated push for "Robot maintenance time
+      reached. Maintain the robot soon." Fires at task-start when
+      robot-maintenance% is at ~10% remaining (same-second as s2p2=50).
+      Cloud gate is server-side; fires on every mow in the maintenance
+      window until the user acknowledges. Confirmed 2026-05-26 controlled
+      blade-reset experiment.
+    status:
+      seen_on_wire: true
+      first_seen: "2026-04-19"
+      last_seen: "2026-05-26"
+      decoded: confirmed
+      bt_only: false
+      not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: verified
+        claim: "s2p2=30 = Maintenance reminder. Cloud device-messages/v2 confirmed 2026-05-26 (text: 'Robot maintenance time reached. Maintain the robot soon.'). Also corpus (probe_log_20260419_130434.jsonl)."
+        evidence: "cloud device-messages/v2, 2026-05-26; probe_log_20260419_130434.jsonl (corpus)"
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
+  - id: "s2p2_36"
+    code: 36
+    name: "FAILED_TO_START_TASK"
+    category: "state_code"
+    semantic: |
+      Failed to start task — cloud device-messages/v2 maps this to "Failed
+      to start the task. Please retry." Fires in the 2026-05-25 12:32
+      off-dock-failure burst (alongside 20/33). Cloud-verified 2026-05-26.
+      Also probe corpus (probe_log_20260419_130434.jsonl).
+    status:
+      seen_on_wire: true
+      first_seen: "2026-04-19"
+      last_seen: "2026-05-25"
+      decoded: confirmed
+      bt_only: false
+      not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: verified
+        claim: "s2p2=36 = Failed to start task. Cloud device-messages/v2 confirmed 2026-05-26 (text: 'Failed to start the task. Please retry.'). Also corpus (probe_log_20260419_130434.jsonl)."
+        evidence: "cloud device-messages/v2, 2026-05-26; probe_log_20260419_130434.jsonl (corpus)"
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
@@ -7376,6 +7620,61 @@ state_codes:
       integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
 
+  - id: "s2p2_74"
+    code: 74
+    name: "PATROL_ENDED"
+    category: "state_code"
+    semantic: |
+      Patrol ended / cancelled. Fires when a Patrol (edge cruise) session
+      ends — either on completion or user cancel. Present in the probe
+      corpus and verified 2026-05-30.
+    status:
+      seen_on_wire: true
+      first_seen: "2026-05-20"
+      last_seen: "2026-05-30"
+      decoded: confirmed
+      bt_only: false
+      not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: verified
+        claim: "s2p2=74 = Patrol ended / cancelled. Corpus-confirmed (probe_log_20260520_131350.jsonl) + verified 2026-05-30."
+        evidence: "probe_log_20260520_131350.jsonl (corpus); verified 2026-05-30"
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
+  - id: "s2p2_76"
+    code: 76
+    name: "CANNOT_REACH_MAINTENANCE_POINT"
+    category: "state_code"
+    semantic: |
+      Cannot reach maintenance point — task ended (give-up + return). Fires
+      once at the give-up moment when a head-to-maintenance-point move cannot
+      complete. Followed by s2p1→5 (auto-return to dock). Contrast with code
+      75 (arrived at maintenance point successfully), which is followed by
+      s2p1→2 (IDLE) and the mower stays at the point.
+
+      Wire context, probe_log_20260520 @ 2026-05-30 16:51:41: mower
+      stalled at obstruction, s2p1→2 (idle) at 16:51:40, s2p2=76 +
+      s1p52={} at 16:51:41, s2p1→5 (returning) at 16:51:42. User-confirmed
+      app notification "Cannot reach the maintenance point. Task ended."
+    status:
+      seen_on_wire: true
+      first_seen: "2026-05-30"
+      last_seen: "2026-05-30"
+      decoded: confirmed
+      bt_only: false
+      not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: verified
+        claim: "s2p2=76 = Cannot reach maintenance point. User-confirmed app text 'Cannot reach the maintenance point. Task ended.' (2026-05-30). Wire: s2p2=76 at 16:51:41 + s2p1→5 auto-return."
+        evidence: "probe_log_20260520_131350.jsonl @ 2026-05-30 16:51:41; user-confirmed app text 2026-05-30"
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
   # ── §8.3 apk-decompiled extensions (not yet seen on wire) ────────────────
 
   - id: "s2p2_37"
@@ -7536,17 +7835,21 @@ state_codes:
     name: "TASK_CANCELLED"
     category: "state_code"
     semantic: |
-      Scheduled task cancelled (status, not error). Lifted from
-      apk-decompiled DreameMowerErrorCode catalog. Not observed in our
-      probe corpus on the g2408 (manual cancels use code 48 + s2p50
-      op-code 3 instead).
+      Scheduled task cancelled (status, not error). mova-community label;
+      not g2408 wire/cloud-confirmed. Not observed in our probe corpus on
+      the g2408 (manual cancels use code 48 + s2p50 op-code 3 instead;
+      scheduled-task-cancelled-while-busy uses code 63).
     status:
       seen_on_wire: false
       first_seen: null
       last_seen: null
-      decoded: hypothesized
+      decoded: partial
       bt_only: false
       not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: partial
+        claim: "s2p2=47: mova-community label; not g2408 wire/cloud-confirmed. 0 corpus hits. Manual cancels use 48+op3; scheduled-busy-cancel uses 63."
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
@@ -7697,18 +8000,28 @@ state_codes:
 
   - id: "s2p2_63"
     code: 63
-    name: "BLOCKED_2"
+    name: "SCHEDULED_TASK_CANCELLED_BUSY"
     category: "state_code"
     semantic: |
-      Obstacle blocking (variant 2). Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Scheduled task cancelled — robot working (busy). Cloud device-messages/v2
+      maps this to "Robot is working. Scheduled task cancelled." Fires when
+      the firmware cancels an incoming scheduled task because the robot is
+      already active. Wire-confirmed (9 corpus hits in probe corpus).
+      Previously misidentified as "Obstacle blocking (variant 2)" from the
+      apk FaultIndex — that was the vacuum-lineage label; the g2408 wire +
+      cloud confirm the real meaning.
     status:
-      seen_on_wire: false
-      first_seen: null
-      last_seen: null
-      decoded: hypothesized
+      seen_on_wire: true
+      first_seen: "2026-05-10"
+      last_seen: "2026-05-26"
+      decoded: confirmed
       bt_only: false
       not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: verified
+        claim: "s2p2=63 = Scheduled task cancelled — robot working (busy). Cloud device-messages/v2 confirmed 2026-05-26 (text: 'Robot is working. Scheduled task cancelled.'). 9 corpus hits."
+        evidence: "cloud device-messages/v2, 2026-05-26; probe_log_20260510_190812.jsonl (corpus, 9 hits)"
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
@@ -7796,15 +8109,24 @@ state_codes:
     name: "TOP_COVER_OPEN"
     category: "state_code"
     semantic: |
-      Top cover open — mechanical fault. Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Top cover open — mechanical fault. Fires when the top cover is lifted
+      while the robot is running. Wire-confirmed: 51 corpus hits across the
+      probe logs; confirmed 2026-04-30 (cover opened during PIN entry).
+      Drives binary_sensor.top_cover_open in the integration. Previously
+      marked hypothesized from the apk catalog only — the corpus and the
+      2026-04-30 controlled test confirm this is the correct g2408 meaning.
     status:
-      seen_on_wire: false
-      first_seen: null
-      last_seen: null
-      decoded: hypothesized
+      seen_on_wire: true
+      first_seen: "2026-04-30"
+      last_seen: "2026-05-14"
+      decoded: confirmed
       bt_only: false
       not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: verified
+        claim: "s2p2=73 = Top cover open. 51 corpus hits + confirmed 2026-04-30 (cover opened during PIN entry). Drives binary_sensor.top_cover_open."
+        evidence: "probe_log_20260514_211550.jsonl (corpus, 51 hits); confirmed 2026-04-30 controlled test (cover opened during PIN entry)"
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
