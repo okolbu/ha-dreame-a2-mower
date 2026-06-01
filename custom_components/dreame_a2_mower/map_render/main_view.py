@@ -173,6 +173,46 @@ def render_main_view(
     )
 
 
+def render_base(
+    map_data: "MapData",
+    *,
+    background_mode,                      # BackgroundMode
+    state: object | None = None,
+    map_id: int = 0,
+    palette: dict | None = None,
+    obstacle_polygons_m: "list[list[tuple[float, float]]] | None" = None,
+) -> bytes:
+    """Render the live map's BASE PNG for the given background mode.
+
+    No trail, no mower icon — those are drawn client-side by the map card.
+
+    GREEN  -> dark-green active lawn (+ optional idle obstacle overlay).
+    STRIPES-> dark lawn + next-mow stripe overlay (needs ``state`` + ``map_id``).
+    EDGE   -> light lawn + dotted boundary.
+    SPOT   -> light lawn + dotted spot rectangles.
+    """
+    from .._render_direction import next_direction
+    from .._render_stripes import compute_stripe_overlay
+    from .background import BackgroundMode
+
+    if background_mode == BackgroundMode.STRIPES and state is not None:
+        return _render_pre_start_with_stripes(
+            map_data, state=state, map_id=int(map_id), palette=palette,
+            next_direction_fn=next_direction,
+            compute_stripe_overlay_fn=compute_stripe_overlay,
+        )
+    if background_mode == BackgroundMode.EDGE:
+        return _render_pre_start_edge(map_data, palette=palette)
+    if background_mode == BackgroundMode.SPOT:
+        return _render_pre_start_spot(map_data, palette=palette)
+    # GREEN (active) or STRIPES-without-state fallback: plain dark lawn,
+    # optionally with the between-session obstacle overlay.
+    return render_base_map(
+        map_data, palette=palette, lawn_mode="dark",
+        obstacles=obstacle_polygons_m,
+    )
+
+
 def _composite_mower_icon(
     png: bytes,
     map_data: "MapData",
