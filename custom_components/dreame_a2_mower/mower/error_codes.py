@@ -180,3 +180,48 @@ S2P2_EVENT_TYPES: dict[int, str] = {
 # still provides authoritative text in the event payload; the slug is generic
 # so HA can register the event_type up-front.
 S2P2_UNKNOWN_EVENT_TYPE = "unknown_s2p2"
+
+# ---------------------------------------------------------------------------
+# Fault partition — which s2p2 codes are genuine, user-actionable FAULTS.
+#
+# s2p2 is a single multiplexed slot: the same wire field carries "mowing
+# started" (50), "rain protection" (56), and "right drive wheel error" (5).
+# MowerState.error_code is just the last raw value, so it cannot represent
+# "is there an active fault?". This set is the single source of truth.
+#
+# Membership = codes that are BOTH (a) wire/cloud-VERIFIED on g2408 (present
+# in inventory.yaml § s2p2 verified Faults list) AND (b) require the user to
+# intervene to get the mower going again. Intentionally a SMALL, high-
+# confidence set.
+#
+# Deliberately EXCLUDED:
+#   - 24 Battery low, 43 Battery temp low → lifecycle/environmental.
+#   - 33 Positioning/relocate failed → surfaced via positioning_health=STUCK
+#     + binary_sensor.positioning_failed (owned there); often auto-recovers.
+#   - 76 Cannot reach maintenance point → mower auto-returns home (s2p1→5);
+#     no intervention (contrast 31, which strands the mower mid-lawn).
+#   - tilt(1)/lift(9)/bumper → live on the s1p1 HEARTBEAT (binary_sensors +
+#     snapshot.pin_required), NOT s2p2. The terminal "can't continue" state
+#     is s2p2=23 (PIN lockout), which IS included.
+#   - 37/38/39/40/41/45/49/57/58/61/62/117 → apk/vacuum-lineage descriptions
+#     still carried in ERROR_CODE_DESCRIPTIONS above but UNCONFIRMED on g2408.
+#     Latching the lawn_mower entity to ERROR on a guessed semantic violates
+#     the repo's fact-discipline. Add a code here ONLY once confirmed on g2408.
+FAULT_CODES: frozenset[int] = frozenset({
+    2,    # Robot trapped (verified 2026-05-30)
+    4,    # Left drive wheel error (verified 2026-05-30)
+    5,    # Right drive wheel error (verified 2026-06-01)
+    23,   # Lift lockout — PIN required on device (emergency stop terminal)
+    31,   # Failed to return to station (stranded — user must recharge)
+    36,   # Failed to start the task — retry (cloud-verified 2026-05-26)
+})
+
+
+def is_fault(code: int | None) -> bool:
+    """True only for genuine, user-actionable s2p2 fault codes.
+
+    None (no code) and unmapped/unknown codes return False — an unknown
+    code is surfaced via the notification event + [NOVEL] log, not latched
+    as a fault, until its semantics are confirmed and added to FAULT_CODES.
+    """
+    return code is not None and code in FAULT_CODES
