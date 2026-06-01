@@ -9,8 +9,11 @@ a fallback signal.
 
 Rule: when battery_percent rises between two pushes, set
 charging=True. Falling battery doesn't flip charging back to False
-(could be brief discharge / load spike). Location going ON_LAWN does
-clear charging (mower clearly off the dock).
+(could be brief discharge / load spike).
+
+NOTE: charging/battery signals no longer set location=AT_DOCK. Location
+is owned solely by s2p1 (dock cluster {6,13,15,16} → AT_DOCK;
+leaving → ON_LAWN). These tests verify only the charging flag.
 """
 from __future__ import annotations
 
@@ -51,10 +54,10 @@ def test_first_battery_observation_does_not_infer():
     assert sm.snapshot().charging is False
 
 
-def test_battery_rise_inference_forces_location_at_dock():
-    """The only charging surface is the dock, so charging=True must
-    imply location=AT_DOCK. Without this, the dashboard shows the
-    impossible combination 'In dock=off' + 'Charging=charging'."""
+def test_battery_rise_inference_sets_charging_true():
+    """The only charging surface is the dock. Battery rising sets charging=True.
+    Location is now driven solely by s2p1 — the charging/battery signals no
+    longer set AT_DOCK (that was a removed side-effect)."""
     from custom_components.dreame_a2_mower.mower.state_machine import (
         MowerStateMachine,
     )
@@ -72,13 +75,15 @@ def test_battery_rise_inference_forces_location_at_dock():
     sm.handle_mqtt_property(siid=3, piid=1, value=30, now_unix=1000)
     sm.handle_mqtt_property(siid=3, piid=1, value=31, now_unix=1060)
     snap = sm.snapshot()
+    # charging flag is set by the battery rise inference
     assert snap.charging is True
-    # And location must have flipped to AT_DOCK
-    assert snap.location == Location.AT_DOCK
+    # Location stays ON_LAWN — s2p1 owns location, not battery/charging signals.
+    assert snap.location == Location.ON_LAWN
 
 
-def test_explicit_s3p2_true_forces_location_at_dock():
-    """Same invariant via the s3p2 path."""
+def test_explicit_s3p2_true_sets_charging_flag():
+    """s3p2=1 (explicit charging signal) must set charging=True.
+    Location is not changed — s2p1 is the sole location authority."""
     from custom_components.dreame_a2_mower.mower.state_machine import (
         MowerStateMachine,
     )
@@ -95,7 +100,8 @@ def test_explicit_s3p2_true_forces_location_at_dock():
     sm.handle_mqtt_property(siid=3, piid=2, value=1, now_unix=1000)
     snap = sm.snapshot()
     assert snap.charging is True
-    assert snap.location == Location.AT_DOCK
+    # Location stays ON_LAWN (s2p1 sets AT_DOCK; not s3p2)
+    assert snap.location == Location.ON_LAWN
 
 
 def test_explicit_s3p2_false_overrides_inference():

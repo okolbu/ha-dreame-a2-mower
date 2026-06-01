@@ -732,10 +732,6 @@ class _CoreMixin:
                     self.state_machine.reconcile_from_telemetry(
                         live_map_active=self.live_map.is_active(),
                         area_mowed_m2=getattr(data, "area_mowed_m2", None),
-                        position_x_m=getattr(data, "position_x_m", None),
-                        position_y_m=getattr(data, "position_y_m", None),
-                        dock_x_mm=getattr(data, "dock_x_mm", None),
-                        dock_y_mm=getattr(data, "dock_y_mm", None),
                         now_unix=now_unix,
                     )
                 except Exception:

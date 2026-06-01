@@ -329,25 +329,6 @@ def test_s2p1_returning_stays_returning_not_repositioning():
     )
 
 
-# ---------------------------------------------------------------------------
-# (6) Freshness: ON_LAWN stamp at undock must protect against stale cloud
-# ---------------------------------------------------------------------------
+# (6) Freshness: cloud-DOCK guard was removed — handle_cloud_poll is gone.
+# Location is now solely driven by s2p1 (no cloud revert path exists).
 
-def test_undock_on_lawn_freshness_protects_against_stale_cloud():
-    """After the undock → REPOSITIONING transition, the freshness stamp for
-    'location' must be set so a stale cloud AT_DOCK poll (with an earlier
-    now_unix) cannot revert it back to AT_DOCK.
-    """
-    sm = MowerStateMachine()
-    sm.handle_mqtt_property(siid=2, piid=1, value=6, now_unix=T0 - 60)
-    sm.handle_mqtt_property(siid=2, piid=1, value=1, now_unix=T0)
-    assert sm.snapshot().location == Location.ON_LAWN
-
-    # Simulate a stale cloud DOCK poll with an earlier timestamp
-    snap = sm.handle_cloud_poll(
-        "DOCK", {"connect_status": 1}, now_unix=T0 - 1
-    )
-    assert snap.location == Location.ON_LAWN, (
-        "Stale cloud AT_DOCK poll must not revert ON_LAWN set at undock "
-        f"(got {snap.location!r})"
-    )

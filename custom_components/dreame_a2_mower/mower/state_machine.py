@@ -1,6 +1,6 @@
 """MowerStateMachine — single owner of the multi-dim mower state.
 
-Inputs (MQTT slots, cloud-poll results, heartbeat ticks) in;
+Inputs (MQTT slots, heartbeat ticks) in;
 StateSnapshot out. Pure-Python; the only HA dependency is the
 optional Store used by load_persisted / save_persisted (added later).
 """
@@ -330,15 +330,6 @@ class MowerStateMachine:
         updates["field_freshness"] = freshness
         return self._replace(**updates)
 
-    # Set of op codes that represent a task leaving the dock (accepted start command).
-    # Used by _apply_s2p50_task_envelope to set location=ON_LAWN at command-time.
-    # - 100-103: mow variants (globalMower, edge, zone, spot) — all in MOW_MODE_CODES
-    # - 108: patrol (blades-up cruise, not a mow but still leaves the dock)
-    # - 109: cruise-to-point (startCleanPoint)
-    # op=10 (fast mapping) is intentionally absent — its dock-departure semantics
-    # are unclear and it has no corresponding user-visible task.
-    _TASK_START_OPS: frozenset[int] = frozenset({100, 101, 102, 103, 108, 109})
-
     def _apply_s2p50_task_envelope(
         self, envelope: Any, now_unix: int
     ) -> StateSnapshot:
@@ -346,16 +337,14 @@ class MowerStateMachine:
 
         - status=True: dispatch current_activity by op code; mow ops
           (100/101/102/103) also enter mow_session=IN_SESSION.
-          Any op in _TASK_START_OPS also sets location=ON_LAWN immediately —
-          the mower undocks at command-time, not ~45s later when s1p4 position
-          telemetry resumes (the reorientation window where s1p4 is silent).
-          This prevents the reconcile rule IN_SESSION+MOWING+AT_DOCK→CHARGE_RESUME
-          from corrupting the activity during the silent window.
         - status=False: still record last_task_op for diagnostics, but
-          don't change activity or location (firmware rejected the task)
+          don't change activity (firmware rejected the task)
         - op=109 (cruise) and op=10 (fast mapping) do NOT enter mow_session
+
+        Location is NOT set here — s2p1 is the sole location authority.
+        The undock transition (s2p1 leaving _DOCKED_STATES) sets ON_LAWN.
         """
-        from .state_snapshot import CurrentActivity, Location, MowSession
+        from .state_snapshot import CurrentActivity, MowSession
         if not isinstance(envelope, dict):
             return self._snapshot
         d = envelope.get("d")
@@ -391,20 +380,6 @@ class MowerStateMachine:
                 if self._snapshot.mow_session != MowSession.IN_SESSION:
                     updates["mow_session"] = MowSession.IN_SESSION
                     freshness["mow_session"] = now_unix
-            # Command-time location: any accepted task-start op leaves the dock.
-            # Set ON_LAWN immediately so:
-            #   1. The entity shows the correct location from command-time, not ~45s
-            #      later when s1p4 position telemetry resumes (reorientation window).
-            #   2. The reconcile rule IN_SESSION+MOWING+AT_DOCK→CHARGE_RESUME in
-            #      _reconcile_mow_activity cannot fire — location is already ON_LAWN.
-            # Scope: _TASK_START_OPS only (mow 100-103, patrol 108, cruise 109).
-            # op=10 (fast mapping) is intentionally excluded (unclear dock semantics).
-            # Freshness is stamped so a stale cloud DOCK poll can't immediately
-            # revert ON_LAWN to AT_DOCK (the MQTT-primary freshness guard in
-            # _apply_cloud_dock only skips when now_unix <= last_mqtt).
-            if op in self._TASK_START_OPS and self._snapshot.location != Location.ON_LAWN:
-                updates["location"] = Location.ON_LAWN
-                freshness["location"] = now_unix
         updates["field_freshness"] = freshness
         return self._replace(**updates)
 
@@ -434,56 +409,6 @@ class MowerStateMachine:
                 field_freshness=freshness,
             )
         return self._snapshot
-
-    def handle_cloud_poll(
-        self, source: str, payload: dict[str, Any], now_unix: int
-    ) -> StateSnapshot:
-        """Apply a cloud-poll result.
-
-        Per-field precedence: only overwrite a field when the cloud
-        poll's `now_unix` is GREATER than the field's last MQTT update
-        stamp in `field_freshness`. Stale cloud-cached values that
-        carry a now_unix older than our last MQTT update for the same
-        field are silently ignored — MQTT-primary wins.
-
-        Unknown sources are silently no-op (returns snapshot unchanged).
-        """
-        if source == "DOCK":
-            return self._apply_cloud_dock(payload, now_unix)
-        return self._snapshot
-
-    def _apply_cloud_dock(
-        self, payload: dict[str, Any], now_unix: int
-    ) -> StateSnapshot:
-        """CFG.DOCK payload → location.
-
-        connect_status=1 → AT_DOCK; connect_status=0 → ON_LAWN.
-        Skips when field freshness > now_unix (MQTT was fresher).
-        Skips when value already matches (no-op).
-
-        Stale-cloud guard: cloud DOCK status lags by 5-10 min on g2408,
-        sometimes reporting AT_DOCK while the mower is clearly mid-mow.
-        When mow_session=IN_SESSION and we already believe location is
-        ON_LAWN, ignore a cloud AT_DOCK claim. Telemetry-driven location
-        is more trustworthy in that case.
-        """
-        from .state_snapshot import Location, MowSession
-        connect = payload.get("connect_status")
-        if connect is None:
-            return self._snapshot
-        new_location = Location.AT_DOCK if int(connect) == 1 else Location.ON_LAWN
-        if (
-            new_location == Location.AT_DOCK
-            and self._snapshot.mow_session == MowSession.IN_SESSION
-            and self._snapshot.location == Location.ON_LAWN
-        ):
-            return self._snapshot
-        last_mqtt = self._snapshot.field_freshness.get("location", 0)
-        if now_unix <= last_mqtt:
-            return self._snapshot
-        freshness = dict(self._snapshot.field_freshness)
-        freshness["location"] = now_unix
-        return self._replace(location=new_location, field_freshness=freshness)
 
     def end_session(self, now_unix: int) -> StateSnapshot:
         """Flip mow_session to BETWEEN_SESSIONS + activity to IDLE.
@@ -553,10 +478,6 @@ class MowerStateMachine:
             freshness["current_activity"] = now_unix
         updates["field_freshness"] = freshness
         return self._replace(**updates)
-
-    # Distance (metres) from dock origin beyond which we infer ON_LAWN.
-    # Larger than typical dock footprint, smaller than the shortest lawn.
-    OFF_DOCK_THRESHOLD_M: float = 1.0
 
     def _reconcile_mow_activity(
         self, *, live_map_active: bool, area_mowed_m2: float | None,
@@ -630,65 +551,30 @@ class MowerStateMachine:
 
         return updates
 
-    def _reconcile_location(
-        self, *, position_x_m: float | None, position_y_m: float | None,
-        dock_x_mm: float | None, dock_y_mm: float | None,
-    ) -> dict[str, Any]:
-        """Location inference (R6): AT_DOCK + position clearly off-dock → ON_LAWN.
-        Returns field updates only (freshness derived by the caller)."""
-        from .state_snapshot import Location
-        updates: dict[str, Any] = {}
-
-        # Location inference: AT_DOCK + position clearly off-dock → ON_LAWN.
-        # dock_*_mm is in millimetres, position_*_m in metres.
-        if (
-            self._snapshot.location == Location.AT_DOCK
-            and position_x_m is not None
-            and position_y_m is not None
-        ):
-            dock_x_m = (dock_x_mm or 0) / 1000.0
-            dock_y_m = (dock_y_mm or 0) / 1000.0
-            dx = position_x_m - dock_x_m
-            dy = position_y_m - dock_y_m
-            dist_m = (dx * dx + dy * dy) ** 0.5
-            if dist_m > self.OFF_DOCK_THRESHOLD_M:
-                updates["location"] = Location.ON_LAWN
-
-        return updates
-
     def reconcile_from_telemetry(
         self,
         *,
         live_map_active: bool,
         area_mowed_m2: float | None,
-        position_x_m: float | None,
-        position_y_m: float | None,
-        dock_x_mm: float | None,
-        dock_y_mm: float | None,
         now_unix: int,
     ) -> StateSnapshot:
         """Cold-boot reconciliation from continuous telemetry.
 
         MQTT properties_changed only fires on CHANGE. After a mid-session
         integration restart we never receive the start events (s2p2=50,
-        s2p1=1) — they fired hours ago. Telemetry (battery, position,
-        area_mowed, live_map) keeps flowing, so we use it to infer that
-        a session is in progress.
+        s2p1=1) — they fired hours ago. Telemetry (battery, area_mowed,
+        live_map) keeps flowing, so we use it to infer that a session is
+        in progress.
 
         Inferences are conservative and gated:
         - Mowing inference requires `area_mowed_m2 > 0` (a real mow signal),
           not just live_map activity, because cruise-to-point also drives
           live_map. Only flips BETWEEN_SESSIONS → IN_SESSION; never
           overwrites an already-known session.
-        - Location inference requires AT_DOCK + a position clearly off the
-          dock origin. Never overwrites AT_POINT / OUTSIDE_KNOWN_AREA.
         """
         updates: dict[str, Any] = {
             **self._reconcile_mow_activity(
                 live_map_active=live_map_active, area_mowed_m2=area_mowed_m2),
-            **self._reconcile_location(
-                position_x_m=position_x_m, position_y_m=position_y_m,
-                dock_x_mm=dock_x_mm, dock_y_mm=dock_y_mm),
         }
         if not updates:
             return self._snapshot
@@ -935,15 +821,10 @@ class MowerStateMachine:
     def _apply_charging(
         self, new_value: bool, now_unix: int
     ) -> StateSnapshot:
-        """Update charging, enforcing the at-dock invariant.
+        """Update the charging flag (s3p2).
 
-        Charging can only happen at the dock. When charging transitions
-        False→True we therefore also set location=AT_DOCK if not
-        already. This is the strongest at-dock signal we have — it
-        even overrides the IN_SESSION+ON_LAWN suppression in
-        _apply_cloud_dock.
+        Location is not set here — s2p1 is the sole location authority.
         """
-        from .state_snapshot import Location
         if self._snapshot.charging == new_value:
             return self._snapshot
         freshness = dict(self._snapshot.field_freshness)
@@ -952,9 +833,6 @@ class MowerStateMachine:
             "charging": new_value,
             "field_freshness": freshness,
         }
-        if new_value and self._snapshot.location != Location.AT_DOCK:
-            updates["location"] = Location.AT_DOCK
-            freshness["location"] = now_unix
         return self._replace(**updates)
 
     def _apply_battery_percent(
@@ -968,8 +846,9 @@ class MowerStateMachine:
         it as a fallback. Falling battery is left alone (could be a
         brief load spike; the firmware s3p2=0 path is authoritative
         for clearing the flag).
+
+        Location is not set here — s2p1 is the sole location authority.
         """
-        from .state_snapshot import Location
         prev = self._snapshot.battery_percent
         if prev == new_value:
             return self._snapshot
@@ -984,10 +863,6 @@ class MowerStateMachine:
         if prev is not None and new_value > prev and not self._snapshot.charging:
             updates["charging"] = True
             freshness["charging"] = now_unix
-            # Invariant: the only charging surface is the dock.
-            if self._snapshot.location != Location.AT_DOCK:
-                updates["location"] = Location.AT_DOCK
-                freshness["location"] = now_unix
         return self._replace(**updates)
 
     def _apply_scalar(

@@ -273,7 +273,7 @@ were removed in the 2026-05-25 refresher consolidation
 |---|---|---|
 | `_refresh_cloud_state` | 2 min | Full state: cfg, mihis, mapl, settings, maps, props. Ports CFG via `cfg_to_state_updates`, MIHIS + SETTINGS, and active-map via `_apply_mapl(cs.mapl)`. |
 | `_refresh_locn` | 60 s | GPS position wants low latency. |
-| `_refresh_dock` | 60 s | Dock arrival/departure latency **and** feeds `state_machine.handle_cloud_poll` (cloud_state path does not). |
+| `_refresh_dock` | 60 s | Dock position sensors (x/y/yaw/in_region). Location not set here — s2p1 is the sole location authority. |
 | `_refresh_net` | 1 h | NET is not part of the full-state fetch. |
 | `_refresh_dev` | 6 h | DEV is not part of the full-state fetch. |
 | `_poll_slow_properties` | 1 h | s6.3 + s1.5 serial-while-unknown; feeds the state machine. |
