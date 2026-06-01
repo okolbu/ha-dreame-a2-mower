@@ -83,7 +83,7 @@ _DEFAULT_PALETTE: dict[str, tuple[int, int, int, int]] = {
     # the light-green lawn.
     "mow_trail_thin_color": (50, 100, 30, 220),
     # Traversal segments (dock-return / cross-map navigation). Drawn LAST
-    # in render_with_trail so it stays visible over mowing strokes.
+    # in the work-log trail render so it stays visible over mowing strokes.
     "traversal_color": (130, 130, 130, 220),
 }
 
@@ -151,7 +151,7 @@ def _renderer_to_px(
 
 
 def extract_projection(map_data: MapData | None) -> dict | None:
-    """Expose the projection params the card needs to reproduce render_with_trail.
+    """Expose the projection params the card needs to project metres to pixels.
 
     Returns the five fields the card consumes to project (x_m, y_m) to
     pixel coords matching the base PNG:

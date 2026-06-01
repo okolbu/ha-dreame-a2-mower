@@ -1,7 +1,7 @@
 """Dotted-polygon drawing helper.
 
 Extracted from the dead `TrailLayer._draw_dotted_polygon`. Used by the
-EDGE / SPOT idle-preview branches in `map_render.render_main_view` to
+EDGE / SPOT background branches in `map_render.render_base` to
 outline the lawn boundary or each spot rectangle.
 """
 from __future__ import annotations

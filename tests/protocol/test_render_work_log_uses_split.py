@@ -22,7 +22,6 @@ from custom_components.dreame_a2_mower.map_decoder import MapData, MowingZone
 from custom_components.dreame_a2_mower.map_render import (
     _DEFAULT_PALETTE,
     render_work_log,
-    render_with_trail,
 )
 
 
@@ -110,14 +109,14 @@ def test_render_work_log_only_cloud_segments_all_mowing():
     )
 
 
-def test_render_work_log_legs_timeline_forwarded_to_render_with_trail():
-    """render_work_log passes legs_timeline= through to render_with_trail.
+def test_render_work_log_legs_timeline_forwarded_to_archived_trail():
+    """render_work_log passes legs_timeline= through to _render_archived_trail.
 
-    Regression guard for Task 5: the new kwarg must flow from
-    render_work_log → render_with_trail so the renderer uses the
-    pre-classified timeline rather than the fuzzy splitter.
+    Regression guard: the kwarg must flow from render_work_log →
+    _render_archived_trail (the renderer moved into work_log.py from the
+    deleted trail.py) so the renderer uses the pre-classified timeline.
     """
-    from unittest.mock import patch, call
+    from unittest.mock import patch
 
     timeline = [
         {"role": "mowing",   "start_ts": 100, "end_ts": 200, "pts": [(2.0, 5.0), (4.0, 5.0)]},
@@ -125,15 +124,15 @@ def test_render_work_log_legs_timeline_forwarded_to_render_with_trail():
     ]
 
     with patch(
-        "custom_components.dreame_a2_mower.map_render.render_with_trail",
+        "custom_components.dreame_a2_mower.map_render.work_log._render_archived_trail",
         return_value=b"\x89PNG",
     ) as mock_rwt:
         render_work_log(_tiny_map(), legs_timeline=timeline)
 
-    assert mock_rwt.called, "render_with_trail was not called"
+    assert mock_rwt.called, "_render_archived_trail was not called"
     _, kwargs = mock_rwt.call_args
     assert kwargs.get("legs_timeline") is timeline, (
-        f"legs_timeline not forwarded; render_with_trail got kwargs={kwargs}"
+        f"legs_timeline not forwarded; _render_archived_trail got kwargs={kwargs}"
     )
 
 

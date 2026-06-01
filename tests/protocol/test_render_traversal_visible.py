@@ -1,10 +1,9 @@
-"""End-to-end: render_with_trail draws mowing in light-green and traversal in grey.
+"""End-to-end: the archived-trail render draws mowing light-green / traversal grey.
 
-Note: the fuzzy split_trail classifier was deleted in Task 11. Two tests that
-relied on the splitter producing traversal classification from local_legs /
-cloud_segments have been removed. Traversal classification now requires either
-mowing_legs/traversal_legs (explicit split) or legs_timeline (capture-time
-metadata). The remaining test guards the legacy `legs=` back-compat kwarg.
+The trail renderer moved into ``work_log._render_archived_trail`` (from the
+deleted ``trail.py``) in the live-map rehaul; the live map no longer renders a
+trail server-side. The public entry point is ``render_work_log``. The remaining
+test guards the legacy ``legs=`` back-compat kwarg through that entry point.
 """
 from __future__ import annotations
 
@@ -15,7 +14,7 @@ from PIL import Image
 from custom_components.dreame_a2_mower.map_decoder import MapData, MowingZone
 from custom_components.dreame_a2_mower.map_render import (
     _DEFAULT_PALETTE,
-    render_with_trail,
+    render_work_log,
 )
 
 
@@ -79,7 +78,6 @@ def _collect_pixels(png_bytes: bytes) -> set:
 def test_legacy_legs_kwarg_still_works():
     """Back-compat: passing the old positional/legacy 'legs' kwarg still renders."""
     legs = [[(2.0, 5.0), (4.0, 5.0)]]
-    # Old call style: render_with_trail(map_data, legs, ...)
-    png = render_with_trail(_tiny_map(), legs)
+    png = render_work_log(_tiny_map(), legs=legs)
     assert isinstance(png, bytes)
     assert len(png) > 0

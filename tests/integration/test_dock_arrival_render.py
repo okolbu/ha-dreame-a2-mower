@@ -1,14 +1,14 @@
-"""TDD: Bug 2 render half — _render_main_view must be triggered promptly on dock arrival.
+"""TDD: Bug 2 render half — _render_base must be triggered promptly on dock arrival.
 
 After the mower docks (session over, live_map inactive), the map should show the
 idle pre-start preview (stripes) without waiting for the next 2-minute cloud refresh.
 
 The fix: in _on_state_update, when dock arrival is detected
-(self._prev_in_dock is False and _sm_at_dock is True), schedule _render_main_view().
+(self._prev_in_dock is False and _sm_at_dock is True), schedule _render_base().
 
 Tests:
-1. Dock arrival (prev=False, new=AT_DOCK) → _render_main_view is scheduled.
-2. Dock departure (prev=True, new=not AT_DOCK) → _render_main_view is NOT called via
+1. Dock arrival (prev=False, new=AT_DOCK) → _render_base is scheduled.
+2. Dock departure (prev=True, new=not AT_DOCK) → _render_base is NOT called via
    dock-arrival path (no spurious render on departure).
 3. Already docked on first push (prev=None) → no spurious render.
 4. Still docked on repeat push → no render (only on the rising edge).
@@ -78,7 +78,7 @@ def _make_coord_for_dock_test(
     coord.hass = hass
 
     # --- render target ---
-    coord._render_main_view = AsyncMock(return_value=None)
+    coord._render_base = AsyncMock(return_value=None)
     coord._last_lidar_object_name = None  # needed for lidar check
 
     # --- _fire_lifecycle (no-op for this test) ---
@@ -108,12 +108,12 @@ def _call_on_state_update_dock_portion(coord, *, now_unix: int = 1_000_000):
 
 
 # ---------------------------------------------------------------------------
-# Test 1: dock arrival → _render_main_view scheduled
+# Test 1: dock arrival → _render_base scheduled
 # ---------------------------------------------------------------------------
 
 def test_dock_arrival_schedules_render():
     """When the mower arrives at dock (prev=False → at_dock=True),
-    _render_main_view must be scheduled via hass.async_create_task.
+    _render_base must be scheduled via hass.async_create_task.
     """
     coord = _make_coord_for_dock_test(
         prev_in_dock=False,         # was not at dock
@@ -132,14 +132,14 @@ def test_dock_arrival_schedules_render():
     # More direct: check that async_create_task was called at all after dock-arrival
     # (we know it fires the render; check the event directly)
     assert coord.hass.async_create_task.called, (
-        "Dock arrival must schedule _render_main_view via hass.async_create_task. "
+        "Dock arrival must schedule _render_base via hass.async_create_task. "
         "Currently, no render is triggered on dock-arrival, causing the idle "
         "stripe preview to appear only after the next 2-min cloud refresh."
     )
 
 
 # ---------------------------------------------------------------------------
-# Test 2: dock departure — _render_main_view NOT triggered via dock path
+# Test 2: dock departure — _render_base NOT triggered via dock path
 # ---------------------------------------------------------------------------
 
 def test_dock_departure_does_not_trigger_dock_arrival_render():
@@ -153,7 +153,7 @@ def test_dock_departure_does_not_trigger_dock_arrival_render():
 
     _call_on_state_update_dock_portion(coord)
 
-    # _render_main_view should NOT be called via the dock-arrival path
+    # _render_base should NOT be called via the dock-arrival path
     # (an undock render is triggered separately from s2p1; we're testing
     # _on_state_update's dock-arrival block specifically).
     # Verify no render was scheduled for dock arrival (might be called for

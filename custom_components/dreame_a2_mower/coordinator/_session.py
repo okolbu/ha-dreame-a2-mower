@@ -332,7 +332,7 @@ class _SessionMixin:
         # the static trail flashes before animation begins. The no-trail
         # variant prevents that.
         # Pass obstacle_polygons_m so the base image includes obstacles
-        # at the same z-order as render_with_trail; the SVG animated trail
+        # at the same z-order as the work-log trail render; the SVG animated trail
         # then draws on top, giving the animated replay visual parity with
         # the static work_log.png (fix for replay card obstacle parity).
         try:

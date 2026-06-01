@@ -11,7 +11,6 @@ def test_work_log_camera_reads_work_log_png():
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
 
     coord = object.__new__(DreameA2MowerCoordinator)
-    coord._main_view_png = b"\x89PNGmainview"
     coord._work_log_png = b"\x89PNGworklog"
     coord._active_map_base_png = None
     coord._static_map_pngs_by_id = {}
@@ -36,7 +35,6 @@ def test_work_log_camera_returns_none_when_slots_empty():
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
 
     coord = object.__new__(DreameA2MowerCoordinator)
-    coord._main_view_png = b"\x89PNGmainview"
     coord._work_log_png = None
     coord._active_map_base_png = None
     coord._static_map_pngs_by_id = {}
@@ -62,7 +60,6 @@ def test_work_log_camera_falls_back_to_active_map_base():
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
 
     coord = object.__new__(DreameA2MowerCoordinator)
-    coord._main_view_png = b"\x89PNGmainview"
     coord._work_log_png = None
     coord._active_map_base_png = b"\x89PNGactivemapbase"
     coord._static_map_pngs_by_id = {}

@@ -2,7 +2,7 @@
 
 A 64x64 RGBA crop of dreame-a2-icon-large.jpg, pre-rotated 270° CCW
 (= 90° CW) so the front of the mower points UP in the unrotated
-source. The renderer's render_with_trail then rotates by
+source. The client-side map/replay card then rotates by
 -heading_deg to align with the actual driving direction.
 
 Rotation history:

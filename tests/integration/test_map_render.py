@@ -28,7 +28,13 @@ if str(_REPO_ROOT) not in sys.path:
 from tests.integration.test_map_decoder import _MINIMAL_MAP  # noqa: E402
 
 from custom_components.dreame_a2_mower.map_decoder import parse_cloud_map  # noqa: E402
-from custom_components.dreame_a2_mower.map_render import render_base_map, render_with_trail  # noqa: E402
+from custom_components.dreame_a2_mower.map_render import render_base_map  # noqa: E402
+# The trail renderer moved into work_log._render_archived_trail (from the
+# deleted trail.py) in the live-map rehaul; the live map no longer renders a
+# trail server-side. These tests exercise that renderer directly.
+from custom_components.dreame_a2_mower.map_render.work_log import (  # noqa: E402
+    _render_archived_trail as render_with_trail,
+)
 
 # PNG magic bytes.
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"

@@ -1879,7 +1879,8 @@ def _make_coordinator_for_replay_tests(
     coord._static_map_pngs_by_id = {}
     coord._last_map_md5_by_id = {}
     coord._active_map_id = None
-    coord._main_view_png = None
+    coord._base_png = None
+    coord._work_log_png = None
     if last_map_md5 is not None:
         coord._last_map_md5_by_id[0] = last_map_md5
 
@@ -1960,12 +1961,12 @@ def test_replay_session_unknown_md5_returns_early():
     coord = _make_coordinator_for_replay_tests(sessions=[])
 
     with patch(
-        "custom_components.dreame_a2_mower.map_render.render_with_trail",
+        "custom_components.dreame_a2_mower.map_render.render_work_log",
     ) as mock_trail:
         asyncio.run(coord.replay_session("does-not-exist"))
         mock_trail.assert_not_called()
 
-    assert coord._main_view_png is None
+    assert coord._work_log_png is None
 
 
 def test_replay_session_load_failure_returns_early():
@@ -1986,11 +1987,11 @@ def test_replay_session_load_failure_returns_early():
     )
     coord = _make_coordinator_for_replay_tests(sessions=[entry], load_return=None)
 
-    with patch("custom_components.dreame_a2_mower.map_render.render_with_trail") as mock_trail:
+    with patch("custom_components.dreame_a2_mower.map_render.render_work_log") as mock_trail:
         asyncio.run(coord.replay_session("abc123"))
         mock_trail.assert_not_called()
 
-    assert coord._main_view_png is None
+    assert coord._work_log_png is None
 
 
 def test_replay_session_renders_archived_trail():
@@ -2082,11 +2083,11 @@ def test_replay_session_no_cloud_returns_early():
     del coord._cloud
 
     from unittest.mock import patch
-    with patch("custom_components.dreame_a2_mower.map_render.render_with_trail") as mock_trail:
+    with patch("custom_components.dreame_a2_mower.map_render.render_work_log") as mock_trail:
         asyncio.run(coord.replay_session("replay-md5"))
         mock_trail.assert_not_called()
 
-    assert coord._main_view_png is None
+    assert coord._work_log_png is None
 
 
 # Session-summary JSON with 7 obstacles (mirroring the 2026-04-18 fixture).
@@ -3160,7 +3161,7 @@ def test_render_maps_from_cloud_state_renders_base_png():
         "custom_components.dreame_a2_mower.map_render.render_base_map",
         return_value=b"\x89PNG\r\n\x1a\n" + b"\x00" * 10,
     ) as mock_base, \
-         patch.object(coord, "_render_main_view", new=AsyncMock()), \
+         patch.object(coord, "_render_base", new=AsyncMock()), \
          patch.object(coord, "_render_active_map_base", new=AsyncMock()):
         asyncio.run(coord._render_maps_from_cloud_state())
         mock_base.assert_called_once()
@@ -3180,7 +3181,7 @@ def test_render_maps_from_cloud_state_skips_if_md5_unchanged():
         "custom_components.dreame_a2_mower.map_render.render_base_map",
         return_value=b"\x89PNG\r\n\x1a\n" + b"\x00" * 10,
     ) as mock_base, \
-         patch.object(coord, "_render_main_view", new=AsyncMock()), \
+         patch.object(coord, "_render_base", new=AsyncMock()), \
          patch.object(coord, "_render_active_map_base", new=AsyncMock()):
         asyncio.run(coord._render_maps_from_cloud_state())
         mock_base.assert_not_called()

@@ -89,10 +89,10 @@ def render_base_map(
             correct z-order and share the same coordinate space as everything
             else on the canvas.
         obstacles: Optional list of obstacle polygons in cloud-frame metres
-            (same format as ``render_with_trail``'s ``obstacle_polygons_m``).
+            (same format as the work-log trail render's ``obstacle_polygons_m``).
             When provided, paints them as semi-transparent blue filled polygons
             using ``_OBSTACLE_FILL`` / ``_OBSTACLE_OUTLINE`` AFTER the dock
-            icon (same z-order as the obstacles in ``render_with_trail``), so
+            icon (same z-order as the obstacles in the work-log trail render), so
             the replay card's no-trail background image includes obstacles and
             the animated SVG trail draws on top. The caller must supply the
             session-specific obstacle list — typically
@@ -398,7 +398,7 @@ def render_base_map(
 
     # -----------------------------------------------------------------------
     # 4b. Obstacle polygons — semi-transparent blue filled polygons,
-    #     same z-order and same drawing code as render_with_trail.
+    #     same z-order and same drawing code as the work-log trail render.
     #     Drawn AFTER the dock icon so they don't obscure it but BEFORE
     #     the final vertical flip (matching the base-map coordinate space).
     #     Used when the caller wants the no-trail background to include
