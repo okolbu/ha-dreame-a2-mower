@@ -104,16 +104,16 @@ def decide(
     )
 
     if session_just_ended:
-        # Rain pause-at-dock veto: when the mower has docked + is charging
-        # because rain protection paused the mow, it reports task_state 2/None
-        # exactly like a finished session — and on reboot _restore_in_progress
-        # seeds prev_task_state=0, so this branch fires spuriously. While the
-        # rain-delay timer is active the session is NOT over (the mower will
-        # undock and resume when rain clears, or the resume window expires and
-        # this veto lifts, letting finalize proceed). `rain_delay_active` is
-        # bounded by the resume-hours window, so the veto cannot hang a session
-        # forever. When it's False, behaviour is unchanged — the
-        # "mower finished while HA was off" auto-finalize still fires.
+        # Rain pause-at-dock veto: when the mower docks because rain protection
+        # paused the mow it reports task_state 2/None exactly like a finished
+        # session — and on reboot _restore_in_progress seeds prev_task_state=0,
+        # so this branch fires spuriously. While rain_delay_active is True the
+        # session is NOT over. rain_delay_active is bounded for resume_hours>=1
+        # (the resume window expires); for resume_hours in {0, None} it stays
+        # active until the mower undocks (which clears _rain_delay_started_at)
+        # — in practice the mower must undock to resume, so the session still
+        # resolves. When rain_delay_active is False, behaviour is unchanged —
+        # the "mower finished while HA was off" auto-finalize still fires.
         if rain_delay_active:
             return FinalizeAction.NOOP
         if state.pending_session_object_name:

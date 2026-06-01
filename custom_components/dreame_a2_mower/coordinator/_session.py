@@ -545,9 +545,11 @@ class _SessionMixin:
             # Rain pause-at-dock veto (mirrors the finalize-gate veto in
             # live_map/finalize.decide). The 0/4→2/None task_state edge that
             # triggers this path also fires when the mower docks to wait out a
-            # rain delay — that is NOT a session end. The bounded rain-delay
-            # window guarantees this veto lifts (mower resumes on undock, or the
-            # resume window expires) so it cannot pin a session open forever.
+            # rain delay — that is NOT a session end. rain_delay_active is
+            # bounded for resume_hours>=1 (the resume window expires); for
+            # resume_hours in {0, None} it stays active until the mower undocks
+            # (which clears _rain_delay_started_at) — in practice the mower
+            # must undock to resume, so the session still resolves.
             LOGGER.warning(
                 "[F5.6.1] _finalize_non_mow_immediate(trigger=%s): rain delay active "
                 "— vetoing finalize (mower paused at dock for rain, session not ended)",
