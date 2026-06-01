@@ -238,6 +238,12 @@ class _CoreMixin:
         # Used by the replay card as its animation base so the SVG-animated
         # trail doesn't double up on a pre-painted static trail.
         self._work_log_base_png: bytes | None = None
+        # Active map's CLEAN base render (light lawn, no trail/icon/stripes/
+        # green) — the Work Log camera's empty-state image. Distinct from the
+        # live `_base_png` (which carries the active background mode). Fed by
+        # `_render_active_map_base`, called at the end of `_render_base`.
+        self._active_map_base_png: bytes | None = None
+        self._active_map_base_md5: str | None = None
         self._picked_session_summary: dict[str, Any] | None = None
         """Flat attribute dict for sensor.dreame_a2_mower_picked_session.
         Set by render_work_log_session; cleared by the work_log select

@@ -61,7 +61,7 @@ class TestDreameA2TrailRenderWidthNumber:
 
         async def _fake_render():
             pass
-        coord._render_main_view = _fake_render
+        coord._render_base = _fake_render
 
         await ent.async_set_native_value(7.0)
 
@@ -84,7 +84,7 @@ class TestDreameA2TrailRenderWidthNumber:
 
         async def _fake_render():
             pass
-        coord._render_main_view = _fake_render
+        coord._render_base = _fake_render
 
         await ent.async_set_native_value(12.9)
         assert captured["state"].trail_render_width == 12  # int() truncates
@@ -94,14 +94,14 @@ class TestDreameA2TrailRenderWidthNumber:
         """The live-map preview must be re-rendered with the new width
         in-band so it's updated before this call returns."""
         coord = _make_coord(width=24)
-        coord._render_main_view = AsyncMock()
+        coord._render_base = AsyncMock()
         coord._picked_session_summary = None
         ent = DreameA2TrailRenderWidthNumber(coord)
         ent.hass = MagicMock()
 
         await ent.async_set_native_value(10.0)
 
-        coord._render_main_view.assert_awaited_once()
+        coord._render_base.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_set_native_value_rerenders_picked_work_log(self):
@@ -110,7 +110,7 @@ class TestDreameA2TrailRenderWidthNumber:
         static replay image keeps the old stroke thickness until the
         user re-picks the session."""
         coord = _make_coord(width=24)
-        coord._render_main_view = AsyncMock()
+        coord._render_base = AsyncMock()
         coord.render_work_log_session = AsyncMock()
         coord._picked_session_summary = {
             "filename": "session-2026-05-19.json",
@@ -129,7 +129,7 @@ class TestDreameA2TrailRenderWidthNumber:
     async def test_set_native_value_skips_work_log_when_no_picked_session(self):
         """No picked session → no work-log re-render attempt."""
         coord = _make_coord(width=24)
-        coord._render_main_view = AsyncMock()
+        coord._render_base = AsyncMock()
         coord.render_work_log_session = AsyncMock()
         coord._picked_session_summary = None
         ent = DreameA2TrailRenderWidthNumber(coord)
@@ -153,7 +153,7 @@ class TestDreameA2TrailRenderWidthNumber:
         async def _fake_work_log(_filename):
             call_order.append("render_work_log")
 
-        coord._render_main_view = _fake_main
+        coord._render_base = _fake_main
         coord.render_work_log_session = _fake_work_log
         coord._picked_session_summary = {"filename": "x.json"}
         coord.async_update_listeners = MagicMock(

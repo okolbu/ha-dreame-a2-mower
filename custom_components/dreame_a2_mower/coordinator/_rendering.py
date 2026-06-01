@@ -161,6 +161,30 @@ class _RenderingMixin:
                 "[MAP] base render: bg=%s map=%s md5=%s",
                 mode.value, active_id, md5,
             )
+        # Keep the Work Log camera's empty-state CLEAN base fresh too.
+        await self._render_active_map_base()
+
+    async def _render_active_map_base(self) -> None:
+        """Render the active map's CLEAN base (light lawn, no trail/icon/stripes)
+        into ``_active_map_base_png``. Used as the Work Log camera's empty-state
+        image. Md5-deduped — the PIL render runs at most once per map version."""
+        active_id = self._active_map_id
+        if active_id is None:
+            return
+        map_data = self.cloud_state.maps_by_id.get(active_id)
+        if map_data is None:
+            return
+        current_md5 = getattr(map_data, "md5", None)
+        if (
+            self._active_map_base_png is not None
+            and self._active_map_base_md5 == current_md5
+        ):
+            return
+        from ..map_render import render_base_map
+        png = await self.hass.async_add_executor_job(render_base_map, map_data)
+        if png:
+            self._active_map_base_png = png
+            self._active_map_base_md5 = current_md5
 
     def _begin_live_stream(self, *, t: float) -> None:
         """Reset the published live stream at session begin / cold-start."""

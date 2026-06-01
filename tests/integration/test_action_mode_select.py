@@ -2,8 +2,8 @@
 
 Recurring bug pattern: selecting a new action_mode used to take 1-2 minutes
 to redraw the live-map preview because async_select_option only broadcast
-the new state (action_mode field) without kicking off `_render_main_view`,
-so `_main_view_png` stayed stale until the next telemetry-driven render
+the new state (action_mode field) without kicking off `_render_base`,
+so `_base_png` stayed stale until the next telemetry-driven render
 fired. The camera entity rotates its access_token only when the PNG bytes
 change AND a coordinator broadcast fires — the broadcast from the state
 change wasn't enough on its own.
@@ -37,17 +37,17 @@ def _make_coord(action_mode: ActionMode = ActionMode.ALL_AREAS) -> MagicMock:
 
 class TestDreameA2ActionModeSelect:
     @pytest.mark.asyncio
-    async def test_async_select_option_triggers_render_main_view(self):
-        """Selecting a new option must await _render_main_view so the
+    async def test_async_select_option_triggers_render_base(self):
+        """Selecting a new option must await _render_base so the
         live-preview PNG reflects the change immediately."""
         coord = _make_coord(action_mode=ActionMode.ALL_AREAS)
-        coord._render_main_view = AsyncMock()
+        coord._render_base = AsyncMock()
         ent = DreameA2ActionModeSelect(coord)
         ent.hass = MagicMock()
 
         await ent.async_select_option(ActionMode.EDGE.value)
 
-        coord._render_main_view.assert_awaited_once()
+        coord._render_base.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_async_select_option_broadcasts_after_render(self):
@@ -60,7 +60,7 @@ class TestDreameA2ActionModeSelect:
         async def _fake_render():
             call_order.append("render")
 
-        coord._render_main_view = _fake_render
+        coord._render_base = _fake_render
         coord.async_update_listeners = MagicMock(
             side_effect=lambda: call_order.append("broadcast")
         )
@@ -88,7 +88,7 @@ class TestDreameA2ActionModeSelect:
             captured["state"] = new_state
 
         coord.async_set_updated_data.side_effect = _capture
-        coord._render_main_view = AsyncMock()
+        coord._render_base = AsyncMock()
 
         ent = DreameA2ActionModeSelect(coord)
         ent.hass = MagicMock()
@@ -110,7 +110,7 @@ class TestDreameA2ActionModeSelect:
         from types import SimpleNamespace
 
         coord = _make_coord(action_mode=ActionMode.ALL_AREAS)
-        coord._render_main_view = AsyncMock()
+        coord._render_base = AsyncMock()
 
         ent = DreameA2ActionModeSelect(coord)
         ent.hass = MagicMock()
@@ -127,7 +127,7 @@ class TestDreameA2ActionModeSelect:
         coord.async_set_updated_data.assert_called_once()
         new_state_arg = coord.async_set_updated_data.call_args.args[0]
         assert new_state_arg.action_mode == ActionMode.EDGE
-        coord._render_main_view.assert_awaited_once()
+        coord._render_base.assert_awaited_once()
         coord.async_update_listeners.assert_called_once()
 
 
@@ -139,7 +139,7 @@ class TestDreameA2ActionModeSelect:
         from types import SimpleNamespace
 
         coord = _make_coord(action_mode=ActionMode.EDGE)
-        coord._render_main_view = AsyncMock()
+        coord._render_base = AsyncMock()
 
         ent = DreameA2ActionModeSelect(coord)
         ent.hass = MagicMock()
@@ -150,4 +150,4 @@ class TestDreameA2ActionModeSelect:
             await ent.async_added_to_hass()
 
         coord.async_set_updated_data.assert_not_called()
-        coord._render_main_view.assert_not_awaited()
+        coord._render_base.assert_not_awaited()

@@ -637,14 +637,17 @@ class DreameA2TrailRenderWidthNumber(
     async def async_set_native_value(self, value: float) -> None:
         """Update trail width and re-render every affected camera in-band.
 
-        Trail width is consumed by BOTH the live-map preview
-        (`_main_view_png`, via `_render_main_view`) and the currently-
-        picked work-log replay (`_work_log_png`, via
-        `render_work_log_session`). Both must re-render before the
-        post-broadcast so each camera entity's
-        `_handle_coordinator_update` observes a PNG-byte change and
-        rotates its `access_token` (which is what busts the browser's
-        cached image URL).
+        Trail width now applies CLIENT-SIDE for the live map (the server
+        renders only the base PNG and the card draws the trail from the
+        published position stream), so re-rendering `_render_base` here no
+        longer changes the live trail width — it's kept only so the entity
+        write still triggers a base re-render + broadcast (the "touch
+        triggers refresh" behaviour). The currently-picked work-log replay
+        (`_work_log_png`, via `render_work_log_session`) IS server-rendered,
+        so its width still updates here. Both must re-render before the
+        post-broadcast so each camera entity's `_handle_coordinator_update`
+        observes a PNG-byte change and rotates its `access_token` (which is
+        what busts the browser's cached image URL).
 
         See `feedback_camera_image_refresh_pattern` for the recurring
         bug class this guards against — pre-fix, the slider produced
@@ -656,7 +659,7 @@ class DreameA2TrailRenderWidthNumber(
             self.coordinator.data, trail_render_width=new_width,
         )
         self.coordinator.async_set_updated_data(new_state)
-        render_main = getattr(self.coordinator, "_render_main_view", None)
+        render_main = getattr(self.coordinator, "_render_base", None)
         if callable(render_main):
             await render_main()
         # Re-render the currently-picked work-log session, if any, so

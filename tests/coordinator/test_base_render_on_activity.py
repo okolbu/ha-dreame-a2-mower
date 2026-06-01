@@ -58,6 +58,8 @@ def _make_coord(*, action_mode=ActionMode.ALL_AREAS, md5="md5-aaa"):
     coord._base_png = None
     coord._base_png_mode = None
     coord._base_png_md5 = None
+    coord._active_map_base_png = None
+    coord._active_map_base_md5 = None
 
     for name in ("_render_base", "_compute_background_mode"):
         setattr(coord, name, types.MethodType(getattr(_RenderingMixin, name), coord))
@@ -67,6 +69,14 @@ def _make_coord(*, action_mode=ActionMode.ALL_AREAS, md5="md5-aaa"):
         return None
 
     coord._load_last_session_obstacles = _no_obstacles
+
+    # _render_base tail-calls _render_active_map_base (the Work Log clean-base
+    # render). Stub it to a no-op here so the executor-call counts below reflect
+    # only the live BASE render; the clean-base render is covered separately.
+    async def _no_clean_base():
+        return None
+
+    coord._render_active_map_base = _no_clean_base
     return coord
 
 
@@ -168,3 +178,23 @@ async def test_green_skips_obstacle_load_idle_loads_it():
     )
     await coord._render_base()
     assert loads == [1]  # unchanged — GREEN skipped the load
+
+
+@pytest.mark.asyncio
+async def test_render_active_map_base_writes_clean_base_and_dedups():
+    """_render_active_map_base renders the Work Log clean base once per map
+    version (md5-deduped) into _active_map_base_png."""
+    coord = _make_coord()
+    # Bind the real method (the harness stubs it to a no-op by default).
+    coord._render_active_map_base = types.MethodType(
+        _RenderingMixin._render_active_map_base, coord
+    )
+
+    await coord._render_active_map_base()
+    assert coord._active_map_base_png == _FAKE_PNG
+    assert coord._active_map_base_md5 == "md5-aaa"
+    assert len(coord.hass.calls) == 1
+
+    # Same md5 -> dedup short-circuits, no new executor call.
+    await coord._render_active_map_base()
+    assert len(coord.hass.calls) == 1

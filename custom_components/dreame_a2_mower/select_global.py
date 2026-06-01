@@ -972,7 +972,7 @@ class DreameA2ActionModeSelect(
         # ALL_AREAS stripe preview). The first render after restoration
         # is what makes the initial dashboard view match the restored
         # selection. See feedback_camera_image_refresh_pattern.
-        render_fn = getattr(self.coordinator, "_render_main_view", None)
+        render_fn = getattr(self.coordinator, "_render_base", None)
         if callable(render_fn):
             await render_fn()
             self.coordinator.async_update_listeners()
@@ -986,7 +986,7 @@ class DreameA2ActionModeSelect(
 
         The broadcast-render-broadcast triplet is load-bearing. The
         camera entity rotates its access_token (which busts the
-        browser's image-URL cache) only when `_main_view_png` bytes
+        browser's image-URL cache) only when `_base_png` bytes
         change AND a coordinator broadcast fires. Just setting the new
         state isn't enough: the render hasn't run yet, so the camera
         sees the new action_mode but unchanged PNG → no token rotation
@@ -995,7 +995,7 @@ class DreameA2ActionModeSelect(
 
         Fix pattern (see also `feedback_camera_image_refresh_pattern`):
           1. async_set_updated_data — broadcasts the new field value
-          2. await _render_main_view — produces the new PNG
+          2. await _render_base — produces the new base PNG
           3. async_update_listeners — broadcasts again so the camera
              entity's _handle_coordinator_update fires, observes the
              PNG change, and rotates its access_token.
@@ -1003,7 +1003,7 @@ class DreameA2ActionModeSelect(
         new_mode = ActionMode(option)
         new_state = dataclasses.replace(self.coordinator.data, action_mode=new_mode)
         self.coordinator.async_set_updated_data(new_state)
-        render_fn = getattr(self.coordinator, "_render_main_view", None)
+        render_fn = getattr(self.coordinator, "_render_base", None)
         if callable(render_fn):
             await render_fn()
             self.coordinator.async_update_listeners()
