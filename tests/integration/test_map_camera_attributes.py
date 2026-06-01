@@ -13,9 +13,10 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 
-def _make_camera(*, base_png=b"\x89PNGbase"):
+def _make_camera(*, base_png=b"\x89PNGbase", position=None):
     from custom_components.dreame_a2_mower.camera import DreameA2MapCamera
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
+    from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
 
     md = SimpleNamespace(
         name="Main Lawn",
@@ -36,6 +37,13 @@ def _make_camera(*, base_png=b"\x89PNGbase"):
     coord._track_snapshot = [[0.0, 0.0, None, 1230.0], [1.0, 2.0, 90.0, 1234.0]]
     coord.cloud_state = cloud_state
     coord._active_map_id = 0
+    sm = MowerStateMachine()
+    if position is not None:
+        sm.handle_position(
+            x_m=position[0], y_m=position[1],
+            north_m=None, east_m=None, now_unix=1000,
+        )
+    coord.state_machine = sm
     coord._cloud = MagicMock()
     coord._cloud.model = "dreame.mower.g2408"
     coord._cloud.mac_address = None
@@ -87,3 +95,21 @@ def test_extra_state_attributes_image_version_is_base_png_hash():
 def test_extra_state_attributes_has_no_calibration_points():
     attrs = _make_camera().extra_state_attributes
     assert "calibration_points" not in attrs
+
+
+def test_last_known_point_none_when_no_position():
+    # Fresh state machine: no telemetry position yet → no idle marker.
+    attrs = _make_camera().extra_state_attributes
+    assert attrs["last_known_point"] is None
+
+
+def test_last_known_point_from_persisted_position():
+    # Persisted last-known position → published for the idle icon (heading None).
+    attrs = _make_camera(position=(1.5, -2.0)).extra_state_attributes
+    assert attrs["last_known_point"] == [1.5, -2.0, None]
+
+
+def test_last_known_point_is_unrecorded():
+    # Excluded from the recorder like the other volatile stream attrs.
+    from custom_components.dreame_a2_mower.camera import DreameA2MapCamera
+    assert "last_known_point" in DreameA2MapCamera._unrecorded_attributes
