@@ -290,6 +290,10 @@ class LiveMapState:
             "error_samples": [list(s) for s in self.error_samples],
             "charge_at_start": self.charge_at_start,
             "settings_snapshot": self.settings_snapshot,
+            # Mow-evidence fields — needed to classify correctly after a reboot.
+            "area_ever_positive": self.area_ever_positive,
+            "last_task_op": self.last_task_op,
+            "target_ids": list(self.target_ids),
         }
 
     def hydrate_from_payload(self, payload: dict) -> None:
@@ -332,6 +336,16 @@ class LiveMapState:
         ]
         self.charge_at_start = payload.get("charge_at_start")
         self.settings_snapshot = payload.get("settings_snapshot")
+        # Mow-evidence fields — restore verbatim, then make area_ever_positive
+        # robust: OR-in a track-derived value so old payloads (written before
+        # this fix, lacking the key) recover correctly from the track's area.
+        # NOTE: self.track is fully populated above, so this is safe.
+        raw_last_op = payload.get("last_task_op")
+        self.last_task_op = int(raw_last_op) if raw_last_op is not None else None
+        self.target_ids = [int(v) for v in (payload.get("target_ids") or [])]
+        self.area_ever_positive = bool(payload.get("area_ever_positive", False)) or any(
+            p.area_m2 > 0.0 for p in self.track
+        )
 
     def end_session(self) -> None:
         self.started_unix = None
