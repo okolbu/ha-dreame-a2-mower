@@ -35,7 +35,11 @@ def project_activity(snapshot) -> LawnMowerActivity:
     from .mower.state_snapshot import (
         CurrentActivity as CA, Location as L,
     )
-    if snapshot.errors:
+    # An active latched fault OR a PIN-required emergency-stop both mean the
+    # mower cannot continue without the user. pin_required is the terminal
+    # state of the s1p1 safety chain (tilt/lift/bumper) — surfaced here so the
+    # primary entity goes red, not just the diagnostic binary_sensor.
+    if snapshot.errors or snapshot.pin_required:
         return LawnMowerActivity.ERROR
     ca = snapshot.current_activity
     if ca == CA.MOWING:
