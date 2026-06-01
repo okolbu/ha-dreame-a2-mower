@@ -931,6 +931,7 @@ class _MqttHandlersMixin:
                         y_m=y_m,
                         north_m=north_m,
                         east_m=east_m,
+                        heading_deg=new_state.position_heading_deg,
                         now_unix=now,
                     )
                 except Exception:

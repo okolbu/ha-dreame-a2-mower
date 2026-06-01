@@ -13,7 +13,7 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 
-def _make_camera(*, base_png=b"\x89PNGbase", position=None):
+def _make_camera(*, base_png=b"\x89PNGbase", position=None, heading=None):
     from custom_components.dreame_a2_mower.camera import DreameA2MapCamera
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
     from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
@@ -41,7 +41,7 @@ def _make_camera(*, base_png=b"\x89PNGbase", position=None):
     if position is not None:
         sm.handle_position(
             x_m=position[0], y_m=position[1],
-            north_m=None, east_m=None, now_unix=1000,
+            north_m=None, east_m=None, heading_deg=heading, now_unix=1000,
         )
     coord.state_machine = sm
     coord._cloud = MagicMock()
@@ -104,9 +104,15 @@ def test_last_known_point_none_when_no_position():
 
 
 def test_last_known_point_from_persisted_position():
-    # Persisted last-known position → published for the idle icon (heading None).
+    # Position with no heading → published with None heading.
     attrs = _make_camera(position=(1.5, -2.0)).extra_state_attributes
     assert attrs["last_known_point"] == [1.5, -2.0, None]
+
+
+def test_last_known_point_includes_heading():
+    # Persisted s1p4 heading is published so the idle icon faces last-travel.
+    attrs = _make_camera(position=(1.5, -2.0), heading=0.0).extra_state_attributes
+    assert attrs["last_known_point"] == [1.5, -2.0, 0.0]
 
 
 def test_last_known_point_is_unrecorded():

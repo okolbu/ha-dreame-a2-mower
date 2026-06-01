@@ -795,6 +795,7 @@ class MowerStateMachine:
         y_m: float | None,
         north_m: float | None,
         east_m: float | None,
+        heading_deg: float | None = None,
         now_unix: int,
     ) -> StateSnapshot:
         """Apply a position update from telemetry.
@@ -818,6 +819,7 @@ class MowerStateMachine:
             ("position_y_m", y_m),
             ("position_north_m", north_m),
             ("position_east_m", east_m),
+            ("position_heading_deg", heading_deg),
         ):
             if value is None:
                 continue

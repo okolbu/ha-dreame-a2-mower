@@ -18,16 +18,20 @@ def _last_known_point(snapshot: Any) -> list[Any] | None:
 
     Lets the live map card draw a STATIC idle icon at the mower's last-known
     position BETWEEN sessions (when the live point stream is empty), so it's
-    clear where the mower is sitting. Heading is ``None`` (not persisted) — the
-    idle icon keeps its default orientation. Known limitation: this is the last
-    *telemetry* position, so it won't reflect the mower being moved/carried
-    manually while idle.
+    clear where the mower is sitting. The third element is the last persisted
+    s1p4 heading (same value the live trail uses), so the idle icon faces the
+    direction the mower was last travelling — at the dock that's its nose-in
+    orientation. ``None`` heading (e.g. position known via a non-telemetry path)
+    leaves the card's default orientation. Known limitation: this is the last
+    *telemetry* pose, so it won't reflect the mower being moved/carried manually
+    while idle.
     """
     x = getattr(snapshot, "position_x_m", None)
     y = getattr(snapshot, "position_y_m", None)
     if x is None or y is None:
         return None
-    return [float(x), float(y), None]
+    h = getattr(snapshot, "position_heading_deg", None)
+    return [float(x), float(y), None if h is None else float(h)]
 
 
 class DreameA2MapCamera(
