@@ -245,6 +245,12 @@ class _MqttHandlersMixin:
                         except Exception:
                             _prev_activity = None
                         try:
+                            _prev_errors = (
+                                self.state_machine.snapshot().errors
+                            )
+                        except Exception:
+                            _prev_errors = frozenset()
+                        try:
                             self.state_machine.handle_mqtt_property(
                                 siid=_sm_siid,
                                 piid=_sm_piid,
@@ -259,6 +265,16 @@ class _MqttHandlersMixin:
                             )
                         except Exception:
                             _new_activity = None
+                        try:
+                            _new_errors = (
+                                self.state_machine.snapshot().errors
+                            )
+                        except Exception:
+                            _new_errors = frozenset()
+                        if _new_errors != _prev_errors:
+                            self._fire_fault_delta(
+                                _prev_errors, _new_errors, now_unix=_now_unix
+                            )
                         if _new_activity != _prev_activity:
                             LOGGER.debug(
                                 "[MAP] activity transition %s → %s — render_base",
@@ -899,6 +915,10 @@ class _MqttHandlersMixin:
                     x_m, y_m, self.station_bearing_deg,
                 )
                 try:
+                    _prev_errors = sm.snapshot().errors
+                except Exception:
+                    _prev_errors = frozenset()
+                try:
                     sm.handle_position(
                         x_m=x_m,
                         y_m=y_m,
@@ -908,6 +928,12 @@ class _MqttHandlersMixin:
                     )
                 except Exception:
                     LOGGER.exception("state_machine.handle_position failed")
+                try:
+                    _new_errors = sm.snapshot().errors
+                except Exception:
+                    _new_errors = frozenset()
+                if _new_errors != _prev_errors:
+                    self._fire_fault_delta(_prev_errors, _new_errors, now_unix=now)
 
         # Persist mowing_phase / task_state_code / slam_task_label in the
         # snapshot so they survive HA restart (per user feedback: showing

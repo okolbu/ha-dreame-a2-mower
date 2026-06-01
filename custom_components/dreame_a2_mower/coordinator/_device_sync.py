@@ -33,6 +33,8 @@ from ..const import (
     DOMAIN,
     EVENT_TYPE_DOCK_ARRIVED,
     EVENT_TYPE_DOCK_DEPARTED,
+    EVENT_TYPE_FAULT_CLEARED,
+    EVENT_TYPE_FAULT_DETECTED,
     EVENT_TYPE_MOWING_ENDED,
     EVENT_TYPE_MOWING_PAUSED,
     EVENT_TYPE_MOWING_RESUMED,
@@ -329,6 +331,27 @@ class _DeviceSyncMixin:
             )
             return
         ent.trigger(event_type, event_data)
+
+    def _fire_fault_delta(
+        self, prev_errors, new_errors, *, now_unix: int
+    ) -> None:
+        """Fire fault_detected / fault_cleared lifecycle events for the
+        change between two snapshot.errors sets. Fired LOCALLY (not via the
+        cloud notification resolver) so faults always reach the activity list.
+        """
+        from ..mower.error_codes import describe_error
+        for code in sorted(new_errors - prev_errors):
+            self._fire_lifecycle(
+                EVENT_TYPE_FAULT_DETECTED,
+                {"code": int(code), "description": describe_error(int(code)),
+                 "at_unix": int(now_unix)},
+            )
+        for code in sorted(prev_errors - new_errors):
+            self._fire_lifecycle(
+                EVENT_TYPE_FAULT_CLEARED,
+                {"code": int(code), "description": describe_error(int(code)),
+                 "at_unix": int(now_unix)},
+            )
 
     def _fire_mowing_ended(
         self,
