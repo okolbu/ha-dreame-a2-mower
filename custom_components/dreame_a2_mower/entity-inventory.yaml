@@ -1254,7 +1254,6 @@ entities:
         area_mowed_m2          — MowerState.area_mowed_m2 (s1p4 telemetry)
         session_distance_m     — MowerState.session_distance_m (s1p4 telemetry)
         error_code             — MowerState.error_code (s2p8)
-        error_description      — derived from error_code via describe_error()
         total_lawn_area_m2     — MowerState.target_area_m2 / total_lawn_area_m2 (CFG)
         wifi_ssid              — MowerState.wifi_ssid (NET)
         wifi_ip                — MowerState.wifi_ip (NET)
@@ -1839,20 +1838,24 @@ entities:
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-01"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: DreameA2DiagnosticSensor.native_value = entity_description.value_fn(coordinator). Reads coordinator (not MowerState) so values survive HA restarts via the state_machine snapshot store. Read from sensor_device.py:795-829; not re-confirmed live this pass."
         evidence: "sensor_device.py:821-822 (native_value → entity_description.value_fn(self.coordinator))"
+      - date: "2026-06-01"
+        status: presumed
+        claim: "sensor.error reads latched snapshot.errors (fault partition) via _active_fault_text, not raw MowerState.error_code; shows None when no active fault, persists a fault until recovery (movement/undock/mow-start)"
     references:
       wire_entry: "varies — see notes for per-key wire surfaces"
       code: "custom_components/dreame_a2_mower/sensor_device.py:795"
     notes: |
       Config-driven base class. One HA entity instantiated per entry in the
       DIAGNOSTIC_SENSORS tuple (sensor_device.py:486). Descriptor keys backed
-      as of 2026-05-31:
+      as of 2026-06-01:
         battery_level          — coord.state_machine.snapshot().battery_percent (s3p1)
+        error_description      — _active_fault_text(coord.state_machine.snapshot()) — latched fault set (snapshot.errors), NOT raw MowerState.error_code; no entity_category (primary entity)
         wifi_rssi_dbm          — coord.state_machine.snapshot().wifi_rssi_dbm (s1p1)
         position_x_m           — coord.state_machine.snapshot().position_x_m (s1p4)
         position_y_m           — coord.state_machine.snapshot().position_y_m (s1p4)
