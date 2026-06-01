@@ -19,6 +19,9 @@
 //   ...
 //   - type: custom:dreame-mower-replay-card
 //     entity: sensor.dreame_a2_mower_picked_session
+import { projectPoint, iconRotation, buildMowerIconSvg } from "./_dreame-map-core.js";
+
+const ICON_PX = 32;
 
 class DreameMowerReplayCard extends HTMLElement {
   constructor() {
@@ -68,13 +71,11 @@ class DreameMowerReplayCard extends HTMLElement {
   }
 
   _projectPoint(x_m, y_m, proj) {
-    const cloud_x = x_m * 1000;
-    const cloud_y = y_m * 1000;
-    const px = (proj.bx2_mm - cloud_x) / proj.pixel_size_mm;
-    const py_pre = (proj.by2_mm - cloud_y) / proj.pixel_size_mm;
-    // FLIP_TOP_BOTTOM applied to base PNG by render_with_trail.
-    const py = proj.height_px - py_pre;
-    return [px, py];
+    // Single projection implementation lives in _dreame-map-core.js
+    // (projectPoint). This thin wrapper keeps the existing call sites
+    // (_buildLegPathD) unchanged. Both take METRES and multiply by 1000
+    // internally, so the call contract is identical to the old body.
+    return projectPoint(x_m, y_m, proj);
   }
 
   _buildLegPathD(leg, proj) {
@@ -182,8 +183,7 @@ class DreameMowerReplayCard extends HTMLElement {
                  x="0" y="0"
                  width="${proj.width_px}" height="${proj.height_px}" />
           ${paths}
-          <circle id="head" r="6" fill="rgb(255,140,0)" stroke="white" stroke-width="2"
-                  cx="0" cy="0" visibility="hidden" />
+          ${buildMowerIconSvg("/dreame_a2_mower/mower-icon.png", ICON_PX)}
           <text id="pause-label" x="50%" y="14" text-anchor="middle"
                 font-size="13" fill="white"
                 style="paint-order:stroke;stroke:black;stroke-width:3px;"
@@ -362,7 +362,7 @@ class DreameMowerReplayCard extends HTMLElement {
     // _paths is populated. This ensures the correct stroke/color is set
     // before the first frame renders.
     this._applyRenderStyle();
-    const marker = this.shadowRoot.getElementById("head");
+    const marker = this.shadowRoot.getElementById("mower");
     if (marker) marker.setAttribute("visibility", "visible");
 
     // --- Pause overlay windows (Task 16) ---
@@ -492,33 +492,49 @@ class DreameMowerReplayCard extends HTMLElement {
       }
     }
 
-    // Head marker follows the active leg's current point. If we're
-    // sitting at a between-leg gap, anchor to the end of the last
-    // completed leg so the marker doesn't disappear.
-    const marker = this.shadowRoot.getElementById("head");
+    // Directional mower icon follows the active leg's current point. If
+    // we're sitting at a between-leg gap, anchor to the end of the last
+    // completed leg so the marker doesn't disappear. The icon is oriented
+    // by the VECTOR FALLBACK (prev->cur screen displacement) — the archived
+    // per-point heading is not threaded through legs_timeline (pts are
+    // [x_m, y_m] only), so iconRotation(null, prevXY, curXY) derives the
+    // angle from motion. See report / follow-up note.
+    const marker = this.shadowRoot.getElementById("mower");
     if (marker) {
       let iconX = null;
       let iconY = null;
+      let prevX = null;
+      let prevY = null;
+      // A small screen-space lookback so the direction vector has > ~1px to
+      // work with even on slow frames; iconRotation ignores sub-px moves.
+      const BACK_PX = 4;
       if (activeLeg >= 0) {
         const slot = this._timeline[activeLeg];
         const L = lengths[activeLeg];
         const frac = (ms - slot.start_ms) / slot.dur;
-        const point = paths[activeLeg].getPointAtLength(L * frac);
+        const at = L * frac;
+        const point = paths[activeLeg].getPointAtLength(at);
         iconX = point.x;
         iconY = point.y;
+        const back = paths[activeLeg].getPointAtLength(Math.max(0, at - BACK_PX));
+        prevX = back.x;
+        prevY = back.y;
       } else {
         // No active leg — we're between legs. Find the last completed leg
         // and freeze the icon at its endpoint during the gap (no straight-line
-        // draw across pen-up gaps). The charging-window snap below can still
-        // override this to lock at dock.
+        // draw across pen-up gaps).
         let prevIdx = -1;
         for (let i = 0; i < this._timeline.length; i++) {
           if (this._timeline[i].end_ms <= ms) prevIdx = i;
         }
         if (prevIdx >= 0) {
-          const point = paths[prevIdx].getPointAtLength(lengths[prevIdx]);
+          const endL = lengths[prevIdx];
+          const point = paths[prevIdx].getPointAtLength(endL);
           iconX = point.x;
           iconY = point.y;
+          const back = paths[prevIdx].getPointAtLength(Math.max(0, endL - BACK_PX));
+          prevX = back.x;
+          prevY = back.y;
         } else if (paths.length > 0) {
           const point = paths[0].getPointAtLength(0);
           iconX = point.x;
@@ -529,12 +545,16 @@ class DreameMowerReplayCard extends HTMLElement {
       // During a charging/rain pause the playhead sits in the between-leg gap
       // after the drive-to-dock leg, so the icon naturally freezes at that
       // leg's last point — which IS the dock, projected through the SAME flip
-      // as the trail. (The old dock-snap override computed a separate dock
-      // pixel WITHOUT the trail's vertical flip, mirroring the icon about the
-      // image centre — removed.)
+      // as the trail.
       if (iconX !== null) {
-        marker.setAttribute("cx", iconX.toFixed(2));
-        marker.setAttribute("cy", iconY.toFixed(2));
+        const prevXY = (prevX !== null) ? [prevX, prevY] : null;
+        const ang = iconRotation(null, prevXY, [iconX, iconY]);
+        if (ang != null) this._iconAngle = ang;
+        const a = (this._iconAngle || 0).toFixed(1);
+        marker.setAttribute(
+          "transform",
+          `translate(${iconX.toFixed(2)},${iconY.toFixed(2)}) rotate(${a})`
+        );
       }
     }
 
