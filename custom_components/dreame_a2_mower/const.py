@@ -86,8 +86,6 @@ NOTIFICATION_EVENT_TYPES: Final[tuple[str, ...]] = (
     "patrol_ended",                     # s2p2=74 (verified 2026-05-30)
     "arrived_at_maintenance_point",
     "cannot_reach_maintenance_point",   # s2p2=76 (user-confirmed app text 2026-05-30)
-    "robot_in_hidden_zone",
-    "station_disconnected",
     "unknown_s2p2",                     # novel codes — text from cloud
 )
 """HA event_type slugs fired by `event.dreame_a2_mower_notification`.

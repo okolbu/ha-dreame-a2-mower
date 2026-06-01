@@ -95,8 +95,6 @@
               "patrol_ended": "Patrol ended",
               "arrived_at_maintenance_point": "Arrived at maintenance point",
               "cannot_reach_maintenance_point": "Cannot reach maintenance point — task ended",
-              "robot_in_hidden_zone": "In hidden zone",
-              "station_disconnected": "Station disconnected",
               "unknown_s2p2": "Notification (novel code)"
             }
           }

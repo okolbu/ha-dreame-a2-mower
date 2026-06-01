@@ -13,11 +13,11 @@ from custom_components.dreame_a2_mower.mower.error_codes import (
 def test_known_error_codes_mapped():
     """The most-confirmed error codes from protocol-doc §2.1 row s2.2 are mapped.
 
-    Code 0 was originally labelled "Hanging" from the apk decompilation but
-    that's the steady-state baseline on g2408 — corrected to "No error / OK"
-    on 2026-04-30 after live observation.
+    Code 0 was previously labelled "No error / OK" (apk vacuum-derived), then
+    corrected to "Bumper / hanging" on 2026-06-01 after the 2026-04-30 controlled
+    test showed s2p2 1→0 co-fired with the HB bumper bit (not a steady-state idle).
     """
-    assert "OK" in ERROR_CODE_DESCRIPTIONS[0].upper() or "NO ERROR" in ERROR_CODE_DESCRIPTIONS[0].upper()
+    assert "BUMPER" in ERROR_CODE_DESCRIPTIONS[0].upper() or "HANGING" in ERROR_CODE_DESCRIPTIONS[0].upper()
     assert "TILT" in ERROR_CODE_DESCRIPTIONS[1].upper() or "DROP" in ERROR_CODE_DESCRIPTIONS[1].upper()
     assert "LIFT" in ERROR_CODE_DESCRIPTIONS[9].upper()
     assert "PIN" in ERROR_CODE_DESCRIPTIONS[23].upper() or "LOCKOUT" in ERROR_CODE_DESCRIPTIONS[23].upper()

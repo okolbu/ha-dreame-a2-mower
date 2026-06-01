@@ -42,7 +42,7 @@ def test_notification_entity_declares_s2p2_event_types():
     assert "mowing_complete" in ent._attr_event_types
     assert "scheduled_mowing_started" in ent._attr_event_types
     assert "hanging" in ent._attr_event_types
-    assert "station_disconnected" in ent._attr_event_types
+    assert "cannot_reach_maintenance_point" in ent._attr_event_types
     assert "unknown_s2p2" in ent._attr_event_types
 
 
