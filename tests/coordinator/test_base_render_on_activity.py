@@ -138,3 +138,33 @@ async def test_compute_background_mode_in_session_is_green():
         coord, activity=CurrentActivity.MOWING, mow_session=MowSession.IN_SESSION
     )
     assert coord._compute_background_mode() == BackgroundMode.GREEN
+
+
+@pytest.mark.asyncio
+async def test_green_skips_obstacle_load_idle_loads_it():
+    """GREEN (active) must NOT load last-session obstacles; an idle preview
+    mode MUST. Pins the `None if GREEN else _load_last_session_obstacles`
+    branch in _render_base (otherwise both paths look identical when the load
+    returns None)."""
+    coord = _make_coord()
+    loads = []
+
+    async def _recording_load(map_id):
+        loads.append(map_id)
+        return None
+
+    coord._load_last_session_obstacles = _recording_load
+
+    # Idle ALL_AREAS -> STRIPES: obstacle load IS invoked.
+    _set_activity(
+        coord, activity=CurrentActivity.IDLE, mow_session=MowSession.BETWEEN_SESSIONS
+    )
+    await coord._render_base()
+    assert loads == [1]
+
+    # Flip to GREEN (active): obstacle load must NOT be invoked again.
+    _set_activity(
+        coord, activity=CurrentActivity.MOWING, mow_session=MowSession.IN_SESSION
+    )
+    await coord._render_base()
+    assert loads == [1]  # unchanged — GREEN skipped the load

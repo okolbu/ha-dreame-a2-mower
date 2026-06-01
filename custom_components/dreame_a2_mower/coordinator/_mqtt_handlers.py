@@ -1029,6 +1029,12 @@ class _MqttHandlersMixin:
             # the stripe preview is replaced with the trail-mode (dark-green base)
             # as soon as the command is acknowledged.
             # Scope: task-start ops only (100-103 mow, 108 patrol, 109 cruise).
+            # NOTE: for the ops that change current_activity (mow/cruise) this is
+            # largely REDUNDANT with the general activity-transition trigger in
+            # `_on_mqtt_message` — the (mode, md5) dedup in _render_base makes the
+            # second call a cheap no-op. It is retained as a command-time-latency
+            # hedge (renders at ack rather than at the next activity push) and to
+            # cover op=108 patrol, which does not flip activity.
             if key == (2, 50):
                 _s2p50_op: int | None = None
                 if isinstance(value, dict):

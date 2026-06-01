@@ -74,7 +74,7 @@ from ._property_apply import (
 )
 
 if TYPE_CHECKING:
-    pass  # cross-mixin type imports added as needed
+    from ..map_render import BackgroundMode
 
 
 class _RenderingMixin:
@@ -106,7 +106,7 @@ class _RenderingMixin:
             return None
         return (float(x), float(y))
 
-    def _compute_background_mode(self):
+    def _compute_background_mode(self) -> "BackgroundMode":
         """BackgroundMode for the current state-machine snapshot."""
         from ..map_render import background_mode_for
         snap = self.state_machine.snapshot()
