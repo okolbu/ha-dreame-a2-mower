@@ -6189,10 +6189,15 @@ telemetry_fields:
     status:
       seen_on_wire: true
       first_seen: "2026-04-20"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-01"
       decoded: confirmed
       bt_only: false
       not_on_g2408: false
+    verifications:
+      - date: "2026-06-01"
+        status: verified
+        claim: "Corpus-wide validation across all 9 probe logs (71,936 s1p4 position frames): 99.2% are 33-byte FULL frames that carry the heading byte[6]; only 0.8% are 8-byte beacons (position-only, NO heading). byte[6]/255*360 vs motion-vector atan2(dy_cloud,dx_cloud) agrees at median 2.5° over 69,639 consecutive-frame pairs (median 1.35°, p90 7.23° when restricted to straight-line travel — the larger 13° figure was unfiltered and dominated by pivot-turn frames where the two-point chord is not the instantaneous heading). The heading byte is reliable; the live-map icon trusts it (rotation A=(270-H)%360, screen-frame) and only falls back to motion-vector for the 0.8% headingless beacons."
+        evidence: "analyze_move_corpus.py over probe_log_*.jsonl (9 logs); tests/protocol/test_icon_direction_corpus.py (median 1.35°/p90 7.23° on 43,182 straight-line pairs)"
     references:
       apk: "ioBroker.dreame/apk.md §parseRobotPose (angle field)"
       integration_code: "custom_components/dreame_a2_mower/protocol/telemetry.py"
