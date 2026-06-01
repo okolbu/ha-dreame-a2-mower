@@ -353,6 +353,25 @@ class _DeviceSyncMixin:
                  "at_unix": int(now_unix)},
             )
 
+    def _fire_local_novel_s2p2(self, *, code: int, now_unix: int) -> None:
+        """Fire a local (NOT cloud-gated) notification for a truly-unknown
+        s2p2 code so it always reaches the activity list. The cloud resolver
+        may still enrich with authoritative text later; this is the guaranteed
+        floor. source='local' distinguishes it from cloud-sourced fires.
+        """
+        ent = self._notification_event
+        if ent is None:
+            return
+        LOGGER.warning(
+            "[event] novel s2p2 code=%d — local activity entry created; no S2P2_EVENT_TYPES mapping",
+            int(code),
+        )
+        ent.trigger(
+            "unknown_s2p2",
+            {"code": int(code), "text": f"Unrecognised status {code}",
+             "source": "local", "siid": 2, "piid": 2, "fired_at": int(now_unix)},
+        )
+
     def _fire_mowing_ended(
         self,
         now_unix: int,

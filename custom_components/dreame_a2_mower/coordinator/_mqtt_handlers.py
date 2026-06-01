@@ -662,6 +662,13 @@ class _MqttHandlersMixin:
                         now_unix=now_unix,
                     )
                 )
+            # Local fire is the guaranteed floor; the cloud resolver scheduled above may
+            # also fire (source="cloud") ~10s later → two activity entries for one
+            # unknown-code transition is expected.
+            if S2P2_EVENT_TYPES.get(int(new_error_code)) is None:
+                self._fire_local_novel_s2p2(
+                    code=int(new_error_code), now_unix=now_unix
+                )
             self._fire_rain_delay_started_if_edge(
                 old=old_error_code, new=new_error_code, now_unix=now_unix
             )
