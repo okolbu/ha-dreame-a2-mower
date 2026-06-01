@@ -246,7 +246,7 @@ async def test_seen_ids_fifo_cap():
 def test_s2p2_event_types_keys_cover_expected_codes():
     """Sanity: known codes (apk-sourced or empirically verified) are in the map."""
     expected = {
-        0, 2, 4, 23, 27, 28, 30, 31, 33, 36, 43, 47, 48, 50, 51, 53, 54, 56, 63, 70, 71, 73, 74, 75, 76, 78, 117,
+        0, 2, 4, 5, 23, 27, 28, 30, 31, 33, 36, 43, 47, 48, 50, 51, 53, 54, 56, 63, 70, 71, 73, 74, 75, 76, 78, 117,
     }
     assert set(S2P2_EVENT_TYPES.keys()) == expected
 
@@ -296,11 +296,22 @@ def test_notification_event_types_cover_all_s2p2_slugs():
 def test_logbook_message_tables_cover_all_event_types():
     """logbook.py holds the 3rd/4th hand-kept slug copies. Every declared
     event_type should have an explicit human message (the underscore-replace
-    fallback works but is ugly)."""
+    fallback works but is ugly).
+
+    fault_detected / fault_cleared are excluded from the _LIFECYCLE_MESSAGES
+    dict because _format() handles them via a dedicated branch that renders the
+    fault description from the payload (not a static label).
+    """
     from custom_components.dreame_a2_mower import logbook as lb
     from custom_components.dreame_a2_mower.const import LIFECYCLE_EVENT_TYPES
+
+    # These lifecycle event types use a dynamic branch in _format() rather than
+    # a static entry in _LIFECYCLE_MESSAGES.
+    _DYNAMIC_LIFECYCLE = {"fault_detected", "fault_cleared"}
 
     for slug in NOTIFICATION_EVENT_TYPES:
         assert slug in lb._NOTIFICATION_MESSAGES, f"logbook missing notif {slug!r}"
     for slug in LIFECYCLE_EVENT_TYPES:
+        if slug in _DYNAMIC_LIFECYCLE:
+            continue
         assert slug in lb._LIFECYCLE_MESSAGES, f"logbook missing lifecycle {slug!r}"

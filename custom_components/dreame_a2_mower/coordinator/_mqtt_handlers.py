@@ -245,6 +245,12 @@ class _MqttHandlersMixin:
                         except Exception:
                             _prev_activity = None
                         try:
+                            _prev_errors = (
+                                self.state_machine.snapshot().errors
+                            )
+                        except Exception:
+                            _prev_errors = frozenset()
+                        try:
                             self.state_machine.handle_mqtt_property(
                                 siid=_sm_siid,
                                 piid=_sm_piid,
@@ -259,6 +265,16 @@ class _MqttHandlersMixin:
                             )
                         except Exception:
                             _new_activity = None
+                        try:
+                            _new_errors = (
+                                self.state_machine.snapshot().errors
+                            )
+                        except Exception:
+                            _new_errors = frozenset()
+                        if _new_errors != _prev_errors:
+                            self._fire_fault_delta(
+                                _prev_errors, _new_errors, now_unix=_now_unix
+                            )
                         if _new_activity != _prev_activity:
                             LOGGER.debug(
                                 "[MAP] activity transition %s → %s — render_base",
@@ -646,6 +662,13 @@ class _MqttHandlersMixin:
                         now_unix=now_unix,
                     )
                 )
+            # Local fire is the guaranteed floor; the cloud resolver scheduled above may
+            # also fire (source="cloud") ~10s later → two activity entries for one
+            # unknown-code transition is expected.
+            if S2P2_EVENT_TYPES.get(int(new_error_code)) is None:
+                self._fire_local_novel_s2p2(
+                    code=int(new_error_code), now_unix=now_unix
+                )
             self._fire_rain_delay_started_if_edge(
                 old=old_error_code, new=new_error_code, now_unix=now_unix
             )
@@ -899,6 +922,10 @@ class _MqttHandlersMixin:
                     x_m, y_m, self.station_bearing_deg,
                 )
                 try:
+                    _prev_errors = sm.snapshot().errors
+                except Exception:
+                    _prev_errors = frozenset()
+                try:
                     sm.handle_position(
                         x_m=x_m,
                         y_m=y_m,
@@ -908,6 +935,12 @@ class _MqttHandlersMixin:
                     )
                 except Exception:
                     LOGGER.exception("state_machine.handle_position failed")
+                try:
+                    _new_errors = sm.snapshot().errors
+                except Exception:
+                    _new_errors = frozenset()
+                if _new_errors != _prev_errors:
+                    self._fire_fault_delta(_prev_errors, _new_errors, now_unix=now)
 
         # Persist mowing_phase / task_state_code / slam_task_label in the
         # snapshot so they survive HA restart (per user feedback: showing

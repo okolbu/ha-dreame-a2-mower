@@ -145,3 +145,28 @@ def test_projection_driving_blades_up_is_mowing():
     from homeassistant.components.lawn_mower import LawnMowerActivity
     s = _build_snapshot(current_activity=CurrentActivity.DRIVING_BLADES_UP)
     assert project_activity(s) == LawnMowerActivity.MOWING
+
+
+def test_latched_fault_projects_to_error():
+    from homeassistant.components.lawn_mower import LawnMowerActivity
+    from custom_components.dreame_a2_mower.lawn_mower import project_activity
+    from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
+
+    m = MowerStateMachine()
+    # Undock into REPOSITIONING (would project MOWING) ...
+    m.handle_mqtt_property(siid=2, piid=1, value=6, now_unix=1000)
+    m.handle_mqtt_property(siid=2, piid=1, value=1, now_unix=1001)
+    assert project_activity(m.snapshot()) == LawnMowerActivity.MOWING
+    # ... then a wheel fault must override to ERROR.
+    m.handle_mqtt_property(siid=2, piid=2, value=5, now_unix=1002)
+    assert project_activity(m.snapshot()) == LawnMowerActivity.ERROR
+
+
+def test_pin_required_projects_to_error():
+    import dataclasses
+    from homeassistant.components.lawn_mower import LawnMowerActivity
+    from custom_components.dreame_a2_mower.lawn_mower import project_activity
+    from custom_components.dreame_a2_mower.mower.state_snapshot import StateSnapshot
+
+    snap = dataclasses.replace(StateSnapshot.initial(), pin_required=True)
+    assert project_activity(snap) == LawnMowerActivity.ERROR

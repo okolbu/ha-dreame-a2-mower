@@ -60,8 +60,25 @@ def _manifest_version() -> str:
     return _MANIFEST_VERSION
 
 
+# Kept for the state_machine_audit eval-globals; no live value_fn calls it now.
 def _describe_error_or_none(code: int | None) -> str | None:
     return describe_error(code) if code is not None else None
+
+
+def _active_fault_text(snapshot) -> str | None:
+    """Human text for the currently-latched fault(s), or None.
+
+    Reads the state machine's latched fault set (snapshot.errors) rather than
+    the last raw s2p2 (MowerState.error_code). s2p2 multiplexes faults with
+    status codes, so the raw value is usually a non-fault and a real fault is
+    overwritten within seconds — the latch is the actionable signal. Multiple
+    simultaneous faults are joined with '; '. Sorted for stable output.
+    """
+    # getattr (not snapshot.errors) keeps the audit eval-path robust to partial fakes.
+    errors = getattr(snapshot, "errors", None)
+    if not errors:
+        return None
+    return "; ".join(describe_error(c) for c in sorted(errors))
 
 
 def _format_active_selection(state: MowerState) -> str | None:
@@ -208,12 +225,6 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.error_code,
     ),
-    DreameA2SensorEntityDescription(
-        key="error_description",
-        name="Error",
-        value_fn=lambda s: _describe_error_or_none(s.error_code),
-    ),
-
     # Lawn / environment:
     DreameA2SensorEntityDescription(
         # Keep the existing key for entity-id stability; the value_fn
@@ -499,6 +510,15 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
         value_fn=lambda coord: coord.state_machine.snapshot().battery_percent,
+    ),
+    # Error — reads the state machine's LATCHED fault (snapshot.errors), not
+    # the last raw s2p2. No entity_category, so it stays a primary entity.
+    # Lives in DIAGNOSTIC_SENSORS (not SENSORS) to get coordinator access
+    # for state_machine.snapshot() — same pattern as battery_level above.
+    DreameA2DiagnosticSensorEntityDescription(
+        key="error_description",
+        name="Error",
+        value_fn=lambda coord: _active_fault_text(coord.state_machine.snapshot()),
     ),
     # WiFi RSSI — reads the persisted snapshot value so it survives HA
     # restarts. The snapshot is loaded from disk via state_machine

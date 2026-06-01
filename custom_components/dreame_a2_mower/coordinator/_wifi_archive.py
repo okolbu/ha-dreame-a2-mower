@@ -10,11 +10,39 @@ from typing import TYPE_CHECKING, Any
 from ..const import LOGGER
 
 if TYPE_CHECKING:
-    pass  # cross-mixin type imports — none needed for this mixin
+    # _periodic_archive_refresh calls into _LidarOssMixin via the MRO.
+    from ._lidar_oss import _LidarOssMixin
 
 
 class _WifiArchiveMixin:
     """Periodic WiFi-heatmap archive refresh + per-session sample read."""
+
+    async def _periodic_archive_refresh(self: "_LidarOssMixin") -> None:
+        """Low-frequency re-list of BOTH cloud archives (wifimap + 3dmap).
+
+        The live update paths only fire while the integration is up and
+        listening: WiFi has no MQTT push slot at all (it is poll-only), and
+        LiDAR's ``s99.20`` push fires only on an app "View LiDAR Map" tap. The
+        boot backfill recovers anything missed while the integration was
+        *down*, but on its own a long-running integration would never notice a
+        map generated mid-session. This timer closes that gap: it re-runs the
+        WiFi OBJ re-list and re-arms the one-shot LiDAR ``3dmap`` backfill.
+        Both are idempotent (dedup by ``object_name`` before download), so a
+        re-list only downloads genuinely-new objects.
+        """
+        import time as _time
+
+        # Re-arm the one-shot LiDAR backfill so the 3dmap list is re-fetched
+        # (it sets the flag back to True itself once the list succeeds).
+        self._lidar_backfill_done = False
+        try:
+            await self._backfill_lidar_from_3dmap(int(_time.time()))
+        except Exception:
+            LOGGER.exception("_periodic_archive_refresh: lidar re-list failed")
+        try:
+            await self.refresh_wifi_archive()
+        except Exception:
+            LOGGER.exception("_periodic_archive_refresh: wifi re-list failed")
 
     async def refresh_wifi_archive(self) -> dict:
         """Fetch all cloud wifimap objects and archive new ones to disk.
@@ -65,6 +93,18 @@ class _WifiArchiveMixin:
                 self._wifi_archive_index = self._wifi_archive_store.load_index()
         except Exception:
             LOGGER.exception("refresh_wifi_archive: fingerprint matcher failed")
+
+        # Bound archive growth: keep newest-N per map. Runs AFTER tagging so
+        # the per-map buckets are correct (pre-tag, every entry is map_id=-1).
+        # No-op unless a retention cap was set at construction.
+        try:
+            pruned = await self.hass.async_add_executor_job(
+                self._wifi_archive_store.enforce_retention
+            )
+            if pruned:
+                self._wifi_archive_index = self._wifi_archive_store.load_index()
+        except Exception:
+            LOGGER.exception("refresh_wifi_archive: retention enforcement failed")
 
         result = "downloaded" if new_count > 0 else "no_data"
         self._wifi_archive_last_refresh = {

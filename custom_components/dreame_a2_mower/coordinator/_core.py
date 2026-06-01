@@ -32,9 +32,11 @@ from ..const import (
     CONF_SESSION_ARCHIVE_KEEP,
     CONF_STATION_BEARING_DEG,
     CONF_USERNAME,
+    CONF_WIFI_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_MAX_MB,
     DEFAULT_SESSION_ARCHIVE_KEEP,
+    DEFAULT_WIFI_ARCHIVE_KEEP,
     DOMAIN,
     EVENT_TYPE_DOCK_ARRIVED,
     EVENT_TYPE_DOCK_DEPARTED,
@@ -210,6 +212,11 @@ class _CoreMixin:
         # in normal HA startup, but guards test / programmatic construction).
         wifi_archive_dir = Path(hass.config.path(DOMAIN, "wifi_archive"))
         self._wifi_archive_store: WifiArchiveStore = WifiArchiveStore(wifi_archive_dir)
+        # Per-map keep-newest-N cap (enforced after tagging in
+        # refresh_wifi_archive). 0 = unlimited. Bounds the picker + disk.
+        self._wifi_archive_store.set_retention(
+            int(opts.get(CONF_WIFI_ARCHIVE_KEEP, DEFAULT_WIFI_ARCHIVE_KEEP))
+        )
         self._wifi_archive_index: list[WifiArchiveEntry] = (
             wifi_index if wifi_index is not None else []
         )
@@ -522,6 +529,20 @@ class _CoreMixin:
                 await self.refresh_wifi_archive()
             except Exception as _ex:
                 LOGGER.debug("Initial WiFi archive fetch failed: %s", _ex)
+
+            # Re-list BOTH archives every 6h so a long-running integration picks
+            # up new wifimap / 3dmap objects without waiting for a restart. WiFi
+            # is poll-only (no MQTT push) and LiDAR's s99.20 fires only on an app
+            # "View LiDAR Map" tap; the boot backfill covers the down-then-restart
+            # case, this timer covers the up-but-idle case. 6h matches _periodic_dev.
+            async def _periodic_archive(_now: Any) -> None:
+                await self._periodic_archive_refresh()
+
+            self.entry.async_on_unload(
+                async_track_time_interval(
+                    self.hass, _periodic_archive, timedelta(hours=6)
+                )
+            )
 
             # Schedule session-finalize retry every RETRY_INTERVAL_SECONDS (60s).
             # Consults finalize.decide() each tick; dispatches AWAIT_OSS_FETCH /

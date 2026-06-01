@@ -91,6 +91,15 @@ class MowerStateMachine:
     # first-step (~0.5–1 m per s1p4 push during active driving).
     _RETURN_REPOSITION_MOVE_THRESHOLD_M: float = 0.3
 
+    # Distance (metres) the mower must move for us to treat it as recovered
+    # from a latched fault. Movement is the user-confirmed recovery proof.
+    # Above GPS jitter (< 0.1 m), below a genuine drive step. NB: a fault the
+    # mower can drive THROUGH (e.g. "blades stuck") will be cleared by this too
+    # — accepted limitation; per-fault clear rules can be added later.
+    # (Same value as _RETURN_REPOSITION_MOVE_THRESHOLD_M, but coincidental —
+    # both are "above jitter, below a drive step" thresholds, not coupled.)
+    _FAULT_CLEAR_MOVE_THRESHOLD_M: float = 0.3
+
     def _apply_s2p1_task_state(
         self, task_state: int, now_unix: int
     ) -> StateSnapshot:
@@ -148,6 +157,10 @@ class MowerStateMachine:
             if self._snapshot.positioning_health == PositioningHealth.STUCK:
                 updates["positioning_health"] = PositioningHealth.LOCALIZED
                 freshness["positioning_health"] = now_unix
+            # Undocking = a fresh start attempt — clear any latched faults.
+            if self._snapshot.errors:
+                updates["errors"] = frozenset()
+                freshness["errors"] = now_unix
             updates["field_freshness"] = freshness
             return self._replace(**updates)
 
@@ -233,6 +246,10 @@ class MowerStateMachine:
         ):
             updates["positioning_health"] = PositioningHealth.LOCALIZED
             freshness["positioning_health"] = now_unix
+        # Resuming mowing also clears latched faults (working again).
+        if task_state == 1 and self._snapshot.errors:
+            updates["errors"] = frozenset()
+            freshness["errors"] = now_unix
         updates["field_freshness"] = freshness
         return self._replace(**updates)
 
@@ -260,6 +277,7 @@ class MowerStateMachine:
             Location,
             PositioningHealth,
         )
+        from .error_codes import is_fault
 
         updates: dict[str, Any] = {"raw_s2p2": event_code}
         freshness = dict(self._snapshot.field_freshness)
@@ -270,6 +288,9 @@ class MowerStateMachine:
             updates["current_activity"] = CurrentActivity.MOWING
             freshness["mow_session"] = now_unix
             freshness["current_activity"] = now_unix
+            if self._snapshot.errors:
+                updates["errors"] = frozenset()
+                freshness["errors"] = now_unix
         elif event_code == 33:
             # Positioning / off-dock-relocate failure (the real "stuck" signal).
             updates["positioning_health"] = PositioningHealth.STUCK
@@ -286,6 +307,14 @@ class MowerStateMachine:
             updates["current_activity"] = CurrentActivity.AT_POINT
             freshness["location"] = now_unix
             freshness["current_activity"] = now_unix
+
+        # Latch genuine faults into snapshot.errors. s2p2 multiplexes faults
+        # with status/lifecycle codes, so MowerState.error_code (the last raw
+        # value) can't represent "an active fault exists" — this set can.
+        # Cleared on recovery (movement / undock / mow start) in Task 3.
+        if is_fault(event_code) and event_code not in self._snapshot.errors:
+            updates["errors"] = self._snapshot.errors | {event_code}
+            freshness["errors"] = now_unix
 
         updates["field_freshness"] = freshness
         return self._replace(**updates)
@@ -823,6 +852,18 @@ class MowerStateMachine:
                     if self._snapshot.location != Location.ON_LAWN:
                         updates["location"] = Location.ON_LAWN
                         freshness["location"] = now_unix
+
+        # Recovery: significant movement clears any latched faults. The mower
+        # physically moving is the strongest available "it recovered" signal.
+        if self._snapshot.errors and x_m is not None and y_m is not None:
+            prev_x = self._snapshot.position_x_m
+            prev_y = self._snapshot.position_y_m
+            if prev_x is not None and prev_y is not None:
+                dx = x_m - prev_x
+                dy = y_m - prev_y
+                if (dx * dx + dy * dy) ** 0.5 > self._FAULT_CLEAR_MOVE_THRESHOLD_M:
+                    updates["errors"] = frozenset()
+                    freshness["errors"] = now_unix
 
         updates["field_freshness"] = freshness
         return self._replace(**updates)

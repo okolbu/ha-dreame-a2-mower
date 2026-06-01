@@ -513,27 +513,58 @@ properties:
     category: "property"
     payload_shape: "int (state/error code)"
     semantic: |
-      State and error code per apk decompilation. Previously misread as a state
-      machine with values {27, 43, 48, ...}; apk reveals it carries fault indices
-      catalogued in apk FaultIndex (e.g. 0=HANGING, 24=BATTERY_LOW, 27=HUMAN_DETECTED,
-      56=BAD_WEATHER, 73=TOP_COVER_OPEN).
+      Numeric state / fault code — one discrete value per push (NOT a bitfield,
+      NOT a state machine). The g2408 meanings are mostly NOT the apk's
+      vacuum-lineage FaultIndex labels; treat the vacuum forks as unreliable here
+      and rely on the per-code table below (full detail + evidence trail in the
+      `state_codes:` section and in this entry's `verifications:`).
 
-      Key values observed on g2408: 27=idle, 31=Failed to return to station,
-      33=Failure transition, 43=Battery temperature low charging stopped,
-      48=Mowing complete, 50=Manual session start, 53=Scheduled session start,
-      54=Returning, 56=Rain protection activated, 60=Frost-protection-suppressed,
-      70=Mowing, 71=Positioning failed, 75=Arrived at Maintenance Point,
-      76=Cannot reach the maintenance point — task ended (give-up + return).
+      Current g2408 meanings — wire- and/or cloud-verified (one code per line):
+      Faults:
+      - 2  Robot trapped
+      - 4  Left drive wheel error
+      - 5  Right drive wheel error
+      - 23 Lift lockout (emergency stop)
+      - 31 Failed to return to station
+      - 33 Positioning / relocate failed (drives state-machine STUCK)
+      - 36 Failed to start task
+      Lifecycle:
+      - 27 Idle / human-detected marker
+      - 50 Manual or mow session start
+      - 53 Scheduled session start
+      - 70 Mowing / continue unfinished task
+      - 48 Mowing complete
+      - 54 Low battery — returning to station
+      - 56 Rain protection activated (rising edge only)
+      - 60 Frost-protection-suppressed
+      - 63 Scheduled task cancelled — robot working (busy)
+      - 71 Standby outside station too long — auto-return
+      - 74 Patrol ended / cancelled
+      - 75 Arrived at maintenance point
+      - 76 Cannot reach maintenance point — task ended (give-up + return)
+      - 24 Battery low (warning threshold — not a stuck-state; see open_questions re 24 vs 54)
+      - 43 Battery temperature low — charging paused (environmental; mower self-protects)
+      Maintenance push (cloud-gated, not errors):
+      - 28 Blades severely worn (cloud wear%-gated push)
+      - 30 Maintenance reminder — maintain robot soon
 
-      See state_codes section for full value table (Task 12). Anything outside the
-      known set produces a one-shot [PROTOCOL_NOVEL] s2p2 WARNING.
+      Watch out — corrected vs earlier / vacuum readings (evidence in verifications):
+      - 28 is the cloud wear%-gated BLADE-WEAR push, NOT an off-dock-relocate
+        marker (the "fires 14/14 on every undock" reading was debunked by
+        full-corpus analysis).
+      - 71 is "standby-too-long auto-return", NOT "positioning failed".
+      - The off-dock 360 reorient carries NO dedicated s2p2 code.
 
-      Note: upstream dreame-mova-mower mapping treats (2,2) as ERROR and (2,1) as
-      STATE — reversed vs g2408. The g2408 overlay corrects this.
+      The per-fire user-visible TEXT is composed by Dreame's cloud, not carried on
+      the wire — the integration relays cloud pushes (coordinator/_notifications.py)
+      and must not synthesize text from a raw s2p2 transition. Any value outside the
+      known set emits a one-shot [PROTOCOL_NOVEL] s2p2 WARNING. Upstream
+      dreame-mova-mower maps (2,2)=ERROR / (2,1)=STATE — reversed vs g2408; the
+      g2408 overlay corrects this.
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-30"
+      last_seen: "2026-06-01"
       decoded: confirmed
       bt_only: false
       not_on_g2408: false
@@ -557,41 +588,6 @@ properties:
           `rain_protection_resume_hours`), not the momentary `error_code == 56`
           flash. Fixed 2026-05-29 (event-surface rework).
         evidence: "user observation 2026-05-15: mower at dock in rain-protection state, app shows ACTIVE, integration binary_sensor reads off"
-      - date: "2026-05-15"
-        status: partial
-        claim: |
-          s2p2=28 correlates with the app push "Blades are severely worn.
-          Replace them soon." Fired 1s after a 70 (continue_unfinished_task)
-          transition at 16:18:51 and matched the user-observed app push at
-          the same minute. Likely the cloud's APNS/FCM trigger for the
-          blade-wear warning (the wear% itself comes from a separate CMS
-          slot — s2p2 just signals when to push).
-
-          Caveat: the same notification appeared three more times in the
-          app the same day with NO corresponding s2p2 transition in the
-          probe log. Trigger for those repeats is unknown — possibilities:
-            (a) APNS/FCM redelivery from the cloud queue
-            (b) App-side time-based reminder
-            (c) Cloud pushes a different MQTT slot (e.g., CMS update) that
-                also produces the same app-side text
-          This means 28 is HIGHLY LIKELY the first-observation trigger
-          but not proven to be the ONLY trigger; the per-repeat mechanism
-          stays an open question.
-        evidence: "probe_log_20260514_211550.jsonl @ 2026-05-15 16:18:51 (s2p2=28 immediately following s2p2=70 at 16:18:50); user-confirmed app push at the same minute; user observed 3 more same-text app notifications same day with no fresh s2p2 transition"
-      - date: "2026-05-15"
-        status: verified
-        claim: |
-          The integration's _on_state_update unconditionally overwrites
-          self._prev_error_code with new_state.error_code, including when
-          new_error_code is None. s2p2 occasionally goes through transient
-          None states (the property push doesn't always carry the slot);
-          a None overwrite then suppresses the NEXT real transition via
-          the `old_code is not None` boot-guard. Net effect: zero alert
-          events ever fired in the activity logbook despite multiple
-          known codes (70, 28) appearing in the probe log. Fixed by only
-          updating _prev_error_code when new is non-None — same pattern
-          as the mowing_paused fix in commit 87e2bbe.
-        evidence: "REST /api/logbook?entity=event.dreame_a2_mower_alert returned 0 entries on 2026-05-15 despite probe log showing s2p2=70 fires"
       - date: "2026-05-25"
         status: verified
         claim: |
@@ -608,62 +604,7 @@ properties:
           same minute as the new app notification "Sensor error. Tap to view
           the solution." (correlation only; not 1:1-proven — see partial
           record below).
-        evidence: "probe_log_20260520_131350.jsonl @ 2026-05-25 12:32:25"
-      - date: "2026-05-25"
-        status: verified
-        claim: |
-          Failed off-dock scheduled-start cascade, 2026-05-25 12:32:04-27,
-          fully device-initiated (no RPC/action preceded it). From rest at the
-          dock (s2p1=6 CHARGING, s2p2=54) a schedule fired: the mower undocked
-          (s3p2 CHARGING→0; s2p1 6→1 MOWING at 12:32:06) and attempted an
-          off-dock relocate (s2p65 TASK_NAV_DOCK→TASK_SLAM_RELOCATE_OFFDOCK at
-          12:32:26). s2p2 ran a rapid burst 54→70→28→20→33→36→63 over ~22 s,
-          then s2p1 1→4 ERROR at 12:32:27. The mower sat in ERROR for EXACTLY
-          one hour (heartbeat-only, no s2p1/s2p2 change), then auto-recovered:
-          s2p1 4→1 MOWING at 13:32:25, mowing successfully until a rain code
-          (s2p2=56) at 13:53. s4p20 (RELOCATION_STATUS) never appeared, so the
-          relocate failure was NOT surfaced on that slot.
-        evidence: "probe_log_20260520_131350.jsonl @ 2026-05-25 12:32:04-13:32:25"
-      - date: "2026-05-25"
-        status: partial
-        claim: |
-          Six app notifications landed at 12:32 during the cascade above.
-          Three map to catalogued codes: 70="Robot will continue the task",
-          28="Blades are severely worn." (fired 1 s after 70, same 70→28
-          pattern as 2026-05-15; recurs again 17:53 same day — so 28 looks
-          like a generic task-start maintenance-reminder substate, NOT a
-          dedicated blade code, and the user reports the blade wording itself
-          is app-derived from wear%), 63="Robot is working. Scheduled task
-          cancelled." THREE are NEW to app-notification-history and absent
-          from S2P2_NOTIFICATION_MAP: "positioning failed. Tap to view
-          solution.", "Sensor error. Tap to view the solution.", "Failed to
-          start the task. Please retry." The leftover burst codes (20, 33, 36)
-          are the candidates, but all three fired within ~1-2 s so the 1:1
-          code↔text assignment is NOT disambiguable from this capture. s2p2 has
-          resisted pinning down across a month of probe logs; do not over-fit a
-          single incident. Refinement worth keeping: "positioning failed" here
-          did NOT carry the documented s2p2=71 — it co-occurred with the
-          off-dock relocate label and codes 33/36, so 71 is at most a
-          stuck/persistent variant, not the only positioning-failed signature.
-        evidence: "probe_log_20260520_131350.jsonl @ 2026-05-25 12:32; user-reported app notifications same minute; docs/research/app-notification-history-2026-05-16.md (three texts absent from catalog)"
-      - date: "2026-05-25"
-        status: verified
-        claim: |
-          s2p2=28 is the UNDOCK / off-dock marker, NOT a blade code.
-          Supersedes the earlier partial "28 correlates with the blades-worn
-          push" reading. Across probe_log_20260520_131350.jsonl it fires
-          exactly once per undock — 14/14 — always within 1-2 s of s2p1→1
-          (CHARGING→MOWING), and never anywhere else. It appears on every
-          start, failed (12:32) and clean (17:53, 13:32) alike, so the
-          2026-05-15 "Blades are severely worn" coincidence was just 28
-          firing on that undock while the app independently pushed the blade
-          text (app-derived from wear%; that text repeated 3× the same day
-          with NO wire event). Per user, the mower always performs an off-dock
-          relocate (a 360 spin just outside the dock for LiDAR bearings) and
-          the app notifies on it — 28 is the wire marker for that
-          undock/relocate-start. The s2p65=TASK_SLAM_RELOCATE_OFFDOCK label
-          only logged on the 12:32 FAILED relocate, not on clean undocks.
-        evidence: "probe_log_20260520_131350.jsonl: 14 undocks 2026-05-20..25, each paired with s2p2=28 within 1-2 s, 28 seen nowhere else; user observation (always relocates off-dock); docs/research/app-notification-history-2026-05-16.md (blade text repeats with no wire event)"
+        evidence: "probe_log_20260520_131350.jsonl @ 2026-05-25 12:32:25 (also the 12:32:04-27 off-dock-fail burst 54→70→28→20→33→36→63 → s2p1=4 ERROR → 1h → auto-recover; full sequence in the probe log; 20/33 still open below)"
       - date: "2026-05-26"
         status: verified
         claim: |
@@ -821,11 +762,33 @@ properties:
           any non-battery return — but the core meaning (standby-return, NOT
           positioning-failed) is text-confirmed.
         evidence: "probe_log_20260520_131350.jsonl @ 2026-05-30 18:26:50 (s2p2=71, s2p1 2→5, 1h after 17:26:50 arrival); user-confirmed app text 'The robot is on standby outside the station for too long. Automatically returning to the station.'; corpus scan of all 5 s2p2=71 (all return-context, none positioning-failure)"
+      - date: "2026-06-01"
+        status: verified
+        claim: |
+          NOVEL code s2p2=5 = "Right drive wheel error" — the right drive wheel
+          cannot turn / is slipping. First occurrence corpus-wide
+          (probe_log_20260520_131350, re-asserted 3× as the property
+          re-published). User-confirmed app notification text "Right drive wheel
+          error" (the exact string is also downloadable via cloud
+          device-messages/v2 to confirm). Symmetric sibling of 4 = "Left drive
+          wheel error" (verified 2026-05-30, left wheel spinning on a ledge); the
+          arrival of the right-wheel counterpart corroborates the 4/5 = drive-
+          wheel-fault pair reading. apk FaultIndex had 5 unmapped/vacuum-derived.
+          Synced to error_codes.py ERROR_CODE_DESCRIPTIONS (5 → "Right drive
+          wheel error") + S2P2_EVENT_TYPES (5 → "right_wheel_error") and added to
+          the state_codes table (s2p2_5).
+        evidence: "probe_log_20260520_131350.jsonl @ 2026-06-01 (s2p2=5, first occurrence in the corpus, ×3 republish); user-confirmed app text 'Right drive wheel error'; cloud device-messages/v2 exact-text download pending"
+      - date: "2026-06-01"
+        status: partial
+        claim: "Integration partitions s2p2 into FAULT_CODES={2,4,5,23,31,36} (verified, intervention-required) that latch snapshot.errors → lawn_mower ERROR + Error sensor + fault_detected/fault_cleared events; all other codes are non-latching. 24/43 reclassified Faults→Lifecycle (battery, not stuck). 33 stays positioning_health-owned; 76 is lifecycle (auto-returns) vs 31 fault (stranded)."
+        evidence: "code:mower/error_codes.py FAULT_CODES"
+        reason: "only inventory-verified intervention faults latch ERROR; unverified vacuum-lineage codes (37/38/39/40/41/45/49/57/58/61/62/117) deliberately excluded pending g2408 confirmation"
     open_questions:
       - "What wire surface carries the user's 'Continue' tap that clears rain-protection early? Candidate: an s2p50 op-code or an s2p2 transition out of the suppressed window. Capture during a live Continue press."
       - "g2408 meaning of s2p2 20 and 33 — both fired in the 2026-05-25 12:32 off-dock-failure burst alongside 'Sensor error' / 'positioning failed' app notifications, but neither is in the cloud's recent-history window (likely pruned). Need either a controlled repro within the cloud's retention window, the apk full 78-entry FaultIndex (bundle L94618-94697, not in apk.md), or text via an API-on-demand fetch the next time these codes fire."
       - "s2p2=71 = idle-too-long-return vs broader non-battery return? Core meaning text-confirmed (standby-too-long → auto-return) and the slug/sensor are fixed. Still open: is 71 strictly the idle-timeout reason, or ANY non-battery return? 3 of 5 corpus occurrences fire while already returning (prev=5). Capture other return triggers (user-recall, end-of-task) to see if they also carry 71; if 71 is broader than idle-timeout, broaden the slug name accordingly."
-      - "NEW fault codes from the 2026-05-30 stuck-patrol (user-confirmed app text, partial — single observations each, confirm carrying code via device-messages/v2): s2p2=2 = 'Robot trapped. Tap to view the solution' (22:44:40, stuck on hose); s2p2=4 = 'Left drive wheel error. Tap to view the solution' (22:59:04, left wheel spinning on a ledge); s2p2=74 = patrol ended/cancelled (23:02:12, fired with s2p1→2 when the user cancelled the patrol → return to dock). All three co-incident with a pause/end (s2p1=4/2, s2p56=[[1,0,4]] paused). These appear in the s4 eiid1 arg13 fault timeline too. apk FaultIndex 2/4 were unmapped/vacuum-derived on g2408 — these are the real g2408 meanings."
+      - "Remaining single-observation fault codes from the 2026-05-30 stuck-patrol (user-confirmed app text; confirm exact string via device-messages/v2): s2p2=2 = 'Robot trapped. Tap to view the solution' (22:44:40, stuck on hose); s2p2=74 = patrol ended/cancelled (23:02:12, fired with s2p1→2 when the user cancelled the patrol → return to dock). Both co-incident with a pause/end (s2p1=4/2, s2p56=[[1,0,4]] paused) and present in the s4 eiid1 arg13 fault timeline. apk FaultIndex 2 was unmapped/vacuum-derived on g2408 — this is the real g2408 meaning. RESOLVED out of this list: the drive-wheel pair 4='Left drive wheel error' (2026-05-30) and 5='Right drive wheel error' (2026-06-01) are now in the state_codes table + error_codes.py (decoded: confirmed)."
+      - "s2p2 24 'Battery low' vs 54 'Low battery — returning to station' overlap: confirm the distinction (hypothesis: 24 = low-battery WARNING threshold, informational; 54 = the low-battery event that TRIGGERS return-to-dock). Capture both firing in one session to pin the trigger points, then rename 24 to something unambiguous (tentative: 'Battery low (warning)'). presumed until a capture confirms."
     siid: 2
     piid: 50
     name: "task_envelope"
@@ -7066,6 +7029,53 @@ s2p51_shapes:
 state_codes:
 
   # ── §4.1 wire-confirmed codes ─────────────────────────────────────────────
+
+  - id: "s2p2_4"
+    code: 4
+    name: "LEFT_DRIVE_WHEEL_ERROR"
+    category: "state_code"
+    semantic: |
+      Left drive wheel error — the left drive wheel cannot turn / is slipping
+      (observed 2026-05-30: left wheel spinning on a ledge during a stuck
+      patrol). User-confirmed app text "Left drive wheel error. Tap to view the
+      solution." Co-incident with a pause/end (s2p1=4 Paused, s2p56=[[1,0,4]])
+      and present in the s4 eiid1 arg13 fault timeline. apk FaultIndex had 4
+      unmapped / vacuum-derived; this is the real g2408 meaning. Symmetric
+      sibling of 5 (right drive wheel).
+    status:
+      seen_on_wire: true
+      first_seen: "2026-05-30"
+      last_seen: "2026-05-30"
+      decoded: confirmed
+      bt_only: false
+      not_on_g2408: false
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
+  - id: "s2p2_5"
+    code: 5
+    name: "RIGHT_DRIVE_WHEEL_ERROR"
+    category: "state_code"
+    semantic: |
+      Right drive wheel error — the right drive wheel cannot turn / is
+      slipping. First wire occurrence 2026-06-01 (probe_log_20260520_131350;
+      the value's first appearance corpus-wide, re-asserted 3× as the property
+      re-published). Corresponds to the app notification "Right drive wheel
+      error" (text user-confirmed; also downloadable via cloud
+      device-messages/v2). Symmetric sibling of 4 (left drive wheel); apk
+      FaultIndex had 5 unmapped / vacuum-derived — this is the real g2408
+      meaning.
+    status:
+      seen_on_wire: true
+      first_seen: "2026-06-01"
+      last_seen: "2026-06-01"
+      decoded: confirmed
+      bt_only: false
+      not_on_g2408: false
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
 
   - id: "s2p2_27"
     code: 27

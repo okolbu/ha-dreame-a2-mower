@@ -3,8 +3,10 @@ from __future__ import annotations
 
 from custom_components.dreame_a2_mower.mower.error_codes import (
     ERROR_CODE_DESCRIPTIONS,
+    FAULT_CODES,
     S2P2_EVENT_TYPES,
     describe_error,
+    is_fault,
 )
 
 
@@ -66,3 +68,33 @@ def test_descriptions_do_not_contradict_event_slugs():
         assert code in S2P2_EVENT_TYPES, code
         assert code in ERROR_CODE_DESCRIPTIONS, code
         assert kw in ERROR_CODE_DESCRIPTIONS[code].lower(), (code, ERROR_CODE_DESCRIPTIONS[code])
+
+
+# Adding a code to FAULT_CODES requires g2408 evidence + an inventory.yaml
+# § s2p2 verification entry (CLAUDE.md fact-discipline). The positive +
+# negative tests below together pin the exact membership.
+def test_genuine_faults_are_faults():
+    # Wire/cloud-VERIFIED s2p2 faults that require user intervention.
+    for code in (2, 4, 5, 23, 31, 36):
+        assert is_fault(code), f"expected {code} to be a fault"
+
+
+def test_status_lifecycle_and_unverified_codes_are_not_faults():
+    # Lifecycle / "(not an error)" / self-recovering / maintenance codes...
+    # ...plus 24/43 (battery lifecycle), 33 (owned by positioning_health),
+    # 76 (auto-returns home), and the unverified vacuum-lineage codes that
+    # MUST NOT latch ERROR until confirmed on g2408.
+    for code in (0, 24, 28, 30, 33, 43, 47, 48, 50, 51, 53, 54, 56, 63, 70,
+                 71, 74, 75, 76,
+                 37, 38, 39, 40, 41, 45, 49, 57, 58, 61, 62, 73, 117):
+        assert not is_fault(code), f"expected {code} to NOT be a fault"
+
+
+def test_fault_codes_are_all_described():
+    for code in FAULT_CODES:
+        assert code in ERROR_CODE_DESCRIPTIONS, f"fault {code} missing description"
+
+
+def test_is_fault_handles_none_and_unknown():
+    assert is_fault(None) is False
+    assert is_fault(999) is False

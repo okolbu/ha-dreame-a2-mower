@@ -37,6 +37,8 @@ EVENT_TYPE_DOCK_DEPARTED: Final = "dock_departed"
 EVENT_TYPE_CHARGING_STARTED: Final = "charging_started"
 EVENT_TYPE_CHARGING_COMPLETE: Final = "charging_complete"
 EVENT_TYPE_RAIN_DELAY_STARTED: Final = "rain_delay_started"
+EVENT_TYPE_FAULT_DETECTED: Final = "fault_detected"
+EVENT_TYPE_FAULT_CLEARED: Final = "fault_cleared"
 
 LIFECYCLE_EVENT_TYPES: Final[tuple[str, ...]] = (
     EVENT_TYPE_MOWING_STARTED,
@@ -48,6 +50,8 @@ LIFECYCLE_EVENT_TYPES: Final[tuple[str, ...]] = (
     EVENT_TYPE_CHARGING_STARTED,
     EVENT_TYPE_CHARGING_COMPLETE,
     EVENT_TYPE_RAIN_DELAY_STARTED,
+    EVENT_TYPE_FAULT_DETECTED,
+    EVENT_TYPE_FAULT_CLEARED,
 )
 
 NOTIFICATION_EVENT_TYPES: Final[tuple[str, ...]] = (
@@ -59,6 +63,7 @@ NOTIFICATION_EVENT_TYPES: Final[tuple[str, ...]] = (
     "hanging",
     "robot_trapped",                    # s2p2=2 (verified 2026-05-30)
     "left_wheel_error",                 # s2p2=4 (verified 2026-05-30)
+    "right_wheel_error",                # s2p2=5 (verified 2026-06-01)
     "emergency_stop",
     "human_detected",
     "blades_worn",                      # s2p2=28
@@ -108,6 +113,7 @@ CONF_COUNTRY: Final = "country"
 CONF_LIDAR_ARCHIVE_KEEP: Final = "lidar_archive_keep"
 CONF_LIDAR_ARCHIVE_MAX_MB: Final = "lidar_archive_max_mb"
 CONF_SESSION_ARCHIVE_KEEP: Final = "session_archive_keep"
+CONF_WIFI_ARCHIVE_KEEP: Final = "wifi_archive_keep"
 
 # Bearing (degrees clockwise from north) of the dock's local X axis.
 # Used to project dock-frame (x_m, y_m) telemetry into global compass-frame
@@ -133,6 +139,12 @@ DEFAULT_COUNTRY: Final = "eu"
 DEFAULT_LIDAR_ARCHIVE_KEEP: Final = 20
 DEFAULT_LIDAR_ARCHIVE_MAX_MB: Final = 200
 DEFAULT_SESSION_ARCHIVE_KEEP: Final = 50
+# Per-map keep-newest-N for the WiFi heatmap archive. WiFi JSONs are tiny
+# (a few KB) so a byte cap is pointless — count is the meaningful lever; the
+# cap exists to bound the picker dropdown and unbounded accumulation. Per-map
+# (see WifiArchiveStore.enforce_retention), so this is 20 *per map*, matching
+# DEFAULT_LIDAR_ARCHIVE_KEEP.
+DEFAULT_WIFI_ARCHIVE_KEEP: Final = 20
 
 # UI strings
 WORK_LOG_PLACEHOLDER: Final = "(pick a session)"

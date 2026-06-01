@@ -37,6 +37,7 @@ from .sensor_device import (
     DreameA2Sensor,
     DreameA2WifiHeatmapAgeSensor,
     DreameA2WifiRefreshStatusSensor,
+    _active_fault_text,
     _api_endpoints_value,
     _describe_error_or_none,
     _format_active_selection,
@@ -140,8 +141,9 @@ async def async_setup_entry(
 # tests/state_machine/test_new_dimension_sensors.py: DreameA2CurrentActivitySensor,
 #     DreameA2LocationSensor, DreameA2PositioningHealthSensor,
 #     DreameA2MqttConnectivitySensor
-# tools/state_machine_audit_fake_coord.py: _describe_error_or_none,
-#     _format_active_selection, _api_endpoints_value, _freshness_value
+# tools/state_machine_audit_fake_coord.py: _active_fault_text,
+#     _describe_error_or_none, _format_active_selection,
+#     _api_endpoints_value, _freshness_value
 #
 # All names are already imported above and therefore available as attributes
 # of this module — no additional assignment needed.
