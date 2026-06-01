@@ -394,7 +394,12 @@ class _SessionMixin:
         """
         import time as _time
         now_unix = int(_time.time())
-        action = _finalize_decide(self.data, self._prev_task_state, now_unix)
+        action = _finalize_decide(
+            self.data,
+            self._prev_task_state,
+            now_unix,
+            rain_delay_active=self.rain_delay_active,
+        )
         # Boot-stale guard: filter out the gate's false-positive when
         # we just restarted into an MQTT-quiet window mid-session.
         # `_restore_in_progress` seeds `_prev_task_state=0` to support
@@ -533,6 +538,19 @@ class _SessionMixin:
             LOGGER.debug(
                 "[F5.6.1] _finalize_non_mow_immediate(trigger=%s): finalize already in progress "
                 "(concurrent trigger) — skip",
+                trigger,
+            )
+            return
+        if self.rain_delay_active:
+            # Rain pause-at-dock veto (mirrors the finalize-gate veto in
+            # live_map/finalize.decide). The 0/4→2/None task_state edge that
+            # triggers this path also fires when the mower docks to wait out a
+            # rain delay — that is NOT a session end. The bounded rain-delay
+            # window guarantees this veto lifts (mower resumes on undock, or the
+            # resume window expires) so it cannot pin a session open forever.
+            LOGGER.warning(
+                "[F5.6.1] _finalize_non_mow_immediate(trigger=%s): rain delay active "
+                "— vetoing finalize (mower paused at dock for rain, session not ended)",
                 trigger,
             )
             return
@@ -939,6 +957,22 @@ class _SessionMixin:
                     "state_machine.seed_in_session failed during restore"
                 )
 
+        # Restore the rain-delay context BEFORE arming the finalize gate
+        # below. _rain_delay_started_at is coordinator (not live_map) state and
+        # is otherwise in-memory only, so it would be lost across a reboot —
+        # leaving coordinator.rain_delay_active reading False and the gate with
+        # no signal that a docked-charging mower is merely waiting out rain.
+        # With it restored, the seeded prev_task_state=0 below no longer drives
+        # a premature FINALIZE_INCOMPLETE of a rain-paused session.
+        if disk_payload is not None:
+            raw_rain = disk_payload.get("rain_delay_started_at")
+            try:
+                self._rain_delay_started_at = (
+                    int(raw_rain) if raw_rain is not None else None
+                )
+            except (TypeError, ValueError):
+                self._rain_delay_started_at = None
+
         # Seed _prev_task_state to "running" so the finalize gate's
         # session-end detection (prev ∈ {0,4} → new ∈ {2,None}) fires on
         # the next MQTT tick if the mower has actually gone idle while
@@ -997,6 +1031,13 @@ class _SessionMixin:
         # against post-write mutation bleeding into the persisted payload.
         payload["last_all_area_mow_direction_deg"] = dict(
             self.data.last_all_area_mow_direction_deg
+        )
+        # Rain-delay context is COORDINATOR state (not live_map state), so it
+        # is injected here rather than via dump_to_payload(). Persisting it lets
+        # _restore_in_progress rehydrate rain_delay_active across a reboot so the
+        # finalize gate can veto a premature finalize of a rain-paused session.
+        payload["rain_delay_started_at"] = getattr(
+            self, "_rain_delay_started_at", None
         )
         try:
             await self.hass.async_add_executor_job(

@@ -45,7 +45,13 @@ class FinalizeAction(Enum):
     AWAIT_OSS_FETCH = auto()  # session ended; OSS key arrived; fetch is pending
 
 
-def decide(state: MowerState, prev_task_state: int | None, now_unix: int) -> FinalizeAction:
+def decide(
+    state: MowerState,
+    prev_task_state: int | None,
+    now_unix: int,
+    *,
+    rain_delay_active: bool = False,
+) -> FinalizeAction:
     """Pure function: examine MowerState + previous tick's task_state and
     return the action to take. The coordinator dispatches the action.
 
@@ -98,6 +104,18 @@ def decide(state: MowerState, prev_task_state: int | None, now_unix: int) -> Fin
     )
 
     if session_just_ended:
+        # Rain pause-at-dock veto: when the mower has docked + is charging
+        # because rain protection paused the mow, it reports task_state 2/None
+        # exactly like a finished session — and on reboot _restore_in_progress
+        # seeds prev_task_state=0, so this branch fires spuriously. While the
+        # rain-delay timer is active the session is NOT over (the mower will
+        # undock and resume when rain clears, or the resume window expires and
+        # this veto lifts, letting finalize proceed). `rain_delay_active` is
+        # bounded by the resume-hours window, so the veto cannot hang a session
+        # forever. When it's False, behaviour is unchanged — the
+        # "mower finished while HA was off" auto-finalize still fires.
+        if rain_delay_active:
+            return FinalizeAction.NOOP
         if state.pending_session_object_name:
             return FinalizeAction.FINALIZE_COMPLETE
         return FinalizeAction.FINALIZE_INCOMPLETE

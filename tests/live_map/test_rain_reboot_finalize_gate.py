@@ -83,25 +83,40 @@ def test_restored_rain_paused_session_is_not_prematurely_finalized(
     suppresses finalize. This test asserts the desired NON-finalize outcome
     and is RED until that guard exists.
     """
-    # NOTE (harness constraint / defect #2): MowerState has NO field that
-    # records "rain delay currently active" — only rain_protection_enabled
-    # (a setting) and rain_protection_resume_hours. The live rain context
-    # lives ONLY in the coordinator's in-memory _rain_delay_started_at, which
-    # is lost on reboot. So decide(), a pure function of MowerState, cannot
-    # today be handed the rain signal it would need to veto the finalize.
-    # This test therefore asserts the desired outcome with the state a docked
-    # rain-paused mower actually reports; making it pass requires either a
-    # persisted/derived rain-or-just-restored signal reaching this gate, or a
-    # coordinator-level guard around it.
+    # Part 2 (2b): decide() now takes a keyword `rain_delay_active`. The
+    # coordinator restores _rain_delay_started_at from in_progress.json before
+    # arming the finalize gate, then passes coordinator.rain_delay_active here.
+    # When the rain timer is active, the session-just-ended branch is vetoed to
+    # NOOP — the mower is waiting out rain at the dock, not ending its session.
     state = MowerState(
         task_state_code=docked_task_state,
         pending_session_object_name=None,
         rain_protection_enabled=True,
     )
-    action = decide(state, prev_task_state=0, now_unix=NOW)
-    assert action != FinalizeAction.FINALIZE_INCOMPLETE, (
+    action = decide(
+        state, prev_task_state=0, now_unix=NOW, rain_delay_active=True
+    )
+    assert action == FinalizeAction.NOOP, (
         "A rain-paused session restored from disk must NOT be finalized on "
         f"the seeded prev_task_state=0 (docked task_state={docked_task_state!r}); "
         f"decide() returned {action!r}. The mower is waiting out the rain "
         "timer at the dock, not ending its session."
+    )
+
+
+@pytest.mark.parametrize("docked_task_state", [2, None])
+def test_no_rain_still_finalizes_on_seeded_prev_zero(docked_task_state):
+    """Pin that the rain veto does NOT regress the "mower finished while HA was
+    off" auto-finalize: with rain_delay_active=False (the default), the same
+    docked state on the seeded prev=0 still returns FINALIZE_INCOMPLETE."""
+    state = MowerState(
+        task_state_code=docked_task_state,
+        pending_session_object_name=None,
+    )
+    action = decide(
+        state, prev_task_state=0, now_unix=NOW, rain_delay_active=False
+    )
+    assert action == FinalizeAction.FINALIZE_INCOMPLETE, (
+        f"no rain (docked task_state={docked_task_state!r}, seeded prev=0) must "
+        f"still finalize; got {action!r}"
     )

@@ -372,7 +372,9 @@ class _CoreMixin:
     @property
     def rain_delay_active(self) -> bool:
         """True while the mower is waiting out the rain-protection timer."""
-        if self._rain_delay_started_at is None:
+        # getattr default: some test fixtures build the coordinator via __new__
+        # without __init__, so the attribute may not exist.
+        if getattr(self, "_rain_delay_started_at", None) is None:
             return False
         resume_at = self.rain_resume_at_unix
         if resume_at is None:
