@@ -23,8 +23,9 @@ class BackgroundMode(str, Enum):
 
 
 # Every activity that means "a task is underway / mower is out and moving".
-# DRIVING_BLADES_UP and FAST_MAPPING are GREEN by design (spec §4.1 / §11.4):
-# the mower is active, so the idle stripe preview would reproduce the #1 bug.
+# DRIVING_BLADES_UP and FAST_MAPPING are GREEN by design: the mower is
+# physically active and off the dock, so showing the idle stripe preview would
+# reproduce the #1 bug (a striped "idle" map while the mower is actually moving).
 _ACTIVE_ACTIVITIES = frozenset({
     CurrentActivity.MOWING,
     CurrentActivity.PAUSED,

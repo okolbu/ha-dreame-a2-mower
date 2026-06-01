@@ -15,17 +15,20 @@ from ._geometry import (
     _renderer_to_px,
     extract_projection,
 )
+from .background import BackgroundMode, background_mode_for
 from .base_map import render_base_map
 from .main_view import render_main_view
 from .trail import render_with_trail
 from .work_log import render_work_log
 
 __all__ = [
+    "BackgroundMode",
     "_DEFAULT_PALETTE",
     "_OBSTACLE_FILL",
     "_OBSTACLE_OUTLINE",
     "_cloud_to_px",
     "_renderer_to_px",
+    "background_mode_for",
     "extract_projection",
     "render_base_map",
     "render_main_view",

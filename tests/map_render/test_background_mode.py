@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import pytest
 from custom_components.dreame_a2_mower.map_render.background import (
     BackgroundMode, background_mode_for,
