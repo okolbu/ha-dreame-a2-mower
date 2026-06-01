@@ -802,39 +802,23 @@ fixture saved under `tests/protocol/fixtures/`; decoder and renderer updated.
 
 ---
 
-### Patrol Logs — trigger and wire format
+### Patrol Logs — remaining open items
 
-**Why:** The app's Work Logs has a "Patrol Logs" tab that is always empty on
-the user's account. No way to initiate a Patrol from the current UI has been
-found. Wire format and OSS schema are unknown.
-**Done when:** A Patrol session is triggered, the s2p50/event_occured sequence
-is captured, and the OSS JSON schema is documented.
-**Status:** TRIGGER + CAPTURE + INTEGRATION DONE. A patrol was triggered
-(app cruise-side) and captured 2026-05-30: `s2p50 op=108`, `s2p2=51` start /
-`74` end, `s4 eiid1 piid1=108`, and a full OSS summary with `mode=108`,
-`start_mode=0`, `result=3`, `stop_reason=101` (aborted run — mower kept getting
-stuck in a narrow area; archive `2026-05-30_1780174930_f3473eba.json`; complete
-MQTT set in `probe_log_*.jsonl`). The integration types it
-`session_type=patrol`, cloud-finalizes it, labels it `[Patrol]`, and it appears
-in the Work Log picker and replays correctly — patrol is handled identically to
-the existing `maintenance_run` ("head to maintenance point") non-mow move.
-2026-06-01 follow-up shipped: the per-map "Mowing" sensors
-(`Mowing sessions` / `Total mowing time` / `Total area mowed`) now exclude
-non-mow types via `_mow_sessions_for_map()` (`const.NON_MOW_SESSION_TYPES`), so a
-patrol no longer inflates mowing totals; lifetime totals already come from the
-device (`total_mowing_time_min` / `total_mowed_area_m2`). The picked-session
-sensor already surfaces `session_type`; no patrol-specific indicator entity (it
-mirrors maintenance_run).
-**Remaining (low priority / blocked):**
-- The app's "Patrol Logs" TAB is still empty (it's separate from the mower
-  session archive — origin unknown).
-- Per-field OSS schema for patrol-specific keys (new s4 eiid1 piids 10/12) still
+**Trigger + capture + integration surfacing are closed — see `docs/DONE.md`**
+("Patrol Logs — trigger and wire format"): a patrol was triggered and captured,
+the integration types it `session_type=patrol`, replays it, and excludes it from
+the "Mowing" aggregates (handled like `maintenance_run`). A few low-priority /
+blocked bits remain:
+**Remaining:**
+- The app's "Patrol Logs" TAB is still empty (separate from the mower session
+  archive — origin unknown).
+- Per-field OSS schema for patrol-specific keys (s4 eiid1 piids 10/12) still
   undecoded.
 - Live-view behaviour during a patrol is untested (op=108 intentionally does not
   flip lawn_mower activity); revisit after observing a live patrol. Mower is
   rain-locked.
 **Procedure:** [docs/research/g2408-capture-procedures.md#4-patrol-log-trigger-investigation](g2408-capture-procedures.md#4-patrol-log-trigger-investigation)
-**Cross-refs:** journal topic `s2p50 op-code catalog`; apk opcodes 107/108
+**Cross-refs:** journal topic `s2p50 op-code catalog`; apk opcodes 107/108; DONE.md "Patrol Logs"
 
 ---
 
