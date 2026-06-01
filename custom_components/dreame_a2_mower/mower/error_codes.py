@@ -26,10 +26,10 @@ from __future__ import annotations
 # entity for visibility, but the description signals the non-fault
 # nature where applicable.
 ERROR_CODE_DESCRIPTIONS: dict[int, str] = {
-    # 2026-04-30: empirical baseline is `s2p2 = 0` while the mower is
-    # mowing or charging without any fault — so the apk-derived
-    # "Hanging" label was wrong for the g2408 (likely model-specific).
-    0: "No error / OK",
+    # 2026-04-30 19:37:13 controlled test: s2p2 1→0 co-fired with the HB bumper
+    # bit — previously mislabelled "No error / OK" (apk vacuum-derived label
+    # that doesn't apply to g2408). See inventory.yaml § state_codes s2p2_0.
+    0: "Bumper / hanging (s2p2 echo of the s1p1 bumper bit)",
     # Confirmed 2026-04-30 against app notifications during a deliberate
     # tilt / lift / lift-lockout test (g2408-protocol §3.4 byte[1..3]).
     1: "Robot tilted (drop sensor)",
@@ -66,36 +66,18 @@ ERROR_CODE_DESCRIPTIONS: dict[int, str] = {
     31: "Failed to return to station",
     # 36: cloud-verified 2026-05-26 "Failed to start the task. Please retry."
     36: "Failed to start the task — retry",
-    37: "Right magnet",
-    38: "Flow error",
-    39: "Infrared fault",
-    40: "Camera fault",
-    41: "Strong magnet",
     # 43: apk FaultIndex "RTC clock error" is vacuum-derived + unconfirmed on
     # g2408; the event table fires `battery_temp_low_charging_paused`. Neither
     # is cloud-pinned — resolve on next capture. inventory § s2p2.
     43: "RTC clock error? (unconfirmed; event slug: battery temp low, charging paused)",
-    44: "Auto key triggered",
-    45: "3.3 V power error",
-    46: "Camera idle",
     47: "Scheduled task cancelled (not an error)",
     48: "Mowing complete (not an error)",
-    49: "Bumper / LDS",
     50: "Mowing task started (not an error)",  # cloud-verified 2026-05-26
     51: "Patrol started (not an error)",  # verified 2026-05-30; was vacuum "Filter blocked" (g2408 has no filter)
     53: "Session starting (scheduled — not an error)",
     54: "Low battery — returning to station",  # S2P2_EVENT_TYPES low_battery_return; was vacuum "Edge fault"
     56: "Bad weather (rain protection active)",
-    57: "Edge fault (alt)",
-    58: "Ultrasonic fault",
-    59: "No-go zone reached",
-    61: "Route error",
-    62: "Route error (alt)",
     63: "Scheduled task cancelled — robot working (not an error)",  # cloud-verified 2026-05-26; was vacuum "Blocked"
-    64: "Blocked (alt)",
-    65: "Restricted area",
-    66: "Restricted area (alt)",
-    67: "Restricted area (alt 2)",
     # 70: cloud-verified 2026-05-26 "Robot will continue the unfinished task."
     70: "Robot will continue the unfinished task (not an error)",
     # 71: apk says "Positioning failed (SLAM relocation needed)" but that is
@@ -116,8 +98,6 @@ ERROR_CODE_DESCRIPTIONS: dict[int, str] = {
     # 76: user-confirmed app text 2026-05-30 "Cannot reach the maintenance point.
     # Task ended." Fires at give-up; followed by s2p1→5 (auto-return). inventory § s2p2.
     76: "Cannot reach the maintenance point — task ended",
-    78: "Robot in hidden zone",
-    117: "Station disconnected",
 }
 
 
@@ -172,8 +152,6 @@ S2P2_EVENT_TYPES: dict[int, str] = {
     74:  "patrol_ended",                    # verified 2026-05-30 (patrol cancelled → return to dock)
     75:  "arrived_at_maintenance_point",
     76:  "cannot_reach_maintenance_point",  # user-confirmed app text 2026-05-30
-    78:  "robot_in_hidden_zone",
-    117: "station_disconnected",
 }
 
 # Slug fired when s2p2 carries a value not in S2P2_EVENT_TYPES — the cloud
@@ -203,10 +181,11 @@ S2P2_UNKNOWN_EVENT_TYPE = "unknown_s2p2"
 #   - tilt(1)/lift(9)/bumper → live on the s1p1 HEARTBEAT (binary_sensors +
 #     snapshot.pin_required), NOT s2p2. The terminal "can't continue" state
 #     is s2p2=23 (PIN lockout), which IS included.
-#   - 37/38/39/40/41/45/49/57/58/61/62/117 → apk/vacuum-lineage descriptions
-#     still carried in ERROR_CODE_DESCRIPTIONS above but UNCONFIRMED on g2408.
-#     Latching the lawn_mower entity to ERROR on a guessed semantic violates
-#     the repo's fact-discipline. Add a code here ONLY once confirmed on g2408.
+#   - 37/38/39/40/41/44/45/46/49/57/58/59/61/62/64/65/66/67/78/117 →
+#     apk/vacuum-lineage codes; ZERO probe-corpus occurrences on g2408;
+#     removed from ERROR_CODE_DESCRIPTIONS (2026-06-01). They fall back to
+#     "Unknown error N". Latching the lawn_mower entity to ERROR on a guessed
+#     vacuum semantic violates fact-discipline. Add here ONLY once confirmed.
 FAULT_CODES: frozenset[int] = frozenset({
     2,    # Robot trapped (verified 2026-05-30)
     4,    # Left drive wheel error (verified 2026-05-30)

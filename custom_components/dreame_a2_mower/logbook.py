@@ -72,8 +72,6 @@ _NOTIFICATION_MESSAGES: dict[str, str] = {
     "top_cover_open": "top cover is open",
     "patrol_ended": "patrol ended",
     "arrived_at_maintenance_point": "arrived at maintenance point",
-    "robot_in_hidden_zone": "entered a hidden zone",
-    "station_disconnected": "station disconnected",
     "unknown_s2p2": "notification (novel code)",
 }
 
