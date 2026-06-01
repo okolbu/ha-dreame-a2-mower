@@ -84,6 +84,7 @@ class StateSnapshot:
     position_y_m: float | None
     position_north_m: float | None
     position_east_m: float | None
+    position_heading_deg: float | None
     wifi_rssi_dbm: int | None
     mowing_phase: int | None
     task_state_code: int | None
@@ -120,6 +121,7 @@ class StateSnapshot:
             position_y_m=None,
             position_north_m=None,
             position_east_m=None,
+            position_heading_deg=None,
             wifi_rssi_dbm=None,
             mowing_phase=None,
             task_state_code=None,
@@ -150,6 +152,7 @@ class StateSnapshot:
             "position_y_m": self.position_y_m,
             "position_north_m": self.position_north_m,
             "position_east_m": self.position_east_m,
+            "position_heading_deg": self.position_heading_deg,
             "wifi_rssi_dbm": self.wifi_rssi_dbm,
             "mowing_phase": self.mowing_phase,
             "task_state_code": self.task_state_code,
@@ -196,6 +199,7 @@ class StateSnapshot:
             position_y_m=raw.get("position_y_m"),
             position_north_m=raw.get("position_north_m"),
             position_east_m=raw.get("position_east_m"),
+            position_heading_deg=raw.get("position_heading_deg"),
             wifi_rssi_dbm=raw.get("wifi_rssi_dbm"),
             mowing_phase=raw.get("mowing_phase"),
             task_state_code=raw.get("task_state_code"),
