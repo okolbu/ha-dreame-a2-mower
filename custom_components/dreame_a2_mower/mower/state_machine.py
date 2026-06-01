@@ -260,6 +260,7 @@ class MowerStateMachine:
             Location,
             PositioningHealth,
         )
+        from .error_codes import is_fault
 
         updates: dict[str, Any] = {"raw_s2p2": event_code}
         freshness = dict(self._snapshot.field_freshness)
@@ -286,6 +287,14 @@ class MowerStateMachine:
             updates["current_activity"] = CurrentActivity.AT_POINT
             freshness["location"] = now_unix
             freshness["current_activity"] = now_unix
+
+        # Latch genuine faults into snapshot.errors. s2p2 multiplexes faults
+        # with status/lifecycle codes, so MowerState.error_code (the last raw
+        # value) can't represent "an active fault exists" — this set can.
+        # Cleared on recovery (movement / undock / mow start) in Task 3.
+        if is_fault(event_code) and event_code not in self._snapshot.errors:
+            updates["errors"] = self._snapshot.errors | {event_code}
+            freshness["errors"] = now_unix
 
         updates["field_freshness"] = freshness
         return self._replace(**updates)
