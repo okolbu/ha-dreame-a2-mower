@@ -140,8 +140,8 @@ class _CloudStateMixin:
         boundary + zones + dock + exclusion/ignore/maintenance
         overlays only. NO historical M_PATH fill, NO live trails.
 
-        The active-map view (Mower tab) gets its own render with
-        trails + M_PATH via `_render_main_view()` → `_main_view_png`,
+        The active-map view (Mower tab) gets its own base render via
+        `_render_base()` → `_base_png` (trail + icon are client-side),
         used exclusively by DreameA2MapCamera.
         """
         if self.cloud_state is None:
@@ -157,12 +157,11 @@ class _CloudStateMixin:
             if png:
                 self._static_map_pngs_by_id[map_id] = png
                 self._last_map_md5_by_id[map_id] = map_data.md5
-        # Also populate _main_view_png so DreameA2MapCamera reads a fresh
-        # active-map render after every cloud_state refresh.
-        await self._render_main_view()
-        # And populate _active_map_base_png — the Work Log camera's
-        # empty-state image (clean base, no trail, no M_PATH).
-        await self._render_active_map_base()
+        # Also populate _base_png so DreameA2MapCamera reads a fresh
+        # active-map base after every cloud_state refresh. The md5+mode dedup
+        # makes this a no-op when nothing changed; it picks up a new map md5
+        # (e.g. a re-scanned boundary) without waiting for an activity flip.
+        await self._render_base()
 
     def _apply_cloud_state_to_mower_state(self) -> None:
         """Push CFG / MIHIS / SETTINGS-derived fields onto MowerState.

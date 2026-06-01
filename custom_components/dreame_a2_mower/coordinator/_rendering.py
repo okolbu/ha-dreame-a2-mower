@@ -8,10 +8,9 @@ import asyncio
 import base64
 import dataclasses
 import json
-import math
 from datetime import timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
@@ -78,103 +77,6 @@ if TYPE_CHECKING:
     pass  # cross-mixin type imports added as needed
 
 
-# ---------------------------------------------------------------------------
-# Module-level constants for between-session re-render throttle
-# ---------------------------------------------------------------------------
-
-#: Minimum seconds between between-session icon re-renders.  The mower pushes
-#: s1p4 every ~5 s (the 8-byte "beacon" variant during return-to-dock).  A
-#: 5-second floor collided with that cadence: timing jitter made every other
-#: beacon fall just under 5 s and get throttled, so the icon only advanced
-#: every ~10 s.  3.0 s keeps a burst-render guard (a flurry of pushes inside
-#: 3 s still coalesces to one render) while letting each ~5 s beacon through.
-#: The 0.3 m move-threshold below still prevents renders while parked.
-_BETWEEN_SESSION_RENDER_MIN_INTERVAL_S: float = 3.0
-
-#: Sentinel for ``_render_main_view(heading=...)`` distinguishing "caller
-#: didn't pass a heading — read it from MowerState" from an explicit
-#: ``heading=None`` ("no heading available — draw the icon unrotated").
-_UNSET: Any = object()
-
-#: Minimum position delta (metres) to trigger a between-session re-render.
-#: Keeps the docked/parked mower (noisy GPS jitter ≪ this) from triggering
-#: renders; a moving mower advances several tens of cm per push.
-_BETWEEN_SESSION_MOVE_THRESHOLD_M: float = 0.3
-
-
-async def _maybe_rerender_between_session_icon(coord: Any, *, now_unix: float) -> None:
-    """Re-render the main view if the mower has moved significantly between sessions.
-
-    Called from `_on_state_update` every time an s1p4 telemetry push arrives
-    while `live_map.is_active()` is False.  Prevents the mower icon from
-    freezing at the session-end position during the return-to-dock drive (or
-    any other between-session movement).
-
-    Guards:
-    - live_map must be INACTIVE (active-session rendering is handled by the
-      existing trail re-render path).
-    - Snapshot must have a valid position (x_m, y_m).
-    - Position must have moved more than ``_BETWEEN_SESSION_MOVE_THRESHOLD_M``
-      since the last render to avoid spurious re-renders on GPS jitter.
-    - At most one render per ``_BETWEEN_SESSION_RENDER_MIN_INTERVAL_S`` seconds
-      (reuses ``coord._last_live_render_unix`` — the same throttle clock used
-      by the live-trail path).
-    """
-    if coord.live_map.is_active():
-        return  # active session handled by trail re-render path
-
-    snap = coord.state_machine.snapshot()
-    cur_x = snap.position_x_m
-    cur_y = snap.position_y_m
-    if cur_x is None or cur_y is None:
-        return  # no position fix — nothing to render
-
-    # Throttle: at most one render per _BETWEEN_SESSION_RENDER_MIN_INTERVAL_S.
-    elapsed = now_unix - coord._last_live_render_unix
-    if elapsed < _BETWEEN_SESSION_RENDER_MIN_INTERVAL_S:
-        return
-
-    # Position-delta gate: only render when the mower has actually moved.
-    prev_x = coord._last_between_session_render_x
-    prev_y = coord._last_between_session_render_y
-    derived_heading: float | None = None
-    if prev_x is not None and prev_y is not None:
-        dx = cur_x - prev_x
-        dy = cur_y - prev_y
-        delta = math.hypot(dx, dy)
-        if delta < _BETWEEN_SESSION_MOVE_THRESHOLD_M:
-            return  # stationary or jitter — skip
-        # Bug 1: the return-to-dock drive sends the 8-byte beacon variant of
-        # s1p4, which carries POSITION ONLY — no heading. self.data's
-        # position_heading_deg is therefore stale and the icon points in a
-        # leftover direction. Derive the icon heading from the MOVEMENT
-        # direction instead. The heading byte's convention (inventory.yaml
-        # s1p4_8b_heading_byte) is the dock-relative cloud frame with
-        # "0° = +X axis", validated by heading_correlate.py against motion
-        # direction atan2(dy_cloud, dx_cloud). We compute the heading in that
-        # exact same cloud frame, so the renderer's existing icon-rotation
-        # (which already accounts for the canvas y-flip) orients it correctly —
-        # a +Y-cloud move renders the same as a 33-byte frame with heading=90°.
-        derived_heading = math.degrees(math.atan2(dy, dx)) % 360.0
-
-    # Update throttle clock and last-rendered position BEFORE the await so
-    # concurrent callers (shouldn't happen, but guard for safety) don't pile up.
-    coord._last_live_render_unix = now_unix
-    coord._last_between_session_render_x = float(cur_x)
-    coord._last_between_session_render_y = float(cur_y)
-
-    LOGGER.debug(
-        "[MAP] between-session icon re-render: pos=(%.2f, %.2f) prev=(%.2f, %.2f) "
-        "elapsed=%.1fs derived_heading=%s",
-        cur_x, cur_y,
-        prev_x if prev_x is not None else float("nan"),
-        prev_y if prev_y is not None else float("nan"),
-        elapsed,
-        f"{derived_heading:.0f}°" if derived_heading is not None else "n/a",
-    )
-    await coord._render_main_view(heading=derived_heading)
-
-
 class _RenderingMixin:
     """Methods extracted from coordinator.py — see spec for groupings."""
 
@@ -204,75 +106,24 @@ class _RenderingMixin:
             return None
         return (float(x), float(y))
 
-    def _current_mower_heading(self) -> float | None:
-        """Return the mower's current heading in degrees, or None."""
-        h = self.data.position_heading_deg
-        return float(h) if h is not None else None
-
-    async def _rerender_live_trail(
-        self,
-        position: tuple[float, float] | None = None,
-        heading: float | None = None,
-    ) -> None:
-        """Re-render the cached map with the current live trail.
-
-        v1.0.0a19: position + heading are passed explicitly by the
-        _on_state_update hook so the icon reflects the SAME push that
-        just appended to live_map. Without this, reading self.data
-        inside the scheduled task could see either the old or new
-        state depending on whether async_set_updated_data has run yet,
-        and the icon would lag behind the trail.
-        """
-        map_data = self.cloud_state.maps_by_id.get(self._active_map_id)
-        if map_data is None or not self.live_map.is_active():
-            return
-        from functools import partial
-        from ..map_render import render_with_trail
-        if position is None:
-            position = self._current_mower_position()
-        if heading is None:
-            heading = self._current_mower_heading()
-        from ..session_card import derive_render_legs
-        legs_timeline = derive_render_legs(
-            [p.as_dict() for p in self.live_map.track]
+    def _compute_background_mode(self):
+        """BackgroundMode for the current state-machine snapshot."""
+        from ..map_render import background_mode_for
+        snap = self.state_machine.snapshot()
+        return background_mode_for(
+            mow_session=snap.mow_session,
+            current_activity=snap.current_activity,
+            action_mode=getattr(self.data, "action_mode", None),
         )
-        png = await self.hass.async_add_executor_job(
-            partial(
-                render_with_trail,
-                map_data,
-                None,
-                None,
-                position,
-                heading,
-                None,
-                legs_timeline=legs_timeline,
-            )
-        )
-        LOGGER.debug(
-            "[MAP] live trail re-render: legs_timeline=%d points=%d bytes=%d pos=%s hdg=%s",
-            len(legs_timeline),
-            self.live_map.total_points(), len(png) if png else 0,
-            position, heading,
-        )
-        await self._render_main_view()
 
-    async def _render_main_view(self, *, heading: float | None = _UNSET) -> None:
-        """Render the active map's Main view (base + live trail + mower icon
-        + last-session obstacles overlay).
+    async def _render_base(self) -> None:
+        """Render the active map's base PNG, keyed on (background_mode, md5).
 
-        Writes the result to self._main_view_png. No-ops gracefully when:
-        - _active_map_id is None (active map not yet known)
-        - cloud_state.maps_by_id has no entry for the active map
-
-        ``heading`` — icon heading in degrees, cloud-frame (0° = +X axis),
-        matching the s1p4 heading-byte convention. When left at the default
-        sentinel, the heading is read from ``self.data.position_heading_deg``
-        (the live-trail / idle-preview path). The between-session re-render
-        passes an EXPLICIT heading derived from the movement direction because
-        the 8-byte beacon frame that drives the return-to-dock drive carries
-        position only — ``position_heading_deg`` is stale there. Passing
-        ``heading=None`` explicitly means "no heading available" (icon drawn
-        unrotated).
+        No-ops when neither the mode nor the map md5 changed since the last
+        render. This is the ONLY server-side live-map render; trail + icon are
+        client-side. Fires on every activity transition (cheap because of the
+        dedup) so the stripes->green flip lands within one tick of the state
+        machine entering an active activity — ~41s before the first move.
         """
         active_id = self._active_map_id
         if active_id is None:
@@ -280,101 +131,66 @@ class _RenderingMixin:
         map_data = self.cloud_state.maps_by_id.get(active_id)
         if map_data is None:
             return
-        from functools import partial
-
-        from ..map_render import render_main_view
-
-        # Track-derived render legs (Task 9): derive_render_legs splits the
-        # per-point track on role flips + pen-up gaps so render_with_trail
-        # paints mowing legs in light-green and traversal legs in grey-on-top
-        # without post-hoc fuzzy matching against cloud track_segments.
-        from ..session_card import derive_render_legs
-        legs_timeline = (
-            derive_render_legs([p.as_dict() for p in self.live_map.track])
-            if self.live_map.is_active() else None
+        mode = self._compute_background_mode()
+        md5 = getattr(map_data, "md5", None)
+        if (
+            self._base_png is not None
+            and self._base_png_mode == mode
+            and self._base_png_md5 == md5
+        ):
+            return  # fresh render already cached
+        from ..map_render import BackgroundMode
+        obstacles = (
+            None if mode == BackgroundMode.GREEN
+            else await self._load_last_session_obstacles(active_id)
         )
-        # P4: prefer snapshot (persisted across reboot + seeded from the
-        # last session archive at cold-start) over live MowerState, so
-        # the mower icon shows on the map even when no s1p4 telemetry
-        # is currently flowing (e.g. mower parked at dock between
-        # sessions). MowerState fields go None when telemetry stops;
-        # the snapshot retains the last known fix.
-        mower_pos = self._current_mower_position()
-        # heading: an EXPLICIT caller value (incl. None) wins; otherwise read
-        # the live MowerState heading (live-trail + idle-preview paths). The
-        # between-session path passes a movement-derived heading because the
-        # 8-byte beacon frame has no heading byte (see _maybe_rerender_...).
-        if heading is _UNSET:
-            heading = self._current_mower_heading()
-        # T17: idle pre-start preview — pass current MowerState, active map id,
-        # and the state-machine mow_session so render_main_view can dispatch
-        # to the stripe/light-green preview when the mower is not in session.
-        _sm_snap = self.state_machine.snapshot()
-        mow_session = _sm_snap.mow_session
-        # last_task_op is retained for diagnostics only — render_main_view no
-        # longer keys the idle-vs-active decision on it (it's a PERSISTED field
-        # that survives reboots as a stale 109, which used to force the
-        # flat-green cruise view at a maintenance point). The actual
-        # "session active now" signal is live_map.is_active().
-        last_task_op = _sm_snap.last_task_op
-        # Reboot-survival fix: pass the ACTUAL active-session signal so the
-        # renderer skips the idle pre-start preview only during a genuinely
-        # active session (e.g. a to-point cruise), not when a finished run's
-        # op was merely restored from disk.
-        live_map_active = self.live_map.is_active()
-        # Bug 1 fix: current_activity lives on StateSnapshot (the state machine),
-        # NOT on MowerState.  render_main_view checks `getattr(state,
-        # "current_activity", None)` to detect REPOSITIONING and skip the
-        # striped pre-start preview.  Without this, passing `state=self.data`
-        # (MowerState, which has no current_activity) means `_is_repositioning`
-        # is always False and the stripe preview is NEVER suppressed during the
-        # ~42s reorientation window.
-        #
-        # Fix: build a thin proxy that delegates all attribute access to
-        # self.data (MowerState) but overrides `current_activity` with the
-        # state machine's snapshot value.
-        class _StateProxy:
-            """Thin proxy: MowerState + state-machine current_activity."""
-            __slots__ = ("_base", "current_activity")
-            def __init__(self, base, activity):
-                object.__setattr__(self, "_base", base)
-                object.__setattr__(self, "current_activity", activity)
-            def __getattr__(self, name):
-                return getattr(object.__getattribute__(self, "_base"), name)
-        _render_state = _StateProxy(self.data, _sm_snap.current_activity)
-        # Overlay obstacles captured during the most recent session for
-        # this map. Mirrors the Dreame app's "show last-mow obstacles"
-        # behavior so users can spot which obstacles to clear before the
-        # next mow. HIDDEN during an active mow: last-session obstacles may
-        # not be in place for the new session and would be visually
-        # misleading. Between sessions (idle) they're shown as a garden-state
-        # reminder. (Fix 3 — v1.0.16a3)
-        from ..mower.state_snapshot import MowSession as _MowSession
-        if mow_session == _MowSession.IN_SESSION:
-            obstacle_polygons_m = None
-        else:
-            obstacle_polygons_m = await self._load_last_session_obstacles(active_id)
+        from functools import partial
+        from ..map_render import render_base
         png = await self.hass.async_add_executor_job(
             partial(
-                render_main_view,
-                map_data,
-                legs_timeline=legs_timeline,
-                mower_position_m=mower_pos,
-                mower_heading_deg=heading,
-                obstacle_polygons_m=obstacle_polygons_m,
-                state=_render_state,
-                map_id=active_id,
-                mow_session=mow_session,
-                last_task_op=last_task_op,
-                live_map_active=live_map_active,
-                trail_width_px=self.data.trail_render_width,
+                render_base, map_data,
+                background_mode=mode, state=self.data,
+                map_id=active_id, obstacle_polygons_m=obstacles,
             )
         )
         if png:
-            self._main_view_png = png
-        # Also keep the work-log empty-state PNG fresh. Md5-deduped, so
-        # the no-op fast-path runs after the first render per map version.
-        await self._render_active_map_base()
+            self._base_png = png
+            self._base_png_mode = mode
+            self._base_png_md5 = md5
+            LOGGER.debug(
+                "[MAP] base render: bg=%s map=%s md5=%s",
+                mode.value, active_id, md5,
+            )
+
+    def _begin_live_stream(self, *, t: float) -> None:
+        """Reset the published live stream at session begin / cold-start."""
+        self._live_point_seq = 0
+        self._latest_point = None
+        self._track_snapshot = []
+
+    def _publish_live_point(
+        self, *, x_m: float, y_m: float, heading_deg: float | None, t: float
+    ) -> None:
+        """Append one position to the published live stream.
+
+        Heading is whatever MowerState carried (the byte heading on the 99.2%
+        of frames that have one; for the rare 8-byte beacon it may be slightly
+        stale — acceptable, the client has a motion-vector fallback and the
+        flip-convention fix is what actually fixes wrong-facing). Only the
+        latest point + seq cross the wire each push; the client accumulates the
+        trail. ``_track_snapshot`` is the catch-up payload for a fresh card.
+        """
+        pt = [float(x_m), float(y_m),
+              None if heading_deg is None else float(heading_deg), float(t)]
+        self._live_point_seq += 1
+        self._latest_point = pt
+        if self._track_snapshot is not None:
+            self._track_snapshot.append(pt)
+        LOGGER.debug(
+            "[MAP] publish: seq=%d pt=(%.2f,%.2f) hdg=%s",
+            self._live_point_seq, x_m, y_m,
+            f"{heading_deg:.1f}(byte)" if heading_deg is not None else "none(vector)",
+        )
 
     async def _load_last_session_obstacles(
         self, map_id: int
@@ -398,8 +214,8 @@ class _RenderingMixin:
         # run (coordinator setup awaits it). Calls before that finishes
         # (e.g., the MAPL handler kicked off from the first CFG refresh)
         # see an empty ``_index`` and must NOT poison the cache with an
-        # empty result. v1.0.11a1 introduced an early _render_main_view
-        # task on active-map change that exposed this race; gate the
+        # empty result. v1.0.11a1 introduced an early render task on
+        # active-map change that exposed this race; gate the
         # empty-cache write on the archive being fully loaded.
         if not getattr(archive, "_index_loaded", False):
             LOGGER.info(
@@ -451,37 +267,4 @@ class _RenderingMixin:
                 map_id, getattr(entry, "filename", "?"),
             )
         return polygons or None
-
-    async def _render_active_map_base(self) -> None:
-        """Render the active map's clean base (no trail, no mower icon, no M_PATH).
-
-        Writes the result to self._active_map_base_png. Used as the Work
-        Log camera's empty-state image (when no session is picked) — it
-        shows "this is the map your work logs would render on" without
-        confusing the user with cumulative mow history.
-
-        Md5-deduped: re-renders only when the active map's MapData.md5
-        changes (or when the cache slot is empty). Safe to call from
-        every _render_main_view trigger because the actual PIL render
-        runs at most once per map version.
-        """
-        active_id = self._active_map_id
-        if active_id is None:
-            return
-        map_data = self.cloud_state.maps_by_id.get(active_id)
-        if map_data is None:
-            return
-        current_md5 = getattr(map_data, "md5", None)
-        if (
-            self._active_map_base_png is not None
-            and self._active_map_base_md5 == current_md5
-        ):
-            return  # already have a fresh render for this md5
-        from ..map_render import render_base_map
-        png = await self.hass.async_add_executor_job(
-            render_base_map, map_data,
-        )
-        if png:
-            self._active_map_base_png = png
-            self._active_map_base_md5 = current_md5
 

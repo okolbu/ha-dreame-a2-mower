@@ -146,16 +146,17 @@ class _MqttHandlersMixin:
                         # next 2-min refresh.
                         if getattr(self, "cloud_state", None) is not None:
                             self._apply_cloud_state_to_mower_state()
-                        # Re-render the live-map PNG so DreameA2MapCamera
+                        # Re-render the live-map base PNG so DreameA2MapCamera
                         # serves the new active map immediately. Without
-                        # this, _main_view_png stays at the previous map's
-                        # render until the next 2-min cloud refresh or a
-                        # live-trail event — observed as ~1-minute lag
-                        # between app-side map flip and the dashboard
-                        # live-map card updating (2026-05-14).
+                        # this, _base_png stays at the previous map's
+                        # render until the next 2-min cloud refresh — observed
+                        # as ~1-minute lag between app-side map flip and the
+                        # dashboard live-map card updating (2026-05-14). The
+                        # md5 in the dedup key differs across maps, so this
+                        # always re-renders on a genuine map switch.
                         hass = getattr(self, "hass", None)
                         if hass is not None:
-                            hass.async_create_task(self._render_main_view())
+                            hass.async_create_task(self._render_base())
                         # Fire listeners so camera + select push state to the
                         # frontend without waiting for the next coordinator
                         # broadcast.
@@ -228,6 +229,21 @@ class _MqttHandlersMixin:
                         except Exception:
                             LOGGER.exception("state_machine.handle_heartbeat failed")
                     else:
+                        # Capture the state-machine activity before/after the
+                        # property is applied so ANY activity transition can
+                        # trigger a base re-render below. This is the single
+                        # general render trigger (rehaul): it subsumes the old
+                        # s2p1→REPOSITIONING-specific trigger. The background
+                        # mode is a pure function of the snapshot, so the
+                        # stripes→green flip lands within one tick of the state
+                        # machine entering an active activity — ~41s before the
+                        # first s1p4 MOVE, fixing the stripe-lag bug.
+                        try:
+                            _prev_activity = (
+                                self.state_machine.snapshot().current_activity
+                            )
+                        except Exception:
+                            _prev_activity = None
                         try:
                             self.state_machine.handle_mqtt_property(
                                 siid=_sm_siid,
@@ -237,37 +253,18 @@ class _MqttHandlersMixin:
                             )
                         except Exception:
                             LOGGER.exception("state_machine.handle_mqtt_property failed")
-                        # Undock / return-leg render trigger: s2p1 entering
-                        # REPOSITIONING. Placed HERE — not in handle_property_push's
-                        # `_apply()` closure — because s2p1 is a no-op in
-                        # apply_property_to_state, so the push short-circuits
-                        # (new_state == self.data) BEFORE `_apply()` runs. The
-                        # state machine, by contrast, processes s2p1 right above
-                        # (handle_mqtt_property → _apply_s2p1_task_state), so the
-                        # snapshot now reflects REPOSITIONING. Without this the
-                        # camera keeps showing the idle stripe preview through the
-                        # ~42s repositioning window and only flips at the first
-                        # s1p4 MOVE. Fires once per s2p1 push and only when the
-                        # resulting activity is REPOSITIONING (covers both undock
-                        # 6/13→1 and return-leg AT_POINT→returning). The render
-                        # decision (main_view.py: REPOSITIONING ⇒ flat-green) is
-                        # already correct.
-                        if (_sm_siid, _sm_piid) == (2, 1):
-                            from ..mower.state_snapshot import (
-                                CurrentActivity as _CA,
+                        try:
+                            _new_activity = (
+                                self.state_machine.snapshot().current_activity
                             )
-                            try:
-                                _act = self.state_machine.snapshot().current_activity
-                            except Exception:
-                                _act = None
-                            if _act == _CA.REPOSITIONING:
-                                LOGGER.debug(
-                                    "[MAP] s2p1 entered REPOSITIONING — triggering "
-                                    "render to replace idle stripe preview"
-                                )
-                                self.hass.async_create_task(
-                                    self._render_main_view()
-                                )
+                        except Exception:
+                            _new_activity = None
+                        if _new_activity != _prev_activity:
+                            LOGGER.debug(
+                                "[MAP] activity transition %s → %s — render_base",
+                                _prev_activity, _new_activity,
+                            )
+                            self.hass.async_create_task(self._render_base())
                         if (_sm_siid, _sm_piid) == (2, 50):
                             _op = (
                                 (_sm_value.get("d") or _sm_value).get("o")
@@ -391,6 +388,9 @@ class _MqttHandlersMixin:
             # the pre-restart trail. Just continue appending to the
             # restored leg.
             self.live_map.begin_session(now_unix)
+            # Reset the published live position stream so the new session's
+            # trail starts clean on the client card.
+            self._begin_live_stream(t=float(now_unix))
             # Snapshot battery % at session start so the archive consumer
             # has a cheap start/end SoC pair without scanning the full
             # battery_samples list. None when battery_level isn't known
@@ -497,33 +497,28 @@ class _MqttHandlersMixin:
             # Mark dirty if a point was actually added (dedup may have skipped it).
             if self.live_map.total_points() > before_pts:
                 self._live_map_dirty = True
-                # v1.0.0a18: throttle live-trail re-renders to ~1/s so
-                # the camera entity reflects the moving mower without
-                # PIL re-rendering on every 5-Hz s1.4 push.
-                self._live_trail_dirty = True
-                if now_unix - self._last_live_render_unix >= 1.0:
-                    self._last_live_render_unix = float(now_unix)
-                    self._live_trail_dirty = False
-                    hass = getattr(self, "hass", None)
-                    if hass is not None:
-                        # v1.0.0a19: pass the live position + heading
-                        # from new_state so the icon lands at the END
-                        # of the just-appended path, not at whatever
-                        # self.data happened to be when the scheduled
-                        # task runs.
-                        hass.async_create_task(
-                            self._rerender_live_trail(
-                                position=(
-                                    float(new_state.position_x_m),
-                                    float(new_state.position_y_m),
-                                ),
-                                heading=(
-                                    float(new_state.position_heading_deg)
-                                    if new_state.position_heading_deg is not None
-                                    else None
-                                ),
-                            )
-                        )
+                # Rehaul: instead of compositing a fresh PNG on every push,
+                # publish the new position to the live stream the map camera
+                # exposes as attributes, then push listeners so the client
+                # card (which draws the trail + icon) picks it up. No throttle:
+                # publishing is a list append, not a PIL render.
+                self._publish_live_point(
+                    x_m=float(new_state.position_x_m),
+                    y_m=float(new_state.position_y_m),
+                    heading_deg=(
+                        float(new_state.position_heading_deg)
+                        if new_state.position_heading_deg is not None else None
+                    ),
+                    t=float(now_unix),
+                )
+                # Push listeners so the map camera entity re-exposes the new
+                # live-stream attributes. Defensive getattr/callable guard
+                # (mirrors the MAPL trigger) so __init__-bypassing test
+                # fixtures that don't set up the DataUpdateCoordinator base
+                # don't crash on this append-path side effect.
+                _update_listeners = getattr(self, "async_update_listeners", None)
+                if callable(_update_listeners):
+                    _update_listeners()
 
         # Sync MowerState's session view from LiveMapState. session_distance_m
         # is integrated from the track (sum of segment lengths, pen-up gaps
@@ -592,12 +587,14 @@ class _MqttHandlersMixin:
             # preview (stripes) appears promptly instead of waiting for the next
             # 2-minute cloud refresh.  The live_map session is already over at
             # this point (session-end fires before dock-arrival), so
-            # _render_main_view will take the between-sessions branch and render
-            # the appropriate idle preview (stripes for ALL_AREAS/ZONE, plain
-            # light-green for EDGE/SPOT).
+            # _render_base will compute an idle background mode and render the
+            # appropriate preview (stripes for ALL_AREAS/ZONE, edge/spot for
+            # EDGE/SPOT). Dock-arrival is also an activity transition, so the
+            # general trigger above may already cover it — the md5+mode dedup
+            # in _render_base makes a second call a cheap no-op.
             _hass = getattr(self, "hass", None)
             if _hass is not None:
-                _hass.async_create_task(self._render_main_view())
+                _hass.async_create_task(self._render_base())
         elif self._prev_in_dock is True and not _sm_at_dock:
             self._fire_lifecycle(
                 EVENT_TYPE_DOCK_DEPARTED, {"at_unix": int(now_unix)}
@@ -1028,7 +1025,7 @@ class _MqttHandlersMixin:
             # After the op echo the state machine has already set location=ON_LAWN
             # and the correct activity. Without a render trigger the camera entity
             # keeps showing the idle stripe preview (pre-start) until s1p4 position
-            # telemetry resumes ~45s later. Fire _render_main_view immediately so
+            # telemetry resumes ~45s later. Fire _render_base immediately so
             # the stripe preview is replaced with the trail-mode (dark-green base)
             # as soon as the command is acknowledged.
             # Scope: task-start ops only (100-103 mow, 108 patrol, 109 cruise).
@@ -1053,29 +1050,15 @@ class _MqttHandlersMixin:
                             "to replace idle stripe preview at command-time",
                             _s2p50_op,
                         )
-                        self.hass.async_create_task(self._render_main_view())
-            # NOTE: the s2p1→REPOSITIONING undock/return render trigger does NOT
-            # live here. s2p1 is a no-op in apply_property_to_state, so an s2p1
-            # push short-circuits at `new_state == self.data` above and never
-            # reaches this `_apply()` closure. The trigger lives in
-            # `_on_mqtt_message`, right after `state_machine.handle_mqtt_property`
-            # applies the s2p1 transition (where the snapshot reflects
-            # REPOSITIONING and the push actually reaches).
-            # Between-session icon re-render (return-to-dock drive visibility).
-            # s1p4 is the source of position updates; fire only on s1p4 so we
-            # don't add spurious renders for every other property push.
-            # _maybe_rerender_between_session_icon guards on:
-            #   - live_map.is_active() == False (no active session)
-            #   - position delta > threshold (mower moved, not GPS jitter)
-            #   - throttle interval elapsed (≤ 1 render per ~5 s)
-            # This covers the return-to-dock drive after a to-point session ends
-            # (the icon stays frozen at the maintenance point otherwise).
-            if key == (1, 4):
-                import time as _time
-                from ._rendering import _maybe_rerender_between_session_icon
-                self.hass.async_create_task(
-                    _maybe_rerender_between_session_icon(self, now_unix=float(now))
-                )
+                        self.hass.async_create_task(self._render_base())
+            # NOTE: render triggers no longer live in this `_apply()` closure
+            # for activity transitions / between-session movement. Activity
+            # changes fire _render_base from `_on_mqtt_message` (right after
+            # handle_mqtt_property, where the snapshot reflects the transition).
+            # Between-session mower movement no longer needs a server render at
+            # all: the icon + trail move CLIENT-side from the published position
+            # stream (see _publish_live_point), so the return-to-dock drive
+            # advances the icon without a PIL re-render.
 
         self.hass.loop.call_soon_threadsafe(_apply)
 

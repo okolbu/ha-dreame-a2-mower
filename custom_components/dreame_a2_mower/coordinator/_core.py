@@ -219,14 +219,20 @@ class _CoreMixin:
         # lives here as the single source of truth.
         self.cloud_state: Any = None  # CloudState | None — actual import deferred
 
-        # Four independent PNG cache slots, one per render pipeline:
-        #   _main_view_png         — active map + live trail (Main view)
+        # Live-map base PNG cache (rehaul). The composited live PNG is gone:
+        # the server renders only the base, keyed on background mode + map md5.
+        # Trail + mower icon are drawn client-side from the published stream.
+        self._base_png: bytes | None = None
+        self._base_png_mode: object | None = None    # BackgroundMode of _base_png
+        self._base_png_md5: str | None = None         # MapData.md5 of _base_png
+        # Live position stream published on the map camera entity (Task 5).
+        self._live_point_seq: int = 0
+        self._latest_point: list | None = None        # [x_m, y_m, heading|None, t]
+        self._track_snapshot: list | None = None       # full session-so-far
+        # Remaining PNG cache slots, one per render pipeline:
         #   _static_map_pngs_by_id — per-map static base + M_PATH (cumulative)
         #   _work_log_png          — picker-selected archived session
-        #   _active_map_base_png   — active map base only (no trail, no M_PATH);
-        #                            shown as the Work Log camera's empty state
         # Each slot is owned by one render path; no shared mutability.
-        self._main_view_png: bytes | None = None
         self._work_log_png: bytes | None = None
         # No-trail variant of _work_log_png — same map, no trail painted.
         # Used by the replay card as its animation base so the SVG-animated
@@ -236,12 +242,8 @@ class _CoreMixin:
         """Flat attribute dict for sensor.dreame_a2_mower_picked_session.
         Set by render_work_log_session; cleared by the work_log select
         when the placeholder is picked."""
-        self._active_map_base_png: bytes | None = None
-        # Tracks the active map's md5 the last time we rendered
-        # _active_map_base_png — used by _render_active_map_base to dedup.
-        self._active_map_base_md5: str | None = None
         # Per-map cache of last-session obstacle polygons (cloud-frame metres).
-        # Populated lazily on first `_render_main_view` per map_id by reading
+        # Populated lazily on first `_render_base` per map_id by reading
         # the most-recent ArchivedSession for that map from disk; invalidated
         # to None whenever a new session is archived so the next render picks
         # up fresh obstacles. Value of `[]` means "loaded, but no obstacles" —
@@ -282,19 +284,6 @@ class _CoreMixin:
         # The camera's available/async_camera_image reads from here so the
         # disk read never happens on the event loop.
         self._wifi_body_cache: dict[str, Any | None] = {}
-        # Throttle live re-renders to at most one per N seconds; the
-        # mower pushes s1.4 every ~5s during a mow which would otherwise
-        # cause one PIL render per push. Burst-coalesce via a dirty flag.
-        self._live_trail_dirty: bool = False
-        self._last_live_render_unix: float = 0.0
-        # Between-session icon re-render position tracking.
-        # Records the snapshot (x_m, y_m) at the time the last between-session
-        # _render_main_view ran.  Used by _maybe_rerender_between_session_icon
-        # to detect whether the mower has moved enough to warrant a new render
-        # (e.g. during the return-to-dock drive after a to-point session ends).
-        self._last_between_session_render_x: float | None = None
-        self._last_between_session_render_y: float | None = None
-
         # Dirty flag for in-progress persistence (F5.7.1).
         # Set by _on_state_update after every append_point; cleared by
         # _persist_in_progress after a successful disk write.
@@ -552,13 +541,15 @@ class _CoreMixin:
             # Re-render the live map now that the archive is available so
             # the last-session obstacle overlay appears immediately. The
             # earlier _refresh_cloud_state passes already
-            # rendered _main_view_png but at that point
+            # rendered _base_png but at that point
             # _load_last_session_obstacles short-circuited on the unloaded
             # archive (returning None without caching, per the guard added
-            # in v1.0.11a2). Without this explicit re-render the overlay
-            # wouldn't appear until the next 2-min cloud refresh or the
-            # next live-trail event — observed in v1.0.11a1.
-            await self._render_main_view()
+            # in v1.0.11a2). The md5+mode dedup in _render_base means this
+            # forces a fresh render only because the obstacle set just changed
+            # — but the obstacle cache is keyed separately, so invalidate the
+            # base cache first so the dedup doesn't skip the re-render.
+            self._base_png = None
+            await self._render_base()
             if archived_count:
                 # v1.0.0a22 / a23: seed total_lawn_area_m2 from the most
                 # recent archived session's map_area_m2 so the user sees
