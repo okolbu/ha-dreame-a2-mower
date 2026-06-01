@@ -37,6 +37,8 @@ EVENT_TYPE_DOCK_DEPARTED: Final = "dock_departed"
 EVENT_TYPE_CHARGING_STARTED: Final = "charging_started"
 EVENT_TYPE_CHARGING_COMPLETE: Final = "charging_complete"
 EVENT_TYPE_RAIN_DELAY_STARTED: Final = "rain_delay_started"
+EVENT_TYPE_FAULT_DETECTED: Final = "fault_detected"
+EVENT_TYPE_FAULT_CLEARED: Final = "fault_cleared"
 
 LIFECYCLE_EVENT_TYPES: Final[tuple[str, ...]] = (
     EVENT_TYPE_MOWING_STARTED,
@@ -48,6 +50,8 @@ LIFECYCLE_EVENT_TYPES: Final[tuple[str, ...]] = (
     EVENT_TYPE_CHARGING_STARTED,
     EVENT_TYPE_CHARGING_COMPLETE,
     EVENT_TYPE_RAIN_DELAY_STARTED,
+    EVENT_TYPE_FAULT_DETECTED,
+    EVENT_TYPE_FAULT_CLEARED,
 )
 
 NOTIFICATION_EVENT_TYPES: Final[tuple[str, ...]] = (

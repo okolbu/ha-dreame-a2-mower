@@ -110,6 +110,28 @@
           "stale": "Stale"
         }
       }
+    },
+    "event": {
+      "lifecycle": {
+        "name": "Lifecycle",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "mowing_started": "Mowing started",
+              "mowing_paused": "Mowing paused",
+              "mowing_resumed": "Mowing resumed",
+              "mowing_ended": "Mowing ended",
+              "dock_arrived": "Arrived at dock",
+              "dock_departed": "Left dock",
+              "charging_started": "Started charging",
+              "charging_complete": "Finished charging",
+              "rain_delay_started": "Rain delay started",
+              "fault_detected": "Fault detected",
+              "fault_cleared": "Fault cleared"
+            }
+          }
+        }
+      }
     }
   }
 }

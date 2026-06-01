@@ -57,7 +57,9 @@
               "dock_departed": "Left dock",
               "charging_started": "Started charging",
               "charging_complete": "Finished charging",
-              "rain_delay_started": "Rain delay started"
+              "rain_delay_started": "Rain delay started",
+              "fault_detected": "Fault detected",
+              "fault_cleared": "Fault cleared"
             }
           }
         }

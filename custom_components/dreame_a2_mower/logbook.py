@@ -81,6 +81,10 @@ _NOTIFICATION_MESSAGES: dict[str, str] = {
 def _format(entity_id: str, event_type: str, attrs: dict[str, Any]) -> str | None:
     """Return the human message for one of our event entities."""
     if entity_id.endswith("_lifecycle"):
+        if event_type in ("fault_detected", "fault_cleared"):
+            desc = attrs.get("description") or f"error {attrs.get('code')}"
+            verb = "fault" if event_type == "fault_detected" else "recovered"
+            return f"{verb}: {desc}"
         return _LIFECYCLE_MESSAGES.get(
             event_type, event_type.replace("_", " ")
         )
