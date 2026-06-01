@@ -29,8 +29,12 @@ class DreameA2MapCamera(
     async def async_camera_image(
         self, width: int | None = None, height: int | None = None
     ) -> bytes | None:
-        """Return the current rendered base-map PNG."""
-        rendered = self.coordinator._main_view_png
+        """Return the current rendered base-map PNG (lawn + background only).
+
+        Trail + mower icon are drawn client-side from the published
+        position stream (see ``extra_state_attributes``).
+        """
+        rendered = self.coordinator._base_png
         return rendered  # may be None on first boot before map is fetched
 
     @property
@@ -51,11 +55,11 @@ class DreameA2MapCamera(
         render produces a structurally unique URL — defence in depth in case
         a misbehaving cache ignores headers.
 
-        Returns ``None`` when no ``_main_view_png`` is present (the entity
+        Returns ``None`` when no ``_base_png`` is present (the entity
         has nothing to serve yet, e.g. immediately after boot before the
         first map fetch).
         """
-        png = self.coordinator._main_view_png
+        png = self.coordinator._base_png
         if not png:
             return None
         import hashlib
@@ -64,43 +68,31 @@ class DreameA2MapCamera(
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Surface the cached PNG's hash and the mower-frame ↔ PNG-pixel
-        calibration the bundled WebGL LiDAR card uses to texture the
-        rendered map onto a quad in 3D space.
+        """Surface the served base PNG's hash, the map projection params,
+        and the live position stream the bundled map card uses to draw the
+        trail + mower icon client-side.
         """
         attrs: dict[str, Any] = {}
-        png = self.coordinator._main_view_png
+        png = self.coordinator._base_png
         if png:
             import hashlib
             attrs["image_version"] = hashlib.sha1(png).hexdigest()[:12]
         md = self.coordinator.cloud_state.maps_by_id.get(self.coordinator._active_map_id)
         if md is not None:
             try:
-                bx2 = float(md.bx2)
-                by2 = float(md.by2)
-                grid = float(md.pixel_size_mm)
-                h = int(md.height_px)
-            except (TypeError, ValueError, AttributeError):
-                return attrs
-            # Renderer formula (`map_render._cloud_to_px`):
-            #   px = (bx2 - x_mm) / grid
-            #   py = (by2 - y_mm) / grid
-            # The renderer then flips the canvas vertically before saving,
-            # so the served PNG's y is `(h - 1) - py_pre_flip`.
-            #
-            # Pick three non-collinear mower-frame mm points; the LiDAR
-            # card affine-fits these to recover the transform.
-            samples = ((0.0, 0.0), (1000.0, 0.0), (0.0, 1000.0))
-            attrs["calibration_points"] = [
-                {
-                    "mower": {"x": x_mm, "y": y_mm},
-                    "map": {
-                        "x": (bx2 - x_mm) / grid,
-                        "y": (h - 1) - (by2 - y_mm) / grid,
-                    },
+                attrs["map_projection"] = {
+                    "bx1_mm": float(md.bx1), "by1_mm": float(md.by1),
+                    "bx2_mm": float(md.bx2), "by2_mm": float(md.by2),
+                    "pixel_size_mm": float(md.pixel_size_mm),
+                    "width_px": int(md.width_px), "height_px": int(md.height_px),
                 }
-                for x_mm, y_mm in samples
-            ]
+            except (TypeError, ValueError, AttributeError):
+                pass
+        attrs["point_seq"] = self.coordinator._live_point_seq
+        attrs["latest_point"] = self.coordinator._latest_point
+        attrs["track_snapshot"] = self.coordinator._track_snapshot
+        mode = getattr(self.coordinator, "_base_png_mode", None)
+        attrs["background_mode"] = getattr(mode, "value", None)
         # Multi-map awareness — expose active map id and name.
         active = self.coordinator._active_map_id
         if active is not None:
@@ -135,7 +127,7 @@ class DreameA2MapCamera(
         broadcasts new data, then push the entity state.
 
         HA's frontend caches the ``/api/camera_proxy/`` URL by access
-        token; replay-session re-renders ``_main_view_png`` but the
+        token; the base render re-renders ``_base_png`` but the
         token only changes via ``async_update_token`` which is normally
         only invoked on a 5-minute timer. Rotating it here forces an
         immediate cache-bust whenever the underlying image is replaced
@@ -148,7 +140,7 @@ class DreameA2MapCamera(
         got None" on every coordinator update. v1.0.0a57 calls it
         directly.
         """
-        cur = self.coordinator._main_view_png
+        cur = self.coordinator._base_png
         # Rotate access_token whenever the rendered PNG bytes change so
         # the frontend immediately re-fetches the updated image.
         png_changed = cur is not None and cur != getattr(self, "_last_seen_png", None)

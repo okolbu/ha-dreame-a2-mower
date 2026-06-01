@@ -58,8 +58,9 @@ class MapImageView(HomeAssistantView):
                 return web.Response(status=400, text="Bad map_id")
             png = coordinator._static_map_pngs_by_id.get(map_id)
         else:
-            # Active-map (Main view) PNG.
-            png = coordinator._main_view_png
+            # Active-map live BASE PNG (lawn + background; trail/icon are
+            # drawn client-side from the published position stream).
+            png = coordinator._base_png
 
         if not png:
             return web.Response(status=404, text="No map rendered yet")
