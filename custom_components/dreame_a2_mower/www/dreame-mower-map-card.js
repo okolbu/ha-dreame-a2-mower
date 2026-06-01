@@ -41,6 +41,20 @@ class DreameMowerMapCard extends HTMLElement {
       this._seq = a.point_seq;
       this._onNewPoint(a.latest_point, a.map_projection);
     }
+    // Between sessions the live stream is empty (no latest_point, seq 0): draw
+    // a STATIC icon at the last-known position so it's clear where the mower is
+    // sitting. A live session (latest_point present, seq > 0) drives the icon
+    // instead — handled above and skipped here. Heading isn't persisted, so the
+    // idle icon keeps its default orientation. Known limitation: a manual move /
+    // carrying the mower while idle won't be reflected until it next reports.
+    const hasLivePoint = a.latest_point && a.point_seq > 0;
+    if (!hasLivePoint && a.last_known_point) {
+      const lp = a.last_known_point;
+      this._iconAt = projectPoint(lp[0], lp[1], a.map_projection);
+      const ang = iconRotation(lp[2], null, this._iconAt);
+      if (ang != null) this._iconAngle = ang;
+      this._placeIcon();
+    }
   }
   _ensureSvg(a) {
     if (this.shadowRoot && this.shadowRoot.getElementById("svg")) return;

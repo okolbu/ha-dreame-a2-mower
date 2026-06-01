@@ -12,6 +12,24 @@ from ._devices import map_device_info, map_unique_id, mower_device_info, mower_u
 from .coordinator import DreameA2MowerCoordinator
 
 
+def _last_known_point(snapshot: Any) -> list[Any] | None:
+    """``[x_m, y_m, None]`` of the mower's last persisted telemetry position,
+    or ``None`` if no position has ever been recorded.
+
+    Lets the live map card draw a STATIC idle icon at the mower's last-known
+    position BETWEEN sessions (when the live point stream is empty), so it's
+    clear where the mower is sitting. Heading is ``None`` (not persisted) — the
+    idle icon keeps its default orientation. Known limitation: this is the last
+    *telemetry* position, so it won't reflect the mower being moved/carried
+    manually while idle.
+    """
+    x = getattr(snapshot, "position_x_m", None)
+    y = getattr(snapshot, "position_y_m", None)
+    if x is None or y is None:
+        return None
+    return [float(x), float(y), None]
+
+
 class DreameA2MapCamera(
     CoordinatorEntity[DreameA2MowerCoordinator], Camera
 ):
@@ -29,7 +47,7 @@ class DreameA2MapCamera(
     # legacy name kept here so it stays excluded if ever re-added.
     # (Hard cap on track_snapshot length is deferred — see Task 9 spec.)
     _unrecorded_attributes = frozenset({
-        "track_snapshot", "latest_point", "point_seq",
+        "track_snapshot", "latest_point", "point_seq", "last_known_point",
         "settings_dual_level_diagnostic", "nav_paths_pt_count_by_map",
         "calibration_points",  # legacy name; harmless if ever re-added
     })
@@ -103,6 +121,12 @@ class DreameA2MapCamera(
         attrs["point_seq"] = self.coordinator._live_point_seq
         attrs["latest_point"] = self.coordinator._latest_point
         attrs["track_snapshot"] = self.coordinator._track_snapshot
+        # Last-known position for the idle icon: the live card draws a static
+        # mower icon here BETWEEN sessions (when the live stream is empty). A
+        # live session's points take over on the card. See _last_known_point.
+        attrs["last_known_point"] = _last_known_point(
+            self.coordinator.state_machine.snapshot()
+        )
         mode = getattr(self.coordinator, "_base_png_mode", None)
         attrs["background_mode"] = getattr(mode, "value", None)
         # Multi-map awareness — expose active map id and name.
