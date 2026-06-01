@@ -183,11 +183,12 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         key="mower_in_dock",
         translation_key="mower_in_dock",
         name="Mower in dock",
-        # SM-12: reads from state_machine snapshot. Location.AT_DOCK is
-        # set by handle_cloud_poll when CFG.DOCK.connect_status is truthy,
-        # and cleared by handle_mqtt_property when s2p2 transitions to an
-        # active task state. This avoids the ~1-hour CFG poll staleness
-        # that caused mower_in_dock to stay True throughout an entire mow.
+        # Location.AT_DOCK is derived solely from s2p1 ∈ {6,13,15,16}
+        # (charging / charged / charge-paused / temp-hold — all on-the-contacts
+        # states). Leaving the dock cluster drives ON_LAWN. Cloud DOCK
+        # connect_status no longer drives location; it was removed because it
+        # lagged 5–10 min and reverted ON_LAWN during the ~41 s reorientation
+        # window (Investigation #2, branch fix/location-single-authority).
         value_fn=lambda coord: (
             coord.state_machine.snapshot().location == Location.AT_DOCK
         ),
