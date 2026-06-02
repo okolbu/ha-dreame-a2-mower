@@ -422,10 +422,12 @@ properties:
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-25"
+      last_seen: "2026-06-01"
       decoded: confirmed
       bt_only: false
       not_on_g2408: false
+    open_questions:
+      - "Accepted gap: if the mower docks while HA is down, location may read stale ON_LAWN until the next s2p1 push; self-heals on the next 6↔13 charge cycle. A future cloud-props→s2p1 feed (same signal, slower transport) could close it without reintroducing a second authority."
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:56"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p1 mode enum"
@@ -505,6 +507,20 @@ properties:
           78-entry FaultIndex or empirical code↔push correlation across
           incidents — NOT derivable from wire + current app alone.
         evidence: "apks/com.dreame.smartlife_2.5.6.4 (Flutter; flutter_assets has only 2.1 in common_mower_protocol.json; libapp.so strings lack FaultIndex names and push texts); apks/Dreamehome 1.5.41 & 2.1.0.14 (no index.android.bundle)"
+      - date: "2026-06-01"
+        status: partial
+        claim: |
+          s2p1 is the SOLE location authority in the integration (branch
+          fix/location-single-authority). Dock cluster = {6,13,16} verified
+          in corpus (6/13 main carriers; 16 observed in dock-only charge cycle
+          13↔16↔6, 11×); 15 presumed (charging-paused only occurs docked,
+          unobserved in corpus). Idle value 2 is a LAWN state (corpus pattern:
+          1→2→5 = mow→idle→returning; single 2→{6,13} event is noise). Cloud
+          DOCK connect_status removed from the location path: it lagged 5–10 min
+          and reverted ON_LAWN during the ~41 s reorientation window after undock
+          (Investigation #2). The removal closes that regression and makes s2p1
+          the sole projection point.
+        evidence: "probe_log_*.jsonl, 154 undocks / s2p1 transition matrix 2026-06-01"
 
   - id: "s2p2"
     siid: 2

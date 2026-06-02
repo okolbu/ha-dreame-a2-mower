@@ -1,15 +1,18 @@
-"""Tests for reconcile_from_telemetry — cold-boot state inference.
+"""Tests for reconcile_from_telemetry — cold-boot mow-session inference.
 
 When the integration starts during an active mow, the start events
 (s2p1=1, s2p2=50, s2p50 op=100) already fired hours ago. MQTT
 properties_changed only fires on change, so we never receive them
-post-subscribe. Telemetry (battery, position, area_mowed, live_map)
-keeps flowing — those are the signals we use to infer that a mow
-session is actually in progress.
+post-subscribe. Telemetry (battery, area_mowed, live_map) keeps
+flowing — those are the signals we use to infer that a mow session
+is actually in progress.
 
 The user's caveat: telemetry alone can't distinguish a mow from a
 cruise-to-point. Only mow-specific signals (area_mowed_m2 > 0) make
 the inference safe.
+
+NOTE: Location reconcile (R6: AT_DOCK + off-dock position → ON_LAWN) was
+removed. Location is now driven solely by s2p1 (dock cluster {6,13,15,16}).
 """
 from __future__ import annotations
 
@@ -27,8 +30,6 @@ def test_reconcile_idle_to_mowing_when_live_map_active_and_area_mowed():
     sm.reconcile_from_telemetry(
         live_map_active=True,
         area_mowed_m2=42.0,
-        position_x_m=5.0, position_y_m=-3.0,
-        dock_x_mm=155, dock_y_mm=10,
         now_unix=1000,
     )
     snap = sm.snapshot()
@@ -48,8 +49,6 @@ def test_reconcile_does_not_assume_mowing_for_cruise():
     sm.reconcile_from_telemetry(
         live_map_active=True,
         area_mowed_m2=0.0,
-        position_x_m=5.0, position_y_m=-3.0,
-        dock_x_mm=155, dock_y_mm=10,
         now_unix=1000,
     )
     snap = sm.snapshot()
@@ -71,13 +70,9 @@ def test_reconcile_does_not_overwrite_authoritative_state():
     # Seed from a real start event
     sm.handle_mqtt_property(siid=2, piid=2, value=50, now_unix=500)
     assert sm.snapshot().mow_session == MowSession.IN_SESSION
-    # Keep position on dock so the location inference is a no-op and we
-    # isolate the mow-session-overwrite check.
     sm.reconcile_from_telemetry(
         live_map_active=True,
         area_mowed_m2=42.0,
-        position_x_m=0.15, position_y_m=0.01,
-        dock_x_mm=155, dock_y_mm=10,
         now_unix=1000,
     )
     snap_after = sm.snapshot()
@@ -86,69 +81,6 @@ def test_reconcile_does_not_overwrite_authoritative_state():
     # mow_session freshness must not have been re-stamped by reconcile —
     # 500 is when s2p2=50 set it.
     assert snap_after.field_freshness["mow_session"] == 500
-
-
-def test_reconcile_location_at_dock_to_on_lawn_when_position_far():
-    """position far from dock + location=AT_DOCK → flip to ON_LAWN."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
-        MowerStateMachine,
-    )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
-        Location,
-    )
-    sm = MowerStateMachine()
-    # Default location is AT_DOCK
-    assert sm.snapshot().location == Location.AT_DOCK
-    sm.reconcile_from_telemetry(
-        live_map_active=False,
-        area_mowed_m2=0.0,
-        position_x_m=8.5,   # mower position in metres
-        position_y_m=-4.2,
-        dock_x_mm=155, dock_y_mm=10,  # dock in mm — different units
-        now_unix=1000,
-    )
-    # Position (8.5m, -4.2m) is ~8.5m from (0.155m, 0.01m) dock — clearly off-dock
-    assert sm.snapshot().location == Location.ON_LAWN
-
-
-def test_reconcile_location_stays_at_dock_when_position_near_dock():
-    """position near dock origin → stay AT_DOCK."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
-        MowerStateMachine,
-    )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
-        Location,
-    )
-    sm = MowerStateMachine()
-    sm.reconcile_from_telemetry(
-        live_map_active=False,
-        area_mowed_m2=0.0,
-        position_x_m=0.2,   # 20cm from origin — on dock
-        position_y_m=0.05,
-        dock_x_mm=155, dock_y_mm=10,
-        now_unix=1000,
-    )
-    assert sm.snapshot().location == Location.AT_DOCK
-
-
-def test_reconcile_handles_none_position():
-    """No position data → don't change location."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
-        MowerStateMachine,
-    )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
-        Location,
-    )
-    sm = MowerStateMachine()
-    sm.reconcile_from_telemetry(
-        live_map_active=False,
-        area_mowed_m2=0.0,
-        position_x_m=None, position_y_m=None,
-        dock_x_mm=None, dock_y_mm=None,
-        now_unix=1000,
-    )
-    # Stays at initial AT_DOCK
-    assert sm.snapshot().location == Location.AT_DOCK
 
 
 def test_reconcile_overrides_stuck_charge_resume_when_area_increasing():
@@ -178,8 +110,6 @@ def test_reconcile_overrides_stuck_charge_resume_when_area_increasing():
     sm.reconcile_from_telemetry(
         live_map_active=True,
         area_mowed_m2=120.0,  # > 0
-        position_x_m=5.0, position_y_m=-3.0,
-        dock_x_mm=155, dock_y_mm=10,
         now_unix=1000,
     )
     snap = sm.snapshot()
@@ -206,8 +136,6 @@ def test_reconcile_does_not_override_authoritative_charge_resume_at_dock():
     sm.reconcile_from_telemetry(
         live_map_active=True,
         area_mowed_m2=120.0,
-        position_x_m=0.1, position_y_m=0.05,  # at dock
-        dock_x_mm=155, dock_y_mm=10,
         now_unix=1000,
     )
     assert sm.snapshot().current_activity == CurrentActivity.CHARGE_RESUME
@@ -237,34 +165,9 @@ def test_reconcile_flips_stuck_mowing_to_charge_resume_at_dock():
     sm.reconcile_from_telemetry(
         live_map_active=True,
         area_mowed_m2=120.0,
-        position_x_m=0.1, position_y_m=0.05,  # at dock
-        dock_x_mm=155, dock_y_mm=10,
         now_unix=1000,
     )
     assert sm.snapshot().current_activity == CurrentActivity.CHARGE_RESUME
-
-
-def test_reconcile_does_not_clobber_explicit_at_point_location():
-    """location=AT_POINT (from s2p2=75) must not be overwritten to ON_LAWN
-    just because position is non-zero. The user is AT a maintenance point."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
-        MowerStateMachine,
-    )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
-        Location,
-    )
-    sm = MowerStateMachine()
-    sm.handle_mqtt_property(siid=2, piid=2, value=75, now_unix=500)
-    assert sm.snapshot().location == Location.AT_POINT
-    sm.reconcile_from_telemetry(
-        live_map_active=False,
-        area_mowed_m2=0.0,
-        position_x_m=8.5, position_y_m=-4.2,
-        dock_x_mm=155, dock_y_mm=10,
-        now_unix=1000,
-    )
-    # AT_POINT is preserved
-    assert sm.snapshot().location == Location.AT_POINT
 
 
 def test_reconcile_resolves_stuck_charge_resume_between_sessions():
@@ -290,10 +193,6 @@ def test_reconcile_resolves_stuck_charge_resume_between_sessions():
     sm.reconcile_from_telemetry(
         live_map_active=False,
         area_mowed_m2=None,
-        position_x_m=None,
-        position_y_m=None,
-        dock_x_mm=None,
-        dock_y_mm=None,
         now_unix=1000,
     )
     assert sm.snapshot().current_activity == CurrentActivity.IDLE
@@ -319,8 +218,6 @@ def test_reconcile_preserves_charge_resume_in_session():
     sm.reconcile_from_telemetry(
         live_map_active=True,
         area_mowed_m2=0.5,
-        position_x_m=0.1, position_y_m=0.05,
-        dock_x_mm=0, dock_y_mm=0,
         now_unix=1000,
     )
     assert sm.snapshot().current_activity == CurrentActivity.CHARGE_RESUME
@@ -341,8 +238,6 @@ def test_reconcile_stamps_freshness_only_for_changed_fields():
     sm.reconcile_from_telemetry(
         live_map_active=True,
         area_mowed_m2=42.0,
-        position_x_m=0.15, position_y_m=0.01,   # ~near dock → location unchanged
-        dock_x_mm=155, dock_y_mm=10,
         now_unix=1000,
     )
     snap = sm.snapshot()
@@ -369,8 +264,6 @@ def test_reconcile_in_session_to_between_when_live_map_inactive():
     sm.reconcile_from_telemetry(
         live_map_active=False,
         area_mowed_m2=None,
-        position_x_m=0.15, position_y_m=0.01,   # near dock → location unchanged
-        dock_x_mm=155, dock_y_mm=10,
         now_unix=1000,
     )
     snap = sm.snapshot()

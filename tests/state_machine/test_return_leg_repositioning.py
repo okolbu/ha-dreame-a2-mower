@@ -86,15 +86,12 @@ def test_s2p1_returning_from_on_lawn_stays_returning():
     NOT REPOSITIONING — REPOSITIONING is only for the AT_POINT standstill.
     """
     sm = MowerStateMachine()
-    # Set location ON_LAWN without going through AT_POINT
-    sm.handle_mqtt_property(
-        siid=2, piid=50,
-        value={"d": {"o": 100, "status": True}},
-        now_unix=T0 - 200,
-    )
+    # Set location ON_LAWN via s2p1 undock (location authority)
+    sm.handle_mqtt_property(siid=2, piid=1, value=13, now_unix=T0 - 250)
+    sm.handle_mqtt_property(siid=2, piid=1, value=1, now_unix=T0 - 200)
     assert sm.snapshot().location == Location.ON_LAWN
-    assert sm.snapshot().mow_session == MowSession.IN_SESSION
-    # End the mow session
+    assert sm.snapshot().mow_session == MowSession.BETWEEN_SESSIONS
+    # End the mow session (s2p2=48 mowing_complete)
     sm.handle_mqtt_property(siid=2, piid=2, value=48, now_unix=T0 - 100)
     assert sm.snapshot().mow_session == MowSession.BETWEEN_SESSIONS
 

@@ -121,13 +121,13 @@ class _RefreshersMixin:
             self.async_set_updated_data(new_state)
 
     async def _refresh_dock(self) -> None:
-        """Fetch CFG.DOCK → populate dock-state fields on MowerState.
+        """Fetch CFG.DOCK → populate dock-position fields on MowerState.
 
         DOCK returns ``{dock: {connect_status, in_region, x, y, yaw,
         near_x, near_y, near_yaw, path_connect}}``. We pull the inner
-        dict and map each field 1:1 onto MowerState. `mower_in_dock`
-        is the only one labelled with semantic meaning; the rest are
-        named with the `dock_*` prefix and surfaced for diagnostics.
+        dict and map position fields (x/y/yaw/in_region) onto MowerState
+        for the dock-position sensors. connect_status is not used here —
+        location is owned solely by s2p1 (dock cluster {6,13,15,16}).
         """
         if not hasattr(self, "_cloud"):
             return
@@ -151,8 +151,8 @@ class _RefreshersMixin:
         in_region = dock.get("in_region")
 
         updates: dict[str, Any] = {}
-        # mower_in_dock was removed from MowerState (SM-14); dock location is
-        # now owned by the state machine via handle_cloud_poll below.
+        # Dock position fields flow to MowerState for the dock-position sensors.
+        # Location is owned solely by s2p1 (not by this cloud poll).
         if in_region is not None:
             updates["dock_in_lawn_region"] = bool(in_region)
         for src, dst in (
@@ -166,16 +166,6 @@ class _RefreshersMixin:
 
         if not updates:
             return
-
-        # Feed the dock dict to the state machine before committing the
-        # legacy MowerState update so SM sees the same signal source.
-        import time as _time
-        try:
-            self.state_machine.handle_cloud_poll(
-                source="DOCK", payload=dock, now_unix=int(_time.time())
-            )
-        except Exception:
-            LOGGER.exception("state_machine.handle_cloud_poll(DOCK) failed")
 
         new_state = dataclasses.replace(self.data, **updates)
         if new_state != self.data:
