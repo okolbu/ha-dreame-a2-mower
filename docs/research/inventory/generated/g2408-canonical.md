@@ -21,9 +21,8 @@
 | s2p52 | preference_update_trigger | empty_dict | WIRED |  |
 | s2p53 | voice_download_progress | int 0..100 | SEEN-UNDECODED |  |
 | s2p54 | lidar_upload_progress | int 0..100 | WIRED | % (×1.0) |
-| s2p55 | ai_obstacle_report | list | SEEN-UNDECODED |  |
-| s2p56 | task_state | {status: list of [task_type, ...] tuples} | WIRED |  |
-| s2p57 | robot_shutdown_trigger | dict (shutdown signal) | APK-KNOWN |  |
+| s2p55 | ai_obstacle_report | list | WIRED |  |
+| s2p56 | robot_shutdown_trigger | dict (shutdown signal) | APK-KNOWN |  |
 | s2p58 | self_check_result | dict {d: {mode, id, result}} | APK-KNOWN |  |
 | s2p61 | map_update_trigger | dict (map update signal) | APK-KNOWN |  |
 | s2p62 | task_progress_flag | int | SEEN-UNDECODED |  |
@@ -59,14 +58,23 @@ Mower-alive ping sent every ~45 seconds regardless of state, plus extra
 emissions during state transitions. 0xCE delimiters at bytes [0] and [19].
 
 Key decoded bytes (partial — full catalog in heartbeat_bytes section, Task 9):
-- [1] & 0x02: Drop / Robot tilted
 - [1] & 0x01: Bumper hit (no corresponding s2p2 transition)
+- [1] & 0x02: Drop / Robot tilted
 - [2] & 0x02: Lift / Robot lifted
 - [3] & 0x80: Lift lockout / PIN required
 - [6] & 0x08: Charging paused — battery temperature too low
-- [10] & 0x80: Latched low-temp event flag (set since last power-cycle)
 - [10] & 0x02: One-shot active-alert flag (self-clears 30–90 s)
-- [17]: WiFi RSSI as signed byte (b if b<128 else b−256)
+- [10] & 0x80: Latched low-temp event flag (set since last power-cycle)
+  — see 2026-05-30 corpus verification: NOT an off-dock flag (it is set
+  ~93% of docked+warm samples too); a single-run off-dock hypothesis was
+  refuted. Trigger still not cleanly pinned, but "mostly-set" is
+  consistent with a since-power-cycle latch.
+- [11] & 0x7F: battery % (== s3p1 in 99.3% of corpus)
+- [11] & 0x80: charging flag
+- [12] >> 4: 4-bit rolling heartbeat counter (the real per-frame counter)
+- [16]: constant 0x80 (framing/reserved)
+- [17]: WiFi RSSI, signed dBm (b if b<128 else b−256)
+- [18]: cellular/LTE signal (signed dBm, presumed)
 
 Per-byte decode lives in the heartbeat_bytes section (Task 9).
 Confirmed 2026-04-17 through 2026-05-05 across the full probe corpus.
@@ -129,6 +137,19 @@ position is stationary is the blades-on detector.
 Per-byte decode lives in telemetry_fields and telemetry_variants sections
 (Task 10). Confirmed 2026-04-17 through 2026-05-05.
 
+NO obstacle/AI-detection flag in s1p4 (or s1p1). Byte-by-byte verified
+2026-05-31 during a real AI obstacle detection (user walked in front
+mid-mow; both apps captured a photo at 12:40:48): every s1p4 byte that
+changed in that window is an already-decoded pose/area/counter field —
+pose deltas (bytes 1-5,10-21), path-point sequence (6-9), percent (24-25),
+total area (26-28), mowed area (29-31; byte[30] is the *middle* byte of the
+finish_uint24 area counter — its bump ~9 s after the photo was just area
+crossing a 256-centiare boundary, NOT a detection). s1p1 likewise: byte[7]
+(mow-active) + byte[10] (0x80 latched-temp) set at mow START not at the
+photo, byte[11]=battery, byte[18]=RSSI. The detection is invisible across
+ALL backend-A surfaces (telemetry, properties, events, device-data) — see
+[[s2p55]]; it is an app-backend (B/C) artifact only.
+
 **See also:** `custom_components/dreame_a2_mower/protocol/telemetry.py`, `docs/research/inventory/generated/g2408-canonical.md § Telemetry (s1p4) fields`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 1 piid:4`
 
 ### s1p5 — `hardware_serial`
@@ -166,6 +187,10 @@ some swaps but not others; see o200 entry).
 
 See docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes for the full role catalogue and
 the correction note (2026-04-23) on earlier session-boundary hypotheses.
+
+**Open questions:**
+- The app's 'Reorienting' popup is NOT driven by the MQTT /status/ stream. A clean popup-timed capture 2026-05-30 (move @ 17:25): user-noted popup START 17:25:42, STOP 17:26:17 — BOTH land inside the 41 s MQTT-silent reorient window (undock 17:25:37-38 → s1p50/s1p51 17:26:19), i.e. popup START ≈ undock+5 s, popup STOP ≈ s1p50/s1p51−2 s. The only wire traffic at those two instants is a routine s1p1 heartbeat whose 20 bytes are identical to neighbours except the counter (byte[11-12]) and a non-binary byte[14] (0 docked→64 undock→4→5→7→135) — NO clean popup on/off flag. So the popup driver is off the sniffed wire (cloud poll/push suspected); the integration cannot reproduce its exact timing from MQTT — best proxy is the bracket [undock transition → s1p50/s1p51]. LEAD for a future capture: popup START and STOP each coincided with an s1p1 emission (s1p1 fires extra heartbeats on state transitions) — check whether popup edges ALWAYS coincide with a heartbeat across captures before trusting it.
+- Housekeeping slots seen DURING the silence (candidates for what the firmware does while it spins): s6p1 map_data_signal {200,201,300} at ~+20 s (5/66; likely the LiDAR-map load), s5p107 energy_index at ~+13 s (53/66), and the UNDER-DECODED s5p106 (purpose unknown, values 1-8; 7/66 at ~+12 s) and s5p105 (enum {1,2,4}; 3/66 at ~+13 s). The clean 360 relocate does NOT emit the SLAM counter (s5p104/s2p65 fire only on the failed-relocate case, 1/66).
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 1 piid:50`
 
@@ -237,6 +262,18 @@ status=[[1,4]]. Previously thought to fold into mode 1.
 Value 11 (BUILDING) confirmed 2026-04-20 17:00:09 when user triggered
 "Expand Lawn" from the Dreame app.
 
+Enum gaps — values 7, 8, 9, 10, 12 are RESERVED/UNUSED on g2408: not named
+in ANY source (cloud keyDefine {1-6,11,13-16}, Flutter app asset
+common_mower_protocol.json {1-6,11,13,14}, or the integration/upstream
+enum) and never observed on the wire across the 9-log probe corpus
+(~66k samples). The numbering simply jumps 6→11. Observed values:
+{1,2,3,4,5,6,11,13,16}. Named-but-unobserved (await OTA / hot-battery
+charge): 14 (Updating), 15 (charge-paused temp-too-high). Don't invent
+names for 7-10/12.
+
+**Open questions:**
+- Accepted gap: if the mower docks while HA is down, location may read stale ON_LAWN until the next s2p1 push; self-heals on the next 6↔13 charge cycle. A future cloud-props→s2p1 feed (same signal, slower transport) could close it without reintroducing a second authority.
+
 **See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:56`, `docs/research/inventory/generated/g2408-canonical.md § s2p1 mode enum`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:1`
 
 ### s2p2 — `task_envelope`
@@ -262,6 +299,12 @@ payloads). Detailed opcode catalog lives in opcodes section (Task 8).
 
 **Open questions:**
 - What wire surface carries the user's 'Continue' tap that clears rain-protection early? Candidate: an s2p50 op-code or an s2p2 transition out of the suppressed window. Capture during a live Continue press.
+- g2408 meaning of s2p2 20 and 33 — both fired in the 2026-05-25 12:32 off-dock-failure burst alongside 'Sensor error' / 'positioning failed' app notifications, but neither is in the cloud's recent-history window (likely pruned). Need either a controlled repro within the cloud's retention window, the apk full 78-entry FaultIndex (bundle L94618-94697, not in apk.md), or text via an API-on-demand fetch the next time these codes fire.
+- s2p2=71 = idle-too-long-return vs broader non-battery return? Core meaning text-confirmed (standby-too-long → auto-return) and the slug/sensor are fixed. Still open: is 71 strictly the idle-timeout reason, or ANY non-battery return? 3 of 5 corpus occurrences fire while already returning (prev=5). Capture other return triggers (user-recall, end-of-task) to see if they also carry 71; if 71 is broader than idle-timeout, broaden the slug name accordingly.
+- Remaining single-observation fault codes from the 2026-05-30 stuck-patrol (user-confirmed app text; confirm exact string via device-messages/v2): s2p2=2 = 'Robot trapped. Tap to view the solution' (22:44:40, stuck on hose); s2p2=74 = patrol ended/cancelled (23:02:12, fired with s2p1→2 when the user cancelled the patrol → return to dock). Both co-incident with a pause/end (s2p1=4/2, s2p56=[[1,0,4]] paused) and present in the s4 eiid1 arg13 fault timeline. apk FaultIndex 2 was unmapped/vacuum-derived on g2408 — this is the real g2408 meaning. RESOLVED out of this list: the drive-wheel pair 4='Left drive wheel error' (2026-05-30) and 5='Right drive wheel error' (2026-06-01) are now in the state_codes table + error_codes.py (decoded: confirmed).
+- s2p2 24 'Battery low' vs 54 'Low battery — returning to station' overlap: confirm the distinction (hypothesis: 24 = low-battery WARNING threshold, informational; 54 = the low-battery event that TRIGGERS return-to-dock). Capture both firing in one session to pin the trigger points, then rename 24 to something unambiguous (tentative: 'Battery low (warning)'). presumed until a capture confirms.
+- s2p2 codes 0/1/9/23 are the s2p2 echoes of the s1p1 safety bits (bumper/tilt/lift/PIN), confirmed by the 2026-04-30 19:37–19:39 controlled test. Open: redundant with the s1p1 binary_sensors, or do they carry extra info worth a dedicated surface?
+- s2p2=0: strictly the bumper/hanging event, or also the post-event return-to-idle value? Corpus has only 6 transitions-to-0; need captures that disambiguate a bumper press from a generic clear-to-0.
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:50`
 
@@ -342,46 +385,57 @@ processes a captured image.
 Cannot confirm semantics without a corpus capture that includes an actual
 AI detection event.
 
-**See also:** `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §AI_OBSTACLE_REPORT`
+AI-photo cloud-endpoint hunt (2026-05-31, probe_ai_photo.py + /tmp
+history/ipc sweeps): the obstacle-photo *list* is NOT on any device-keyed
+cloud surface reachable with the integration's Dreame-Auth token. Ruled
+out: (a) batch device-data — `getDeviceData` ignores the `key` filter and
+dumps the full model; no AI/photo key exists; (b) `iotstatus/history`
+property-history for s2p55/s2p51/s1p53 → all `{"list":[]}` (also empty for
+s2p1/s2p2, so this device historises nothing server-side); (c) siid=1/2
+event-history (eiid 1..20) → empty; (d) `message-record/list` categories
+1..20 → 0 records; (e) `device-messages/v2` → empty (short ~6-7d
+retention); (f) guessed `/dreame-*/ {ai-photo,obstacle-photos,
+device-photos}` paths → 404. The only live lead is
+`/smart-app/ipc/detection/event/list` (libapp.so has a full IPC event
+model: imageUrl/picUrl/confidence/eventType; detection classes
+Human/Bird/Fire/Crying) — it accepts our token (HTTP 400 "Missing
+necessary request parameters", not 404/auth) but the g2408 device record
+has `videoStatus:null` + `featureCode:-1`, i.e. the mower is NOT enrolled
+as an IPC/camera device, so this is most likely the Dreame security-camera
+product line, not the mower; 7 param shapes all stayed at 400. Meanwhile
+the feature is ON at the cloud level — CFG.AOP=1 and REC[7] photo_consent=1
+across all dumps — and the user reports the photo set syncing to a 2nd app
+device, so photos DO exist cloud-side.
 
-### s2p56 — `task_state`
+UPDATE 2026-05-31 — Tasshack/dreame-vacuum analogue (likely supersedes the
+"needs a separate endpoint / MITM" conclusion above). The vacuum integration
+reads obstacle photos with NO dedicated endpoint: each photo is an inline
+entry in the map blob's `ai_obstacle` array (the SAME field name our
+session_summary.py already parses, empty in our corpus). Per
+OLD/.../dreame-vacuum/dreame/map.py (~L2086) each entry is
+`[x, y, type, possibility, key, file_name, random]` — a photo exists only
+when `len>=7 and int(key)>=1000`; a 4-element entry is a detection-only
+marker. `possibility` = the "human 80%" confidence (×100), `type` = obstacle
+class (vacuum enum 128-139 = furniture/clutter; the MOWER's classes will
+differ — Human/Animal/Object per the app), `file_name` = an OSS object name
+fetched via `get_interim_file_url(file_name)` (the SAME OSS path our mower
+already uses for maps/LiDAR — cloud_client/_oss.py). The vacuum AES-CBC
+decrypts the crop (aes_iv+key) because its maps are encrypted binary; the
+g2408's maps are PLAINTEXT JSON, so the mower's file_name is likely a
+plaintext OSS key (decryption need TBD). The "2nd-device same set" =
+both apps read the same cloud blob's ai_obstacle + fetch the same OSS
+objects (no per-account gallery service). Historical photos: the vacuum
+pulls them via OBJECT_NAME property-history; the mower equivalent is the
+MAPL/map-object history. STATUS: structural template only — NOT yet
+g2408 wire-confirmed (our ai_obstacle has always been empty). Confirm by
+capturing the live MAP blob + session summary during/after a REAL detection
+and checking whether ai_obstacle populates with 7-element entries; if so,
+fetch file_name via the existing get_interim_file_url. This is MITM-FREE and
+replaces the earlier blocked-by-MITM next step.
 
-Cloud status push — internal task-state ack. Wire envelope has two
-observed shapes on g2408:
+**See also:** `protocol/session_summary.py:140,385 (ai_obstacle already parsed); cloud_client/_oss.py (get_interim_file_url already present)`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §AI_OBSTACLE_REPORT; apks/aa/lib/arm64-v8a/libapp.so (IpcEventModel)`
 
-  2-element variant — full-area mows (most common, 163/213 in corpus):
-    {"status": []}            no active task
-    {"status": [[1, 0]]}      running
-    {"status": [[1, 2]]}      complete / transitional
-    {"status": [[1, 4]]}      paused-pending-resume / recharge boundary
-
-  3-element variant — scheduled edge / spot / zone mows (since 2026-04-27):
-    {"status": [[1, 0, 0]]}   start (running)
-    {"status": [[1, 0, 2]]}   mid-session marker (NOT session-end on its own)
-
-The integration extracts status[0][1] (the sub-state int) as
-task_state_code: 0=running, 4=paused, 2=complete, None=no task.
-
-For the 3-element variant the [1] read returns the middle 0, so
-task_state_code stays at 0 across the [1,0,0] → [1,0,2] transition.
-This is the correct behaviour: a rain-paused edge mow (2026-05-09 19:00
-ran 19h with two rain breaks) emits [1,0,2] partway through and keeps
-mowing afterwards. The authoritative session-end signal in the 3-element
-case is the next empty status `[]` event OR the integration's cloud-
-summary gate firing — whichever lands first. The probe sometimes misses
-the `[]` event (HA restart, probe truncation) in which case the HA
-archive's recorded `start` / `end` fields are the ground truth.
-
-The session-state machine uses task_state_code for begin_session /
-begin_leg / session-end transitions: 0→4→0 is a recharge round-trip;
-4→0 triggers begin_leg; prev∈{0,4} and new∈{2,None} means session ended.
-
-Confirmed g2408 sub-state values from 2026-04-29/30 corpus. Note: wire shape
-is a dict, not a bare int — a common decode trap for apk-decompiled code.
-
-**See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:80`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:56`
-
-### s2p57 — `robot_shutdown_trigger`
+### s2p56 — `robot_shutdown_trigger`
 
 Robot shutdown trigger. Apk subscribes at L181482-181512 and dispatches
 a 5-second-delay sequence culminating in a firmware shutdown or reboot.
@@ -894,6 +948,21 @@ HTTP GET → writes to LidarArchive under
 <config>/dreame_a2_mower/lidar/YYYY-MM-DD_<ts>_<md5>.pcd.
 Content-addressed by md5; re-tapping the same scan is a no-op.
 
+PULL-BASED ALTERNATIVE (2026-05-31): these exact objects are also listed by
+the OBJ routed action `s2.50 m='g' t='OBJ' d={type:'3dmap'}` → {out:[{d:
+{name:[<obj>,...]}}]}, newest-first. Confirmed identical: s99.20 announced
+04-19/04-20/05-10; the 3dmap list returned 04-20+05-10 (newest ~2; 04-19
+had aged out); fetching the 05-10 object yields a `# .PCD v0.7` point cloud
+(831 KB). So `3dmap` == the s99.20 LiDAR PCDs. The s99.20 MQTT push is the
+primary (free, rides the stream we already consume); the 3dmap OBJ list is
+a backfill option — limited retention (newest ~2) and via the 80001-flaky
+relay, so NOT a full archive. WIRED 2026-05-31: cloud_client.list_3dmap_objects()
++ coordinator._backfill_lidar_from_3dmap() run once per session from
+_refresh_cloud_state (after _apply_mapl), fetching any 3dmap object not already
+archived (dedup by object_name → no re-download) into the active map's
+LidarArchive. Relay 80001 leaves it unretried-this-cycle and the next refresh
+tries again; the live s99.20 push remains the primary source for new scans.
+
 **See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:125`, `docs/research/inventory/generated/g2408-canonical.md § Events`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 99 piid:20`
 
 ## Events
@@ -1184,16 +1253,16 @@ never reached.
 | o10 | upload_map | {m:'a', o:10} | APK-KNOWN |  |
 | o11 | suppress_fault | {m:'a', o:11} | WIRED |  |
 | o12 | lock_bot | {m:'a', o:12, d:{lock: 0|1}} | APK-KNOWN |  |
-| o15 | remote_setting | {m:'a', p:0, o:15, d:{c: 0|1} | {h: height*10}} | APK-KNOWN |  |
+| o15 | remote_setting | {m:'a', p:0, o:15, d:{c: 0|1} | {h: height*10}} | SEEN-UNDECODED |  |
 | o100 | global_mower | {m:'a', o:100, t:'TASK', area_id:N, region_id:[1], time:N, exe:T} | WIRED |  |
 | o101 | edge_mower | {m:'a', o:101, d:{edge:[[map_id, contour_id], ...]}, t:'TASK'} | WIRED |  |
 | o102 | zone_mower | {m:'a', o:102, d:{region:[zone_id, ...]}, t:'TASK'} | WIRED |  |
 | o103 | spot_mower | {m:'a', o:103, d:{area:[spot_id, ...]}, t:'TASK'} | WIRED |  |
 | o104 | plan_mower | {m:'a', o:104, d:{...}} | APK-KNOWN |  |
 | o105 | obstacle_mower | {m:'a', o:105, d:{...}} | APK-KNOWN |  |
-| o107 | start_cruise_point | {m:'a', o:107, d:{...}} | APK-KNOWN |  |
-| o108 | start_cruise_side | {m:'a', o:108, d:{...}} | APK-KNOWN |  |
-| o109 | start_clean_point | {m:'a', d:{o:109, status:false, exe:true}, t:'TASK'} (echo only) | WIRED |  |
+| o107 | start_cruise_point | ECHO s2p50 {o:107, exe:true, status:true, error:0, estimate_time:N, time:T, t:'TASK'}. SEND payload (point list + per-point settings) NOT captured — see open_questions. | SEEN-UNDECODED |  |
+| o108 | start_cruise_side | {m:'a', o:108, d:{...}} | DECODED-UNWIRED |  |
+| o109 | start_clean_point | SEND {m:'a', p:0, o:109, d:{point:[point_id]}} via routed_action; ECHO s2p50 {o:109, exe:true, status:true|false, [estimate_time, time]} | WIRED |  |
 | o110 | start_learning_map | {m:'a', o:110} | APK-KNOWN |  |
 | o200 | change_map | echo: {d:{exe:true, o:200, status:true}, t:'TASK'} | DECODED-UNWIRED |  |
 | o201 | exit_build_map | {m:'a', d:{o:201, status:true, error:0}, t:'TASK'} (echo) | WIRED |  |
@@ -1354,12 +1423,15 @@ sent while an active joystick session is running (between o:2 start
 and o:3 stop). Not a standalone configuration path — only valid in
 remote-control context.
 
-Never observed on g2408 wire; the integration does not implement
-joystick remote control.
+NOW OBSERVED on g2408 (2026-05-30): op=15 also appears as an s2p50 TASK
+envelope {exe:true, o:15, status:true} at the START of a manual/remote-control
+session — distinct from the apk's d:{c}/{h} remoteSetting adjust. It is the
+manual-drive START marker (see verification). The integration still does not
+implement joystick driving.
 
 **Open questions:**
 - Are c and h the only sub-parameters, or can other fields be passed?
-- Does the firmware accept o:15 outside an active joystick session?
+- Does op=15 reliably echo for every manual-drive start, or only sometimes (like other app-triggered ops)?
 
 **See also:** `apk: ioBroker.dreame/apk.md §Remote Control remoteSetting L175109`
 
@@ -1436,40 +1508,74 @@ observed on g2408 wire. Exact semantics and d-field unknown.
 
 ### o107 — `start_cruise_point`
 
-Patrol to a specific point. Apk-documented as startCruisePoint. Not
-observed on g2408 wire. Used by some Dreame robot models for autonomous
-patrol waypoint navigation.
+POINT PATROL (startCruisePoint) — the mower visits a user-placed list of
+map points in sequence. CONFIRMED on g2408 2026-06-03: a user-triggered
+double-point patrol emitted s2p50 op=107
+{error:0, estimate_time:155, exe:true, o:107, status:true, time:10664} at
+20:44:10, paired with s2p2=51 (patrol started, same as edge patrol) and
+s2p56 going []→[[3,0],[4,-1]] (the point queue — two entries for the two
+points; shape [point_id, state], state 0=active/-1=pending PRESUMED).
+Runs blades-up (s1p4 area stays 0) with valid position telemetry, like the
+edge patrol (o:108). estimate_time=155s for this 2-point route.
+Companion to o:108 (cruise along an edge / zone edge).
+
+NEGATIVE finding (capture limitation): the per-point app settings — Number
+of Patrol Cycles (1/2/3) and "Auto Capture & Upload Photos at Patrol Points"
+(on/off), set to point1=2cyc/ON, point2=1cyc/OFF this run — did NOT appear
+in any captured /status/ device uplink. The MQTT monitor only receives the
+device's /status/ topic (+ broker-permitted #); the app→device command
+carrying the point list + settings is not relayed to it. So with the
+current capture path, patrol settings are unobservable on the wire. Next
+candidate is the s4 eiid1 session-summary OSS object at patrol end.
 
 **Open questions:**
-- Does g2408 support patrol/cruise modes at all?
+- SEND payload shape of the op=107 command (point list + per-point cycles + auto-capture flags) is uncaptured — the broker doesn't relay the app→device downlink to the /status/ monitor. Capture via integration-side routed_action logging, or check whether settings land in the s4 eiid1 session-summary OSS object at patrol end.
+- s2p56 [[3,0],[4,-1]]: confirm point_id vs state field order and state vocab (0=active? -1=pending? 2=arrived as in o=109?) across more captures.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
 ### o108 — `start_cruise_side`
 
-Patrol along an edge. Apk-documented as startCruiseSide. Not observed
-on g2408 wire. Companion to o:107.
+PATROL along an edge (startCruiseSide). CONFIRMED on g2408 2026-05-30: a
+user-triggered Patrol of the zone-1 edge emitted s2p50 op=108
+{error:0, estimate_time:900, exe:true, o:108, status:true, t:'TASK'} at
+22:35:54, paired with s2p2=51 (patrol started) and s2p56=[[1,0,0]]. Runs
+blades-up (area=0) with valid s1p4 position telemetry. estimate_time=900s
+(15 min). Companion to o:107 (cruise to a point).
 
 **Open questions:**
-- Does g2408 support cruise-side mode?
+- Patrol session capture: the live map reportedly can't track the mower during patrol despite valid s1p4 — investigate the begin_session/render path. Patrol should be a first-class session_type (op=108 / s2p2=51, 0-area).
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
 ### o109 — `start_clean_point`
 
-"Go to clean point" command / task-start-failed echo. Apk-documents
-this as startCleanPoint (go to a designated cleaning point). On g2408
-it is observed exclusively as a status:false echo on s2p50 — indicating
-a task command was rejected because the mower was in a bad state
-(e.g. Positioning Failed, s2p2=71).
+"Go to clean point" = Head to Maintenance Point. Apk-documents this as
+startCleanPoint. SEND SHAPE CONFIRMED LIVE 2026-05-31:
+routed_action(109, {"point":[point_id]}) — a bare per-map cleanPoint id on
+the ACTIVE map — is accepted and the mower drives to the point. The d-key is
+the target TYPE ("point"), matching the per-op convention (102 region / 103
+area / 101 edge / 109 point); reusing spot's {area:[id]} with o=109 is
+REJECTED (status:false), so the key matters, not just the opcode.
 
-First observed 2026-04-20 19:34:20: the mower emitted o:109
-status:false (task rejected), immediately followed by o:-1 status:true
-(abort cleanup). The integration monitors for o:109 + status:false as
-the "task start failed" signal.
+Lifecycle on accept (per 2026-05-12 app capture + 2026-05-31 live):
+s2p50 {o:109, exe:true, status:true, error:0, estimate_time:N} → s2p56=[[id,0]]
+(started) → [[id,2]] (arrived) → s2p1=2 → s2p2=75 arrived_at_maintenance_point
+→ s1p52={}. Failure to reach → s2p2=76 "Cannot reach the maintenance point."
 
-Whether o:109 as a command (not echo) does anything useful on g2408
-is unknown.
+Echo can also be status:false = task rejected (mower in a bad state, e.g.
+Positioning Failed s2p2=71, or a wrong d-shape). First seen 2026-04-20
+19:34:20: o:109 status:false then o:-1 status:true (abort cleanup); the
+integration monitors o:109 + status:false as the "task start failed" signal.
+
+cleanPoints are PER-MAP (id is per-map; map 0 had ids 1,2 with type=6
+shapeType=5 path=[{x,y}], map 1 had none), so a per-map button must target
+the right map — set it active (op=200) first if it isn't, OR test whether
+{point:[[map_id, id]]} also works (untested; bare id sufficed on the active map).
+
+**Open questions:**
+- TRANSPORT is solved (2026-05-31, see verifications): routed_action → /device/sendCommand works; 80001 is a wake-up timeout fixable by retry. The ONLY remaining unknown is the op=109 d-SHAPE. Re-probe with probe_cruise_to_point.py --routed-byid --retries 5 from a clean idle dock and read the cloud reply: r:0 = shape accepted (mower should head to the point + echo s2p56=[[id,0]]); r<0 or an o:109 status:false echo = shape wrong.
+- d-shape LEAD: the s2p56 selector-id finding (2026-05-30) shows point-runs carry a stable per-target id as status[0][0] (corpus ids 2,1,1,2 == the map's two cleanPoints ids 1,2), so op=109's `d` likely references the point BY ID — `{point:[id]}` / `{area:[id]}`, same family as spot (o103 `{area:[id]}`) — not by coordinate. See docs/TODO.md 'Cruise-to-Point / Head-to-Maintenance-Point trigger (op=109)'.
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
@@ -1510,7 +1616,7 @@ publishes. The single inbound echo was minimal:
 `{exe:true, o:200, status:true}` — no map_id in payload.
 
 Phase 1 of multi-map (a92) subscribes to s1p50 as a MAPL-repoll
-trigger (in addition to mowing_started + 10-min CFG poll).
+trigger (in addition to mowing_started + 2-min cloud refresh).
 Outbound command shape still unknown; capture procedure: extend
 probe to log mqtt publishes, OR mitm-proxy the app's HTTPS
 traffic, then tap thumbnails and diff.
@@ -1727,16 +1833,24 @@ authoritative read path is CFG.CLS. Sample: 0 (off).
 ### CMS — `consumables_wear_meters`
 
 Consumables wear meters. Wear meters in minutes. Apk documents 3
-fields; g2408 has 4. Max-minutes: [6000, 30000, 3600, ?].
-blade_min/brush_min/robot_min confirmed vs app. CMS[3] semantic TBD
-— likely tied to Link Module (cellular connectivity, electronics that
-age — most plausible wear candidate), Garage, or Charging Station
-MCA10. User without any of those accessories will see CMS[3]=0 or -1.
-Confirmation needs a user with a Link Module to compare CMS[3] vs
-app-side fault/firmware indicator. Sample: [3084, 0, 0, -1].
+fields; g2408 has 4. Max-minutes: [6000, 30000, 3600, n/a].
+CMS[0..2] = blade_min / brush_min / robot_min — confirmed vs app
+(% + hours-left match the thresholds).
+CMS[3] semantic UNCONFIRMED — only ever seen as -1 on this unit. Do NOT
+assert a label: mower_tail.py's CONSUMABLE_SLOT_NAMES[3]="Link Module"
+is an unverified guess, NOT app-confirmed (the "Link Module=n/a" string
+seen in tail output is that guess, not the app). The app's consumables
+page actually carries three further items beyond the wear trio — Link
+Module (cellular SUBSCRIPTION, day-based: e.g. 904 days left, term
+2025-11-19→2028-11-19; NOT a minutes wear-meter), Garage (dock roof),
+and Charging Station MCA10 — so one CMS[3] slot cannot represent all
+three, and the "minutes" framing doesn't fit Link. -1 most plausibly
+means "accessory/feature absent" (this user has none of the three), but
+which one (or a presence summary) is unproven. Samples: [3084,0,0,-1],
+[495,3739,0,-1].
 
 **Open questions:**
-- CMS[3] semantic — Link Module, Garage, or MCA10? Needs user with Link Module.
+- CMS[3] semantic — does it track Link Module, Garage, MCA10, or a presence summary? Needs a unit that has one of those accessories (all -1 here). Note Link is a day-based subscription, not a minutes wear-meter, so a wear-meter interpretation of CMS[3] is suspect.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX CMS`
 
@@ -2352,20 +2466,20 @@ it detects rain conditions or on a periodic sync interval.
 | s1p1_b2_bit1 | lift | single bit | WIRED | bool (×1.0) |
 | s1p1_b3_bit7 | lift_lockout_pin_required | single bit | WIRED | bool (×1.0) |
 | s1p1_b4 | human_presence_detection | byte | WIRED | byte (×1.0) |
-| s1p1_b5 | undocumented | byte | SEEN-UNDECODED |  |
+| s1p1_b5 | offdock_event_flags | byte (sparse bitfield) | SEEN-UNDECODED |  |
 | s1p1_b6_bit3 | charging_paused_batt_temp_low | single bit | WIRED | bool (×1.0) |
 | s1p1_b7 | state_transition_marker | byte | WIRED | byte (×1.0) |
-| s1p1_b8 | undocumented | byte | SEEN-UNDECODED |  |
+| s1p1_b8 | sparse_context_flags | byte (sparse bitfield) | SEEN-UNDECODED |  |
 | s1p1_b9 | mow_start_pulse | byte | WIRED | byte (×1.0) |
 | s1p1_b10_bit1 | safety_alert_active | single bit | WIRED | bool (×1.0) |
 | s1p1_b10_bit7 | batt_temp_low_latched | single bit | WIRED | bool (×1.0) |
-| s1p1_b11_b12 | monotonic_counter | uint16_le (bytes [11-12]) | WIRED | count (×1.0) |
-| s1p1_b13 | undocumented | byte | SEEN-UNDECODED |  |
-| s1p1_b14 | startup_state_machine | byte | WIRED | byte (×1.0) |
-| s1p1_b15 | undocumented | byte | SEEN-UNDECODED |  |
-| s1p1_b16 | undocumented | byte | SEEN-UNDECODED |  |
+| s1p1_b11_b12 | battery_pct_and_charge_flag | byte[11]=battery; byte[12]=counter+flag (NOT a u16) | WIRED | % (×1.0) |
+| s1p1_b13 | locomotion_state_b13 | byte (state enum) | SEEN-UNDECODED | byte (×1.0) |
+| s1p1_b14 | locomotion_state | byte (state enum) | WIRED | byte (×1.0) |
+| s1p1_b15 | substate_b15 | byte (small enum / bitfield) | SEEN-UNDECODED | byte (×1.0) |
+| s1p1_b16 | constant_0x80 | byte (constant) | DECODED-UNWIRED |  |
 | s1p1_b17 | wifi_rssi_dbm | byte (signed int8) | WIRED | dBm (×1.0) |
-| s1p1_b18 | undocumented | byte | SEEN-UNDECODED |  |
+| s1p1_b18 | cellular_signal | byte (coarse cellular-signal metric) | SEEN-UNDECODED | raw (×1.0) |
 | s1p1_b19 | frame_delimiter_end | byte (likely 0xCE) | WIRED |  |
 
 ### s1p1_b0 — `frame_delimiter_start`
@@ -2435,14 +2549,21 @@ Single-event datapoint — reproduce before relying on it.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/heartbeat.py`, `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
-### s1p1_b5 — `undocumented`
+### s1p1_b5 — `offdock_event_flags`
 
-Observed on the wire (every heartbeat carries this byte) but not
-yet characterised. Contributors with reproducible test scenarios
-should file a finding linking the value range to a device event.
+Sparse off-dock event/error bitfield. 0x00 in 67,563/67,677 corpus
+heartbeats; nonzero ONLY while off-dock (charging=0), never docked.
+Observed bits (corpus 2026-05-31):
+  - bit 4 (0x10) — associates with error/pause: dominates state=4
+    ("Paused due to errors", 70/90 frames) and appears in state=2.
+  - bit 1 (0x02) — transient during mowing/returning (state 1/5).
+  - 0x12 = both bits together.
+decoded: partial — the bit→event mapping is correlational (no
+controlled trigger yet); bit 4 ≈ "error/pause active" is the
+strongest read.
 
 **Open questions:**
-- Determine value range and stationarity across mowing/idle/charging.
+- Trigger a controlled error-pause and confirm byte[5] bit4 sets; identify bit1's event.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
@@ -2474,14 +2595,21 @@ dataclass.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/heartbeat.py`, `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
-### s1p1_b8 — `undocumented`
+### s1p1_b8 — `sparse_context_flags`
 
-Observed on the wire (every heartbeat carries this byte) but not
-yet characterised. Contributors with reproducible test scenarios
-should file a finding linking the value range to a device event.
+Sparse context flag byte. 0x00 in 66,074/67,677 corpus heartbeats.
+Observed bits (corpus 2026-05-31):
+  - bit 0 (0x01) — appears predominantly DOCKED (state 13 charge-
+    complete: 881, state 6 charging: 317); a docked/settled context.
+  - bit 7 (0x80) — appears during MOWING (state 1: 207) and returning;
+    a motion/active context transient.
+  - 0x81 = both (only seen docked, state 13).
+decoded: partial — bit semantics are correlational only. NB: distinct
+from byte[4] (the confirmed 0x08 human-presence pulse) and byte[5]
+(off-dock error flags).
 
 **Open questions:**
-- Determine value range and stationarity across mowing/idle/charging.
+- Pin byte[8] bit0 (docked-context) and bit7 (mowing-context) to specific transitions.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
@@ -2537,58 +2665,108 @@ Wire mask: byte[10] & 0x80.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/heartbeat.py`, `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
-### s1p1_b11_b12 — `monotonic_counter`
+### s1p1_b11_b12 — `battery_pct_and_charge_flag`
 
-Monotonic counter, little-endian u16 spanning bytes [11-12].
-Increments with each heartbeat emission. Used by the integration
-to detect duplicate or out-of-order heartbeat deliveries. Decoded
-via struct.unpack_from("<H", data, 11).
+byte[11] = battery level + charge flag (corpus-decoded 2026-05-31,
+RETRACTS the prior "uint16_le monotonic counter [11-12]" reading):
+  - bits 0-6 (byte[11] & 0x7F) = battery percent. Matches s3p1
+    battery EXACTLY in 99.3% of 67,677 corpus heartbeats
+    (Pearson +0.9992). =100 docked-full (state 13), drains 100→low
+    while mowing, =14-15 when returning on low battery (state 5).
+  - bit 7 (byte[11] & 0x80) = "actively charging" flag. Tracks s3p2
+    charging==1 exactly (set 10124/10172 while charging; clear when
+    discharging or charge-complete). So 228 = 0x80|100 = charging at
+    100%, 222 = charging at 94%, etc.
 
-**See also:** `custom_components/dreame_a2_mower/protocol/heartbeat.py`, `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
+byte[12] is a SEPARATE field, NOT the high byte of a u16 with byte[11]:
+  - high nibble (byte[12] >> 4) = a 4-bit rolling heartbeat counter
+    (uniform 0-15, increments +1 per emission → consecutive byte
+    deltas cluster on +16/+32). This is the actual per-frame counter
+    the retracted reading was reaching for.
+  - low nibble (byte[12] & 0x0F) = a sub-flag, almost always 1 or 5
+    (differ by bit 2); meaning TBD.
 
-### s1p1_b13 — `undocumented`
+NOTE: heartbeat.py:74 still reads `struct.unpack_from("<H", data, 11)`
+as `counter` = battery | (byte[12]<<8). It changes every frame (byte[12]
+high nibble ticks) so dedup happens to work, but the field is
+semantically battery+counter, not a clean monotonic u16. Safe to leave
+the code; this entry corrects the understanding.
 
-Observed on the wire (every heartbeat carries this byte) but not
-yet characterised. Contributors with reproducible test scenarios
-should file a finding linking the value range to a device event.
+**See also:** `custom_components/dreame_a2_mower/protocol/heartbeat.py:74`, `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
+
+### s1p1_b13 — `locomotion_state_b13`
+
+Mode-correlated state byte; a likely companion to byte[14]
+locomotion_state. Corpus distribution (_s1p1.py, 66,083 frames /
+9 logs) by s2p1 mode:
+  - mode 13 (charge-done) → 255 (92%)
+  - mode 6 (docked) → 36 (59%) / 255 (35%)
+  - mode 1 (mowing) → 35 (95%)
+  - mode 5 (returning) → 40 (68%) / 255 (31%)
+  - mode 2 (idle) → 255 (60%) / 40 (19%) / 37 (13%)
+  - mode 11 (building) → spread 17-27 (19/20/24/25…)
+Not yet pinned to a clean enum, but clearly state-bearing rather
+than noise (19 corpus values, tightly mode-segregated).
 
 **Open questions:**
-- Determine value range and stationarity across mowing/idle/charging.
+- Characterise byte[13] jointly with byte[14] — are they a 16-bit field or two independent state bytes? Building mode's 17-27 spread suggests a per-phase counter during map-build.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
-### s1p1_b14 — `startup_state_machine`
+### s1p1_b14 — `locomotion_state`
 
-Startup state machine byte. Transitions through a fixed sequence
-during device boot: 0 → 64 → 68 → 4 → 5 → 7 → 135. Steady-state
-value after full boot is 135. Useful for detecting incomplete
-startup or firmware boot stall (e.g. mower stuck at 64 would
-indicate a boot-loop).
+Locomotion / activity-state byte (NOT a boot sequence — see
+2026-05-30 retraction). Corpus-correlated with the s2p1 mode over
+66,083 heartbeats across 9 logs:
+  - mode 6/13 (charging / charge-done, i.e. DOCKED) → 0 (95-97%)
+  - mode 1 (mowing) → 135 = 0x87 (95%); mode 11 (building) → 135 (86%)
+  - mode 5 (returning) → spread of 0x80-range values
+    (148/143/139/140/141/136…)
+  - mode 2 (idle off-dock) → 132/135/139/143 (0x80-range)
+  - undock transition → transient 64 → 68 → 4 → 5 → 7 before settling
+    to 135 once the mower is moving
+Reading: bit 7 (0x80) ≈ "off-dock / operating" (set in mowing,
+returning, idle; clear when docked=0 and during the early undock
+transients). The low bits look like an activity sub-state (mowing
+pins to 0x87; returning steps through several 0x8x values). The
+"0→64→68→4→5→7→135 sequence" the prior entry called a boot machine
+is actually the undock→operating transition — i.e. the reorient
+sub-state walk — and runs on EVERY undock, with docked steady-state
+0 (not 135).
 
 **Open questions:**
-- Are all 7 states observed on every cold boot, or is the sequence firmware-version dependent?
+- Enumerate the 0x80-range sub-states: does the low nibble during 'returning' (136/139/140/141/143/148) step monotonically through return phases, or is it a flag field? Capture a labelled return-to-dock.
+- byte[13] (undocumented, 19 corpus values) is ALSO mode-correlated (255 when docked/charge-done, 35 mowing, 40 returning, building-specific 17-27) — likely a companion state byte to [14]; characterise together.
+- Maintenance/fault sub-states extend the 0x80 range: a 2026-05-30 at-point maintenance (deliberate tilt + lid-open + PIN) drove byte[14] 132→164 (0xA4) while the tilt/PIN-lockout was asserted (s2p2=1 tilted, 23 emergency_stop, 73 top_cover_open), then back to 132 on PIN clear — so 164 = a tilted/locked-out at-point sub-state. Consistent with 'activity+condition state', not boot.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/heartbeat.py`, `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
-### s1p1_b15 — `undocumented`
+### s1p1_b15 — `substate_b15`
 
-Observed on the wire (every heartbeat carries this byte) but not
-yet characterised. Contributors with reproducible test scenarios
-should file a finding linking the value range to a device event.
+State/sub-phase byte — corpus-characterised (_s1p1.py, 66,140 frames /
+9 logs) but NOT cleanly pinned to an enum. Distribution by s2p1 mode:
+  - mode 13 (charge-done) → 0 (94%); mode 6 (docked) → 0 (59%) / 1 (31%)
+  - mode 1 (mowing) → 1 (46%) / 0 (41%) / 5 (6%) / 6 (3%)
+  - mode 5 (returning) → 0 (48%) / 54 (31%) / 1 (17%)
+  - mode 2 (idle) → 0 (67%) / 54 (23%)
+  - mode 11 (building) → 1 (58%) / 4 (28%) / 17 / 20
+Transition behaviour (raw undock frames): 0 docked → 54 at undock-onset
+→ 18 during the reorient → small values in steady state. The 17/18/20/54
+values (0x11/0x12/0x14/0x36) suggest a bitfield rather than a sequential
+enum; needs a labelled capture to separate the bits. State-bearing, not
+noise; sits alongside byte[13]/byte[14] as the s1p1 state block.
 
 **Open questions:**
-- Determine value range and stationarity across mowing/idle/charging.
+- Is byte[15] a bitfield? The {17,18,20,54}=0x11/0x12/0x14/0x36 values hint at bit combinations. Capture labelled idle/returning/reorient transitions to separate the bits, and check whether [13][14][15] form one multi-byte state block.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
-### s1p1_b16 — `undocumented`
+### s1p1_b16 — `constant_0x80`
 
-Observed on the wire (every heartbeat carries this byte) but not
-yet characterised. Contributors with reproducible test scenarios
-should file a finding linking the value range to a device event.
-
-**Open questions:**
-- Determine value range and stationarity across mowing/idle/charging.
+Constant 0x80 (128). Held 128 in ALL 67,677 corpus heartbeats
+(distinct value count = 1) across every state, charging mode, and
+session. Most likely a fixed framing/format byte or a hard-wired
+reserved flag, not a live signal. Corpus-checked 2026-05-31.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
@@ -2606,14 +2784,34 @@ just keeps tracking whatever the radio detects.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/heartbeat.py`, `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
-### s1p1_b18 — `undocumented`
+### s1p1_b18 — `cellular_signal`
 
-Observed on the wire (every heartbeat carries this byte) but not
-yet characterised. Contributors with reproducible test scenarios
-should file a finding linking the value range to a device event.
+Cellular (LTE) signal strength — a SEPARATE radio from byte[17] WiFi
+RSSI, with its own 4-bar gauge in the Dreame app (the g2408 has an LTE
+modem; cellular is independent of WiFi). User-identified + live-confirmed
+2026-05-31.
+
+Evidence it is cellular (not WiFi):
+  - INDEPENDENCE / stability: byte[18] changes in only 2.2% of frame-to-
+    frame steps (6 distinct values / 67,714 frames) vs byte[17] WiFi RSSI
+    at 62.1% (44 distinct) — 28× more stable, matching "cellular
+    fluctuates much less than WiFi" (user).
+  - LIVE LOCKSTEP: on 2026-05-31 13:20, while the app's cellular gauge
+    read 1 of 4 bars (poor, back-yard), byte[18] held flat at 186 across
+    consecutive heartbeats while byte[17] WiFi jittered (−67/−68 dBm).
+    So the dominant value 186 == the current ~1-bar reading.
+  - Distribution: 186 (90.7%), 196 (9.2%, more common off-dock: 5849 vs
+    316 docked), rare 180/203; positive 126/127 appear ONLY docked — a
+    no-signal / N/A sentinel.
+
+UNIT UNCERTAIN: a naive signed-int8 read makes 186 = −70 dBm, but −70 dBm
+is normally *decent* cellular yet the gauge shows 1/4 bars — so either the
+modem's bar thresholds are conservative or byte[18] is a raw / RSRP-style
+scale, not plain dBm. The byte↔bars mapping is the empirical anchor; the
+physical unit is not yet pinned.
 
 **Open questions:**
-- Determine value range and stationarity across mowing/idle/charging.
+- Pin the byte→bars thresholds (and the physical unit) by sampling byte[18] at each of the 4 app bar-levels — e.g. move the mower/dock through good→poor cellular spots and record byte[18] at each bar count.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
@@ -3388,9 +3586,20 @@ slot semantics (4 from MSG_ALERT + 4 from VOICE) wire-confirmed
 
 | id | name | shape | status | unit |
 |----|------|-------|--------|------|
+| s2p2_0 | BUMPER_HANGING |  | WIRED |  |
+| s2p2_1 | ROBOT_TILTED |  | WIRED |  |
+| s2p2_2 | ROBOT_TRAPPED |  | WIRED |  |
+| s2p2_4 | LEFT_DRIVE_WHEEL_ERROR |  | WIRED |  |
+| s2p2_5 | RIGHT_DRIVE_WHEEL_ERROR |  | WIRED |  |
+| s2p2_9 | ROBOT_LIFTED |  | WIRED |  |
+| s2p2_23 | LIFT_LOCKOUT_PIN_REQUIRED |  | WIRED |  |
+| s2p2_24 | BATTERY_LOW |  | WIRED |  |
 | s2p2_27 | IDLE |  | WIRED |  |
+| s2p2_28 | BLADES_SEVERELY_WORN |  | WIRED |  |
+| s2p2_30 | MAINTENANCE_REMINDER |  | WIRED |  |
 | s2p2_31 | FAILED_TO_RETURN_TO_STATION |  | WIRED |  |
 | s2p2_33 | FAILURE_TRANSITION |  | WIRED |  |
+| s2p2_36 | FAILED_TO_START_TASK |  | WIRED |  |
 | s2p2_37 | RIGHT_MAGNET |  | WIRED |  |
 | s2p2_38 | FLOW_ERROR |  | WIRED |  |
 | s2p2_39 | INFRARED_FAULT |  | WIRED |  |
@@ -3404,7 +3613,7 @@ slot semantics (4 from MSG_ALERT + 4 from VOICE) wire-confirmed
 | s2p2_48 | MOWING_COMPLETE |  | WIRED |  |
 | s2p2_49 | LDS_BUMPER |  | WIRED |  |
 | s2p2_50 | SESSION_STARTING_MANUAL |  | WIRED |  |
-| s2p2_51 | FILTER_BLOCKED |  | WIRED |  |
+| s2p2_51 | PATROL_STARTED |  | WIRED |  |
 | s2p2_53 | SESSION_STARTING_SCHEDULED |  | WIRED |  |
 | s2p2_54 | RETURNING |  | WIRED |  |
 | s2p2_56 | RAIN_PROTECTION |  | WIRED |  |
@@ -3414,7 +3623,7 @@ slot semantics (4 from MSG_ALERT + 4 from VOICE) wire-confirmed
 | s2p2_60 | FROST_SUPPRESSED_SCHEDULED |  | WIRED |  |
 | s2p2_61 | ROUTE_FAULT |  | WIRED |  |
 | s2p2_62 | ROUTE_2 |  | WIRED |  |
-| s2p2_63 | BLOCKED_2 |  | WIRED |  |
+| s2p2_63 | SCHEDULED_TASK_CANCELLED_BUSY |  | WIRED |  |
 | s2p2_64 | BLOCKED_3 |  | WIRED |  |
 | s2p2_65 | RESTRICTED |  | WIRED |  |
 | s2p2_66 | RESTRICTED_2 |  | WIRED |  |
@@ -3422,9 +3631,100 @@ slot semantics (4 from MSG_ALERT + 4 from VOICE) wire-confirmed
 | s2p2_70 | MOWING |  | WIRED |  |
 | s2p2_71 | POSITIONING_FAILED_OR_AUTO_RECOVER |  | WIRED |  |
 | s2p2_73 | TOP_COVER_OPEN |  | WIRED |  |
+| s2p2_74 | PATROL_ENDED |  | WIRED |  |
 | s2p2_75 | ARRIVED_AT_MAINTENANCE_POINT |  | WIRED |  |
+| s2p2_76 | CANNOT_REACH_MAINTENANCE_POINT |  | WIRED |  |
 | s2p2_78 | ROBOT_IN_HIDDEN_ZONE |  | WIRED |  |
 | s2p2_117 | STATION_DISCONNECTED |  | WIRED |  |
+
+### s2p2_0 — `BUMPER_HANGING`
+
+Bumper / hanging — s2p2 echo of the s1p1 bumper bit. The 2026-04-30
+19:37:13 controlled-safety test shows s2p2 transitioning 1→0 at the
+exact moment the HB bumper bit was SET. Corpus has only 6
+transitions-to-0, indicating this is an event code, NOT the resting
+idle baseline.
+
+Status is partial because it is ambiguous whether 0 also marks the
+post-event return-to-idle: only 6 corpus transitions-to-0 exist and
+they may include both bumper-event arrivals and generic clear-to-0
+recoveries. Disambiguation requires targeted captures with known
+bumper presses.
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
+### s2p2_1 — `ROBOT_TILTED`
+
+Robot tilted — s2p2 echo of the s1p1 drop/tilt bit. Confirmed by the
+2026-04-30 19:37:05 controlled-safety test: s2p2 transitioned 48→1 at
+the exact moment the HB drop/tilt bit was SET. Also present in the
+probe corpus (probe_log_20260514_211550.jsonl).
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
+### s2p2_2 — `ROBOT_TRAPPED`
+
+Robot trapped — mower is stuck and cannot self-recover. User-confirmed
+app notification text 2026-05-30. Present in the probe corpus
+(probe_log_20260520_131350.jsonl).
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
+### s2p2_4 — `LEFT_DRIVE_WHEEL_ERROR`
+
+Left drive wheel error — the left drive wheel cannot turn / is slipping
+(observed 2026-05-30: left wheel spinning on a ledge during a stuck
+patrol). User-confirmed app text "Left drive wheel error. Tap to view the
+solution." Co-incident with a pause/end (s2p1=4 Paused, s2p56=[[1,0,4]])
+and present in the s4 eiid1 arg13 fault timeline. apk FaultIndex had 4
+unmapped / vacuum-derived; this is the real g2408 meaning. Symmetric
+sibling of 5 (right drive wheel).
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
+### s2p2_5 — `RIGHT_DRIVE_WHEEL_ERROR`
+
+Right drive wheel error — the right drive wheel cannot turn / is
+slipping. First wire occurrence 2026-06-01 (probe_log_20260520_131350;
+the value's first appearance corpus-wide, re-asserted 3× as the property
+re-published). Corresponds to the app notification "Right drive wheel
+error" (text user-confirmed; also downloadable via cloud
+device-messages/v2). Symmetric sibling of 4 (left drive wheel); apk
+FaultIndex had 5 unmapped / vacuum-derived — this is the real g2408
+meaning.
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
+### s2p2_9 — `ROBOT_LIFTED`
+
+Robot lifted — s2p2 echo of the s1p1 lift bit. Confirmed by the
+2026-04-30 19:37:57 controlled-safety test: s2p2 transitioned 0→9 at
+the exact moment the HB lift bit was SET. Also present in the probe
+corpus (probe_log_20260419_130434.jsonl).
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
+### s2p2_23 — `LIFT_LOCKOUT_PIN_REQUIRED`
+
+Lift lockout / PIN required (emergency stop) — s2p2 echo of the s1p1
+emergency-stop/PIN bit. Confirmed by the 2026-04-30 19:39:35 controlled-
+safety test: s2p2 transitioned 9→23 at the exact moment the HB PIN-
+required bit was SET. Also present in the probe corpus
+(probe_log_20260514_211550.jsonl).
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
+### s2p2_24 — `BATTERY_LOW`
+
+Battery low — apk FaultIndex BATTERY_LOW. NOT observed on the g2408
+wire (0 corpus hits across all 9 probe logs). Kept pending resolution
+of the 24-vs-54 relationship: s2p2=54 is the confirmed low-battery
+returning code; it is unclear whether 24 is a distinct low-battery
+WARNING threshold (distinct from 54 = low-battery RETURNING) or
+simply the vacuum FaultIndex label for the same event on a different
+device model.
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
 ### s2p2_27 — `IDLE`
 
@@ -3433,6 +3733,30 @@ task. Also observed transiently (emitted twice in one second) during
 BT-to-cloud session hand-off windows, so it is not literal "idle" at
 every occurrence. A runtime value of 27 may be a brief in-between
 marker during session transitions; correlate with s2p1 to confirm.
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
+### s2p2_28 — `BLADES_SEVERELY_WORN`
+
+Blades severely worn — cloud wear%-gated push. Cloud device-messages/v2
+maps this to "Blades are severely worn. Replace them soon." The cloud
+only emits the push when blade wear% justifies (server-side gate);
+integrations must NOT key blades_worn off s2p2=28 wire transitions
+alone — relay only what the cloud actually pushes. Wire-present but
+timing is cloud-gated (fires while docked in the worn-blade window,
+not on every undock as previously hypothesized; see 2026-05-30
+retraction in the s2p2 property verifications).
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
+### s2p2_30 — `MAINTENANCE_REMINDER`
+
+Maintenance reminder — cloud-gated push for "Robot maintenance time
+reached. Maintain the robot soon." Fires at task-start when
+robot-maintenance% is at ~10% remaining (same-second as s2p2=50).
+Cloud gate is server-side; fires on every mow in the maintenance
+window until the user acknowledges. Confirmed 2026-05-26 controlled
+blade-reset experiment.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
 
@@ -3456,6 +3780,23 @@ Failure transition — fires at the moment a task fails (positioning,
 task-start, return). Precedes s2p1→2 (IDLE) and s2p2=31 by ~1 s.
 The combined 33→31 pair is one of two paths into code 31; the other
 is direct 48→31 after an edge-mow auto-dock failure.
+
+Drives positioning state: as of 2026-05-30 the state machine sets
+positioning_health = STUCK (+ location OUTSIDE_KNOWN_AREA) on s2p2=33 —
+the real positioning/off-dock-relocate failure signal (e.g. the 12:32
+relocate-fail → s2p1=4 Paused). Cleared back to LOCALIZED on a mowing
+resume (s2p1=1). This replaced the old, never-firing 71+31 combination
+(71 and 31/33 do not co-occur). 33 itself is orthogonal to 71/31:
+33 = "positioning failed", 31 = "failed to return", 71 = "standby return".
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py; mower/state_machine.py § _apply_s2p2_event`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
+### s2p2_36 — `FAILED_TO_START_TASK`
+
+Failed to start task — cloud device-messages/v2 maps this to "Failed
+to start the task. Please retry." Fires in the 2026-05-25 12:32
+off-dock-failure burst (alongside 20/33). Cloud-verified 2026-05-26.
+Also probe corpus (probe_log_20260419_130434.jsonl).
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
 
@@ -3534,10 +3875,10 @@ DreameMowerErrorCode catalog. Not observed in our probe corpus.
 
 ### s2p2_47 — `TASK_CANCELLED`
 
-Scheduled task cancelled (status, not error). Lifted from
-apk-decompiled DreameMowerErrorCode catalog. Not observed in our
-probe corpus on the g2408 (manual cancels use code 48 + s2p50
-op-code 3 instead).
+Scheduled task cancelled (status, not error). mova-community label;
+not g2408 wire/cloud-confirmed. Not observed in our probe corpus on
+the g2408 (manual cancels use code 48 + s2p50 op-code 3 instead;
+scheduled-task-cancelled-while-busy uses code 63).
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
@@ -3570,10 +3911,13 @@ status code rather than a fault.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
 
-### s2p2_51 — `FILTER_BLOCKED`
+### s2p2_51 — `PATROL_STARTED`
 
-Filter blocked — maintenance required. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+PATROL STARTED. Observed 2026-05-30 22:35:11 the instant the user triggered
+a Patrol (edge of zone 1) from the app — fired with s2p56=[] just before
+s2p1→1 + s2p50 op=108 (cruise-side). The apk "FILTER_BLOCKED" name is
+vacuum-derived and WRONG for g2408 (g2408 has no filter). This capture also
+resolves the long-blocked "Patrol Logs: no known trigger" item.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
@@ -3655,10 +3999,15 @@ DreameMowerErrorCode catalog. Not observed in our probe corpus.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
-### s2p2_63 — `BLOCKED_2`
+### s2p2_63 — `SCHEDULED_TASK_CANCELLED_BUSY`
 
-Obstacle blocking (variant 2). Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+Scheduled task cancelled — robot working (busy). Cloud device-messages/v2
+maps this to "Robot is working. Scheduled task cancelled." Fires when
+the firmware cancels an incoming scheduled task because the robot is
+already active. Wire-confirmed (9 corpus hits in probe corpus).
+Previously misidentified as "Obstacle blocking (variant 2)" from the
+apk FaultIndex — that was the vacuum-lineage label; the g2408 wire +
+cloud confirm the real meaning.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
@@ -3716,10 +4065,22 @@ means self-recovery succeeded.
 
 ### s2p2_73 — `TOP_COVER_OPEN`
 
-Top cover open — mechanical fault. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+Top cover open — mechanical fault. Fires when the top cover is lifted
+while the robot is running. Wire-confirmed: 51 corpus hits across the
+probe logs; confirmed 2026-04-30 (cover opened during PIN entry).
+Drives binary_sensor.top_cover_open in the integration. Previously
+marked hypothesized from the apk catalog only — the corpus and the
+2026-04-30 controlled test confirm this is the correct g2408 meaning.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
+
+### s2p2_74 — `PATROL_ENDED`
+
+Patrol ended / cancelled. Fires when a Patrol (edge cruise) session
+ends — either on completion or user cancel. Present in the probe
+corpus and verified 2026-05-30.
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
 
 ### s2p2_75 — `ARRIVED_AT_MAINTENANCE_POINT`
 
@@ -3731,6 +4092,21 @@ followed by s1p52={}. No event_occured summary for Head-to-MP tasks.
 Note: §8.3 apk catalog lists code 75 as "LOW_BATTERY_TURN_OFF";
 the wire-confirmed §4.1 semantics (arrived at MP) take precedence
 for the g2408 model.
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
+### s2p2_76 — `CANNOT_REACH_MAINTENANCE_POINT`
+
+Cannot reach maintenance point — task ended (give-up + return). Fires
+once at the give-up moment when a head-to-maintenance-point move cannot
+complete. Followed by s2p1→5 (auto-return to dock). Contrast with code
+75 (arrived at maintenance point successfully), which is followed by
+s2p1→2 (IDLE) and the mower stays at the point.
+
+Wire context, probe_log_20260520 @ 2026-05-30 16:51:41: mower
+stalled at obstruction, s2p1→2 (idle) at 16:51:40, s2p2=76 +
+s1p52={} at 16:51:41, s2p1→5 (returning) at 16:51:42. User-confirmed
+app notification "Cannot reach the maintenance point. Task ended."
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
 
@@ -4047,9 +4423,11 @@ to within rounding.
 
 | id | name | shape | status | unit |
 |----|------|-------|--------|------|
-| event_s4eiid1_arg1 | event_arg_flag | int (always 100) | SEEN-UNDECODED |  |
+| archive_cloud_track | verbatim_cloud_track | [ [[x_m, y_m], ...], ... ] | WIRED | m |
+| archive_track | per_point_track_stream | [{t: float, x_m: float, y_m: float, area_m2: float, heading_deg: float|null, task_state: int, role: str}, ...] | WIRED |  |
+| event_s4eiid1_arg1 | mode_op | int (mode/op enum) | DECODED-UNWIRED |  |
 | event_s4eiid1_arg11 | event_arg11 | int (0 or 1) | SEEN-UNDECODED |  |
-| event_s4eiid1_arg13 | event_arg13_list | [] (always empty) | SEEN-UNDECODED |  |
+| event_s4eiid1_arg13 | fault_event_timeline | list of [unix_ts, s2p2_code] | DECODED-UNWIRED |  |
 | event_s4eiid1_arg14 | total_lawn_area_m2 | int (m² rounded) | WIRED | m² (×1.0) |
 | event_s4eiid1_arg15 | event_arg15 | int (always 0) | SEEN-UNDECODED |  |
 | event_s4eiid1_arg2 | end_code | int (enum) | SEEN-UNDECODED |  |
@@ -4059,9 +4437,12 @@ to within rounding.
 | event_s4eiid1_arg8 | session_start_unix | unix_seconds (int) | WIRED | ISO8601 local (×1.0) |
 | event_s4eiid1_arg9 | session_summary_oss_object_key | string (OSS object key path) | WIRED |  |
 | summary_areas | area_mowed_m2 | float (m²) | WIRED | m² (×1.0) |
+| summary_complete_count | completed_target_count | int | UNCLASSIFIED |  |
 | summary_dock | dock_pose | [x_cm, y_cm, heading_deg] | WIRED | m (×0.01) |
+| summary_edge_status | edge_status | list[[int, int, int]]; presence-gated on mode 101 only | SEEN-UNDECODED |  |
 | summary_end | session_end_unix | unix_seconds (int) | WIRED | ISO8601 local (×1.0) |
 | summary_faults | faults | [] (empty on normal completion) | UNCLASSIFIED |  |
+| summary_human_detected | human_detected_count | int | UNCLASSIFIED |  |
 | summary_legs_meta | legs_meta | [{role: str, start_ts: int, end_ts: int}, ...] | WIRED |  |
 | summary_map_area | total_lawn_area_m2 | int (m²) | WIRED | m² (×1.0) |
 | summary_map_list | map_list | [{id, type, name, area, etime, time, data:[[x,y]...], track:[...]}, ...] | WIRED |  |
@@ -4069,22 +4450,84 @@ to within rounding.
 | summary_md5 | content_md5 | hex string (MD5) | WIRED |  |
 | summary_mode | mode | int (enum) | WIRED |  |
 | summary_obstacle | obstacle_list | [{id, type, data:[[x_cm, y_mm]...]}, ...] | WIRED |  |
+| summary_photo_detected | photo_detected_flag | int (0/1) | UNCLASSIFIED |  |
+| summary_photo_list | auto_capture_photo_list | [str, ...]  # bare leaf filenames, e.g. "1780512275.jpg" | UNCLASSIFIED |  |
+| summary_point | patrol_point_route | [{id:int, param:{}, point:[x_cm, y_cm, ?], time:int_s, type:int}, ...] | UNCLASSIFIED |  |
+| summary_point_status | patrol_point_status | [[point_id, stage], ...] | UNCLASSIFIED |  |
 | summary_pre_type | pre_type | int | UNCLASSIFIED |  |
+| summary_pref | global_pref | [int, int] | UNCLASSIFIED |  |
+| summary_recognition | recognition_flag | int | UNCLASSIFIED |  |
 | summary_region_status | region_status | [[zone_id, status], ...] | UNCLASSIFIED |  |
 | summary_result | result | int | WIRED |  |
+| summary_spot_track | spot_track | list[[x_cm, y_cm]]; sentinel [2147483647, 2147483647] marks track breaks | DECODED-UNWIRED |  |
 | summary_start | session_start_unix | unix_seconds (int) | WIRED | ISO8601 local (×1.0) |
 | summary_start_mode | start_mode | int | UNCLASSIFIED |  |
 | summary_stop_reason | stop_reason | int | WIRED |  |
 | summary_time | duration_minutes | int (minutes) | WIRED |  |
-| summary_trajectory | trajectory_list | [{id:[int, int], data:[[x, y]...]}, ...] | UNCLASSIFIED |  |
+| summary_track_break_positions | track_break_marker_positions | list of [2147483647, 2147483647] rows interleaved with [x_cm, y_cm] rows | DECODED-UNWIRED |  |
+| summary_trajectory | trajectory_list | [{id:[int, ...], data:[[x_cm, y_cm]...], track:[[x_cm, y_cm] | TRACK_BREAK_MARKER, ...]}, ...] | DECODED-UNWIRED |  |
 
-### event_s4eiid1_arg1 — `event_arg_flag`
+### archive_cloud_track — `verbatim_cloud_track`
 
-Constant flag in every captured event_occured siid=4 eiid=1. Value always 100
-across six captures. Likely a protocol version marker or a fixed flag byte.
+Integration-authored archive field (not from the cloud wire directly).
+Stores the cloud session-summary track segments verbatim after the OSS
+fetch in coordinator/_lidar_oss.py:_inject_live_map_into_raw_dict.
+The outer list is segments (split by the max-int sentinel in the raw
+cloud track); each segment is a list of [x_m, y_m] pairs.
 
-**Open questions:**
-- Does piid=1 ever differ from 100? May encode firmware version or event schema.
+The cloud wire shape (map[].track) is UNCHANGED — this field is just
+the parsed + converted form stored inside the archive so the classifier
+can re-run without a second OSS fetch.
+
+Stored for reference only — NOT used to classify roles. A cloud-coverage
+"rescue" (upgrade traversal→mowing when near the cloud path) was tried
+and removed 2026-05-28: on a full-lawn mow the cloud's blades-down
+segments blanket the lawn, so a cross-area traversal driving over
+already-mowed grass sits on the cloud path and gets falsely greened.
+Area-delta is the sole role authority. Do not re-add cloud-rescue.
+
+No longer surfaced to the dashboard as a separate entity attribute;
+the card reads legs_timeline derived from the `track` stream instead.
+
+**See also:** `custom_components/dreame_a2_mower/coordinator/_lidar_oss.py`, `custom_components/dreame_a2_mower/inventory.yaml § summary_map_track`
+
+### archive_track — `per_point_track_stream`
+
+Integration-authored archive field (not from the cloud).
+Per-s1p4-point time-coded track stream written to every session archive
+by coordinator/_lidar_oss.py:_inject_live_map_into_raw_dict since the
+2026-05-28 session-replay rewrite.
+
+Each row is a TrackPoint dict serialized from live_map.LiveMapState:
+  t             — unix seconds (ms precision), from s1p4 arrival
+  x_m, y_m     — cloud-frame metres, charger-relative
+  area_m2       — cumulative mowed area from the same s1p4 push
+  heading_deg   — mower heading from s1p4 if decoded, else null
+  task_state    — latest s2p1 value at this point (diagnostic only)
+  role          — "mowing" | "traversal"; set by area-delta at
+                  append (area grew → mowing, flat → traversal) and
+                  only SMOOTHED at finalize (lone stutters flipped).
+                  Area-delta is the sole authority; no cloud-rescue.
+                  The archived role is final.
+
+Replaces: _local_legs, _legs_meta, _mowing_legs, _traversal_legs
+(removed in the 2026-05-28 rewrite).
+
+This is an integration storage artefact, not a cloud wire surface.
+Versioned as load-bearing: coord._session.py and session_card.py
+read it; entity sensor.dreame_a2_mower_picked_session surfaces
+track_first_ts, track_last_ts, legs_timeline, distance_mowing_m,
+distance_traversal_m all derived from this field.
+
+**See also:** `custom_components/dreame_a2_mower/coordinator/_lidar_oss.py`
+
+### event_s4eiid1_arg1 — `mode_op`
+
+The session's mode/op — same enum as summary.mode / the s2p50 TASK op:
+100=all_areas, 101=edge, 102=zone, 103=spot, 108=patrol (cruise-side).
+NOT a constant. The earlier "always 100 across six captures" reading was a
+sampling artifact — all six were all-area mows (op 100). Disproved
+2026-05-30 by a Patrol whose event carried piid=1 = 108.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Events`
 
@@ -4097,10 +4540,13 @@ Binary flag. Observed values: 0 and 1 across six captures. Semantics unknown.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Events`
 
-### event_s4eiid1_arg13 — `event_arg13_list`
+### event_s4eiid1_arg13 — `fault_event_timeline`
 
-Always an empty list across all captures. Purpose unknown — possibly a
-placeholder for a future extension or fault-code list.
+Per-session FAULT/EVENT timeline: a list of [unix_ts, s2p2_code] pairs for
+the faults/interventions during the session. Empty on a clean run (which is
+why all prior captures showed []). Decoded 2026-05-30 on a stuck patrol:
+[[…,2],[…,23],[…,4],[…,23],[…,23]] = trapped(2) → lift(23) → pause(4) →
+lift(23) → lift(23), each timestamp matching the wire s2p2 transitions.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Events`
 
@@ -4190,12 +4636,42 @@ to within recharge-leg-transit overhead.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/session_summary.py`, `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
+### summary_complete_count — `completed_target_count`
+
+Number of targets completed in the session. =2 on the double-point patrol
+(2 points), None/absent on a single-target all-area mow. It counts POINTS
+(targets), NOT cycles — the user set 2+1 cycles but complete_count=2. Maps
+to s4 eiid1 piid2 (=2 same run).
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
+
 ### summary_dock — `dock_pose`
 
 Dock coordinates and heading in mower frame. x, y in cm; heading in degrees.
 Used by the live-map overlay to position the dock icon.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/session_summary.py`, `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
+
+### summary_edge_status — `edge_status`
+
+Diagnostic enum present only in edge-mode (mode 101) session summaries.
+Three observed edge mows (2026-05-16, 2026-05-17, 2026-05-23) all
+carry the IDENTICAL value [[1, 0, 2]] despite very different durations
+(13/15/27 min) and obstacle counts (4/4/13). No variance to decode the
+individual columns further.
+
+Likely a one-row [task_type, sub_state, terminal_result] tuple based
+on the trailing 2 matching the session's `result: 1` mod 2 pattern,
+but that's speculation.
+
+Integration ignores this field — there is no derived entity surface
+for it. Filed for future researchers if more edge mows ever produce
+a different value (would indicate non-success edge cases worth
+decoding).
+
+**Open questions:**
+- Does an interrupted / faulted edge mow produce a different edge_status row?
+- Why does this field exist only for edge — what does it tell the cloud that result/stop_reason don't already?
 
 ### summary_end — `session_end_unix`
 
@@ -4210,6 +4686,14 @@ Not yet decoded from a faulted-session capture.
 
 **Open questions:**
 - What fault objects look like? Capture during an actual fault event.
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
+
+### summary_human_detected — `human_detected_count`
+
+Count/flag of human detections during the session (=0 on the patrol). Likely
+the AI human-detection counter; may align with s4 eiid1 piid11 (=0 same run).
+Single sample — semantics presumed, not confirmed.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
@@ -4250,6 +4734,13 @@ description sub-object instead of track.
 Mow path as [x, y] pairs in cm. Max-int sentinel [2147483647, 2147483647]
 marks segment breaks (e.g. between mowing legs separated by a dock-recharge).
 Used by LiveMapState to draw completed track segments on the camera overlay.
+
+As of the 2026-05-28 session-replay rewrite: the cloud wire shape is
+UNCHANGED (parse_session_summary still yields track_segments). The
+integration now stores the parsed cloud track verbatim under `cloud_track`
+in the session archive and no longer surfaces the parsed track_segments to
+the dashboard via a separate `_summary_trail_legs` path — the JS replay
+card derives its trail entirely from the per-point `track` stream instead.
 
 **Open questions:**
 - Legacy live_map.py:20 defined PATH_DEDUPE_METRES = 0.2 m and skipped appending a path point if it was within 0.2 m of the last point (live_map.py:135-162), preventing micro-segment noise in the live trail. The greenfield dropped this deduplication during the rewrite. Re-evaluate during axis 4: does the session-summary track data contain enough micro-segments to warrant client-side deduplication when rendering, or is the firmware already deduping before archiving?
@@ -4296,11 +4787,12 @@ is a no-op.
 
 ### summary_mode — `mode`
 
-Session mode code. Value 100 observed on all captured sessions. Enum not
-fully decoded.
-
-**Open questions:**
-- Does mode distinguish all-areas vs zone vs spot vs edge sessions?
+Session mode code = the mow-type op: 100=all_areas, 101=edge, 102=zone,
+103=spot, 107=patrol_point (cruise-point), 108=patrol (cruise-side / edge).
+Identical to the s2p50 TASK op (100/101/102/103/107/108). This is the
+RELIABLE per-session mow-type record — firmware-produced and present in the
+OSS summary even for scheduled mows whose s2p50 op never echoed on MQTT.
+Distinct from MowerState.action_mode (user dropdown intent, not a record).
 
 **See also:** `custom_components/dreame_a2_mower/protocol/session_summary.py`, `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
@@ -4312,9 +4804,84 @@ the camera map overlay as obstacle polygons via LiveMapState.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/session_summary.py`, `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
+### summary_photo_detected — `photo_detected_flag`
+
+Whether the session captured any auto-capture photo. =1 on the patrol that
+took 3 photos. Aligns with s4 eiid1 piid10 (=1 same run) — partial cross-walk
+(single sample; needs a photo_detected=0 session to confirm piid10 mapping).
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
+
+### summary_photo_list — `auto_capture_photo_list`
+
+Auto-Capture patrol photo references. List of bare leaf filenames (no path)
+whose stems are UNIX-second timestamps in UTC (1780512275 = 2026-06-03
+18:44:35Z = 20:44:35 local). This is THE photo surface for the mower — prior
+photo hunts only checked the always-empty ai_obstacle[] and never found this
+field. Photo timestamps fall inside the auto-capture-ON point's in-place
+rotation window, so they double as the per-point auto-capture evidence.
+
+The photo BYTES are not yet retrievable: the filenames carry no path and are
+NOT relative to the summary object — both getDownloadUrl and
+getOss1dDownloadUrl return OSS NoSuchKey for the bare leaf, the did-prefixed
+leaf, the no-extension leaf, and the summary-naming-mirror leaf in the
+summary's own Aliyun directory (ruled out 2026-06-03). The leaf IS accepted
+by the separate 479D Xiaomi-FDS bucket (signed URL host
+awsde0.fds.api.xiaomi.com, key oss/479D/<uid>/<did>/<leaf>) but Object Not
+Found at the subpaths tried. No list endpoint exists (aiphoto/list,
+obstacle/photo/list, iotuserdata/aiObstacle/list all 404). Exact FDS subpath
+needs app-capture or APK analysis. See o107 + project_g2408_ai_photo_probe.
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
+
+### summary_point — `patrol_point_route`
+
+PATROL point route (present on mode=107 point-patrol summaries). One entry
+per user-placed patrol point, in route order. Fields: id = per-map point id
+(matches the s2p56 queue ids and point_status); point = [x_cm, y_cm, k] map
+coords (k=2 observed; third element undecoded); time = the per-point dwell
+budget in seconds (60 observed = the app's "1 min" per point); type = point
+type (2 observed); param = a nested dict that is EMPTY {} in the only capture
+— the requested per-point settings (Number of Patrol Cycles, Auto-Capture)
+are NOT stored here. Those settings are command-only and unobservable on
+every reachable surface; they are reconstructable from telemetry instead
+(cycles = count of in-place ~360° rotations at the point; auto-capture =
+whether photo_list timestamps fall in that point's dwell window). See o107.
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
+
+### summary_point_status — `patrol_point_status`
+
+Final per-point completion state on a mode=107 patrol. Same [id, stage]
+shape and vocab as the live s2p56 queue (stage 2 = arrived/done). NB the
+order can differ from the `point` route order (observed reversed). Decoded
+2026-06-03: point_status=[[4,2],[3,2]] (both points done) for a route
+point=[id3, id4].
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
+
 ### summary_pre_type — `pre_type`
 
 Mowing preference type. Not yet decoded from g2408 captures.
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
+
+### summary_pref — `global_pref`
+
+Two-int preference array present in ALL session summaries (=[45,0] on both
+the mode=107 patrol and a same-day mode=100 all-area mow). Because it is
+identical across unrelated session types it is a GLOBAL/account preference,
+NOT per-session or per-point input. DEBUNKED as a patrol-settings carrier
+(two ints could not encode per-point settings for an arbitrary point count).
+Exact meaning of the two ints undecoded.
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
+
+### summary_recognition — `recognition_flag`
+
+Recognition/AI flag on the patrol summary (=1 observed). Exact meaning
+undecoded — possibly whether AI recognition ran on the captured photos.
+Recorded for completeness; do not assume semantics.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
@@ -4338,6 +4905,31 @@ decoded.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/session_summary.py`, `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
+### summary_spot_track — `spot_track`
+
+Per-spot mowing path for spot-mode sessions (mode 103). The session JSON
+carries a global spot[] array enumerating ALL spot areas defined on the
+lawn; only the spot that was actually mowed in THIS session has its
+`.track` field populated. Other spots in the array have just `.data`
+(the corner polygon).
+
+Coordinates are dock-relative centimetres (divide by 100 for metres).
+Includes int32-max sentinel rows [2147483647, 2147483647] marking
+track breaks (likely lift-up / pen-up moments), same role as
+TRACK_BREAK_MARKER in map[].track.
+
+The integration's parse_session_summary._decode_map_layer currently
+handles type=0 (boundary) and type=2 (exclusion) but returns None for
+type=3 (spot), so this field is silently dropped. Spot mows therefore
+get cloud_legs=[] from the parser even though the path is in the blob.
+Fix track: extend _decode_map_layer or add a sibling spot-track
+extractor.
+
+**Open questions:**
+- What's the firmware's emit cadence for spot.track points? 60 pts over 6 min = ~10s/pt — much sparser than s1p4 live (5Hz). Is it a fixed time interval, distance interval, or curated/decimated?
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
+
 ### summary_start — `session_start_unix`
 
 Session start timestamp in Unix seconds. Matches event_occured piid 8
@@ -4348,11 +4940,12 @@ captures 2026-04-17..2026-04-20.
 
 ### summary_start_mode — `start_mode`
 
-Session start-trigger mode (scheduled vs manual vs app-button etc.).
-Not yet decoded from g2408 captures.
+Session start-trigger mode: 1 = scheduled, 0 = manual/app-triggered
+(partial — decoded 2026-05-30; voice / HA-service start values not yet
+distinguished, may also map to 0).
 
 **Open questions:**
-- What values distinguish scheduled, manual-app, voice, and HA-service starts?
+- Do voice and HA-service starts have distinct start_mode values, or do they collapse to 0 (manual/app)?
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
@@ -4371,17 +4964,64 @@ Session duration in minutes. No scale conversion — value is directly in minute
 
 **See also:** `custom_components/dreame_a2_mower/protocol/session_summary.py`, `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
-### summary_trajectory — `trajectory_list`
+### summary_track_break_positions — `track_break_marker_positions`
 
-High-level planning path. Each entry has a composite id (two ints) and a
-data array of [x, y] waypoints. Purpose: likely the routing skeleton used
-by the firmware's path planner (not the actual mow track — that is in
-map[].track).
+The int32-max sentinel ``[2147483647, 2147483647]`` appears in every
+track field as a segment-break marker. ``_split_track`` splits the
+track on these rows into continuous polyline segments. Verified
+2026-05-26: 3260 occurrences across 17 OSS blobs, zero variants
+(always exactly ``[2147483647, 2147483647]``, never an asymmetric
+form with one column normal).
+
+Open question: what triggers a sentinel? Hand-inspection shows
+sentinels appearing INSIDE a rectangular spot mow where there is
+no obstacle and no map corner to break the path — so the trigger
+is something more subtle (lift-up event? brief localisation loss?
+mid-row pause? blade-up transition?).
+
+Hypothesis worth investigating: render each sentinel position
+(start or end of the surrounding segment, whichever is closer)
+as a red diagnostic dot on the work-log map. Plot many sessions'
+sentinels together to look for a pattern (clustering near specific
+regions, near obstacles, at consistent times-since-last-sentinel,
+etc.). The neighbour-pattern analysis showed many sentinels where
+``prev == next`` (mower stayed in place) suggesting brief pause/
+hover events, but sometimes the next point IS offset by 5-20 cm
+(mower drifted or repositioned during the lift-up).
+
+The integration's session-archive currently throws away the sentinel
+positions when ``_split_track`` consumes them. To investigate, we'd
+either retain the positions on a sidecar (e.g., ``_track_breaks``
+with the surrounding segment's start/end (x, y) and ts when
+derivable) or re-parse from the raw JSON at render time.
 
 **Open questions:**
-- How does trajectory differ from map[].track? Is it the pre-computed plan vs actual path?
+- What event in the firmware triggers the sentinel? Lift-up detection? Brief localisation loss? Mid-row pause? Pattern unclear from cluster analysis.
+- TODO: Plot sentinel positions as red dots on work-log map (at start OR end of surrounding segment, whichever is closer to the unknown drop position) to look for spatial clustering.
 
-**See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
+### summary_trajectory — `trajectory_list`
+
+Each entry carries TWO fields with very different roles:
+
+- ``data``: closed-loop lawn outline polygon, ~100-109 cm-encoded points
+  (first ≈ last). Identical across every session captured against the
+  same lawn snapshot; changes only when the user redraws the boundary
+  in the Dreame app.
+- ``track``: the actual mowed path for EDGE-MODE sessions (mode 101).
+  Same wire convention as boundary.track — list of [x_cm, y_cm] rows
+  interleaved with int32-max sentinel rows that split into continuous
+  segments. Empty for non-edge modes.
+
+So the field name "trajectory" is a misnomer: ``data`` is geometry,
+``track`` is per-session path data — and only present for edge.
+
+Coordinate frame: dock-relative centimetres.
+
+Mode-to-path-source mapping (full survey):
+  mode 100 (all_areas / zone) → map[i].track
+  mode 101 (edge)             → trajectory[].track    ← here
+  mode 102 (all_areas)        → map[i].track
+  mode 103 (spot)             → spot[N].track for mowed N
 
 ## M_PATH encoding
 

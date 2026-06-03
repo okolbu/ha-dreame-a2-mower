@@ -216,10 +216,15 @@ class MowerStateMachine:
         # CRUISING_TO_POINT activity set by _apply_s2p50_task_envelope.
         # Only op=109 (cruise) needs this override; all real mow ops (100-103)
         # and unspecified ops (None) keep the unconditional MOWING mapping.
-        task_state_1_activity = (
-            CurrentActivity.CRUISING_TO_POINT
-            if self._snapshot.last_task_op == 109
-            else CurrentActivity.MOWING
+        # Patrol (107/108) emits s2p1=1 too; like op=109 it must not clobber the
+        # blades-up activity set by the op echo into MOWING.
+        _s2p1_1_override = {
+            109: CurrentActivity.CRUISING_TO_POINT,
+            107: CurrentActivity.PATROL_POINT,
+            108: CurrentActivity.PATROL_EDGE,
+        }
+        task_state_1_activity = _s2p1_1_override.get(
+            self._snapshot.last_task_op, CurrentActivity.MOWING
         )
         activity_map: dict[int, CurrentActivity] = {
             1: task_state_1_activity,
@@ -364,14 +369,17 @@ class MowerStateMachine:
             # Mow-variant ops (100-103) come from the canonical mode enum so
             # this map can't drift from the session-card labels / summary slugs.
             # 109 (cruise) and 10 (fast-mapping) are op-only — no OSS mode — so
-            # they stay here. Patrol (108) is intentionally absent from the
-            # activity map: it has no distinct ActivityEnum value and maps to
-            # no HA-side activity change (it just leaves the dock).
+            # they stay here. Patrol ops 107 (point) / 108 (edge) get a
+            # first-class blades-up PATROL activity (T1/T2, 2026-06-03) so the
+            # activity sensor stops sitting at REPOSITIONING for the whole run.
+            # Patrol does NOT enter a mow_session (handled below via MOW_MODE_CODES).
             op_map: dict[int, CurrentActivity] = {
                 code: CurrentActivity.MOWING for code in MOW_MODE_CODES
             }
             op_map[109] = CurrentActivity.CRUISING_TO_POINT
             op_map[10] = CurrentActivity.FAST_MAPPING
+            op_map[107] = CurrentActivity.PATROL_POINT
+            op_map[108] = CurrentActivity.PATROL_EDGE
             new_activity = op_map.get(op)
             if new_activity is not None and new_activity != self._snapshot.current_activity:
                 updates["current_activity"] = new_activity

@@ -727,7 +727,7 @@ class DreameA2CurrentActivitySensor(_SnapshotEnumSensorBase):
     _attr_options = [
         "mowing", "paused", "repositioning", "returning", "charge_resume",
         "cruising_to_point", "at_point", "fast_mapping",
-        "driving_blades_up", "idle",
+        "driving_blades_up", "patrol_edge", "patrol_point", "idle",
     ]
 
 

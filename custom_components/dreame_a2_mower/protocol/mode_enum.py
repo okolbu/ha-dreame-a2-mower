@@ -45,7 +45,8 @@ MODE_BY_CODE: dict[int, ModeInfo] = {
     101: ModeInfo("edge", "Edge", True),
     102: ModeInfo("zone", "Zone", True),
     103: ModeInfo("spot", "Spot", True),
-    108: ModeInfo("patrol", "Patrol", False),
+    107: ModeInfo("patrol_point", "Point Patrol", False),
+    108: ModeInfo("patrol", "Edge Patrol", False),
 }
 
 # Blades-down mow-variant codes (excludes patrol 108). The state machine uses

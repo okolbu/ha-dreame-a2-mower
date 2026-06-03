@@ -60,6 +60,16 @@ def test_patrol_when_op_108():
     ) == ("patrol", None)
 
 
+def test_patrol_when_op_107():
+    """op=107 (cruise-point / POINT patrol) is a patrol too — confirmed on wire
+    2026-06-03. Before this it fell through to mow and the replay dropdown
+    mislabelled the run 'Mowing'."""
+    assert classify_session_type(
+        last_task_op=107, saw_mow_start=False, area_ever_positive=False,
+        last_point_end_code=None,
+    ) == ("patrol", None)
+
+
 def test_patrol_when_s2p2_51_seen_even_without_op_echo():
     """Scheduled / op-not-echoed patrols still carry s2p2=51 on the wire."""
     assert classify_session_type(

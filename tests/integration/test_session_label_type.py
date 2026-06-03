@@ -11,8 +11,8 @@ def _entry(**kw):
 def test_mode_and_start_mode_labels_match_decoded_mapping():
     """MODE_LABELS / START_MODE_LABELS must match the verified decode
     (inventory § summary_mode): 100 all-areas / 101 edge / 102 zone / 103 spot /
-    108 patrol; start_mode 1=scheduled / 0=manual. (Old code had 102='All areas'
-    and reversed start_mode — guesswork.)"""
+    107 point-patrol / 108 edge-patrol; start_mode 1=scheduled / 0=manual. (Old
+    code had 102='All areas' and reversed start_mode — guesswork.)"""
     from custom_components.dreame_a2_mower.session_card import (
         MODE_LABELS, START_MODE_LABELS,
     )
@@ -20,7 +20,8 @@ def test_mode_and_start_mode_labels_match_decoded_mapping():
     assert MODE_LABELS[101] == "Edge"
     assert MODE_LABELS[102] == "Zone"
     assert MODE_LABELS[103] == "Spot"
-    assert MODE_LABELS[108] == "Patrol"
+    assert MODE_LABELS[107] == "Point Patrol"
+    assert MODE_LABELS[108] == "Edge Patrol"
     assert START_MODE_LABELS[1] == "Scheduled"
     assert START_MODE_LABELS[0].startswith("Manual")
 

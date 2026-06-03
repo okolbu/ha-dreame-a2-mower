@@ -2216,8 +2216,12 @@ entities:
         status: presumed
         claim: "Ported from code 2026-05-31: activity property calls project_activity(state_machine.snapshot()); project_activity maps CA.MOWING→MOWING, CA.PAUSED→PAUSED, CA.RETURNING→RETURNING, CA.IDLE@dock→DOCKED, CA.CHARGE_RESUME@dock→DOCKED, CA.CRUISING/FAST_MAPPING/DRIVING_BLADES_UP/REPOSITIONING→MOWING, CA.AT_POINT→PAUSED, errors→ERROR. async_start_mowing reads action_mode and dispatches the appropriate start variant; async_pause/async_dock dispatch PAUSE/DOCK. Read from lawn_mower.py:80-155; not re-confirmed live."
         evidence: "lawn_mower.py:27-67 (project_activity); lawn_mower.py:104-106 (activity property → project_activity); lawn_mower.py:108-148 (async_start_mowing → dispatch per action_mode); lawn_mower.py:143-147 (async_pause/async_dock)"
+      - date: "2026-06-03"
+        status: verified
+        claim: "project_activity now maps the two new patrol activities CA.PATROL_EDGE / CA.PATROL_POINT → LawnMowerActivity.MOWING (same group as CRUISING/FAST_MAPPING/DRIVING_BLADES_UP/REPOSITIONING), so the primary entity shows active during a patrol while the detailed activity sensor says Edge/Point Patrol."
+        evidence: "tests/state_machine/test_lawn_mower_projection.py::test_projection_patrol_is_mowing; lawn_mower.py:66-68"
     references:
-      wire_entry: "s2p2; s1p4"
+      wire_entry: "s2p2; s1p4; o107; o108"
       code: "custom_components/dreame_a2_mower/lawn_mower.py:80"
     notes: |
       Primary HA lawn_mower entity. Features: START_MOWING | PAUSE | DOCK.
@@ -2875,15 +2879,20 @@ entities:
         status: presumed
         claim: "Ported from code 2026-05-31: native_value = getattr(snapshot, 'current_activity').value where snapshot comes from coordinator.state_machine.snapshot(). ENUM device class; options include mowing/paused/repositioning/returning/charge_resume/cruising_to_point/at_point/fast_mapping/driving_blades_up/idle. Read from sensor_device.py:701-711 + _sensor_base.py:58-78; not re-confirmed live."
         evidence: "_sensor_base.py:75-78 (native_value → getattr(snap, _SNAPSHOT_FIELD).value); sensor_device.py:701-711 (_SNAPSHOT_FIELD='current_activity', _KEY='current_activity')"
+      - date: "2026-06-03"
+        status: verified
+        claim: "Added two first-class patrol activities patrol_edge / patrol_point (T1/T2). The state machine maps s2p50 op=108→PATROL_EDGE and op=107→PATROL_POINT (and the s2p1=1 working-tick keeps them, like op=109), so the sensor no longer sits at 'repositioning' for the whole patrol. _attr_options + strings.json + translations/en.json updated in lockstep (translation labels 'Edge Patrol'/'Point Patrol'); drift-guard test asserts options == CurrentActivity value set."
+        evidence: "tests/state_machine/test_patrol_live_activity.py; tests/state_machine/test_new_dimension_sensors.py::test_current_activity_options_cover_every_enum_value; state_machine.py op_map[107/108]; observed live op=107 patrol probe_log_20260520_131350.jsonl @ 2026-06-03"
     references:
-      wire_entry: "s2p2; s1p4"
+      wire_entry: "s2p2; s1p4; o107; o108"
       code: "custom_components/dreame_a2_mower/sensor_device.py:701"
     notes: |
       Snapshot-backed ENUM sensor — survives HA restarts via the state-machine
       Store. Emits the CurrentActivity enum value string (lowercase). Options:
       mowing, paused, repositioning, returning, charge_resume, cruising_to_point,
-      at_point, fast_mapping, driving_blades_up, idle. Updated on every
-      coordinator data push via _SnapshotEnumSensorBase._handle_coordinator_update.
+      at_point, fast_mapping, driving_blades_up, patrol_edge, patrol_point, idle.
+      Updated on every coordinator data push via
+      _SnapshotEnumSensorBase._handle_coordinator_update.
 
   - id: "sensor.dreame_a2_mower_mower_location"
     platform: sensor

@@ -1215,6 +1215,17 @@ properties:
           between the two spots). One app command can queue multiple items run in
           order.
         evidence: "probe_log_20260520_131350.jsonl @ 2026-05-30 21:18:32→21:30:40 (2-spot mow); point-run task_ids 2,1,1,2 @ 15:18/16:50/16:59/17:26"
+      - date: "2026-06-03"
+        status: verified
+        claim: |
+          The same per-target queue vocab applies to op=107 POINT PATROL. A live
+          double-point patrol stepped []→[[3,0],[4,-1]]→[[3,2],[4,-1]]→[[3,2],[4,0]]
+          →[[3,2],[4,2]] then s2p2=74: point ids 3 & 4, stage -1=queued → 0=running
+          → 2=done, advancing in-place exactly like the 2-spot mow. Confirms the
+          [point_id, stage] shape and the -1/0/2 vocab are shared across point
+          patrol and multi-spot mow. NOTE: the per-point app settings (cycles 2/1,
+          auto-capture on/off) are NOT in s2p56 — only id + stage.
+        evidence: "probe_log_20260520_131350.jsonl @ 2026-06-03 20:43:27→20:46:02 (op=107 2-point patrol)"
       - date: "2026-05-16"
         status: verified
         claim: |
@@ -1784,6 +1795,18 @@ properties:
         status: retracted
         retracts: "properties_changed is value-deduped (redundant save is silent)"
         reason: "noop save test 21:07:47–21:08:46 emitted three identical s6p2 frames; the earlier silent observation was actually the user dismissing the unsaved-changes warning, not a redundant save"
+      - date: "2026-06-03"
+        status: verified
+        claim: |
+          No device-write surface for the s6p2 fields via routed-action CFG.
+          Mowing Efficiency (s6p2[1]) maps to CFG.PRE[1]; a direct write of
+          t='PRE' returned r=-3 (no setter) with the relay confirmed awake —
+          see § PRE 2026-06-03 verification. EdgeMaster (s6p2[2]) has no PRE
+          slot on g2408 and PRE has no setter regardless, so neither is
+          writable through this surface. s6p2 itself is a device→cloud push
+          (read-only reflector of the app's Mowing-Settings save); it is not a
+          write target. The app's actual write RPC is still uncaptured (Phase 3).
+        evidence: "docs/research/wire-captures/pre-write-r3-2026-06-03.md"
     open_questions:
       - "What is byte[3]? Usually 2, one 198 outlier — possibly a mid-session status flag or schema/frame-type marker. Needs more samples around mid-mow setting changes."
 
@@ -3213,18 +3236,127 @@ opcodes:
     op: 107
     name: "start_cruise_point"
     category: "opcode"
-    payload_shape: "{m:'a', o:107, d:{...}}"
+    payload_shape: "ECHO s2p50 {o:107, exe:true, status:true, error:0, estimate_time:N, time:T, t:'TASK'}. SEND payload (point list + per-point settings) NOT captured — see open_questions."
     semantic: |
-      Patrol to a specific point. Apk-documented as startCruisePoint. Not
-      observed on g2408 wire. Used by some Dreame robot models for autonomous
-      patrol waypoint navigation.
+      POINT PATROL (startCruisePoint) — the mower visits a user-placed list of
+      map points in sequence. CONFIRMED on g2408 2026-06-03: a user-triggered
+      double-point patrol emitted s2p50 op=107
+      {error:0, estimate_time:155, exe:true, o:107, status:true, time:10664} at
+      20:44:10, paired with s2p2=51 (patrol started, same as edge patrol) and
+      s2p56 going []→[[3,0],[4,-1]] (the point queue — two entries for the two
+      points; shape [point_id, state], state 0=active/-1=pending PRESUMED).
+      Runs blades-up (s1p4 area stays 0) with valid position telemetry, like the
+      edge patrol (o:108). estimate_time=155s for this 2-point route.
+      Companion to o:108 (cruise along an edge / zone edge).
+
+      NEGATIVE finding (capture limitation): the per-point app settings — Number
+      of Patrol Cycles (1/2/3) and "Auto Capture & Upload Photos at Patrol Points"
+      (on/off), set to point1=2cyc/ON, point2=1cyc/OFF this run — did NOT appear
+      in any captured /status/ device uplink. The MQTT monitor only receives the
+      device's /status/ topic (+ broker-permitted #); the app→device command
+      carrying the point list + settings is not relayed to it. So with the
+      current capture path, patrol settings are unobservable on the wire. Next
+      candidate is the s4 eiid1 session-summary OSS object at patrol end.
     status:
-      seen_on_wire: false
-      decoded: hypothesized
+      seen_on_wire: true
+      first_seen: "2026-06-03"
+      last_seen: "2026-06-03"
+      decoded: partial
       bt_only: false
       not_on_g2408: false
     open_questions:
-      - "Does g2408 support patrol/cruise modes at all?"
+      - "SEND payload shape of the op=107 command (point list + per-point cycles + auto-capture flags) is uncaptured — the broker doesn't relay the app→device downlink to the /status/ monitor. Capture via integration-side routed_action logging, or check whether settings land in the s4 eiid1 session-summary OSS object at patrol end."
+      - "s2p56 [[3,0],[4,-1]]: confirm point_id vs state field order and state vocab (0=active? -1=pending? 2=arrived as in o=109?) across more captures."
+    verifications:
+      - date: "2026-06-03"
+        status: verified
+        claim: "op=107 (start_cruise_point / POINT patrol) is real on g2408. A user double-point patrol emitted s2p50 {o:107, exe:true, status:true, error:0, estimate_time:155, time:10664} at 20:44:10, with s2p2=51 (started) and s2p56 []→[[3,0],[4,-1]] (2-point queue). Blades-up (s1p4 area=0). Companion to o:108 edge patrol."
+        evidence: "probe_log_20260520_131350.jsonl @ 2026-06-03 20:44:10 (s2p50 o=107 echo); s2p56 @ 20:44:10; user-confirmed double-point Patrol trigger"
+      - date: "2026-06-03"
+        status: partial
+        claim: "Per-point patrol settings (cycles 1/2/3, auto-capture on/off) are NOT present in any captured /status/ uplink for op=107 — only the device echo (which lacks them) and the s2p56 point queue. The app→device command is not relayed to the MQTT monitor, so patrol settings are unobservable via this capture path."
+        evidence: "probe_log_20260520_131350.jsonl @ 2026-06-03 20:43:27..20:44:35 (full window: no command topic, no settings-bearing piid); user set point1=2cyc/AutoCapture-ON, point2=1cyc/AutoCapture-OFF"
+      - date: "2026-06-03"
+        status: verified
+        claim: |
+          Auto-Capture patrol PHOTOS are out-of-band — NOT on the MQTT property
+          bus. Point 1 had Auto Capture ON and the app showed captured photos
+          afterward, yet the full patrol window (20:43:27→20:46:52) contains ZERO
+          photo/image/jpg/camera references on any topic; the only OSS object is
+          the session-summary JSON (s4 piid9). Photos upload device→cloud via the
+          separate AI-photo/AOP pipeline (cloud-side, MITM-blocked — see the
+          ai_photo probe). Do NOT hunt the MQTT wire for patrol photos. The s4
+          piid10=1 (auto-capture was ON for 1 of 2 points) is a POSSIBLE photo
+          count but UNVERIFIED — could be coincidence; the summary OSS JSON is the
+          place to confirm.
+        evidence: "probe_log_20260520_131350.jsonl @ 2026-06-03 20:43:27→20:46:52 (no photo refs); app showed photos post-patrol; cross-ref project_g2408_ai_photo_probe"
+      - date: "2026-06-03"
+        status: verified
+        claim: |
+          The op=107 patrol summary .0550.json carries the executed ROUTE but NOT
+          the requested per-point settings. Fetched object
+          ali_dreame/2026/06/03/BM169439/-112293549_184603810.0550.json (mode=107):
+            point = [{id:3, param:{}, point:[-305,-548,2], time:60, type:2},
+                     {id:4, param:{}, point:[-198,634,2],  time:60, type:2}]
+            point_status=[[4,2],[3,2]] complete_count=2 areas=0.01 time=2
+            pref=[45,0] recognition=1 result=1 start_mode=0 stop_reason=-1
+          Per-point `param` is EMPTY {} for both points, so the requested Number-of-
+          Patrol-Cycles (2/1) and Auto-Capture (on/off) toggles are NOT stored in
+          the summary either — the summary is an OUTCOME record (route, durations
+          time=60s/pt, completion), not an input-settings record. Conclusion: those
+          two toggles are command-only (app→device), unobservable on every surface
+          we can reach (MQTT echo, s2p56, and the cloud .0550 summary).
+        evidence: "patrol_oss_20260603/objects/ali_dreame_2026_06_03_BM169439_-112293549_184603810.0550.json (fetched via iotfile/getDownloadUrl 2026-06-03)"
+      - date: "2026-06-03"
+        status: verified
+        claim: |
+          CORRECTION/EXTENSION to the 'photos out-of-band' note: the patrol photos
+          ARE referenced inside the .0550 summary, in NEW fields the fetch script
+          never read: photo_detected=1, recognition=1, and
+          photo_list=["1780512275.jpg","1780512296.jpg","1780512302.jpg"]. Still NOT
+          on MQTT (the earlier negative holds) — but cloud-recoverable. The three
+          photo timestamps (20:44:35 / :56 / 20:45:02) ALL fall inside point-1's
+          active window (auto-capture ON, 2 cycles, 20:44:10→20:45:07); point-2
+          (auto-capture OFF) produced ZERO. So the per-point auto-capture OUTCOME is
+          observable via photo timing even though the toggle isn't stored. NOTE the
+          photo BYTES are not yet retrievable: getDownloadUrl for
+          ali_dreame/.../-112293549_1780512275.jpg returns OSS NoSuchKey, so the real
+          patrol-photo object prefix (bare names are unix-ts.jpg) is still UNKNOWN.
+        evidence: "summary photo_list/photo_detected fields (fetched .0550.json); NoSuchKey on constructed photo path (OSS Key oss/media/000000/oss/ali_dreame/2026/06/03/BM169439/-112293549_1780512275.jpg)"
+      - date: "2026-06-03"
+        status: partial
+        claim: |
+          s4 eiid1 piid → summary-field cross-walk (single sample, op=107 patrol):
+          piid1=107=mode, piid2=2=complete_count, piid8=1780512205=start,
+          piid9=object name, piid10=1≈photo_detected, piid13=[]=fault timeline,
+          piid14=384≈map_area(383), piid60=-1=stop_reason. piid3=1/piid7=1/piid11=0/
+          piid12=0/piid15=0 still ambiguous. Resolves part of the long-open 'eiid1
+          piids 10/12 undecoded' item — piid10 aligns with photo_detected — but
+          needs ≥1 more sample (esp. a mow with photo_detected=0) to confirm.
+        evidence: "probe_log_20260520_131350.jsonl @ 2026-06-03 20:46:04 (s4 eiid1) vs fetched .0550 summary same session"
+      - date: "2026-06-03"
+        status: verified
+        claim: |
+          PER-POINT cycles + auto-capture are RECONSTRUCTABLE from telemetry even
+          though stored nowhere. A patrol "cycle" = one in-place ~360° rotation at
+          the point. Decoded s1p4 (pose + heading byte[6]) over the double-point
+          run: at point 1 (mm [-3000,-5490], set 2cyc/ON) the mower was stationary
+          20:44:35→20:45:05 (~30s) with heading sweeping ~2 full turns
+          (58→158→265→6→113→217→318) and fired 3 photos in that window; at point 2
+          (mm [-2000,6330], set 1cyc/OFF) it was stationary 20:45:45→20:46:00 (~15s)
+          with ~1 turn (4→112→219→328) and 0 photos. The 2:1 dwell/rotation ratio
+          matches the 2:1 cycle setting; auto-capture shows as photos-during-the-
+          point's-rotation. Route structure = drive→rotate(N)→drive→rotate(N)→dock.
+        evidence: "probe_log_20260520_131350.jsonl s1p4 @ 2026-06-03 20:44:10→20:46:35 (decoded pose+heading); photo_list timestamps from .0550 summary"
+      - date: "2026-06-03"
+        status: verified
+        claim: |
+          summary `pref` is NOT the patrol-settings carrier — DEBUNKED. pref=[45,0]
+          is identical in the mode=107 patrol summary AND this morning's mode=100
+          all-area mow summary (different session types), so it is a global/account
+          preference, not per-point patrol input. (Two ints could not encode
+          per-point settings for an arbitrary point count anyway.)
+        evidence: "patrol .0550 (mode107) pref=[45,0] == mow .0550 (-112293549_090642791, mode100) pref=[45,0]"
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
@@ -4058,14 +4190,32 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-03"
       decoded: confirmed
       bt_only: false
       not_on_g2408: false
+    verifications:
+      - date: "2026-06-03"
+        status: verified
+        claim: |
+          CFG.PRE has NO setter at the s2.50 routed-action address on g2408
+          fw 4.3.6_0550. Sending {m:'s', t:'PRE', d:{value:[0,1]}} (correct
+          2-element shape, flipping mode Standard→Efficient) returned
+          out[0].r=-3. The findBot control (op=9) returned r=0 and the mower
+          spoke "Robot is here" immediately before, so the relay was genuinely
+          awake — r=-3 is a real firmware verdict, not a sleeping-relay 80001.
+          Per the 2026-05-09 r-code disambiguation, r=-3 is target-level (no
+          setter for t='PRE'), so it is payload-shape-independent. Therefore
+          Mowing Efficiency (PRE[1]) is NOT device-writable via the routed-
+          action CFG surface — same class as the int-list keys DND/LOW/WRP/
+          BAT/LIT/REC/LANG. The prior "no write surface identified" was
+          extrapolation; this is the first direct evidence on the PRE surface.
+        evidence: "docs/research/wire-captures/pre-write-r3-2026-06-03.md (tools/probe_pre_write.py --probe; CFG.VER=816 before)"
     references:
       apk: "ioBroker.dreame/apk.md §setX PRE"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+      wire_capture: "docs/research/wire-captures/pre-write-r3-2026-06-03.md"
 
   - id: "PROT"
     name: "navigation_path"
@@ -8781,10 +8931,12 @@ session_summary_fields:
       101: "edge"
       102: "zone"
       103: "spot"
+      107: "patrol_point"
       108: "patrol"
     semantic: |
       Session mode code = the mow-type op: 100=all_areas, 101=edge, 102=zone,
-      103=spot, 108=patrol (identical to the s2p50 TASK op 100/101/102/103/108). This is the
+      103=spot, 107=patrol_point (cruise-point), 108=patrol (cruise-side / edge).
+      Identical to the s2p50 TASK op (100/101/102/103/107/108). This is the
       RELIABLE per-session mow-type record — firmware-produced and present in the
       OSS summary even for scheduled mows whose s2p50 op never echoed on MQTT.
       Distinct from MowerState.action_mode (user dropdown intent, not a record).
@@ -8816,6 +8968,19 @@ session_summary_fields:
           beyond the 100-103 mow subtypes; integration now classifies session_type
           'patrol' and routes it to the cloud-finalize path.
         evidence: "HA box /config/dreame_a2_mower/sessions/2026-05-30_1780174930_f3473eba.json (mode=108, start_mode=0, result=3, stop_reason=101, s2p2 codes 2/4/51/74)"
+      - date: "2026-06-03"
+        status: verified
+        claim: |
+          mode=107 = patrol_point (point patrol / cruise-point), distinct from
+          108=patrol_edge. A live double-point patrol's s4 eiid1 session-summary
+          carried piid=1 (= summary.mode) = 107, with the OSS object name in piid=9
+          (ali_dreame/2026/06/03/.../-112293549_184603810.0550.json). Same
+          cloud-archive path as a mow; piid=13 fault timeline empty (clean run).
+          The per-point app settings (cycles, auto-capture) are NOT in the scalar
+          s4 piids — the OSS JSON (piid=9) is the only remaining candidate; not yet
+          fetched. (piid=10=1, piid=12=0 this run — meaning still undecoded, do NOT
+          assume these are the settings.)
+        evidence: "probe_log_20260520_131350.jsonl @ 2026-06-03 20:46:04 (s4 eiid1, piid1=107, piid9 OSS object); user-confirmed double-point Patrol trigger"
       - date: "2026-05-15"
         status: presumed
         claim: "session_card.MODE_LABELS holds best-effort enum mappings; unmapped values render as 'raw=N' on the dashboard's Picked-session card"
@@ -9233,6 +9398,185 @@ session_summary_fields:
         evidence: "oss_dumps/ — 4 spot mows verified: 2026-05-21 18:22 (8.2m²) → spot[2].track 176pts; 2026-05-25 21:10 (9m²) → spot[0].track 61pts; 2026-05-26 20:22 (9m²) → spot[0].track 61pts; 2026-05-26 20:56 (5m²) → spot[1].track 60pts. In each session, exactly ONE spot[N] has .track set."
     open_questions:
       - "What's the firmware's emit cadence for spot.track points? 60 pts over 6 min = ~10s/pt — much sparser than s1p4 live (5Hz). Is it a fixed time interval, distance interval, or curated/decimated?"
+
+  - id: "summary_point"
+    key_path: "point"
+    name: "patrol_point_route"
+    category: "session_summary"
+    payload_shape: "[{id:int, param:{}, point:[x_cm, y_cm, ?], time:int_s, type:int}, ...]"
+    semantic: |
+      PATROL point route (present on mode=107 point-patrol summaries). One entry
+      per user-placed patrol point, in route order. Fields: id = per-map point id
+      (matches the s2p56 queue ids and point_status); point = [x_cm, y_cm, k] map
+      coords (k=2 observed; third element undecoded); time = the per-point dwell
+      budget in seconds (60 observed = the app's "1 min" per point); type = point
+      type (2 observed); param = a nested dict that is EMPTY {} in the only capture
+      — the requested per-point settings (Number of Patrol Cycles, Auto-Capture)
+      are NOT stored here. Those settings are command-only and unobservable on
+      every reachable surface; they are reconstructable from telemetry instead
+      (cycles = count of in-place ~360° rotations at the point; auto-capture =
+      whether photo_list timestamps fall in that point's dwell window). See o107.
+    status:
+      seen_on_wire: false
+      decoded: partial
+      bt_only: false
+      not_on_g2408: false
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+    verifications:
+      - date: "2026-06-03"
+        status: verified
+        claim: "mode=107 patrol summary point=[{id:3,param:{},point:[-305,-548,2],time:60,type:2},{id:4,param:{},point:[-198,634,2],time:60,type:2}]; param EMPTY for both; ids 3,4 match the s2p56 queue and point_status."
+        evidence: "oss_dumps/ali_dreame_2026_06_03_BM169439_-112293549_184603810.0550.json.pretty.json"
+
+  - id: "summary_point_status"
+    key_path: "point_status"
+    name: "patrol_point_status"
+    category: "session_summary"
+    payload_shape: "[[point_id, stage], ...]"
+    semantic: |
+      Final per-point completion state on a mode=107 patrol. Same [id, stage]
+      shape and vocab as the live s2p56 queue (stage 2 = arrived/done). NB the
+      order can differ from the `point` route order (observed reversed). Decoded
+      2026-06-03: point_status=[[4,2],[3,2]] (both points done) for a route
+      point=[id3, id4].
+    status:
+      seen_on_wire: false
+      decoded: confirmed
+      bt_only: false
+      not_on_g2408: false
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+
+  - id: "summary_complete_count"
+    key_path: "complete_count"
+    name: "completed_target_count"
+    category: "session_summary"
+    payload_shape: "int"
+    semantic: |
+      Number of targets completed in the session. =2 on the double-point patrol
+      (2 points), None/absent on a single-target all-area mow. It counts POINTS
+      (targets), NOT cycles — the user set 2+1 cycles but complete_count=2. Maps
+      to s4 eiid1 piid2 (=2 same run).
+    status:
+      seen_on_wire: false
+      decoded: partial
+      bt_only: false
+      not_on_g2408: false
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+
+  - id: "summary_photo_list"
+    key_path: "photo_list"
+    name: "auto_capture_photo_list"
+    category: "session_summary"
+    payload_shape: "[str, ...]  # bare leaf filenames, e.g. \"1780512275.jpg\""
+    semantic: |
+      Auto-Capture patrol photo references. List of bare leaf filenames (no path)
+      whose stems are UNIX-second timestamps in UTC (1780512275 = 2026-06-03
+      18:44:35Z = 20:44:35 local). This is THE photo surface for the mower — prior
+      photo hunts only checked the always-empty ai_obstacle[] and never found this
+      field. Photo timestamps fall inside the auto-capture-ON point's in-place
+      rotation window, so they double as the per-point auto-capture evidence.
+
+      The photo BYTES are not yet retrievable: the filenames carry no path and are
+      NOT relative to the summary object — both getDownloadUrl and
+      getOss1dDownloadUrl return OSS NoSuchKey for the bare leaf, the did-prefixed
+      leaf, the no-extension leaf, and the summary-naming-mirror leaf in the
+      summary's own Aliyun directory (ruled out 2026-06-03). The leaf IS accepted
+      by the separate 479D Xiaomi-FDS bucket (signed URL host
+      awsde0.fds.api.xiaomi.com, key oss/479D/<uid>/<did>/<leaf>) but Object Not
+      Found at the subpaths tried. No list endpoint exists (aiphoto/list,
+      obstacle/photo/list, iotuserdata/aiObstacle/list all 404). Exact FDS subpath
+      needs app-capture or APK analysis. See o107 + project_g2408_ai_photo_probe.
+    status:
+      seen_on_wire: false
+      decoded: partial
+      bt_only: false
+      not_on_g2408: false
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+    verifications:
+      - date: "2026-06-03"
+        status: verified
+        claim: "photo_list=[\"1780512275.jpg\",\"1780512296.jpg\",\"1780512302.jpg\"] on the mode=107 patrol; stems are UNIX-sec UTC matching point-1's auto-capture-ON rotation window (20:44:35/:56/20:45:02 local); point-2 (capture OFF) produced none. Photo bytes not retrievable — bare leaf is NoSuchKey in the summary's Aliyun dir; likely in the 479D Xiaomi-FDS bucket, subpath unknown."
+        evidence: "summary photo_list field + getOss1dDownloadUrl NoSuchKey on ali_dreame/2026/06/03/BM169439/1780512275.jpg (2026-06-03)"
+
+  - id: "summary_photo_detected"
+    key_path: "photo_detected"
+    name: "photo_detected_flag"
+    category: "session_summary"
+    payload_shape: "int (0/1)"
+    semantic: |
+      Whether the session captured any auto-capture photo. =1 on the patrol that
+      took 3 photos. Aligns with s4 eiid1 piid10 (=1 same run) — partial cross-walk
+      (single sample; needs a photo_detected=0 session to confirm piid10 mapping).
+    status:
+      seen_on_wire: false
+      decoded: partial
+      bt_only: false
+      not_on_g2408: false
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+
+  - id: "summary_recognition"
+    key_path: "recognition"
+    name: "recognition_flag"
+    category: "session_summary"
+    payload_shape: "int"
+    semantic: |
+      Recognition/AI flag on the patrol summary (=1 observed). Exact meaning
+      undecoded — possibly whether AI recognition ran on the captured photos.
+      Recorded for completeness; do not assume semantics.
+    status:
+      seen_on_wire: false
+      decoded: unknown
+      bt_only: false
+      not_on_g2408: false
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+
+  - id: "summary_human_detected"
+    key_path: "human_detected"
+    name: "human_detected_count"
+    category: "session_summary"
+    payload_shape: "int"
+    semantic: |
+      Count/flag of human detections during the session (=0 on the patrol). Likely
+      the AI human-detection counter; may align with s4 eiid1 piid11 (=0 same run).
+      Single sample — semantics presumed, not confirmed.
+    status:
+      seen_on_wire: false
+      decoded: unknown
+      bt_only: false
+      not_on_g2408: false
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+
+  - id: "summary_pref"
+    key_path: "pref"
+    name: "global_pref"
+    category: "session_summary"
+    payload_shape: "[int, int]"
+    semantic: |
+      Two-int preference array present in ALL session summaries (=[45,0] on both
+      the mode=107 patrol and a same-day mode=100 all-area mow). Because it is
+      identical across unrelated session types it is a GLOBAL/account preference,
+      NOT per-session or per-point input. DEBUNKED as a patrol-settings carrier
+      (two ints could not encode per-point settings for an arbitrary point count).
+      Exact meaning of the two ints undecoded.
+    status:
+      seen_on_wire: false
+      decoded: partial
+      bt_only: false
+      not_on_g2408: false
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+    verifications:
+      - date: "2026-06-03"
+        status: verified
+        claim: "pref=[45,0] identical in the mode=107 patrol summary and the same-day mode=100 mow summary → global/account preference, not patrol input."
+        evidence: "oss_dumps patrol .0550 vs mow -112293549_090642791 .0550 (2026-06-03)"
 
   - id: "summary_legs_meta"
     key_path: "_legs_meta"

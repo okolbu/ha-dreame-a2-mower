@@ -170,3 +170,15 @@ def test_pin_required_projects_to_error():
 
     snap = dataclasses.replace(StateSnapshot.initial(), pin_required=True)
     assert project_activity(snap) == LawnMowerActivity.ERROR
+
+
+def test_projection_patrol_is_mowing():
+    """T1/T2: blades-up patrol (edge or point) projects to MOWING on the
+    lawn_mower entity — same as REPOSITIONING/CRUISING — so the primary entity
+    shows active, not error/idle, while the detailed sensor says Edge/Point Patrol."""
+    from custom_components.dreame_a2_mower.lawn_mower import project_activity
+    from custom_components.dreame_a2_mower.mower.state_snapshot import CurrentActivity
+    from homeassistant.components.lawn_mower import LawnMowerActivity
+    for ca in (CurrentActivity.PATROL_EDGE, CurrentActivity.PATROL_POINT):
+        s = _build_snapshot(current_activity=ca)
+        assert project_activity(s) == LawnMowerActivity.MOWING, ca

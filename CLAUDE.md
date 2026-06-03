@@ -8,6 +8,29 @@ documentation drift week after week. The cause is always the same: a
 finding got recorded in prose but not in any structured place the next
 session would find. This rule exists to stop that.
 
+### Generation-time scope (load-bearing — the gate fires in conversation, not just at inventory-write)
+
+The inventory rules below fire when you *write a file*. But presumptions are
+born earlier — in conversational reasoning — and by the time you'd write
+inventory you have already asserted the guess as fact and maybe acted on it.
+So the gate must fire where the leak happens: **in the prose you generate.**
+
+**Rule:** every sentence you write — in chat OR in a doc — that describes a
+wire/protocol surface (where a value lives, what a byte means, what a payload
+carries, when an event fires, how a setting is transported) MUST carry an
+inline epistemic tag:
+
+- `[<log_file>@<ts>]` or `[apk:<ref>]` / `[screenshot:<name>]` — direct evidence; matches `verified`.
+- `[UNVERIFIED]` — hypothesis, no evidence yet; matches `presumed`. State the guess ONLY with this tag attached.
+- `[UNKNOWN — to capture]` — a gap; the honest output here is a capture/verification step, not a description.
+
+A bare declarative about the wire with no tag is the bug this rule exists to
+catch. "Don't presume" failed as a prohibition because it gave no alternative
+action; the alternative is: tag it `[UNVERIFIED]`, or convert it to a capture
+step. Absence of evidence must be structurally visible in the sentence itself.
+When you only have a guess, prefer producing the capture plan (what to grep /
+trigger / diff) over volunteering an "analysis" that reads as fact.
+
 ### When the rule fires
 
 You MUST update an inventory file in the same response as any of:

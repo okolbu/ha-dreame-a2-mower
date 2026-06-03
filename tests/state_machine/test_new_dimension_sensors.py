@@ -62,6 +62,26 @@ def test_mqtt_connectivity_sensor():
     assert s.native_value == "stale"
 
 
+def test_current_activity_options_cover_every_enum_value():
+    """The ENUM sensor must list every CurrentActivity value, else a real value
+    (e.g. the new patrol_edge / patrol_point) renders as an invalid state. Drift
+    guard: options set == enum value set."""
+    from custom_components.dreame_a2_mower.mower.state_snapshot import CurrentActivity
+    from custom_components.dreame_a2_mower.sensor import DreameA2CurrentActivitySensor
+    enum_values = {a.value for a in CurrentActivity}
+    assert set(DreameA2CurrentActivitySensor._attr_options) == enum_values
+
+
+def test_current_activity_patrol_values():
+    from custom_components.dreame_a2_mower.mower.state_snapshot import CurrentActivity
+    from custom_components.dreame_a2_mower.sensor import DreameA2CurrentActivitySensor
+    for ca in (CurrentActivity.PATROL_EDGE, CurrentActivity.PATROL_POINT):
+        coord = _coord(current_activity=ca)
+        s = DreameA2CurrentActivitySensor(coord)
+        assert s.native_value == ca.value
+        assert ca.value in DreameA2CurrentActivitySensor._attr_options
+
+
 def test_sensors_are_enum_device_class():
     """All 4 dimension sensors expose SensorDeviceClass.ENUM with options."""
     from homeassistant.components.sensor import SensorDeviceClass

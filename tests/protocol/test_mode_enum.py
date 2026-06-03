@@ -12,10 +12,12 @@ def test_slugs_and_labels():
     assert mode_slug(101) == "edge"
     assert mode_slug(102) == "zone"
     assert mode_slug(103) == "spot"
+    assert mode_slug(107) == "patrol_point"
     assert mode_slug(108) == "patrol"
     assert mode_label(100) == "All areas"
     assert mode_label(102) == "Zone"  # regression: was once mislabelled "All areas"
-    assert mode_label(108) == "Patrol"
+    assert mode_label(107) == "Point Patrol"
+    assert mode_label(108) == "Edge Patrol"  # 107 point / 108 edge distinguished 2026-06-03
 
 
 def test_unknown_code_is_none():
@@ -24,10 +26,12 @@ def test_unknown_code_is_none():
 
 
 def test_mow_codes_exclude_patrol():
-    """100-103 are blades-down mows; 108 (patrol) is NOT — it must not open a
-    mow_session in the state machine."""
+    """100-103 are blades-down mows; 107/108 (point/edge patrol) are NOT — they
+    must not open a mow_session in the state machine."""
     assert MOW_MODE_CODES == frozenset({100, 101, 102, 103})
+    assert 107 not in MOW_MODE_CODES
     assert 108 not in MOW_MODE_CODES
+    assert MODE_BY_CODE[107].is_mow is False
     assert MODE_BY_CODE[108].is_mow is False
     assert all(MODE_BY_CODE[c].is_mow for c in (100, 101, 102, 103))
 

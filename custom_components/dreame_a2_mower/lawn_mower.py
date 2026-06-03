@@ -64,7 +64,8 @@ def project_activity(snapshot) -> LawnMowerActivity:
             else LawnMowerActivity.PAUSED
         )
     if ca in (CA.CRUISING_TO_POINT, CA.FAST_MAPPING,
-              CA.DRIVING_BLADES_UP, CA.REPOSITIONING):
+              CA.DRIVING_BLADES_UP, CA.REPOSITIONING,
+              CA.PATROL_EDGE, CA.PATROL_POINT):
         return LawnMowerActivity.MOWING
     if ca == CA.AT_POINT:
         return LawnMowerActivity.PAUSED

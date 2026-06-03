@@ -86,7 +86,9 @@
           "cruising_to_point": "Cruising to point",
           "at_point": "At point",
           "fast_mapping": "Mapping",
-          "driving_blades_up": "Driving (blades up)"
+          "driving_blades_up": "Driving (blades up)",
+          "patrol_edge": "Edge Patrol",
+          "patrol_point": "Point Patrol"
         }
       },
       "mower_location": {

@@ -13,7 +13,8 @@ def test_dimension_enums_have_expected_values():
     assert {e.name for e in CurrentActivity} == {
         "MOWING", "PAUSED", "REPOSITIONING", "RETURNING",
         "CHARGE_RESUME", "CRUISING_TO_POINT", "AT_POINT",
-        "FAST_MAPPING", "DRIVING_BLADES_UP", "IDLE",
+        "FAST_MAPPING", "DRIVING_BLADES_UP",
+        "PATROL_EDGE", "PATROL_POINT", "IDLE",
     }
     assert {e.name for e in Location} == {
         "AT_DOCK", "ON_LAWN", "AT_POINT", "OUTSIDE_KNOWN_AREA",

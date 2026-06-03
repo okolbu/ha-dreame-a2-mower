@@ -75,7 +75,7 @@ def classify_session_type(
 
     Order (positive signals first):
       1. manual_drive  — s2p50 op=15 seen (manual/remote control).
-      2. patrol        — s2p50 op=108 (cruise-side) OR s2p2=51 (patrol started).
+      2. patrol        — s2p50 op∈{107 point, 108 edge} OR s2p2=51 (patrol started).
          Blades-up, area=0, but produces a cloud OSS summary (mode=108) so it
          finalizes via the cloud path, NOT locally. Checked before `mow` and
          the maintenance default so a patrol that drifts past the dock (75/76)
@@ -88,7 +88,7 @@ def classify_session_type(
     """
     if last_task_op == 15:
         return "manual_drive", None
-    if last_task_op == 108 or saw_patrol_start:
+    if last_task_op in (107, 108) or saw_patrol_start:
         return "patrol", None
     if saw_mow_start or area_ever_positive:
         return "mow", None

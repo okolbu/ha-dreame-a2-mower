@@ -27,6 +27,9 @@ class CurrentActivity(Enum):
     AT_POINT = "at_point"
     FAST_MAPPING = "fast_mapping"
     DRIVING_BLADES_UP = "driving_blades_up"
+    # Blades-up patrol (cruise). s2p50 op distinguishes 108=edge / 107=point.
+    PATROL_EDGE = "patrol_edge"
+    PATROL_POINT = "patrol_point"
     IDLE = "idle"
 
 

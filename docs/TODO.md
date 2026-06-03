@@ -23,6 +23,54 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
+### Make controllable entities honest — read-only-until-proven vs known-writable audit
+
+**Why:** Several entities render an interactive HA control (number slider,
+select dropdown, switch toggle) for a value that the device does NOT apply —
+the write is accepted by the cloud cache (or rejected with `r=-3`) but never
+reaches the firmware. Dragging `number.<map>_settings_mowing_height` does
+absolutely nothing on the mower, yet the slider moves and "sticks," which is
+actively misleading. `entity-inventory.yaml` already records the verdict per
+entity (`write_path:` + `status.seen_working:`): ~17 entities are
+`cloud-cache-only`, 7 are `no device write`, plus the PRE/efficiency surface is
+now confirmed `r=-3` (2026-06-03). The precedent for honest read-only is
+`switch_map.DreameA2MapEdgemasterSwitch` (no-op + warning) — but a no-op switch
+the UI still renders as a live toggle is only half a fix; the control should
+not *look* operable.
+
+**Done when:**
+1. Every entity on a control platform (`number`, `select`, `switch`,
+   `time`, plus `lawn_mower`/`button` actions) is classified in
+   `entity-inventory.yaml` into one of: **device-write-confirmed** (live
+   `r=0` + behavioural/app proof), **cloud-cache-only** (cloud accepts,
+   device doesn't apply), **no-write** (`r=-3`/80001/no surface), or
+   **untested**. The `write_path` + a new explicit `control_mode:`
+   (`writable` | `read_only_pending` | `read_only_confirmed`) field carry
+   the verdict; CI gate (`tests/inventory/…`) keeps code ↔ inventory in sync.
+2. For every entity that is NOT device-write-confirmed, the HA control no
+   longer presents as operable-with-no-effect. Pick the representation in a
+   short brainstorm/spec first (options to weigh: convert to a read-only
+   `sensor`; keep the control but `_attr_available=False` / disabled-by-
+   default; or a "Diagnostic, read-only" entity-category + name suffix). The
+   chosen pattern is applied uniformly, not per-entity ad hoc, and the
+   existing EdgeMaster no-op switch is migrated onto it.
+3. Untested controls are clearly marked (name suffix or attribute) so the
+   user knows a toggle is provisional, and each is added to the Phase-3
+   app-RPC capture list so its true write surface gets probed.
+
+**Status:** open (needs a brainstorm on the HA representation before code —
+HA has no native "read-only number/select"; the design choice in done-when #2
+is the crux). Probe tooling already exists (`tools/probe_pre_write.py`
+pattern) to settle "untested" cases live.
+**Cross-refs:** `custom_components/dreame_a2_mower/entity-inventory.yaml`
+(`write_path` / `seen_working` per entity); `switch_map.py`
+(EdgeMaster read-only precedent); `number.py:390` (the mowing-height slider
+example); `docs/research/wire-captures/settings-surface-cloud-only-2026-05-09.md`,
+`cfg-write-regression-2026-05-09.md`, `pre-write-r3-2026-06-03.md` (the
+cloud-cache-only / r=-3 findings); the Phase-3 app-RPC TODO below; auto-memory
+`feedback_no_migration_overengineering` (single-user — favour the simplest
+honest representation).
+
 ### s2p2 fault-surfacing — follow-ups after the FAULT_CODES partition
 
 **Why:** The fault-partition feature shipped on branch `fix/s2p2-fault-partition`
@@ -220,8 +268,22 @@ chunked-batch key we haven't probed.
 **Done when:** Toggle each in the app while monitoring the empty-batch
 read; if any chunked-batch key changes, surface as a new entity. If
 neither changes, document as confirmed BT-only post-cloud-discovery.
-**Status:** open
-**Cross-refs:** historical doc; `docs/research/cloud-write-reference.md`.
+**Status:** RESOLVED 2026-06-03 — confirmed no routed-action write surface.
+The premise ("maybe cloud-writable post-discovery") was tested directly
+rather than via the empty-batch route: Mowing Efficiency is `CFG.PRE[1]`,
+and a live `set_pre` of the correct 2-element shape returned `out[0].r=-3`
+(no setter for `t='PRE'`) with the findBot relay control confirmed awake
+("Robot is here" + `r=0`). Per the 2026-05-09 r-code disambiguation `r=-3`
+is target-level, so it is shape-independent. EdgeMaster (`s6p2[2]`) has no
+`PRE` slot on g2408 and `PRE` has no setter regardless. So neither is
+writable via the routed-action CFG surface; `s6p2` itself is a read-only
+push reflector. `set_pre` now parses `out[0].r` and fails honestly instead
+of reporting false success. The ONE remaining unknown — the app's actual
+write RPC — is the Phase-3 HTTPS-sniff work tracked under "Determine whether
+HA writes drive the device…" below; it is NOT specific to these two fields.
+**Cross-refs:** `docs/research/wire-captures/pre-write-r3-2026-06-03.md`;
+`tools/probe_pre_write.py`; `inventory.yaml § PRE` + `§ s6p2` (2026-06-03
+verifications); historical doc; `docs/research/cloud-write-reference.md`.
 
 ### Capture zone / edge action codes for SCHEDULE blob
 
@@ -769,11 +831,76 @@ blocked bits remain:
 **Remaining:**
 - The app's "Patrol Logs" TAB is still empty (separate from the mower session
   archive — origin unknown).
-- Per-field OSS schema for patrol-specific keys (s4 eiid1 piids 10/12) still
-  undecoded.
-- Live-view behaviour during a patrol is untested (op=108 intentionally does not
-  flip lawn_mower activity); revisit after observing a live patrol. Mower is
-  rain-locked.
+- Per-field OSS schema for patrol keys: now mostly decoded 2026-06-03 — see
+  `inventory.yaml § summary_point / summary_point_status / summary_complete_count /
+  summary_photo_list / summary_photo_detected / summary_pref`. The s4 eiid1
+  piid→summary cross-walk is partial (piid10≈photo_detected, piid2=complete_count,
+  piid14≈map_area, piid60=stop_reason); still need a `photo_detected=0` session to
+  confirm piid10, and piid3/7/11/12/15 remain ambiguous.
+
+**Integration work surfaced by the 2026-06-03 point patrol (op=107):**
+- **[T1] ✅ DONE (2026-06-03).** First-class patrol activities added. State machine
+  maps s2p50 op=108→`patrol_edge`, op=107→`patrol_point` (`state_machine.py` op_map +
+  the s2p1=1 working-tick override), so the activity sensor no longer sits at
+  `repositioning` for the whole patrol. Flips at the op echo (the undock→first-point
+  drive legitimately stays `repositioning` until then). Tests:
+  `tests/state_machine/test_patrol_live_activity.py`.
+- **[T2] ✅ DONE (2026-06-03).** Edge vs Point distinguished as the two activities
+  above, labelled "Edge Patrol"/"Point Patrol" (`strings.json` + `translations/en.json`;
+  `mode_enum` 107=Point Patrol / 108=Edge Patrol). lawn_mower projects both → MOWING.
+- **[T3] PARTIAL (2026-06-03).** Root cause FIXED: `classify_session_type` now treats
+  op=107 as patrol (was falling through → the new run mislabelled "Mowing"), and
+  `mode_enum` has 107. So a freshly-finalized point patrol types `patrol` and the
+  picker shows `[Patrol]`. **Remaining:** (a) the picker still shows a generic
+  `[Patrol]` — to show `[Edge Patrol]`/`[Point Patrol]` the archive INDEX entry
+  (`archive/session.py:ArchivedSession`) must carry the mode/subtype (persisted-format
+  change); (b) sessions archived BEFORE this fix keep their old type on disk.
+  **Both (a) and (b) are DEFERRED into the session-format brainstorm below.**
+
+**[BRAINSTORM] Session title + archive-format design (decide before touching the
+persisted format).** Scope agreed 2026-06-03:
+  1. **Subtype in the picker title, for BOTH patrol and mow.** If patrol surfaces
+     Edge/Point, mowing should match: `[Mowing — All areas]` / `[Mowing — Edge]` /
+     `[Mowing — Zone]` / `[Mowing — Spot]` and `[Patrol — Edge]` / `[Patrol — Point]`.
+     Patrol and mow should feel the same. Needs a persisted subtype/mode on
+     `ArchivedSession` + a unified `format_session_label`.
+  2. **Scheduled vs manual visual differentiation:** considered, NOT now (start_mode
+     is decoded; revisit later).
+  3. **Can a patrol be scheduled?** TBD — unknown whether the app allows it. (NB the
+     classifier already handles a non-echoed patrol via `saw_patrol_start`/s2p2=51, so
+     a scheduled patrol would still type `patrol` if it ever happens.)
+  4. **House per-point/edge settings + `photo_list`** on the patrol session record so
+     they're tied to the session — gated on T4 (image location) for the photos.
+  5. **Migration:** rebuild existing sessions via `tools/rebuild_session.py` once the
+     format lands (the 2026-06-03 point patrol currently reads `[Mowing]` on disk).
+- **[T4] Auto-Capture photo retrieval (blocked-by-path).** Photos are referenced in
+  the summary `photo_list` (real filenames) but the bytes are not yet fetchable — the
+  bare leaf is NoSuchKey in the summary's Aliyun dir and the exact `479D/` Xiaomi-FDS
+  subpath is unknown. Needs app-capture or APK; see `project_g2408_ai_photo_probe` +
+  `inventory.yaml § summary_photo_list`. Also: `fetch_session_photos.py` only reads
+  `ai_obstacle` — patch it to read `photo_list`.
+- **[T6] Partial/interrupted edge patrol mis-typed `maintenance_run` ("To Point").**
+  Observed 2026-06-03 on a real edge patrol (op=108) that was interrupted by a stuck
+  event then by rain protection (OLD code — pre-T1/T3 deploy). It archived as a
+  "To Point" session and finalized with location ON_LAWN although the mower was in
+  fact docked. Two distinct defects to investigate (with POST-deploy data — re-test
+  the edge patrol after the release):
+    (a) **typing:** an op=108 patrol should classify `patrol`, but after a
+    stuck/rain interruption it landed `maintenance_run`. Likely `last_task_op` got
+    overwritten away from 108 by a return/cancel op AND `saw_patrol_start` (s2p2=51)
+    didn't survive the interruption/session-split. Verify against the wire
+    (`probe_log_20260520_131350.jsonl`, the ~21:xx edge patrol) — do NOT presume.
+    (b) **location:** finalized ON_LAWN while docked — the dock-return s2p1 either
+    wasn't seen or wasn't applied to the archived snapshot at finalize. Cross-ref
+    `project_rain_reboot_session_fix`.
+  Side observation (LEAVE debugging for now per user): rain protection appears to
+  CANCEL a patrol (the app cancelled the session), unlike a mow which it pauses —
+  TBD whether that's firmware behaviour.
+- **[T5] Settings are reconstructable, not stored.** Per-point cycles =
+  count of in-place ~360° rotations at the point; auto-capture = whether photo_list
+  timestamps fall in that point's dwell window. If per-point patrol info is ever
+  surfaced, derive it this way (the requested toggle values exist on no reachable
+  surface). See `inventory.yaml § o107`.
 **Procedure:** [docs/research/g2408-capture-procedures.md#4-patrol-log-trigger-investigation](g2408-capture-procedures.md#4-patrol-log-trigger-investigation)
 **Cross-refs:** journal topic `s2p50 op-code catalog`; apk opcodes 107/108; DONE.md "Patrol Logs"
 
@@ -990,10 +1117,22 @@ stores (relax the 10-element minimum); `_build_pre_efficiency`
 reads the current PRE list from `cs.cfg["PRE"]` and mutates only
 the index it owns; live test on g2408 confirms PRE round-trips at
 length 2 after a "Mowing Efficiency" toggle.
-**Status:** open (deferred — schedule + AI work first)
-**Cross-refs:** `custom_components/dreame_a2_mower/protocol/cfg_action.py:162`;
+**Status:** mostly moot 2026-06-03 — the live test was performed
+(`tools/probe_pre_write.py`) and `t='PRE'` returned `out[0].r=-3`: the
+device has NO routed-action setter for PRE, so a PRE write never reaches
+the firmware regardless of array length. The "inflating a field firmware
+kept short" concern is therefore academic (nothing is stored device-side).
+`set_pre` now parses `out[0].r` and returns False on the r=-3 reject
+(no more false success). The only residual cleanup value is cosmetic:
+the efficiency select still *attempts* a write that can't succeed —
+consider making it read-only (like `switch_map.DreameA2MapEdgemasterSwitch`)
+OR leave it attempting-and-failing-honestly. Relaxing the len<10 guard /
+2-element RMW is NOT worth doing unless the Phase-3 app-RPC capture finds a
+PRE write path that *does* apply.
+**Cross-refs:** `docs/research/wire-captures/pre-write-r3-2026-06-03.md`;
+`custom_components/dreame_a2_mower/protocol/cfg_action.py:162`;
 `custom_components/dreame_a2_mower/select.py:175-200`; live probe
-`/tmp/probe_cfg_arrays.py`.
+`tools/probe_pre_write.py`.
 
 ### BAT[2] hardcoded `1` in build helpers
 
