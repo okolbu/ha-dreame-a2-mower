@@ -747,7 +747,19 @@ class _FetchersMixin:
         current PRE array via fetch_cfg(), mutate the target element, and
         pass the full updated array here.
 
-        Returns True on success, False on any failure.
+        Returns True only when the device's routed-action response has
+        ``out[0].r == 0``. The HTTP-layer ``code`` is always 0 on a
+        reachable cloud even when the device rejects the action, so a
+        shallow ``result is not None`` check reports false success — the
+        same bug class as the pre-v1.0.2a9 ``set_cfg``. We parse
+        ``out[0].r`` here just like ``set_cfg`` does.
+
+        Known result on g2408 fw 4.3.6_0550: ``t='PRE'`` has NO setter at
+        the s2.50 routed-action address — every PRE write returns
+        ``out[0].r=-3`` (relay-confirmed, not a sleeping-relay 80001).
+        So this returns False on g2408; the caller's optimistic update is
+        reverted and HA surfaces the rejection instead of a false success.
+        See docs/research/wire-captures/pre-write-r3-2026-06-03.md.
 
         Source: protocol/cfg_action.py set_pre(); docs/research/g2408-protocol.md §6.2.
         """
@@ -757,6 +769,31 @@ class _FetchersMixin:
             result = cfg_action.set_pre(self.action, pre_array)
             if result is None:
                 _LOGGER.warning("set_pre: cloud returned None (80001?)")
+                return False
+            if not isinstance(result, dict):
+                _LOGGER.warning(
+                    "set_pre: unexpected response shape: %r", result
+                )
+                return False
+            top_code = result.get("code")
+            if top_code is not None and top_code != 0:
+                _LOGGER.warning("set_pre: cloud HTTP error code %s", top_code)
+                return False
+            outs = result.get("out") or []
+            if not outs or not isinstance(outs[0], dict):
+                _LOGGER.warning(
+                    "set_pre: missing or malformed `out` in response: %r", result
+                )
+                return False
+            r = outs[0].get("r")
+            if r != 0:
+                msg = outs[0].get("msg") or outs[0].get("e") or ""
+                _LOGGER.warning(
+                    "set_pre: device rejected (out[0].r=%r msg=%r). t='PRE' has "
+                    "no routed-action setter on g2408 — see "
+                    "docs/research/wire-captures/pre-write-r3-2026-06-03.md",
+                    r, msg,
+                )
                 return False
             return True
         except ValueError as ex:
