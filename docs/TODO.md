@@ -38,15 +38,31 @@ now confirmed `r=-3` (2026-06-03). The precedent for honest read-only is
 the UI still renders as a live toggle is only half a fix; the control should
 not *look* operable.
 
-**Done when:**
-1. Every entity on a control platform (`number`, `select`, `switch`,
-   `time`, plus `lawn_mower`/`button` actions) is classified in
-   `entity-inventory.yaml` into one of: **device-write-confirmed** (live
-   `r=0` + behavioural/app proof), **cloud-cache-only** (cloud accepts,
-   device doesn't apply), **no-write** (`r=-3`/80001/no surface), or
-   **untested**. The `write_path` + a new explicit `control_mode:`
-   (`writable` | `read_only_pending` | `read_only_confirmed`) field carry
-   the verdict; CI gate (`tests/inventory/…`) keeps code ↔ inventory in sync.
+**AUDIT DONE (2026-06-03)** — full classification in
+`docs/research/control-honesty-audit-2026-06-03.md`. Every control entity is
+bucketed A device-write-confirmed / B device-write-presumed / C cloud-cache-only /
+D read-only no-op / E integration-local-honest. **Misleading set = C + D** (~17
+per-map SETTINGS controls + ~7 CFG int-list controls that "stick" but the firmware
+ignores, plus ~10 cfg_key-omitted no-op controls). Honest = A (working-9 CFG +
+routed op=100/9/109 actions) and E (action-mode, target selection, archive pickers,
+refresh/finalize buttons). Still-open follow-ups the audit surfaced:
+- **WRP & LANG A-vs-C is unresolved** — a same-day (2026-05-09) contradiction
+  between `cfg-write-regression` ("no setter, r=-3") and the `_build_wrp` /
+  `_build_text_language` docstrings ("verified live"). Re-probe through the current
+  `set_cfg` (parses `out[0].r`) to settle; one of the two records gets retracted.
+- **Bucket B needs live probes** — s5a2/3/4 (stop/pause/dock direct actions, may
+  80001), op=200 active-map, op=10 generate_3dmap, op=12 lock_bot.
+- **`o10` name drift** (inventory `upload_map` vs code `GENERATE_3D_MAP`); stale
+  `actions.py` line numbers in inventory evidence pointers.
+- **Coverage gaps:** Patrol (o107/o108) has no trigger control; `MISTA` no fallback
+  sensor; phantom-sensor prose for `WRF`/`TIME`/`VER` (claim sensors that don't exist).
+
+**Done when (remaining):**
+1. ~~Classify every control entity~~ DONE in the audit doc. Next: persist the
+   verdict as an explicit `control_mode:` (`writable` | `read_only_pending` |
+   `read_only_confirmed`) field on each entity in `entity-inventory.yaml` + a CI
+   gate (`tests/inventory/…`) keeping code ↔ inventory in sync. (Hold the WRP/LANG
+   rows at `read_only_pending` until the re-probe settles them.)
 2. For every entity that is NOT device-write-confirmed, the HA control no
    longer presents as operable-with-no-effect. Pick the representation in a
    short brainstorm/spec first (options to weigh: convert to a read-only
