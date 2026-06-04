@@ -731,8 +731,8 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         ),
     ),
     DreameA2DiagnosticSensorEntityDescription(
-        key="mower_timezone",
-        translation_key="mower_timezone",
+        key="timezone",
+        translation_key="timezone",
         icon="mdi:earth-clock",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,

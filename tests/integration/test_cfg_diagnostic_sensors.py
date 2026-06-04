@@ -122,14 +122,14 @@ def test_weather_forecast_reference_sensor_none():
     assert d.value_fn(coord) is None
 
 
-def test_mower_timezone_sensor():
-    d = _descriptor("mower_timezone")
+def test_timezone_sensor():
+    d = _descriptor("timezone")
     coord = _coord_with_state(timezone="Europe/Oslo")
     assert d.value_fn(coord) == "Europe/Oslo"
 
 
-def test_mower_timezone_sensor_none():
-    d = _descriptor("mower_timezone")
+def test_timezone_sensor_none():
+    d = _descriptor("timezone")
     coord = _coord_with_state(timezone=None)
     assert d.value_fn(coord) is None
 
@@ -151,8 +151,8 @@ def test_weather_forecast_reference_sensor_is_disabled_by_default():
     assert d.entity_registry_enabled_default is False
 
 
-def test_mower_timezone_sensor_is_disabled_by_default():
-    d = _descriptor("mower_timezone")
+def test_timezone_sensor_is_disabled_by_default():
+    d = _descriptor("timezone")
     assert d.entity_registry_enabled_default is False
 
 
@@ -163,7 +163,7 @@ def test_cfg_version_sensor_is_disabled_by_default():
 
 def test_all_three_have_diagnostic_entity_category():
     from homeassistant.helpers.entity import EntityCategory
-    for key in ("weather_forecast_reference", "mower_timezone", "cfg_version"):
+    for key in ("weather_forecast_reference", "timezone", "cfg_version"):
         d = _descriptor(key)
         assert d.entity_category == EntityCategory.DIAGNOSTIC, (
             f"{key}: expected DIAGNOSTIC, got {d.entity_category}"

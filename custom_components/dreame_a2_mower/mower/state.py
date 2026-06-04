@@ -507,7 +507,7 @@ class MowerState:
     weather_forecast_reference: int | None = None
 
     # Source: CFG.TIME (confirmed). IANA timezone name, e.g. "Europe/Oslo".
-    # Exposed as sensor.mower_timezone. Persistence: persistent.
+    # Exposed as sensor.timezone. Persistence: persistent.
     timezone: str | None = None
 
     # Source: CFG.VER (confirmed). Monotonic CFG-write counter.

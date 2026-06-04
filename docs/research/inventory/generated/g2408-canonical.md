@@ -2019,7 +2019,7 @@ just an enable flag. Sample: 1 (on).
 ### TIME — `timezone`
 
 Timezone IANA name, e.g. 'Europe/Oslo'. Surfaced as the
-disabled-by-default diagnostic sensor.mower_timezone (added 2026-06-04).
+disabled-by-default diagnostic sensor.timezone (added 2026-06-04).
 Sample: "Europe/Oslo".
 
 **See also:** `custom_components/dreame_a2_mower/sensor_device.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX TIME`

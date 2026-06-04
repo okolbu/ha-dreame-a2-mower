@@ -4116,7 +4116,7 @@ cfg_keys:
     payload_shape: "str (IANA timezone name)"
     semantic: |
       Timezone IANA name, e.g. 'Europe/Oslo'. Surfaced as the
-      disabled-by-default diagnostic sensor.mower_timezone (added 2026-06-04).
+      disabled-by-default diagnostic sensor.timezone (added 2026-06-04).
       Sample: "Europe/Oslo".
     status:
       seen_on_wire: true

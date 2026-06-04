@@ -52,7 +52,7 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
 4. **Coverage gaps (separate features the audit surfaced):**
    - ~~phantom-sensor prose for `WRF`/`TIME`/`VER`~~ **DONE (2026-06-04).** Built as
      disabled-by-default DIAGNOSTIC sensors (`sensor.dreame_a2_mower_weather_forecast_reference`
-     / `_mower_timezone` / `_cfg_version`): CFG→MowerState port in
+     / `_timezone` / `_cfg_version`): CFG→MowerState port in
      `cfg_to_state_updates`, descriptors in `sensor_device.py`, inventory rows + the prose
      corrected with retraction records. The claims are now true.
    - **`MISTA` area fallback sensor — deferred (not blocked, but non-trivial).** Needs a

@@ -415,7 +415,7 @@ sensor.mowing_phase:
   reboot: required
   note: "Snapshot-backed (StateSnapshot.mowing_phase). Last-known persists across HA restart via the snapshot Store; writer is coordinator.handle_property_push → state_machine.handle_misc_persisted on s1p4."
 
-sensor.mower_timezone:
+sensor.timezone:
   holder: other
   idle: unavailable
   reboot: unavailable_ok

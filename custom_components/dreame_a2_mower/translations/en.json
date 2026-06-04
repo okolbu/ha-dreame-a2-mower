@@ -171,8 +171,8 @@
       "weather_forecast_reference": {
         "name": "Weather forecast reference"
       },
-      "mower_timezone": {
-        "name": "Mower timezone"
+      "timezone": {
+        "name": "Timezone"
       },
       "cfg_version": {
         "name": "CFG version"

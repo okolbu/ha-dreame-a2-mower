@@ -1976,7 +1976,7 @@ entities:
         cloud_device_id        — coord._cloud.device_id (cloud account record ID)
         mac_address            — coord._cloud.mac_address (WiFi MAC from cloud)
         weather_forecast_reference — coord.data.weather_forecast_reference (CFG.WRF) → "on"/"off"
-        mower_timezone         — coord.data.timezone (CFG.TIME)
+        timezone         — coord.data.timezone (CFG.TIME)
         cfg_version            — coord.data.cfg_version (CFG.VER)
       Snapshot-backed sensors survive HA restarts; MowerState-backed sensors
       in DIAGNOSTIC_SENSORS use value_fn(coord) not value_fn(coord.data) to
@@ -2009,7 +2009,7 @@ entities:
       (entity_registry_enabled_default=False). EntityCategory.DIAGNOSTIC.
       Added 2026-06-04 to resolve phantom-sensor prose in inventory.yaml.
 
-  - id: "sensor.dreame_a2_mower_mower_timezone"
+  - id: "sensor.dreame_a2_timezone"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
     class_file: "custom_components/dreame_a2_mower/sensor_device.py"
