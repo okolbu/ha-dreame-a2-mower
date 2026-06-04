@@ -247,6 +247,12 @@ sensor.blades_life_pct:
   reboot: unavailable_ok
   note: "Device-identity / consumable life — CFG-backed; populated once on first cloud poll."
 
+sensor.cfg_version:
+  holder: other
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "CFG.VER monotonic write counter; populated once on first cloud poll."
+
 sensor.charging_status:
   holder: mower_state
   idle: unavailable
@@ -408,6 +414,12 @@ sensor.mowing_phase:
   idle: unavailable
   reboot: required
   note: "Snapshot-backed (StateSnapshot.mowing_phase). Last-known persists across HA restart via the snapshot Store; writer is coordinator.handle_property_push → state_machine.handle_misc_persisted on s1p4."
+
+sensor.mower_timezone:
+  holder: other
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "CFG.TIME IANA timezone name; populated once on first cloud poll."
 
 sensor.mqtt_age_s:
   holder: snapshot
@@ -576,6 +588,12 @@ sensor.wifi_rssi_dbm:
   idle: unavailable
   reboot: required
   note: "Persisted via snapshot Store; idle: unavailable reflects fake-coord cold-start (real runtime load_persisted happens before HA platform setup)."
+
+sensor.weather_forecast_reference:
+  holder: other
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "CFG.WRF int {0,1} → 'on'/'off' string; populated once on first cloud poll."
 
 sensor.wifi_ssid:
   holder: mower_state

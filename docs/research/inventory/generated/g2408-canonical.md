@@ -2018,10 +2018,11 @@ just an enable flag. Sample: 1 (on).
 
 ### TIME — `timezone`
 
-Timezone IANA name, e.g. 'Europe/Oslo'. Exposed as
-mower_timezone sensor. Sample: "Europe/Oslo".
+Timezone IANA name, e.g. 'Europe/Oslo'. Surfaced as the
+disabled-by-default diagnostic sensor.mower_timezone (added 2026-06-04).
+Sample: "Europe/Oslo".
 
-**See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX TIME`
+**See also:** `custom_components/dreame_a2_mower/sensor_device.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX TIME`
 
 ### VER — `cfg_version`
 
@@ -2030,10 +2031,10 @@ mis-labelled "firmware version". Monotonic increment on every
 successful CFG write; useful as a tripwire for toggle-correlation
 research. Distinct from the actual firmware version surfaced by
 sensor.firmware_version (which reads device.info.version, a separate
-cloud field). Surfaced as diagnostic sensor.cfg_version.
-Sample: 444.
+cloud field). Surfaced as the disabled-by-default diagnostic
+sensor.cfg_version (added 2026-06-04). Sample: 444.
 
-**See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX VER`
+**See also:** `custom_components/dreame_a2_mower/sensor_device.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX VER`
 
 ### VOICE — `voice_prompt_modes`
 
@@ -2058,9 +2059,10 @@ Robot Voice volume. Confirmed 2026-04-24. Mapping is percentage
 ### WRF — `weather_forecast_reference`
 
 Weather Forecast Reference. Mapping {0: off, 1: on}. Surfaced as
-sensor.weather_forecast_reference. Sample: 1 (on).
+the disabled-by-default diagnostic sensor.weather_forecast_reference
+(added 2026-06-04). Sample: 1 (on).
 
-**See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX WRF`
+**See also:** `custom_components/dreame_a2_mower/sensor_device.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX WRF`
 
 ### WRP — `rain_protection`
 

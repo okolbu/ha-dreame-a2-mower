@@ -711,6 +711,47 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
             getattr(getattr(coord, "_cloud", None), "mac_address", None)
         ),
     ),
+
+    # ------ CFG diagnostic observability sensors (added 2026-06-04) ------
+    # All three read from MowerState (coord.data) which is populated by
+    # cfg_to_state_updates on every 2-min cloud refresh. Disabled by default.
+
+    DreameA2DiagnosticSensorEntityDescription(
+        key="weather_forecast_reference",
+        translation_key="weather_forecast_reference",
+        icon="mdi:weather-partly-cloudy",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        # CFG.WRF int {0, 1} → "on" / "off" string. Returns None when not
+        # yet received from the cloud (before first 2-min refresh).
+        value_fn=lambda coord: (
+            "on" if getattr(coord.data, "weather_forecast_reference", None) == 1
+            else "off" if getattr(coord.data, "weather_forecast_reference", None) == 0
+            else None
+        ),
+    ),
+    DreameA2DiagnosticSensorEntityDescription(
+        key="mower_timezone",
+        translation_key="mower_timezone",
+        icon="mdi:earth-clock",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        # CFG.TIME — IANA timezone name, e.g. "Europe/Oslo". Returns None
+        # until the first cloud refresh delivers the CFG payload.
+        value_fn=lambda coord: getattr(coord.data, "timezone", None),
+    ),
+    DreameA2DiagnosticSensorEntityDescription(
+        key="cfg_version",
+        translation_key="cfg_version",
+        icon="mdi:counter",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        # CFG.VER — monotonic int counter incremented on every CFG write.
+        # Distinct from sensor.firmware_version (which tracks the OTA firmware
+        # version from device.info.version, not this CFG-write counter).
+        value_fn=lambda coord: getattr(coord.data, "cfg_version", None),
+    ),
 )
 
 

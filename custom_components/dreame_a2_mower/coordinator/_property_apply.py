@@ -682,6 +682,35 @@ def cfg_to_state_updates(cfg: dict[str, Any]) -> dict[str, Any]:
         except (TypeError, ValueError) as ex:
             LOGGER.warning("[CFG] VOICE decode error: %s — raw=%r", ex, voice_raw)
 
+    # ---- WRF: weather forecast reference ----
+    # CFG.WRF = int {0, 1}. Confirmed on g2408 (decoded: confirmed in
+    # inventory.yaml). Surfaced as disabled-by-default sensor.
+    wrf_raw = cfg.get("WRF")
+    if wrf_raw is not None:
+        try:
+            updates["weather_forecast_reference"] = int(wrf_raw)
+        except (TypeError, ValueError) as ex:
+            LOGGER.warning("[CFG] WRF decode error: %s — raw=%r", ex, wrf_raw)
+
+    # ---- TIME: IANA timezone name ----
+    # CFG.TIME = str (IANA timezone name), e.g. "Europe/Oslo". Confirmed
+    # on g2408 (decoded: confirmed in inventory.yaml). Only port non-empty
+    # strings; an empty string is treated as absent.
+    time_raw = cfg.get("TIME")
+    if isinstance(time_raw, str) and time_raw:
+        updates["timezone"] = time_raw
+
+    # ---- VER: CFG-write revision counter ----
+    # CFG.VER = int (monotonic counter). Confirmed on g2408. Distinct from
+    # sensor.firmware_version (which reads device.info.version). Surfaced
+    # as disabled-by-default sensor.
+    ver_raw = cfg.get("VER")
+    if ver_raw is not None:
+        try:
+            updates["cfg_version"] = int(ver_raw)
+        except (TypeError, ValueError) as ex:
+            LOGGER.warning("[CFG] VER decode error: %s — raw=%r", ex, ver_raw)
+
     return updates
 
 

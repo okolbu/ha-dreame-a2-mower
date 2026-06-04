@@ -168,6 +168,15 @@
       "firmware_version_dev": {
         "name": "Firmware version (DEV)"
       },
+      "weather_forecast_reference": {
+        "name": "Weather forecast reference"
+      },
+      "mower_timezone": {
+        "name": "Mower timezone"
+      },
+      "cfg_version": {
+        "name": "CFG version"
+      },
       "ota_capable_raw": {
         "name": "OTA flag (raw)"
       },

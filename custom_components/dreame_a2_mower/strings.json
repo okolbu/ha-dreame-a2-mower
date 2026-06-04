@@ -68,6 +68,15 @@
       "task_state_code": {
         "name": "Task state (raw)"
       },
+      "weather_forecast_reference": {
+        "name": "Weather forecast reference"
+      },
+      "mower_timezone": {
+        "name": "Mower timezone"
+      },
+      "cfg_version": {
+        "name": "CFG version"
+      },
       "charging_status": {
         "state": {
           "charging": "Charging",

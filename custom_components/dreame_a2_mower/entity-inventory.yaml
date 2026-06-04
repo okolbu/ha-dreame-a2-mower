@@ -1975,9 +1975,91 @@ entities:
         ota_capable_raw        — coord.data.ota_capable_raw (CFG.DEV.ota)
         cloud_device_id        — coord._cloud.device_id (cloud account record ID)
         mac_address            — coord._cloud.mac_address (WiFi MAC from cloud)
+        weather_forecast_reference — coord.data.weather_forecast_reference (CFG.WRF) → "on"/"off"
+        mower_timezone         — coord.data.timezone (CFG.TIME)
+        cfg_version            — coord.data.cfg_version (CFG.VER)
       Snapshot-backed sensors survive HA restarts; MowerState-backed sensors
       in DIAGNOSTIC_SENSORS use value_fn(coord) not value_fn(coord.data) to
       access the state machine directly.
+
+  # ------ CFG diagnostic observability sensors (added 2026-06-04) ------
+
+  - id: "sensor.dreame_a2_mower_weather_forecast_reference"
+    platform: sensor
+    class: "DreameA2DiagnosticSensor"
+    class_file: "custom_components/dreame_a2_mower/sensor_device.py"
+    device: parent
+    source:
+      wire: "CFG.WRF"
+      state_path: "coord.data.weather_forecast_reference → 'on'/'off' string"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-04"
+    verifications:
+      - date: "2026-06-04"
+        status: presumed
+        claim: "Ported from CFG into MowerState and surfaced as a disabled-by-default diagnostic sensor."
+        evidence: "sensor_device.py DIAGNOSTIC_SENSORS + coordinator/_property_apply.py cfg_to_state_updates"
+    references:
+      wire_entry: "WRF"
+      code: "custom_components/dreame_a2_mower/sensor_device.py"
+    notes: |
+      CFG.WRF int {0,1} → "on"/"off" string. Disabled-by-default
+      (entity_registry_enabled_default=False). EntityCategory.DIAGNOSTIC.
+      Added 2026-06-04 to resolve phantom-sensor prose in inventory.yaml.
+
+  - id: "sensor.dreame_a2_mower_mower_timezone"
+    platform: sensor
+    class: "DreameA2DiagnosticSensor"
+    class_file: "custom_components/dreame_a2_mower/sensor_device.py"
+    device: parent
+    source:
+      wire: "CFG.TIME"
+      state_path: "coord.data.timezone (IANA timezone name string)"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-04"
+    verifications:
+      - date: "2026-06-04"
+        status: presumed
+        claim: "Ported from CFG into MowerState and surfaced as a disabled-by-default diagnostic sensor."
+        evidence: "sensor_device.py DIAGNOSTIC_SENSORS + coordinator/_property_apply.py cfg_to_state_updates"
+    references:
+      wire_entry: "TIME"
+      code: "custom_components/dreame_a2_mower/sensor_device.py"
+    notes: |
+      CFG.TIME IANA timezone name, e.g. "Europe/Oslo". Disabled-by-default
+      (entity_registry_enabled_default=False). EntityCategory.DIAGNOSTIC.
+      Added 2026-06-04 to resolve phantom-sensor prose in inventory.yaml.
+
+  - id: "sensor.dreame_a2_mower_cfg_version"
+    platform: sensor
+    class: "DreameA2DiagnosticSensor"
+    class_file: "custom_components/dreame_a2_mower/sensor_device.py"
+    device: parent
+    source:
+      wire: "CFG.VER"
+      state_path: "coord.data.cfg_version (monotonic int counter)"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-04"
+    verifications:
+      - date: "2026-06-04"
+        status: presumed
+        claim: "Ported from CFG into MowerState and surfaced as a disabled-by-default diagnostic sensor."
+        evidence: "sensor_device.py DIAGNOSTIC_SENSORS + coordinator/_property_apply.py cfg_to_state_updates"
+    references:
+      wire_entry: "VER"
+      code: "custom_components/dreame_a2_mower/sensor_device.py"
+    notes: |
+      CFG.VER monotonic int counter incremented on each CFG write.
+      SensorStateClass.MEASUREMENT. Distinct from sensor.firmware_version
+      (which reads the OTA firmware version from device.info.version).
+      Disabled-by-default (entity_registry_enabled_default=False).
+      EntityCategory.DIAGNOSTIC. Added 2026-06-04.
 
   - id: "sensor.dreame_a2_mower_ota_status"
     platform: sensor

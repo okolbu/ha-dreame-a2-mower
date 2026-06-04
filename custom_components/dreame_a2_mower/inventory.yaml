@@ -4115,16 +4115,24 @@ cfg_keys:
     category: "cfg"
     payload_shape: "str (IANA timezone name)"
     semantic: |
-      Timezone IANA name, e.g. 'Europe/Oslo'. Exposed as
-      mower_timezone sensor. Sample: "Europe/Oslo".
+      Timezone IANA name, e.g. 'Europe/Oslo'. Surfaced as the
+      disabled-by-default diagnostic sensor.mower_timezone (added 2026-06-04).
+      Sample: "Europe/Oslo".
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-04"
       decoded: confirmed
+    verifications:
+      - date: "2026-06-04"
+        status: verified
+        claim: "Now ported from CFG into MowerState and surfaced as a disabled-by-default diagnostic sensor."
+        evidence: "sensor_device.py DIAGNOSTIC_SENSORS + coordinator/_property_apply.py cfg_to_state_updates"
+        retracts: "Exposed as mower_timezone sensor."
+        reason: "the sensor did not previously exist; now built"
     references:
       apk: "ioBroker.dreame/apk.md §setX TIME"
-      integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
+      integration_code: "custom_components/dreame_a2_mower/sensor_device.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
 
   - id: "VER"
@@ -4137,16 +4145,23 @@ cfg_keys:
       successful CFG write; useful as a tripwire for toggle-correlation
       research. Distinct from the actual firmware version surfaced by
       sensor.firmware_version (which reads device.info.version, a separate
-      cloud field). Surfaced as diagnostic sensor.cfg_version.
-      Sample: 444.
+      cloud field). Surfaced as the disabled-by-default diagnostic
+      sensor.cfg_version (added 2026-06-04). Sample: 444.
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-04"
       decoded: confirmed
+    verifications:
+      - date: "2026-06-04"
+        status: verified
+        claim: "Now ported from CFG into MowerState and surfaced as a disabled-by-default diagnostic sensor."
+        evidence: "sensor_device.py DIAGNOSTIC_SENSORS + coordinator/_property_apply.py cfg_to_state_updates"
+        retracts: "Surfaced as diagnostic sensor.cfg_version."
+        reason: "the sensor did not previously exist; now built"
     references:
       apk: "ioBroker.dreame/apk.md §setX VER"
-      integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
+      integration_code: "custom_components/dreame_a2_mower/sensor_device.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
 
   - id: "VOICE"
@@ -4202,15 +4217,23 @@ cfg_keys:
       1: "on"
     semantic: |
       Weather Forecast Reference. Mapping {0: off, 1: on}. Surfaced as
-      sensor.weather_forecast_reference. Sample: 1 (on).
+      the disabled-by-default diagnostic sensor.weather_forecast_reference
+      (added 2026-06-04). Sample: 1 (on).
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-04"
       decoded: confirmed
+    verifications:
+      - date: "2026-06-04"
+        status: verified
+        claim: "Now ported from CFG into MowerState and surfaced as a disabled-by-default diagnostic sensor."
+        evidence: "sensor_device.py DIAGNOSTIC_SENSORS + coordinator/_property_apply.py cfg_to_state_updates"
+        retracts: "Surfaced as sensor.weather_forecast_reference."
+        reason: "the sensor did not previously exist; now built"
     references:
       apk: "ioBroker.dreame/apk.md §setX WRF"
-      integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
+      integration_code: "custom_components/dreame_a2_mower/sensor_device.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
 
   - id: "WRP"

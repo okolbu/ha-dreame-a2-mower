@@ -498,6 +498,23 @@ class MowerState:
     # Observability hook — not a user-visible setting. Persistence: persistent.
     last_settings_change_unix: int | None = None
 
+    # ------ CFG diagnostic observability fields ------
+    # These are surfaced as disabled-by-default diagnostic sensors.
+    # Added 2026-06-04.
+
+    # Source: CFG.WRF (confirmed). Mapping {0: off, 1: on}.
+    # Exposed as sensor.weather_forecast_reference. Persistence: persistent.
+    weather_forecast_reference: int | None = None
+
+    # Source: CFG.TIME (confirmed). IANA timezone name, e.g. "Europe/Oslo".
+    # Exposed as sensor.mower_timezone. Persistence: persistent.
+    timezone: str | None = None
+
+    # Source: CFG.VER (confirmed). Monotonic CFG-write counter.
+    # Exposed as sensor.cfg_version. Distinct from sensor.firmware_version.
+    # Persistence: persistent.
+    cfg_version: int | None = None
+
     # ------ F5 fields: session lifecycle ------
 
     # Volatile — unix timestamp when the current session started (set
