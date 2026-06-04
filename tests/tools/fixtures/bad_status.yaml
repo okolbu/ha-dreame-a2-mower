@@ -16,8 +16,6 @@ properties:
       first_seen: "2026-04-17"
       last_seen: "2026-04-30"
       decoded: maybe_sometimes
-      bt_only: false
-      not_on_g2408: false
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:56"
 events: []

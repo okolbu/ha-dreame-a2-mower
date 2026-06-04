@@ -2094,13 +2094,11 @@ via s2p2=56. Sample: [1, 4].
 ### AIOBS — `ai_obstacle_data`
 
 APK-documented endpoint. The 3 cloud dumps so far all returned
-r=-3. Previously concluded `not_on_g2408: true`, but MISTA
-reversed that conclusion when it flipped from r=-3/r=-1 to a
-successful payload between dump 2 and dump 3 — establishing
-that error responses are stateful or transient, not negative
-proof of firmware support. With only 3 data points this row
-is downgraded to `decoded: hypothesized` and
-`not_on_g2408: false`.
+r=-3. Was once suspected absent on g2408, but MISTA reversed that
+when it flipped from r=-3/r=-1 to a successful payload between
+dump 2 and dump 3 — establishing that error responses are stateful
+or transient, not negative proof of firmware support. With only 3
+data points this row is kept at `decoded: hypothesized`.
 
 **Open questions:**
 - Capture this endpoint during an AI-obstacle detection event (s1p53 transition).

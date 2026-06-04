@@ -242,7 +242,7 @@ Every procedure follows this structure:
 
 ## 7. Cloud-dump cadence re-test
 
-**Closes:** AIOBS, MAPD, MAPI, MITRC, OBS, PRE (cfg_individual.PRE) — the 6 axis-1-hardening downgrades that were marked `not_on_g2408 → false / decoded: hypothesized` due to insufficient negative evidence; MISTA's open questions about r=-1 ↔ ok flips; PIN, PREI, RPET, IOT semantics if any flip.
+**Closes:** AIOBS, MAPD, MAPI, MITRC, OBS, PRE (cfg_individual.PRE) — the 6 axis-1-hardening downgrades left at `decoded: hypothesized` due to insufficient negative evidence; MISTA's open questions about r=-1 ↔ ok flips; PIN, PREI, RPET, IOT semantics if any flip.
 **Trigger type:** `automatic-over-time`
 **Estimated effort:** 1 day to set up; 1-2 weeks to accumulate samples; ~30 min to merge findings
 
@@ -253,7 +253,7 @@ Every procedure follows this structure:
 ### Procedure
 1. Schedule `dreame_cloud_dump.py` to run hourly for 1-2 weeks.
 2. Each run writes a fresh dump under `dreame_cloud_dumps/`.
-3. Periodically (every few days), run `python tools/inventory_audit.py --consistency` to surface any not_on_g2408 contradictions.
+3. Periodically (every few days), run `python tools/inventory_audit.py --consistency` to surface any seen_on_wire / value-catalog contradictions.
 4. After the collection period, walk all dumps and look for endpoint flips:
    ```bash
    python -c "
@@ -278,12 +278,12 @@ Every procedure follows this structure:
 
 ### What to look for
 - Endpoints that returned `ok` in some dumps and `r=-1` or `r=-3` in others. Each one is evidence the endpoint is stateful, NOT firmware-unsupported.
-- Endpoints that returned `r=-3` consistently across all dumps in the period — those become genuinely confirmed `not_on_g2408: true` if combined with apk-side evidence (e.g., the apk explicitly labels them vacuum-only).
+- Endpoints that returned `r=-3` consistently across all dumps in the period — those are genuinely absent: leave them out of inventory.yaml (no row) if combined with apk-side evidence (e.g., the apk explicitly labels them vacuum-only).
 - Endpoint payload patterns when they DO succeed — do MAPD / MAPI return chunked map data?
 
 ### After capture
 - For each flip endpoint: upgrade row from `decoded: hypothesized` to `decoded: confirmed`, populate `payload_shape:` with the observed success shape.
-- For each consistently-erroring endpoint with corroborating apk evidence: revisit `not_on_g2408: true` (with the proper "consistent-across-N-dumps + apk-says-vacuum-only" justification).
+- For each consistently-erroring endpoint with corroborating apk evidence: keep it out of inventory.yaml as genuinely absent (record the "consistent-across-N-dumps + apk-says-vacuum-only" justification in the journal).
 - Add a journal entry under `cfg_individual MISTA reversal` topic noting the broader cadence study results.
 
 ## 8. Change PIN code wire format

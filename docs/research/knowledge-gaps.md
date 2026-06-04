@@ -113,8 +113,9 @@ remaining gap), s2p50 (TASK envelope opcodes — see §6).
 
 Census over 66k+ frames shows **zero occurrences** — these are upstream/apk
 catalog carried into the integration that the g2408 firmware does not emit on the
-`/status/` topic. Candidates to flag `not_on_g2408: true` (or clearly mark
-"upstream catalog, unobserved") so they stop reading as live gaps:
+`/status/` topic. Since inventory.yaml now lists only g2408-relevant rows, these
+belong OUT of the inventory (or carry `decoded: hypothesized` if kept for
+reference) so they stop reading as live gaps:
 
 - **s4p21, s4p22, s4p23, s4p26, s4p27, s4p44, s4p47, s4p49, s4p59, s4p68, s4p83**
   (obstacle_avoidance / ai_detection / cleaning_mode / child_lock / cruise_type /

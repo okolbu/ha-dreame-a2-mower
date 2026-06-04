@@ -176,10 +176,6 @@ def _derive_status_label(row: dict[str, Any]) -> str:
         return "WIRED"
     seen = status.get("seen_on_wire", False)
     decoded = status.get("decoded")
-    if status.get("not_on_g2408"):
-        return "NOT-ON-G2408"
-    if status.get("bt_only"):
-        return "BT-ONLY"
     if seen and decoded == "confirmed":
         return "DECODED-UNWIRED"
     if seen:

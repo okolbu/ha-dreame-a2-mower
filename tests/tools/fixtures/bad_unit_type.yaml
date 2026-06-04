@@ -10,8 +10,6 @@ properties:
     status:
       seen_on_wire: true
       decoded: confirmed
-      bt_only: false
-      not_on_g2408: false
     references: {}
 events: []
 actions: []

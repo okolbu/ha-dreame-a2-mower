@@ -52,8 +52,6 @@ append a new entry. The generic schema:
     first_seen: "2026-04-17"     # date of first probe-log appearance
     last_seen: "2026-04-30"
     decoded: confirmed           # confirmed | hypothesized | unknown
-    bt_only: false
-    not_on_g2408: false
 
   references:
     apk: "ioBroker.dreame/apk.md §parseRobotPose"
@@ -123,16 +121,13 @@ The audit runs two passes by default:
 and `cfg_individual` endpoint observed in the probe/dump corpus has an inventory
 row. This catches omissions — things we saw but didn't document.
 
-**Consistency pass** (3 sections): reconciles every _claim_ in the inventory
+**Consistency pass** (2 sections): reconciles every _claim_ in the inventory
 against the corpus. Specifically:
 
-1. **`not_on_g2408: true` rows**: scan all `dump_*.json` files for an `ok`
-   response under that endpoint name. If ANY dump shows `ok` → contradiction
-   (the endpoint does respond, so the row is wrong).
-2. **`seen_on_wire: false` rows** (properties): scan all `probe_log_*.jsonl`
+1. **`seen_on_wire: false` rows** (properties): scan all `probe_log_*.jsonl`
    for the slot's (siid, piid). If observed → contradiction (the slot was seen,
    so the row is wrong).
-3. **`value_catalog` membership**: for property rows with a `value_catalog` AND
+2. **`value_catalog` membership**: for property rows with a `value_catalog` AND
    `seen_on_wire: true`, collect every scalar value observed in the probe corpus
    for that (siid, piid). Any value not in the catalog → contradiction (possible
    novel enum value that the row should document).
@@ -140,15 +135,20 @@ against the corpus. Specifically:
 The consistency pass exists because the presence pass was blind to _wrong_
 claims in existing rows — only catching missing rows.
 
-### Empirical caveat: r=-1 / r=-3 are not proof of feature absence
+### Retired status fields: `bt_only` and `not_on_g2408`
 
-`r=-1` and `r=-3` responses from `cfg_individual` endpoints are **stateful or
-transient** — they do not prove the feature is absent from the firmware. The
-MISTA endpoint, for example, returned `r=-1` in dumps 1 and 2 but a full `ok`
-payload in dump 3 (same firmware, different mower state). With only 3 cloud
-dumps in the corpus, the sample is too small to claim non-support. Any row
-previously marked `not_on_g2408: true` solely on the basis of `r=-1`/`r=-3`
-responses has been downgraded to `decoded: hypothesized`.
+These two per-row status booleans were removed (every row carried `false`, so
+they conveyed nothing). The inventory now represents the *current g2408-known*
+surface: a row's presence means it is relevant to g2408, and "not on this device"
+is expressed by absence from the inventory rather than a per-row flag. The old
+`not_on_g2408` consistency check was dropped with the field.
+
+The empirical reason the flag never stuck: `r=-1` / `r=-3` responses from
+`cfg_individual` endpoints are **stateful or transient** — they do not prove a
+feature is absent. MISTA, for example, returned `r=-1` in dumps 1-2 but a full
+`ok` payload in dump 3 (same firmware, different mower state), so nothing was
+ever confidently marked absent. `bt_only` was the debunked BT-vs-cloud framing
+(settings the integration can't write are cloud-cache failures, not Bluetooth).
 
 ## What "decoded: confirmed" means
 
@@ -175,9 +175,8 @@ wire but semantics inferred), the row stays at `decoded: hypothesized`.
   remain `decoded: hypothesized` with open questions to trigger future capture.
 - **Small-sample problem with r=-1 / r=-3**: only 3 cloud dumps exist. Any
   endpoint that returned errors in all dumps may still respond `ok` under
-  different mower state (post-mow, mid-mow, BT-active, etc.). Watchdog passes
-  should retry these endpoints in varied states before marking anything
-  `not_on_g2408: true`.
+  different mower state (post-mow, mid-mow, etc.) — which is why per-row
+  "not on g2408" claims were retired rather than trusted.
 - **Watchdog's role**: the consistency audit is the standing watchdog. Running
   it against new probe logs or cloud dumps as they arrive will surface any
   new `seen_on_wire` contradictions or novel enum values automatically.

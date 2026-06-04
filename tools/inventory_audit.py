@@ -154,29 +154,6 @@ def _format_id(kind: str, siid: int, key: int) -> str:
 # Consistency-check helpers
 # ---------------------------------------------------------------------------
 
-def _walk_dump_cfg_individual_responses(
-    dump_glob: str,
-) -> dict[str, list[str]]:
-    """Return {endpoint_name: [dump_filename, ...]} for dumps where the
-    endpoint returned an 'ok' response (not an _error)."""
-    ok_by_endpoint: dict[str, list[str]] = defaultdict(list)
-    for path in glob.glob(dump_glob):
-        if path == "/dev/null":
-            continue
-        try:
-            data = json.loads(Path(path).read_text())
-        except (json.JSONDecodeError, FileNotFoundError):
-            continue
-        dump_name = Path(path).name
-        cfg_indiv = data.get("cfg_individual") or {}
-        if not isinstance(cfg_indiv, dict):
-            continue
-        for endpoint, val in cfg_indiv.items():
-            if isinstance(val, dict) and "ok" in val and "_error" not in val:
-                ok_by_endpoint[endpoint].append(dump_name)
-    return dict(ok_by_endpoint)
-
-
 def _walk_probe_log_observed_values(
     probe_glob: str,
 ) -> dict[tuple[int, int], set[Any]]:
@@ -225,36 +202,21 @@ def consistency_audit(
 ) -> tuple[int, str]:
     """Run consistency checks and return (exit_code, markdown_section_str).
 
-    Three checks:
-    1. not_on_g2408:true rows — any dump showing ok for that endpoint → fail.
-    2. seen_on_wire:false rows — any probe log observing that (siid,piid) → fail.
-    3. value_catalog rows with seen_on_wire:true — any observed value not in
+    Two checks:
+    1. seen_on_wire:false rows — any probe log observing that (siid,piid) → fail.
+    2. value_catalog rows with seen_on_wire:true — any observed value not in
        the catalog → fail (possible novel enum value requiring documentation).
 
     ``probe`` is the already-computed dict from _walk_probe_logs (avoids
     re-scanning the corpus).  ``probe_glob`` is still needed for the
     value-extraction pass that captures individual scalar values.
     """
-    dump_ok = _walk_dump_cfg_individual_responses(dump_glob)
     probe_values = _walk_probe_log_observed_values(probe_glob)
 
     # Build a set of all observed (kind, siid, key) pairs for fast lookup.
     probe_prop_keys = {(s, p) for (kind, s, p) in probe if kind == "property"}
 
-    # Check 1: not_on_g2408:true rows in cfg_individual.
-    not_on_g2408_contradictions: list[str] = []
-    for row in (inventory.get("cfg_individual") or []):
-        st = row.get("status") or {}
-        if not st.get("not_on_g2408"):
-            continue
-        endpoint = str(row.get("id") or "")
-        if endpoint in dump_ok:
-            dumps_str = ", ".join(sorted(dump_ok[endpoint]))
-            not_on_g2408_contradictions.append(
-                f"`{endpoint}` — claimed `not_on_g2408:true` but returned `ok` in: {dumps_str}"
-            )
-
-    # Check 2: seen_on_wire:false rows in properties (siid+piid).
+    # Check 1: seen_on_wire:false rows in properties (siid+piid).
     seen_contradictions: list[str] = []
     for row in (inventory.get("properties") or []):
         st = row.get("status") or {}
@@ -272,7 +234,7 @@ def consistency_audit(
                 f"but observed in probe corpus"
             )
 
-    # Check 3: value_catalog membership for seen properties.
+    # Check 2: value_catalog membership for seen properties.
     catalog_contradictions: list[str] = []
     for row in (inventory.get("properties") or []):
         st = row.get("status") or {}
@@ -297,7 +259,7 @@ def consistency_audit(
             )
 
     any_fail = bool(
-        not_on_g2408_contradictions or seen_contradictions or catalog_contradictions
+        seen_contradictions or catalog_contradictions
     )
 
     lines: list[str] = []
@@ -311,10 +273,6 @@ def consistency_audit(
             lines.append(f"- {it}\n")
         lines.append("\n")
 
-    csection(
-        "Consistency: not_on_g2408 claims contradicted by dump corpus",
-        not_on_g2408_contradictions,
-    )
     csection(
         "Consistency: seen_on_wire:false claims contradicted by probe corpus",
         seen_contradictions,
@@ -424,8 +382,8 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         default=False,
         help=(
-            "Run only the consistency checks (not_on_g2408 / seen_on_wire / "
-            "value_catalog) instead of the default full run. "
+            "Run only the consistency checks (seen_on_wire / value_catalog) "
+            "instead of the default full run. "
             "Default (no flag): both presence and consistency checks run."
         ),
     )

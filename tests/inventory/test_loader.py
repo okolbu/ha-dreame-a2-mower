@@ -122,8 +122,7 @@ def test_inline_value_catalog_takes_precedence_over_section() -> None:
                 "name": "status",
                 "category": "property",
                 "value_catalog": {1: "INLINE_WINS"},  # inline says "INLINE_WINS"
-                "status": {"seen_on_wire": True, "decoded": "confirmed",
-                           "bt_only": False, "not_on_g2408": False},
+                "status": {"seen_on_wire": True, "decoded": "confirmed"},
                 "references": {},
             },
         ],
@@ -135,8 +134,7 @@ def test_inline_value_catalog_takes_precedence_over_section() -> None:
         "mode_enum": [
             {"id": "s2p1_1", "value": 1, "name": "SECTION_LOSES",
              "category": "mode_enum",
-             "status": {"seen_on_wire": True, "decoded": "confirmed",
-                        "bt_only": False, "not_on_g2408": False},
+             "status": {"seen_on_wire": True, "decoded": "confirmed"},
              "references": {}},
         ],
     }
