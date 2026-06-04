@@ -79,6 +79,10 @@ def _make_coord_for_dock_test(
 
     # --- render target ---
     coord._render_base = AsyncMock(return_value=None)
+    # Render is scheduled via the thread-safe helper (HA 2026.6: async_create_task
+    # off the event loop raises). Mock it so tests assert on scheduling intent,
+    # not the call_soon_threadsafe deferral mechanism.
+    coord._schedule_render_base = MagicMock()
     coord._last_lidar_object_name = None  # needed for lidar check
 
     # --- _fire_lifecycle (no-op for this test) ---
@@ -122,19 +126,11 @@ def test_dock_arrival_schedules_render():
 
     _call_on_state_update_dock_portion(coord)
 
-    # hass.async_create_task must have been called with the render coro
-    calls = coord.hass.async_create_task.call_args_list
-    render_calls = [
-        c for c in calls
-        if hasattr(c.args[0], '__name__') or hasattr(c.args[0], 'cr_frame')
-        or 'render' in str(c).lower()
-    ]
-    # More direct: check that async_create_task was called at all after dock-arrival
-    # (we know it fires the render; check the event directly)
-    assert coord.hass.async_create_task.called, (
-        "Dock arrival must schedule _render_base via hass.async_create_task. "
-        "Currently, no render is triggered on dock-arrival, causing the idle "
-        "stripe preview to appear only after the next 2-min cloud refresh."
+    # Dock arrival must schedule a render via the thread-safe helper.
+    assert coord._schedule_render_base.called, (
+        "Dock arrival must schedule _render_base (via _schedule_render_base). "
+        "Without it the idle stripe preview persists until the next 2-min cloud "
+        "refresh."
     )
 
 
@@ -195,10 +191,9 @@ def test_first_push_at_dock_no_spurious_render():
         "First push (prev=None) must NOT fire dock_arrived (boot-time guard)"
     )
     # And no render from dock-arrival path
-    assert not coord.hass.async_create_task.called or all(
-        'render' not in str(c).lower()
-        for c in coord.hass.async_create_task.call_args_list
-    ), "First push (prev=None) must NOT trigger dock-arrival render"
+    assert not coord._schedule_render_base.called, (
+        "First push (prev=None) must NOT trigger dock-arrival render"
+    )
 
 
 # ---------------------------------------------------------------------------
