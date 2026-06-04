@@ -88,18 +88,24 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      read); the real un-awaited call is an entity-write handler calling `render_fn()` without
      await (candidates `number.py:678`, `select_global.py:989/1020`). Fold into the log-health
      sweep.
-   - **[TODO] Patrol replay omits the on-the-spot 360° spins** the mower does AT each patrol
-     point (the live map shows them; the archived/replay track does not). The finalized
-     archive renders from the CLOUD summary track (`md5` real) which evidently simplifies
-     out stationary rotations; the LOCAL `track` stream (what the live map draws) has them.
-     Capture the spins into the replay — prefer the local `track` over `cloud_track` for
-     patrol sessions, or merge the local stationary-rotation points. Cross-ref
-     `coordinator/_session.py` (replay render source), `live_map/state.py:append_point`
-     (20cm/500ms dedup — confirm it keeps same-position heading-only changes).
-   - **[CHORE] Remove the remaining `[F5-DIAG]` confirmation logs** (`_handle_task_op_echo`
-     s2p50-echo + `_seed_session_type_from_pending` seed-at-begin) once the thread-safety
-     fix is live-confirmed (a patrol should now show `last_op=107` at seed). The `[F5-RAW]`
-     and per-s2p2 `[F5-DIAG]` logs were already removed with the thread-safety fix.
+   - **[TODO] Patrol replay doesn't VISUALISE the on-the-spot 360° spins** (render-side, not
+     capture). CORRECTED 2026-06-04: `cloud_track` is EMPTY for patrols, so the replay already
+     uses the LOCAL track — which DOES capture the spins (archive `2026-06-04_1780607797`: 5
+     consecutive points at `(x,y)≈(-4.2,-1.66)` with headings `255°→8°→112°→217°→321°`). They
+     render as a stationary dot because the trail is `(x,y)` line segments. Fix is render-side:
+     show heading/rotation at fixed-position points in the replay, NOT the dedup/capture path.
+   - **[TODO] Patrol trail starts ~48s late (no dock→first-point leg).** The mower undocks and
+     reorients for ~48s emitting NO `s1p4`, so the local track's first point is +48s into the
+     session, near the dock but not AT it (archive `1780607797`: first pt `(-0.81,-0.15)@+48s`).
+     The outbound MOVEs are all captured; what's missing is the leg FROM the dock. Fix idea:
+     seed the trail with the dock position at session start so the first segment connects
+     dock→first-real-point.
+   - **[TODO minor] Live-map background stays green ~50-90s after the mower physically docks.**
+     It follows the session state, which stays active through the dock-return + OSS-fetch
+     finalize window (archive `1780607797`: archived 23:17:58, striped 23:18:06). Could flip to
+     the idle preview as soon as the mower is docked+charging, before the archive finalize.
+   - **[DONE — v1.0.23a4] `[F5-DIAG]` confirmation logs removed** after the thread-safety fix
+     was live-confirmed (`seed at begin: last_op=107`). All temporary patrol diagnostics gone.
    - **[TODO] Full integration log-health sweep.** Beyond the thread-safety raise, audit the
      HA log for any other dreame_a2_mower WARNING/ERROR (the 2026.6 async/thread-safety
      tightening may have surfaced others) and clean them up so the integration runs warning-
