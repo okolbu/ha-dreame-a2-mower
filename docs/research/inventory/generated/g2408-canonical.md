@@ -1261,7 +1261,7 @@ never reached.
 | o104 | plan_mower | {m:'a', o:104, d:{...}} | APK-KNOWN |  |
 | o105 | obstacle_mower | {m:'a', o:105, d:{...}} | APK-KNOWN |  |
 | o107 | start_cruise_point | ECHO s2p50 {o:107, exe:true, status:true, error:0, estimate_time:N, time:T, t:'TASK'}. SEND payload (point list + per-point settings) NOT captured — see open_questions. | SEEN-UNDECODED |  |
-| o108 | start_cruise_side | {m:'a', o:108, d:{...}} | DECODED-UNWIRED |  |
+| o108 | start_cruise_side | SEND {m:'a', o:108, d:{edge:[[m,c]]}} (contour pairs, CONFIRMED LIVE 2026-06-04); ECHO s2p50 {o:108, exe:true, status:true, t:'TASK'} | DECODED-UNWIRED |  |
 | o109 | start_clean_point | SEND {m:'a', p:0, o:109, d:{point:[point_id]}} via routed_action; ECHO s2p50 {o:109, exe:true, status:true|false, [estimate_time, time]} | WIRED |  |
 | o110 | start_learning_map | {m:'a', o:110} | APK-KNOWN |  |
 | o200 | change_map | echo: {d:{exe:true, o:200, status:true}, t:'TASK'} | DECODED-UNWIRED |  |
@@ -1555,8 +1555,7 @@ blades-up (area=0) with valid s1p4 position telemetry. estimate_time=900s
 (15 min). Companion to o:107 (cruise to a point).
 
 **Open questions:**
-- Patrol session capture: the live map reportedly can't track the mower during patrol despite valid s1p4 — investigate the begin_session/render path. Patrol should be a first-class session_type (op=108 / s2p2=51, 0-area).
-- SEND payload UNCAPTURED. [UNVERIFIED] HYPOTHESIS (2026-06-04): the echo s2p56=[[1,0,0]] matches the MAP-blob `contours` entry id=[1,0] (type=7) seen in live fetch_map — so startCruiseSide likely targets a contour, payload `{edge:[[1,0]]}` (the contour-pair, same d-key as edge-mow o:101 which uses {edge:[[pair]]}). Verify by firing routed_action(108, {edge:[[1,0]]}) and watching for s2p50 o:108 status:true; status:false ⇒ wrong d-key, try {contour:[[1,0]]} / {region:[1]}.
+- Patrol session capture: the live map can't track the mower during patrol despite valid s1p4 (CONFIRMED 2026-06-04 — the return leg after a point patrol was not drawn). Investigate the begin_session/render path. Patrol should be a first-class session_type (op=107/108 / s2p2=51, 0-area).
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 

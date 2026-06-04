@@ -3273,7 +3273,7 @@ opcodes:
     op: 108
     name: "start_cruise_side"
     category: "opcode"
-    payload_shape: "{m:'a', o:108, d:{...}}"
+    payload_shape: "SEND {m:'a', o:108, d:{edge:[[m,c]]}} (contour pairs, CONFIRMED LIVE 2026-06-04); ECHO s2p50 {o:108, exe:true, status:true, t:'TASK'}"
     semantic: |
       PATROL along an edge (startCruiseSide). CONFIRMED on g2408 2026-05-30: a
       user-triggered Patrol of the zone-1 edge emitted s2p50 op=108
@@ -3287,8 +3287,7 @@ opcodes:
       last_seen: "2026-05-30"
       decoded: confirmed
     open_questions:
-      - "Patrol session capture: the live map reportedly can't track the mower during patrol despite valid s1p4 — investigate the begin_session/render path. Patrol should be a first-class session_type (op=108 / s2p2=51, 0-area)."
-      - "SEND payload UNCAPTURED. [UNVERIFIED] HYPOTHESIS (2026-06-04): the echo s2p56=[[1,0,0]] matches the MAP-blob `contours` entry id=[1,0] (type=7) seen in live fetch_map — so startCruiseSide likely targets a contour, payload `{edge:[[1,0]]}` (the contour-pair, same d-key as edge-mow o:101 which uses {edge:[[pair]]}). Verify by firing routed_action(108, {edge:[[1,0]]}) and watching for s2p50 o:108 status:true; status:false ⇒ wrong d-key, try {contour:[[1,0]]} / {region:[1]}."
+      - "Patrol session capture: the live map can't track the mower during patrol despite valid s1p4 (CONFIRMED 2026-06-04 — the return leg after a point patrol was not drawn). Investigate the begin_session/render path. Patrol should be a first-class session_type (op=107/108 / s2p2=51, 0-area)."
     verifications:
       - date: "2026-06-04"
         status: partial
@@ -3299,6 +3298,15 @@ opcodes:
           mirrors edge-mow o:101 and the echo s2p56=[[1,0,0]] matches contour [1,0];
           flip to verified on first live s2p50 o:108 status:true.
         evidence: "mower/actions.py _edge_patrol_payload + ACTION_TABLE; coordinator/_writes.py start_edge_patrol"
+      - date: "2026-06-04"
+        status: verified
+        claim: |
+          op=108 SEND shape CONFIRMED LIVE. The integration's start_edge_patrol →
+          routed_action(108, {"edge":[[m,c]]}) (outer-perimeter contour pairs)
+          physically launched an EDGE patrol on g2408 — the mower moved out on a
+          dashboard button press, user-confirmed 2026-06-04. So {"edge":[[m,c]]}
+          (the contour-pair d-key, same as edge-mow o:101) is correct; status:true.
+        evidence: "live 2026-06-04: dreame_a2_mower.start_edge_patrol service → op=108 → mower performed an edge patrol, user-confirmed"
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"

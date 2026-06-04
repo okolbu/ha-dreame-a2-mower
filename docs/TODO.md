@@ -65,10 +65,9 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      `cruisePoints` (type=8) + rendered as green-P markers + surfaced as
      `sensor.…_patrol_points`/`_patrol_edges` (generic `items` attr) + a generic
      `dreame-multi-select-card` + `start_point_patrol`/`start_edge_patrol` services.
-     **o107 (point patrol) SEND shape is now VERIFIED LIVE (2026-06-04 — two real
-     patrols fired via the card).** o108 (edge patrol) SEND still `[UNVERIFIED]` pending
-     a live launch. Zone/spot multi-select can now reuse the same sensor+service+card
-     pattern.
+     **Both o107 (point) and o108 (edge) SEND shapes are now VERIFIED LIVE (2026-06-04 —
+     real patrols fired from the card moved the mower in both modes).** Zone/spot
+     multi-select can now reuse the same sensor+service+card pattern.
    - **Live map doesn't track / path the mower during a patrol (incl. the return leg).**
      Observed 2026-06-04: after a point patrol, the live map did NOT draw the mower's
      path back from the patrol point. Same root cause as the o108 open_question — a
