@@ -545,3 +545,25 @@ class _WritesMixin:
             MowerAction.GO_TO_POINT, {"point_id": point_id}
         )
 
+    async def start_point_patrol(self, *, map_id: int, point_ids: list[int]) -> None:
+        """Launch a POINT patrol (op=107) over the given cruise points on map_id.
+
+        point_ids are per-map cruisePoint ids, so the map must be active first.
+        SEND shape is [UNVERIFIED] — see actions._point_patrol_payload / o107.
+        """
+        await self._ensure_active_map(map_id)
+        await self.dispatch_action(
+            MowerAction.START_POINT_PATROL, {"point_ids": [int(i) for i in point_ids]}
+        )
+
+    async def start_edge_patrol(self, *, map_id: int, contour_ids: list[list[int]]) -> None:
+        """Launch an EDGE patrol (op=108) over the given contour pairs on map_id.
+
+        contour_ids are [m, c] pairs (outer perimeters). SEND shape is
+        [UNVERIFIED] — see actions._edge_patrol_payload / o108.
+        """
+        await self._ensure_active_map(map_id)
+        await self.dispatch_action(
+            MowerAction.START_EDGE_PATROL, {"contour_ids": [list(c) for c in contour_ids]}
+        )
+
