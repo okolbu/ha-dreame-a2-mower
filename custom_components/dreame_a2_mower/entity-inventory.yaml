@@ -1601,7 +1601,7 @@ entities:
 
   - id: "select.dreame_a2_mower_language"
     platform: select
-    control_mode: read_only_pending
+    control_mode: read_only_noop
     class: "DreameA2SettingSelect"
     class_file: "custom_components/dreame_a2_mower/select_global.py:439"
     device: parent

@@ -59,7 +59,7 @@ CONTROL_MODES: dict[str, ControlMode | dict[str, ControlMode]] = {
     # select
     "select.dreame_a2_mower_navigation_path": _W,
     "select.dreame_a2_mower_rain_protection_resume_hours": _P,
-    "select.dreame_a2_mower_language": _P,
+    "select.dreame_a2_mower_language": _N,
     "select.dreame_a2_mower_lcd_language": _P,
     "select.dreame_a2_mower_voice_language": _P,
     "select.dreame_a2_mower_work_log": _L,
