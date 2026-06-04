@@ -369,9 +369,17 @@ class _MqttHandlersMixin:
         """
         if not isinstance(value, dict):
             return
-        inner = value.get("d")
-        src = inner if isinstance(inner, dict) else value
-        op = src.get("o")
+        # The op can live at the top level (unwrapped echo `{o, exe, status,…}`
+        # and the reject echo `{exe, o, status:false}`) OR nested under `d`
+        # (wrapped echo `{d:{…o…}, t:"TASK"}`). Prefer the top level, fall back
+        # to d.o — this also handles the SEND shape `{m, o, d:{payload}}` where d
+        # is the payload (no `o`), which the old `value.get("d") or value` form
+        # would have mis-read. (Corpus probe_log_20260520: all three echo shapes.)
+        op = value.get("o")
+        if op is None:
+            inner = value.get("d")
+            if isinstance(inner, dict):
+                op = inner.get("o")
         LOGGER.warning(
             "[F5-DIAG] s2p50 echo: raw=%r op=%s active=%s",
             value, op, self.live_map.is_active(),

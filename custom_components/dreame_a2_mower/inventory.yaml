@@ -3304,6 +3304,52 @@ opcodes:
           user-confirmed. So {"point":[ids]} (same d-key as the live o109 go-to-point)
           is the correct send shape; status:true behaviorally.
         evidence: "live 2026-06-04: dreame_a2_mower.start_point_patrol service → op=107 → mower performed a point patrol, user-confirmed twice"
+      - date: "2026-06-04"
+        status: verified
+        claim: |
+          POINT-patrol session-type recording — s2p2=51 (not the op echo) is the
+          dependable type signal the integration actually receives. CORPUS: the op
+          echo IS reliably on the external broker — probe_log_20260520_131350.jsonl
+          (the only patrol-bearing capture) has s2p50 o=107 ×24, o=108 ×9, with
+          s2p2=51 ×24 and s2p2=74 ×24 (107/51/74 all 1:1). But the integration only
+          subscribes to the device /status/ topic (the probe subscribes to #), so in
+          the live run 2026-06-04 22:08-22:10 (v1.0.23a1, [F5-DIAG]) ZERO s2p50 echo
+          lines were logged (last_task_op stayed None) while s2p2=51 WAS captured
+          (via the recorder). s2p2=51 arrives AT session start (22:08:17, active=False)
+          — 43s BEFORE begin_session (None→0 @22:09:00) — so _capture_telemetry_sample's
+          is_active() guard previously dropped it from error_samples (it survived only
+          in HA's recorder history, merged AFTER classification), and the session
+          mis-typed maintenance_run ("To Point"). FIX (v1.0.23a1): latch s2p2=51
+          ungated into _pending_saw_patrol_start + seed live_map.saw_patrol_start at
+          begin_session. Live-confirmed: typed `patrol`, fetched a real cloud md5
+          (dde54e28…), captured the full out-and-back track (return leg). The mis-type
+          had also suppressed the return leg (early local-finalize) and expired the OSS
+          fetch — both fixed downstream by correct typing.
+        evidence: "live trace 2026-06-04 [F5-DIAG]: s2p2=51 active=False @22:08:17; seed saw_patrol_start=True @22:09:00; no s2p50 echo received; archive 2026-06-04_1780603796_dde54e28.json session_type=patrol md5=dde54e28 track=28pts(out-and-back). Corpus: probe_log_20260520_131350.jsonl s2p50 o=107×24/o=108×9, s2p2 51×24/74×24"
+      - date: "2026-06-04"
+        status: partial
+        claim: |
+          A POINT patrol's at-point ARRIVAL emits s2p2=74 (distinct from the op=109
+          to-point arrival code s2p2=75). Corpus support: probe_log_20260520 has
+          s2p2=74 ×24 co-occurring 1:1 with the 24 s2p2=51 patrol-starts (while
+          s2p2=75 ×42 tracks the to-point/op=109 runs in the same log). Live
+          2026-06-04: task_state 0→2 @22:09:56 then s2p2=74 @22:09:57 at the patrol
+          point. Strong (multi-occurrence) but keep `partial` until the 74-vs-75
+          partition (patrol-arrival=74 / to-point-arrival=75) is cross-checked on a
+          run carrying both.
+        evidence: "probe_log_20260520_131350.jsonl s2p2=74×24 ∥ s2p2=51×24; live trace 2026-06-04 [F5-DIAG] s2p2=74 active=True @22:09:57; archive error_samples=[[…,51],[…,74]]"
+      - date: "2026-06-04"
+        status: presumed
+        claim: |
+          OPEN QUESTION — why doesn't the integration receive the s2p50 op=107/108
+          echo for patrols? It is reliably on the external broker (corpus above) and
+          s2p50 mow ops (o=100) DO reach the integration historically, yet the live
+          patrol run logged no s2p50 at all. Hypotheses: (a) the patrol echo is on a
+          command-reply topic the integration doesn't subscribe to (it only gets
+          /status/; the probe gets #), or (b) post-restart MQTT reconnect missed it.
+          Not load-bearing (s2p2=51 suffices), but resolving it would give a second
+          robust type signal + enable the command-time render trigger for patrols.
+        evidence: "omit — hypothesis; needs a /status/-only capture during a patrol to compare against the # probe"
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"

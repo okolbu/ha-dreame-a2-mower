@@ -68,37 +68,32 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      **Both o107 (point) and o108 (edge) SEND shapes are now VERIFIED LIVE (2026-06-04 —
      real patrols fired from the card moved the mower in both modes).** Zone/spot
      multi-select can now reuse the same sensor+service+card pattern.
-   - **[FIX IN REVIEW 2026-06-04 — branch `fix/patrol-session-type-recording`]**
-     Root-caused + fixed: a pending task-op latch (`_pending_task_op`) captures the
-     `s2p50` op echo ungated and seeds `live_map.last_task_op` at `begin_session`, so a
-     dock-started patrol types as `patrol` (cloud-finalized) and the early-finalize gate
-     skips it. Persisted across boot via a `pending_task_op.json` sidecar; `classify`
-     now warns on the no-signal `maintenance_run` fall-through. **Remove this whole item
-     once live re-confirmed** (dock-started point + edge patrol both type as Patrol with
-     the return leg captured). Original report retained below for reference:
-   - **[BUG] Patrol sessions finalize early + mis-type as `maintenance_run` ("To Point").**
-     Observed 2026-06-04 (NOT restart-related — the HA restart came after the failing
-     run): the FIRST point patrol recorded a proper full `patrol` session (return leg
-     included); the SECOND point patrol AND an edge patrol closed early (mower still
-     going) and got labelled `[To Point]` (maintenance_run). Two distinct defects:
-     - **Root — session type isn't recorded reliably.** `live_map.classify.classify_session_type`
-       RE-DERIVES the type at finalize from transient wire signals (`last_task_op∈{107,108}`
-       or `saw_patrol_start`/s2p2=51). A point patrol emits `s2p2=75` (arrived) at EACH
-       point and per-leg ops can overwrite `last_task_op`, and s2p2=51 can be missed — so
-       by finalize the patrol marker is gone and it **silently falls through to the
-       `maintenance_run` default**. That default masks the real failure: the type was never
-       reliably recorded. FIX: record `session_type` AUTHORITATIVELY at session START. The
-       integration now triggers patrols itself (`start_point_patrol`/`start_edge_patrol`) —
-       it KNOWS it's a patrol, so latch an expected-type on the in-progress session rather
-       than re-deriving from the wire (keep the wire path as the fallback for app-triggered
-       patrols). A not-known type should be surfaced/logged, not silently defaulted.
-     - **Downstream — early finalize.** `_mqtt_handlers` block (A) finalizes immediately on
-       `s2p2=75` unless `_provisional_session_is_cloud_finalized()` (which depends on the
-       root signal). With the type known, the guard holds and the patrol runs to dock (full
-       return leg + live-map tracking). Also re-check the s2p56 new-command-boundary (block c)
-       doesn't split a multi-point patrol. Cross-ref `coordinator/_mqtt_handlers.py` (blocks
-       A/c), `coordinator/_session.py` (`_provisional_session_type`, finalize), `live_map/
-       classify.py`, `live_map/state.py` (signal capture), inventory `o107`/`o108`.
+   - **[FIXED — live-confirmed 2026-06-04, v1.0.23a1] Patrol mis-typed `maintenance_run`
+     ("To Point") + lost return leg.** Root cause: a point patrol's only reliable type
+     signal is `s2p2=51`, which arrives AT session start (before `begin_session`) and was
+     dropped by `_capture_telemetry_sample`'s `is_active()` guard; the `s2p50` op echo is
+     NOT reliably delivered to the integration (v1.0.22a9 latched it in vain). Fix: latch
+     `s2p2=51` ungated into `_pending_saw_patrol_start`, durable `live_map.saw_patrol_start`
+     seeded at `begin_session`, OR'd into `classify`. Live trace confirmed: typed `patrol`,
+     real cloud md5, full out-and-back track. Correct typing ALSO fixed the early-finalize
+     (return leg now captured) and the OSS-fetch expiry (clean cloud-finalize path) — both
+     were downstream symptoms. See inventory `o107` verifications (2026-06-04).
+   - **[BUG] Live map: striped (idle) background never switches to flat-green during a
+     session.** The live *trail* draws fine, but the base map stays the idle stripe preview.
+     Log shows `RuntimeWarning: coroutine '_RenderingMixin._render_base' was never awaited`
+     at `sensor_device.py:611` — a `self._render_base()` call that isn't `await`ed /
+     `async_create_task`-scheduled, so the command-time re-render never runs. Fix: schedule
+     it properly (mirror the other `hass.async_create_task(self._render_base())` call sites).
+   - **[TODO] Patrol replay omits the on-the-spot 360° spins** the mower does AT each patrol
+     point (the live map shows them; the archived/replay track does not). The finalized
+     archive renders from the CLOUD summary track (`md5` real) which evidently simplifies
+     out stationary rotations; the LOCAL `track` stream (what the live map draws) has them.
+     Capture the spins into the replay — prefer the local `track` over `cloud_track` for
+     patrol sessions, or merge the local stationary-rotation points. Cross-ref
+     `coordinator/_session.py` (replay render source), `live_map/state.py:append_point`
+     (20cm/500ms dedup — confirm it keeps same-position heading-only changes).
+   - **[CHORE] Remove the temporary `[F5-DIAG]` WARNING wire-logging** added in v1.0.23a1
+     (`_mqtt_handlers.py`: s2p50-echo, s2p2-code, seed-at-begin) once the above are captured.
    - **Patrol per-point cycles + auto-capture — find the cloud source (no good candidate
      yet).** The app shows per-point cycle count (×1/×2/×3) and an auto-capture camera
      toggle, and they sync across app instances → cloud-persisted somewhere — but NOT in

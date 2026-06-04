@@ -43,6 +43,21 @@ def test_handle_task_op_echo_parses_flat_o(tmp_path):
     assert c._pending_task_op == 108
 
 
+def test_handle_task_op_echo_all_corpus_shapes(tmp_path):
+    # The three s2p50 echo shapes seen in probe_log_20260520, plus the SEND
+    # form (op at top + d=payload) the old `value.get("d") or value` form missed.
+    cases = [
+        {"d": {"error": 0, "exe": True, "o": 107, "status": True}, "t": "TASK"},  # wrapped
+        {"error": 0, "estimate_time": 155, "exe": True, "o": 107, "status": True, "time": 1},  # unwrapped
+        {"exe": False, "o": 107, "status": False},  # reject echo
+        {"m": "a", "o": 107, "d": {"point": [3, 4]}},  # SEND (op top + d payload)
+    ]
+    for value in cases:
+        c = _coord(tmp_path)
+        c._handle_task_op_echo(value)
+        assert c._pending_task_op == 107, f"missed op in {value!r}"
+
+
 def test_handle_task_op_echo_ignores_missing_op(tmp_path):
     c = _coord(tmp_path)
     c._handle_task_op_echo({"d": {}})
