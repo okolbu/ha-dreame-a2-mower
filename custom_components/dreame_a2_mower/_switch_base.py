@@ -20,6 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._devices import map_device_info, mower_device_info, mower_unique_id
 from .const import LOGGER
+from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .mower.state import MowerState
 
@@ -53,7 +54,7 @@ class DreameA2SwitchEntityDescription(SwitchEntityDescription):
 # ---------------------------------------------------------------------------
 
 class DreameA2Switch(
-    CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
 ):
     """A coordinator-backed switch entity.
 
@@ -73,6 +74,7 @@ class DreameA2Switch(
         self.entity_description = description
         self._attr_unique_id = mower_unique_id(coordinator, description.key)
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="switch", key=description.key)
 
     @property
     def is_on(self) -> bool | None:
@@ -105,6 +107,8 @@ class DreameA2Switch(
 
     async def _async_set_value(self, enabled: bool) -> None:
         """Write the new state to the mower via the coordinator."""
+        if self.read_only:
+            return await self._reject_readonly_write()
         desc = self.entity_description
         if desc.cfg_key is None:
             LOGGER.warning(
@@ -150,7 +154,7 @@ _AI_OBJECTS_BIT = 1 << 2
 
 
 class _AiRecognitionBitSwitch(
-    CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
 ):
     """Common base for the 3 AI obstacle recognition bit switches.
 
@@ -160,6 +164,7 @@ class _AiRecognitionBitSwitch(
     """
 
     _BIT: int = 0
+    _HONESTY_LEAF: str = ""
     _attr_has_entity_name = True
     _attr_should_poll = False
 
@@ -169,6 +174,9 @@ class _AiRecognitionBitSwitch(
         self._attr_device_info = map_device_info(
             coordinator, map_id,
             name=getattr(coordinator.cloud_state.maps_by_id.get(map_id), "name", None),
+        )
+        self._control_mode = resolve_control_mode(
+            platform="switch", key=f"map_N_{self._HONESTY_LEAF}"
         )
 
     @property
@@ -188,6 +196,8 @@ class _AiRecognitionBitSwitch(
         return super().available
 
     async def _toggle(self, on: bool) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         coord = self.coordinator
         cs = getattr(coord, "cloud_state", None)
         if cs is None:

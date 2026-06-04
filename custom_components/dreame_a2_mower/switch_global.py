@@ -938,6 +938,7 @@ class DreameA2AiRecognitionHumansSwitch(_AiRecognitionBitSwitch):
     """AI Obstacle Recognition: Humans (bit 0) — per-map."""
 
     _BIT = _AI_HUMANS_BIT
+    _HONESTY_LEAF = "ai_recognition_humans"
     _attr_translation_key = "ai_recognition_humans"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
@@ -951,6 +952,7 @@ class DreameA2AiRecognitionAnimalsSwitch(_AiRecognitionBitSwitch):
     """AI Obstacle Recognition: Animals (bit 1) — per-map."""
 
     _BIT = _AI_ANIMALS_BIT
+    _HONESTY_LEAF = "ai_recognition_animals"
     _attr_translation_key = "ai_recognition_animals"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
@@ -964,6 +966,7 @@ class DreameA2AiRecognitionObjectsSwitch(_AiRecognitionBitSwitch):
     """AI Obstacle Recognition: Objects (bit 2) — per-map."""
 
     _BIT = _AI_OBJECTS_BIT
+    _HONESTY_LEAF = "ai_recognition_objects"
     _attr_translation_key = "ai_recognition_objects"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
