@@ -834,6 +834,8 @@ class _SessionMixin:
         except Exception as ex:
             LOGGER.warning("[F5.6.1] _do_finalize_incomplete: delete_in_progress raised: %s", ex)
 
+        self._clear_pending_op()
+
         # Clear pending state, end live_map session.
         self._fire_mowing_ended(
             now_unix=now_unix,
@@ -860,6 +862,20 @@ class _SessionMixin:
             )
         )
 
+    def _load_pending_op_from_sidecar(self) -> None:
+        """Restore the pending task op persisted before a boot (no live session
+        yet). A reboot AFTER begin_session is covered separately by
+        in_progress.json's last_task_op."""
+        op = self.session_archive.read_pending_op()
+        if op is not None:
+            self._pending_task_op = op
+
+    def _clear_pending_op(self) -> None:
+        """Drop the pending op + its sidecar so a finished session's op cannot
+        seed a later one (the no-window safety valve)."""
+        self._pending_task_op = None
+        self.session_archive.delete_pending_op()
+
     async def _restore_in_progress(self) -> None:
         """Restore a live session from sessions/in_progress.json on HA boot.
 
@@ -879,6 +895,10 @@ class _SessionMixin:
         from ._restore_merge import merge_in_progress_payloads
 
         LOGGER.info("[F5.7.1] _restore_in_progress: starting (restore-then-merge)")
+
+        # Recover the pending task op latched before the previous shutdown,
+        # in case the restart straddled the op-echo -> begin_session window.
+        self._load_pending_op_from_sidecar()
 
         try:
             disk_payload: dict | None = await self.hass.async_add_executor_job(
