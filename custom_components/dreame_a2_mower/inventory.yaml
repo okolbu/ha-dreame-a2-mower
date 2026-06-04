@@ -115,6 +115,19 @@ properties:
     open_questions:
       - "Capture s1p2 transitions during the next firmware update to confirm value semantics."
       - "Does g2408 emit CANNOT_UPGRADE (5) when battery is too low for OTA?"
+      - |
+        VALUE-MAP CONFLICT: the upstream dreame-mower fork (different app/device
+        lineage) maps s1p2 (FIRMWARE_INSTALL_STATE_PROPERTY) value 2 =
+        'new_firmware_available', 3 = 'installing_firmware_after_download', 4 =
+        'firmware_download_failed' — which DISAGREES with this entry's apk
+        OTAState enum (2=UPGRADING, 3=UPGRADE_SUCCESS, 4=UPGRADE_FAILED). Neither
+        is g2408 wire-verified (no OTA captured). If the upstream lineage applies,
+        s1p2==2 is the "new firmware available" signal an UpdateEntity would key
+        off; if the apk enum applies, availability isn't on s1p2 at all and only
+        comes from a cloud OTA-check endpoint (not yet located — the app's
+        Current/Latest version fields are not in device/info, which only carries
+        `ver`=current fw 4.3.6_0550 and a dynamic `latestStatus` connection enum).
+        The next OTA event resolves which lineage is correct.
 
   - id: "s1p3"
     siid: 1
@@ -1868,7 +1881,7 @@ properties:
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-31"
+      last_seen: "2026-06-04"
       decoded: confirmed
     verifications:
       - date: "2026-05-31"
@@ -1898,6 +1911,32 @@ properties:
           the same on demand. Closes the TODO "Trigger a fresh WiFi heatmap render"
           (moved to DONE.md 2026-06-03). Gap = the exact autonomous-upload trigger.
         evidence: "s6.aiid=4 → 80001 verified 2026-05-09; OBJ t=wifimap returns only already-cached objects (live test 2026-05-31, same run as the 3dmap/photo OBJ sweep); integration paths coordinator/_core.py refresh_wifi_archive boot seed + 6h _periodic_archive_refresh, button.py DreameA2RefreshAllWifiButton"
+      - date: "2026-06-04"
+        status: verified
+        claim: |
+          s99p20 is NOT a firmware / OTA package path — it is the LiDAR
+          map-binary (PCD) object key. The three s99p20 values ever seen on the
+          wire (2026-04-19 / 04-20 / 05-10) were re-downloaded today via
+          iotfile/getDownloadUrl and are each `# .PCD v0.7` point clouds
+          (145257 / 153261 / 51932 points). The signed OSS URL path is
+          `iot/mapbin/000000/...` ("map binary"), confirming map data, not
+          firmware.
+
+          The ".0550" filename suffix is the device's RUNNING-firmware stamp
+          (CFG.DEV.fw = 4.3.6_0550) applied to every device-uploaded OSS object —
+          it also appears on the session-summary `.0550.json` files (oss_dumps/)
+          and patrol `.0550.json`. It is NOT an OTA-package version; all three
+          PCDs carry the same 0550 stamp because the mower ran fw 0550 the whole
+          time. The variable number in the filename decodes as the UTC
+          time-of-day of staging (HHMMSSmmm) and matches each properties_changed
+          event timestamp to the second; masterUid "BM169439" is the uid segment.
+
+          This DEBUNKS the upstream dreame-mower guess that
+          DEVICE_FILE_PATH_PROPERTY_20 (siid=99 piid=20) carries "Firmware/OTA
+          update packages (when firmware updates are available)" — that comment
+          is wrong for g2408. The real OTA wire signals are s1p2
+          (firmware/ota state) + s1p3 (progress), neither yet wire-captured.
+        evidence: "fw_download/path{1,2,3}_*.0550.pcd downloaded 2026-06-04 via iotfile/getDownloadUrl — all PCD v0.7, OSS bucket path iot/mapbin/000000/; s2p54 100→86→100 brackets the 05-10 push in probe_log_20260419_130434.jsonl@2026-05-10 19:03:50 (View-LiDAR upload dip); upstream mislabel at OLD/alternatives_archive_2026-05-05/alternatives/dreame-mower/custom_components/dreame_mower/dreame/const.py:94"
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:125"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Events"
