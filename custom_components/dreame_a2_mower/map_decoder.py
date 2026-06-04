@@ -268,7 +268,6 @@ class MapData:
     # §4.6 for the wire-format finding (2026-05-05 live runs).
     available_contour_ids: tuple[tuple[int, int], ...]
     maintenance_points: tuple[MaintenancePoint, ...]
-    patrol_points: tuple[PatrolPoint, ...]
 
     # --- charger (renderer coords, post-reflection + offset) ---
     dock_xy: tuple[float, float] | None
@@ -284,6 +283,9 @@ class MapData:
     # changes.
     map_id: int = 0
     name: str | None = None
+    # Patrol/cruise points (cloud key cruisePoints, type=8). Defaulted so
+    # existing MapData() call-sites need no changes.
+    patrol_points: tuple[PatrolPoint, ...] = ()
 
 
 # ---------------------------------------------------------------------------
