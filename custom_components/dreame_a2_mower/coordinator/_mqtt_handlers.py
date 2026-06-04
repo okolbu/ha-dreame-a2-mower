@@ -372,6 +372,10 @@ class _MqttHandlersMixin:
         inner = value.get("d")
         src = inner if isinstance(inner, dict) else value
         op = src.get("o")
+        LOGGER.warning(
+            "[F5-DIAG] s2p50 echo: raw=%r op=%s active=%s",
+            value, op, self.live_map.is_active(),
+        )
         if op is None:
             return
         try:
@@ -380,14 +384,23 @@ class _MqttHandlersMixin:
             return
 
     def _seed_session_type_from_pending(self) -> None:
-        """Seed live_map.last_task_op from the pending latch at session birth.
+        """Seed live_map type signals from the pending latches at session birth.
 
-        begin_session() nulls last_task_op; this re-stamps it from the op echo
-        that arrived before the session existed. No-op when nothing is latched
-        or no session is active.
+        begin_session() nulls last_task_op + saw_patrol_start; this re-stamps
+        them from the op echo (s2p50) and patrol-start (s2p2=51) that arrived
+        before the session existed. No-op when nothing is latched or no session
+        is active.
         """
-        if self._pending_task_op is not None and self.live_map.is_active():
+        if not self.live_map.is_active():
+            return
+        if self._pending_task_op is not None:
             self.live_map.last_task_op = self._pending_task_op
+        if self._pending_saw_patrol_start:
+            self.live_map.saw_patrol_start = True
+        LOGGER.warning(
+            "[F5-DIAG] seed at begin: last_op=%s saw_patrol_start=%s",
+            self._pending_task_op, self._pending_saw_patrol_start,
+        )
 
     def _on_state_update(self, new_state: MowerState, now_unix: int) -> MowerState:
         """Hook fired after apply_property_to_state. Updates LiveMapState
@@ -808,10 +821,29 @@ class _MqttHandlersMixin:
         """Append a raw telemetry value to the matching LiveMapState
         sample buffer. Runs on the event loop (hop done by caller).
 
-        Only fires while a session is active. The raw int wire value
-        is captured verbatim — interpretation (charging-status enum,
-        s2p2 notification map) happens at archive-consumer time.
+        Only the BUFFER append fires while a session is active. The raw int
+        wire value is captured verbatim — interpretation (charging-status
+        enum, s2p2 notification map) happens at archive-consumer time.
         """
+        # Patrol-start latch (UNGATED — runs before the is_active() guard).
+        # s2p2=51 (patrol started) is a POINT patrol's only type signal and it
+        # arrives AT session start, before begin_session exists; the guard below
+        # would otherwise drop it. Latch it so the session is typed patrol even
+        # though it never lands in error_samples.
+        if key == (2, 2):
+            try:
+                v51 = int(value)
+            except (TypeError, ValueError):
+                v51 = None
+            if v51 == 51:
+                self._pending_saw_patrol_start = True
+                if self.live_map.is_active():
+                    self.live_map.saw_patrol_start = True
+            if v51 is not None:
+                LOGGER.warning(
+                    "[F5-DIAG] s2p2=%s active=%s lm_patrol=%s",
+                    v51, self.live_map.is_active(), self.live_map.saw_patrol_start,
+                )
         if not self.live_map.is_active():
             return
         try:

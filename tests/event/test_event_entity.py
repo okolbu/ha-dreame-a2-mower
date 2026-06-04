@@ -43,6 +43,7 @@ def _make_coord(at_dock: bool = False) -> DreameA2MowerCoordinator:
     coord._prev_task_state = None
     coord._prev_in_dock = None
     coord._pending_task_op = None
+    coord._pending_saw_patrol_start = False
     coord.novel_registry = NovelObservationRegistry()
     coord.freshness = FreshnessTracker()
     coord._live_map_dirty = False

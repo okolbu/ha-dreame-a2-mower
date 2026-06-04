@@ -11,6 +11,7 @@ def _coord(tmp_path):
     c.session_archive = SessionArchive(tmp_path)
     c.live_map = LiveMapState()
     c._pending_task_op = None
+    c._pending_saw_patrol_start = False
     return c
 
 

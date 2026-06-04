@@ -581,7 +581,7 @@ class _SessionMixin:
         lm = self.live_map
         codes = [code for _, code in (lm.error_samples or [])]
         saw_mow_start = any(c in (50, 53) for c in codes)
-        saw_patrol_start = 51 in codes
+        saw_patrol_start = (51 in codes) or lm.saw_patrol_start
         session_type, _ = classify_session_type(
             last_task_op=lm.last_task_op,
             saw_mow_start=saw_mow_start,
@@ -871,9 +871,10 @@ class _SessionMixin:
             self._pending_task_op = op
 
     def _clear_pending_op(self) -> None:
-        """Drop the pending op + its sidecar so a finished session's op cannot
-        seed a later one (the no-window safety valve)."""
+        """Drop the pending type latches (op + patrol-start) + the op sidecar so
+        a finished session's signals cannot seed a later one (no-window valve)."""
         self._pending_task_op = None
+        self._pending_saw_patrol_start = False
         self.session_archive.delete_pending_op()
 
     async def _restore_in_progress(self) -> None:

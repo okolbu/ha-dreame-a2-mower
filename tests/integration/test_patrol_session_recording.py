@@ -27,6 +27,7 @@ def _coord(tmp_path, monkeypatch):
     c.live_map = LiveMapState()
     c.data = MowerState()
     c._pending_task_op = None
+    c._pending_saw_patrol_start = False
 
     # Task-state transition tracking.
     c._prev_task_state = None
@@ -118,3 +119,37 @@ def test_dock_started_point_patrol_typed_patrol_not_finalized(tmp_path, monkeypa
     assert not gate_would_finalize, (
         "Early-finalize gate must SKIP for a cloud-finalized (patrol) session"
     )
+
+
+def test_dock_started_point_patrol_typed_patrol_via_s2p2_51(tmp_path, monkeypatch):
+    """The real point-patrol case: NO op echo is captured (last_task_op stays
+    None); the only type signal is s2p2=51, arriving BEFORE begin_session.
+    The ungated 51-latch + seed must still type it patrol.
+
+    Reproduces the v1.0.22a9 miss: the op-echo latch caught nothing (point
+    patrols don't deliver it), and 51 was dropped by _capture_telemetry_sample's
+    is_active() guard, so the session mis-typed maintenance_run ("To Point").
+    """
+    c = _coord(tmp_path, monkeypatch)
+
+    # ── 1. s2p2=51 arrives while no session is active (it lands at start). ──
+    c._capture_telemetry_sample((2, 2), 51, 1999)
+    assert not c.live_map.is_active(),         "No session active yet"
+    assert c._pending_saw_patrol_start is True, "51 must latch ungated"
+    assert c.live_map.error_samples == [],      "51 must NOT enter the buffer pre-session"
+    assert c.live_map.last_task_op is None,     "no op echo for a point patrol"
+
+    # ── 2. First MQTT push fires begin_session (which would drop a buffered 51). ──
+    s = MowerState()
+    s.task_state_code = 0
+    c._on_state_update(s, now_unix=2000)
+    assert c.live_map.is_active()
+    assert c.live_map.saw_patrol_start is True, "seed must stamp the durable flag"
+
+    # ── 3. Types as patrol from the durable flag alone (no op, empty buffer). ──
+    assert c.live_map.last_task_op is None
+    assert [code for _, code in c.live_map.error_samples] == [], (
+        "begin_session wiped the buffer — only the latched flag carries the type"
+    )
+    assert c._provisional_session_type() == "patrol"
+    assert c._provisional_session_is_cloud_finalized() is True
