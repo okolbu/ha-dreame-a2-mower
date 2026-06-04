@@ -3147,6 +3147,20 @@ opcodes:
           parse of `cruisePoints` once populated. To capture id/coords/type:
           re-define patrol points in the app, then re-run the cloud fetch.
         evidence: "live DreameA2CloudClient.fetch_map 2026-06-04 via tools/probe_cruise_to_point.py machinery: map0/map1 top-level keys include cruisePoints={dataType:Map,value:[]}; cleanPoints held only the 2 maintenance ids (1,2, type=6)"
+      - date: "2026-06-04"
+        status: verified
+        claim: |
+          cruisePoints CONFIRMED as the patrol-point store + CLOUD-RELAYED. After the
+          user added a patrol point in the app, live fetch_map shows map0 cruisePoints
+          with 3 entries (ids 3,4,5), each {id, type:8, shapeType:5,
+          path:[{x,y}], time:60, etime:60}. PATROL points are type=8 (vs maintenance
+          cleanPoints type=6) — cleanly distinguishable. Cloud-relayed: user confirmed
+          the new point appeared on a SECOND app instance. The earlier-same-day EMPTY
+          read was pre-sync/stale (the map blob lagged the app). So patrol points ARE
+          surfaceable from the MAP blob already fetched — parse cruisePoints (type=8)
+          like _parse_maintenance_points; the o:107 point list + coords come from here
+          (e.g. {point:[3,4,5]}; coords pt3=[-3050,-5480] pt4=[-1980,6340] pt5=[-4260,-1660]).
+        evidence: "live DreameA2CloudClient.fetch_map 2026-06-04: map0 cruisePoints.value=[[3,{type:8,shapeType:5,path:[{x:-3050,y:-5480}],time:60,etime:60}],[4,{...path:[{x:-1980,y:6340}]...}],[5,{...path:[{x:-4260,y:-1660}]...}]]; user confirmed cross-app-instance sync"
       - date: "2026-06-03"
         status: partial
         claim: "Per-point patrol settings (cycles 1/2/3, auto-capture on/off) are NOT present in any captured /status/ uplink for op=107 — only the device echo (which lacks them) and the s2p56 point queue. The app→device command is not relayed to the MQTT monitor, so patrol settings are unobservable via this capture path."
