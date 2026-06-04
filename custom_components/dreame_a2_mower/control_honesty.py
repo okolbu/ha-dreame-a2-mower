@@ -182,4 +182,6 @@ def resolve_control_mode(*, platform: str, key: str) -> ControlMode:
     generic = CONTROL_MODES.get(f"{platform}.dreame_a2_mower_<key>")
     if isinstance(generic, dict) and key in generic:
         return generic[key]
+    if isinstance(generic, ControlMode):
+        return generic
     raise KeyError(f"no control_mode for {platform}.* key={key!r}")

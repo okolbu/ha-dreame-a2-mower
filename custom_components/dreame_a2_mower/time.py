@@ -27,6 +27,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._devices import mower_device_info, mower_unique_id
 from .const import DOMAIN, LOGGER
+from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .mower.state import MowerState
 
@@ -114,7 +115,7 @@ TIMES: tuple[DreameA2TimeEntityDescription, ...] = (
 # ---------------------------------------------------------------------------
 
 
-class DreameA2Time(CoordinatorEntity[DreameA2MowerCoordinator], TimeEntity):
+class DreameA2Time(_ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], TimeEntity):
     """Read-only time entity backed by MowerState int-minutes field.
 
     Displays schedule slot start/end times. async_set_value is a no-op
@@ -133,6 +134,7 @@ class DreameA2Time(CoordinatorEntity[DreameA2MowerCoordinator], TimeEntity):
         self.entity_description = description
         self._attr_unique_id = mower_unique_id(coordinator, description.key)
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="time", key=description.key)
 
     @property
     def native_value(self) -> time | None:

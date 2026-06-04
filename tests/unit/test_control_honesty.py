@@ -69,3 +69,7 @@ async def test_reject_readonly_write_republishes_and_does_not_write():
     e = _FakeEntity(ControlMode.READ_ONLY_CONFIRMED)
     await e._reject_readonly_write()
     assert e.published == 1 and e.wrote is False
+
+
+def test_resolve_generic_scalar_time():
+    assert resolve_control_mode(platform="time", key="anything") is ControlMode.READ_ONLY_NOOP
