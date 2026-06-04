@@ -116,6 +116,26 @@ class _RenderingMixin:
             action_mode=getattr(self.data, "action_mode", None),
         )
 
+    def _schedule_render_base(self) -> None:
+        """Schedule ``_render_base`` on the event loop, safe from ANY thread.
+
+        HA 2026.6 made ``hass.async_create_task`` RAISE when called off the
+        event loop. The MQTT message callback runs on paho's background thread,
+        so a bare ``async_create_task(self._render_base())`` there raises and
+        ABORTS the whole callback — taking out not just the render but any later
+        processing in the same message (notably the s2p50 op-echo latch that
+        sits right after the activity-transition render trigger). Always hop to
+        the loop via ``call_soon_threadsafe`` first; from the loop this is a
+        harmless one-tick defer (``_render_base`` is idempotent via its
+        (mode, md5) dedup). See docs/TODO.md / the 2026-06-04 patrol trace.
+        """
+        hass = getattr(self, "hass", None)
+        if hass is None:
+            return
+        hass.loop.call_soon_threadsafe(
+            lambda: hass.async_create_task(self._render_base())
+        )
+
     async def _render_base(self) -> None:
         """Render the active map's base PNG, keyed on (background_mode, md5).
 

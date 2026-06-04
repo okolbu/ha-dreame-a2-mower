@@ -156,7 +156,7 @@ class _MqttHandlersMixin:
                         # always re-renders on a genuine map switch.
                         hass = getattr(self, "hass", None)
                         if hass is not None:
-                            hass.async_create_task(self._render_base())
+                            self._schedule_render_base()
                         # Fire listeners so camera + select push state to the
                         # frontend without waiting for the next coordinator
                         # broadcast.
@@ -280,7 +280,7 @@ class _MqttHandlersMixin:
                                 "[MAP] activity transition %s → %s — render_base",
                                 _prev_activity, _new_activity,
                             )
-                            self.hass.async_create_task(self._render_base())
+                            self._schedule_render_base()
                         if (_sm_siid, _sm_piid) == (2, 50):
                             # Latch the op UNGATED — a patrol/mow commanded from
                             # the dock echoes its op ~40s before begin_session
@@ -669,7 +669,7 @@ class _MqttHandlersMixin:
             # in _render_base makes a second call a cheap no-op.
             _hass = getattr(self, "hass", None)
             if _hass is not None:
-                _hass.async_create_task(self._render_base())
+                self._schedule_render_base()
         elif self._prev_in_dock is True and not _sm_at_dock:
             self._fire_lifecycle(
                 EVENT_TYPE_DOCK_DEPARTED, {"at_unix": int(now_unix)}
@@ -840,18 +840,12 @@ class _MqttHandlersMixin:
         # though it never lands in error_samples.
         if key == (2, 2):
             try:
-                v51 = int(value)
+                if int(value) == 51:
+                    self._pending_saw_patrol_start = True
+                    if self.live_map.is_active():
+                        self.live_map.saw_patrol_start = True
             except (TypeError, ValueError):
-                v51 = None
-            if v51 == 51:
-                self._pending_saw_patrol_start = True
-                if self.live_map.is_active():
-                    self.live_map.saw_patrol_start = True
-            if v51 is not None:
-                LOGGER.warning(
-                    "[F5-DIAG] s2p2=%s active=%s lm_patrol=%s",
-                    v51, self.live_map.is_active(), self.live_map.saw_patrol_start,
-                )
+                pass
         if not self.live_map.is_active():
             return
         try:
@@ -1168,7 +1162,7 @@ class _MqttHandlersMixin:
                             "to replace idle stripe preview at command-time",
                             _s2p50_op,
                         )
-                        self.hass.async_create_task(self._render_base())
+                        self._schedule_render_base()
             # NOTE: render triggers no longer live in this `_apply()` closure
             # for activity transitions / between-session movement. Activity
             # changes fire _render_base from `_on_mqtt_message` (right after

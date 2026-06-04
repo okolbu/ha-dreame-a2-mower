@@ -98,8 +98,24 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      patrol sessions, or merge the local stationary-rotation points. Cross-ref
      `coordinator/_session.py` (replay render source), `live_map/state.py:append_point`
      (20cm/500ms dedup — confirm it keeps same-position heading-only changes).
-   - **[CHORE] Remove the temporary `[F5-DIAG]` WARNING wire-logging** added in v1.0.23a1
-     (`_mqtt_handlers.py`: s2p50-echo, s2p2-code, seed-at-begin) once the above are captured.
+   - **[CHORE] Remove the remaining `[F5-DIAG]` confirmation logs** (`_handle_task_op_echo`
+     s2p50-echo + `_seed_session_type_from_pending` seed-at-begin) once the thread-safety
+     fix is live-confirmed (a patrol should now show `last_op=107` at seed). The `[F5-RAW]`
+     and per-s2p2 `[F5-DIAG]` logs were already removed with the thread-safety fix.
+   - **[TODO] Full integration log-health sweep.** Beyond the thread-safety raise, audit the
+     HA log for any other dreame_a2_mower WARNING/ERROR (the 2026.6 async/thread-safety
+     tightening may have surfaced others) and clean them up so the integration runs warning-
+     free. Pull via `ha core logs` over SSH (HAOS) or WS `system_log/list`; the integration
+     doesn't log to disk.
+   - **[FIXED — v1.0.23a3] MQTT callback aborted by off-loop `async_create_task` (HA 2026.6).**
+     The activity-transition render trigger called `hass.async_create_task(self._render_base())`
+     directly on paho's MQTT thread; HA 2026.6 RAISES on off-loop `async_create_task`, which
+     aborted the whole MQTT message callback — taking out the render (striped background) AND
+     the s2p50 op-echo latch that runs right after it (so `last_task_op` stayed None; the
+     s2p2=51 latch saved the type). Fix: `_RenderingMixin._schedule_render_base()` hops to the
+     loop via `call_soon_threadsafe` before `async_create_task`; all 4 `_render_base` triggers
+     in `_mqtt_handlers.py` route through it. Live trace 2026-06-04: echo arrived
+     (`[F5-RAW]` s2p50 o:107) but `_handle_task_op_echo` never ran due to the raise.
    - **Patrol per-point cycles + auto-capture — find the cloud source (no good candidate
      yet).** The app shows per-point cycle count (×1/×2/×3) and an auto-capture camera
      toggle, and they sync across app instances → cloud-persisted somewhere — but NOT in
