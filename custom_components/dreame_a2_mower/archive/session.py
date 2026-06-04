@@ -42,6 +42,7 @@ INDEX_VERSION = 2
 IN_PROGRESS_NAME = "in_progress.json"
 IN_PROGRESS_VERSION = 1
 IN_PROGRESS_MAX_AGE_S = 12 * 3600  # stale beyond this; auto-cleaned on read
+PENDING_OP_NAME = "pending_task_op.json"
 
 
 def _compute_crc32(payload: dict[str, Any]) -> int:
@@ -439,6 +440,41 @@ class SessionArchive:
         # the deletion (otherwise they'd return the cached payload
         # for up to IN_PROGRESS_CACHE_TTL_S after delete).
         self._in_progress_cached = (0.0, None)
+
+    # ------------------ pending task-op sidecar ------------------
+
+    def _pending_op_path(self) -> Path:
+        return self._root / PENDING_OP_NAME
+
+    def read_pending_op(self) -> int | None:
+        """Load the persisted pending task op, or None.
+
+        The op echo (s2p50) is a one-shot command-ack that never replays, so
+        it is persisted to survive a restart that lands between the echo and
+        begin_session. No CRC/age guard: a single int, cleared on finalize.
+        """
+        path = self._pending_op_path()
+        if not path.exists():
+            return None
+        try:
+            data = json.loads(path.read_text())
+            return int(data["op"])
+        except (OSError, ValueError, KeyError, TypeError):
+            return None
+
+    def write_pending_op(self, op: int) -> None:
+        """Persist the pending task op (last-wins, no window)."""
+        path = self._pending_op_path()
+        try:
+            path.write_text(json.dumps({"op": int(op)}))
+        except (OSError, ValueError, TypeError) as ex:
+            _LOGGER.warning("SessionArchive: failed to write pending op: %s", ex)
+
+    def delete_pending_op(self) -> None:
+        try:
+            self._pending_op_path().unlink(missing_ok=True)
+        except OSError:
+            pass
 
     def in_progress_entry(self) -> ArchivedSession | None:
         """Synthesize an ArchivedSession from the in-progress payload.

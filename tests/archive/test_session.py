@@ -540,3 +540,25 @@ def test_index_entry_session_type_round_trip_and_legacy_default():
     assert legacy.session_type is None
     assert legacy.outcome is None
     assert legacy.target_ids is None
+
+
+def test_pending_task_op_roundtrip(tmp_path):
+    from custom_components.dreame_a2_mower.archive.session import SessionArchive
+    arc = SessionArchive(tmp_path)
+    assert arc.read_pending_op() is None
+    arc.write_pending_op(107)
+    assert arc.read_pending_op() == 107
+    arc.write_pending_op(108)          # last-wins, no window
+    assert arc.read_pending_op() == 108
+    arc.delete_pending_op()
+    assert arc.read_pending_op() is None
+
+
+def test_pending_task_op_bad_file_returns_none(tmp_path):
+    from custom_components.dreame_a2_mower.archive.session import (
+        PENDING_OP_NAME,
+        SessionArchive,
+    )
+    arc = SessionArchive(tmp_path)
+    (tmp_path / PENDING_OP_NAME).write_text("not json{")
+    assert arc.read_pending_op() is None
