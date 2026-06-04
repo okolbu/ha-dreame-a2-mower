@@ -65,8 +65,18 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      `cruisePoints` (type=8) + rendered as green-P markers + surfaced as
      `sensor.…_patrol_points`/`_patrol_edges` (generic `items` attr) + a generic
      `dreame-multi-select-card` + `start_point_patrol`/`start_edge_patrol` services.
-     SEND shapes are `[UNVERIFIED]` pending a live `status:true`. Zone/spot multi-select
-     can now reuse the same sensor+service+card pattern.
+     **o107 (point patrol) SEND shape is now VERIFIED LIVE (2026-06-04 — two real
+     patrols fired via the card).** o108 (edge patrol) SEND still `[UNVERIFIED]` pending
+     a live launch. Zone/spot multi-select can now reuse the same sensor+service+card
+     pattern.
+   - **Live map doesn't track / path the mower during a patrol (incl. the return leg).**
+     Observed 2026-06-04: after a point patrol, the live map did NOT draw the mower's
+     path back from the patrol point. Same root cause as the o108 open_question — a
+     patrol isn't begun as a tracked `session_type`, so the live trail + return path
+     aren't captured/rendered despite valid s1p4 position telemetry. Make patrol a
+     first-class tracked session (op=107/108, s2p2=51, 0-area, blades-up) in the
+     begin_session / live-trail render path. Cross-ref `coordinator/_session.py`
+     (begin/finalize), `_rendering.py` (live trail), inventory `o108` open_question.
    - **Patrol per-point cycles + auto-capture — find the cloud source (no good candidate
      yet).** The app shows per-point cycle count (×1/×2/×3) and an auto-capture camera
      toggle, and they sync across app instances → cloud-persisted somewhere — but NOT in
