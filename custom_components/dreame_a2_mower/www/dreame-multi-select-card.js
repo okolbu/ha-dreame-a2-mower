@@ -28,13 +28,22 @@ class DreameMultiSelectCard extends HTMLElement {
 
   _key(item) { return JSON.stringify(item.id); }
 
+  _syncBtn() {
+    const off = this._checked.size === 0;
+    this._btn.disabled = off;
+    this._btn.style.opacity = off ? "0.5" : "1";
+    this._btn.style.cursor = off ? "default" : "pointer";
+  }
+
   _update() {
     const items = this._items();
     if (!this._rendered) {
       this.innerHTML = `
         <ha-card header="${this._config.title || ""}">
           <div class="dms-list" style="padding:0 16px"></div>
-          <div style="padding:16px"><mwc-button raised class="dms-go"></mwc-button></div>
+          <div style="padding:16px">
+            <button class="dms-go" style="background:var(--primary-color);color:var(--text-primary-color,#fff);border:none;padding:8px 18px;border-radius:6px;font-size:14px;font-weight:500"></button>
+          </div>
         </ha-card>`;
       this._list = this.querySelector(".dms-list");
       this._btn = this.querySelector(".dms-go");
@@ -54,7 +63,7 @@ class DreameMultiSelectCard extends HTMLElement {
       cb.checked = this._checked.has(k);
       cb.addEventListener("change", () => {
         if (cb.checked) this._checked.add(k); else this._checked.delete(k);
-        this._btn.disabled = this._checked.size === 0;
+        this._syncBtn();
       });
       const span = document.createElement("span");
       let extra = "";
@@ -66,7 +75,7 @@ class DreameMultiSelectCard extends HTMLElement {
       this._list.appendChild(row);
     }
     if (items.length === 0) this._list.textContent = "No items.";
-    this._btn.disabled = this._checked.size === 0;
+    this._syncBtn();
   }
 
   _fire() {
