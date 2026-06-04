@@ -3255,6 +3255,16 @@ opcodes:
           by analogy to the live-confirmed go-to-point (o109 {"point":[id]}); flip
           to verified on first live s2p50 o:107 status:true.
         evidence: "mower/actions.py _point_patrol_payload + ACTION_TABLE; coordinator/_writes.py start_point_patrol"
+      - date: "2026-06-04"
+        status: verified
+        claim: |
+          op=107 SEND shape CONFIRMED LIVE. The integration's start_point_patrol →
+          routed_action(107, {"point":[ids]}) physically launched a POINT patrol on
+          g2408 (mower patrolled the selected cruise points) — twice on 2026-06-04
+          (an accidental dashboard-button press + a deliberate press), both
+          user-confirmed. So {"point":[ids]} (same d-key as the live o109 go-to-point)
+          is the correct send shape; status:true behaviorally.
+        evidence: "live 2026-06-04: dreame_a2_mower.start_point_patrol service → op=107 → mower performed a point patrol, user-confirmed twice"
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
