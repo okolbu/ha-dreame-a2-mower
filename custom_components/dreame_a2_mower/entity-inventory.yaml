@@ -452,6 +452,53 @@ entities:
       dreame_a2_mower.mower_go_to_maintenance_point service can reference
       specific points. Placement happens in the Dreame app only.
 
+  - id: "sensor.dreame_a2_mower_map_N_patrol_points"
+    platform: sensor
+    class: "DreameA2PatrolPointsSensor"
+    class_file: "custom_components/dreame_a2_mower/sensor_map.py"
+    device: per-map
+    source:
+      wire: "cloud MAP blob (cruisePoints, type=8)"
+      state_path: "len(coordinator.cloud_state.maps_by_id[map_id].patrol_points)"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-04"
+    verifications:
+      - date: "2026-06-04"
+        status: verified
+        claim: "state = count of MapData.patrol_points; extra_state_attributes['items'] = [{id,label,x_mm,y_mm,cycles:null,auto_capture:null}]. cruisePoints live-confirmed type=8."
+        evidence: "live fetch_map 2026-06-04 (cruisePoints ids 3,4,5); map_decoder._parse_cruise_points"
+    references:
+      wire_entry: "o107"
+      code: "custom_components/dreame_a2_mower/sensor_map.py"
+    notes: |
+      Generic `items` attribute consumed by dreame-multi-select-card. cycles/
+      auto_capture are null — not readable from any known cloud surface yet.
+
+  - id: "sensor.dreame_a2_mower_map_N_patrol_edges"
+    platform: sensor
+    class: "DreameA2PatrolEdgesSensor"
+    class_file: "custom_components/dreame_a2_mower/sensor_map.py"
+    device: per-map
+    source:
+      wire: "cloud MAP blob (contours / available_contour_ids, outer perimeters c==0)"
+      state_path: "outer-perimeter contour pairs of coordinator.cloud_state.maps_by_id[map_id].available_contour_ids"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-04"
+    verifications:
+      - date: "2026-06-04"
+        status: presumed
+        claim: "items = [{id:[m,0], label:'Edge m'}] for outer-perimeter contours; feeds the op=108 edge-patrol payload {edge:[[m,0]]}."
+    references:
+      wire_entry: "o108"
+      code: "custom_components/dreame_a2_mower/sensor_map.py"
+    notes: |
+      Reuses available_contour_ids (already parsed for edge-mow). Generic
+      `items` attribute consumed by dreame-multi-select-card.
+
   - id: "sensor.dreame_a2_mower_map_N_exclusion_zones"
     platform: sensor
     class: "DreameA2ExclusionZonesSensor"

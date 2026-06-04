@@ -136,6 +136,7 @@ title: Dreame A2 Mower
 #   /hacsfiles/atomic-calendar-revive/atomic-calendar-revive.js (module)
 #   /dreame_a2_mower/dreame-a2-lidar-card.js (module)
 #   /dreame_a2_mower/dreame-a2-schedule-card.js (module)
+#   - /dreame_a2_mower/dreame-multi-select-card.js  (generic multi-select; register as JavaScript Module)
 
 views:
   - title: Mower
@@ -782,6 +783,20 @@ views:
                       ### 🚧 Pathway Obstacle Avoidance (Plan 2)
 
                       Per-map switch + sub-numbers for sensitivity/threshold.
+                  - type: custom:dreame-multi-select-card
+                    title: Point Patrol — Map 1
+                    entity: sensor.dreame_a2_mower_map_1_patrol_points
+                    service: dreame_a2_mower.start_point_patrol
+                    id_param: point_ids
+                    map_id: 0
+                    action_label: Start point patrol
+                  - type: custom:dreame-multi-select-card
+                    title: Edge Patrol — Map 1
+                    entity: sensor.dreame_a2_mower_map_1_patrol_edges
+                    service: dreame_a2_mower.start_edge_patrol
+                    id_param: contour_ids
+                    map_id: 0
+                    action_label: Start edge patrol
 
   - title: Schedule
     path: schedule

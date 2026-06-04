@@ -70,6 +70,10 @@ _DEFAULT_PALETTE: dict[str, tuple[int, int, int, int]] = {
     "mp_fill": (180, 130, 80, 220),
     "mp_outline": (110, 70, 30, 255),
     "mp_text": (255, 255, 255, 255),
+    # Patrol / cruise points — green circle 2x dock radius with white "P".
+    "pp_fill": (60, 170, 90, 220),
+    "pp_outline": (20, 90, 40, 255),
+    "pp_text": (255, 255, 255, 255),
     # ------ Phase 1 (2026-05-17 render-styling refresh) ------
     # Dark green — alias of zone_outline RGB but used as a fill color in
     # the pre-mow / cutting-target / active-mow-background contexts.

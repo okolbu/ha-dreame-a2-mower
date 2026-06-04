@@ -55,6 +55,8 @@ class MowerAction(Enum):
     SUPPRESS_FAULT = auto()
     FINALIZE_SESSION = auto()  # integration-local; no cloud call
     SET_ACTIVE_MAP = auto()
+    START_POINT_PATROL = auto()  # op=107 startCruisePoint — point patrol
+    START_EDGE_PATROL = auto()   # op=108 startCruiseSide — edge patrol
 
 
 class ActionEntry(TypedDict, total=False):
@@ -164,6 +166,35 @@ def _go_to_point_payload(params: dict[str, Any]) -> dict[str, Any]:
     return {"point": [int(params["point_id"])]}
 
 
+def _point_patrol_payload(params: dict[str, Any]) -> dict[str, Any]:
+    """TASK envelope d-field for POINT patrol (op=107, startCruisePoint).
+
+    [UNVERIFIED] SEND shape ``{"point":[ids]}`` — by direct analogy to the
+    live-confirmed go-to-point (op=109 ``{"point":[id]}``), with a multi-element
+    list (the patrol echo s2p56=[[3,0],[4,-1]] shows a 2-point queue). Confirm
+    live; if rejected (status:false) the d-key is wrong, not the list. See
+    inventory.yaml o107.
+    """
+    points = params.get("point_ids") or []
+    if not points:
+        raise ValueError("START_POINT_PATROL requires non-empty 'point_ids' list")
+    return {"point": [int(p) for p in points]}
+
+
+def _edge_patrol_payload(params: dict[str, Any]) -> dict[str, Any]:
+    """TASK envelope d-field for EDGE patrol (op=108, startCruiseSide).
+
+    [UNVERIFIED] SEND shape ``{"edge":[[m,c],...]}`` contour pairs — same d-key
+    as edge-mow (op=101); the patrol echo s2p56=[[1,0,0]] matches contour id
+    [1,0]. Confirm live; fall back to {"contour":…}/{"region":…} if rejected.
+    See inventory.yaml o108.
+    """
+    contour_ids = params.get("contour_ids") or []
+    if not contour_ids:
+        raise ValueError("START_EDGE_PATROL requires non-empty 'contour_ids' list")
+    return {"edge": [list(pair) for pair in contour_ids]}
+
+
 def _set_active_map_payload(params: dict[str, Any]) -> dict[str, Any]:
     """TASK envelope d-field for set-active-map (op=200).
 
@@ -215,6 +246,16 @@ ACTION_TABLE: dict[MowerAction, ActionEntry] = {
         "siid": 5, "aiid": 1,
         "routed_t": "TASK", "routed_o": 109,
         "payload_fn": _go_to_point_payload,
+    },
+    MowerAction.START_POINT_PATROL: {
+        "siid": 5, "aiid": 1,
+        "routed_t": "TASK", "routed_o": 107,
+        "payload_fn": _point_patrol_payload,
+    },
+    MowerAction.START_EDGE_PATROL: {
+        "siid": 5, "aiid": 1,
+        "routed_t": "TASK", "routed_o": 108,
+        "payload_fn": _edge_patrol_payload,
     },
     MowerAction.PAUSE: {"siid": 5, "aiid": 4},
     MowerAction.DOCK: {"siid": 5, "aiid": 3},

@@ -25,6 +25,7 @@ def _make_min_map_with_nav_paths(nav_paths):
         contour_paths=(),
         available_contour_ids=(),
         maintenance_points=(),
+        patrol_points=(),
         dock_xy=None,
         total_area_m2=10.0,
         nav_paths=nav_paths,

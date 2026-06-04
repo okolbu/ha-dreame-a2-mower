@@ -379,6 +379,46 @@ def render_base_map(
         )
 
     # -----------------------------------------------------------------------
+    # 3.6. Patrol / cruise points — green 2× dock-radius circles with a "P"
+    #      glyph. Same pattern as maintenance points (3.5). cruisePoints come
+    #      in cloud-frame mm — use _cloud_to_px. The glyph is rotated 180° to
+    #      cancel the canvas-end FLIP_TOP_BOTTOM (same trick as the "M").
+    # -----------------------------------------------------------------------
+    for pp in getattr(map_data, "patrol_points", ()) or ():
+        ppx, ppy = _cloud_to_px(
+            float(pp.x_mm), float(pp.y_mm), bx2, by2, grid,
+        )
+        draw.ellipse(
+            [ppx - mp_radius_px, ppy - mp_radius_px,
+             ppx + mp_radius_px, ppy + mp_radius_px],
+            fill=p["pp_fill"],
+            outline=p["pp_outline"],
+            width=2,
+        )
+        try:
+            font = ImageFont.truetype(
+                "DejaVuSans-Bold.ttf", size=int(mp_radius_px * 1.4)
+            )
+        except (OSError, IOError):
+            font = ImageFont.load_default()
+        glyph_size = int(mp_radius_px * 3)
+        glyph = Image.new("RGBA", (glyph_size, glyph_size), (0, 0, 0, 0))
+        glyph_draw = ImageDraw.Draw(glyph)
+        glyph_draw.text(
+            (glyph_size / 2, glyph_size / 2),
+            "P",
+            fill=p["pp_text"],
+            font=font,
+            anchor="mm",
+        )
+        glyph = glyph.rotate(180)
+        image.paste(
+            glyph,
+            (int(ppx - glyph_size / 2), int(ppy - glyph_size / 2)),
+            glyph,
+        )
+
+    # -----------------------------------------------------------------------
     # 4. Dock / charger icon — filled circle at dock_xy.
     #    dock_xy is in renderer-frame mm (post-reflection + CHARGER_OFFSET_MM);
     #    divide by pixel_size_mm for pixel coords.

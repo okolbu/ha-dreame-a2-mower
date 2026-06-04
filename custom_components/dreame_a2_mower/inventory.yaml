@@ -3246,6 +3246,15 @@ opcodes:
           preference, not per-point patrol input. (Two ints could not encode
           per-point settings for an arbitrary point count anyway.)
         evidence: "patrol .0550 (mode107) pref=[45,0] == mow .0550 (-112293549_090642791, mode100) pref=[45,0]"
+      - date: "2026-06-04"
+        status: partial
+        claim: |
+          The integration now SENDS op=107 as routed_action(107, {"point":[ids]})
+          (ids from cruisePoints) via MowerAction.START_POINT_PATROL +
+          coordinator.start_point_patrol. SEND shape [UNVERIFIED] — high-confidence
+          by analogy to the live-confirmed go-to-point (o109 {"point":[id]}); flip
+          to verified on first live s2p50 o:107 status:true.
+        evidence: "mower/actions.py _point_patrol_payload + ACTION_TABLE; coordinator/_writes.py start_point_patrol"
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
@@ -3270,6 +3279,16 @@ opcodes:
     open_questions:
       - "Patrol session capture: the live map reportedly can't track the mower during patrol despite valid s1p4 — investigate the begin_session/render path. Patrol should be a first-class session_type (op=108 / s2p2=51, 0-area)."
       - "SEND payload UNCAPTURED. [UNVERIFIED] HYPOTHESIS (2026-06-04): the echo s2p56=[[1,0,0]] matches the MAP-blob `contours` entry id=[1,0] (type=7) seen in live fetch_map — so startCruiseSide likely targets a contour, payload `{edge:[[1,0]]}` (the contour-pair, same d-key as edge-mow o:101 which uses {edge:[[pair]]}). Verify by firing routed_action(108, {edge:[[1,0]]}) and watching for s2p50 o:108 status:true; status:false ⇒ wrong d-key, try {contour:[[1,0]]} / {region:[1]}."
+    verifications:
+      - date: "2026-06-04"
+        status: partial
+        claim: |
+          The integration now SENDS op=108 as routed_action(108, {"edge":[[m,c]]})
+          (outer-perimeter contour pairs) via MowerAction.START_EDGE_PATROL +
+          coordinator.start_edge_patrol. SEND shape [UNVERIFIED] — the d-key `edge`
+          mirrors edge-mow o:101 and the echo s2p56=[[1,0,0]] matches contour [1,0];
+          flip to verified on first live s2p50 o:108 status:true.
+        evidence: "mower/actions.py _edge_patrol_payload + ACTION_TABLE; coordinator/_writes.py start_edge_patrol"
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"

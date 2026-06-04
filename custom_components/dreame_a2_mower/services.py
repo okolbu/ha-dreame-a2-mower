@@ -41,6 +41,8 @@ SERVICE_REFRESH_CLOUD_STATE = "refresh_cloud_state"
 SERVICE_SHOW_PHOTO_PRIVACY_POLICY = "show_photo_privacy_policy"
 SERVICE_SET_LANGUAGE = "set_language"
 SERVICE_MOVE_LIDAR_SCAN = "move_lidar_scan"
+SERVICE_START_POINT_PATROL = "start_point_patrol"
+SERVICE_START_EDGE_PATROL = "start_edge_patrol"
 
 
 # Schemas
@@ -68,6 +70,22 @@ SCHEMA_MOW_EDGE = vol.Schema(
 
 SCHEMA_MOW_SPOT = vol.Schema(
     {vol.Required("spot_ids"): vol.All(cv.ensure_list, [vol.Coerce(int)])}
+)
+
+SCHEMA_START_POINT_PATROL = vol.Schema(
+    {
+        vol.Optional("map_id"): vol.Coerce(int),
+        vol.Required("point_ids"): vol.All(cv.ensure_list, [vol.Coerce(int)]),
+    }
+)
+
+SCHEMA_START_EDGE_PATROL = vol.Schema(
+    {
+        vol.Optional("map_id"): vol.Coerce(int),
+        vol.Required("contour_ids"): vol.All(
+            cv.ensure_list, [vol.All(cv.ensure_list, [vol.Coerce(int)])]
+        ),
+    }
 )
 
 SCHEMA_EMPTY = vol.Schema({})
@@ -171,6 +189,28 @@ async def _handle_mow_spot(call: ServiceCall) -> None:
     await coordinator.dispatch_action(
         MowerAction.START_SPOT_MOW, {"spots": list(spot_ids)}
     )
+
+
+async def _handle_start_point_patrol(call: ServiceCall) -> None:
+    coordinator = _coordinator_from_call(call.hass, call)
+    if coordinator is None:
+        return
+    map_id = call.data.get("map_id")
+    if map_id is None:
+        map_id = getattr(coordinator, "_active_map_id", None) or 0
+    point_ids = list(int(p) for p in call.data["point_ids"])
+    await coordinator.start_point_patrol(map_id=int(map_id), point_ids=point_ids)
+
+
+async def _handle_start_edge_patrol(call: ServiceCall) -> None:
+    coordinator = _coordinator_from_call(call.hass, call)
+    if coordinator is None:
+        return
+    map_id = call.data.get("map_id")
+    if map_id is None:
+        map_id = getattr(coordinator, "_active_map_id", None) or 0
+    contour_ids = [list(c) for c in call.data["contour_ids"]]
+    await coordinator.start_edge_patrol(map_id=int(map_id), contour_ids=contour_ids)
 
 
 async def _handle_simple_action(action_name: str):
@@ -697,6 +737,10 @@ async def async_register_services(hass: HomeAssistant) -> None:
         _async_move_lidar_scan,
         schema=SCHEMA_MOVE_LIDAR_SCAN,
     )
+    hass.services.async_register(DOMAIN, SERVICE_START_POINT_PATROL,
+                                  _handle_start_point_patrol, schema=SCHEMA_START_POINT_PATROL)
+    hass.services.async_register(DOMAIN, SERVICE_START_EDGE_PATROL,
+                                  _handle_start_edge_patrol, schema=SCHEMA_START_EDGE_PATROL)
 
 
 def async_unregister_services(hass: HomeAssistant) -> None:
@@ -707,5 +751,6 @@ def async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_SHOW_LIDAR_FULLSCREEN, SERVICE_DUMP_MAP_DIAGNOSTICS, SERVICE_DISCOVER_CLOUD_API,
         SERVICE_REFRESH_CLOUD_STATE, SERVICE_SHOW_PHOTO_PRIVACY_POLICY,
         SERVICE_SET_LANGUAGE, SERVICE_MOVE_LIDAR_SCAN,
+        SERVICE_START_POINT_PATROL, SERVICE_START_EDGE_PATROL,
     ):
         hass.services.async_remove(DOMAIN, svc)

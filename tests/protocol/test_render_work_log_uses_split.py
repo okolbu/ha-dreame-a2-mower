@@ -66,6 +66,7 @@ def _tiny_map() -> MapData:
         contour_paths=(),
         available_contour_ids=(),
         maintenance_points=(),
+        patrol_points=(),
         dock_xy=None,
         total_area_m2=100.0,
         nav_paths=(),
