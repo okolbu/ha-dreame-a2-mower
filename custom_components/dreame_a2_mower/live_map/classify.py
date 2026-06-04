@@ -20,7 +20,10 @@ probe-log rebuild / migration tools.
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
+
+_LOGGER = logging.getLogger(__name__)
 
 
 def classify_track(
@@ -92,6 +95,17 @@ def classify_session_type(
         return "patrol", None
     if saw_mow_start or area_ever_positive:
         return "mow", None
+    if last_task_op is None:
+        # No op, no mow evidence, no patrol start, no to-point op. The type was
+        # never recorded — a real to-point run carries op=109 (handled by the
+        # block above via last_point_end_code), so a None op here means the
+        # start clues were lost. Surface it instead of masking behind the
+        # default. See 2026-06-04 patrol-session-type-recording fix.
+        _LOGGER.warning(
+            "classify_session_type: no positive session-type signal "
+            "(last_task_op=None, no mow/area/patrol) — defaulting to "
+            "maintenance_run; the session start clues may have been lost"
+        )
     outcome = {75: "arrived", 76: "could_not_reach"}.get(
         last_point_end_code, "unknown"
     )
