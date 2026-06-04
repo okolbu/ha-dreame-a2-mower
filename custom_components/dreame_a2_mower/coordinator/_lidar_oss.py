@@ -675,6 +675,10 @@ class _LidarOssMixin:
             LOGGER.warning(
                 "[F5.6.1] _do_oss_fetch: delete_in_progress raised: %s", ex
             )
+        # The session is fully archived (mow/patrol cloud-finalized path).
+        # Clear the pending task op + sidecar so a finished session's op
+        # cannot seed a later one (no-window safety valve).
+        self._clear_pending_op()
         self._fire_mowing_ended(
             now_unix=now_unix,
             area_mowed_m2=summary.area_mowed_m2,
