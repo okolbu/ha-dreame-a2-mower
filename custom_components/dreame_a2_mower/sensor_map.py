@@ -102,6 +102,70 @@ class DreameA2MaintenancePointsSensor(_DreameA2PerMapSensorBase):
         }
 
 
+class DreameA2PatrolPointsSensor(_DreameA2PerMapSensorBase):
+    """Per-map list of patrol (cruise) points.
+
+    State = count; ``extra_state_attributes['items']`` is the generic
+    multi-select shape consumed by dreame-multi-select-card. Decoded from
+    MAP key ``cruisePoints`` (type=8). Read-only; placement is app-only.
+    cycles/auto_capture are null — not readable from any known surface yet.
+    """
+
+    _attr_name = "Patrol points"
+    _attr_icon = "mdi:map-marker-path"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _KEY = "patrol_points"
+
+    def _compute_value(self, m):
+        return len(getattr(m, "patrol_points", None) or ())
+
+    @property
+    def extra_state_attributes(self):
+        m = self._map()
+        pts = (getattr(m, "patrol_points", None) or ()) if m is not None else ()
+        return {
+            "items": [
+                {
+                    "id": p.point_id,
+                    "label": f"Patrol point {p.point_id}",
+                    "x_mm": p.x_mm,
+                    "y_mm": p.y_mm,
+                    "cycles": None,
+                    "auto_capture": None,
+                }
+                for p in pts
+            ]
+        }
+
+
+class DreameA2PatrolEdgesSensor(_DreameA2PerMapSensorBase):
+    """Per-map list of edge-patrol targets (outer-perimeter contours).
+
+    State = count; ``extra_state_attributes['items']`` is the generic
+    multi-select shape; each item's ``id`` is the ``[m, c]`` contour pair the
+    op=108 payload needs. Only outer perimeters (c == 0) are offered, matching
+    the app's per-zone edge selection.
+    """
+
+    _attr_name = "Patrol edges"
+    _attr_icon = "mdi:vector-square"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _KEY = "patrol_edges"
+
+    def _outer(self, m):
+        cids = getattr(m, "available_contour_ids", None) or ()
+        return [cid for cid in cids if len(cid) == 2 and cid[1] == 0]
+
+    def _compute_value(self, m):
+        return len(self._outer(m))
+
+    @property
+    def extra_state_attributes(self):
+        m = self._map()
+        outer = self._outer(m) if m is not None else []
+        return {"items": [{"id": [cid[0], cid[1]], "label": f"Edge {cid[0]}"} for cid in outer]}
+
+
 class DreameA2ExclusionZonesSensor(_DreameA2PerMapSensorBase):
     """Per-map count of exclusion (red / no-go) zones.
 

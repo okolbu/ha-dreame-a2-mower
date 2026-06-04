@@ -53,6 +53,8 @@ from .sensor_map import (
     DreameA2MapPreEdgemasterSensor,
     DreameA2MapPreMowingHeightSensor,
     DreameA2MapSegmentCountSensor,
+    DreameA2PatrolEdgesSensor,
+    DreameA2PatrolPointsSensor,
     DreameA2SpotsCountSensor,
 )
 from .sensor_session import (
@@ -98,6 +100,8 @@ async def async_setup_entry(
             DreameA2MapAreaSensor(coordinator, map_id=map_id),
             DreameA2MapSegmentCountSensor(coordinator, map_id=map_id),
             DreameA2MaintenancePointsSensor(coordinator, map_id=map_id),
+            DreameA2PatrolPointsSensor(coordinator, map_id=map_id),
+            DreameA2PatrolEdgesSensor(coordinator, map_id=map_id),
             DreameA2ExclusionZonesSensor(coordinator, map_id=map_id),
             DreameA2IgnoreObstacleZonesSensor(coordinator, map_id=map_id),
             DreameA2SpotsCountSensor(coordinator, map_id=map_id),
