@@ -390,6 +390,25 @@ class DreameA2MqttClient:
             )
             return
 
+        # [F5-RAW temporary diag] Surface ANY inbound message carrying a task op
+        # / TASK echo / s2p50, at the EARLIEST point (before the data-envelope
+        # unwrap) — to settle whether the integration actually receives the
+        # patrol op echo on the wire, and if so under what method/envelope, or it
+        # is dropped here (e.g. no "data" field => not forwarded). Remove after
+        # the patrol-wire investigation. See docs/TODO.md.
+        try:
+            _raws = json.dumps(response)
+        except Exception:
+            _raws = str(response)
+        if any(m in _raws for m in ('"o":', '"o" :', 'TASK', '"piid": 50', '"piid":50')):
+            _LOGGER.warning(
+                "[F5-RAW] topic=%s has_data=%s method=%s payload=%s",
+                topic,
+                bool(response.get("data")),
+                (response.get("data") or {}).get("method") if isinstance(response.get("data"), dict) else response.get("method"),
+                _raws[:600],
+            )
+
         # Unwrap the Dreame envelope: { "data": { "method": ..., ... } }.
         if response.get("data"):
             try:

@@ -79,11 +79,17 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      (return leg now captured) and the OSS-fetch expiry (clean cloud-finalize path) — both
      were downstream symptoms. See inventory `o107` verifications (2026-06-04).
    - **[BUG] Live map: striped (idle) background never switches to flat-green during a
-     session.** The live *trail* draws fine, but the base map stays the idle stripe preview.
-     Log shows `RuntimeWarning: coroutine '_RenderingMixin._render_base' was never awaited`
-     at `sensor_device.py:611` — a `self._render_base()` call that isn't `await`ed /
-     `async_create_task`-scheduled, so the command-time re-render never runs. Fix: schedule
-     it properly (mirror the other `hass.async_create_task(self._render_base())` call sites).
+     patrol.** The live *trail* draws fine, but the base stays the idle stripe preview.
+     TWO candidate causes (disambiguate with the [F5-RAW] capture): (a) the command-time
+     render trigger is the s2p50 echo, which the integration may not be receiving for
+     patrols (see the [F5-RAW] investigation) → no re-render fires; and/or (b) the base
+     render mode for a blades-up/area=0 patrol may compute as the idle stripe preview
+     (`background_mode_for`), i.e. patrol isn't treated as an active-session background.
+     SEPARATE minor bug seen in the same log: `RuntimeWarning: coroutine
+     '_RenderingMixin._render_base' was never awaited` — `sensor_device.py:611` is only the
+     GC site (a novel_observations attr read); the real un-awaited call is an entity-write
+     handler calling `render_fn()` without await (candidates `number.py:678`,
+     `select_global.py:989/1020`). Fix that call to `await` / `async_create_task`.
    - **[TODO] Patrol replay omits the on-the-spot 360° spins** the mower does AT each patrol
      point (the live map shows them; the archived/replay track does not). The finalized
      archive renders from the CLOUD summary track (`md5` real) which evidently simplifies
