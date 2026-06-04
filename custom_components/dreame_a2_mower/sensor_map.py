@@ -5,6 +5,7 @@ load it directly.  It is imported by sensor.py.
 
 Contains: DreameA2MapNameSensor, DreameA2MapAreaSensor,
 DreameA2MapSegmentCountSensor, DreameA2MaintenancePointsSensor,
+DreameA2PatrolPointsSensor, DreameA2PatrolEdgesSensor,
 DreameA2ExclusionZonesSensor, DreameA2IgnoreObstacleZonesSensor,
 DreameA2SpotsCountSensor, DreameA2MapPreMowingHeightSensor,
 DreameA2MapPreEdgemasterSensor.
