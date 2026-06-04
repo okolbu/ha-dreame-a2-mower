@@ -355,6 +355,50 @@ class _MqttHandlersMixin:
                 EVENT_TYPE_RAIN_DELAY_STARTED, {"at_unix": int(now_unix)}
             )
 
+    def _latch_task_op(self, op: int) -> None:
+        """Record the latest task op (s2p50 echo), ungated by session-active.
+
+        Persisted to the sidecar (last-wins, no window) so it survives a
+        restart that lands before begin_session. If a session is already
+        active, also set last_task_op directly so a mid-session op change
+        (e.g. a new command without docking) is reflected immediately.
+        """
+        self._pending_task_op = int(op)
+        try:
+            self.session_archive.write_pending_op(int(op))
+        except Exception:  # pragma: no cover - sidecar write is best-effort
+            LOGGER.exception("_latch_task_op: sidecar write failed")
+        if self.live_map.is_active():
+            self.live_map.last_task_op = int(op)
+
+    def _handle_task_op_echo(self, value: Any) -> None:
+        """Extract the op from an s2p50 value and latch it.
+
+        s2p50 value is `{"d": {"o": <op>, ...}, ...}`; some payloads carry the
+        op flat as `{"o": <op>}`. Non-dict / missing-op payloads are ignored.
+        """
+        if not isinstance(value, dict):
+            return
+        inner = value.get("d")
+        src = inner if isinstance(inner, dict) else value
+        op = src.get("o")
+        if op is None:
+            return
+        try:
+            self._latch_task_op(int(op))
+        except (TypeError, ValueError):
+            return
+
+    def _seed_session_type_from_pending(self) -> None:
+        """Seed live_map.last_task_op from the pending latch at session birth.
+
+        begin_session() nulls last_task_op; this re-stamps it from the op echo
+        that arrived before the session existed. No-op when nothing is latched
+        or no session is active.
+        """
+        if self._pending_task_op is not None and self.live_map.is_active():
+            self.live_map.last_task_op = self._pending_task_op
+
     def _on_state_update(self, new_state: MowerState, now_unix: int) -> MowerState:
         """Hook fired after apply_property_to_state. Updates LiveMapState
         based on s2p56 transitions and appends s1p4 positions to the

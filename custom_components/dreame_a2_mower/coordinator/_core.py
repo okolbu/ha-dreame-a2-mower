@@ -146,6 +146,12 @@ class _CoreMixin:
         # per-target arrivals, so it never trips this. None until the first
         # s2p56 push is observed (so the first command doesn't false-split).
         self._prev_s2p56_empty: bool | None = None
+        # Pending task op (s2p50 echo) latched ungated by session-active so a
+        # patrol/mow/etc. commanded from the dock is recorded before
+        # begin_session exists to hold it. Seeded into live_map.last_task_op at
+        # begin_session; persisted via the pending_task_op sidecar. See
+        # docs/superpowers/specs/2026-06-04-patrol-session-type-recording-design.md
+        self._pending_task_op: int | None = None
         # Synchronous latch to prevent double-finalize when s2p2=75 AND the
         # task_state 0→2 edge arrive within ~1 s and both schedule
         # _finalize_non_mow_immediate as concurrent async tasks. Both can pass
