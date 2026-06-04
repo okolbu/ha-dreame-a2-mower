@@ -49,10 +49,20 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
    **DONE (2026-06-04).** o10 corrected (it DOES fire op=10 via GENERATE_3D_MAP; the
    apk-uploadMap vs integration-generate_3dmap name conflict is now a flagged open question +
    capture step); 17 stale `actions.py:NNN` refs refreshed to current `ACTION_TABLE` lines.
-4. **Coverage gaps (separate features the audit surfaced):** Patrol (o107/o108) has no
-   trigger control; `MISTA` could be a MQTT-unavailable area fallback sensor; phantom-sensor
-   prose for `WRF`/`TIME`/`VER` (claim a `sensor.X` that doesn't exist — build the trivial
-   diagnostic sensors or correct the prose).
+4. **Coverage gaps (separate features the audit surfaced):**
+   - ~~phantom-sensor prose for `WRF`/`TIME`/`VER`~~ **DONE (2026-06-04).** Built as
+     disabled-by-default DIAGNOSTIC sensors (`sensor.dreame_a2_mower_weather_forecast_reference`
+     / `_mower_timezone` / `_cfg_version`): CFG→MowerState port in
+     `cfg_to_state_updates`, descriptors in `sensor_device.py`, inventory rows + the prose
+     corrected with retraction records. The claims are now true.
+   - **`MISTA` area fallback sensor — deferred (not blocked, but non-trivial).** Needs a
+     dedicated cloud-fetch of the MISTA `cfg_individual` endpoint (not currently polled) and
+     is **mid-run-only** (returns r=-1/-3 when idle, per `project_g2408_mista_decoded`), so it
+     would be unavailable except while mowing — a niche MQTT-down fallback. Build only if the
+     s1p4 MQTT area stream proves unreliable.
+   - **Patrol (o107/o108) trigger control — device-blocked.** Needs the outbound SEND payload
+     captured first (the inbound echo is confirmed; the integration only types patrols
+     post-hoc). Belongs with the live-probe work (#2).
 
 **Cross-refs:** `control_honesty.py` (`CONTROL_MODES` single SoT); `entity-inventory.yaml`
 (`control_mode` per row); `docs/research/wire-captures/{settings-surface-cloud-only,
