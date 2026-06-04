@@ -606,11 +606,6 @@ class DreameA2MapMowingEfficiencySelect(
     async def async_select_option(self, option: str) -> None:
         if self.read_only:
             return await self._reject_readonly_write()
-        LOGGER.warning(
-            "select.<map>_mowing_efficiency: no working device-write path "
-            "on g2408; ignoring select_option(%r)",
-            option,
-        )
 
 
 class DreameA2PerMapEdgeMowingWalkModeSelect(

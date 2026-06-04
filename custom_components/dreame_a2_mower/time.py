@@ -143,15 +143,9 @@ class DreameA2Time(_ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordina
         return _to_time(minutes)
 
     async def async_set_value(self, value: time) -> None:
-        """Read-only in F4 — log warning and no-op.
-
-        Schedule editing on g2408 is BT-only per protocol-doc §1.1.
-        F5+ may add write support after validation on a live mower.
-        """
-        LOGGER.warning(
-            "time.%s: write deferred (schedule editing on g2408 is BT-only or not yet validated)",
-            self.entity_description.key,
-        )
+        """Read-only in F4 — snap back via control-honesty mixin."""
+        if self.read_only:
+            return await self._reject_readonly_write()
 
 
 # ---------------------------------------------------------------------------

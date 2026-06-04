@@ -29,7 +29,11 @@ from custom_components.dreame_a2_mower.switch_global import SWITCHES
 from custom_components.dreame_a2_mower.switch import (
     DreameA2Switch,
     DreameA2AiRecognitionHumansSwitch,
+    DreameA2AiHumanDetectionSwitch,
+    DreameA2EdgeMowingAutoSwitch,
+    DreameA2MapEdgemasterSwitch,
 )
+from custom_components.dreame_a2_mower.control_honesty import _ControlHonestyMixin
 
 _MAP_ID = 0
 
@@ -171,6 +175,135 @@ def test_ai_recognition_humans_turn_on_does_not_write_and_snaps_back():
     )
     coord.write_settings = AsyncMock(return_value=True)  # spy
     ent = DreameA2AiRecognitionHumansSwitch(coord, map_id=_MAP_ID)
+    ent.async_write_ha_state = MagicMock()
+
+    asyncio.run(ent.async_turn_on())
+
+    coord.write_settings.assert_not_called()
+    ent.async_write_ha_state.assert_called_once()  # snap-back fired
+
+
+# ---------------------------------------------------------------------------
+# DreameA2AiHumanDetectionSwitch  (previously missed — read_only_pending)
+# ---------------------------------------------------------------------------
+
+def test_ai_human_detection_has_honesty_mixin():
+    coord = _make_coord()
+    ent = DreameA2AiHumanDetectionSwitch(coord)
+    assert isinstance(ent, _ControlHonestyMixin)
+
+
+def test_ai_human_detection_is_read_only():
+    coord = _make_coord()
+    ent = DreameA2AiHumanDetectionSwitch(coord)
+    assert ent.read_only is True
+
+
+def test_ai_human_detection_has_padlock_icon():
+    coord = _make_coord()
+    ent = DreameA2AiHumanDetectionSwitch(coord)
+    assert ent.icon == "mdi:lock-outline"
+
+
+def test_ai_human_detection_turn_on_does_not_call_write_ai_human_enabled():
+    """read_only guard must fire BEFORE write_ai_human_enabled is called."""
+    coord = _make_coord()
+    coord.write_ai_human_enabled = AsyncMock(return_value=True)  # spy
+    ent = DreameA2AiHumanDetectionSwitch(coord)
+    ent.async_write_ha_state = MagicMock()
+
+    asyncio.run(ent.async_turn_on())
+
+    coord.write_ai_human_enabled.assert_not_called()
+    ent.async_write_ha_state.assert_called_once()  # snap-back fired
+
+
+def test_ai_human_detection_turn_off_does_not_call_write_ai_human_enabled():
+    coord = _make_coord()
+    coord.write_ai_human_enabled = AsyncMock(return_value=True)  # spy
+    ent = DreameA2AiHumanDetectionSwitch(coord)
+    ent.async_write_ha_state = MagicMock()
+
+    asyncio.run(ent.async_turn_off())
+
+    coord.write_ai_human_enabled.assert_not_called()
+    ent.async_write_ha_state.assert_called_once()  # snap-back fired
+
+
+# ---------------------------------------------------------------------------
+# DreameA2EdgeMowingAutoSwitch  (previously missed — read_only_confirmed)
+# ---------------------------------------------------------------------------
+
+def test_edge_mowing_auto_has_honesty_mixin():
+    coord = _make_coord(settings_by_map={_MAP_ID: {"edgeMowingAuto": 1}})
+    ent = DreameA2EdgeMowingAutoSwitch(coord, map_id=_MAP_ID)
+    assert isinstance(ent, _ControlHonestyMixin)
+
+
+def test_edge_mowing_auto_is_read_only():
+    coord = _make_coord(settings_by_map={_MAP_ID: {"edgeMowingAuto": 1}})
+    ent = DreameA2EdgeMowingAutoSwitch(coord, map_id=_MAP_ID)
+    assert ent.read_only is True
+
+
+def test_edge_mowing_auto_has_padlock_icon():
+    coord = _make_coord(settings_by_map={_MAP_ID: {"edgeMowingAuto": 1}})
+    ent = DreameA2EdgeMowingAutoSwitch(coord, map_id=_MAP_ID)
+    assert ent.icon == "mdi:lock-outline"
+
+
+def test_edge_mowing_auto_turn_on_does_not_call_settings_write():
+    """read_only guard must fire BEFORE _settings_switch_optimistic_write."""
+    coord = _make_coord(settings_by_map={_MAP_ID: {"edgeMowingAuto": 0}})
+    coord.write_settings = AsyncMock(return_value=True)  # spy
+    ent = DreameA2EdgeMowingAutoSwitch(coord, map_id=_MAP_ID)
+    ent.async_write_ha_state = MagicMock()
+
+    asyncio.run(ent.async_turn_on())
+
+    coord.write_settings.assert_not_called()
+    ent.async_write_ha_state.assert_called_once()  # snap-back fired
+
+
+# ---------------------------------------------------------------------------
+# DreameA2MapEdgemasterSwitch  (previously missed — read_only_noop)
+# ---------------------------------------------------------------------------
+
+def _make_coord_with_state_machine():
+    """Coordinator stub that also has state_machine (needed by EdgeMaster)."""
+    coord = _make_coord()
+    sm = MagicMock()
+    snap = MagicMock()
+    snap.pre_shadow_by_map_id = {_MAP_ID: {"edgemaster": True}}
+    sm.snapshot.return_value = snap
+    coord.state_machine = sm
+    return coord
+
+
+def test_edgemaster_has_honesty_mixin():
+    coord = _make_coord_with_state_machine()
+    ent = DreameA2MapEdgemasterSwitch(coord, map_id=_MAP_ID)
+    assert isinstance(ent, _ControlHonestyMixin)
+
+
+def test_edgemaster_is_read_only():
+    coord = _make_coord_with_state_machine()
+    ent = DreameA2MapEdgemasterSwitch(coord, map_id=_MAP_ID)
+    assert ent.read_only is True
+
+
+def test_edgemaster_has_padlock_icon():
+    coord = _make_coord_with_state_machine()
+    ent = DreameA2MapEdgemasterSwitch(coord, map_id=_MAP_ID)
+    # read_only_noop → padlock overrides _attr_icon = "mdi:mower"
+    assert ent.icon == "mdi:lock-outline"
+
+
+def test_edgemaster_turn_on_snaps_back():
+    """EdgeMaster turn_on must snap-back, never call coordinator write."""
+    coord = _make_coord_with_state_machine()
+    coord.write_settings = AsyncMock()  # spy — must NOT be called
+    ent = DreameA2MapEdgemasterSwitch(coord, map_id=_MAP_ID)
     ent.async_write_ha_state = MagicMock()
 
     asyncio.run(ent.async_turn_on())

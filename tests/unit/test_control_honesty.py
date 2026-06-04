@@ -1,6 +1,7 @@
 """Unit tests for control_honesty resolver + modes."""
 from custom_components.dreame_a2_mower.control_honesty import (
     ControlMode, READ_ONLY_MODES, CONTROL_MODES, resolve_control_mode,
+    _ControlHonestyMixin,
 )
 
 
@@ -31,9 +32,6 @@ def test_resolve_unknown_raises():
     import pytest
     with pytest.raises(KeyError):
         resolve_control_mode(platform="number", key="does_not_exist")
-
-
-from custom_components.dreame_a2_mower.control_honesty import _ControlHonestyMixin, ControlMode
 
 
 class _FakeEntity(_ControlHonestyMixin):
