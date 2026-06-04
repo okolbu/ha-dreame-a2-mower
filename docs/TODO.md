@@ -23,75 +23,38 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
-### Make controllable entities honest — read-only-until-proven vs known-writable audit
+### Control honesty — residual follow-ups (core shipped 2026-06-04)
 
-**Why:** Several entities render an interactive HA control (number slider,
-select dropdown, switch toggle) for a value that the device does NOT apply —
-the write is accepted by the cloud cache (or rejected with `r=-3`) but never
-reaches the firmware. Dragging `number.<map>_settings_mowing_height` does
-absolutely nothing on the mower, yet the slider moves and "sticks," which is
-actively misleading. `entity-inventory.yaml` already records the verdict per
-entity (`write_path:` + `status.seen_working:`): ~17 entities are
-`cloud-cache-only`, 7 are `no device write`, plus the PRE/efficiency surface is
-now confirmed `r=-3` (2026-06-03). The precedent for honest read-only is
-`switch_map.DreameA2MapEdgemasterSwitch` (no-op + warning) — but a no-op switch
-the UI still renders as a live toggle is only half a fix; the control should
-not *look* operable.
+**Core DONE** — the audit + `control_mode` classification + padlock/snap-back read-only
+representation shipped in v1.0.22a4. See `DONE.md` "Make controllable entities honest"
+and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
 
-**AUDIT DONE (2026-06-03)** — full classification in
-`docs/research/control-honesty-audit-2026-06-03.md`. Every control entity is
-bucketed A device-write-confirmed / B device-write-presumed / C cloud-cache-only /
-D read-only no-op / E integration-local-honest. **Misleading set = C + D** (~17
-per-map SETTINGS controls + ~7 CFG int-list controls that "stick" but the firmware
-ignores, plus ~10 cfg_key-omitted no-op controls). Honest = A (working-9 CFG +
-routed op=100/9/109 actions) and E (action-mode, target selection, archive pickers,
-refresh/finalize buttons). Still-open follow-ups the audit surfaced:
-- **WRP & LANG A-vs-C is unresolved** — a same-day (2026-05-09) contradiction
-  between `cfg-write-regression` ("no setter, r=-3") and the `_build_wrp` /
-  `_build_text_language` docstrings ("verified live"). Re-probe through the current
-  `set_cfg` (parses `out[0].r`) to settle; one of the two records gets retracted.
-- **Bucket B needs live probes** — s5a2/3/4 (stop/pause/dock direct actions, may
-  80001), op=200 active-map, op=10 generate_3dmap, op=12 lock_bot.
-- **`o10` name drift** (inventory `upload_map` vs code `GENERATE_3D_MAP`); stale
-  `actions.py` line numbers in inventory evidence pointers.
-- **Coverage gaps:** Patrol (o107/o108) has no trigger control; `MISTA` no fallback
-  sensor; phantom-sensor prose for `WRF`/`TIME`/`VER` (claim sensors that don't exist).
+1. **Mark provisional `device_write_unproven` controls.** stop/pause/dock (s5a2/3/4),
+   active-map (op=200), generate_3dmap (op=10), lock_bot (op=12) currently render as normal
+   operable controls. Give them a distinct provisional/unconfirmed signal and add each to
+   the Phase-3 app-RPC capture list. (Deliberately deferred from the markers work — they
+   mostly work, so don't over-mark; pick the lightweight signal first.)
+2. **Live re-probes to finalize uncertain classifications** (device-blocked):
+   - **WRP, LANG (lcd/voice), AI_HUMAN** — held at `read_only_pending` due to the same-day
+     (2026-05-09) contradiction: `cfg-write-regression` ("no setter, r=-3") vs the
+     `_build_wrp`/`_build_text_language` docstrings ("verified live"). Re-probe via the
+     current `set_cfg` (parses `out[0].r`): r=0+behaviour ⇒ flip to `device_writable`; r=-3
+     ⇒ `read_only_confirmed` and retract the docstring claim. One line in `CONTROL_MODES` +
+     the matching inventory row per flip (the sync test enforces both).
+   - **Bucket B actions:** s5a2/3/4 (may 80001), op=200, op=10, op=12 — confirm they land.
+   Probe tooling: `tools/probe_pre_write.py`.
+3. **Inventory accuracy:** `o10` name drift (inventory `upload_map` vs code
+   `GENERATE_3D_MAP` — re-check against the apk); refresh the stale `actions.py` line
+   numbers in several inventory evidence pointers.
+4. **Coverage gaps (separate features the audit surfaced):** Patrol (o107/o108) has no
+   trigger control; `MISTA` could be a MQTT-unavailable area fallback sensor; phantom-sensor
+   prose for `WRF`/`TIME`/`VER` (claim a `sensor.X` that doesn't exist — build the trivial
+   diagnostic sensors or correct the prose).
 
-**Done when (remaining):**
-1. ~~Classify every control entity + persist `control_mode` + CI gate~~ **DONE
-   (2026-06-04).** Every control entity in `entity-inventory.yaml` now carries a
-   `control_mode` (`device_writable` | `device_write_unproven` | `integration_local`
-   | `read_only_pending` | `read_only_confirmed` | `read_only_noop`; generic
-   `DreameA2Switch`/`DreameA2Number` rows use `control_mode: per_key` +
-   `control_mode_by_key`). Gate: `tests/inventory/test_control_mode_gate.py` blocks
-   a new control entity that ships unclassified. WRP/LANG/AI_HUMAN held at
-   `read_only_pending` pending the re-probe.
-2. ~~**Representation** — stop presenting non-writable controls as operable-with-no-effect~~
-   **DONE (2026-06-04).** Read-only controls (`read_only_pending`/`read_only_confirmed`/
-   `read_only_noop`) now show a padlock (`mdi:lock-outline`) + a `read_only`/`control_mode`
-   attribute and SNAP BACK on write (no device write, no fake "stick") — driven by
-   `control_honesty.py` (`_ControlHonestyMixin` + `CONTROL_MODES`, applied uniformly across
-   number/select/switch/time). Operable controls (`device_writable`/`integration_local`/
-   `device_write_unproven`) are untouched. The EdgeMaster no-op switch is migrated onto the
-   shared pattern. Dashboard has a padlock legend. CI: `test_control_mode_code_sync`
-   (code↔inventory) + `test_control_entities_wired` (every control entity carries the mixin).
-   **Flip-to-writable when a path is found = one line in `CONTROL_MODES` + the inventory row.**
-   Spec/plan: `2026-06-04-control-honesty-markers{-design,}.md` (moved to `OLD/` on branch finish).
-3. **(remaining)** Distinctly mark provisional `device_write_unproven` controls (stop/pause/
-   dock, op=200/10/12 — they currently render as normal controls) and add each to the Phase-3
-   app-RPC capture list. Plus the live re-probes the audit flagged: WRP/LANG/AI_HUMAN (held at
-   `read_only_pending`) and the bucket-B actions.
-
-**Status:** representation SHIPPED (2026-06-04). Remaining: provisional-marking (#3) + the
-live re-probes (WRP/LANG/AI_HUMAN, bucket B). Probe tooling exists (`tools/probe_pre_write.py`).
-**Cross-refs:** `custom_components/dreame_a2_mower/entity-inventory.yaml`
-(`write_path` / `seen_working` per entity); `switch_map.py`
-(EdgeMaster read-only precedent); `number.py:390` (the mowing-height slider
-example); `docs/research/wire-captures/settings-surface-cloud-only-2026-05-09.md`,
-`cfg-write-regression-2026-05-09.md`, `pre-write-r3-2026-06-03.md` (the
-cloud-cache-only / r=-3 findings); the Phase-3 app-RPC TODO below; auto-memory
-`feedback_no_migration_overengineering` (single-user — favour the simplest
-honest representation).
+**Cross-refs:** `control_honesty.py` (`CONTROL_MODES` single SoT); `entity-inventory.yaml`
+(`control_mode` per row); `docs/research/wire-captures/{settings-surface-cloud-only,
+cfg-write-regression}-2026-05-09.md`, `pre-write-r3-2026-06-03.md`; the Phase-3 app-RPC TODO
+below; auto-memory `project_control_honesty_markers`, `feedback_no_migration_overengineering`.
 
 ### s2p2 fault-surfacing — follow-ups after the FAULT_CODES partition
 
