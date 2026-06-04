@@ -1599,6 +1599,32 @@ entities:
       MowerState.rain_protection_enabled to preserve the enabled bit when only
       the hours field changes.
 
+  - id: "select.dreame_a2_mower_language"
+    platform: select
+    control_mode: read_only_pending
+    class: "DreameA2SettingSelect"
+    class_file: "custom_components/dreame_a2_mower/select_global.py:439"
+    device: parent
+    source:
+      wire: "LANG"
+      state_path: "coordinator.data.language_code (MowerState field: 'text=N,voice=M' raw string)"
+    write_path: "none (cfg_key intentionally omitted; read-only diagnostic)"
+    status:
+      seen_working: false
+      last_verified: "2026-06-04"
+    verifications:
+      - date: "2026-06-04"
+        status: presumed
+        claim: "Raw diagnostic entity (key='language') in SETTING_SELECTS; reads language_code as 'text=N,voice=M' string; cfg_key=None so no write path. EntityCategory.DIAGNOSTIC."
+        evidence: "select_global.py:372-380 (language descriptor with cfg_key omitted)"
+    references:
+      wire_entry: "LANG"
+      code: "custom_components/dreame_a2_mower/select_global.py:439"
+    notes: |
+      Raw diagnostic for the full LANG CFG value ("text=N,voice=M" string).
+      EntityCategory.DIAGNOSTIC; cfg_key omitted intentionally. Use lcd_language
+      or voice_language for the human-readable selects.
+
   - id: "select.dreame_a2_mower_lcd_language"
     platform: select
     control_mode: read_only_pending
