@@ -65,9 +65,16 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      `cruisePoints` (type=8) + rendered as green-P markers + surfaced as
      `sensor.…_patrol_points`/`_patrol_edges` (generic `items` attr) + a generic
      `dreame-multi-select-card` + `start_point_patrol`/`start_edge_patrol` services.
-     SEND shapes are `[UNVERIFIED]` pending a live `status:true`. Cycles/auto-capture
-     still need a cloud-source probe (not in the map blob). Zone/spot multi-select can
-     now reuse the same sensor+service+card pattern.
+     SEND shapes are `[UNVERIFIED]` pending a live `status:true`. Zone/spot multi-select
+     can now reuse the same sensor+service+card pattern.
+   - **Patrol per-point cycles + auto-capture — find the cloud source (no good candidate
+     yet).** The app shows per-point cycle count (×1/×2/×3) and an auto-capture camera
+     toggle, and they sync across app instances → cloud-persisted somewhere — but NOT in
+     the MAP `cruisePoints` blob (only id/path/time/etime), NOT in the patrol summary
+     `param:{}` (empty), NOT on `/status/`. The sensor `items` reserve `cycles:null` /
+     `auto_capture:null` for when a source is found (surface read-only first, then writable
+     when a write endpoint is found). No promising endpoint identified yet — needs an
+     app-backend / batch-key sweep (likely MITM-gated, see `reference_app_api_probe`).
 
 **Cross-refs:** `control_honesty.py` (`CONTROL_MODES` single SoT); `entity-inventory.yaml`
 (`control_mode` per row); `docs/research/wire-captures/{settings-surface-cloud-only,
