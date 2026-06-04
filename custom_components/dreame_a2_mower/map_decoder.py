@@ -157,6 +157,20 @@ class MaintenancePoint:
 
 
 @dataclass(frozen=True, slots=True)
+class PatrolPoint:
+    """Cruise / patrol point in raw cloud-frame mm.
+
+    From the MAP blob key ``cruisePoints`` (type=8) — distinct from
+    maintenance ``cleanPoints`` (type=6). Coordinates kept in the cloud
+    frame, mirroring MaintenancePoint.
+    """
+
+    point_id: int
+    x_mm: float
+    y_mm: float
+
+
+@dataclass(frozen=True, slots=True)
 class NavPath:
     """A connecting "navigation path" rendered as a gray polyline in the
     Dreame app. Connects two map regions (e.g. dock area to a remote
@@ -254,6 +268,7 @@ class MapData:
     # §4.6 for the wire-format finding (2026-05-05 live runs).
     available_contour_ids: tuple[tuple[int, int], ...]
     maintenance_points: tuple[MaintenancePoint, ...]
+    patrol_points: tuple[PatrolPoint, ...]
 
     # --- charger (renderer coords, post-reflection + offset) ---
     dock_xy: tuple[float, float] | None
@@ -471,6 +486,37 @@ def _parse_maintenance_points(cloud_response: dict[str, Any]) -> list[Maintenanc
         except (KeyError, TypeError, ValueError):
             continue
     return mp_out
+
+
+def _parse_cruise_points(cloud_response: dict[str, Any]) -> list[PatrolPoint]:
+    """Parse ``cruisePoints`` (patrol points, type=8) into PatrolPoint objects.
+
+    Same wrapper shape as ``cleanPoints``:
+    ``{dataType, value: [[id, {path:[{x,y}], type, ...}], ...]}``.
+    Coordinates kept in raw cloud-frame mm.
+    """
+    pp_out: list[PatrolPoint] = []
+    cruise_raw = cloud_response.get("cruisePoints", {})
+    cp_entries = cruise_raw.get("value", []) if isinstance(cruise_raw, dict) else []
+    for entry in cp_entries:
+        if isinstance(entry, list) and len(entry) >= 2:
+            point_id = entry[0]
+            pdata = entry[1]
+        elif isinstance(entry, dict):
+            point_id = entry.get("id", 1)
+            pdata = entry
+        else:
+            continue
+        point_path = pdata.get("path") or []
+        if not point_path:
+            continue
+        try:
+            pt = point_path[0]
+            pid = int(point_id) if isinstance(point_id, (int, float)) else int(pdata.get("id", len(pp_out) + 1))
+            pp_out.append(PatrolPoint(point_id=pid, x_mm=float(pt["x"]), y_mm=float(pt["y"])))
+        except (KeyError, TypeError, ValueError):
+            continue
+    return pp_out
 
 
 def _parse_nav_paths(cloud_response: dict[str, Any]) -> list[NavPath]:
@@ -708,6 +754,11 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
     mp_out = _parse_maintenance_points(cloud_response)
 
     # -----------------------------------------------------------------------
+    # Cruise / patrol points — raw cloud-frame mm.
+    # -----------------------------------------------------------------------
+    pp_out = _parse_cruise_points(cloud_response)
+
+    # -----------------------------------------------------------------------
     # Nav paths — gray connecting polylines between map regions.
     # Decoded from the cloud `paths` key. Coordinates kept in cloud-frame
     # mm (no reflection needed — purely informational for rendering).
@@ -790,6 +841,7 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
         contour_paths=tuple(contour_out),
         available_contour_ids=tuple(contour_ids_out),
         maintenance_points=tuple(mp_out),
+        patrol_points=tuple(pp_out),
         dock_xy=dock_xy,
         total_area_m2=total_area_m2,
         nav_paths=tuple(nav_paths_out),
