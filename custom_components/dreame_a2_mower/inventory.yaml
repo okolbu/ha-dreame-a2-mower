@@ -3133,6 +3133,20 @@ opcodes:
         status: verified
         claim: "op=107 (start_cruise_point / POINT patrol) is real on g2408. A user double-point patrol emitted s2p50 {o:107, exe:true, status:true, error:0, estimate_time:155, time:10664} at 20:44:10, with s2p2=51 (started) and s2p56 []→[[3,0],[4,-1]] (2-point queue). Blades-up (s1p4 area=0). Companion to o:108 edge patrol."
         evidence: "probe_log_20260520_131350.jsonl @ 2026-06-03 20:44:10 (s2p50 o=107 echo); s2p56 @ 20:44:10; user-confirmed double-point Patrol trigger"
+      - date: "2026-06-04"
+        status: partial
+        claim: |
+          Predefined PATROL points have their own MAP-blob key `cruisePoints`
+          (sibling of `cleanPoints`), same wrapper shape
+          {dataType:'Map', value:[[id, {id, path, type, shapeType}]]}. Live
+          fetch_map 2026-06-04 shows `cruisePoints` present on BOTH maps but EMPTY
+          (value:[]); the 2026-06-03 route points (ids 3,4) are NOT currently
+          persisted. So patrol points are NOT in cleanPoints (no conflation with
+          maintenance points), and the integration already fetches the structure
+          that would hold them — surfacing them is a _parse_maintenance_points-style
+          parse of `cruisePoints` once populated. To capture id/coords/type:
+          re-define patrol points in the app, then re-run the cloud fetch.
+        evidence: "live DreameA2CloudClient.fetch_map 2026-06-04 via tools/probe_cruise_to_point.py machinery: map0/map1 top-level keys include cruisePoints={dataType:Map,value:[]}; cleanPoints held only the 2 maintenance ids (1,2, type=6)"
       - date: "2026-06-03"
         status: partial
         claim: "Per-point patrol settings (cycles 1/2/3, auto-capture on/off) are NOT present in any captured /status/ uplink for op=107 — only the device echo (which lacks them) and the s2p56 point queue. The app→device command is not relayed to the MQTT monitor, so patrol settings are unobservable via this capture path."
@@ -3241,6 +3255,7 @@ opcodes:
       decoded: confirmed
     open_questions:
       - "Patrol session capture: the live map reportedly can't track the mower during patrol despite valid s1p4 — investigate the begin_session/render path. Patrol should be a first-class session_type (op=108 / s2p2=51, 0-area)."
+      - "SEND payload UNCAPTURED. [UNVERIFIED] HYPOTHESIS (2026-06-04): the echo s2p56=[[1,0,0]] matches the MAP-blob `contours` entry id=[1,0] (type=7) seen in live fetch_map — so startCruiseSide likely targets a contour, payload `{edge:[[1,0]]}` (the contour-pair, same d-key as edge-mow o:101 which uses {edge:[[pair]]}). Verify by firing routed_action(108, {edge:[[1,0]]}) and watching for s2p50 o:108 status:true; status:false ⇒ wrong d-key, try {contour:[[1,0]]} / {region:[1]}."
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"

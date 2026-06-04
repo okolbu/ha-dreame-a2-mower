@@ -1556,6 +1556,7 @@ blades-up (area=0) with valid s1p4 position telemetry. estimate_time=900s
 
 **Open questions:**
 - Patrol session capture: the live map reportedly can't track the mower during patrol despite valid s1p4 — investigate the begin_session/render path. Patrol should be a first-class session_type (op=108 / s2p2=51, 0-area).
+- SEND payload UNCAPTURED. [UNVERIFIED] HYPOTHESIS (2026-06-04): the echo s2p56=[[1,0,0]] matches the MAP-blob `contours` entry id=[1,0] (type=7) seen in live fetch_map — so startCruiseSide likely targets a contour, payload `{edge:[[1,0]]}` (the contour-pair, same d-key as edge-mow o:101 which uses {edge:[[pair]]}). Verify by firing routed_action(108, {edge:[[1,0]]}) and watching for s2p50 o:108 status:true; status:false ⇒ wrong d-key, try {contour:[[1,0]]} / {region:[1]}.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
