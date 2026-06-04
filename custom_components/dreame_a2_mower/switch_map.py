@@ -17,13 +17,14 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._devices import map_device_info, map_unique_id
 from .const import LOGGER
+from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 
 
 class DreameA2MapEdgemasterSwitch(
-    CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
 ):
-    """Per-map EdgeMaster — read-only.
+    """Per-map EdgeMaster — read-only (read_only_noop).
 
     Reads from the s6.2 PRE shadow (state_machine.snapshot().pre_shadow_by_map_id).
     Each s6.2 push from the device is tagged with the active map_id at push
@@ -34,9 +35,8 @@ class DreameA2MapEdgemasterSwitch(
     No working device-write surface for EdgeMaster has been identified on
     g2408 firmware (NOT a Bluetooth-transport issue — see
     docs/research/wire-captures/settings-surface-cloud-only-2026-05-09.md).
-    async_turn_on / async_turn_off log + no-op; HA's UI will still render
-    the toggle but the change won't be applied. Phase 3 work = capture the
-    device-write path used by the Dreame app.
+    control_mode=read_only_noop; async_turn_on / async_turn_off snap back via
+    _reject_readonly_write. The change is NOT applied to the device.
     """
 
     _attr_has_entity_name = True
@@ -55,6 +55,7 @@ class DreameA2MapEdgemasterSwitch(
         self._attr_device_info = map_device_info(
             coordinator, map_id, name=getattr(map_obj, "name", None),
         )
+        self._control_mode = resolve_control_mode(platform="switch", key="map_N_edgemaster")
 
     def _shadow_value(self) -> bool | None:
         sm = getattr(self.coordinator, "state_machine", None)
@@ -82,11 +83,9 @@ class DreameA2MapEdgemasterSwitch(
         return super().available
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        LOGGER.warning(
-            "switch.<map>_edgemaster: no working device-write path on g2408; ignoring turn_on"
-        )
+        if self.read_only:
+            return await self._reject_readonly_write()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        LOGGER.warning(
-            "switch.<map>_edgemaster: no working device-write path on g2408; ignoring turn_off"
-        )
+        if self.read_only:
+            return await self._reject_readonly_write()

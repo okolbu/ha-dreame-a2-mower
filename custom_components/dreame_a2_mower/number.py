@@ -37,6 +37,7 @@ from ._devices import (
     mower_unique_id,
 )
 from .const import CONF_STATION_BEARING_DEG, DOMAIN, LOGGER
+from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .mower.state import MowerState
 
@@ -248,12 +249,12 @@ async def async_setup_entry(
 # ---------------------------------------------------------------------------
 
 class DreameA2Number(
-    CoordinatorEntity[DreameA2MowerCoordinator], NumberEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], NumberEntity
 ):
     """A coordinator-backed number entity.
 
     Settable entities call coordinator.write_setting; read-only entities
-    log a warning and no-op when async_set_native_value is called.
+    snap back via _reject_readonly_write when async_set_native_value is called.
     """
 
     _attr_has_entity_name = True
@@ -268,6 +269,7 @@ class DreameA2Number(
         self.entity_description = description
         self._attr_unique_id = mower_unique_id(coordinator, description.key)
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="number", key=description.key)
 
     @property
     def native_value(self) -> float | int | None:
@@ -275,6 +277,8 @@ class DreameA2Number(
 
     async def async_set_native_value(self, value: float) -> None:
         """Write the new value to the mower via the coordinator."""
+        if self.read_only:
+            return await self._reject_readonly_write()
         desc = self.entity_description
         if desc.cfg_key is None:
             LOGGER.warning(
@@ -322,7 +326,7 @@ class DreameA2Number(
 # ---------------------------------------------------------------------------
 
 class _PerMapSettingsNumberBase(
-    CoordinatorEntity[DreameA2MowerCoordinator], NumberEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], NumberEntity
 ):
     """Base for per-map SETTINGS-driven number entities.
 
@@ -350,6 +354,9 @@ class _PerMapSettingsNumberBase(
         self._map_id = map_id
         self._attr_translation_key = self._KEY
         self._attr_unique_id = map_unique_id(coordinator, map_id, self._KEY)
+        self._control_mode = resolve_control_mode(
+            platform="number", key=f"map_N_{self._KEY}"
+        )
         map_obj = coordinator.cloud_state.maps_by_id.get(map_id)
         # has_entity_name=True + per-map device_info means HA prepends the
         # device name ("Map 1") to the entity name in the friendly_name and
@@ -378,6 +385,8 @@ class _PerMapSettingsNumberBase(
         return super().available
 
     async def async_set_native_value(self, value: float) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         await _settings_optimistic_write(
             self,
             field=self._SETTING_FIELD,
@@ -489,7 +498,7 @@ class DreameA2PerMapObstacleAvoidanceSensitivityNumber(_PerMapSettingsNumberBase
 # ---------------------------------------------------------------------------
 
 class DreameA2StationBearingNumber(
-    CoordinatorEntity[DreameA2MowerCoordinator], NumberEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], NumberEntity
 ):
     """User-settable compass bearing of the dock's local X axis.
 
@@ -520,6 +529,9 @@ class DreameA2StationBearingNumber(
         super().__init__(coordinator)
         self._attr_unique_id = mower_unique_id(coordinator, "station_bearing_deg")
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(
+            platform="number", key="station_bearing_deg"
+        )
 
     @property
     def native_value(self) -> float | None:
@@ -579,6 +591,7 @@ class DreameA2StationBearingNumber(
 # ---------------------------------------------------------------------------
 
 class DreameA2TrailRenderWidthNumber(
+    _ControlHonestyMixin,
     CoordinatorEntity[DreameA2MowerCoordinator],
     RestoreEntity,
     NumberEntity,
@@ -609,6 +622,9 @@ class DreameA2TrailRenderWidthNumber(
         super().__init__(coordinator)
         self._attr_unique_id = mower_unique_id(coordinator, "trail_render_width")
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(
+            platform="number", key="trail_render_width"
+        )
 
     @property
     def native_value(self) -> float:

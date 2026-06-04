@@ -19,6 +19,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._devices import map_device_info, map_unique_id
 from .const import LOGGER
+from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .mower.state import MowerState
 
@@ -53,7 +54,7 @@ class DreameA2SettingsSelectDescription(SelectEntityDescription):
 # ---------------------------------------------------------------------------
 
 class _DreameA2DynamicTargetSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity, RestoreEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity, RestoreEntity
 ):
     """Base for selects whose options come from MapData.{mowing,spot}_zones."""
 

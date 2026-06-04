@@ -30,6 +30,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._devices import mower_device_info, mower_unique_id
 from .const import DOMAIN, LOGGER, WORK_LOG_PLACEHOLDER
+from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .mower.state import ActionMode, MowerState
 from ._select_base import DreameA2SettingsSelectDescription
@@ -437,7 +438,7 @@ SETTING_SELECTS: tuple[DreameA2SettingsSelectDescription, ...] = (
 # ---------------------------------------------------------------------------
 
 class DreameA2SettingSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
 ):
     """A coordinator-backed select entity for enum-style CFG settings.
 
@@ -463,6 +464,7 @@ class DreameA2SettingSelect(
         self.entity_description = description
         self._attr_unique_id = mower_unique_id(coordinator, description.key)
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="select", key=description.key)
 
     @property
     def options(self) -> list[str]:
@@ -487,6 +489,8 @@ class DreameA2SettingSelect(
 
     async def async_select_option(self, option: str) -> None:
         """Write the selected option to the mower via the coordinator."""
+        if self.read_only:
+            return await self._reject_readonly_write()
         desc = self.entity_description
         if desc.cfg_key is None:
             LOGGER.warning(
@@ -528,7 +532,7 @@ class DreameA2SettingSelect(
 
 
 class DreameA2WorkLogSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
 ):
     """Dropdown of archived sessions; picking one fires `render_work_log_session`.
 
@@ -556,6 +560,7 @@ class DreameA2WorkLogSelect(
         super().__init__(coordinator)
         self._attr_unique_id = mower_unique_id(coordinator, "work_log")
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="select", key="work_log")
         self._label_to_filename: dict[str, str] = {}
         self._attr_options: list[str] = [self._placeholder]
         self._attr_current_option = self._placeholder
@@ -648,7 +653,7 @@ class DreameA2WorkLogSelect(
 
 
 class DreameA2LidarArchiveSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
 ):
     """Cross-map LiDAR archive picker.
 
@@ -670,6 +675,7 @@ class DreameA2LidarArchiveSelect(
         super().__init__(coordinator)
         self._attr_unique_id = mower_unique_id(coordinator, "lidar_archive")
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="select", key="lidar_archive")
         self._attr_current_option: str | None = self._placeholder
         self._attr_options: list[str] = [self._placeholder]
 
@@ -740,7 +746,7 @@ class DreameA2LidarArchiveSelect(
 
 
 class DreameA2ActiveMapSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
 ):
     """Active-map selector. Writable via s2.50 op:200 changeMap.
 
@@ -763,6 +769,7 @@ class DreameA2ActiveMapSelect(
         super().__init__(coordinator)
         self._attr_unique_id = mower_unique_id(coordinator, "active_map")
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="select", key="active_map")
         # Optimistic UI: set while a changeMap write is in flight so the
         # dropdown doesn't revert to the old value before firmware commits.
         self._optimistic_target_map_id: int | None = None
@@ -799,8 +806,14 @@ class DreameA2ActiveMapSelect(
         Cards key off this stable integer rather than the select's state
         (the friendly name), so the dashboard survives the user renaming
         a map in the Dreame app.
+
+        Chains into the _ControlHonestyMixin extra_state_attributes via
+        super() so control_mode / read_only are also present.
         """
-        return {"current_map_id": self.coordinator._active_map_id}
+        attrs = super().extra_state_attributes or {}
+        attrs = dict(attrs)
+        attrs["current_map_id"] = self.coordinator._active_map_id
+        return attrs
 
     @staticmethod
     def _label_for(map_id: int, map_data: Any) -> str:
@@ -919,7 +932,7 @@ class DreameA2ActiveMapSelect(
 # ---------------------------------------------------------------------------
 
 class DreameA2ActionModeSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity, RestoreEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity, RestoreEntity
 ):
     """User-facing action_mode picker.
 
@@ -947,6 +960,7 @@ class DreameA2ActionModeSelect(
         super().__init__(coordinator)
         self._attr_unique_id = mower_unique_id(coordinator, "action_mode")
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="select", key="action_mode")
 
     async def async_added_to_hass(self) -> None:
         await super().async_added_to_hass()
@@ -1015,7 +1029,7 @@ class DreameA2ActionModeSelect(
 
 
 class DreameA2WifiArchiveSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
 ):
     """Cross-map WiFi heatmap archive picker.
 
@@ -1038,6 +1052,7 @@ class DreameA2WifiArchiveSelect(
         super().__init__(coordinator)
         self._attr_unique_id = mower_unique_id(coordinator, "wifi_archive")
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="select", key="wifi_archive")
         self._attr_current_option: str | None = self._placeholder
         self._attr_options: list[str] = [self._placeholder]
         # Cache of label → entry for reverse-lookup in async_select_option.

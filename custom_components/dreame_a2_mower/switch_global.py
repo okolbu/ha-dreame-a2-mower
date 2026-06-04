@@ -20,6 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._devices import map_device_info, map_unique_id, mower_device_info, mower_unique_id
 from .const import LOGGER
+from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .mower.state import MowerState
 from ._switch_base import (
@@ -664,7 +665,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
 # ---------------------------------------------------------------------------
 
 class DreameA2EdgeMowingAutoSwitch(
-    CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
 ):
     """Edge mowing auto — per-map SETTINGS switch."""
 
@@ -682,6 +683,7 @@ class DreameA2EdgeMowingAutoSwitch(
             coordinator, map_id,
             name=getattr(coordinator.cloud_state.maps_by_id.get(map_id), "name", None),
         )
+        self._control_mode = resolve_control_mode(platform="switch", key="map_N_automatic_edge_mowing")
 
     @property
     def is_on(self) -> bool | None:
@@ -700,6 +702,8 @@ class DreameA2EdgeMowingAutoSwitch(
         return super().available
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         await _settings_switch_optimistic_write(
             self, field="edgeMowingAuto", new_value=True,
             state_field="settings_edge_mowing_auto",
@@ -707,6 +711,8 @@ class DreameA2EdgeMowingAutoSwitch(
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         await _settings_switch_optimistic_write(
             self, field="edgeMowingAuto", new_value=False,
             state_field="settings_edge_mowing_auto",
@@ -715,7 +721,7 @@ class DreameA2EdgeMowingAutoSwitch(
 
 
 class DreameA2EdgeMowingSafeSwitch(
-    CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
 ):
     """Edge mowing safe — per-map SETTINGS switch."""
 
@@ -733,6 +739,7 @@ class DreameA2EdgeMowingSafeSwitch(
             coordinator, map_id,
             name=getattr(coordinator.cloud_state.maps_by_id.get(map_id), "name", None),
         )
+        self._control_mode = resolve_control_mode(platform="switch", key="map_N_safe_edge_mowing")
 
     @property
     def is_on(self) -> bool | None:
@@ -749,6 +756,8 @@ class DreameA2EdgeMowingSafeSwitch(
         return super().available
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         await _settings_switch_optimistic_write(
             self, field="edgeMowingSafe", new_value=True,
             state_field="settings_edge_mowing_safe",
@@ -756,6 +765,8 @@ class DreameA2EdgeMowingSafeSwitch(
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         await _settings_switch_optimistic_write(
             self, field="edgeMowingSafe", new_value=False,
             state_field="settings_edge_mowing_safe",
@@ -764,7 +775,7 @@ class DreameA2EdgeMowingSafeSwitch(
 
 
 class DreameA2EdgeMowingObstacleAvoidanceSwitch(
-    CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
 ):
     """Edge mowing obstacle avoidance — per-map SETTINGS switch."""
 
@@ -782,6 +793,7 @@ class DreameA2EdgeMowingObstacleAvoidanceSwitch(
             coordinator, map_id,
             name=getattr(coordinator.cloud_state.maps_by_id.get(map_id), "name", None),
         )
+        self._control_mode = resolve_control_mode(platform="switch", key="map_N_obstacle_avoidance_on_edges")
 
     @property
     def is_on(self) -> bool | None:
@@ -798,6 +810,8 @@ class DreameA2EdgeMowingObstacleAvoidanceSwitch(
         return super().available
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         await _settings_switch_optimistic_write(
             self, field="edgeMowingObstacleAvoidance", new_value=True,
             state_field="settings_edge_mowing_obstacle_avoidance",
@@ -805,6 +819,8 @@ class DreameA2EdgeMowingObstacleAvoidanceSwitch(
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         await _settings_switch_optimistic_write(
             self, field="edgeMowingObstacleAvoidance", new_value=False,
             state_field="settings_edge_mowing_obstacle_avoidance",
@@ -813,7 +829,7 @@ class DreameA2EdgeMowingObstacleAvoidanceSwitch(
 
 
 class DreameA2ObstacleAvoidanceEnabledSwitch(
-    CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
 ):
     """Obstacle avoidance enabled — per-map SETTINGS switch."""
 
@@ -831,6 +847,7 @@ class DreameA2ObstacleAvoidanceEnabledSwitch(
             coordinator, map_id,
             name=getattr(coordinator.cloud_state.maps_by_id.get(map_id), "name", None),
         )
+        self._control_mode = resolve_control_mode(platform="switch", key="map_N_lidar_obstacle_recognition")
 
     @property
     def is_on(self) -> bool | None:
@@ -847,6 +864,8 @@ class DreameA2ObstacleAvoidanceEnabledSwitch(
         return super().available
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         await _settings_switch_optimistic_write(
             self, field="obstacleAvoidanceEnabled", new_value=True,
             state_field="settings_obstacle_avoidance_enabled",
@@ -854,6 +873,8 @@ class DreameA2ObstacleAvoidanceEnabledSwitch(
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         await _settings_switch_optimistic_write(
             self, field="obstacleAvoidanceEnabled", new_value=False,
             state_field="settings_obstacle_avoidance_enabled",
@@ -862,7 +883,7 @@ class DreameA2ObstacleAvoidanceEnabledSwitch(
 
 
 class DreameA2AiHumanDetectionSwitch(
-    CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
 ):
     """AI human detection — reads from cloud_state.ai_human_enabled."""
 
@@ -875,6 +896,7 @@ class DreameA2AiHumanDetectionSwitch(
         super().__init__(coordinator)
         self._attr_unique_id = mower_unique_id(coordinator, "cloud_state_ai_human_enabled")
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="switch", key="cloud_state_ai_human_enabled")
 
     @property
     def is_on(self) -> bool | None:
@@ -890,6 +912,8 @@ class DreameA2AiHumanDetectionSwitch(
         return super().available
 
     async def async_turn_on(self, **kwargs: Any) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         coord = self.coordinator
         cs = getattr(coord, "cloud_state", None)
         old_value = cs.ai_human_enabled if cs is not None else None
@@ -912,6 +936,8 @@ class DreameA2AiHumanDetectionSwitch(
         self.async_write_ha_state()
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         coord = self.coordinator
         cs = getattr(coord, "cloud_state", None)
         old_value = cs.ai_human_enabled if cs is not None else None
@@ -938,6 +964,7 @@ class DreameA2AiRecognitionHumansSwitch(_AiRecognitionBitSwitch):
     """AI Obstacle Recognition: Humans (bit 0) — per-map."""
 
     _BIT = _AI_HUMANS_BIT
+    _HONESTY_LEAF = "ai_recognition_humans"
     _attr_translation_key = "ai_recognition_humans"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
@@ -951,6 +978,7 @@ class DreameA2AiRecognitionAnimalsSwitch(_AiRecognitionBitSwitch):
     """AI Obstacle Recognition: Animals (bit 1) — per-map."""
 
     _BIT = _AI_ANIMALS_BIT
+    _HONESTY_LEAF = "ai_recognition_animals"
     _attr_translation_key = "ai_recognition_animals"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
@@ -964,6 +992,7 @@ class DreameA2AiRecognitionObjectsSwitch(_AiRecognitionBitSwitch):
     """AI Obstacle Recognition: Objects (bit 2) — per-map."""
 
     _BIT = _AI_OBJECTS_BIT
+    _HONESTY_LEAF = "ai_recognition_objects"
     _attr_translation_key = "ai_recognition_objects"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:

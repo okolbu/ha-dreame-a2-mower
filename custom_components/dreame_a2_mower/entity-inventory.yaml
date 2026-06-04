@@ -1095,8 +1095,9 @@ entities:
     platform: number
     control_mode: per_key
     control_mode_by_key:
-      VOL: device_writable        # volume (CFG.VOL int, working-9 -> device-applied)
-      BAT: read_only_confirmed    # auto_recharge/resume battery % (CFG.BAT list[6], no setter r=-3)
+      volume: device_writable
+      auto_recharge_battery_pct: read_only_confirmed
+      resume_battery_pct: read_only_confirmed
     class: "DreameA2Number"
     class_file: "custom_components/dreame_a2_mower/number.py"
     device: parent
@@ -1597,6 +1598,32 @@ entities:
       the full WRP list; whichever fires last wins. The select reads
       MowerState.rain_protection_enabled to preserve the enabled bit when only
       the hours field changes.
+
+  - id: "select.dreame_a2_mower_language"
+    platform: select
+    control_mode: read_only_noop
+    class: "DreameA2SettingSelect"
+    class_file: "custom_components/dreame_a2_mower/select_global.py:439"
+    device: parent
+    source:
+      wire: "LANG"
+      state_path: "coordinator.data.language_code (MowerState field: 'text=N,voice=M' raw string)"
+    write_path: "none (cfg_key intentionally omitted; read-only diagnostic)"
+    status:
+      seen_working: false
+      last_verified: "2026-06-04"
+    verifications:
+      - date: "2026-06-04"
+        status: presumed
+        claim: "Raw diagnostic entity (key='language') in SETTING_SELECTS; reads language_code as 'text=N,voice=M' string; cfg_key=None so no write path. EntityCategory.DIAGNOSTIC."
+        evidence: "select_global.py:372-380 (language descriptor with cfg_key omitted)"
+    references:
+      wire_entry: "LANG"
+      code: "custom_components/dreame_a2_mower/select_global.py:439"
+    notes: |
+      Raw diagnostic for the full LANG CFG value ("text=N,voice=M" string).
+      EntityCategory.DIAGNOSTIC; cfg_key omitted intentionally. Use lcd_language
+      or voice_language for the human-readable selects.
 
   - id: "select.dreame_a2_mower_lcd_language"
     platform: select
@@ -2641,19 +2668,31 @@ entities:
     platform: switch
     control_mode: per_key
     control_mode_by_key:
-      CLS: device_writable        # child_lock
-      ATA: device_writable        # anti_theft x3
-      FDP: device_writable        # frost_protection
-      STUN: device_writable       # auto_recharge_standby
-      AOP: device_writable        # ai_obstacle_photos
-      MSG_ALERT: device_writable  # msg_alert x4
-      VOICE: device_writable      # voice x4
-      DND: read_only_confirmed    # no setter (r=-3)
-      LOW: read_only_confirmed    # no setter (r=-3)
-      BAT: read_only_confirmed    # no setter (r=-3)
-      WRP: read_only_pending      # contradiction; needs re-probe
-      LIT: read_only_noop         # led x5, cfg_key=None
-      REC: read_only_noop         # human_presence_alert, cfg_key=None
+      child_lock: device_writable
+      anti_theft_lift_alarm: device_writable
+      anti_theft_offmap_alarm: device_writable
+      anti_theft_realtime_location: device_writable
+      frost_protection: device_writable
+      auto_recharge_standby: device_writable
+      ai_obstacle_photos: device_writable
+      msg_alert_anomaly: device_writable
+      msg_alert_error: device_writable
+      msg_alert_task: device_writable
+      msg_alert_consumables: device_writable
+      voice_regular_notification: device_writable
+      voice_work_status: device_writable
+      voice_special_status: device_writable
+      voice_error_status: device_writable
+      dnd: read_only_confirmed
+      low_speed_at_night: read_only_confirmed
+      custom_charging_period: read_only_confirmed
+      rain_protection: read_only_pending
+      led_period: read_only_noop
+      led_in_standby: read_only_noop
+      led_in_working: read_only_noop
+      led_in_charging: read_only_noop
+      led_in_error: read_only_noop
+      human_presence_alert: read_only_noop
     class: "DreameA2Switch"
     class_file: "custom_components/dreame_a2_mower/_switch_base.py:55"
     device: parent

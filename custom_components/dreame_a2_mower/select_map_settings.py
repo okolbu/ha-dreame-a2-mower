@@ -30,6 +30,7 @@ from ._settings_writes import (
     settings_optimistic_write as _settings_select_optimistic_write,
 )
 from .const import LOGGER
+from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from ._select_base import _DreameA2DynamicTargetSelect
 
@@ -50,6 +51,7 @@ class DreameA2ZoneSelect(_DreameA2DynamicTargetSelect):
     def __init__(self, coordinator: DreameA2MowerCoordinator, map_id: int) -> None:
         # has_entity_name=True; device_name is prepended automatically.
         super().__init__(coordinator, "zone_target", "Zone", "mdi:grass", map_id=map_id)
+        self._control_mode = resolve_control_mode(platform="select", key="map_N_zone_target")
 
     def _entries(self) -> list[tuple[int, str]]:
         md = self.coordinator.cloud_state.maps_by_id.get(self._map_id)
@@ -80,6 +82,7 @@ class DreameA2SpotSelect(_DreameA2DynamicTargetSelect):
     def __init__(self, coordinator: DreameA2MowerCoordinator, map_id: int) -> None:
         # has_entity_name=True; device_name is prepended automatically.
         super().__init__(coordinator, "spot_target", "Spot", "mdi:target", map_id=map_id)
+        self._control_mode = resolve_control_mode(platform="select", key="map_N_spot_target")
 
     def _entries(self) -> list[tuple[int, str]]:
         md = self.coordinator.cloud_state.maps_by_id.get(self._map_id)
@@ -103,7 +106,7 @@ class DreameA2SpotSelect(_DreameA2DynamicTargetSelect):
 
 
 class DreameA2EdgeSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity, RestoreEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity, RestoreEntity
 ):
     """Pick which contour(s) the next edge-mode start_mowing targets.
 
@@ -140,6 +143,7 @@ class DreameA2EdgeSelect(
         super().__init__(coordinator)
         self._map_id = map_id
         self._attr_unique_id = map_unique_id(coordinator, map_id, "edge_target")
+        self._control_mode = resolve_control_mode(platform="select", key="map_N_edge_target")
         map_data = coordinator.cloud_state.maps_by_id.get(map_id)
         map_name = getattr(map_data, "name", None) if map_data is not None else None
         # has_entity_name=True; device_name is prepended automatically.
@@ -292,7 +296,7 @@ class DreameA2EdgeSelect(
 
 
 class DreameA2MowingModeSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
 ):
     """One picker to start any mowing mode on a given map.
 
@@ -313,6 +317,7 @@ class DreameA2MowingModeSelect(
         map_data = coordinator.cloud_state.maps_by_id.get(map_id)
         map_name = getattr(map_data, "name", None) if map_data is not None else None
         self._attr_unique_id = map_unique_id(coordinator, map_id, "mowing_mode")
+        self._control_mode = resolve_control_mode(platform="select", key="map_N_mowing_mode")
         # _attr_name is the static class attribute "Mowing mode". HA's
         # has_entity_name=True prepends the device name (e.g. "Map 2")
         # to produce friendly_name "Map 2 Mowing mode" → slug
@@ -387,7 +392,7 @@ class DreameA2MowingModeSelect(
 
 
 class DreameA2PerMapMowingDirectionSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
 ):
     """Per-map mowing direction (degrees)."""
 
@@ -405,6 +410,9 @@ class DreameA2PerMapMowingDirectionSelect(
         self._map_id = map_id
         self._attr_unique_id = map_unique_id(
             coordinator, map_id, "settings_mowing_direction"
+        )
+        self._control_mode = resolve_control_mode(
+            platform="select", key="map_N_settings_mowing_direction"
         )
         map_obj = coordinator.cloud_state.maps_by_id.get(map_id)
         # has_entity_name=True; device_name is prepended automatically.
@@ -435,6 +443,8 @@ class DreameA2PerMapMowingDirectionSelect(
         return super().available
 
     async def async_select_option(self, option: str) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         try:
             idx = self._OPTIONS.index(option)
         except ValueError:
@@ -447,7 +457,7 @@ class DreameA2PerMapMowingDirectionSelect(
 
 
 class DreameA2PerMapMowingDirectionModeSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
 ):
     """Per-map mowing pattern — Striped / Crisscross / Chequerboard."""
 
@@ -465,6 +475,9 @@ class DreameA2PerMapMowingDirectionModeSelect(
         self._map_id = map_id
         self._attr_unique_id = map_unique_id(
             coordinator, map_id, "settings_mowing_direction_mode"
+        )
+        self._control_mode = resolve_control_mode(
+            platform="select", key="map_N_settings_mowing_direction_mode"
         )
         map_obj = coordinator.cloud_state.maps_by_id.get(map_id)
         # has_entity_name=True; device_name is prepended automatically.
@@ -496,6 +509,8 @@ class DreameA2PerMapMowingDirectionModeSelect(
         return super().available
 
     async def async_select_option(self, option: str) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         if option not in self._OPTIONS:
             return
         idx = self._OPTIONS.index(option)
@@ -507,7 +522,7 @@ class DreameA2PerMapMowingDirectionModeSelect(
 
 
 class DreameA2MapMowingEfficiencySelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
 ):
     """Per-map mowing efficiency — read-only.
 
@@ -542,6 +557,9 @@ class DreameA2MapMowingEfficiencySelect(
         self._map_id = map_id
         self._attr_unique_id = map_unique_id(
             coordinator, map_id, "mowing_efficiency"
+        )
+        self._control_mode = resolve_control_mode(
+            platform="select", key="map_N_mowing_efficiency"
         )
         map_obj = coordinator.cloud_state.maps_by_id.get(map_id)
         # has_entity_name=True; device_name is prepended automatically.
@@ -586,15 +604,12 @@ class DreameA2MapMowingEfficiencySelect(
         return super().available
 
     async def async_select_option(self, option: str) -> None:
-        LOGGER.warning(
-            "select.<map>_mowing_efficiency: no working device-write path "
-            "on g2408; ignoring select_option(%r)",
-            option,
-        )
+        if self.read_only:
+            return await self._reject_readonly_write()
 
 
 class DreameA2PerMapEdgeMowingWalkModeSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
 ):
     """Per-map edge mowing walk mode."""
 
@@ -612,6 +627,10 @@ class DreameA2PerMapEdgeMowingWalkModeSelect(
         self._map_id = map_id
         self._attr_unique_id = map_unique_id(
             coordinator, map_id, "settings_edge_mowing_walk_mode"
+        )
+        # Note: inventory id is map_N_edge_walk_mode (not map_N_settings_edge_mowing_walk_mode)
+        self._control_mode = resolve_control_mode(
+            platform="select", key="map_N_edge_walk_mode"
         )
         map_obj = coordinator.cloud_state.maps_by_id.get(map_id)
         # has_entity_name=True; device_name is prepended automatically.
@@ -643,6 +662,8 @@ class DreameA2PerMapEdgeMowingWalkModeSelect(
         return super().available
 
     async def async_select_option(self, option: str) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
         if option not in self._OPTIONS:
             return
         try:
@@ -657,7 +678,7 @@ class DreameA2PerMapEdgeMowingWalkModeSelect(
 
 
 class DreameA2MaintenancePointSelect(
-    CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
 ):
     """Per-map picker for the maintenance/clean point the Head-to-point button
     targets. Options are ``Point {id}`` from the map's ``maintenance_points``.
@@ -678,6 +699,9 @@ class DreameA2MaintenancePointSelect(
         super().__init__(coordinator)
         self._map_id = map_id
         self._attr_unique_id = map_unique_id(coordinator, map_id, "maintenance_point")
+        self._control_mode = resolve_control_mode(
+            platform="select", key="map_N_maintenance_point"
+        )
         self._attr_name = "Maintenance point"
         md = coordinator.cloud_state.maps_by_id.get(map_id)
         map_name = getattr(md, "name", None) if md is not None else None
