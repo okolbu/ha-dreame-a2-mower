@@ -57,9 +57,22 @@ def test_padlock_icon_only_when_read_only():
 
 def test_extra_state_attributes_marks_read_only():
     a = _FakeEntity(ControlMode.READ_ONLY_NOOP).extra_state_attributes
-    assert a == {"control_mode": "read_only_noop", "read_only": True}
+    assert a == {"control_mode": "read_only_noop", "read_only": True, "provisional": False}
     assert _FakeEntity(ControlMode.INTEGRATION_LOCAL).extra_state_attributes == {
-        "control_mode": "integration_local", "read_only": False,
+        "control_mode": "integration_local", "read_only": False, "provisional": False,
+    }
+
+
+def test_provisional_property():
+    assert _FakeEntity(ControlMode.DEVICE_WRITE_UNPROVEN).provisional is True
+    assert _FakeEntity(ControlMode.DEVICE_WRITABLE).provisional is False
+    assert _FakeEntity(ControlMode.READ_ONLY_CONFIRMED).provisional is False
+
+
+def test_provisional_in_extra_state_attributes():
+    a = _FakeEntity(ControlMode.DEVICE_WRITE_UNPROVEN).extra_state_attributes
+    assert a == {
+        "control_mode": "device_write_unproven", "read_only": False, "provisional": True,
     }
 
 

@@ -26,6 +26,7 @@ from ._devices import (
     mower_unique_id,
 )
 from .const import DOMAIN, LOGGER
+from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .mower.actions import MowerAction
 from .mower.state_snapshot import CurrentActivity
@@ -56,7 +57,7 @@ async def async_setup_entry(
 
 
 class _DreameA2ActionButton(
-    CoordinatorEntity[DreameA2MowerCoordinator], ButtonEntity
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], ButtonEntity
 ):
     """Base for primary mow-control buttons mirroring the Dreame app's
     Start / Pause / Stop / Recharge tiles."""
@@ -77,6 +78,7 @@ class _DreameA2ActionButton(
         self._attr_name = name
         self._attr_icon = icon
         self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="button", key=unique_suffix)
 
     async def async_press(self) -> None:
         LOGGER.info("button.%s: pressed; dispatching %s", self._attr_unique_id, self._action.name)

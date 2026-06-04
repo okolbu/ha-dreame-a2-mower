@@ -140,6 +140,16 @@ class _ControlHonestyMixin:
         return self._control_mode in READ_ONLY_MODES
 
     @property
+    def provisional(self) -> bool:
+        """A real device RPC whose effect on g2408 is not yet live-proven.
+
+        Operable (no padlock / snap-back) but flagged via the `provisional`
+        extra-state-attribute so the UI / automations can tell it apart from a
+        confirmed control. Distinct from `read_only` (which IS blocked).
+        """
+        return self._control_mode is ControlMode.DEVICE_WRITE_UNPROVEN
+
+    @property
     def icon(self) -> str | None:
         if self.read_only:
             return _PADLOCK_ICON
@@ -158,6 +168,7 @@ class _ControlHonestyMixin:
             base.update(parent_attrs)
         base["control_mode"] = str(self._control_mode)
         base["read_only"] = self.read_only
+        base["provisional"] = self.provisional
         return base
 
     async def _reject_readonly_write(self) -> None:

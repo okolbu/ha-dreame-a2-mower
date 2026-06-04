@@ -29,11 +29,13 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 representation shipped in v1.0.22a4. See `DONE.md` "Make controllable entities honest"
 and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
 
-1. **Mark provisional `device_write_unproven` controls.** stop/pause/dock (s5a2/3/4),
-   active-map (op=200), generate_3dmap (op=10), lock_bot (op=12) currently render as normal
-   operable controls. Give them a distinct provisional/unconfirmed signal and add each to
-   the Phase-3 app-RPC capture list. (Deliberately deferred from the markers work — they
-   mostly work, so don't over-mark; pick the lightweight signal first.)
+1. ~~**Mark provisional `device_write_unproven` controls.**~~ **DONE (2026-06-04).**
+   `_ControlHonestyMixin` gained a `provisional` flag (= `device_write_unproven`) exposed via
+   the `provisional` + `control_mode` extra-state-attributes; `_DreameA2ActionButton` (pause/
+   stop/recharge/lock_bot/generate_3dmap) now carries it, and `select.active_map` inherits it
+   from the mixin. Lightweight by design — operable, no padlock/snap-back, just a queryable
+   attribute (dashboards can template a badge on `provisional`). They still need adding to the
+   Phase-3 app-RPC capture list (folded into #2's bucket-B probes).
 2. **Live re-probes to finalize uncertain classifications** (device-blocked):
    - **WRP, LANG (lcd/voice), AI_HUMAN** — held at `read_only_pending` due to the same-day
      (2026-05-09) contradiction: `cfg-write-regression` ("no setter, r=-3") vs the
@@ -43,9 +45,10 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      the matching inventory row per flip (the sync test enforces both).
    - **Bucket B actions:** s5a2/3/4 (may 80001), op=200, op=10, op=12 — confirm they land.
    Probe tooling: `tools/probe_pre_write.py`.
-3. **Inventory accuracy:** `o10` name drift (inventory `upload_map` vs code
-   `GENERATE_3D_MAP` — re-check against the apk); refresh the stale `actions.py` line
-   numbers in several inventory evidence pointers.
+3. ~~**Inventory accuracy:** `o10` name drift + stale `actions.py` line numbers.~~
+   **DONE (2026-06-04).** o10 corrected (it DOES fire op=10 via GENERATE_3D_MAP; the
+   apk-uploadMap vs integration-generate_3dmap name conflict is now a flagged open question +
+   capture step); 17 stale `actions.py:NNN` refs refreshed to current `ACTION_TABLE` lines.
 4. **Coverage gaps (separate features the audit surfaced):** Patrol (o107/o108) has no
    trigger control; `MISTA` could be a MQTT-unavailable area fallback sensor; phantom-sensor
    prose for `WRF`/`TIME`/`VER` (claim a `sensor.X` that doesn't exist — build the trivial
