@@ -60,9 +60,14 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      is **mid-run-only** (returns r=-1/-3 when idle, per `project_g2408_mista_decoded`), so it
      would be unavailable except while mowing — a niche MQTT-down fallback. Build only if the
      s1p4 MQTT area stream proves unreliable.
-   - **Patrol (o107/o108) trigger control — device-blocked.** Needs the outbound SEND payload
-     captured first (the inbound echo is confirmed; the integration only types patrols
-     post-hoc). Belongs with the live-probe work (#2).
+   - ~~Patrol trigger~~ **SHIPPED (2026-06-04, feat/patrol-point-surfacing).** Point
+     patrol (o107) + edge patrol (o108) triggers, cruise points parsed from MAP
+     `cruisePoints` (type=8) + rendered as green-P markers + surfaced as
+     `sensor.…_patrol_points`/`_patrol_edges` (generic `items` attr) + a generic
+     `dreame-multi-select-card` + `start_point_patrol`/`start_edge_patrol` services.
+     SEND shapes are `[UNVERIFIED]` pending a live `status:true`. Cycles/auto-capture
+     still need a cloud-source probe (not in the map blob). Zone/spot multi-select can
+     now reuse the same sensor+service+card pattern.
 
 **Cross-refs:** `control_honesty.py` (`CONTROL_MODES` single SoT); `entity-inventory.yaml`
 (`control_mode` per row); `docs/research/wire-captures/{settings-surface-cloud-only,
