@@ -3287,7 +3287,7 @@ opcodes:
       last_seen: "2026-05-30"
       decoded: confirmed
     open_questions:
-      - "Patrol session capture: the live map can't track the mower during patrol despite valid s1p4 (CONFIRMED 2026-06-04 — the return leg after a point patrol was not drawn). Investigate the begin_session/render path. Patrol should be a first-class session_type (op=107/108 / s2p2=51, 0-area)."
+      - "Patrol session capture: a dock-started patrol intermittently mis-typed as maintenance_run and finalized early (CONFIRMED 2026-06-04 — 2nd point patrol + an edge patrol closed early, missing the return leg). ROOT-CAUSED + FIX IN REVIEW (branch fix/patrol-session-type-recording): begin_session wiped the pre-session s2p50 op echo + s2p2=51 clues, so classify fell through to maintenance_run. Fix latches the op ungated (_pending_task_op) and seeds last_task_op at begin_session. AWAITING LIVE RE-CONFIRMATION that a dock-started point + edge patrol both type as patrol and capture the return leg to dock."
     verifications:
       - date: "2026-06-04"
         status: partial
@@ -3307,6 +3307,19 @@ opcodes:
           dashboard button press, user-confirmed 2026-06-04. So {"edge":[[m,c]]}
           (the contour-pair d-key, same as edge-mow o:101) is correct; status:true.
         evidence: "live 2026-06-04: dreame_a2_mower.start_edge_patrol service → op=108 → mower performed an edge patrol, user-confirmed"
+      - date: "2026-06-04"
+        status: presumed
+        claim: |
+          Patrol mis-type/early-finalize root-caused to begin_session() wiping the
+          pre-session s2p50 op echo + s2p2=51 clues (the op echo is captured ungated
+          but begin_session reset error_samples / nulled last_task_op, dropping it).
+          Fixed by latching the op ungated into _pending_task_op and seeding
+          live_map.last_task_op at begin_session (also persisted via a sidecar across
+          a boot that straddles the op-echo→begin window). Once typed patrol, the
+          session is cloud-finalized so the s2p2=75 early-finalize gate skips it and
+          the return leg is captured. PRESUMED — not yet re-confirmed on the live
+          mower; a dock-started point + edge patrol must be observed typing as patrol
+          with the return leg drawn before flipping this to verified.
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
