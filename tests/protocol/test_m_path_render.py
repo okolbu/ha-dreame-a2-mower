@@ -26,6 +26,7 @@ def _make_min_map():
         contour_paths=(),
         available_contour_ids=(),
         maintenance_points=(),
+        patrol_points=(),
         dock_xy=None,
         total_area_m2=10.0,
         nav_paths=(),
@@ -131,7 +132,7 @@ def test_m_path_drawn_above_mowing_zones():
         ), name="zone1"),),
         exclusion_zones=(), spot_zones=(),
         contour_paths=(), available_contour_ids=(),
-        maintenance_points=(), dock_xy=None,
+        maintenance_points=(), patrol_points=(), dock_xy=None,
         total_area_m2=10.0, nav_paths=(),
     )
 
