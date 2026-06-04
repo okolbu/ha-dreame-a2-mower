@@ -100,3 +100,46 @@ def test_cloud_finalized_types_are_mow_and_patrol():
     assert CLOUD_FINALIZED_SESSION_TYPES == frozenset({"mow", "patrol"})
     assert "maintenance_run" not in CLOUD_FINALIZED_SESSION_TYPES
     assert "manual_drive" not in CLOUD_FINALIZED_SESSION_TYPES
+
+
+# ---------------------------------------------------------------------------
+# Warning on no-signal maintenance_run fall-through (2026-06-04)
+# ---------------------------------------------------------------------------
+
+import logging
+
+
+def test_no_signal_maintenance_run_warns(caplog):
+    from custom_components.dreame_a2_mower.live_map.classify import (
+        classify_session_type,
+    )
+    with caplog.at_level(logging.WARNING):
+        t, outcome = classify_session_type(
+            last_task_op=None,
+            saw_mow_start=False,
+            area_ever_positive=False,
+            last_point_end_code=None,
+            saw_patrol_start=False,
+        )
+    assert t == "maintenance_run"
+    assert any(
+        "no positive session-type signal" in r.message for r in caplog.records
+    )
+
+
+def test_to_point_op109_maintenance_run_does_not_warn(caplog):
+    from custom_components.dreame_a2_mower.live_map.classify import (
+        classify_session_type,
+    )
+    with caplog.at_level(logging.WARNING):
+        t, outcome = classify_session_type(
+            last_task_op=109,                 # genuine to-point run
+            saw_mow_start=False,
+            area_ever_positive=False,
+            last_point_end_code=75,
+            saw_patrol_start=False,
+        )
+    assert (t, outcome) == ("maintenance_run", "arrived")
+    assert not any(
+        "no positive session-type signal" in r.message for r in caplog.records
+    )

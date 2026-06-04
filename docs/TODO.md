@@ -68,6 +68,14 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      **Both o107 (point) and o108 (edge) SEND shapes are now VERIFIED LIVE (2026-06-04 —
      real patrols fired from the card moved the mower in both modes).** Zone/spot
      multi-select can now reuse the same sensor+service+card pattern.
+   - **[FIX IN REVIEW 2026-06-04 — branch `fix/patrol-session-type-recording`]**
+     Root-caused + fixed: a pending task-op latch (`_pending_task_op`) captures the
+     `s2p50` op echo ungated and seeds `live_map.last_task_op` at `begin_session`, so a
+     dock-started patrol types as `patrol` (cloud-finalized) and the early-finalize gate
+     skips it. Persisted across boot via a `pending_task_op.json` sidecar; `classify`
+     now warns on the no-signal `maintenance_run` fall-through. **Remove this whole item
+     once live re-confirmed** (dock-started point + edge patrol both type as Patrol with
+     the return leg captured). Original report retained below for reference:
    - **[BUG] Patrol sessions finalize early + mis-type as `maintenance_run` ("To Point").**
      Observed 2026-06-04 (NOT restart-related — the HA restart came after the failing
      run): the FIRST point patrol recorded a proper full `patrol` session (return leg
