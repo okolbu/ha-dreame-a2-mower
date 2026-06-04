@@ -14,7 +14,20 @@ ACTIVE = [
     CurrentActivity.RETURNING, CurrentActivity.CHARGE_RESUME,
     CurrentActivity.CRUISING_TO_POINT, CurrentActivity.FAST_MAPPING,
     CurrentActivity.DRIVING_BLADES_UP,
+    # Patrol is an active (blades-up, out-and-moving) session -> GREEN.
+    CurrentActivity.PATROL_POINT, CurrentActivity.PATROL_EDGE,
 ]
+
+
+def test_patrol_activities_render_green():
+    # Regression (2026-06-04): a patrol settled into PATROL_POINT/EDGE flickered
+    # back to the idle stripe preview because these weren't in _ACTIVE_ACTIVITIES.
+    for activity in (CurrentActivity.PATROL_POINT, CurrentActivity.PATROL_EDGE):
+        assert background_mode_for(
+            mow_session=MowSession.BETWEEN_SESSIONS,
+            current_activity=activity,
+            action_mode=ActionMode.ALL_AREAS,
+        ) is BackgroundMode.GREEN
 
 @pytest.mark.parametrize("activity", ACTIVE)
 def test_active_activities_render_green(activity):
