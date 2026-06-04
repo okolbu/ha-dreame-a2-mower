@@ -66,25 +66,24 @@ refresh/finalize buttons). Still-open follow-ups the audit surfaced:
    `control_mode_by_key`). Gate: `tests/inventory/test_control_mode_gate.py` blocks
    a new control entity that ships unclassified. WRP/LANG/AI_HUMAN held at
    `read_only_pending` pending the re-probe.
-2. (was #2) **Representation** — for every non-writable control, stop presenting it
-   as operable-with-no-effect. **← brainstorm next (part b).**
-3. (was #3) Mark provisional (`device_write_unproven`) controls + add to the
-   Phase-3 app-RPC capture list.
-2. For every entity that is NOT device-write-confirmed, the HA control no
-   longer presents as operable-with-no-effect. Pick the representation in a
-   short brainstorm/spec first (options to weigh: convert to a read-only
-   `sensor`; keep the control but `_attr_available=False` / disabled-by-
-   default; or a "Diagnostic, read-only" entity-category + name suffix). The
-   chosen pattern is applied uniformly, not per-entity ad hoc, and the
-   existing EdgeMaster no-op switch is migrated onto it.
-3. Untested controls are clearly marked (name suffix or attribute) so the
-   user knows a toggle is provisional, and each is added to the Phase-3
-   app-RPC capture list so its true write surface gets probed.
+2. ~~**Representation** — stop presenting non-writable controls as operable-with-no-effect~~
+   **DONE (2026-06-04).** Read-only controls (`read_only_pending`/`read_only_confirmed`/
+   `read_only_noop`) now show a padlock (`mdi:lock-outline`) + a `read_only`/`control_mode`
+   attribute and SNAP BACK on write (no device write, no fake "stick") — driven by
+   `control_honesty.py` (`_ControlHonestyMixin` + `CONTROL_MODES`, applied uniformly across
+   number/select/switch/time). Operable controls (`device_writable`/`integration_local`/
+   `device_write_unproven`) are untouched. The EdgeMaster no-op switch is migrated onto the
+   shared pattern. Dashboard has a padlock legend. CI: `test_control_mode_code_sync`
+   (code↔inventory) + `test_control_entities_wired` (every control entity carries the mixin).
+   **Flip-to-writable when a path is found = one line in `CONTROL_MODES` + the inventory row.**
+   Spec/plan: `2026-06-04-control-honesty-markers{-design,}.md` (moved to `OLD/` on branch finish).
+3. **(remaining)** Distinctly mark provisional `device_write_unproven` controls (stop/pause/
+   dock, op=200/10/12 — they currently render as normal controls) and add each to the Phase-3
+   app-RPC capture list. Plus the live re-probes the audit flagged: WRP/LANG/AI_HUMAN (held at
+   `read_only_pending`) and the bucket-B actions.
 
-**Status:** open (needs a brainstorm on the HA representation before code —
-HA has no native "read-only number/select"; the design choice in done-when #2
-is the crux). Probe tooling already exists (`tools/probe_pre_write.py`
-pattern) to settle "untested" cases live.
+**Status:** representation SHIPPED (2026-06-04). Remaining: provisional-marking (#3) + the
+live re-probes (WRP/LANG/AI_HUMAN, bucket B). Probe tooling exists (`tools/probe_pre_write.py`).
 **Cross-refs:** `custom_components/dreame_a2_mower/entity-inventory.yaml`
 (`write_path` / `seen_working` per entity); `switch_map.py`
 (EdgeMaster read-only precedent); `number.py:390` (the mowing-height slider
