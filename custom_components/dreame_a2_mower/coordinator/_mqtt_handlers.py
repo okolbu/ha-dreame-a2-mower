@@ -380,10 +380,6 @@ class _MqttHandlersMixin:
             inner = value.get("d")
             if isinstance(inner, dict):
                 op = inner.get("o")
-        LOGGER.warning(
-            "[F5-DIAG] s2p50 echo: raw=%r op=%s active=%s",
-            value, op, self.live_map.is_active(),
-        )
         if op is None:
             return
         try:
@@ -405,10 +401,6 @@ class _MqttHandlersMixin:
             self.live_map.last_task_op = self._pending_task_op
         if self._pending_saw_patrol_start:
             self.live_map.saw_patrol_start = True
-        LOGGER.warning(
-            "[F5-DIAG] seed at begin: last_op=%s saw_patrol_start=%s",
-            self._pending_task_op, self._pending_saw_patrol_start,
-        )
 
     def _on_state_update(self, new_state: MowerState, now_unix: int) -> MowerState:
         """Hook fired after apply_property_to_state. Updates LiveMapState

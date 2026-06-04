@@ -78,18 +78,16 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      real cloud md5, full out-and-back track. Correct typing ALSO fixed the early-finalize
      (return leg now captured) and the OSS-fetch expiry (clean cloud-finalize path) — both
      were downstream symptoms. See inventory `o107` verifications (2026-06-04).
-   - **[BUG] Live map: striped (idle) background never switches to flat-green during a
-     patrol.** The live *trail* draws fine, but the base stays the idle stripe preview.
-     TWO candidate causes (disambiguate with the [F5-RAW] capture): (a) the command-time
-     render trigger is the s2p50 echo, which the integration may not be receiving for
-     patrols (see the [F5-RAW] investigation) → no re-render fires; and/or (b) the base
-     render mode for a blades-up/area=0 patrol may compute as the idle stripe preview
-     (`background_mode_for`), i.e. patrol isn't treated as an active-session background.
-     SEPARATE minor bug seen in the same log: `RuntimeWarning: coroutine
-     '_RenderingMixin._render_base' was never awaited` — `sensor_device.py:611` is only the
-     GC site (a novel_observations attr read); the real un-awaited call is an entity-write
-     handler calling `render_fn()` without await (candidates `number.py:678`,
-     `select_global.py:989/1020`). Fix that call to `await` / `async_create_task`.
+   - **[FIXED — striped background during patrol]** Resolved across two fixes: (a) v1.0.23a3
+     thread-safety (the s2p50-triggered render was raising off-loop and aborting); (b)
+     v1.0.23a4 `background_mode_for` — `PATROL_POINT`/`PATROL_EDGE` were missing from
+     `_ACTIVE_ACTIVITIES`, so the base flipped to idle stripes once a patrol settled into
+     those activities. Both live-confirmed 2026-06-04.
+   - **[TODO minor] `RuntimeWarning: coroutine '_RenderingMixin._render_base' was never
+     awaited`** — `sensor_device.py:611` is only the GC site (a novel_observations attr
+     read); the real un-awaited call is an entity-write handler calling `render_fn()` without
+     await (candidates `number.py:678`, `select_global.py:989/1020`). Fold into the log-health
+     sweep.
    - **[TODO] Patrol replay omits the on-the-spot 360° spins** the mower does AT each patrol
      point (the live map shows them; the archived/replay track does not). The finalized
      archive renders from the CLOUD summary track (`md5` real) which evidently simplifies

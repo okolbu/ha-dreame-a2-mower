@@ -35,6 +35,13 @@ _ACTIVE_ACTIVITIES = frozenset({
     CurrentActivity.CRUISING_TO_POINT,
     CurrentActivity.FAST_MAPPING,
     CurrentActivity.DRIVING_BLADES_UP,
+    # Patrol (cruise) — blades-up but actively out and moving, so GREEN like
+    # CRUISING_TO_POINT. Without these the background flickered to the idle
+    # stripe preview the moment a patrol settled into PATROL_POINT/EDGE (while
+    # REPOSITIONING on undock and RETURNING on the way back stayed green) —
+    # live-confirmed 2026-06-04.
+    CurrentActivity.PATROL_POINT,
+    CurrentActivity.PATROL_EDGE,
 })
 
 _IDLE_PREVIEW_BY_ACTION = {
