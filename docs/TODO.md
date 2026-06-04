@@ -58,11 +58,18 @@ refresh/finalize buttons). Still-open follow-ups the audit surfaced:
   sensor; phantom-sensor prose for `WRF`/`TIME`/`VER` (claim sensors that don't exist).
 
 **Done when (remaining):**
-1. ~~Classify every control entity~~ DONE in the audit doc. Next: persist the
-   verdict as an explicit `control_mode:` (`writable` | `read_only_pending` |
-   `read_only_confirmed`) field on each entity in `entity-inventory.yaml` + a CI
-   gate (`tests/inventory/…`) keeping code ↔ inventory in sync. (Hold the WRP/LANG
-   rows at `read_only_pending` until the re-probe settles them.)
+1. ~~Classify every control entity + persist `control_mode` + CI gate~~ **DONE
+   (2026-06-04).** Every control entity in `entity-inventory.yaml` now carries a
+   `control_mode` (`device_writable` | `device_write_unproven` | `integration_local`
+   | `read_only_pending` | `read_only_confirmed` | `read_only_noop`; generic
+   `DreameA2Switch`/`DreameA2Number` rows use `control_mode: per_key` +
+   `control_mode_by_key`). Gate: `tests/inventory/test_control_mode_gate.py` blocks
+   a new control entity that ships unclassified. WRP/LANG/AI_HUMAN held at
+   `read_only_pending` pending the re-probe.
+2. (was #2) **Representation** — for every non-writable control, stop presenting it
+   as operable-with-no-effect. **← brainstorm next (part b).**
+3. (was #3) Mark provisional (`device_write_unproven`) controls + add to the
+   Phase-3 app-RPC capture list.
 2. For every entity that is NOT device-write-confirmed, the HA control no
    longer presents as operable-with-no-effect. Pick the representation in a
    short brainstorm/spec first (options to weigh: convert to a read-only

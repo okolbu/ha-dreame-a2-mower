@@ -300,6 +300,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_edgemaster"
     platform: switch
+    control_mode: read_only_noop
     class: "DreameA2MapEdgemasterSwitch"
     class_file: "custom_components/dreame_a2_mower/switch.py:1259"
     device: per-map
@@ -655,6 +656,7 @@ entities:
 
   - id: "select.dreame_a2_mower_map_N_mowing_efficiency"
     platform: select
+    control_mode: read_only_noop
     class: "DreameA2MapMowingEfficiencySelect"
     class_file: "custom_components/dreame_a2_mower/select.py"
     device: per-map
@@ -688,6 +690,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_automatic_edge_mowing"
     platform: switch
+    control_mode: read_only_confirmed
     class: "DreameA2EdgeMowingAutoSwitch"
     class_file: "custom_components/dreame_a2_mower/switch.py:854"
     device: per-map
@@ -714,6 +717,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_safe_edge_mowing"
     platform: switch
+    control_mode: read_only_confirmed
     class: "DreameA2EdgeMowingSafeSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:717"
     device: per-map
@@ -740,6 +744,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_obstacle_avoidance_on_edges"
     platform: switch
+    control_mode: read_only_confirmed
     class: "DreameA2EdgeMowingObstacleAvoidanceSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:766"
     device: per-map
@@ -766,6 +771,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_lidar_obstacle_recognition"
     platform: switch
+    control_mode: read_only_confirmed
     class: "DreameA2ObstacleAvoidanceEnabledSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:815"
     device: per-map
@@ -793,6 +799,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_cloud_state_ai_human_enabled"
     platform: switch
+    control_mode: read_only_pending
     class: "DreameA2AiHumanDetectionSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:864"
     device: parent
@@ -824,6 +831,7 @@ entities:
 
   - id: "select.dreame_a2_mower_map_N_edge_walk_mode"
     platform: select
+    control_mode: read_only_confirmed
     class: "DreameA2PerMapEdgeMowingWalkModeSelect"
     class_file: "custom_components/dreame_a2_mower/select.py:1706"
     device: per-map
@@ -849,6 +857,7 @@ entities:
 
   - id: "select.dreame_a2_mower_map_N_maintenance_point"
     platform: select
+    control_mode: integration_local
     class: "DreameA2MaintenancePointSelect"
     class_file: "custom_components/dreame_a2_mower/select_map_settings.py:659"
     device: per-map
@@ -873,6 +882,7 @@ entities:
 
   - id: "button.dreame_a2_mower_map_N_head_to_point"
     platform: button
+    control_mode: device_writable
     class: "DreameA2HeadToPointButton"
     class_file: "custom_components/dreame_a2_mower/button.py:334"
     device: per-map
@@ -1025,6 +1035,7 @@ entities:
 
   - id: "number.dreame_a2_mower_human_presence_alert_sensitivity"
     platform: number
+    control_mode: read_only_noop
     class: "DreameA2Number"
     class_file: "custom_components/dreame_a2_mower/number.py:250"
     device: parent
@@ -1080,6 +1091,29 @@ entities:
       lands. When the write path is added, consider converting to select + adding a
       one-time _migration.py rewrite.
 
+  - id: "number.dreame_a2_mower_<key>"
+    platform: number
+    control_mode: per_key
+    control_mode_by_key:
+      VOL: device_writable        # volume (CFG.VOL int, working-9 -> device-applied)
+      BAT: read_only_confirmed    # auto_recharge/resume battery % (CFG.BAT list[6], no setter r=-3)
+    class: "DreameA2Number"
+    class_file: "custom_components/dreame_a2_mower/number.py"
+    device: parent
+    source:
+      wire: "varies per descriptor key - CFG transport (coordinator.write_setting)"
+      state_path: "entity_description.value_fn(coordinator.data) - MowerState passthrough"
+    write_path: "coordinator.write_setting(desc.cfg_key, wire_value); read-only when cfg_key is None"
+    status:
+      seen_working: false
+      last_verified: "2026-06-04"
+    notes: >
+      Config-driven DreameA2Number instances from the NUMBERS descriptor tuple
+      (number.py). VOL=volume is a working-9 CFG key (device-applied); the two
+      battery-% numbers are CFG.BAT list[6] with no setter (r=-3 -> cloud-cache/
+      no-op). The read-only human_presence_alert_sensitivity (CFG.REC[1],
+      cfg_key=None) has its own row above. See
+      docs/research/control-honesty-audit-2026-06-03.md.
   - id: "binary_sensor.dreame_a2_mower_human_presence_scenario_standby"
     platform: binary_sensor
     class: "DreameA2BinarySensor"
@@ -1413,6 +1447,7 @@ entities:
 
   - id: "number.dreame_a2_mower_trail_render_width"
     platform: number
+    control_mode: integration_local
     class: "DreameA2TrailRenderWidthNumber"
     class_file: "custom_components/dreame_a2_mower/number.py"
     device: parent
@@ -1442,6 +1477,7 @@ entities:
 
   - id: "number.dreame_a2_mower_station_bearing_deg"
     platform: number
+    control_mode: integration_local
     class: "DreameA2StationBearingNumber"
     class_file: "custom_components/dreame_a2_mower/number.py:491"
     device: parent
@@ -1507,6 +1543,7 @@ entities:
 
   - id: "select.dreame_a2_mower_navigation_path"
     platform: select
+    control_mode: device_writable
     class: "DreameA2SettingSelect"
     class_file: "custom_components/dreame_a2_mower/select_global.py:439"
     device: parent
@@ -1535,6 +1572,7 @@ entities:
 
   - id: "select.dreame_a2_mower_rain_protection_resume_hours"
     platform: select
+    control_mode: read_only_pending
     class: "DreameA2SettingSelect"
     class_file: "custom_components/dreame_a2_mower/select_global.py:439"
     device: parent
@@ -1562,6 +1600,7 @@ entities:
 
   - id: "select.dreame_a2_mower_lcd_language"
     platform: select
+    control_mode: read_only_pending
     class: "DreameA2SettingSelect"
     class_file: "custom_components/dreame_a2_mower/select_global.py:439"
     device: parent
@@ -1588,6 +1627,7 @@ entities:
 
   - id: "select.dreame_a2_mower_voice_language"
     platform: select
+    control_mode: read_only_pending
     class: "DreameA2SettingSelect"
     class_file: "custom_components/dreame_a2_mower/select_global.py:439"
     device: parent
@@ -1613,6 +1653,7 @@ entities:
 
   - id: "select.dreame_a2_mower_work_log"
     platform: select
+    control_mode: integration_local
     class: "DreameA2WorkLogSelect"
     class_file: "custom_components/dreame_a2_mower/select_global.py:530"
     device: parent
@@ -1639,6 +1680,7 @@ entities:
 
   - id: "select.dreame_a2_mower_lidar_archive"
     platform: select
+    control_mode: integration_local
     class: "DreameA2LidarArchiveSelect"
     class_file: "custom_components/dreame_a2_mower/select_global.py:650"
     device: parent
@@ -1663,6 +1705,7 @@ entities:
 
   - id: "select.dreame_a2_mower_active_map"
     platform: select
+    control_mode: device_write_unproven
     class: "DreameA2ActiveMapSelect"
     class_file: "custom_components/dreame_a2_mower/select_global.py:742"
     device: parent
@@ -1689,6 +1732,7 @@ entities:
 
   - id: "select.dreame_a2_mower_action_mode"
     platform: select
+    control_mode: integration_local
     class: "DreameA2ActionModeSelect"
     class_file: "custom_components/dreame_a2_mower/select_global.py:921"
     device: parent
@@ -1719,6 +1763,7 @@ entities:
 
   - id: "select.dreame_a2_mower_wifi_archive"
     platform: select
+    control_mode: integration_local
     class: "DreameA2WifiArchiveSelect"
     class_file: "custom_components/dreame_a2_mower/select_global.py:1017"
     device: parent
@@ -1749,6 +1794,7 @@ entities:
 
   - id: "select.dreame_a2_mower_map_N_edge_target"
     platform: select
+    control_mode: integration_local
     class: "DreameA2EdgeSelect"
     class_file: "custom_components/dreame_a2_mower/select_map_settings.py:104"
     device: per-map
@@ -1775,6 +1821,7 @@ entities:
 
   - id: "select.dreame_a2_mower_map_N_mowing_mode"
     platform: select
+    control_mode: integration_local
     class: "DreameA2MowingModeSelect"
     class_file: "custom_components/dreame_a2_mower/select_map_settings.py:293"
     device: per-map
@@ -1801,6 +1848,7 @@ entities:
 
   - id: "select.dreame_a2_mower_map_N_settings_mowing_direction"
     platform: select
+    control_mode: read_only_confirmed
     class: "DreameA2PerMapMowingDirectionSelect"
     class_file: "custom_components/dreame_a2_mower/select_map_settings.py:388"
     device: per-map
@@ -1825,6 +1873,7 @@ entities:
 
   - id: "select.dreame_a2_mower_map_N_settings_mowing_direction_mode"
     platform: select
+    control_mode: read_only_confirmed
     class: "DreameA2PerMapMowingDirectionModeSelect"
     class_file: "custom_components/dreame_a2_mower/select_map_settings.py:448"
     device: per-map
@@ -2120,6 +2169,7 @@ entities:
 
   - id: "button.dreame_a2_mower_refresh_cloud_state"
     platform: button
+    control_mode: integration_local
     class: "DreameA2RefreshCloudStateButton"
     class_file: "custom_components/dreame_a2_mower/button.py:254"
     device: parent
@@ -2146,6 +2196,7 @@ entities:
 
   - id: "button.dreame_a2_mower_refresh_wifi_heatmaps"
     platform: button
+    control_mode: integration_local
     class: "DreameA2RefreshAllWifiButton"
     class_file: "custom_components/dreame_a2_mower/button.py:287"
     device: parent
@@ -2171,6 +2222,7 @@ entities:
 
   - id: "button.dreame_a2_mower_finalize_session"
     platform: button
+    control_mode: integration_local
     class: "DreameA2FinalizeSessionButton"
     class_file: "custom_components/dreame_a2_mower/button.py:222"
     device: parent
@@ -2201,6 +2253,7 @@ entities:
 
   - id: "lawn_mower.dreame_a2_mower"
     platform: lawn_mower
+    control_mode: device_writable
     class: "DreameA2LawnMower"
     class_file: "custom_components/dreame_a2_mower/lawn_mower.py:80"
     device: parent
@@ -2303,6 +2356,7 @@ entities:
 
   - id: "number.dreame_a2_mower_map_N_settings_mowing_height"
     platform: number
+    control_mode: read_only_confirmed
     class: "DreameA2PerMapMowingHeightNumber"
     class_file: "custom_components/dreame_a2_mower/number.py:390"
     device: per-map
@@ -2332,6 +2386,7 @@ entities:
 
   - id: "number.dreame_a2_mower_map_N_settings_cutter_position"
     platform: number
+    control_mode: read_only_confirmed
     class: "DreameA2PerMapCutterPositionNumber"
     class_file: "custom_components/dreame_a2_mower/number.py:412"
     device: per-map
@@ -2358,6 +2413,7 @@ entities:
 
   - id: "number.dreame_a2_mower_map_N_settings_cutter_position_height"
     platform: number
+    control_mode: read_only_confirmed
     class: "DreameA2PerMapCutterPositionHeightNumber"
     class_file: "custom_components/dreame_a2_mower/number.py:424"
     device: per-map
@@ -2383,6 +2439,7 @@ entities:
 
   - id: "number.dreame_a2_mower_map_N_settings_edge_mowing_num"
     platform: number
+    control_mode: read_only_confirmed
     class: "DreameA2PerMapEdgeMowingNumNumber"
     class_file: "custom_components/dreame_a2_mower/number.py:437"
     device: per-map
@@ -2409,6 +2466,7 @@ entities:
 
   - id: "number.dreame_a2_mower_map_N_settings_obstacle_avoidance_height"
     platform: number
+    control_mode: read_only_confirmed
     class: "DreameA2PerMapObstacleAvoidanceHeightNumber"
     class_file: "custom_components/dreame_a2_mower/number.py:449"
     device: per-map
@@ -2435,6 +2493,7 @@ entities:
 
   - id: "number.dreame_a2_mower_map_N_settings_obstacle_avoidance_distance"
     platform: number
+    control_mode: read_only_confirmed
     class: "DreameA2PerMapObstacleAvoidanceDistanceNumber"
     class_file: "custom_components/dreame_a2_mower/number.py:462"
     device: per-map
@@ -2461,6 +2520,7 @@ entities:
 
   - id: "number.dreame_a2_mower_map_N_settings_obstacle_avoidance_sensitivity"
     platform: number
+    control_mode: read_only_confirmed
     class: "DreameA2PerMapObstacleAvoidanceSensitivityNumber"
     class_file: "custom_components/dreame_a2_mower/number.py:475"
     device: per-map
@@ -2492,6 +2552,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_ai_recognition_humans"
     platform: switch
+    control_mode: read_only_confirmed
     class: "DreameA2AiRecognitionHumansSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:937"
     device: per-map
@@ -2520,6 +2581,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_ai_recognition_animals"
     platform: switch
+    control_mode: read_only_confirmed
     class: "DreameA2AiRecognitionAnimalsSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:950"
     device: per-map
@@ -2546,6 +2608,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_ai_recognition_objects"
     platform: switch
+    control_mode: read_only_confirmed
     class: "DreameA2AiRecognitionObjectsSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:963"
     device: per-map
@@ -2576,6 +2639,21 @@ entities:
 
   - id: "switch.dreame_a2_mower_<key>"
     platform: switch
+    control_mode: per_key
+    control_mode_by_key:
+      CLS: device_writable        # child_lock
+      ATA: device_writable        # anti_theft x3
+      FDP: device_writable        # frost_protection
+      STUN: device_writable       # auto_recharge_standby
+      AOP: device_writable        # ai_obstacle_photos
+      MSG_ALERT: device_writable  # msg_alert x4
+      VOICE: device_writable      # voice x4
+      DND: read_only_confirmed    # no setter (r=-3)
+      LOW: read_only_confirmed    # no setter (r=-3)
+      BAT: read_only_confirmed    # no setter (r=-3)
+      WRP: read_only_pending      # contradiction; needs re-probe
+      LIT: read_only_noop         # led x5, cfg_key=None
+      REC: read_only_noop         # human_presence_alert, cfg_key=None
     class: "DreameA2Switch"
     class_file: "custom_components/dreame_a2_mower/_switch_base.py:55"
     device: parent
@@ -2636,6 +2714,7 @@ entities:
 
   - id: "time.dreame_a2_mower_<key>"
     platform: time
+    control_mode: read_only_noop
     class: "DreameA2Time"
     class_file: "custom_components/dreame_a2_mower/time.py:117"
     device: parent
@@ -2675,6 +2754,7 @@ entities:
 
   - id: "button.dreame_a2_mower_start_mowing"
     platform: button
+    control_mode: device_writable
     class: "DreameA2StartMowingButton"
     class_file: "custom_components/dreame_a2_mower/button.py:79"
     device: parent
@@ -2703,6 +2783,7 @@ entities:
 
   - id: "button.dreame_a2_mower_pause_mowing"
     platform: button
+    control_mode: device_write_unproven
     class: "DreameA2PauseMowingButton"
     class_file: "custom_components/dreame_a2_mower/button.py:123"
     device: parent
@@ -2728,6 +2809,7 @@ entities:
 
   - id: "button.dreame_a2_mower_stop_mowing"
     platform: button
+    control_mode: device_write_unproven
     class: "DreameA2StopMowingButton"
     class_file: "custom_components/dreame_a2_mower/button.py:137"
     device: parent
@@ -2753,6 +2835,7 @@ entities:
 
   - id: "button.dreame_a2_mower_recharge"
     platform: button
+    control_mode: device_write_unproven
     class: "DreameA2RechargeButton"
     class_file: "custom_components/dreame_a2_mower/button.py:154"
     device: parent
@@ -2779,6 +2862,7 @@ entities:
 
   - id: "button.dreame_a2_mower_find_bot"
     platform: button
+    control_mode: device_writable
     class: "DreameA2FindBotButton"
     class_file: "custom_components/dreame_a2_mower/button.py:174"
     device: parent
@@ -2805,6 +2889,7 @@ entities:
 
   - id: "button.dreame_a2_mower_lock_bot"
     platform: button
+    control_mode: device_write_unproven
     class: "DreameA2LockBotButton"
     class_file: "custom_components/dreame_a2_mower/button.py:189"
     device: parent
@@ -2833,6 +2918,7 @@ entities:
 
   - id: "button.dreame_a2_mower_generate_3dmap"
     platform: button
+    control_mode: device_write_unproven
     class: "DreameA2Generate3DMapButton"
     class_file: "custom_components/dreame_a2_mower/button.py:206"
     device: parent
@@ -2984,6 +3070,7 @@ entities:
 
   - id: "select.dreame_a2_mower_map_N_zone_target"
     platform: select
+    control_mode: integration_local
     class: "DreameA2ZoneSelect"
     class_file: "custom_components/dreame_a2_mower/select_map_settings.py:44"
     device: per-map
@@ -3013,6 +3100,7 @@ entities:
 
   - id: "select.dreame_a2_mower_map_N_spot_target"
     platform: select
+    control_mode: integration_local
     class: "DreameA2SpotSelect"
     class_file: "custom_components/dreame_a2_mower/select_map_settings.py:74"
     device: per-map
