@@ -164,7 +164,7 @@ class _LidarOssMixin:
         lm = self.live_map
         codes = [code for _, code in (lm.error_samples or [])]
         saw_mow_start = any(c in (50, 53) for c in codes)
-        saw_patrol_start = 51 in codes
+        saw_patrol_start = (51 in codes) or lm.saw_patrol_start
         end_codes = [c for c in codes if c in (75, 76)]
         last_point_end_code = end_codes[-1] if end_codes else None
         session_type, outcome = classify_session_type(

@@ -131,6 +131,16 @@ class LiveMapState:
     """True once area_mowed_m2 > 0 at any point — a positive mow-evidence
     signal independent of the s2p2 50/53 start code."""
 
+    saw_patrol_start: bool = False
+    """True once s2p2=51 (patrol started) was seen for this session — a
+    durable patrol-type signal. Latched even when 51 arrives BEFORE
+    begin_session (which would otherwise drop it: 51 lands while no session
+    is active, so the error_samples buffer never records it). Seeded at
+    begin_session from the coordinator's _pending_saw_patrol_start latch and
+    set directly when 51 arrives in-session. classify_session_type ORs this
+    with `51 in error_samples` so a point patrol (whose ONLY type signal is
+    the pre-session 51) types as patrol, not maintenance_run."""
+
     _PEN_UP_GAP_S: ClassVar[float] = 30.0
 
     def is_active(self) -> bool:
@@ -154,6 +164,7 @@ class LiveMapState:
         self.target_ids = []
         self.last_task_op = None
         self.area_ever_positive = False
+        self.saw_patrol_start = False
 
     def update_task_state(self, t: float, code: int) -> None:
         """Record an s2p1 sample and remember the latest code for tagging.
@@ -290,9 +301,10 @@ class LiveMapState:
             "error_samples": [list(s) for s in self.error_samples],
             "charge_at_start": self.charge_at_start,
             "settings_snapshot": self.settings_snapshot,
-            # Mow-evidence fields — needed to classify correctly after a reboot.
+            # Mow-evidence / type fields — needed to classify correctly after a reboot.
             "area_ever_positive": self.area_ever_positive,
             "last_task_op": self.last_task_op,
+            "saw_patrol_start": self.saw_patrol_start,
             "target_ids": list(self.target_ids),
         }
 
@@ -342,6 +354,9 @@ class LiveMapState:
         # NOTE: self.track is fully populated above, so this is safe.
         raw_last_op = payload.get("last_task_op")
         self.last_task_op = int(raw_last_op) if raw_last_op is not None else None
+        self.saw_patrol_start = bool(payload.get("saw_patrol_start", False)) or (
+            51 in [c for _, c in self.error_samples]
+        )
         self.target_ids = [int(v) for v in (payload.get("target_ids") or [])]
         self.area_ever_positive = bool(payload.get("area_ever_positive", False)) or any(
             p.area_m2 > 0.0 for p in self.track

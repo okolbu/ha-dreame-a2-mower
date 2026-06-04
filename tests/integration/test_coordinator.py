@@ -566,6 +566,7 @@ def _make_coordinator_for_session_tests():
     coord._real_task_state_observed = False
     coord._prev_in_dock = None
     coord._pending_task_op = None
+    coord._pending_saw_patrol_start = False
     coord.novel_registry = NovelObservationRegistry()
     coord.freshness = FreshnessTracker()
     # v1.0.0a18: live-trail re-render needs these in __init__-bypassing fixtures.

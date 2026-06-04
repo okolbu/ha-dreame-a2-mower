@@ -13,6 +13,7 @@ def test_load_pending_op_from_sidecar(tmp_path):
     c.session_archive = arc
     c.live_map = LiveMapState()
     c._pending_task_op = None
+    c._pending_saw_patrol_start = False
     c._load_pending_op_from_sidecar()
     assert c._pending_task_op == 108
 
@@ -33,6 +34,7 @@ def test_clear_is_idempotent_when_no_sidecar(tmp_path):
     c = DreameA2MowerCoordinator.__new__(DreameA2MowerCoordinator)
     c.session_archive = arc
     c._pending_task_op = None
+    c._pending_saw_patrol_start = False
     c._clear_pending_op()                 # must not raise when nothing to clear
     assert c._pending_task_op is None
     assert arc.read_pending_op() is None

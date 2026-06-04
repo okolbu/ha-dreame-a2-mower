@@ -152,6 +152,13 @@ class _CoreMixin:
         # begin_session; persisted via the pending_task_op sidecar. See
         # docs/superpowers/specs/2026-06-04-patrol-session-type-recording-design.md
         self._pending_task_op: int | None = None
+        # Pending patrol-start (s2p2=51) latched ungated by session-active. A
+        # POINT patrol's only type signal is s2p2=51, which arrives AT session
+        # start — before begin_session, so _capture_telemetry_sample's
+        # is_active() guard drops it from error_samples. Latch it here so
+        # _seed_session_type_from_pending can stamp live_map.saw_patrol_start at
+        # begin (the op-echo path covers edge patrols, which DO emit op=108).
+        self._pending_saw_patrol_start: bool = False
         # Synchronous latch to prevent double-finalize when s2p2=75 AND the
         # task_state 0→2 edge arrive within ~1 s and both schedule
         # _finalize_non_mow_immediate as concurrent async tasks. Both can pass
