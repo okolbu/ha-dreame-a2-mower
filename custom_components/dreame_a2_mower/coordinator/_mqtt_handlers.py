@@ -282,24 +282,14 @@ class _MqttHandlersMixin:
                             )
                             self.hass.async_create_task(self._render_base())
                         if (_sm_siid, _sm_piid) == (2, 50):
-                            _op = (
-                                (_sm_value.get("d") or _sm_value).get("o")
-                                if isinstance(_sm_value, dict)
-                                else None
+                            # Latch the op UNGATED — a patrol/mow commanded from
+                            # the dock echoes its op ~40s before begin_session
+                            # exists to hold it. _handle_task_op_echo persists it
+                            # and (if a session is already active) sets
+                            # last_task_op immediately.
+                            self.hass.loop.call_soon_threadsafe(
+                                lambda v=_sm_value: self._handle_task_op_echo(v)
                             )
-                            if _op is not None:
-                                self.hass.loop.call_soon_threadsafe(
-                                    lambda op=_op: (
-                                        capture_session_type_signals(
-                                            self.live_map,
-                                            s2p56_status=None,
-                                            s2p50_op=op,
-                                            area_m2=None,
-                                        )
-                                        if self.live_map.is_active()
-                                        else None
-                                    )
-                                )
         elif method == "event_occured":
             # F5.6.1: capture OSS object name from siid=4 eiid=1
             params = payload.get("params") or {}
@@ -448,6 +438,10 @@ class _MqttHandlersMixin:
             # the pre-restart trail. Just continue appending to the
             # restored leg.
             self.live_map.begin_session(now_unix)
+            # Seed the just-born session's type from the op echo that arrived
+            # before it existed (begin_session nulled last_task_op). Fixes the
+            # dock-start race where the s2p50 echo / s2p2=51 are lost.
+            self._seed_session_type_from_pending()
             # Reset the published live position stream so the new session's
             # trail starts clean on the client card.
             self._begin_live_stream()
