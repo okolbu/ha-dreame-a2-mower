@@ -12,6 +12,7 @@ enforces it. See docs/research/control-honesty-audit-2026-06-03.md.
 """
 from __future__ import annotations
 
+import logging
 from enum import StrEnum
 from typing import Any
 
@@ -111,6 +112,59 @@ CONTROL_MODES: dict[str, ControlMode | dict[str, ControlMode]] = {
     "button.dreame_a2_mower_lock_bot": _U,
     "button.dreame_a2_mower_generate_3dmap": _U,
 }
+
+
+_LOGGER = logging.getLogger(__name__)
+_PADLOCK_ICON = "mdi:lock-outline"
+
+
+class _ControlHonestyMixin:
+    """Adds the honesty verdict to a control entity.
+
+    Subclasses MUST set ``self._control_mode`` (a ControlMode) in __init__,
+    typically via ``resolve_control_mode(...)``. When the mode is read-only the
+    mixin shows a padlock, marks the entity via extra-state-attributes, and the
+    write handler is expected to call ``_reject_readonly_write`` instead of
+    writing. Operable modes are pass-through.
+    """
+
+    _control_mode: ControlMode = ControlMode.INTEGRATION_LOCAL
+
+    @property
+    def control_mode(self) -> ControlMode:
+        return self._control_mode
+
+    @property
+    def read_only(self) -> bool:
+        return self._control_mode in READ_ONLY_MODES
+
+    @property
+    def icon(self) -> str | None:
+        if self.read_only:
+            return _PADLOCK_ICON
+        attr = getattr(self, "_attr_icon", None)
+        if attr is not None:
+            return attr
+        desc = getattr(self, "entity_description", None)
+        return getattr(desc, "icon", None) if desc is not None else None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        base: dict[str, Any] = {}
+        parent = super()
+        parent_attrs = getattr(parent, "extra_state_attributes", None)
+        if isinstance(parent_attrs, dict):
+            base.update(parent_attrs)
+        base["control_mode"] = str(self._control_mode)
+        base["read_only"] = self.read_only
+        return base
+
+    async def _reject_readonly_write(self) -> None:
+        _LOGGER.info(
+            "%s: write ignored — no device write path yet (control_mode=%s)",
+            getattr(self, "entity_id", type(self).__name__), self._control_mode,
+        )
+        self.async_write_ha_state()  # re-publish unchanged state → UI snaps back
 
 
 def resolve_control_mode(*, platform: str, key: str) -> ControlMode:
