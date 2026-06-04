@@ -2272,7 +2272,7 @@ actions:
          o:100 is the confirmed working path."
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)"]
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:153"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:195"
       apk: "ioBroker.dreame/apk.md §Actions o:100 globalMower"
 
   - id: "s5a1_zone"
@@ -2292,7 +2292,7 @@ actions:
       decoded: confirmed
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)"]
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:157"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:199"
       apk: "ioBroker.dreame/apk.md §Actions o:102 zoneMower"
 
   - id: "s5a1_edge"
@@ -2319,7 +2319,7 @@ actions:
       decoded: confirmed
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)"]
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:162"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:204"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
       apk: "ioBroker.dreame/apk.md §Actions o:101 edgeMower"
 
@@ -2341,7 +2341,7 @@ actions:
       decoded: confirmed
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)"]
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:167"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:209"
       apk: "ioBroker.dreame/apk.md §Actions o:103 spotMower"
 
   - id: "s5a4"
@@ -2359,7 +2359,7 @@ actions:
       decoded: confirmed
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:809)"]
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:172"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:219"
       apk: "ioBroker.dreame/apk.md §Actions o:4 pauseControl"
 
   - id: "s5a3"
@@ -2378,7 +2378,7 @@ actions:
       decoded: confirmed
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:810)"]
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:173"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:220"
       apk: "ioBroker.dreame/apk.md §Actions o:7 stopBackCharge"
 
   - id: "s5a2"
@@ -2395,7 +2395,7 @@ actions:
       decoded: confirmed
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:811)"]
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:175"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:222"
       apk: "ioBroker.dreame/apk.md §Actions o:3 stopControl"
 
   - id: "s7a1"
@@ -2413,7 +2413,7 @@ actions:
       decoded: confirmed
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:821)"]
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:178"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:225"
       apk: "ioBroker.dreame/apk.md §Actions o:9 findBot"
 
   - id: "s4a3"
@@ -2430,7 +2430,7 @@ actions:
       decoded: confirmed
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:813)"]
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:190"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:237"
       apk: "ioBroker.dreame/apk.md §Actions o:11 suppressFault"
 
   - id: "cfg_write_cls"
@@ -2451,7 +2451,7 @@ actions:
       seen_on_wire: false
       decoded: confirmed
     references:
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:184"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:231"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
 
   - id: "local_only_finalize"
@@ -2470,7 +2470,7 @@ actions:
       seen_on_wire: false
       decoded: confirmed
     references:
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:195"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:242"
 
   # --- Vacuum-derived consumable resets ---
   # The 8 entries below come from the legacy DreameMowerActionMapping
@@ -2822,24 +2822,42 @@ opcodes:
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:178"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:225"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
 
   - id: "o10"
     op: 10
-    name: "upload_map"
+    name: "upload_map (apk) / generate_3dmap (integration) — UNRESOLVED"
     category: "opcode"
-    payload_shape: "{m:'a', o:10}"
+    payload_shape: "{m:'a', o:10, d:{idx:<map_index>}}"
     semantic: |
-      Trigger map upload to cloud. Apk-documented as uploadMap. Not observed
-      on g2408 wire; the integration does not use this opcode (map fetches
-      go through the OSS/REST path, not this action).
+      NAME/SEMANTIC UNRESOLVED, untested on g2408. This row reads the apk opcode
+      as uploadMap (trigger map upload to cloud). The integration, however, maps
+      MowerAction.GENERATE_3D_MAP → routed_o=10 with d={idx:0} (the
+      DreameA2Generate3DMapButton), per the integration author's apk reading
+      ("generate 3D map") — directly conflicting with this row's "uploadMap"
+      reading of the SAME opcode. One of the two apk readings is wrong; not
+      observed on the g2408 wire either way. [UNKNOWN — to capture] Resolve with a
+      live press while docked: a s2p54 3dmap-progress push + a new 3dmap OSS object
+      ⇒ generate-3dmap; nothing (or an upload-only effect) ⇒ uploadMap. The
+      generate_3dmap button is bucket B (device_write_unproven) for exactly this
+      reason.
     status:
       seen_on_wire: false
       decoded: hypothesized
+    verifications:
+      - date: "2026-06-04"
+        status: partial
+        claim: "The integration DOES fire op=10 — MowerAction.GENERATE_3D_MAP routes to routed_o=10 with d={idx:0} via DreameA2Generate3DMapButton. The opcode's NAME (apk uploadMap vs integration generate_3dmap) is unresolved and untested on g2408."
+        evidence: "custom_components/dreame_a2_mower/mower/actions.py:261 (ACTION_TABLE[GENERATE_3D_MAP] routed_o=10); button.py DreameA2Generate3DMapButton"
+        retracts: "the integration does not use this opcode (map fetches go through the OSS/REST path, not this action)"
+        reason: "code maps GENERATE_3D_MAP → routed_o=10 and the generate_3dmap button fires it"
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:261"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    open_questions:
+      - "Is g2408 op=10 'uploadMap' (this row's apk reading) or 'generate 3D map' (the integration's GENERATE_3D_MAP mapping)? Live press while docked, watch for s2p54 3dmap-progress + a new 3dmap OSS object. Resolves the name AND the bucket-B classification of the generate_3dmap button."
 
   - id: "o11"
     op: 11
@@ -2855,7 +2873,7 @@ opcodes:
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:190"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:237"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
 
   - id: "o12"
@@ -2943,7 +2961,7 @@ opcodes:
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:155"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:195"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p1 mode enum"
 
   - id: "o101"
@@ -2972,7 +2990,7 @@ opcodes:
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:163"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:204"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
 
   - id: "o102"
@@ -2991,7 +3009,7 @@ opcodes:
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:158"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:199"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
 
   - id: "o103"
@@ -3038,7 +3056,7 @@ opcodes:
         evidence: "live probe_cruise_to_point.py --spot-control 1 --retries 5 then --routed-byid --retries 5 2026-05-31 (did -112293549); user confirmed 'now mowing spot 1'; warm follow-up op=9 + op=109 r:0 on attempt 1"
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
-      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:168"
+      integration_code: "custom_components/dreame_a2_mower/mower/actions.py:209"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
 
   - id: "o104"

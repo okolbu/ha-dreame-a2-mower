@@ -1037,7 +1037,7 @@ Suppress / clear the current active fault or warning. Wired via routed
 action s2a50 with o:11 (suppressFault opcode). Verified in legacy
 DreameMowerActionMapping as CLEAR_WARNING (types.py:813).
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:190`, `apk: ioBroker.dreame/apk.md §Actions o:11 suppressFault`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:813)`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:237`, `apk: ioBroker.dreame/apk.md §Actions o:11 suppressFault`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:813)`
 
 ### s5a1 — `start_mowing`
 
@@ -1053,7 +1053,7 @@ o101, o102, o103 for the respective TASK envelope shapes.
 **Open questions:**
 - Direct action(5,1) consistently returns 80001; routed path via s2a50 o:100 is the confirmed working path.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:153`, `apk: ioBroker.dreame/apk.md §Actions o:100 globalMower`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:195`, `apk: ioBroker.dreame/apk.md §Actions o:100 globalMower`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)`
 
 ### s5a1_zone — `start_zone_mow`
 
@@ -1064,7 +1064,7 @@ payload {m:'a', p:0, o:102, d:{region:[zone_ids]}}.
 zone_ids are scalar ints from MAP.*.mowingAreas.value. Alias
 START_ZONE_MOW in MowerAction enum. Routed-action opcode see o102.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:157`, `apk: ioBroker.dreame/apk.md §Actions o:102 zoneMower`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:199`, `apk: ioBroker.dreame/apk.md §Actions o:102 zoneMower`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)`
 
 ### s5a1_edge — `start_edge_mow`
 
@@ -1082,7 +1082,7 @@ fallback and prefers contour_ids populated from cached map data.
 See docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes for the full failure-mode
 write-up (2026-05-05, three live captures).
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:162`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §Actions o:101 edgeMower`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:204`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §Actions o:101 edgeMower`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)`
 
 ### s5a1_spot — `start_spot_mow`
 
@@ -1094,7 +1094,7 @@ spot_ids from MAP.*.spotAreas.value. Confirmed end-to-end live
 2026-04-29 (per project memory). Echo: {area_id:[N], exe:T,
 o:103, region_id:[], status:T, time:N}.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:167`, `apk: ioBroker.dreame/apk.md §Actions o:103 spotMower`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:209`, `apk: ioBroker.dreame/apk.md §Actions o:103 spotMower`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)`
 
 ### s5a2 — `stop`
 
@@ -1102,7 +1102,7 @@ Stop the current mowing run (without returning to dock). Verified in
 legacy DreameMowerActionMapping (types.py:811). On g2408, direct
 action returns 80001; routed path is the fallback.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:175`, `apk: ioBroker.dreame/apk.md §Actions o:3 stopControl`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:811)`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:222`, `apk: ioBroker.dreame/apk.md §Actions o:3 stopControl`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:811)`
 
 ### s5a3 — `dock`
 
@@ -1112,7 +1112,7 @@ semantic). Verified in legacy DreameMowerActionMapping (types.py:810).
 On g2408, direct action returns 80001; routed path is the fallback.
 Expected s2p1 transition: any → RETURNING → CHARGING.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:173`, `apk: ioBroker.dreame/apk.md §Actions o:7 stopBackCharge`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:810)`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:220`, `apk: ioBroker.dreame/apk.md §Actions o:7 stopBackCharge`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:810)`
 
 ### s5a4 — `pause`
 
@@ -1121,7 +1121,7 @@ DreameMowerActionMapping (types.py:809). On g2408, direct action
 returns 80001; the integration retries via routed action if needed.
 Expected s2p1 transition: WORKING → PAUSED.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:172`, `apk: ioBroker.dreame/apk.md §Actions o:4 pauseControl`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:809)`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:219`, `apk: ioBroker.dreame/apk.md §Actions o:4 pauseControl`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:809)`
 
 ### s7a1 — `find_bot`
 
@@ -1130,7 +1130,7 @@ routed action s2a50 with o:9 (findBot opcode). Verified in legacy
 DreameMowerActionMapping as LOCATE (types.py:821). On g2408, the
 routed path (o:9) is the working channel.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:178`, `apk: ioBroker.dreame/apk.md §Actions o:9 findBot`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:821)`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:225`, `apk: ioBroker.dreame/apk.md §Actions o:9 findBot`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:821)`
 
 ### s9a1 — `reset_blades`
 
@@ -1223,7 +1223,7 @@ computes not bool(current), and calls write_setting("CLS", toggled).
 Confirmed g2408: CLS is the authoritative child-lock setting
 (docs/research/inventory/generated/g2408-canonical.md § CFG keys).
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:184`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:231`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`
 
 ### local_only_finalize — `finalize_session`
 
@@ -1234,7 +1234,7 @@ event_occured signal (e.g. session ended during HA restart).
 local_only: true in the ActionEntry — the cloud-action path is
 never reached.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:195`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:242`
 
 ## Routed-action opcodes
 
@@ -1250,7 +1250,7 @@ never reached.
 | o7 | joystick_stop_back | {m:'a', o:7} | APK-KNOWN |  |
 | o8 | set_ota | {m:'a', o:8, d:{...}} | APK-KNOWN |  |
 | o9 | find_bot | {m:'a', o:9} | WIRED |  |
-| o10 | upload_map | {m:'a', o:10} | APK-KNOWN |  |
+| o10 | upload_map (apk) / generate_3dmap (integration) — UNRESOLVED | {m:'a', o:10, d:{idx:<map_index>}} | WIRED |  |
 | o11 | suppress_fault | {m:'a', o:11} | WIRED |  |
 | o12 | lock_bot | {m:'a', o:12, d:{lock: 0|1}} | APK-KNOWN |  |
 | o15 | remote_setting | {m:'a', p:0, o:15, d:{c: 0|1} | {h: height*10}} | SEEN-UNDECODED |  |
@@ -1380,15 +1380,26 @@ Used by the integration's FIND_BOT action via routed action s2a50.
 Apk-documented as findBot. No echo observed on s2p50 — command is
 fire-and-forget.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:178`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:225`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
-### o10 — `upload_map`
+### o10 — `upload_map (apk) / generate_3dmap (integration) — UNRESOLVED`
 
-Trigger map upload to cloud. Apk-documented as uploadMap. Not observed
-on g2408 wire; the integration does not use this opcode (map fetches
-go through the OSS/REST path, not this action).
+NAME/SEMANTIC UNRESOLVED, untested on g2408. This row reads the apk opcode
+as uploadMap (trigger map upload to cloud). The integration, however, maps
+MowerAction.GENERATE_3D_MAP → routed_o=10 with d={idx:0} (the
+DreameA2Generate3DMapButton), per the integration author's apk reading
+("generate 3D map") — directly conflicting with this row's "uploadMap"
+reading of the SAME opcode. One of the two apk readings is wrong; not
+observed on the g2408 wire either way. [UNKNOWN — to capture] Resolve with a
+live press while docked: a s2p54 3dmap-progress push + a new 3dmap OSS object
+⇒ generate-3dmap; nothing (or an upload-only effect) ⇒ uploadMap. The
+generate_3dmap button is bucket B (device_write_unproven) for exactly this
+reason.
 
-**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+**Open questions:**
+- Is g2408 op=10 'uploadMap' (this row's apk reading) or 'generate 3D map' (the integration's GENERATE_3D_MAP mapping)? Live press while docked, watch for s2p54 3dmap-progress + a new 3dmap OSS object. Resolves the name AND the bucket-B classification of the generate_3dmap button.
+
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:261`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
 ### o11 — `suppress_fault`
 
@@ -1396,7 +1407,7 @@ Suppress / clear the current active fault or warning. Used by the
 integration's SUPPRESS_FAULT action via routed action s2a50. Apk-
 documented as suppressFault.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:190`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:237`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
 ### o12 — `lock_bot`
 
@@ -1446,7 +1457,7 @@ as globalMower.
 Echo arrives seconds after the routed action; confirms the mower has
 accepted the task. See §4.3 "Session start" for the full sequence.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:155`, `docs/research/inventory/generated/g2408-canonical.md § s2p1 mode enum`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:195`, `docs/research/inventory/generated/g2408-canonical.md § s2p1 mode enum`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
 ### o101 — `edge_mower`
 
@@ -1464,7 +1475,7 @@ send explicit [[map_id, contour_index], ...] pairs. Confirmed 2026-05-05
 
 Observed in probe corpus from 2026-04-26 onward.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:163`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:204`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
 ### o102 — `zone_mower`
 
@@ -1472,7 +1483,7 @@ Zone-specific mowing task launch. zone_ids are scalar ints from
 MAP.*.mowingAreas.value. Distinct from o:101 edge contours (which use
 [map_id, contour_index] 2-tuples). Observed in probe corpus per §4.6.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:158`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:199`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
 ### o103 — `spot_mower`
 
@@ -1482,7 +1493,7 @@ end-to-end live 2026-04-29. Cloud spotAreas.area=0 in echo — actual
 spot coordinates from telemetry, not from echo (per project memory
 g2408-session-archive-quirks).
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:168`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:209`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
 ### o104 — `plan_mower`
 
