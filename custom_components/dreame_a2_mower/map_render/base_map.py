@@ -411,7 +411,11 @@ def render_base_map(
             font=font,
             anchor="mm",
         )
-        glyph = glyph.rotate(180)
+        # Cancel the canvas-end FLIP_TOP_BOTTOM with a VERTICAL flip (NOT a 180°
+        # rotation — rotate(180) = H-flip + V-flip, so after the canvas V-flip the
+        # glyph is left horizontally MIRRORED. That's invisible for the H-symmetric
+        # "M" but mirrors a "P". A plain vertical flip cancels the canvas flip cleanly.
+        glyph = glyph.transpose(Image.FLIP_TOP_BOTTOM)
         image.paste(
             glyph,
             (int(ppx - glyph_size / 2), int(ppy - glyph_size / 2)),
