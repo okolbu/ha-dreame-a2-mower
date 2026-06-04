@@ -68,6 +68,8 @@ _tab_header_settings_zones: &tab_header_settings_zones
 
     ## ⚙️ Settings & Zones — Active map: {{ states('select.dreame_a2_mower_active_map') }} &nbsp;<span style="font-size:0.75em;color:var(--secondary-text-color)">switch on Map Selector</span>
 
+    <span style="font-size:0.75em;color:var(--secondary-text-color)">🔒 = control is present but the device write path isn't unlocked yet (changes snap back).</span>
+
 _tab_header_schedule: &tab_header_schedule
   type: markdown
   content: |
