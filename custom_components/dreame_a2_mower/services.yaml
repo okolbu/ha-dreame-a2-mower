@@ -238,3 +238,52 @@ show_photo_privacy_policy:
     binary_sensor.dreame_a2_mower_photo_consent.
   fields: {}
 
+start_point_patrol:
+  name: Start point patrol
+  description: >
+    Launch a point patrol (op=107) over the selected cruise points on a map.
+    Cruise points are placed in the Dreame app; ids come from
+    sensor.dreame_a2_mower_map_N_patrol_points (attribute items).
+    SEND shape is provisional until live-confirmed.
+  fields:
+    map_id:
+      description: Map id. Defaults to the active map if omitted.
+      required: false
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 1
+          mode: box
+    point_ids:
+      description: Cruise point ids to patrol.
+      required: true
+      example: "[3, 4]"
+      selector:
+        object:
+
+start_edge_patrol:
+  name: Start edge patrol
+  description: >
+    Launch an edge patrol (op=108) over the selected outer-perimeter contours.
+    Contour pairs come from sensor.dreame_a2_mower_map_N_patrol_edges (items).
+    SEND shape is provisional until live-confirmed.
+  fields:
+    map_id:
+      description: Map id. Defaults to the active map if omitted.
+      required: false
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+          step: 1
+          mode: box
+    contour_ids:
+      description: Contour pairs [[m, c], ...] to patrol.
+      required: true
+      example: "[[1, 0]]"
+      selector:
+        object:
+
