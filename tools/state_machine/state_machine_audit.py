@@ -9,7 +9,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from tools._toolmeta import add_to_parser
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools._toolmeta import add_to_parser  # noqa: E402
 
 TOOL_META = {"domain": "state_machine", "run_by": "owner",
     "when": "When verifying entity value-source wiring after coordinator/entity changes.",
