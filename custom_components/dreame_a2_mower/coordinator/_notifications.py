@@ -170,12 +170,23 @@ class _NotificationsMixin:
         self._mark_notification_seen(message_id)
 
         if is_novel_source:
-            LOGGER.warning(
-                "[notif] novel s%dp%d=%d source from cloud: text=%r "
-                "(message_id=%s) — please report this code+text to the "
-                "integration maintainer so it can be added to S2P2_EVENT_TYPES.",
-                siid, piid, value, text, message_id,
-            )
+            if value in S2P2_EVENT_TYPES:
+                # Code is already mapped (e.g. s2p2=54 low_battery_return); this
+                # is just the first time we've seen its cloud text THIS session
+                # (the text cache is per-process, so it re-fires every restart).
+                # Not novel — debug only.
+                LOGGER.debug(
+                    "[notif] first cloud text this session for known "
+                    "s%dp%d=%d: text=%r (message_id=%s)",
+                    siid, piid, value, text, message_id,
+                )
+            else:
+                LOGGER.warning(
+                    "[notif] novel s%dp%d=%d source from cloud: text=%r "
+                    "(message_id=%s) — please report this code+text to the "
+                    "integration maintainer so it can be added to S2P2_EVENT_TYPES.",
+                    siid, piid, value, text, message_id,
+                )
 
         event_type = S2P2_EVENT_TYPES.get(value, S2P2_UNKNOWN_EVENT_TYPE)
         self._fire_notification(

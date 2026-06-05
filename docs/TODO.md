@@ -112,10 +112,18 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      >16KB recorder reject → `_unrecorded_attributes = {"*"}`; (B4) `get_interim_file_url("")`
      → 40020 → empty-object_name guard; (C1) `80001` device-offline + `routed-action error`
      NoneType spam → DEBUG; (D) 15 operational `[F5]`/`[novel]` flow/success logs → DEBUG
-     (caught-exception `[F5]` logs kept at WARNING). Remaining low-pri: the `_render_base
-     "never awaited"` RuntimeWarning (entity-write handler `render_fn()` without await,
-     `number.py:678`/`select_global.py:989`); the one-time CloudState-migration notice at
-     WARNING (`__init__.py:40`, could be INFO); a novel `s2p2=54` cloud-text notif (x2).
+     (caught-exception `[F5]` logs kept at WARNING).
+   - **[DONE — v1.0.23a6] Log-health tail + NOVEL-probe audit.** (1) `_render_base "never
+     awaited"` RuntimeWarning was a *side-effect* of the a3 thread-safety raise (orphaned
+     coroutine) — already gone, verified in the live log, no code change. (2) Stale
+     CloudState-migration notice → DEBUG. (3) `s2p2=54` false-novel notif: gated the "novel
+     source" WARNING on `value not in S2P2_EVENT_TYPES` (a known code's first-cloud-text-this-
+     session → DEBUG). NOVEL audit (per the caution that old NOVEL lines may already be
+     addressed): `s2p1 state=4` + `s4 eiid1 piids 10/12` were ALREADY documented after their
+     first-sighting (historical artifacts, no action); `s2p2=20`/`72` and the `s2p51
+     {type:0|1}` shape were genuinely undocumented → recorded in `inventory.yaml` (s2p2
+     "Observed but UNDECODED" + s2p51 open_question, kept OUT of error_codes.py per the
+     confidence gate). Decoding them needs a labelled live capture.
    - **[FIXED — v1.0.23a3] MQTT callback aborted by off-loop `async_create_task` (HA 2026.6).**
      The activity-transition render trigger called `hass.async_create_task(self._render_base())`
      directly on paho's MQTT thread; HA 2026.6 RAISES on off-loop `async_create_task`, which
