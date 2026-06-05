@@ -93,3 +93,42 @@ def build_census(lines: Iterable[str]) -> dict[str, dict]:
         e["value_kind_hint"] = _kind_hint(e)
         out[key] = e
     return out
+
+
+def check_coverage(census: dict[str, dict], inventory: dict[tuple, dict]) -> list[str]:
+    """Return a list of human-readable coverage violations (empty == pass).
+
+    inventory: {(siid,piid): {value_kind, observed_values:[{value,status}],
+    observed_shapes:[{sig,status}]}}. For value_kind 'enum' every census value
+    must be parked in observed_values; 'nested' every shape-sig in observed_shapes;
+    'counter'/'continuous'/'blob' -> property-presence only (no value check).
+    """
+    violations: list[str] = []
+    for key, c in census.items():
+        ident = (c["siid"], c["piid"])
+        inv = inventory.get(ident)
+        if inv is None:
+            violations.append(f"{key}: seen on wire but no inventory entry")
+            continue
+        kind = inv.get("value_kind")
+        if kind == "enum":
+            parked = {ov["value"] for ov in (inv.get("observed_values") or [])}
+            for v in c["values"]:
+                if v not in parked:
+                    violations.append(
+                        f"{key}: unparked value {v} — decode it or add "
+                        f"observed_values [{{value: {v}, status: unknown}}]")
+        elif kind == "nested":
+            parked = {ov["sig"] for ov in (inv.get("observed_shapes") or [])}
+            for sig in c["shape_sigs"]:
+                if sig not in parked:
+                    violations.append(
+                        f"{key}: unparked nested shape {sig!r} — add "
+                        f"observed_shapes [{{sig: {sig!r}, status: unknown}}]")
+        elif kind in ("counter", "continuous", "blob"):
+            pass  # presence-only; the entry exists, that's enough
+        else:
+            violations.append(
+                f"{key}: inventory entry missing value_kind "
+                f"(enum|counter|continuous|blob|nested)")
+    return violations

@@ -41,3 +41,48 @@ def test_build_census_first_seen_records_earliest_ts():
              _line(5, 104, 12, "2026-05-26 09:00:00")]
     c = build_census(lines)
     assert c["s5p104"]["first_seen"]["12"] == "2026-05-25 12:32:24"
+
+
+from tools.wire_census_lib import check_coverage
+
+
+def test_check_coverage_passes_when_all_values_parked():
+    census = {"s5p104": {"siid": 5, "piid": 104, "value_kind_hint": "enum",
+                         "values": [7, 12], "shape_sigs": [], "is_blob": False}}
+    inv = {(5, 104): {"value_kind": "enum",
+                      "observed_values": [{"value": 7, "status": "confirmed"},
+                                          {"value": 12, "status": "unknown"}]}}
+    assert check_coverage(census, inv) == []
+
+
+def test_check_coverage_flags_unparked_value():
+    census = {"s5p105": {"siid": 5, "piid": 105, "value_kind_hint": "enum",
+                         "values": [1, 2, 3, 4, 5], "shape_sigs": [], "is_blob": False}}
+    inv = {(5, 105): {"value_kind": "enum",
+                      "observed_values": [{"value": v, "status": "confirmed"} for v in (1, 2, 4)]}}
+    viols = check_coverage(census, inv)
+    assert any("s5p105" in v and "3" in v for v in viols)
+    assert any("s5p105" in v and "5" in v for v in viols)
+
+
+def test_check_coverage_flags_unregistered_property():
+    census = {"s9p9": {"siid": 9, "piid": 9, "value_kind_hint": "enum",
+                       "values": [1], "shape_sigs": [], "is_blob": False}}
+    viols = check_coverage(census, {})
+    assert any("s9p9" in v and "no inventory entry" in v for v in viols)
+
+
+def test_check_coverage_skips_counter_value_enumeration():
+    census = {"s5p107": {"siid": 5, "piid": 107, "value_kind_hint": "counter",
+                         "values": list(range(256)), "shape_sigs": [], "is_blob": False}}
+    inv = {(5, 107): {"value_kind": "counter", "observed_values": []}}
+    assert check_coverage(census, inv) == []
+
+
+def test_check_coverage_checks_nested_shape_sigs():
+    census = {"s2p50": {"siid": 2, "piid": 50, "value_kind_hint": "nested",
+                        "values": [], "shape_sigs": ["d,t", "exe,o,status"], "is_blob": False}}
+    inv = {(2, 50): {"value_kind": "nested",
+                     "observed_shapes": [{"sig": "d,t", "status": "confirmed"}]}}
+    viols = check_coverage(census, inv)
+    assert any("s2p50" in v and "exe,o,status" in v for v in viols)
