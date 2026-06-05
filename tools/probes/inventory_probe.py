@@ -5,8 +5,8 @@ Per spec §4.7: refuses to write anything; asks before each batch;
 emits a delta JSON the reviewer merges into inventory.yaml by hand.
 
 CLI:
-    python tools/inventory_probe.py --dry-run     # plan-only, no network
-    python tools/inventory_probe.py               # actually probe (asks first)
+    python tools/probes/inventory_probe.py --dry-run     # plan-only, no network
+    python tools/probes/inventory_probe.py               # actually probe (asks first)
 
 Credentials: read in situ from ../server-credentials.txt and
 ../ha-credentials.txt. Never copied to disk.
@@ -18,8 +18,16 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DELTA_OUT = REPO_ROOT / "tools" / "inventory_probe_delta.json"
+
+TOOL_META = {"domain": "probes", "run_by": "owner",
+    "when": "When verifying an inventory claim against live cloud property values (read-only).",
+    "summary": "Read-only Dreame-cloud probe that dumps device properties for inventory verification."}
+
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+from tools._toolmeta import add_to_parser  # noqa: E402
 
 
 @dataclass
@@ -87,6 +95,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="List planned batches; no network calls.")
     parser.add_argument("--delta-out", type=Path, default=DEFAULT_DELTA_OUT,
                         help="Where to write the delta JSON.")
+    add_to_parser(parser, TOOL_META)
     args = parser.parse_args(argv)
 
     _print_plan()

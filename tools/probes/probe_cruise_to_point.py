@@ -21,13 +21,13 @@ Usage
 ::
 
     # List maintenance points (need point_id + x_mm/y_mm)
-    python3 tools/probe_cruise_to_point.py --list-points
+    python3 tools/probes/probe_cruise_to_point.py --list-points
 
     # Try one shape against point_id=1
-    python3 tools/probe_cruise_to_point.py --point-id 1 --shape tpoint
+    python3 tools/probes/probe_cruise_to_point.py --point-id 1 --shape tpoint
 
     # Try each shape sequentially (stops at first cloud "success")
-    python3 tools/probe_cruise_to_point.py --point-id 1 --auto
+    python3 tools/probes/probe_cruise_to_point.py --point-id 1 --auto
 
 In another terminal, run ``probe_a2_mqtt.py`` so you can confirm
 acceptance via the live MQTT echo (``s2p50 o:109 status:true``
@@ -84,7 +84,16 @@ for _mod in (
 import importlib.util  # noqa: E402
 import types  # noqa: E402
 
-_INTEG_ROOT = str(Path(__file__).resolve().parent.parent / "custom_components" / "dreame_a2_mower")
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+_INTEG_ROOT = str(_REPO_ROOT / "custom_components" / "dreame_a2_mower")
+
+TOOL_META = {"domain": "probes", "run_by": "owner",
+    "when": "When reverse-engineering cruise-to-point (op=109) payloads. WRITES to the live device.",
+    "summary": "Probe candidate cruise-to-point command payload shapes on the live g2408."}
+
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+from tools._toolmeta import add_to_parser  # noqa: E402
 
 
 def _load_module(modname: str, filepath: str, package: str | None = None):
@@ -633,6 +642,7 @@ def main() -> int:
     p.add_argument("--credentials", default=DEFAULT_CREDS_PATH,
                    help=f"Credentials file (email/pass/country one per line). "
                         f"Default: {DEFAULT_CREDS_PATH}")
+    add_to_parser(p, TOOL_META)
     args = p.parse_args()
 
     client = _build_cloud_client(args.credentials)

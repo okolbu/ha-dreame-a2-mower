@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-TOOL = Path(__file__).parents[2] / "tools" / "inventory_probe.py"
+TOOL = Path(__file__).parents[2] / "tools" / "probes" / "inventory_probe.py"
 
 
 def test_probe_refuses_without_yes() -> None:

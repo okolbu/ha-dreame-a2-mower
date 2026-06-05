@@ -64,7 +64,11 @@ for _mod in (
 import importlib.util
 import types
 
-_INTEG = str(Path(__file__).resolve().parent.parent / "custom_components" / "dreame_a2_mower")
+_INTEG = str(Path(__file__).resolve().parent.parent.parent / "custom_components" / "dreame_a2_mower")
+
+TOOL_META = {"domain": "probes", "run_by": "owner",
+    "when": "When reverse-engineering maintenance-point map edits. WRITES to the live device.",
+    "summary": "Probe candidate map-edit payloads for adding a maintenance point."}
 
 
 def _load(modname, filepath, package=None):

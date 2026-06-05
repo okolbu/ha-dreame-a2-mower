@@ -40,21 +40,21 @@ Usage
 ::
 
     # Just read current PRE + VER (no write)
-    python3 tools/probe_pre_write.py --read
+    python3 tools/probes/probe_pre_write.py --read
 
     # Is the cloud relay awake right now? (harmless findBot beep)
-    python3 tools/probe_pre_write.py --relay-check
+    python3 tools/probes/probe_pre_write.py --relay-check
 
     # Probe writability: flip mode, read out[0].r, then RESTORE original
     # (non-destructive). Uses the highest-confidence shape by default.
-    python3 tools/probe_pre_write.py --probe
+    python3 tools/probes/probe_pre_write.py --probe
 
     # Try every candidate shape until one returns r=0 (each auto-restored)
-    python3 tools/probe_pre_write.py --probe --auto
+    python3 tools/probes/probe_pre_write.py --probe --auto
 
     # Intentionally SET efficiency and LEAVE it (for the behavioural test:
     # then check the Dreame app / mowing behaviour reflects it). 0=Standard 1=Efficient.
-    python3 tools/probe_pre_write.py --set 1
+    python3 tools/probes/probe_pre_write.py --set 1
 
 Confirming firmware-side acceptance: cloud ``r:0`` + a ``CFG.VER`` bump is the
 strong cloud signal, but the decisive proof the *device* applied it is the
@@ -79,7 +79,7 @@ from unittest.mock import MagicMock
 
 
 # --- Stub `homeassistant` so we can import the cloud_client package standalone
-# Mirrors tools/probe_cruise_to_point.py.
+# Mirrors tools/probes/probe_cruise_to_point.py.
 for _mod in (
     "homeassistant",
     "homeassistant.const",
@@ -110,9 +110,16 @@ for _mod in (
 import importlib.util  # noqa: E402
 import types  # noqa: E402
 
-_INTEG_ROOT = str(
-    Path(__file__).resolve().parent.parent / "custom_components" / "dreame_a2_mower"
-)
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+_INTEG_ROOT = str(_REPO_ROOT / "custom_components" / "dreame_a2_mower")
+
+TOOL_META = {"domain": "probes", "run_by": "owner",
+    "when": "When testing whether CFG.PRE (mowing efficiency) is device-writable. WRITES to the live device.",
+    "summary": "Probe whether CFG.PRE is writable on the g2408 vs cloud-cache-only."}
+
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
+from tools._toolmeta import add_to_parser  # noqa: E402
 
 
 def _load_module(modname: str, filepath: str, package: str | None = None):
@@ -487,6 +494,7 @@ def main() -> int:
     p.add_argument("--credentials", default=DEFAULT_CREDS_PATH,
                    help=f"Credentials file (email/pass/country, one per line). "
                         f"Default: {DEFAULT_CREDS_PATH}")
+    add_to_parser(p, TOOL_META)
     args = p.parse_args()
 
     client = _build_cloud_client(args.credentials)
