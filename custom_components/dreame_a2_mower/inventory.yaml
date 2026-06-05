@@ -27,6 +27,7 @@ properties:
     piid: 1
     name: "heartbeat"
     category: "blob"
+    value_kind: blob
     payload_shape: "20-byte blob"
     semantic: |
       Mower-alive ping sent every ~45 seconds regardless of state, plus extra
@@ -161,6 +162,7 @@ properties:
     piid: 4
     name: "mowing_telemetry"
     category: "blob"
+    value_kind: blob
     payload_shape: "33-byte / 8-byte / 10-byte variants"
     semantic: |
       Position, phase, area, and distance telemetry. Three frame lengths observed
@@ -221,6 +223,9 @@ properties:
     piid: 50
     name: "state_change_ping"
     category: "trigger"
+    value_kind: nested
+    observed_shapes:
+      - {sig: '', status: unknown}
     payload_shape: "empty_dict"
     semantic: |
       Lightweight "something changed, consider re-fetching" ping. No payload.
@@ -286,6 +291,9 @@ properties:
     piid: 51
     name: "dock_position_update_trigger"
     category: "trigger"
+    value_kind: nested
+    observed_shapes:
+      - {sig: '', status: unknown}
     payload_shape: "empty_dict"
     semantic: |
       Dock-position-update trigger per apk decompilation. Fires when the dock pose
@@ -315,6 +323,9 @@ properties:
     piid: 52
     name: "task_end_flush"
     category: "trigger"
+    value_kind: nested
+    observed_shapes:
+      - {sig: '', status: unknown}
     payload_shape: "empty_dict"
     semantic: |
       Task-ended flush/commit ping. No payload. Fires at session complete
@@ -346,6 +357,10 @@ properties:
     piid: 53
     name: "bluetooth_connected"
     category: "property"
+    value_kind: enum
+    observed_values:
+      - {value: 0, status: unknown}
+      - {value: 1, status: unknown}
     payload_shape: "bool"
     semantic: |
       Controlling-app BLUETOOTH connection status (bool). True while a Dreame app
@@ -386,6 +401,17 @@ properties:
     piid: 1
     name: "mode"
     category: "property"
+    value_kind: enum
+    observed_values:
+      - {value: 1, status: unknown}
+      - {value: 2, status: unknown}
+      - {value: 3, status: unknown}
+      - {value: 4, status: unknown}
+      - {value: 5, status: unknown}
+      - {value: 6, status: unknown}
+      - {value: 11, status: unknown}
+      - {value: 13, status: unknown}
+      - {value: 16, status: unknown}
     payload_shape: "int (enum)"
     value_catalog:
       1: "Mowing"
@@ -532,6 +558,38 @@ properties:
     piid: 2
     name: "error_code"
     category: "property"
+    value_kind: enum
+    observed_values:
+      - {value: 0, status: unknown}
+      - {value: 1, status: unknown}
+      - {value: 2, status: unknown}
+      - {value: 4, status: unknown}
+      - {value: 5, status: unknown}
+      - {value: 9, status: unknown}
+      - {value: 20, status: unknown}
+      - {value: 23, status: unknown}
+      - {value: 27, status: unknown}
+      - {value: 28, status: unknown}
+      - {value: 30, status: unknown}
+      - {value: 31, status: unknown}
+      - {value: 33, status: unknown}
+      - {value: 36, status: unknown}
+      - {value: 43, status: unknown}
+      - {value: 48, status: unknown}
+      - {value: 50, status: unknown}
+      - {value: 51, status: unknown}
+      - {value: 53, status: unknown}
+      - {value: 54, status: unknown}
+      - {value: 56, status: unknown}
+      - {value: 60, status: unknown}
+      - {value: 63, status: unknown}
+      - {value: 70, status: unknown}
+      - {value: 71, status: unknown}
+      - {value: 72, status: unknown}
+      - {value: 73, status: unknown}
+      - {value: 74, status: unknown}
+      - {value: 75, status: unknown}
+      - {value: 76, status: unknown}
     payload_shape: "int (state/error code)"
     semantic: |
       Numeric state / fault code — one discrete value per push (NOT a bitfield,
@@ -834,10 +892,14 @@ properties:
       - "s2p2 24 'Battery low' vs 54 'Low battery — returning to station' overlap: confirm the distinction (hypothesis: 24 = low-battery WARNING threshold, informational; 54 = the low-battery event that TRIGGERS return-to-dock). Capture both firing in one session to pin the trigger points, then rename 24 to something unambiguous (tentative: 'Battery low (warning)'). presumed until a capture confirms."
       - "s2p2 codes 0/1/9/23 are the s2p2 echoes of the s1p1 safety bits (bumper/tilt/lift/PIN), confirmed by the 2026-04-30 19:37–19:39 controlled test. Open: redundant with the s1p1 binary_sensors, or do they carry extra info worth a dedicated surface?"
       - "s2p2=0: strictly the bumper/hanging event, or also the post-event return-to-idle value? Corpus has only 6 transitions-to-0; need captures that disambiguate a bumper press from a generic clear-to-0."
+  - id: "s2p50"
     siid: 2
     piid: 50
     name: "task_envelope"
     category: "multiplexed"
+    value_kind: nested
+    observed_shapes:
+      - {sig: 'd,t', status: unknown}
     payload_shape: "TASK envelope; multiple op-code classes"
     semantic: |
       TASK envelope — multiple operation classes sharing this slot. Two major
@@ -876,6 +938,13 @@ properties:
     piid: 51
     name: "multiplexed_config"
     category: "multiplexed"
+    value_kind: nested
+    observed_shapes:
+      - {sig: 'end,start,value', status: unknown}
+      - {sig: 'text,voice', status: unknown}
+      - {sig: 'time,tz', status: unknown}
+      - {sig: 'type', status: unknown}
+      - {sig: 'value', status: unknown}
     payload_shape: "shape varies by setting"
     semantic: |
       All "More Settings" toggles in the Dreame app that travel via cloud share
@@ -933,6 +1002,9 @@ properties:
     piid: 52
     name: "preference_update_trigger"
     category: "trigger"
+    value_kind: nested
+    observed_shapes:
+      - {sig: '', status: unknown}
     payload_shape: "empty_dict"
     semantic: |
       Mowing-preference-update trigger per apk decompilation. Fires when PRE
@@ -959,6 +1031,7 @@ properties:
     piid: 53
     name: "voice_download_progress"
     category: "property"
+    value_kind: continuous
     payload_shape: "int 0..100"
     semantic: |
       Apk says VOICE_DOWNLOAD_PROGRESS_PCT — progress counter for downloading a
@@ -982,6 +1055,7 @@ properties:
     piid: 54
     name: "lidar_upload_progress"
     category: "property"
+    value_kind: continuous
     payload_shape: "int 0..100"
     unit:
       wire: "percent"
@@ -1014,6 +1088,9 @@ properties:
     piid: 55
     name: "ai_obstacle_report"
     category: "property"
+    value_kind: nested
+    observed_shapes:
+      - {sig: 'obs,type', status: unknown}
     payload_shape: "list"
     semantic: |
       Apk says AI_OBSTACLE_REPORT — a list of AI-camera-detected obstacle events.
@@ -1175,6 +1252,9 @@ properties:
     piid: 56
     name: "task_state"
     category: "property"
+    value_kind: nested
+    observed_shapes:
+      - {sig: 'status', status: unknown}
     payload_shape: "{status: list of [task_type, ...] tuples}"
     semantic: |
       Cloud status push — internal task-state ack. Wire envelope has two
@@ -1289,6 +1369,7 @@ properties:
     open_questions:
       - "3-element MIDDLE value (the X in [task_id, X, stage]) is always 0 in the corpus — undecoded. Likely a segment/lap index; capture a multi-segment scheduled run (e.g. a rain-paused mow's later segments) to see if it ever increments. (The THIRD/last value = stage 0=start/2=done is now decoded — 2026-05-30.)"
       - "Confirm the 3-element variant is SCHEDULED-correlated, not mow-type-correlated: cross-reference each 3-element session against its summary.mode (a 2026-05-30 spot-check found a morning mode=100 all-area scheduled mow that was 3-element, contradicting the old edge/spot/zone attribution). Needs a full per-session correlation."
+  - id: "s2p57"
     siid: 2
     piid: 57
     name: "robot_shutdown_trigger"
@@ -1367,6 +1448,9 @@ properties:
     piid: 62
     name: "task_progress_flag"
     category: "property"
+    value_kind: enum
+    observed_values:
+      - {value: 0, status: unknown}
     payload_shape: "int"
     semantic: |
       Apk says task progress flag. Observed 16 times in the probe corpus. Semantic
@@ -1389,6 +1473,7 @@ properties:
     piid: 65
     name: "slam_task_label"
     category: "property"
+    value_kind: blob
     payload_shape: "string"
     semantic: |
       SLAM / nav task-type string. Three values confirmed on g2408:
@@ -1427,6 +1512,7 @@ properties:
     piid: 66
     name: "lawn_area_snapshot"
     category: "property"
+    value_kind: blob
     payload_shape: "list[float, int]"
     unit:
       wire: "m2"
@@ -1465,6 +1551,7 @@ properties:
     piid: 1
     name: "battery_level"
     category: "property"
+    value_kind: continuous
     payload_shape: "int 0..100"
     unit:
       wire: "percent"
@@ -1490,6 +1577,11 @@ properties:
     piid: 2
     name: "charging_status"
     category: "property"
+    value_kind: enum
+    observed_values:
+      - {value: 0, status: unknown}
+      - {value: 1, status: unknown}
+      - {value: 2, status: unknown}
     payload_shape: "int (enum)"
     value_catalog:
       0: "Not Charging"
@@ -1524,6 +1616,10 @@ properties:
     piid: 104
     name: "slam_relocate_counter"
     category: "property"
+    value_kind: enum
+    observed_values:
+      - {value: 7, status: unknown}
+      - {value: 12, status: unknown}
     payload_shape: "int"
     semantic: |
       SLAM relocate counter. Fires exclusively alongside s2p65 = 'TASK_SLAM_RELOCATE'
@@ -1549,6 +1645,13 @@ properties:
     piid: 105
     name: "s5p105_raw"
     category: "property"
+    value_kind: enum
+    observed_values:
+      - {value: 1, status: unknown}
+      - {value: 2, status: unknown}
+      - {value: 3, status: unknown}
+      - {value: 4, status: unknown}
+      - {value: 5, status: unknown}
     payload_shape: "int (small enum)"
     semantic: |
       Small enum with values {1, 2, 4} observed across the corpus 2026-04-17 to
@@ -1576,6 +1679,25 @@ properties:
     piid: 106
     name: "s5p106_raw"
     category: "property"
+    value_kind: enum
+    observed_values:
+      - {value: 1, status: unknown}
+      - {value: 2, status: unknown}
+      - {value: 3, status: unknown}
+      - {value: 4, status: unknown}
+      - {value: 5, status: unknown}
+      - {value: 6, status: unknown}
+      - {value: 7, status: unknown}
+      - {value: 8, status: unknown}
+      - {value: 9, status: unknown}
+      - {value: 10, status: unknown}
+      - {value: 11, status: unknown}
+      - {value: 12, status: unknown}
+      - {value: 13, status: unknown}
+      - {value: 14, status: unknown}
+      - {value: 16, status: unknown}
+      - {value: 19, status: unknown}
+      - {value: 20, status: unknown}
     payload_shape: "int"
     semantic: |
       Purpose unknown. 157 observations across 5 days show values 1-8 with rare 9
@@ -1605,6 +1727,7 @@ properties:
     piid: 107
     name: "energy_index"
     category: "property"
+    value_kind: counter
     payload_shape: "int"
     unit:
       wire: "unsigned_byte"
@@ -1648,6 +1771,10 @@ properties:
     piid: 108
     name: "s5p108_raw"
     category: "property"
+    value_kind: enum
+    observed_values:
+      - {value: 1, status: unknown}
+      - {value: 2, status: unknown}
     payload_shape: "int"
     semantic: |
       Only one observation in the probe corpus. Semantic unknown. No apk
@@ -1667,6 +1794,11 @@ properties:
     piid: 1
     name: "map_data_signal"
     category: "property"
+    value_kind: enum
+    observed_values:
+      - {value: 200, status: unknown}
+      - {value: 201, status: unknown}
+      - {value: 300, status: unknown}
     payload_shape: "int — observed values {200, 201, 300}"
     semantic: |
       Map-readiness signal. Cycles among {200, 201, 300} to signal "new
@@ -1736,6 +1868,7 @@ properties:
     piid: 2
     name: "frame_info"
     category: "property"
+    value_kind: blob
     payload_shape: "list[int, int, bool, int] len 4"
     semantic: |
       FRAME_INFO / Mowing Settings page save reflector. Per-active-map on
@@ -1820,6 +1953,7 @@ properties:
     piid: 3
     name: "wifi_signal_push"
     category: "property"
+    value_kind: blob
     payload_shape: "list[bool, int]"
     semantic: |
       WiFi signal push on g2408: [cloud_connected, rssi_dbm]. NOT the OSS object
@@ -1865,6 +1999,10 @@ properties:
     piid: 117
     name: "dock_nav_state"
     category: "property"
+    value_kind: enum
+    observed_values:
+      - {value: 1, status: unknown}
+      - {value: 3, status: unknown}
     payload_shape: "int"
     semantic: |
       Dock-nav state marker. Confirmed 2026-05-05 as a dock-navigation state
@@ -1904,6 +2042,7 @@ properties:
     piid: 20
     name: "lidar_object_name"
     category: "blob"
+    value_kind: blob
     payload_shape: "string (OSS object key)"
     semantic: |
       LiDAR point-cloud OSS object key. Published by the mower each time the user
