@@ -86,3 +86,27 @@ def test_check_coverage_checks_nested_shape_sigs():
                      "observed_shapes": [{"sig": "d,t", "status": "confirmed"}]}}
     viols = check_coverage(census, inv)
     assert any("s2p50" in v and "exe,o,status" in v for v in viols)
+
+
+import yaml
+from tools.wire_census_lib import seed_blocks
+
+
+def test_seed_blocks_emits_valid_yaml_for_enum_and_nested():
+    census = {
+        "s5p104": {"siid": 5, "piid": 104, "value_kind_hint": "enum",
+                   "values": [7, 12], "shape_sigs": [], "is_blob": False},
+        "s2p50": {"siid": 2, "piid": 50, "value_kind_hint": "nested",
+                  "values": [], "shape_sigs": ["d,t"], "is_blob": False},
+        "s1p1": {"siid": 1, "piid": 1, "value_kind_hint": "blob",
+                 "values": [], "shape_sigs": [], "is_blob": True},
+    }
+    text = seed_blocks(census)
+    parsed = yaml.safe_load(text)
+    assert parsed["s5p104"]["value_kind"] == "enum"
+    assert {ov["value"] for ov in parsed["s5p104"]["observed_values"]} == {7, 12}
+    # all seeded values start parked as unknown (decoder fills in meaning later)
+    assert all(ov["status"] == "unknown" for ov in parsed["s5p104"]["observed_values"])
+    assert parsed["s2p50"]["observed_shapes"][0]["sig"] == "d,t"
+    assert parsed["s1p1"]["value_kind"] == "blob"
+    assert "observed_values" not in parsed["s1p1"]  # blobs: presence only

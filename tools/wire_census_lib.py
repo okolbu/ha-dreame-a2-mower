@@ -9,6 +9,7 @@ inventory.yaml.
 from __future__ import annotations
 
 import json
+import yaml
 from typing import Any, Iterable
 
 _COUNTER_DISTINCT_THRESHOLD = 32  # > this many distinct ints + wide range -> counter
@@ -132,3 +133,20 @@ def check_coverage(census: dict[str, dict], inventory: dict[tuple, dict]) -> lis
                 f"{key}: inventory entry missing value_kind "
                 f"(enum|counter|continuous|blob|nested)")
     return violations
+
+
+def seed_blocks(census: dict[str, dict]) -> str:
+    """Emit a YAML mapping {sNpM: {value_kind, observed_values|observed_shapes}}
+    for one-time merge into inventory. All values start status: unknown (parked);
+    the dev re-classifies value_kind (the hint is advisory) and decodes later.
+    """
+    out: dict[str, dict] = {}
+    for key, c in census.items():
+        block: dict = {"value_kind": c["value_kind_hint"]}
+        if c["value_kind_hint"] == "enum":
+            block["observed_values"] = [{"value": v, "status": "unknown"} for v in c["values"]]
+        elif c["value_kind_hint"] == "nested":
+            block["observed_shapes"] = [{"sig": s, "status": "unknown"} for s in c["shape_sigs"]]
+        # counter/continuous/blob: no value list
+        out[key] = block
+    return yaml.safe_dump(out, sort_keys=False, default_flow_style=False)
