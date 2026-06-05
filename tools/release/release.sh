@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Cut a new release that HACS will actually see.
+# tool-meta: domain=release run_by=maintainer
+# tool-when: After pushing integration commits, to cut a HACS-visible release.
+# tool-summary: Bump version, tag, push, create the GitHub Release, and refresh HACS.
 #
 # Usage:
-#   tools/release.sh                  # auto-bumps a80 → a81
-#   tools/release.sh 1.0.0a99         # explicit version (no leading "v")
-#   tools/release.sh --notes "msg"    # auto-bump with custom notes
+#   tools/release/release.sh                  # auto-bumps a80 → a81
+#   tools/release/release.sh 1.0.0a99         # explicit version (no leading "v")
+#   tools/release/release.sh --notes "msg"    # auto-bump with custom notes
 #
 # What this guards against (every failure mode hit historically):
 #   1. Tag pushed without a GitHub Release object → HACS invisible.

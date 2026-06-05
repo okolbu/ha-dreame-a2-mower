@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Force the highest-version release to be marked Latest (not prerelease).
+# tool-meta: domain=release run_by=maintainer
+# tool-when: When GitHub demoted the newest release off "Latest".
+# tool-summary: Force the highest-version release to be marked Latest (not prerelease).
 #
 # Use:
-#   tools/promote-latest.sh                # auto-detect highest version
-#   tools/promote-latest.sh v1.0.5a8       # promote a specific tag
+#   tools/release/promote-latest.sh                # auto-detect highest version
+#   tools/release/promote-latest.sh v1.0.5a8       # promote a specific tag
 #
 # This is a self-healing tool for when GitHub demotes a release to
 # Prerelease unexpectedly (recurring pain on this repo). Safe to run
