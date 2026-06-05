@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures" / "journal_complete"
-TOOL = Path(__file__).parents[2] / "tools" / "journal_completeness_check.py"
+TOOL = Path(__file__).parents[2] / "tools" / "inventory" / "journal_completeness_check.py"
 
 
 def _run(extra_args: list[str]) -> subprocess.CompletedProcess[str]:

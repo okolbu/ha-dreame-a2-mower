@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 FIXTURES = Path(__file__).parent / "fixtures"
-TOOL = Path(__file__).parents[2] / "tools" / "inventory_audit.py"
+TOOL = Path(__file__).parents[2] / "tools" / "inventory" / "inventory_audit.py"
 
 
 def test_probe_walker_finds_unknown_slot() -> None:

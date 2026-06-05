@@ -20,7 +20,14 @@ from typing import Any
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools._toolmeta import add_to_parser  # noqa: E402
+
+TOOL_META = {"domain": "inventory", "run_by": "ci",
+    "when": "Every CI build (--validate-only); locally before shipping an inventory change.",
+    "summary": "Generate canonical inventory docs from inventory.yaml and validate its schema."}
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INVENTORY = REPO_ROOT / "custom_components" / "dreame_a2_mower" / "inventory.yaml"
 
 _UNIT_VOCAB: frozenset[str] = frozenset(
@@ -338,6 +345,7 @@ def main(argv: list[str] | None = None) -> int:
         default=REPO_ROOT / "docs" / "research" / "inventory" / "generated",
         help="Where to write generated files (default: %(default)s)",
     )
+    add_to_parser(parser, TOOL_META)
     args = parser.parse_args(argv)
 
     try:

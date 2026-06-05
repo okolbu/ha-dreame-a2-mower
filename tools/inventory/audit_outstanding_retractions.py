@@ -19,13 +19,21 @@ build without blocking work.
 """
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 from typing import Any, Iterator
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools._toolmeta import add_to_parser  # noqa: E402
+
+TOOL_META = {"domain": "inventory", "run_by": "ci",
+    "when": "Every CI build (notice-only); when reviewing retraction debt.",
+    "summary": "List inventory retractions that lack a re-verified replacement claim."}
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 WIRE_INVENTORY = REPO_ROOT / "custom_components" / "dreame_a2_mower" / "inventory.yaml"
 ENTITY_INVENTORY = REPO_ROOT / "custom_components" / "dreame_a2_mower" / "entity-inventory.yaml"
 
@@ -99,7 +107,10 @@ def audit(path: Path) -> list[tuple[str, dict[str, Any]]]:
     return out
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_to_parser(parser, TOOL_META)
+    parser.parse_args(argv)
     wire = audit(WIRE_INVENTORY)
     entity = audit(ENTITY_INVENTORY)
     total = len(wire) + len(entity)

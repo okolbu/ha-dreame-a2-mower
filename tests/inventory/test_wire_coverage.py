@@ -12,7 +12,7 @@ import sys
 import yaml
 
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-sys.path.insert(0, os.path.join(_REPO, "tools"))
+sys.path.insert(0, os.path.join(_REPO, "tools", "inventory"))
 from wire_census_lib import check_coverage  # noqa: E402
 
 
@@ -42,7 +42,7 @@ def test_wire_census_fully_covered_by_inventory():
     violations = check_coverage(census, inv)
     assert not violations, (
         "Wire values not registered in inventory (decode them, or park as "
-        "status: unknown via tools/wire_census.py --seed):\n  "
+        "status: unknown via tools/inventory/wire_census.py --seed):\n  "
         + "\n  ".join(violations)
     )
 

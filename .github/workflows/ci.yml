@@ -164,10 +164,10 @@ jobs:
         # entity-inventory.yaml entry (and no stale entries). Complements the
         # inventory-touch-gate (which only fires on PR diffs) by enforcing
         # completeness on every run.
-        run: python tools/entity_inventory_audit.py
+        run: python tools/inventory/entity_inventory_audit.py
 
       - name: Inventory schema validation
-        run: python tools/inventory_gen.py --validate-only
+        run: python tools/inventory/inventory_gen.py --validate-only
 
       - name: Inventory presence audit (notice-only)
         # Coverage tracker: lists protocol/cloud surfaces observed in
@@ -177,14 +177,14 @@ jobs:
         # surfaces is the inventory-touch-gate job, which blocks changing
         # protocol/entity files without a matching inventory update.
         continue-on-error: true
-        run: python tools/inventory_audit.py
+        run: python tools/inventory/inventory_audit.py
 
       - name: Inventory consistency audit
-        run: python tools/inventory_audit.py --consistency
+        run: python tools/inventory/inventory_audit.py --consistency
 
       - name: Outstanding retractions audit (notice-only)
         # Surfaces every inventory entry whose latest verification is a
         # retraction — i.e. a withdrawn claim that hasn't been replaced
         # with a re-verified record yet. Notice-only: never fails the
         # build, just lists them so they don't quietly accumulate.
-        run: python tools/audit_outstanding_retractions.py
+        run: python tools/inventory/audit_outstanding_retractions.py

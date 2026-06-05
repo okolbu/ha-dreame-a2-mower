@@ -1,6 +1,6 @@
 from __future__ import annotations
 import json
-from tools.wire_census_lib import build_census
+from tools.inventory.wire_census_lib import build_census
 
 
 def _line(siid, piid, value, ts="2026-05-20 13:00:00"):
@@ -43,7 +43,7 @@ def test_build_census_first_seen_records_earliest_ts():
     assert c["s5p104"]["first_seen"]["12"] == "2026-05-25 12:32:24"
 
 
-from tools.wire_census_lib import check_coverage
+from tools.inventory.wire_census_lib import check_coverage
 
 
 def test_check_coverage_passes_when_all_values_parked():
@@ -89,7 +89,7 @@ def test_check_coverage_checks_nested_shape_sigs():
 
 
 import yaml
-from tools.wire_census_lib import seed_blocks
+from tools.inventory.wire_census_lib import seed_blocks
 
 
 def test_seed_blocks_emits_valid_yaml_for_enum_and_nested():
@@ -122,7 +122,7 @@ def test_cli_writes_census_json(tmp_path):
     out = tmp_path / "wire-census.json"
     repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     r = subprocess.run(
-        [sys.executable, "tools/wire_census.py", "--log-dir", str(logdir), "--out", str(out)],
+        [sys.executable, "tools/inventory/wire_census.py", "--log-dir", str(logdir), "--out", str(out)],
         cwd=repo, capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
     data = json.loads(out.read_text())

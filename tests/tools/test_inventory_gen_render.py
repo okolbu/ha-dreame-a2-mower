@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 
 FIXTURES = Path(__file__).parent / "fixtures"
-TOOL = Path(__file__).parents[2] / "tools" / "inventory_gen.py"
+TOOL = Path(__file__).parents[2] / "tools" / "inventory" / "inventory_gen.py"
 
 
 def test_render_one_property() -> None:

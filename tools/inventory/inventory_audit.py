@@ -26,7 +26,14 @@ from typing import Any
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools._toolmeta import add_to_parser  # noqa: E402
+
+TOOL_META = {"domain": "inventory", "run_by": "ci",
+    "when": "Every CI build; locally before shipping a fact-heavy change.",
+    "summary": "Cross-check inventory.yaml for internal contradictions and value-catalog gaps."}
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_INVENTORY = REPO_ROOT / "custom_components" / "dreame_a2_mower" / "inventory.yaml"
 DEFAULT_OUTPUT = REPO_ROOT / "docs" / "research" / "inventory" / "generated" / "coverage-report.md"
 
@@ -387,6 +394,7 @@ def main(argv: list[str] | None = None) -> int:
             "Default (no flag): both presence and consistency checks run."
         ),
     )
+    add_to_parser(parser, TOOL_META)
     args = parser.parse_args(argv)
 
     try:

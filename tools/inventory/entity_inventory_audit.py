@@ -27,13 +27,21 @@ they deliberately record a removed entity so it isn't re-added.
 """
 from __future__ import annotations
 
+import argparse
 import ast
 import pathlib
 import sys
 
 import yaml
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[2]))
+from tools._toolmeta import add_to_parser  # noqa: E402
+
+TOOL_META = {"domain": "inventory", "run_by": "ci",
+    "when": "Every CI build; after adding or changing an entity.",
+    "summary": "Verify entity-inventory.yaml covers every integration entity class."}
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent.parent
 CC = ROOT / "custom_components" / "dreame_a2_mower"
 INV = CC / "entity-inventory.yaml"
 
@@ -115,7 +123,10 @@ def _inventoried_classes() -> set[str]:
     return out
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    add_to_parser(parser, TOOL_META)
+    parser.parse_args(argv)
     classes = _entity_classes()
     inv = _inventoried_classes()
     missing = sorted(c for c in classes if c not in inv)

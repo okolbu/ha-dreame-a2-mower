@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 FIXTURES = Path(__file__).parent / "fixtures"
-TOOL = Path(__file__).parents[2] / "tools" / "inventory_gen.py"
+TOOL = Path(__file__).parents[2] / "tools" / "inventory" / "inventory_gen.py"
 
 
 def _run(args: list[str]) -> subprocess.CompletedProcess[str]:

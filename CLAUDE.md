@@ -507,7 +507,7 @@ Tier-1/Tier-2 doc and leave the original in `OLD/`.
 - `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/` — out-of-tree
   historical/process docs (specs, plans, handoffs, pre-restructure raw, completed
   logs), mirroring the old `docs/`-relative path. Read-only archive.
-- `tools/inventory_audit.py` — CI consistency check; run locally before
+- `tools/inventory/inventory_audit.py` — CI consistency check; run locally before
   shipping a fact-heavy change.
 - `.github/workflows/ci.yml` — `inventory-touch-gate` job blocks PRs
   that change protocol or entity definitions without updating the

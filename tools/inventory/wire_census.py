@@ -18,7 +18,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from wire_census_lib import build_census, seed_blocks  # noqa: E402
 
-_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from tools._toolmeta import add_to_parser  # noqa: E402
+
+TOOL_META = {"domain": "inventory", "run_by": "owner",
+    "when": "After a new probe capture lands, to regenerate the wire census and find unparked values.",
+    "summary": "Regenerate docs/research/wire-census.json and report wire values missing from inventory."}
+
+_REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DEFAULT_LOG_DIR = os.path.dirname(_REPO)  # /data/claude/homeassistant
 _DEFAULT_OUT = os.path.join(_REPO, "docs", "research", "wire-census.json")
 
@@ -35,6 +42,7 @@ def main(argv=None) -> int:
     ap.add_argument("--out", default=_DEFAULT_OUT)
     ap.add_argument("--seed", action="store_true", help="print inventory seed blocks")
     ap.add_argument("--unknowns", action="store_true", help="report unregistered values")
+    add_to_parser(ap, TOOL_META)
     args = ap.parse_args(argv)
 
     census = build_census(_read_lines(args.log_dir))

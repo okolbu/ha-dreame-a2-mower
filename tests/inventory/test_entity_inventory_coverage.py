@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_entity_inventory_is_complete():
     r = subprocess.run(
-        [sys.executable, str(ROOT / "tools" / "entity_inventory_audit.py")],
+        [sys.executable, str(ROOT / "tools" / "inventory" / "entity_inventory_audit.py")],
         capture_output=True, text=True,
     )
     assert r.returncode == 0, (

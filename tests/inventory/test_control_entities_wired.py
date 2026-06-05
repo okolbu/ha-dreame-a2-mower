@@ -12,7 +12,7 @@ Strategy:
   2. For each class found, import it from the actual module and assert
      issubclass(cls, _ControlHonestyMixin).
 
-The AST scan mirrors the one in tools/entity_inventory_audit.py (same
+The AST scan mirrors the one in tools/inventory/entity_inventory_audit.py (same
 _derives_from_entity / _class_graph logic), but filtered to control platforms
 whose platform modules are in the known set.
 """

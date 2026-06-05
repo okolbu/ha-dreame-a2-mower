@@ -16,6 +16,13 @@ import re
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools._toolmeta import add_to_parser  # noqa: E402
+
+TOOL_META = {"domain": "inventory", "run_by": "owner",
+    "when": "When auditing the research journal for analysis not promoted into inventory.yaml.",
+    "summary": "Flag research-journal paragraphs that were never folded into inventory.yaml."}
+
 
 # Paragraphs shorter than this are skipped (one-liners, headers, list bullets
 # of a couple words). Tunable; 80 is a reasonable cut.
@@ -97,6 +104,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--old", type=Path, required=True)
     parser.add_argument("--destinations", type=Path, nargs="+", required=True)
     parser.add_argument("--allowlist", type=Path, default=None)
+    add_to_parser(parser, TOOL_META)
     args = parser.parse_args(argv)
 
     allowlist = _load_allowlist(args.allowlist)
