@@ -558,6 +558,12 @@ properties:
       Maintenance push (cloud-gated, not errors):
       - 28 Blades severely worn (cloud wear%-gated push)
       - 30 Maintenance reminder — maintain robot soon
+      Observed but UNDECODED (in probe corpus / NOVEL log; meaning not yet pinned.
+      Do NOT add to error_codes.py until decoded — need a labelled live capture):
+      - 20 — first NOVEL 2026-05-25; x3 in probe_log_20260520 (patrol run), inside a
+        maintenance/mow sequence just before 33/36/63. Meaning unknown.
+      - 72 — first NOVEL 2026-06-01; x3 in probe_log_20260520, isolated near s2p1
+        state=5 (returning). Meaning unknown.
 
       Watch out — corrected vs earlier / vacuum readings (evidence in verifications):
       - 28 is the cloud wear%-gated BLADE-WEAR push, NOT an off-dock-relocate
@@ -575,13 +581,24 @@ properties:
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-06-01"
+      last_seen: "2026-06-05"
       decoded: confirmed
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:62"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
       apk: "ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:2"
     verifications:
+      - date: "2026-06-05"
+        status: partial
+        claim: |
+          Two s2p2 codes are seen on the wire but NOT yet decoded (recorded in the
+          semantic block's "Observed but UNDECODED" list, kept OUT of
+          error_codes.py per the confidence gate): s2p2=20 (first NOVEL 2026-05-25,
+          x3 in probe_log_20260520 patrol run, in a maintenance/mow sequence before
+          33/36/63) and s2p2=72 (first NOVEL 2026-06-01, x3 in probe_log_20260520,
+          isolated near s2p1 state=5 returning). Meanings need a labelled live
+          capture before they can be named.
+        evidence: "probe_log_20260520_131350.jsonl: s2p2=20 x3, s2p2=72 x3; NOVEL log 2026-05-25 (20) + 2026-06-01 (72)"
       - date: "2026-05-15"
         status: verified
         claim: |
@@ -871,6 +888,21 @@ properties:
       integration_code: "custom_components/dreame_a2_mower/protocol/config_s2p51.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p51 multiplexed-config shapes"
       apk: "ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:51"
+    open_questions:
+      - "Undecoded s2p51 shape {'type': 0|1} — NOT handled by decode_s2p51 (raises
+        S2P51DecodeError 'unknown payload shape' at config_s2p51.py:125 → _property_apply
+        logs a one-shot [PROTOCOL_NOVEL] WARNING and drops it). First seen 2026-06-03
+        20:04-20:05 during patrol-point editing; a single-key 0/1 toggle. Which
+        setting it carries is unknown — CFG-DIFF capture needed (toggle one
+        patrol-related app setting, snapshot getCFG, watch s2p51)."
+    verifications:
+      - date: "2026-06-05"
+        status: partial
+        claim: |
+          New single-key s2p51 shape {'type': 0|1} observed on the wire, NOT yet
+          decoded (decode_s2p51 raises on it; the value is dropped after a
+          [PROTOCOL_NOVEL] WARNING). Toggle (0/1) seen during patrol-point editing.
+        evidence: "probe_log 2026-06-03 20:04:59 {'type': 1}, 20:05:01 {'type': 0}; config_s2p51.py:125 raises 'unknown payload shape'"
 
   - id: "s2p52"
     siid: 2
