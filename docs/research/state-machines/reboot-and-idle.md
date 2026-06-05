@@ -274,4 +274,4 @@ Entities reading CloudState that need reboot persistence are inherently `YELLOW`
 2. **Default to literal idle** — area accumulators (`area_mowed_m2`, `session_distance_m`), session-scoped distances, boolean fault flags (`obstacle_flag`, `drop_tilt`, `bumper`, `lift`, `battery_temp_low` → False by default at boot).
 3. **Mark unavailable** — live-telemetry rates, current-session ETA, things only meaningful mid-session; CFG-backed settings during the brief poll window can show `available = False` rather than Unknown.
 
-The audit verifier (`tools/state_machine_audit.py`) produces the ranked list automatically; this matrix documents the prescriptive targets.
+The audit verifier (`tools/state_machine/state_machine_audit.py`) produces the ranked list automatically; this matrix documents the prescriptive targets.

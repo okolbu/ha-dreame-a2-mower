@@ -1,7 +1,7 @@
 """Tests for class-attribute entity discovery."""
 from __future__ import annotations
 
-from tools.state_machine_audit_discover import discover_entities
+from tools.state_machine.state_machine_audit_discover import discover_entities
 
 
 def test_discover_finds_snapshot_attribute_entities():

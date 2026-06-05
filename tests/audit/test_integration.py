@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 
 def _run() -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", "tools.state_machine_audit"],
+        [sys.executable, "-m", "tools.state_machine.state_machine_audit"],
         cwd=str(ROOT),
         capture_output=True,
         text=True,

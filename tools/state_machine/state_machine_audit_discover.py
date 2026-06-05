@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CCDIR = (
-    Path(__file__).resolve().parent.parent
+    Path(__file__).resolve().parent.parent.parent
     / "custom_components"
     / "dreame_a2_mower"
 )

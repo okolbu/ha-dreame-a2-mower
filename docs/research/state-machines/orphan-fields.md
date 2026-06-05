@@ -13,7 +13,7 @@ re-derive their purpose every release.
 
 > **How to refresh this list.** Re-run the audit:
 > ```bash
-> python3 -m tools.state_machine_audit | tail
+> python3 -m tools.state_machine.state_machine_audit | tail
 > ```
 > The "Summary: ... + N orphan MowerState fields" line is the canonical
 > count. The full sorted list is in the orphan-fields section of the

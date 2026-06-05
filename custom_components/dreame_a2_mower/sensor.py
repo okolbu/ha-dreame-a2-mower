@@ -145,7 +145,7 @@ async def async_setup_entry(
 # tests/state_machine/test_new_dimension_sensors.py: DreameA2CurrentActivitySensor,
 #     DreameA2LocationSensor, DreameA2PositioningHealthSensor,
 #     DreameA2MqttConnectivitySensor
-# tools/state_machine_audit_fake_coord.py: _active_fault_text,
+# tools/state_machine/state_machine_audit_fake_coord.py: _active_fault_text,
 #     _describe_error_or_none, _format_active_selection,
 #     _api_endpoints_value, _freshness_value
 #

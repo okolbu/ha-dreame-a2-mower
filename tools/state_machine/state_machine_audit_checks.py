@@ -49,7 +49,7 @@ def load_expectations(path: Path) -> dict[str, Expectation]:
 def _compute_snapshot_fields() -> frozenset[str]:
     # Reuse the test harness's HA stubs if not already in place.
     if "homeassistant" not in sys.modules:
-        sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tests"))
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "tests"))
         import conftest  # noqa: F401
 
     from custom_components.dreame_a2_mower.mower.state_snapshot import (
@@ -136,7 +136,7 @@ def check_sourcing(ed: "EntityDescriptor") -> Result:
     GREEN: no MowerState reads of snapshot-owned fields.
     RED:   any MowerState read of a snapshot-owned field.
     """
-    from tools.state_machine_audit_discover import EntityDescriptor  # noqa: F401
+    from tools.state_machine.state_machine_audit_discover import EntityDescriptor  # noqa: F401
 
     bad = _fields_read_from_mower_state(ed.value_fn_src) & SNAPSHOT_FIELDS
     if bad:
@@ -168,7 +168,7 @@ def check_idle(ed: "EntityDescriptor", exp: Expectation) -> Result:
     missing fake-coord attribute — i.e. the audit harness needs a small
     extension; not a true failure of the entity.
     """
-    from tools.state_machine_audit_fake_coord import observe_cold_value
+    from tools.state_machine.state_machine_audit_fake_coord import observe_cold_value
 
     arg_kind = (
         "data" if ed.value_fn_src.lstrip().startswith("lambda s:")
@@ -206,7 +206,7 @@ def check_idle(ed: "EntityDescriptor", exp: Expectation) -> Result:
     )
 
 
-from tools.state_machine_audit_discover import classify_holder
+from tools.state_machine.state_machine_audit_discover import classify_holder
 
 
 def check_reboot(ed: "EntityDescriptor", exp: Expectation) -> Result:
@@ -265,7 +265,7 @@ def find_orphan_fields(
     """
     if all_fields is None:
         if "homeassistant" not in sys.modules:
-            sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "tests"))
+            sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "tests"))
             import conftest  # noqa: F401
         from custom_components.dreame_a2_mower.mower.state import MowerState
         all_fields = {f.name for f in dataclasses.fields(MowerState)}

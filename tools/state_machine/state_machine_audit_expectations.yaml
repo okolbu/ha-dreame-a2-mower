@@ -1,7 +1,7 @@
 # State-machine audit expectations
 #
 # One entry per entity, keyed by `<platform>.<key>`. Drives the audit
-# verifier in tools/state_machine_audit.py.
+# verifier in tools/state_machine/state_machine_audit.py.
 #
 # Schema:
 #   <platform>.<key>:

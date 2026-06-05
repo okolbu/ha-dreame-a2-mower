@@ -20,7 +20,7 @@ from typing import Any
 # Make sure the integration package is importable. tests/conftest.py
 # stubs HA; reuse the same pattern when this module is imported outside
 # of pytest.
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parent.parent.parent
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 

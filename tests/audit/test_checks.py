@@ -3,10 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from tools.state_machine_audit_checks import load_expectations
+from tools.state_machine.state_machine_audit_checks import load_expectations
 
 ROOT = Path(__file__).resolve().parent.parent.parent
-YAML = ROOT / "tools" / "state_machine_audit_expectations.yaml"
+YAML = ROOT / "tools" / "state_machine" / "state_machine_audit_expectations.yaml"
 
 
 def test_load_expectations_parses_known_entries():
@@ -21,7 +21,7 @@ def test_load_expectations_parses_known_entries():
 
 
 def test_load_expectations_raises_on_missing_file():
-    from tools.state_machine_audit_checks import load_expectations
+    from tools.state_machine.state_machine_audit_checks import load_expectations
 
     try:
         load_expectations(Path("/nonexistent/path.yaml"))
@@ -30,8 +30,8 @@ def test_load_expectations_raises_on_missing_file():
     raise AssertionError("expected FileNotFoundError")
 
 
-from tools.state_machine_audit_discover import EntityDescriptor
-from tools.state_machine_audit_checks import (
+from tools.state_machine.state_machine_audit_discover import EntityDescriptor
+from tools.state_machine.state_machine_audit_checks import (
     SNAPSHOT_FIELDS,
     check_sourcing,
     Expectation,
@@ -76,7 +76,7 @@ def test_sourcing_red_when_battery_reads_mower_state():
     assert "battery_percent" in r.detail
 
 
-from tools.state_machine_audit_checks import check_idle
+from tools.state_machine.state_machine_audit_checks import check_idle
 
 
 def test_idle_green_when_mower_in_dock_returns_true():
@@ -126,7 +126,7 @@ def test_idle_red_when_value_does_not_match_literal():
     assert r.status == "red"
 
 
-from tools.state_machine_audit_checks import check_reboot
+from tools.state_machine.state_machine_audit_checks import check_reboot
 
 
 def test_reboot_green_when_battery_reads_snapshot():
@@ -195,7 +195,7 @@ def test_reboot_green_when_unavailable_ok():
     assert r.status == "green"
 
 
-from tools.state_machine_audit_checks import find_orphan_fields
+from tools.state_machine.state_machine_audit_checks import find_orphan_fields
 
 
 def test_find_orphan_fields_returns_unread_names():

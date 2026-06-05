@@ -1,7 +1,7 @@
 """Tests for entity discovery."""
 from __future__ import annotations
 
-from tools.state_machine_audit_discover import discover_entities
+from tools.state_machine.state_machine_audit_discover import discover_entities
 
 
 def test_discover_returns_known_entity_count_floor():
@@ -50,7 +50,7 @@ def test_discover_finds_mower_in_dock():
     assert "mower_in_dock" in keys
 
 
-from tools.state_machine_audit_discover import classify_holder
+from tools.state_machine.state_machine_audit_discover import classify_holder
 
 
 def test_classify_snapshot_read():

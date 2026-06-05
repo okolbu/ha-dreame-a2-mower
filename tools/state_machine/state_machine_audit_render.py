@@ -1,14 +1,14 @@
 """Markdown renderer for the entity-sources audit (Doc 3)."""
 from __future__ import annotations
 
-from tools.state_machine_audit_discover import EntityDescriptor, classify_holder
-from tools.state_machine_audit_checks import Result
+from tools.state_machine.state_machine_audit_discover import EntityDescriptor, classify_holder
+from tools.state_machine.state_machine_audit_checks import Result
 
 
 HEADER = """\
 # Doc 3 — Entity → Field Dependency Matrix
 
-> **Generated** by `tools/state_machine_audit.py`. Do not hand-edit; rerun the
+> **Generated** by `tools/state_machine/state_machine_audit.py`. Do not hand-edit; rerun the
 > audit instead. Spec:
 > `docs/superpowers/specs/2026-05-13-state-machine-audit-design.md`.
 

@@ -1,7 +1,7 @@
 """Tests for the audit fake coordinator."""
 from __future__ import annotations
 
-from tools.state_machine_audit_fake_coord import build_fake_coord
+from tools.state_machine.state_machine_audit_fake_coord import build_fake_coord
 
 
 def test_fake_coord_has_state_machine_snapshot():
@@ -27,7 +27,7 @@ def test_fake_coord_has_cloud_state():
     assert coord.cloud_state.cfg == {}
 
 
-from tools.state_machine_audit_fake_coord import observe_cold_value
+from tools.state_machine.state_machine_audit_fake_coord import observe_cold_value
 
 
 def test_observe_snapshot_field_returns_initial():

@@ -1,6 +1,6 @@
 # Doc 3 — Entity → Field Dependency Matrix
 
-> **Generated** by `tools/state_machine_audit.py`. Do not hand-edit; rerun the
+> **Generated** by `tools/state_machine/state_machine_audit.py`. Do not hand-edit; rerun the
 > audit instead. Spec:
 > `docs/superpowers/specs/2026-05-13-state-machine-audit-design.md`.
 

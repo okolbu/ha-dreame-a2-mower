@@ -9,7 +9,13 @@ import argparse
 import sys
 from pathlib import Path
 
-from tools.state_machine_audit_checks import (
+from tools._toolmeta import add_to_parser
+
+TOOL_META = {"domain": "state_machine", "run_by": "owner",
+    "when": "When verifying entity value-source wiring after coordinator/entity changes.",
+    "summary": "Audit how every entity sources its value (sourcing/idle/reboot/orphan-field checks)."}
+
+from tools.state_machine.state_machine_audit_checks import (
     Result,
     check_idle,
     check_reboot,
@@ -17,7 +23,7 @@ from tools.state_machine_audit_checks import (
     find_orphan_fields,
     load_expectations,
 )
-from tools.state_machine_audit_discover import discover_entities
+from tools.state_machine.state_machine_audit_discover import discover_entities
 
 EXPECTATIONS_PATH = Path(__file__).resolve().parent / "state_machine_audit_expectations.yaml"
 
@@ -47,6 +53,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--quiet", action="store_true", help="Only print the final tally.",
     )
+    add_to_parser(parser, TOOL_META)
     args = parser.parse_args(argv)
 
     expectations = load_expectations(EXPECTATIONS_PATH)
@@ -88,7 +95,7 @@ def main(argv: list[str] | None = None) -> int:
             print()
 
     if args.write_doc3:
-        from tools.state_machine_audit_render import render_doc3
+        from tools.state_machine.state_machine_audit_render import render_doc3
         args.write_doc3.parent.mkdir(parents=True, exist_ok=True)
         args.write_doc3.write_text(render_doc3(entities, results))
         print(f"Wrote Doc 3 → {args.write_doc3}")

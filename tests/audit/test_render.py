@@ -1,9 +1,9 @@
 """Tests for the markdown renderer."""
 from __future__ import annotations
 
-from tools.state_machine_audit_render import render_doc3
-from tools.state_machine_audit_discover import EntityDescriptor
-from tools.state_machine_audit_checks import Result
+from tools.state_machine.state_machine_audit_render import render_doc3
+from tools.state_machine.state_machine_audit_discover import EntityDescriptor
+from tools.state_machine.state_machine_audit_checks import Result
 
 
 def test_render_doc3_emits_table_with_headers():
