@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Wire-census coverage guard CLI.
 
-  python tools/wire_census.py                       # regenerate docs/research/wire-census.json
-  python tools/wire_census.py --seed                # print inventory seed blocks
-  python tools/wire_census.py --unknowns            # report unregistered values + circumstance
+  python tools/inventory/wire_census.py                       # regenerate docs/research/wire-census.json
+  python tools/inventory/wire_census.py --seed                # print inventory seed blocks
+  python tools/inventory/wire_census.py --unknowns            # report unregistered values + circumstance
 
 Probe logs default to the dev-box parent dir; override with --log-dir.
 """

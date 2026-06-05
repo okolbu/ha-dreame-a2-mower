@@ -6,9 +6,9 @@ described in docs/research/inventory/README.md, and (in a later step)
 renders generated/g2408-canonical.md.
 
 CLI:
-    python tools/inventory_gen.py                   # full generate
-    python tools/inventory_gen.py --validate-only   # schema check only
-    python tools/inventory_gen.py PATH              # validate a different file
+    python tools/inventory/inventory_gen.py                   # full generate
+    python tools/inventory/inventory_gen.py --validate-only   # schema check only
+    python tools/inventory/inventory_gen.py PATH              # validate a different file
 """
 from __future__ import annotations
 
@@ -63,7 +63,7 @@ _REQUIRED_TOP_LEVEL_KEYS: tuple[str, ...] = (
 
 _BANNER = (
     "<!-- DO NOT EDIT BY HAND. Source: docs/research/inventory/inventory.yaml. "
-    "Regenerate via `python tools/inventory_gen.py`. -->\n\n"
+    "Regenerate via `python tools/inventory/inventory_gen.py`. -->\n\n"
 )
 
 # Order in which sections render. Names mirror inventory.yaml top-level keys.
@@ -120,7 +120,7 @@ def _validate_row(section: str, idx: int, row: dict[str, Any]) -> Iterable[str]:
             elif wire not in _UNIT_VOCAB:
                 yield (
                     f"{section}[{rid}].unit.wire: '{wire}' not in vocabulary "
-                    f"(extend tools/inventory_gen.py:_UNIT_VOCAB if intentional)"
+                    f"(extend tools/inventory/inventory_gen.py:_UNIT_VOCAB if intentional)"
                 )
     status = row.get("status")
     if status is not None:
@@ -373,7 +373,7 @@ def main(argv: list[str] | None = None) -> int:
     coverage_path = out_dir / "coverage-report.md"
     if not coverage_path.exists():
         coverage_path.write_text(
-            _BANNER + "# Coverage Report\n\n_Run `python tools/inventory_audit.py` to populate._\n"
+            _BANNER + "# Coverage Report\n\n_Run `python tools/inventory/inventory_audit.py` to populate._\n"
         )
     print(f"ok: rendered {canonical_path}")
     return 0
