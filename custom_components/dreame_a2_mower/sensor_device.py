@@ -39,24 +39,24 @@ from ._sensor_base import (
 # ---------------------------------------------------------------------------
 
 # Cache the integration version once at module import time.
-# manifest.json is static for the lifetime of the HA process; reading it
-# repeatedly inside native_value would hit the event-loop blocking detector
-# on every state refresh.  Import time is before the event loop enters its
-# strict async-only mode, so a synchronous read here is safe.
-_MANIFEST_VERSION: str | None = None
+# manifest.json is static for the lifetime of the HA process. Read it ONCE at
+# module-import time — HA imports integration modules in an import executor
+# (off the event loop), so the synchronous read here is safe. Reading it lazily
+# from native_value (the previous behaviour) landed on the event loop and tripped
+# HA 2026.6's blocking-call detector (read_text inside the loop).
+def _read_manifest_version() -> str:
+    try:
+        _manifest_path = Path(__file__).parent / "manifest.json"
+        return str(json.loads(_manifest_path.read_text()).get("version", "unknown"))
+    except Exception:  # noqa: BLE001
+        return "unknown"
+
+
+_MANIFEST_VERSION: str = _read_manifest_version()
 
 
 def _manifest_version() -> str:
-    """Return the integration version string, reading manifest.json at most once."""
-    global _MANIFEST_VERSION
-    if _MANIFEST_VERSION is None:
-        _manifest_path = Path(__file__).parent / "manifest.json"
-        try:
-            _MANIFEST_VERSION = str(
-                json.loads(_manifest_path.read_text()).get("version", "unknown")
-            )
-        except Exception:  # noqa: BLE001
-            _MANIFEST_VERSION = "unknown"
+    """Return the integration version string (read once at import)."""
     return _MANIFEST_VERSION
 
 
@@ -814,6 +814,13 @@ class DreameA2PickedSessionSensor(
     _attr_has_entity_name = True
     _attr_name = "Picked session"
     _attr_icon = "mdi:history"
+    # The summary dict (track/legs/segments) routinely exceeds the recorder's
+    # 16 KB per-attribute cap, which logs a WARNING and refuses to store it.
+    # These attributes are point-in-time UI payloads, not history — exclude the
+    # whole entity's attributes from the recorder. "*" is homeassistant.const
+    # MATCH_ALL (the recorder's "exclude every attribute" sentinel); the literal
+    # avoids importing a symbol the stubbed-HA test venv doesn't provide.
+    _unrecorded_attributes = frozenset({"*"})
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         super().__init__(coordinator)

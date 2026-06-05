@@ -106,11 +106,16 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      the idle preview as soon as the mower is docked+charging, before the archive finalize.
    - **[DONE — v1.0.23a4] `[F5-DIAG]` confirmation logs removed** after the thread-safety fix
      was live-confirmed (`seed at begin: last_op=107`). All temporary patrol diagnostics gone.
-   - **[TODO] Full integration log-health sweep.** Beyond the thread-safety raise, audit the
-     HA log for any other dreame_a2_mower WARNING/ERROR (the 2026.6 async/thread-safety
-     tightening may have surfaced others) and clean them up so the integration runs warning-
-     free. Pull via `ha core logs` over SSH (HAOS) or WS `system_log/list`; the integration
-     doesn't log to disk.
+   - **[DONE — v1.0.23a5] Log-health sweep.** Audited `system_log/list` (WS) and fixed every
+     real dreame WARNING: (B1) blocking `read_text(manifest.json)` on the loop → read once at
+     import; (B2) deprecated `TrackerEntity` import → new path; (B3) `picked_session` attrs
+     >16KB recorder reject → `_unrecorded_attributes = {"*"}`; (B4) `get_interim_file_url("")`
+     → 40020 → empty-object_name guard; (C1) `80001` device-offline + `routed-action error`
+     NoneType spam → DEBUG; (D) 15 operational `[F5]`/`[novel]` flow/success logs → DEBUG
+     (caught-exception `[F5]` logs kept at WARNING). Remaining low-pri: the `_render_base
+     "never awaited"` RuntimeWarning (entity-write handler `render_fn()` without await,
+     `number.py:678`/`select_global.py:989`); the one-time CloudState-migration notice at
+     WARNING (`__init__.py:40`, could be INFO); a novel `s2p2=54` cloud-text notif (x2).
    - **[FIXED — v1.0.23a3] MQTT callback aborted by off-loop `async_create_task` (HA 2026.6).**
      The activity-transition render trigger called `hass.async_create_task(self._render_base())`
      directly on paho's MQTT thread; HA 2026.6 RAISES on off-loop `async_create_task`, which

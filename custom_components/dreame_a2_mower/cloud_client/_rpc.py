@@ -155,12 +155,15 @@ class _RpcMixin:
             error_code = api_response.get("code") if api_response else None
             self._last_send_error_code = error_code  # F6.8.1
             if error_code:
-                _LOGGER.warning(
+                # 80001 = "device unreachable via cloud relay" — on g2408 this is
+                # a normal asleep mower (fires constantly while it sleeps), so log
+                # it at DEBUG. Any other code is a genuine error -> WARNING.
+                _log = _LOGGER.debug if error_code == 80001 else _LOGGER.warning
+                _log(
                     "Cloud send error %s for %s: %s",
                     error_code, method, api_response.get("msg", "") if api_response else "",
                 )
-                # 80001 = "device unreachable via cloud relay".
-                # On g2408 this is permanent — fast-return None without retrying.
+                # 80001: fast-return None without retrying.
                 if error_code == 80001:
                     return None
             raise _SendFailed(error_code)

@@ -500,7 +500,7 @@ class _LidarOssMixin:
             )
             return
 
-        LOGGER.warning(
+        LOGGER.debug(
             "[F5.6.1] _do_oss_fetch: fetching object_name=%r (attempt #%s)",
             object_name,
             (self.data.pending_session_attempt_count or 0) + 1,
@@ -632,7 +632,7 @@ class _LidarOssMixin:
             LOGGER.warning("[F5.6.1] _do_oss_fetch: archive raised: %s", ex)
             return
 
-        LOGGER.warning(
+        LOGGER.debug(
             "[F5.6.1] _do_oss_fetch: archived session md5=%r area=%.1fm² "
             "duration=%dmin (already_exists=%s)",
             summary.md5,
@@ -650,7 +650,7 @@ class _LidarOssMixin:
         # md5-recycling can be diagnosed and (if needed) the dedup
         # rule reworked to use object_name or start_ts instead.
         if archived_entry is None:
-            LOGGER.warning(
+            LOGGER.debug(
                 "[F5.6.1] _do_oss_fetch: md5 dedup hit — "
                 "object_name=%r start_ts=%s end_ts=%s area=%.1f map_area=%s "
                 "(picker will NOT show a new row; cloud reused md5)",
