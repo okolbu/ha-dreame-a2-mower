@@ -525,7 +525,7 @@ closed with a "won't fix because X" note.
 before a reboot 2026-05-07 and 5 since. All observed entries are
 `category: value` for slots without a `value_catalog` — e.g. `s3p1`
 battery_level (every new percentage triggers), `s5p107` energy_index
-(int 1..250), `s1p53` obstacle_flag (True/False both fire on first
+(int 1..250), `s1p53` bluetooth_connected (True/False both fire on first
 observation). The registry's first-time-seen-value path is correct as
 a log signal but is noise on the user-visible sensor.
 **Done when:** The sensor's `observations` attribute filters out

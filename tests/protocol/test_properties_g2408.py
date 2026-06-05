@@ -26,8 +26,8 @@ def test_property_map_returns_heartbeat_blob_siid_piid():
     assert siid_piid(Property.HEARTBEAT) == (1, 1)
 
 
-def test_property_map_returns_obstacle_flag_siid_piid():
-    assert siid_piid(Property.OBSTACLE_FLAG) == (1, 53)
+def test_property_map_returns_bluetooth_connected_siid_piid():
+    assert siid_piid(Property.BLUETOOTH_CONNECTED) == (1, 53)
 
 
 def test_property_map_returns_multiplexed_config_siid_piid():

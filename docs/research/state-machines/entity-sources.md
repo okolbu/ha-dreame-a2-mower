@@ -21,7 +21,7 @@ worst-of indicator.
 | `binary_sensor.lift` | binary_sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `binary_sensor.mower_in_dock` | binary_sensor | snapshot | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `binary_sensor.mowing_session_active` | binary_sensor | snapshot | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
-| `binary_sensor.obstacle_detected` | binary_sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
+| `binary_sensor.bluetooth_connected` | binary_sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `binary_sensor.photo_consent` | binary_sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `binary_sensor.positioning_failed` | binary_sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `binary_sensor.rain_protection_active` | binary_sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |

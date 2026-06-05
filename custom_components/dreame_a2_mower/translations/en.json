@@ -135,7 +135,7 @@
       }
     },
     "binary_sensor": {
-      "obstacle_detected": { "state": { "off": "No", "on": "Yes" } },
+      "bluetooth_connected": { "state": { "off": "Disconnected", "on": "Connected" } },
       "battery_temp_low": { "state": { "off": "No", "on": "Yes" } },
       "mowing_session_active": { "state": { "off": "No", "on": "Yes" } },
       "drop_tilt": { "state": { "off": "No", "on": "Yes" } },

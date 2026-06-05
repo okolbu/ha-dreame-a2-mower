@@ -14,7 +14,7 @@
 | s1p50 | state_change_ping | empty_dict | WIRED |  |
 | s1p51 | dock_position_update_trigger | empty_dict | WIRED |  |
 | s1p52 | task_end_flush | empty_dict | WIRED |  |
-| s1p53 | obstacle_flag | bool | WIRED |  |
+| s1p53 | bluetooth_connected | bool | WIRED |  |
 | s2p1 | mode | int (enum) | WIRED |  |
 | s2p2 | task_envelope | TASK envelope; multiple op-code classes | WIRED |  |
 | s2p51 | multiplexed_config | shape varies by setting | WIRED |  |
@@ -95,6 +95,19 @@ Should fire before/after s1p3 (OTA progress) pushes.
 **Open questions:**
 - Capture s1p2 transitions during the next firmware update to confirm value semantics.
 - Does g2408 emit CANNOT_UPGRADE (5) when battery is too low for OTA?
+- VALUE-MAP CONFLICT: the upstream dreame-mower fork (different app/device
+lineage) maps s1p2 (FIRMWARE_INSTALL_STATE_PROPERTY) value 2 =
+'new_firmware_available', 3 = 'installing_firmware_after_download', 4 =
+'firmware_download_failed' — which DISAGREES with this entry's apk
+OTAState enum (2=UPGRADING, 3=UPGRADE_SUCCESS, 4=UPGRADE_FAILED). Neither
+is g2408 wire-verified (no OTA captured). If the upstream lineage applies,
+s1p2==2 is the "new firmware available" signal an UpdateEntity would key
+off; if the apk enum applies, availability isn't on s1p2 at all and only
+comes from a cloud OTA-check endpoint (not yet located — the app's
+Current/Latest version fields are not in device/info, which only carries
+`ver`=current fw 4.3.6_0550 and a dynamic `latestStatus` connection enum).
+The next OTA event resolves which lineage is correct.
+
 
 **See also:** `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 1 piid:2`
 
@@ -224,23 +237,26 @@ teardown).
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 1 piid:52`
 
-### s1p53 — `obstacle_flag`
+### s1p53 — `bluetooth_connected`
 
-Set True when the mower detects an obstacle, person, or animal during mowing.
-Never sent False automatically — the HA entity must auto-clear after ~30 s
-of no refresh, otherwise it latches indefinitely.
+Controlling-app BLUETOOTH connection status (bool). True while a Dreame app
+has a BLE connection to the robot; toggles when the app is foregrounded /
+backgrounded. The apk's own name for this slot is "BLE Connection Status",
+and the sibling dreame-mower integration names siid:1 piid:53
+"bluetooth_connected" — both agree, and the user reproduced it at will
+2026-06-05 by entering/leaving the phone app.
 
-Apk names this slot "BLE Connection Status" but g2408 behaviour is
-obstacle-detection: 26 triggers observed in ~15 min near an exclusion zone,
-mean duration ~6.6 s. Cleared to False at 21:04:46 on 2026-04-18 as a
-side-effect of a state transition, not by an obstacle-clear event.
+NOT obstacle detection. The earlier "obstacle_flag" reading was a
+correlation artifact: the 26 toggles seen "near an exclusion zone" coincided
+with the user handling the phone app during that window, not with obstacle
+events. Obstacle/person/animal events are cloud-side push notifications, not
+this MQTT bool.
 
-Separate from human-presence detection, which goes through the Dreame cloud
-push-notification service directly and is not observable via MQTT.
+Integration surface: binary_sensor `bluetooth_connected`
+(device_class CONNECTIVITY). (Was mislabelled `obstacle_detected` /
+MowerState.obstacle_flag before the 2026-06-05 relabel.)
 
-Note: apk name "BLE Connection Status" does not match g2408 wire behaviour.
-
-**See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:61`, `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 1 piid:53`
+**See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:61 + binary_sensor.py (bluetooth_connected)`, `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 1 piid:53; OLD/dreame-mower const.py:53 bluetooth_connected`
 
 ### s2p1 — `mode`
 
@@ -328,6 +344,9 @@ shape by any element > 1 or < 0.
 
 Detail in s2p51_shapes section (Task 11). Confirmed 2026-04-17 through
 2026-04-30 via live toggle testing.
+
+**Open questions:**
+- Undecoded s2p51 shape {'type': 0|1} — NOT handled by decode_s2p51 (raises S2P51DecodeError 'unknown payload shape' at config_s2p51.py:125 → _property_apply logs a one-shot [PROTOCOL_NOVEL] WARNING and drops it). First seen 2026-06-03 20:04-20:05 during patrol-point editing; a single-key 0/1 value. LEAD (dreame-mower cross-ref): that integration treats ALL of s2p51 as a GENERIC 'settings change acknowledgment — re-fetch' trigger (property_misc.py SettingsChangeHandler), not a self-contained value. So {'type': N} is likely a which-category-changed re-fetch trigger (like s2p52), and the actual change lands via a getCFG re-fetch — NOT a value to decode in place. Confirm via CFG-DIFF (toggle a patrol/map setting, watch s2p51 {type} then diff getCFG).
 
 **See also:** `custom_components/dreame_a2_mower/protocol/config_s2p51.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p51 multiplexed-config shapes`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:51`
 
@@ -1555,7 +1574,7 @@ blades-up (area=0) with valid s1p4 position telemetry. estimate_time=900s
 (15 min). Companion to o:107 (cruise to a point).
 
 **Open questions:**
-- Patrol session capture: the live map can't track the mower during patrol despite valid s1p4 (CONFIRMED 2026-06-04 — the return leg after a point patrol was not drawn). Investigate the begin_session/render path. Patrol should be a first-class session_type (op=107/108 / s2p2=51, 0-area).
+- Patrol session capture: a dock-started patrol intermittently mis-typed as maintenance_run and finalized early (CONFIRMED 2026-06-04 — 2nd point patrol + an edge patrol closed early, missing the return leg). ROOT-CAUSED + FIX IN REVIEW (branch fix/patrol-session-type-recording): begin_session wiped the pre-session s2p50 op echo + s2p2=51 clues, so classify fell through to maintenance_run. Fix latches the op ungated (_pending_task_op) and seeds last_task_op at begin_session. AWAITING LIVE RE-CONFIRMATION that a dock-started point + edge patrol both type as patrol and capture the return leg to dock.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
@@ -2114,7 +2133,7 @@ or transient, not negative proof of firmware support. With only 3
 data points this row is kept at `decoded: hypothesized`.
 
 **Open questions:**
-- Capture this endpoint during an AI-obstacle detection event (s1p53 transition).
+- Capture this endpoint during an AI-obstacle detection event (cloud-side trigger; s1p53 is the BLE-connection flag, NOT an obstacle signal).
 - Test whether more cloud dumps over time produce a successful response (cf. MISTA).
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX AIOBS`
@@ -2369,7 +2388,7 @@ between dump 2 and dump 3. Downgraded to `decoded: hypothesized`
 pending further evidence.
 
 **Open questions:**
-- Capture immediately after an obstacle event (s1p53 True transition).
+- Capture immediately after an AI-obstacle event (cloud-side; s1p53 is BLE-connection, NOT obstacle — find the real on-wire trigger).
 - Cross-reference with AIOBS — both apk-described as obstacle endpoints, semantics distinct.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX OBS`
@@ -3989,8 +4008,7 @@ scheduled-start time when the firmware's ambient-temperature check
 refuses to launch the mow. Confirmed 2026-04-27 07:58:02. Drives
 the Dreame app notification "Temperature too low. Frost Protection is
 activated. The Scheduled task will start later." The mower wakes
-briefly, fires this code, optionally runs a quick s1p53 obstacle-
-sensor self-test pulse, then settles back to s2p1=13
+briefly, fires this code, then settles back to s2p1=13
 (CHARGING_COMPLETED) ~10 minutes later. Distinct from code 53
 (scheduled task did start) and code 56 (rain pause during a run).
 
@@ -4772,7 +4790,7 @@ Plausible triggers (none ruled out):
       consecutive samples). Test: decode s1p4 byte layout to extract
       per-sample (x, y); align with segment boundaries.
   (b) Blade-state change (blade off then back on). Test: correlate
-      with s1p53 transitions if s1p53 turns out to be blade-state.
+      with a blade-state signal — but s1p53 is now confirmed the BLE-connection flag (NOT blade-state), so this needs a different signal (none identified yet).
   (c) Cloud-side heartbeat / cadence trigger (e.g., break every N
       seconds). Test: timestamps aren't carried in map[].track,
       but s1p4 timestamps could be used to derive segment-time spans.
