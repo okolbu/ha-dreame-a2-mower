@@ -558,12 +558,16 @@ properties:
       Maintenance push (cloud-gated, not errors):
       - 28 Blades severely worn (cloud wear%-gated push)
       - 30 Maintenance reminder — maintain robot soon
-      Observed but UNDECODED (in probe corpus / NOVEL log; meaning not yet pinned.
-      Do NOT add to error_codes.py until decoded — need a labelled live capture):
-      - 20 — first NOVEL 2026-05-25; x3 in probe_log_20260520 (patrol run), inside a
-        maintenance/mow sequence just before 33/36/63. Meaning unknown.
-      - 72 — first NOVEL 2026-06-01; x3 in probe_log_20260520, isolated near s2p1
-        state=5 (returning). Meaning unknown.
+      Observed on g2408, decode CROSS-REFERENCED from the sibling dreame-mower
+      integration's device_code.py (siid:2 piid:2 — SAME channel; its table matches
+      ALL our independently-confirmed g2408 codes: 24/28/30/43/51/54/71). NOT yet
+      g2408-wire-LABELLED, so kept OUT of error_codes.py per the confidence gate:
+      - 20 — "Sensor error" (dreame-mower name SENSOR, type ERROR). [presumed]
+        Corpus: x3 in probe_log_20260520, in a maintenance/mow sequence before 33/36/63.
+      - 72 — "Returning to dock after pause timeout" (dreame-mower PAUSE_TIMEOUT_RETURNING,
+        type INFO). [partial] — sibling of confirmed 71 (idle-timeout-returning) AND
+        corroborated by the g2408 corpus (72 fires near s2p1 state=5 returning, x3 in
+        probe_log_20260520).
 
       Watch out — corrected vs earlier / vacuum readings (evidence in verifications):
       - 28 is the cloud wear%-gated BLADE-WEAR push, NOT an off-dock-relocate
@@ -591,14 +595,17 @@ properties:
       - date: "2026-06-05"
         status: partial
         claim: |
-          Two s2p2 codes are seen on the wire but NOT yet decoded (recorded in the
-          semantic block's "Observed but UNDECODED" list, kept OUT of
-          error_codes.py per the confidence gate): s2p2=20 (first NOVEL 2026-05-25,
-          x3 in probe_log_20260520 patrol run, in a maintenance/mow sequence before
-          33/36/63) and s2p2=72 (first NOVEL 2026-06-01, x3 in probe_log_20260520,
-          isolated near s2p1 state=5 returning). Meanings need a labelled live
-          capture before they can be named.
-        evidence: "probe_log_20260520_131350.jsonl: s2p2=20 x3, s2p2=72 x3; NOVEL log 2026-05-25 (20) + 2026-06-01 (72)"
+          s2p2=20 and s2p2=72 decode CROSS-REFERENCED from the sibling dreame-mower
+          integration (custom_components/dreame_mower/dreame/property/device_code.py,
+          explicitly siid:2 piid:2): 20 = "Sensor error" (SENSOR, ERROR); 72 =
+          "Returning to dock after pause timeout" (PAUSE_TIMEOUT_RETURNING, INFO). That
+          table matches ALL our independently-confirmed g2408 codes (24/28/30/43/51/54/71
+          — e.g. 51 "Cruise task started", 54 "Low battery returning", 71 "idle-timeout
+          returning"), so it is a high-trust reference. 72 is also corpus-corroborated
+          (fires near s2p1 state=5 returning) and is the sibling of confirmed 71. Kept
+          OUT of error_codes.py until g2408-wire-LABELLED (a deliberate capture: trigger
+          a pause-timeout return / a sensor fault and confirm the code).
+        evidence: "OLD/alternatives_archive_2026-05-05/alternatives/dreame-mower/custom_components/dreame_mower/dreame/property/device_code.py:338 (code 20), :650 (code 72); probe_log_20260520_131350.jsonl s2p2=20 x3 / s2p2=72 x3 near state=5"
       - date: "2026-05-15"
         status: verified
         claim: |
@@ -892,17 +899,24 @@ properties:
       - "Undecoded s2p51 shape {'type': 0|1} — NOT handled by decode_s2p51 (raises
         S2P51DecodeError 'unknown payload shape' at config_s2p51.py:125 → _property_apply
         logs a one-shot [PROTOCOL_NOVEL] WARNING and drops it). First seen 2026-06-03
-        20:04-20:05 during patrol-point editing; a single-key 0/1 toggle. Which
-        setting it carries is unknown — CFG-DIFF capture needed (toggle one
-        patrol-related app setting, snapshot getCFG, watch s2p51)."
+        20:04-20:05 during patrol-point editing; a single-key 0/1 value. LEAD (dreame-mower
+        cross-ref): that integration treats ALL of s2p51 as a GENERIC 'settings change
+        acknowledgment — re-fetch' trigger (property_misc.py SettingsChangeHandler), not a
+        self-contained value. So {'type': N} is likely a which-category-changed re-fetch
+        trigger (like s2p52), and the actual change lands via a getCFG re-fetch — NOT a
+        value to decode in place. Confirm via CFG-DIFF (toggle a patrol/map setting,
+        watch s2p51 {type} then diff getCFG)."
     verifications:
       - date: "2026-06-05"
         status: partial
         claim: |
-          New single-key s2p51 shape {'type': 0|1} observed on the wire, NOT yet
-          decoded (decode_s2p51 raises on it; the value is dropped after a
-          [PROTOCOL_NOVEL] WARNING). Toggle (0/1) seen during patrol-point editing.
-        evidence: "probe_log 2026-06-03 20:04:59 {'type': 1}, 20:05:01 {'type': 0}; config_s2p51.py:125 raises 'unknown payload shape'"
+          New single-key s2p51 shape {'type': 0|1} observed on the wire, NOT decoded
+          (decode_s2p51 raises; value dropped after a [PROTOCOL_NOVEL] WARNING). Seen
+          during patrol-point editing. LEAD: the sibling dreame-mower integration models
+          s2p51 (siid2 piid51 'settings_change') as a generic 'settings changed — re-fetch'
+          ACK rather than decoding the payload, so {'type': N} is probably a re-fetch
+          trigger (which-category changed), with the real value arriving via getCFG.
+        evidence: "probe_log 2026-06-03 20:04:59 {'type': 1}, 20:05:01 {'type': 0}; config_s2p51.py:125 raises; OLD/.../dreame-mower/.../property/property_misc.py:100 SettingsChangeHandler (generic ack model)"
 
   - id: "s2p52"
     siid: 2
