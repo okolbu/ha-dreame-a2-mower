@@ -44,7 +44,7 @@ and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
      ⇒ `read_only_confirmed` and retract the docstring claim. One line in `CONTROL_MODES` +
      the matching inventory row per flip (the sync test enforces both).
    - **Bucket B actions:** s5a2/3/4 (may 80001), op=200, op=10, op=12 — confirm they land.
-   Probe tooling: `tools/probe_pre_write.py`.
+   Probe tooling: `tools/probes/probe_pre_write.py`.
 3. ~~**Inventory accuracy:** `o10` name drift + stale `actions.py` line numbers.~~
    **DONE (2026-06-04).** o10 corrected (it DOES fire op=10 via GENERATE_3D_MAP; the
    apk-uploadMap vs integration-generate_3dmap name conflict is now a flagged open question +
@@ -358,7 +358,7 @@ of reporting false success. The ONE remaining unknown — the app's actual
 write RPC — is the Phase-3 HTTPS-sniff work tracked under "Determine whether
 HA writes drive the device…" below; it is NOT specific to these two fields.
 **Cross-refs:** `docs/research/wire-captures/pre-write-r3-2026-06-03.md`;
-`tools/probe_pre_write.py`; `inventory.yaml § PRE` + `§ s6p2` (2026-06-03
+`tools/probes/probe_pre_write.py`; `inventory.yaml § PRE` + `§ s6p2` (2026-06-03
 verifications); historical doc; `docs/research/cloud-write-reference.md`.
 
 ### Capture zone / edge action codes for SCHEDULE blob
@@ -899,7 +899,7 @@ persisted format).** Scope agreed 2026-06-03:
      patrol it would still type `patrol` — defensive only.)
   4. **House per-point/edge settings + `photo_list`** on the patrol session record so
      they're tied to the session — gated on T4 (image location) for the photos.
-  5. **Migration:** rebuild existing sessions via `tools/rebuild_session.py` once the
+  5. **Migration:** rebuild existing sessions via `tools/session/rebuild_session.py` once the
      format lands (the 2026-06-03 point patrol currently reads `[Mowing]` on disk).
 - **[T4] Auto-Capture photo retrieval (blocked-by-path).** Photos are referenced in
   the summary `photo_list` (real filenames) but the bytes are not yet fetchable — the
@@ -1146,7 +1146,7 @@ reads the current PRE list from `cs.cfg["PRE"]` and mutates only
 the index it owns; live test on g2408 confirms PRE round-trips at
 length 2 after a "Mowing Efficiency" toggle.
 **Status:** mostly moot 2026-06-03 — the live test was performed
-(`tools/probe_pre_write.py`) and `t='PRE'` returned `out[0].r=-3`: the
+(`tools/probes/probe_pre_write.py`) and `t='PRE'` returned `out[0].r=-3`: the
 device has NO routed-action setter for PRE, so a PRE write never reaches
 the firmware regardless of array length. The "inflating a field firmware
 kept short" concern is therefore academic (nothing is stored device-side).
@@ -1160,7 +1160,7 @@ PRE write path that *does* apply.
 **Cross-refs:** `docs/research/wire-captures/pre-write-r3-2026-06-03.md`;
 `custom_components/dreame_a2_mower/protocol/cfg_action.py:162`;
 `custom_components/dreame_a2_mower/select.py:175-200`; live probe
-`tools/probe_pre_write.py`.
+`tools/probes/probe_pre_write.py`.
 
 ### BAT[2] hardcoded `1` in build helpers
 

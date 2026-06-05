@@ -253,7 +253,7 @@ Every procedure follows this structure:
 ### Procedure
 1. Schedule `dreame_cloud_dump.py` to run hourly for 1-2 weeks.
 2. Each run writes a fresh dump under `dreame_cloud_dumps/`.
-3. Periodically (every few days), run `python tools/inventory_audit.py --consistency` to surface any seen_on_wire / value-catalog contradictions.
+3. Periodically (every few days), run `python tools/inventory/inventory_audit.py --consistency` to surface any seen_on_wire / value-catalog contradictions.
 4. After the collection period, walk all dumps and look for endpoint flips:
    ```bash
    python -c "

@@ -1,4 +1,4 @@
-<!-- DO NOT EDIT BY HAND. Source: docs/research/inventory/inventory.yaml. Regenerate via `python tools/inventory_gen.py`. -->
+<!-- DO NOT EDIT BY HAND. Source: docs/research/inventory/inventory.yaml. Regenerate via `python tools/inventory/inventory_gen.py`. -->
 
 # g2408 Protocol — Canonical Reference
 

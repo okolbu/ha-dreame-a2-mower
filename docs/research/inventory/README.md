@@ -16,7 +16,7 @@ mower.
 |------|------|
 | `../../custom_components/dreame_a2_mower/inventory.yaml` | Source of truth. Edit by hand. |
 | `generated/g2408-canonical.md` | Human-readable reference. Generated. |
-| `generated/coverage-report.md` | Audit complement (auto-generated, gitignored; run `tools/inventory_audit.py` locally). |
+| `generated/coverage-report.md` | Audit complement (auto-generated, gitignored; run `tools/inventory/inventory_audit.py` locally). |
 | `README.md` | This file. |
 
 ## Adding a row
@@ -85,7 +85,7 @@ A row matching multiple conditions picks the first row in the table.
 ## Unit vocabulary
 
 `unit.wire` values are validated against a closed list. To add a new wire
-encoding, extend `_UNIT_VOCAB` in `tools/inventory_gen.py` in the same
+encoding, extend `_UNIT_VOCAB` in `tools/inventory/inventory_gen.py` in the same
 commit as the row that introduces it. Current vocab:
 
 ```
@@ -99,18 +99,18 @@ raw_bytes, string
 
 ```bash
 # Render canonical doc + coverage report:
-python tools/inventory_gen.py
+python tools/inventory/inventory_gen.py
 
 # Audit committed corpus against the inventory; non-zero exit if any
 # observed slot is missing OR if any inventory claim contradicts the corpus:
-python tools/inventory_audit.py
+python tools/inventory/inventory_audit.py
 
 # Run only the consistency checks (skip presence checks):
-python tools/inventory_audit.py --consistency
+python tools/inventory/inventory_audit.py --consistency
 
 # Read-only live probe (asks before each batch); produces a delta
 # JSON for the reviewer to merge by hand:
-python tools/inventory_probe.py --read-only
+python tools/probes/inventory_probe.py --read-only
 ```
 
 ### Consistency checks

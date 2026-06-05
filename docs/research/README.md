@@ -11,7 +11,7 @@ These docs are kept current. Each carries a **Status — AUTHORITATIVE** banner 
 | `../../custom_components/dreame_a2_mower/entity-inventory.yaml` | **Per-HA-entity source of truth** (read source, write path, status per entity class). Replaced `entity-validation-matrix.md` 2026-05-31 — the matrix had gone 3 weeks stale; its content was re-verified from code into this structured registry, which a CI gate keeps complete. The old matrix is archived at `OLD/ha-dreame-a2-mower-docs/research/entity-validation-matrix.md`. |
 | [`cloud-write-reference.md`](cloud-write-reference.md) | Cloud transport layer: auth, endpoints, payload framing, response codes for every cloud surface (routed-action / set_cfg / setDeviceData / chunked-batch). |
 | [`inventory/generated/g2408-canonical.md`](inventory/generated/g2408-canonical.md) | Per-slot semantic for every property / event / action / CFG key (auto-generated from `inventory/inventory.yaml`). |
-| `inventory/generated/coverage-report.md` | Inventory coverage status — auto-generated, **gitignored** (data-dependent; run `tools/inventory_audit.py` locally). |
+| `inventory/generated/coverage-report.md` | Inventory coverage status — auto-generated, **gitignored** (data-dependent; run `tools/inventory/inventory_audit.py` locally). |
 
 ## Stable overview — read for context
 
