@@ -1632,13 +1632,27 @@ properties:
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-05"
       decoded: hypothesized
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:131"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
+    verifications:
+      - date: "2026-06-05"
+        status: presumed
+        claim: |
+          A SECOND value 12 is now observed (first 2026-05-25; previously only 7).
+          Both fire during s2p1=WORKING. With two fixed values (7, 12) and NO
+          monotonic increase, the existing "slam_relocate_counter" name is doubtful
+          — this behaves like a MODE/STATUS, not a counter. POTENTIAL name from the
+          sibling dreame-mower integration: siid5/piid104 "task_status" (NOT g2408
+          truth). The grounded circumstance still holds: it fires alongside the
+          s2p65 TASK_SLAM_RELOCATE bursts — so 7/12 are likely relocate-mode or
+          relocate-result codes. Confirm by triggering relocalization in differing
+          conditions and watching whether the value tracks the outcome.
+        evidence: "corpus: value 12 first 2026-05-25 12:32:24, both 7+12 during s2p1=WORKING; co-occurs with s2p65 TASK_SLAM_RELOCATE; OLD/dreame-mower const.py:80 'task_status' (POTENTIAL only)"
     open_questions:
-      - "Is the constant value 7 a retry count, mode enum, or firmware constant?"
+      - "7/12 a relocate mode/result enum (fires with s2p65 relocate)? 'counter' name is doubtful (only 2 fixed values). dreame-mower potential: 'task_status'."
 
   - id: "s5p105"
     siid: 5
@@ -1714,13 +1728,28 @@ properties:
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-05"
       decoded: hypothesized
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:139"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
+    verifications:
+      - date: "2026-06-05"
+        status: presumed
+        claim: |
+          LEAD: s5p106 is likely a GPS-related COUNT — best candidate GPS SATELLITE
+          COUNT. POTENTIAL name (sibling integration, NOT g2408 truth):
+          ioBroker.dreame labels siid5/piid106 "GPS Satellites (5-106)". The wire
+          circumstance corroborates strongly: full-corpus values 1-20 peak at 4-6
+          (typical satellites under partial sky); present in ALL s2p1 states incl.
+          docked/CHARGED (227/323/359 of values 4/5/6 fire while CHARGED); vary
+          NON-monotonically (satellites drift across the sky); NO correlation with
+          mowing or battery. This explains every prior "purpose unknown" note
+          (docked pushes, non-monotonic jumps, ~30 min cadence). Confirm by
+          correlating s5p106 against GPS fix quality / open-vs-obstructed sky.
+        evidence: "full-corpus value↔s2p1 correlation 2026-06-05 (1-20, CHARGED-dominant for 4-6, all-states); OLD/alternatives_archive_2026-05-05/ioBroker.dreame/main.js:823 'GPS Satellites (5-106)' (POTENTIAL name only, sibling integration)"
     open_questions:
-      - "Value 10/0xA never observed — is this a bitmask with a forbidden bit, or a sparse enum?"
+      - "GPS-satellite-count hypothesis (see verifications) — confirm by correlating s5p106 against GPS fix quality / sky obstruction. dreame-mower names it only generically (service5_property_106); the GPS name is ioBroker's."
 
   - id: "s5p107"
     siid: 5
@@ -1763,6 +1792,13 @@ properties:
       alt_repos:
         - "alternatives/dreame-mower/dreame/types.py (const.py:83)"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
+    verifications:
+      - date: "2026-06-05"
+        status: retracted
+        claim: "energy/discharge-index reading (dreame-mower const.py:83) stands; ioBroker's competing 'Positioning Mode (5-107)' name is RULED OUT for g2408."
+        evidence: "full corpus 2026-06-05: s5p107 has 184 distinct values spanning 1-255 — inconsistent with a small mode enum; the wide spread fits an energy/discharge index (counter), not a positioning mode"
+        retracts: "ioBroker.dreame main.js:824 'Positioning Mode (5-107)'"
+        reason: "A positioning-MODE would have a handful of discrete values; the g2408 corpus shows 184 distinct values across 1-255, which is a continuous index, not a mode. The dreame-mower 'energy_index' naming + the load-weighted s2p1-mode gradient are the better-supported reading. (Note per 2026-06-05 discipline: both are sibling-integration POTENTIALS; the energy interpretation is corpus-supported but the exact unit is still open below.)"
     open_questions:
       - "Does median energy_index rise on sloped lawns vs flat? User's lawn is flat — needs a sloped-lawn contributor to confirm mWh-over-interval interpretation."
 

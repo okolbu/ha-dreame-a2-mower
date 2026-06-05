@@ -16,13 +16,15 @@
 | s1p52 | task_end_flush | empty_dict | WIRED |  |
 | s1p53 | bluetooth_connected | bool | WIRED |  |
 | s2p1 | mode | int (enum) | WIRED |  |
-| s2p2 | task_envelope | TASK envelope; multiple op-code classes | WIRED |  |
+| s2p2 | error_code | int (state/error code) | WIRED |  |
+| s2p50 | task_envelope | TASK envelope; multiple op-code classes | WIRED |  |
 | s2p51 | multiplexed_config | shape varies by setting | WIRED |  |
 | s2p52 | preference_update_trigger | empty_dict | WIRED |  |
 | s2p53 | voice_download_progress | int 0..100 | SEEN-UNDECODED |  |
 | s2p54 | lidar_upload_progress | int 0..100 | WIRED | % (×1.0) |
 | s2p55 | ai_obstacle_report | list | WIRED |  |
-| s2p56 | robot_shutdown_trigger | dict (shutdown signal) | APK-KNOWN |  |
+| s2p56 | task_state | {status: list of [task_type, ...] tuples} | WIRED |  |
+| s2p57 | robot_shutdown_trigger | dict (shutdown signal) | APK-KNOWN |  |
 | s2p58 | self_check_result | dict {d: {mode, id, result}} | APK-KNOWN |  |
 | s2p61 | map_update_trigger | dict (map update signal) | APK-KNOWN |  |
 | s2p62 | task_progress_flag | int | SEEN-UNDECODED |  |
@@ -292,7 +294,79 @@ names for 7-10/12.
 
 **See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:56`, `docs/research/inventory/generated/g2408-canonical.md § s2p1 mode enum`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:1`
 
-### s2p2 — `task_envelope`
+### s2p2 — `error_code`
+
+Numeric state / fault code — one discrete value per push (NOT a bitfield,
+NOT a state machine). The g2408 meanings are mostly NOT the apk's
+vacuum-lineage FaultIndex labels; treat the vacuum forks as unreliable here
+and rely on the per-code table below (full detail + evidence trail in the
+`state_codes:` section and in this entry's `verifications:`).
+
+Current g2408 meanings — wire- and/or cloud-verified (one code per line):
+Faults:
+- 2  Robot trapped
+- 4  Left drive wheel error
+- 5  Right drive wheel error
+- 23 Lift lockout (emergency stop)
+- 31 Failed to return to station
+- 33 Positioning / relocate failed (drives state-machine STUCK)
+- 36 Failed to start task
+Lifecycle:
+- 27 Idle / human-detected marker
+- 50 Manual or mow session start
+- 53 Scheduled session start
+- 70 Mowing / continue unfinished task
+- 48 Mowing complete
+- 54 Low battery — returning to station
+- 56 Rain protection activated (rising edge only)
+- 60 Frost-protection-suppressed
+- 63 Scheduled task cancelled — robot working (busy)
+- 71 Standby outside station too long — auto-return
+- 74 Patrol ended / cancelled
+- 75 Arrived at maintenance point
+- 76 Cannot reach maintenance point — task ended (give-up + return)
+- 24 Battery low (warning threshold — not a stuck-state; see open_questions re 24 vs 54)
+- 43 Battery temperature low — charging paused (environmental; mower self-protects)
+Maintenance push (cloud-gated, not errors):
+- 28 Blades severely worn (cloud wear%-gated push)
+- 30 Maintenance reminder — maintain robot soon
+Observed on g2408, decode CROSS-REFERENCED from the sibling dreame-mower
+integration's device_code.py (siid:2 piid:2 — SAME channel; its table matches
+ALL our independently-confirmed g2408 codes: 24/28/30/43/51/54/71). NOT yet
+g2408-wire-LABELLED, so kept OUT of error_codes.py per the confidence gate:
+- 20 — "Sensor error" (dreame-mower name SENSOR, type ERROR). [presumed]
+  Corpus: x3 in probe_log_20260520, in a maintenance/mow sequence before 33/36/63.
+- 72 — "Returning to dock after pause timeout" (dreame-mower PAUSE_TIMEOUT_RETURNING,
+  type INFO). [partial] — sibling of confirmed 71 (idle-timeout-returning) AND
+  corroborated by the g2408 corpus (72 fires near s2p1 state=5 returning, x3 in
+  probe_log_20260520).
+
+Watch out — corrected vs earlier / vacuum readings (evidence in verifications):
+- 28 is the cloud wear%-gated BLADE-WEAR push, NOT an off-dock-relocate
+  marker (the "fires 14/14 on every undock" reading was debunked by
+  full-corpus analysis).
+- 71 is "standby-too-long auto-return", NOT "positioning failed".
+- The off-dock 360 reorient carries NO dedicated s2p2 code.
+
+The per-fire user-visible TEXT is composed by Dreame's cloud, not carried on
+the wire — the integration relays cloud pushes (coordinator/_notifications.py)
+and must not synthesize text from a raw s2p2 transition. Any value outside the
+known set emits a one-shot [PROTOCOL_NOVEL] s2p2 WARNING. Upstream
+dreame-mova-mower maps (2,2)=ERROR / (2,1)=STATE — reversed vs g2408; the
+g2408 overlay corrects this.
+
+**Open questions:**
+- What wire surface carries the user's 'Continue' tap that clears rain-protection early? Candidate: an s2p50 op-code or an s2p2 transition out of the suppressed window. Capture during a live Continue press.
+- g2408 meaning of s2p2 20 and 33 — both fired in the 2026-05-25 12:32 off-dock-failure burst alongside 'Sensor error' / 'positioning failed' app notifications, but neither is in the cloud's recent-history window (likely pruned). Need either a controlled repro within the cloud's retention window, the apk full 78-entry FaultIndex (bundle L94618-94697, not in apk.md), or text via an API-on-demand fetch the next time these codes fire.
+- s2p2=71 = idle-too-long-return vs broader non-battery return? Core meaning text-confirmed (standby-too-long → auto-return) and the slug/sensor are fixed. Still open: is 71 strictly the idle-timeout reason, or ANY non-battery return? 3 of 5 corpus occurrences fire while already returning (prev=5). Capture other return triggers (user-recall, end-of-task) to see if they also carry 71; if 71 is broader than idle-timeout, broaden the slug name accordingly.
+- Remaining single-observation fault codes from the 2026-05-30 stuck-patrol (user-confirmed app text; confirm exact string via device-messages/v2): s2p2=2 = 'Robot trapped. Tap to view the solution' (22:44:40, stuck on hose); s2p2=74 = patrol ended/cancelled (23:02:12, fired with s2p1→2 when the user cancelled the patrol → return to dock). Both co-incident with a pause/end (s2p1=4/2, s2p56=[[1,0,4]] paused) and present in the s4 eiid1 arg13 fault timeline. apk FaultIndex 2 was unmapped/vacuum-derived on g2408 — this is the real g2408 meaning. RESOLVED out of this list: the drive-wheel pair 4='Left drive wheel error' (2026-05-30) and 5='Right drive wheel error' (2026-06-01) are now in the state_codes table + error_codes.py (decoded: confirmed).
+- s2p2 24 'Battery low' vs 54 'Low battery — returning to station' overlap: confirm the distinction (hypothesis: 24 = low-battery WARNING threshold, informational; 54 = the low-battery event that TRIGGERS return-to-dock). Capture both firing in one session to pin the trigger points, then rename 24 to something unambiguous (tentative: 'Battery low (warning)'). presumed until a capture confirms.
+- s2p2 codes 0/1/9/23 are the s2p2 echoes of the s1p1 safety bits (bumper/tilt/lift/PIN), confirmed by the 2026-04-30 19:37–19:39 controlled test. Open: redundant with the s1p1 binary_sensors, or do they carry extra info worth a dedicated surface?
+- s2p2=0: strictly the bumper/hanging event, or also the post-event return-to-idle value? Corpus has only 6 transitions-to-0; need captures that disambiguate a bumper press from a generic clear-to-0.
+
+**See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:62`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:2`
+
+### s2p50 — `task_envelope`
 
 TASK envelope — multiple operation classes sharing this slot. Two major
 shapes observed:
@@ -312,15 +386,6 @@ The cloud occasionally drops s2p50 deliveries under load. The integration
 triggers a MAP rebuild on o=215 or o=201 with status:true && error:0.
 The s2p50 echo is NOT a faithful copy of the input (firmware canonicalizes
 payloads). Detailed opcode catalog lives in opcodes section (Task 8).
-
-**Open questions:**
-- What wire surface carries the user's 'Continue' tap that clears rain-protection early? Candidate: an s2p50 op-code or an s2p2 transition out of the suppressed window. Capture during a live Continue press.
-- g2408 meaning of s2p2 20 and 33 — both fired in the 2026-05-25 12:32 off-dock-failure burst alongside 'Sensor error' / 'positioning failed' app notifications, but neither is in the cloud's recent-history window (likely pruned). Need either a controlled repro within the cloud's retention window, the apk full 78-entry FaultIndex (bundle L94618-94697, not in apk.md), or text via an API-on-demand fetch the next time these codes fire.
-- s2p2=71 = idle-too-long-return vs broader non-battery return? Core meaning text-confirmed (standby-too-long → auto-return) and the slug/sensor are fixed. Still open: is 71 strictly the idle-timeout reason, or ANY non-battery return? 3 of 5 corpus occurrences fire while already returning (prev=5). Capture other return triggers (user-recall, end-of-task) to see if they also carry 71; if 71 is broader than idle-timeout, broaden the slug name accordingly.
-- Remaining single-observation fault codes from the 2026-05-30 stuck-patrol (user-confirmed app text; confirm exact string via device-messages/v2): s2p2=2 = 'Robot trapped. Tap to view the solution' (22:44:40, stuck on hose); s2p2=74 = patrol ended/cancelled (23:02:12, fired with s2p1→2 when the user cancelled the patrol → return to dock). Both co-incident with a pause/end (s2p1=4/2, s2p56=[[1,0,4]] paused) and present in the s4 eiid1 arg13 fault timeline. apk FaultIndex 2 was unmapped/vacuum-derived on g2408 — this is the real g2408 meaning. RESOLVED out of this list: the drive-wheel pair 4='Left drive wheel error' (2026-05-30) and 5='Right drive wheel error' (2026-06-01) are now in the state_codes table + error_codes.py (decoded: confirmed).
-- s2p2 24 'Battery low' vs 54 'Low battery — returning to station' overlap: confirm the distinction (hypothesis: 24 = low-battery WARNING threshold, informational; 54 = the low-battery event that TRIGGERS return-to-dock). Capture both firing in one session to pin the trigger points, then rename 24 to something unambiguous (tentative: 'Battery low (warning)'). presumed until a capture confirms.
-- s2p2 codes 0/1/9/23 are the s2p2 echoes of the s1p1 safety bits (bumper/tilt/lift/PIN), confirmed by the 2026-04-30 19:37–19:39 controlled test. Open: redundant with the s1p1 binary_sensors, or do they carry extra info worth a dedicated surface?
-- s2p2=0: strictly the bumper/hanging event, or also the post-event return-to-idle value? Corpus has only 6 transitions-to-0; need captures that disambiguate a bumper press from a generic clear-to-0.
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:50`
 
@@ -454,7 +519,65 @@ replaces the earlier blocked-by-MITM next step.
 
 **See also:** `protocol/session_summary.py:140,385 (ai_obstacle already parsed); cloud_client/_oss.py (get_interim_file_url already present)`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §AI_OBSTACLE_REPORT; apks/aa/lib/arm64-v8a/libapp.so (IpcEventModel)`
 
-### s2p56 — `robot_shutdown_trigger`
+### s2p56 — `task_state`
+
+Cloud status push — internal task-state ack. Wire envelope has two
+observed shapes on g2408:
+
+  2-element variant — full-area mows (most common, 163/213 in corpus):
+    {"status": []}            no active task
+    {"status": [[1, 0]]}      running
+    {"status": [[1, 2]]}      complete / transitional
+    {"status": [[1, 4]]}      paused-pending-resume / recharge boundary
+
+  3-element variant — SCHEDULED mows (since 2026-04-27); a value is inserted
+  in the MIDDLE so the stage moves to the LAST element. Structure is
+  [task_id, X, stage] where X is always 0 (undecoded — likely a segment/lap
+  index) and the STAGE is the LAST element (decoded 2026-05-30):
+    {"status": [[1, 0, 0]]}   running — last value 0
+    {"status": [[1, 0, 4]]}   PAUSED  — last value 4 (e.g. stuck/rain mid-run)
+    {"status": [[1, 0, 2]]}   DONE    — last value 2
+  [1,0,2] = SESSION-DONE (NOT a "segment" that resumes). Corpus-verified
+  2026-05-30: across all 10 [1,0,2] events the mower DOCKS within ~1 min
+  (s2p1→6) and NONE is preceded by a rain code (s2p2=56). The few later
+  re-activations are SEPARATE mows 15-25 min after docking, not resumes.
+  DEBUNKED: the 2026-05-16 claim that "[1,0,2] at 19:13 then ran 19 h
+  rain-spanned (2026-05-09 edge mow)" is FALSE — that mow docked at 19:14.
+  Treat that whole "segment vs archive session / rain-spans-[1,0,2]" story
+  (incl. an earlier version of THIS note) as guesswork that was wrong.
+  Consequence: the integration now reads status[0][-1] (the LAST element) as
+  task_state_code — correct for both 2- and 3-element, and it surfaces the
+  3-element PAUSE [1,0,4] which the old middle-read missed. (v1.0.x 2026-05-30;
+  property_mapping.py (2,56).)
+  NB the earlier "3-element = edge/spot/zone mows" attribution is imprecise:
+  3-element correlates with SCHEDULED runs (morning all-area mode=100 included),
+  not mow type. App-triggered runs (points, manual, the 2-spot mow) stay 2-element.
+
+The integration extracts status[0][-1] (the LAST element = stage) as
+task_state_code: 0=running, 4=paused, 2=complete, None=no task. This is
+correct for both 2-element (last == [1]) and 3-element (last is the stage,
+not the constant-0 middle). Pre-2026-05-30 it read status[0][1], which on
+3-element runs returned the middle 0 and hid done/paused — a workaround
+built on the now-debunked 19h-rain story (see above). The session-end
+signal can be either the [1,0,2]/empty `[]` event OR the integration's
+cloud-summary gate. The probe sometimes misses the `[]` event (HA restart,
+probe truncation) in which case the HA
+archive's recorded `start` / `end` fields are the ground truth.
+
+The session-state machine uses task_state_code for begin_session /
+begin_leg / session-end transitions: 0→4→0 is a recharge round-trip;
+4→0 triggers begin_leg; prev∈{0,4} and new∈{2,None} means session ended.
+
+Confirmed g2408 sub-state values from 2026-04-29/30 corpus. Note: wire shape
+is a dict, not a bare int — a common decode trap for apk-decompiled code.
+
+**Open questions:**
+- 3-element MIDDLE value (the X in [task_id, X, stage]) is always 0 in the corpus — undecoded. Likely a segment/lap index; capture a multi-segment scheduled run (e.g. a rain-paused mow's later segments) to see if it ever increments. (The THIRD/last value = stage 0=start/2=done is now decoded — 2026-05-30.)
+- Confirm the 3-element variant is SCHEDULED-correlated, not mow-type-correlated: cross-reference each 3-element session against its summary.mode (a 2026-05-30 spot-check found a morning mode=100 all-area scheduled mow that was 3-element, contradicting the old edge/spot/zone attribution). Needs a full per-session correlation.
+
+**See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:80`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:56`
+
+### s2p57 — `robot_shutdown_trigger`
 
 Robot shutdown trigger. Apk subscribes at L181482-181512 and dispatches
 a 5-second-delay sequence culminating in a firmware shutdown or reboot.
@@ -769,7 +892,7 @@ Quiet-listed in the integration so it does not re-fire [PROTOCOL_NOVEL] on
 every relocate. Surfaced as a default-disabled raw diagnostic sensor.
 
 **Open questions:**
-- Is the constant value 7 a retry count, mode enum, or firmware constant?
+- 7/12 a relocate mode/result enum (fires with s2p65 relocate)? 'counter' name is doubtful (only 2 fixed values). dreame-mower potential: 'task_status'.
 
 **See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:131`, `docs/research/inventory/generated/g2408-canonical.md § Properties`
 
@@ -805,7 +928,7 @@ pushes fire while the mower is docked.
 Surfaced as a default-disabled raw diagnostic sensor.
 
 **Open questions:**
-- Value 10/0xA never observed — is this a bitmask with a forbidden bit, or a sparse enum?
+- GPS-satellite-count hypothesis (see verifications) — confirm by correlating s5p106 against GPS fix quality / sky obstruction. dreame-mower names it only generically (service5_property_106); the GPS name is ioBroker's.
 
 **See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:139`, `docs/research/inventory/generated/g2408-canonical.md § Properties`
 
