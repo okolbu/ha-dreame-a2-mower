@@ -344,32 +344,42 @@ properties:
   - id: "s1p53"
     siid: 1
     piid: 53
-    name: "obstacle_flag"
+    name: "bluetooth_connected"
     category: "property"
     payload_shape: "bool"
     semantic: |
-      Set True when the mower detects an obstacle, person, or animal during mowing.
-      Never sent False automatically — the HA entity must auto-clear after ~30 s
-      of no refresh, otherwise it latches indefinitely.
+      Controlling-app BLUETOOTH connection status (bool). True while a Dreame app
+      has a BLE connection to the robot; toggles when the app is foregrounded /
+      backgrounded. The apk's own name for this slot is "BLE Connection Status",
+      and the sibling dreame-mower integration names siid:1 piid:53
+      "bluetooth_connected" — both agree, and the user reproduced it at will
+      2026-06-05 by entering/leaving the phone app.
 
-      Apk names this slot "BLE Connection Status" but g2408 behaviour is
-      obstacle-detection: 26 triggers observed in ~15 min near an exclusion zone,
-      mean duration ~6.6 s. Cleared to False at 21:04:46 on 2026-04-18 as a
-      side-effect of a state transition, not by an obstacle-clear event.
+      NOT obstacle detection. The earlier "obstacle_flag" reading was a
+      correlation artifact: the 26 toggles seen "near an exclusion zone" coincided
+      with the user handling the phone app during that window, not with obstacle
+      events. Obstacle/person/animal events are cloud-side push notifications, not
+      this MQTT bool.
 
-      Separate from human-presence detection, which goes through the Dreame cloud
-      push-notification service directly and is not observable via MQTT.
-
-      Note: apk name "BLE Connection Status" does not match g2408 wire behaviour.
+      Integration surface: binary_sensor `bluetooth_connected`
+      (device_class CONNECTIVITY). (Was mislabelled `obstacle_detected` /
+      MowerState.obstacle_flag before the 2026-06-05 relabel.)
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-05"
       decoded: confirmed
+    verifications:
+      - date: "2026-06-05"
+        status: retracted
+        claim: "s1p53 is the controlling-app BLE/Bluetooth connection flag (true while an app is BLE-connected; toggles on app foreground/background)."
+        evidence: "user reproduced 2026-06-05 by entering/leaving the phone app; apk 'BLE Connection Status'; OLD/.../dreame-mower/.../dreame/const.py:53 BLUETOOTH_PROPERTY siid=1 piid=53 name='bluetooth_connected'; value is bool (918 samples in probe corpus)"
+        retracts: "g2408 behaviour is obstacle-detection: 26 triggers observed in ~15 min near an exclusion zone, mean duration ~6.6 s"
+        reason: "The obstacle reading was a correlation artifact (app handled during that window). Two independent sources (apk + dreame-mower) name it BLE/Bluetooth connectivity, and the user reproduced the toggle by foreground/backgrounding the app. Relabelled obstacle_flag→bluetooth_connected across the integration."
     references:
-      integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:61"
+      integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:61 + binary_sensor.py (bluetooth_connected)"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes"
-      apk: "ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 1 piid:53"
+      apk: "ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 1 piid:53; OLD/dreame-mower const.py:53 bluetooth_connected"
 
   - id: "s2p1"
     siid: 2
@@ -4487,7 +4497,7 @@ cfg_individual:
       apk: "ioBroker.dreame/apk.md §getX AIOBS"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
-      - "Capture this endpoint during an AI-obstacle detection event (s1p53 transition)."
+      - "Capture this endpoint during an AI-obstacle detection event (cloud-side trigger; s1p53 is the BLE-connection flag, NOT an obstacle signal)."
       - "Test whether more cloud dumps over time produce a successful response (cf. MISTA)."
 
   - id: "CFG"
@@ -4801,7 +4811,7 @@ cfg_individual:
       apk: "ioBroker.dreame/apk.md §getX OBS"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
-      - "Capture immediately after an obstacle event (s1p53 True transition)."
+      - "Capture immediately after an AI-obstacle event (cloud-side; s1p53 is BLE-connection, NOT obstacle — find the real on-wire trigger)."
       - "Cross-reference with AIOBS — both apk-described as obstacle endpoints, semantics distinct."
 
   - id: "PIN"
@@ -7474,8 +7484,7 @@ state_codes:
       refuses to launch the mow. Confirmed 2026-04-27 07:58:02. Drives
       the Dreame app notification "Temperature too low. Frost Protection is
       activated. The Scheduled task will start later." The mower wakes
-      briefly, fires this code, optionally runs a quick s1p53 obstacle-
-      sensor self-test pulse, then settles back to s2p1=13
+      briefly, fires this code, then settles back to s2p1=13
       (CHARGING_COMPLETED) ~10 minutes later. Distinct from code 53
       (scheduled task did start) and code 56 (rain pause during a run).
     status:
@@ -8907,7 +8916,7 @@ session_summary_fields:
               consecutive samples). Test: decode s1p4 byte layout to extract
               per-sample (x, y); align with segment boundaries.
           (b) Blade-state change (blade off then back on). Test: correlate
-              with s1p53 transitions if s1p53 turns out to be blade-state.
+              with a blade-state signal — but s1p53 is now confirmed the BLE-connection flag (NOT blade-state), so this needs a different signal (none identified yet).
           (c) Cloud-side heartbeat / cadence trigger (e.g., break every N
               seconds). Test: timestamps aren't carried in map[].track,
               but s1p4 timestamps could be used to derive segment-time spans.

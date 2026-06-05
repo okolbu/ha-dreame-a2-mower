@@ -922,7 +922,7 @@ class _MqttHandlersMixin:
         elif key in PROPERTY_MAPPING:
             if self.novel_registry.record_value(siid, piid, value, now):
                 # First-time value for an already-mapped slot is informational
-                # (e.g. s1p53 obstacle_flag toggling True for the first time
+                # (e.g. s1p53 bluetooth_connected toggling True for the first time
                 # after install); the slot is recognised so there is nothing
                 # for the user to action. Keep [NOVEL/property] at WARN since
                 # that one signals a protocol gap.

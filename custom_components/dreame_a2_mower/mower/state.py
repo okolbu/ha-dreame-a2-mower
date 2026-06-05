@@ -86,7 +86,7 @@ class MowerState:
     error_code: int | None = None
 
     # Source: s1.53 (confirmed). Persistence: volatile.
-    obstacle_flag: bool | None = None
+    bluetooth_connected: bool | None = None
 
     # Source: s1.4 byte[29-30] decoded (confirmed). Persistence: volatile.
     area_mowed_m2: float | None = None

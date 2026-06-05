@@ -57,8 +57,8 @@ def test_disambiguator_pattern_is_supported():
     assert _disambiguate({"x": 1}) == "alt_field"
 
 
-def test_obstacle_flag_maps_to_s1p53():
-    assert PROPERTY_MAPPING[(1, 53)].field_name == "obstacle_flag"
+def test_bluetooth_connected_maps_to_s1p53():
+    assert PROPERTY_MAPPING[(1, 53)].field_name == "bluetooth_connected"
 
 
 def test_error_code_maps_to_s2p2():

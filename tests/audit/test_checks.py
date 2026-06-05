@@ -45,7 +45,7 @@ def test_snapshot_fields_includes_known():
     assert "location" in SNAPSHOT_FIELDS
     assert "mow_session" in SNAPSHOT_FIELDS
     # MowerState-only fields must NOT be in the set:
-    assert "obstacle_flag" not in SNAPSHOT_FIELDS
+    assert "bluetooth_connected" not in SNAPSHOT_FIELDS
 
 
 def test_sourcing_green_when_battery_reads_snapshot():

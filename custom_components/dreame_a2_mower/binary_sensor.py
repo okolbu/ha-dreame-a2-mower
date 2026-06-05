@@ -56,11 +56,15 @@ def _cloud_connected_value(coord) -> bool | None:
 
 BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
     DreameA2BinarySensorEntityDescription(
-        key="obstacle_detected",
-        translation_key="obstacle_detected",
-        name="Obstacle detected",
-        device_class=BinarySensorDeviceClass.SAFETY,
-        value_fn=lambda coord: bool(coord.data.obstacle_flag),
+        # s1p53 is the controlling-app Bluetooth connection flag (fires when the
+        # Dreame app foregrounds/backgrounds), NOT obstacle detection — confirmed
+        # 2026-06-05 (user can toggle it via the app; dreame-mower names siid1/piid53
+        # "bluetooth_connected"). Was mislabelled obstacle_detected pre-relabel.
+        key="bluetooth_connected",
+        translation_key="bluetooth_connected",
+        name="App Bluetooth",
+        device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        value_fn=lambda coord: bool(coord.data.bluetooth_connected),
     ),
     DreameA2BinarySensorEntityDescription(
         key="rain_protection_active",
