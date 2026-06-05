@@ -26,7 +26,7 @@ TOOL_META = {"domain": "inventory", "run_by": "owner",
     "summary": "Regenerate docs/research/wire-census.json and report wire values missing from inventory."}
 
 _REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_DEFAULT_LOG_DIR = os.path.dirname(_REPO)  # /data/claude/homeassistant
+_DEFAULT_LOG_DIR = os.path.join(os.path.dirname(_REPO), "probe", "logs")  # /data/claude/homeassistant/probe/logs
 _DEFAULT_OUT = os.path.join(_REPO, "docs", "research", "wire-census.json")
 
 

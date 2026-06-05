@@ -281,7 +281,7 @@ def main(argv: list[str] | None = None) -> int:
     grp.add_argument("--bulk", action="store_true")
     parser.add_argument(
         "--probe-glob",
-        default="/data/claude/homeassistant/probe_log_*.jsonl",
+        default="/data/claude/homeassistant/probe/logs/probe_log_*.jsonl",
     )
     parser.add_argument("--tz", default="Europe/Oslo")
     parser.add_argument(

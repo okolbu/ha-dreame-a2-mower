@@ -377,7 +377,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--inventory", type=Path, default=DEFAULT_INVENTORY)
     parser.add_argument(
         "--probe-glob", type=str,
-        default=str(REPO_ROOT.parent / "probe_log_*.jsonl"),
+        default=str(REPO_ROOT.parent / "probe" / "logs" / "probe_log_*.jsonl"),
     )
     parser.add_argument(
         "--cloud-dump-glob", type=str,
