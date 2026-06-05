@@ -898,18 +898,22 @@ every relocate. Surfaced as a default-disabled raw diagnostic sensor.
 
 ### s5p105 — `s5p105_raw`
 
-Small enum with values {1, 2, 4} observed across the corpus 2026-04-17 to
-2026-04-30: 84× value 1, 9× value 2, 3× value 4. Value 1 is the steady-
-state; 2 and 4 fire transiently.
+Small enum. Full-corpus distribution (130 pushes, 2026-04-17 → 2026-06-04):
+1× steady (109), then transient 2 (13), 3 (4), 4 (3), 5 (1). Value 1 is the
+steady-state; 2-5 fire transiently.
 
-Driver unknown — possibly a session-mode marker. Often fires alongside
-s5p106 and s5p107 in the same second. Cross-reference timestamps against
-s2p1 STATE transitions to identify context for non-1 values.
+STRUCTURE (corpus-verified, see verifications): s5p105 is one member of a
+periodic siid5 diagnostic frame emitted as a back-to-back burst of separate
+properties_changed messages in fixed order 107 → 105 → 106 → 108 (consecutive
+MQTT message ids). s5p105 and s5p107 co-fire in ALL 130 pushes; s5p106 and
+s5p108 join the burst only when their own value changes (push-on-change). The
+MEANING of the 1-5 enum is still unknown (POTENTIAL only). dreame-mower carries
+no name (generic service5_property_105); ioBroker has none either.
 
 Surfaced as a default-disabled raw diagnostic sensor.
 
 **Open questions:**
-- What triggers values 2 and 4? Correlate against s2p1 transitions.
+- What triggers the transient values 2-5? Frame structure is known; the enum's meaning is not. Correlate non-1 values against s2p1/positioning context.
 
 **See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:135`, `docs/research/inventory/generated/g2408-canonical.md § Properties`
 
@@ -929,6 +933,7 @@ Surfaced as a default-disabled raw diagnostic sensor.
 
 **Open questions:**
 - GPS-satellite-count hypothesis (see verifications) — confirm by correlating s5p106 against GPS fix quality / sky obstruction. dreame-mower names it only generically (service5_property_106); the GPS name is ioBroker's.
+- Leaf-cover test inconclusive (no under-tree samples in corpus; spatial pattern is a distance-from-dock gradient, not a localized dip). Needs a TARGETED capture: s5p106 under the apple-tree crown vs an adjacent open-lawn spot.
 
 **See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:139`, `docs/research/inventory/generated/g2408-canonical.md § Properties`
 
@@ -955,16 +960,22 @@ decode is confirmed.
 
 **Open questions:**
 - Does median energy_index rise on sloped lawns vs flat? User's lawn is flat — needs a sloped-lawn contributor to confirm mWh-over-interval interpretation.
+- TENSION: s5p107 anchors a periodic ~30-min siid5 frame (107→105→106→108) alongside positioning-ish props. Re-examine whether 'energy_index' is right, or whether the frame is a periodic GNSS/diagnostic sample where 107 is a quality/sequence figure rather than discharge energy. Energy reading is corpus-supported (load gradient) but the periodic-frame membership wasn't known when it was decoded.
 
 **See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:143`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `alternatives/dreame-mower/dreame/types.py (const.py:83)`
 
 ### s5p108 — `s5p108_raw`
 
-Only one observation in the probe corpus. Semantic unknown. No apk
-documentation found. Cannot characterize without more captures.
+Rare member of the periodic siid5 diagnostic frame (see s5p105). 6 pushes
+across the full corpus (2026-04-20 → 2026-06-03), values 1 (×3) and 2 (×3).
+Every push rides the siid5 burst and is emitted LAST in the fixed order
+107 → 105 → 106 → 108 (consecutive MQTT message ids). Because it is
+push-on-change and binary-ish (1/2), it appears only when its value flips —
+most frames omit it. Meaning UNKNOWN (POTENTIAL only); dreame-mower has just
+a generic service5_property_108, ioBroker has no name.
 
 **Open questions:**
-- Only 1 observation. What value was it? What was the mower state at that moment?
+- What does the 1↔2 flip mark? It is the last member of the siid5 positioning/diagnostic frame; correlate the flip against fix-quality or a positioning state change.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Properties`
 

@@ -2,7 +2,7 @@
 #
 # Edit this file by hand. Never edit the rendered docs in
 # docs/research/inventory/generated/ — they are produced by
-# `python tools/inventory_gen.py`.
+# `python tools/inventory/inventory_gen.py`.
 #
 # Schema documentation: docs/research/inventory/README.md
 # Spec: docs/superpowers/specs/2026-05-05-g2408-protocol-inventory-design.md
@@ -559,37 +559,43 @@ properties:
     name: "error_code"
     category: "property"
     value_kind: enum
+    # observed_values status reconciled 2026-06-05 against the per-code
+    # `state_codes:` decode status (confirmed→confirmed, partial→partial,
+    # absent→unknown). Codes 20 and 72 stay `unknown` — seen on the wire but no
+    # confirmed decode (no state_codes row; cross-ref against OLD/ integrations
+    # found no g2408 match). They remain registered so the wire-coverage gate
+    # passes; `unknown` is the honest decode-state, not a coverage gap.
     observed_values:
-      - {value: 0, status: unknown}
-      - {value: 1, status: unknown}
-      - {value: 2, status: unknown}
-      - {value: 4, status: unknown}
-      - {value: 5, status: unknown}
-      - {value: 9, status: unknown}
+      - {value: 0, status: partial}
+      - {value: 1, status: confirmed}
+      - {value: 2, status: confirmed}
+      - {value: 4, status: confirmed}
+      - {value: 5, status: confirmed}
+      - {value: 9, status: confirmed}
       - {value: 20, status: unknown}
-      - {value: 23, status: unknown}
-      - {value: 27, status: unknown}
-      - {value: 28, status: unknown}
-      - {value: 30, status: unknown}
-      - {value: 31, status: unknown}
-      - {value: 33, status: unknown}
-      - {value: 36, status: unknown}
-      - {value: 43, status: unknown}
-      - {value: 48, status: unknown}
-      - {value: 50, status: unknown}
-      - {value: 51, status: unknown}
-      - {value: 53, status: unknown}
-      - {value: 54, status: unknown}
-      - {value: 56, status: unknown}
-      - {value: 60, status: unknown}
-      - {value: 63, status: unknown}
-      - {value: 70, status: unknown}
-      - {value: 71, status: unknown}
+      - {value: 23, status: confirmed}
+      - {value: 27, status: confirmed}
+      - {value: 28, status: confirmed}
+      - {value: 30, status: confirmed}
+      - {value: 31, status: confirmed}
+      - {value: 33, status: confirmed}
+      - {value: 36, status: confirmed}
+      - {value: 43, status: confirmed}
+      - {value: 48, status: confirmed}
+      - {value: 50, status: confirmed}
+      - {value: 51, status: confirmed}
+      - {value: 53, status: confirmed}
+      - {value: 54, status: confirmed}
+      - {value: 56, status: confirmed}
+      - {value: 60, status: confirmed}
+      - {value: 63, status: confirmed}
+      - {value: 70, status: confirmed}
+      - {value: 71, status: confirmed}
       - {value: 72, status: unknown}
-      - {value: 73, status: unknown}
-      - {value: 74, status: unknown}
-      - {value: 75, status: unknown}
-      - {value: 76, status: unknown}
+      - {value: 73, status: confirmed}
+      - {value: 74, status: confirmed}
+      - {value: 75, status: confirmed}
+      - {value: 76, status: confirmed}
     payload_shape: "int (state/error code)"
     semantic: |
       Numeric state / fault code — one discrete value per push (NOT a bitfield,
@@ -1355,7 +1361,7 @@ properties:
         status: retracted
         claim: |
           tried treating status[0][-1] as the unified sub_state extractor in
-          tools/rebuild_session.py
+          tools/session/rebuild_session.py
         retracts: "sub_state is the LAST element, status[0][-1] cross-format"
         reason: |
           Hypothesis fit the 13-min 2026-05-16 19:00 case but broke the 19-hour
@@ -1651,6 +1657,18 @@ properties:
           relocate-result codes. Confirm by triggering relocalization in differing
           conditions and watching whether the value tracks the outcome.
         evidence: "corpus: value 12 first 2026-05-25 12:32:24, both 7+12 during s2p1=WORKING; co-occurs with s2p65 TASK_SLAM_RELOCATE; OLD/dreame-mower const.py:80 'task_status' (POTENTIAL only)"
+      - date: "2026-06-05"
+        status: verified
+        claim: |
+          s5p104 is RELOCATE-BOUND and DISTINCT from the periodic siid5 diagnostic
+          frame (107/105/106/108). Full-corpus mining: 6 pushes total, value 7 (×5)
+          / 12 (×1); each co-occurs with an s2p65 TASK_SLAM_RELOCATE burst (5/6
+          within ±2 s) and does NOT follow the frame's 107→105→106→108 msgid order.
+          So s5p104 is event-triggered (relocalization), whereas its siid5 neighbours
+          105/106/107/108 are a periodic ~30-min telemetry frame. This confirms the
+          earlier "fires alongside s2p65 relocate" note across the whole corpus. The
+          7-vs-12 meaning remains POTENTIAL (relocate mode/result).
+        evidence: "full-corpus co-occurrence 2026-06-05 (6 pushes, s2p65×5/6; not in the 107→105→106→108 frame ordering)"
     open_questions:
       - "7/12 a relocate mode/result enum (fires with s2p65 relocate)? 'counter' name is doubtful (only 2 fixed values). dreame-mower potential: 'task_status'."
 
@@ -1668,25 +1686,43 @@ properties:
       - {value: 5, status: unknown}
     payload_shape: "int (small enum)"
     semantic: |
-      Small enum with values {1, 2, 4} observed across the corpus 2026-04-17 to
-      2026-04-30: 84× value 1, 9× value 2, 3× value 4. Value 1 is the steady-
-      state; 2 and 4 fire transiently.
+      Small enum. Full-corpus distribution (130 pushes, 2026-04-17 → 2026-06-04):
+      1× steady (109), then transient 2 (13), 3 (4), 4 (3), 5 (1). Value 1 is the
+      steady-state; 2-5 fire transiently.
 
-      Driver unknown — possibly a session-mode marker. Often fires alongside
-      s5p106 and s5p107 in the same second. Cross-reference timestamps against
-      s2p1 STATE transitions to identify context for non-1 values.
+      STRUCTURE (corpus-verified, see verifications): s5p105 is one member of a
+      periodic siid5 diagnostic frame emitted as a back-to-back burst of separate
+      properties_changed messages in fixed order 107 → 105 → 106 → 108 (consecutive
+      MQTT message ids). s5p105 and s5p107 co-fire in ALL 130 pushes; s5p106 and
+      s5p108 join the burst only when their own value changes (push-on-change). The
+      MEANING of the 1-5 enum is still unknown (POTENTIAL only). dreame-mower carries
+      no name (generic service5_property_105); ioBroker has none either.
 
       Surfaced as a default-disabled raw diagnostic sensor.
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-04"
       decoded: hypothesized
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:135"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
+    verifications:
+      - date: "2026-06-05"
+        status: verified
+        claim: |
+          s5p105 belongs to a PERIODIC siid5 DIAGNOSTIC FRAME, not a standalone
+          property. STRUCTURE (verified from message-id sequencing across the full
+          probe corpus): the device emits the frame as consecutive properties_changed
+          messages (never one batched params list — 0 messages carry >1 siid5 prop)
+          in the fixed order 107 → 105 → 106 → 108. s5p105 and s5p107 co-fire in
+          ALL 130/130 s5p105 pushes; s5p106 joins 79/130 and s5p108 6/6. Value 1 is
+          steady (109/130) with transient excursions to 2/3/4/5. The frame fires
+          ~30 min apart (matching the s5p106 cadence). Only the EMISSION STRUCTURE is
+          verified here — the 1-5 enum's meaning stays UNKNOWN/POTENTIAL.
+        evidence: "full-corpus co-occurrence + msgid ordering 2026-06-05 (130 s5p105 pushes; s5p107×130, s5p106×79, s5p108×6; consecutive msgids e.g. 1224/1225/1226/1227 = 107/105/106/108)"
     open_questions:
-      - "What triggers values 2 and 4? Correlate against s2p1 transitions."
+      - "What triggers the transient values 2-5? Frame structure is known; the enum's meaning is not. Correlate non-1 values against s2p1/positioning context."
 
   - id: "s5p106"
     siid: 5
@@ -1748,8 +1784,46 @@ properties:
           (docked pushes, non-monotonic jumps, ~30 min cadence). Confirm by
           correlating s5p106 against GPS fix quality / open-vs-obstructed sky.
         evidence: "full-corpus value↔s2p1 correlation 2026-06-05 (1-20, CHARGED-dominant for 4-6, all-states); OLD/alternatives_archive_2026-05-05/ioBroker.dreame/main.js:823 'GPS Satellites (5-106)' (POTENTIAL name only, sibling integration)"
+      - date: "2026-06-05"
+        status: presumed
+        claim: |
+          INCONCLUSIVE (leaning weak-support, NOT confirmation) on the leaf-cover
+          test for the GPS-satellite hypothesis (GPS name remains POTENTIAL/
+          UNVERIFIED). Attempted to test whether s5p106 dips when the mower is
+          under the apple tree's leaf crown (user ballpark ~(4,3) m, leaves grown
+          ~mid-May). Correlated each s5p106 push against the nearest-in-time s1p4
+          position in the leaf-era log (probe_log_20260520_131350.jsonl, May20→
+          Jun5). Findings: (a) of 571 s5p106 pushes only 34 land while the mower
+          is OUT on the lawn (>2 m from dock) with a position fix within 90 s —
+          the rest fire docked; (b) ZERO working samples fall within 2 m of the
+          tree (closest 4.4 m) so the discriminating under-tree measurement does
+          not exist in the corpus; (c) low values (1-3) are scattered across the
+          WHOLE lawn perimeter, NOT clustered at one location — so no localized-
+          obstruction signature; (d) instead there is a weak distance-from-dock
+          gradient (Pearson r=-0.38: value 5-6 mean dock-dist ~6-7.5 m, value 1-3
+          ~11-12 m; docked values reach 10, working max 6). A clean GNSS satellite
+          count should not fall off over a few metres of open-lawn horizontal
+          distance, so this gradient is a mild argument AGAINST a literal sat-count
+          reading (could be RTK fix-quality vs base range, or signal bars). VERDICT:
+          corpus cannot confirm or refute the leaf hypothesis; a TARGETED capture is
+          required — park/drive the mower directly under the tree crown and capture
+          s5p106 there vs at an adjacent open-lawn spot.
+        evidence: "s5p106↔s1p4 spatial correlation 2026-06-05, probe_log_20260520_131350.jsonl (34 working samples, none within 2m of tree, low values lawn-wide, r(value,dock-dist)=-0.38)"
+      - date: "2026-06-05"
+        status: presumed
+        claim: |
+          CADENCE refinement [UNVERIFIED — user live-observation, not corpus-
+          measured]: inter-push interval appears quantised to ~30/60/90 min (a
+          30-min base with some skew), and the property is PUSH-ON-CHANGE — so a
+          steady value simply goes silent. A live 2-hour gap (no s5p106) ending
+          when rain-protection engaged is most simply explained by "value never
+          changed across those 2 h," not a dropped message. This supersedes the
+          looser "~30 min cadence" note in semantic above. Consistent with the
+          siblings being a low-rate positioning/GNSS-quality cluster.
+        evidence: "user live observation 2026-06-05 (30/60/90-min quantum; 2 h silence before rain-protect); not yet cross-measured against the probe corpus"
     open_questions:
       - "GPS-satellite-count hypothesis (see verifications) — confirm by correlating s5p106 against GPS fix quality / sky obstruction. dreame-mower names it only generically (service5_property_106); the GPS name is ioBroker's."
+      - "Leaf-cover test inconclusive (no under-tree samples in corpus; spatial pattern is a distance-from-dock gradient, not a localized dip). Needs a TARGETED capture: s5p106 under the apple-tree crown vs an adjacent open-lawn spot."
 
   - id: "s5p107"
     siid: 5
@@ -1799,8 +1873,20 @@ properties:
         evidence: "full corpus 2026-06-05: s5p107 has 184 distinct values spanning 1-255 — inconsistent with a small mode enum; the wide spread fits an energy/discharge index (counter), not a positioning mode"
         retracts: "ioBroker.dreame main.js:824 'Positioning Mode (5-107)'"
         reason: "A positioning-MODE would have a handful of discrete values; the g2408 corpus shows 184 distinct values across 1-255, which is a continuous index, not a mode. The dreame-mower 'energy_index' naming + the load-weighted s2p1-mode gradient are the better-supported reading. (Note per 2026-06-05 discipline: both are sibling-integration POTENTIALS; the energy interpretation is corpus-supported but the exact unit is still open below.)"
+      - date: "2026-06-05"
+        status: verified
+        claim: |
+          STRUCTURAL: s5p107 ANCHORS a periodic siid5 diagnostic frame — it is the
+          FIRST message (lowest msgid) of a back-to-back burst emitted in fixed order
+          107 → 105 → 106 → 108. It co-fires with s5p105 in ALL 130/130 s5p105 pushes.
+          This is an emission-structure fact only and does NOT overturn the
+          energy/discharge-index reading above (the 1-255 spread + load-weighted
+          s2p1 gradient still stand). But the lockstep pairing with positioning-ish
+          neighbours (105/106/108) is a tension worth flagging — see open_questions.
+        evidence: "full-corpus msgid ordering 2026-06-05 (s5p107 lowest msgid in each burst, e.g. 1224 before 105/106/108 at 1225/1226/1227; co-fire s5p105×130/130)"
     open_questions:
       - "Does median energy_index rise on sloped lawns vs flat? User's lawn is flat — needs a sloped-lawn contributor to confirm mWh-over-interval interpretation."
+      - "TENSION: s5p107 anchors a periodic ~30-min siid5 frame (107→105→106→108) alongside positioning-ish props. Re-examine whether 'energy_index' is right, or whether the frame is a periodic GNSS/diagnostic sample where 107 is a quality/sequence figure rather than discharge energy. Energy reading is corpus-supported (load gradient) but the periodic-frame membership wasn't known when it was decoded."
 
   - id: "s5p108"
     siid: 5
@@ -1813,17 +1899,33 @@ properties:
       - {value: 2, status: unknown}
     payload_shape: "int"
     semantic: |
-      Only one observation in the probe corpus. Semantic unknown. No apk
-      documentation found. Cannot characterize without more captures.
+      Rare member of the periodic siid5 diagnostic frame (see s5p105). 6 pushes
+      across the full corpus (2026-04-20 → 2026-06-03), values 1 (×3) and 2 (×3).
+      Every push rides the siid5 burst and is emitted LAST in the fixed order
+      107 → 105 → 106 → 108 (consecutive MQTT message ids). Because it is
+      push-on-change and binary-ish (1/2), it appears only when its value flips —
+      most frames omit it. Meaning UNKNOWN (POTENTIAL only); dreame-mower has just
+      a generic service5_property_108, ioBroker has no name.
     status:
       seen_on_wire: true
-      first_seen: "2026-04-17"
-      last_seen: "2026-05-05"
-      decoded: unknown
+      first_seen: "2026-04-20"
+      last_seen: "2026-06-03"
+      decoded: hypothesized
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
+    verifications:
+      - date: "2026-06-05"
+        status: verified
+        claim: |
+          s5p108 is the rare 4th member of the periodic siid5 diagnostic frame
+          (107 → 105 → 106 → 108, consecutive msgids). 6 pushes total, values 1
+          (×3) / 2 (×3), each emitted LAST in the burst and always alongside
+          s5p105 + s5p107 (6/6) and usually s5p106 (5/6). Only the emission
+          structure is verified; the 1/2 enum's meaning is unknown. Supersedes the
+          stale "only one observation" note.
+        evidence: "full-corpus mining 2026-06-05 (6 s5p108 pushes; co-fire s5p105×6/s5p107×6/s5p106×5; msgid-last in burst e.g. 1224/1225/1226/1227)"
     open_questions:
-      - "Only 1 observation. What value was it? What was the mower state at that moment?"
+      - "What does the 1↔2 flip mark? It is the last member of the siid5 positioning/diagnostic frame; correlate the flip against fix-quality or a positioning state change."
 
   - id: "s6p1"
     siid: 6
@@ -3416,7 +3518,7 @@ opcodes:
           that would hold them — surfacing them is a _parse_maintenance_points-style
           parse of `cruisePoints` once populated. To capture id/coords/type:
           re-define patrol points in the app, then re-run the cloud fetch.
-        evidence: "live DreameA2CloudClient.fetch_map 2026-06-04 via tools/probe_cruise_to_point.py machinery: map0/map1 top-level keys include cruisePoints={dataType:Map,value:[]}; cleanPoints held only the 2 maintenance ids (1,2, type=6)"
+        evidence: "live DreameA2CloudClient.fetch_map 2026-06-04 via tools/probes/probe_cruise_to_point.py machinery: map0/map1 top-level keys include cruisePoints={dataType:Map,value:[]}; cleanPoints held only the 2 maintenance ids (1,2, type=6)"
       - date: "2026-06-04"
         status: verified
         claim: |
@@ -3757,7 +3859,7 @@ opcodes:
         evidence: "live probe_cruise_to_point.py --routed-shape point_id --point-id 1 --retries 5 2026-05-31 (did -112293549) → cloud r:0; user-confirmed mower moving to the point (vs {area:[1]} status:false reject minutes earlier)"
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
-      tooling: "tools/probe_cruise_to_point.py (--list-points / --relay-check / --spot-control / --routed-byid; all support --retries/--retry-delay for the wake-up timeout)"
+      tooling: "tools/probes/probe_cruise_to_point.py (--list-points / --relay-check / --spot-control / --routed-byid; all support --retries/--retry-delay for the wake-up timeout)"
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
 
@@ -4408,7 +4510,7 @@ cfg_keys:
           action CFG surface — same class as the int-list keys DND/LOW/WRP/
           BAT/LIT/REC/LANG. The prior "no write surface identified" was
           extrapolation; this is the first direct evidence on the PRE surface.
-        evidence: "docs/research/wire-captures/pre-write-r3-2026-06-03.md (tools/probe_pre_write.py --probe; CFG.VER=816 before)"
+        evidence: "docs/research/wire-captures/pre-write-r3-2026-06-03.md (tools/probes/probe_pre_write.py --probe; CFG.VER=816 before)"
     references:
       apk: "ioBroker.dreame/apk.md §setX PRE"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
