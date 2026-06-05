@@ -834,6 +834,7 @@ properties:
       - "s2p2 24 'Battery low' vs 54 'Low battery — returning to station' overlap: confirm the distinction (hypothesis: 24 = low-battery WARNING threshold, informational; 54 = the low-battery event that TRIGGERS return-to-dock). Capture both firing in one session to pin the trigger points, then rename 24 to something unambiguous (tentative: 'Battery low (warning)'). presumed until a capture confirms."
       - "s2p2 codes 0/1/9/23 are the s2p2 echoes of the s1p1 safety bits (bumper/tilt/lift/PIN), confirmed by the 2026-04-30 19:37–19:39 controlled test. Open: redundant with the s1p1 binary_sensors, or do they carry extra info worth a dedicated surface?"
       - "s2p2=0: strictly the bumper/hanging event, or also the post-event return-to-idle value? Corpus has only 6 transitions-to-0; need captures that disambiguate a bumper press from a generic clear-to-0."
+  - id: "s2p50"
     siid: 2
     piid: 50
     name: "task_envelope"
@@ -1289,6 +1290,7 @@ properties:
     open_questions:
       - "3-element MIDDLE value (the X in [task_id, X, stage]) is always 0 in the corpus — undecoded. Likely a segment/lap index; capture a multi-segment scheduled run (e.g. a rain-paused mow's later segments) to see if it ever increments. (The THIRD/last value = stage 0=start/2=done is now decoded — 2026-05-30.)"
       - "Confirm the 3-element variant is SCHEDULED-correlated, not mow-type-correlated: cross-reference each 3-element session against its summary.mode (a 2026-05-30 spot-check found a morning mode=100 all-area scheduled mow that was 3-element, contradicting the old edge/spot/zone attribution). Needs a full per-session correlation."
+  - id: "s2p57"
     siid: 2
     piid: 57
     name: "robot_shutdown_trigger"
