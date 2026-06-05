@@ -436,7 +436,7 @@ The following keys and methods were removed in the 2026-05-28 session-replay rew
 - Archive keys: `_local_legs`, `_legs_meta`, `_mowing_legs`, `_traversal_legs`
 - Live-map API: `LiveMapState.set_mowing()`, leg accumulator arrays
 
-Old archives that pre-date the rewrite must be rebuilt via `tools/rebuild_session.py` to get a per-point `track`.
+Old archives that pre-date the rewrite must be rebuilt via `tools/session/rebuild_session.py` to get a per-point `track`.
 
 ### Reference
 

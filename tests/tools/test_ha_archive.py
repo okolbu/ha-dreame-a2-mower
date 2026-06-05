@@ -1,10 +1,10 @@
-"""Tests for tools._rebuild_session_lib.ha_archive."""
+"""Tests for tools.session._rebuild_session_lib.ha_archive."""
 from __future__ import annotations
 
 from pathlib import Path
 from unittest.mock import patch
 
-from tools._rebuild_session_lib.ha_archive import (
+from tools.session._rebuild_session_lib.ha_archive import (
     HAArchiveFetcher,
     parse_archive_filename,
 )
@@ -41,7 +41,7 @@ def test_fetcher_list_archives_parses_remote_ls():
         "garbage.txt\n"
     )
     with patch(
-        "tools._rebuild_session_lib.ha_archive._run_ssh",
+        "tools.session._rebuild_session_lib.ha_archive._run_ssh",
         return_value=fake_ls,
     ):
         f = HAArchiveFetcher(host="x", user="x", password="x", remote_dir="/r")
@@ -62,6 +62,6 @@ def test_fetcher_dry_run_does_not_scp(tmp_path: Path):
         host="x", user="x", password="x", remote_dir="/r",
         dry_run=True,
     )
-    with patch("tools._rebuild_session_lib.ha_archive._run_scp") as mock_scp:
+    with patch("tools.session._rebuild_session_lib.ha_archive._run_scp") as mock_scp:
         f.push_archive(local_path=fake, remote_filename="x.json")
         mock_scp.assert_not_called()

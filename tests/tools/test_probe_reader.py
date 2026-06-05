@@ -1,4 +1,4 @@
-"""Tests for tools._rebuild_session_lib.probe_reader."""
+"""Tests for tools.session._rebuild_session_lib.probe_reader."""
 from __future__ import annotations
 
 import json
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from tools._rebuild_session_lib.probe_reader import ProbeReader
+from tools.session._rebuild_session_lib.probe_reader import ProbeReader
 
 
 @pytest.fixture

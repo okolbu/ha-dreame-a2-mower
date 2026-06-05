@@ -1,7 +1,7 @@
-"""Tests for tools._rebuild_session_lib.session_windows."""
+"""Tests for tools.session._rebuild_session_lib.session_windows."""
 from __future__ import annotations
 
-from tools._rebuild_session_lib.session_windows import (
+from tools.session._rebuild_session_lib.session_windows import (
     Window,
     detect_windows,
 )

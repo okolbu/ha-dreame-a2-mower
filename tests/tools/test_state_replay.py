@@ -1,7 +1,7 @@
-"""Tests for tools._rebuild_session_lib.state_replay."""
+"""Tests for tools.session._rebuild_session_lib.state_replay."""
 from __future__ import annotations
 
-from tools._rebuild_session_lib.state_replay import (
+from tools.session._rebuild_session_lib.state_replay import (
     charge_at_start,
     settings_snapshot_at_start,
 )

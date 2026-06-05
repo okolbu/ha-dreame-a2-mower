@@ -1,7 +1,7 @@
-"""Tests for tools._rebuild_session_lib.samples_replay."""
+"""Tests for tools.session._rebuild_session_lib.samples_replay."""
 from __future__ import annotations
 
-from tools._rebuild_session_lib.samples_replay import backfill_samples
+from tools.session._rebuild_session_lib.samples_replay import backfill_samples
 
 
 class _StubReader:

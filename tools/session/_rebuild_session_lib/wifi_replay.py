@@ -26,7 +26,7 @@ def _load_decoder_module(name: str) -> ModuleType:
     """
     if name in _DECODER_CACHE:
         return _DECODER_CACHE[name]
-    repo_root = Path(__file__).resolve().parent.parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent.parent
     src = repo_root / "custom_components" / "dreame_a2_mower" / "protocol" / f"{name}.py"
     spec = importlib.util.spec_from_file_location(
         f"_rebuild_session_{name}", src,

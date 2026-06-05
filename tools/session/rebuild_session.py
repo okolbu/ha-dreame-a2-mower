@@ -19,31 +19,36 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-# Put the repo root on sys.path so `from tools._rebuild_session_lib...` works
+# Put the repo root on sys.path so `from tools.session._rebuild_session_lib...` works
 # regardless of the cwd from which the tool is invoked. The script lives at
-# <repo>/tools/rebuild_session.py, so parent.parent is <repo>.
-_REPO_ROOT = Path(__file__).resolve().parent.parent
+# <repo>/tools/session/rebuild_session.py, so parent.parent.parent is <repo>.
+_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
-from tools._rebuild_session_lib.ha_archive import (  # noqa: E402
+from tools.session._rebuild_session_lib.ha_archive import (  # noqa: E402
     HAArchiveFetcher,
 )
-from tools._rebuild_session_lib.track_replay import reconstruct_track  # noqa: E402
-from tools._rebuild_session_lib.probe_reader import ProbeReader  # noqa: E402
-from tools._rebuild_session_lib.samples_replay import backfill_samples  # noqa: E402
-from tools._rebuild_session_lib.session_windows import (  # noqa: E402
+from tools.session._rebuild_session_lib.track_replay import reconstruct_track  # noqa: E402
+from tools.session._rebuild_session_lib.probe_reader import ProbeReader  # noqa: E402
+from tools.session._rebuild_session_lib.samples_replay import backfill_samples  # noqa: E402
+from tools.session._rebuild_session_lib.session_windows import (  # noqa: E402
     Window,
     detect_windows,
 )
-from tools._rebuild_session_lib.ha_archive import (  # noqa: E402
+from tools.session._rebuild_session_lib.ha_archive import (  # noqa: E402
     ArchiveFilename,
 )
-from tools._rebuild_session_lib.state_replay import (  # noqa: E402
+from tools.session._rebuild_session_lib.state_replay import (  # noqa: E402
     charge_at_start,
     settings_snapshot_at_start,
 )
-from tools._rebuild_session_lib.wifi_replay import reconstruct_wifi_samples  # noqa: E402
+from tools.session._rebuild_session_lib.wifi_replay import reconstruct_wifi_samples  # noqa: E402
+from tools._toolmeta import add_to_parser  # noqa: E402
+
+TOOL_META = {"domain": "session", "run_by": "owner",
+    "when": "When reconstructing a session archive from probe logs (dev box only).",
+    "summary": "End-to-end rebuild of a session archive from MQTT probe logs."}
 
 
 def _cloud_segments_from_summary(raw_dict):
@@ -305,6 +310,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     parser.add_argument("--dry-run", action="store_true")
+    add_to_parser(parser, TOOL_META)
     args = parser.parse_args(argv)
 
     tz = zoneinfo.ZoneInfo(args.tz)

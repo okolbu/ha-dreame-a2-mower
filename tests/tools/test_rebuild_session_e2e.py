@@ -6,8 +6,8 @@ import json
 import zoneinfo
 from pathlib import Path
 
-from tools._rebuild_session_lib.probe_reader import ProbeReader
-from tools.rebuild_session import _diff_and_merge_samples, rebuild_one_session
+from tools.session._rebuild_session_lib.probe_reader import ProbeReader
+from tools.session.rebuild_session import _diff_and_merge_samples, rebuild_one_session
 
 
 def _write_synthetic_probe(path: Path):

@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from tools._rebuild_session_lib.track_replay import reconstruct_track
+from tools.session._rebuild_session_lib.track_replay import reconstruct_track
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 # A real 33-byte s1p4 full frame (from a probe log): decodes to a valid
@@ -29,7 +29,7 @@ def test_default_decoder_works_without_homeassistant():
     """
     script = (
         "import sys; sys.path.insert(0, %r)\n"
-        "from tools._rebuild_session_lib.track_replay import _default_decoder\n"
+        "from tools.session._rebuild_session_lib.track_replay import _default_decoder\n"
         "r = _default_decoder(bytes(%r))\n"
         "assert r is not None and len(r) == 4, r\n"
         "print('OK', r)\n"

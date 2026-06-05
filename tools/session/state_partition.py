@@ -3,7 +3,7 @@
 against probe-log ground truth.
 
 Usage:
-    python3 tools/state_partition.py <session.json> <probe_log.jsonl>
+    python3 tools/session/state_partition.py <session.json> <probe_log.jsonl>
 
 Prints:
   - Per-state seconds (from probe log STATE transitions)
@@ -23,6 +23,10 @@ import datetime as dt
 import json
 import sys
 from pathlib import Path
+
+TOOL_META = {"domain": "session", "run_by": "owner",
+    "when": "When verifying a session archive's time breakdown against probe-log ground truth.",
+    "summary": "Check a session JSON's time partition against probe-log evidence."}
 
 
 def parse_probe_log(probe_path: Path, start_ts: int, end_ts: int):
@@ -76,7 +80,7 @@ def main(session_path: Path, probe_path: Path) -> None:
     # in HA via the package __init__ (which fails outside the HA runtime).
     import importlib.util as ilu
 
-    repo_root = Path(__file__).resolve().parent.parent
+    repo_root = Path(__file__).resolve().parent.parent.parent
     sc_path = repo_root / "custom_components" / "dreame_a2_mower" / "session_card.py"
     spec = ilu.spec_from_file_location("session_card", sc_path)
     sc = ilu.module_from_spec(spec)  # type: ignore[arg-type]
