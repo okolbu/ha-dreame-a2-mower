@@ -32,7 +32,8 @@
 
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# This script lives at tools/release/release.sh — two levels below the repo root.
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 MANIFEST="custom_components/dreame_a2_mower/manifest.json"
