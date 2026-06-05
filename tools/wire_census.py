@@ -51,8 +51,40 @@ def main(argv=None) -> int:
 
 
 def _report_unknowns(census: dict) -> int:
-    # Implemented in Task 7; default no-op stub so the CLI parses.
-    print("(--unknowns report implemented in Task 7)")
+    import yaml as _yaml
+
+    from wire_census_lib import check_coverage
+
+    inv_path = os.path.join(
+        _REPO, "custom_components", "dreame_a2_mower", "inventory.yaml")
+    doc = _yaml.safe_load(open(inv_path))
+    idx: dict = {}
+
+    def walk(n):
+        if isinstance(n, dict):
+            if "siid" in n and "piid" in n and "value_kind" in n:
+                idx[(int(n["siid"]), int(n["piid"]))] = n
+            for v in n.values():
+                walk(v)
+        elif isinstance(n, list):
+            for it in n:
+                walk(it)
+    walk(doc)
+
+    viols = check_coverage(census, idx)
+    if not viols:
+        print("No unregistered wire values — inventory fully covers the census.")
+        return 0
+    print(f"{len(viols)} unregistered wire value(s):\n")
+    for v in viols:
+        print("  -", v)
+    print(
+        "\nClassification aids: grep OLD/ (esp. dreame-mower device_code.py / "
+        "const.py — its names matched ALL our confirmed codes); cross-check the "
+        "value's first_seen timestamp against the s2p1/s2p2/activity window in the "
+        "raw mqtt_message logs; or propose a labelled toggle/action test. Names + "
+        "meaning go in inventory.yaml ONLY — never sourced from the probe's PRETTY "
+        "names (those mirror our possibly-stale labels).")
     return 0
 
 
