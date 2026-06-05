@@ -50,30 +50,47 @@ with a **committed census artifact** (below).
 
 ### 1. `tools/wire_census.py` — census generator (dev-box)
 
-Aggregates all `probe_log_*.jsonl`. From `pretty` lines it parses
-`sNpM (NAME) = value`; from `deep` it parses nested-property shape dumps. Emits,
-per property:
+Aggregates all `probe_log_*.jsonl`, reading the **raw `mqtt_message`** entries
+(the authoritative `properties_changed` → `(siid, piid, value)` stream) — NOT the
+probe's decoded `pretty`/`deep` text. The census is deliberately **naming-agnostic
+and decode-agnostic**: it keys purely on the objective wire facts `(siid, piid)` +
+the value set. Emits, per property:
 
 ```jsonc
 {
   "s5p104": {
-    "siid": 5, "piid": 104, "names": ["S5P104_RAW"],
-    "kind_hint": "enum",            // auto-guess; inventory's value_kind wins
-    "values": [7, 12],              // distinct discrete values (enum/counter)
-    "shape_sigs": null,             // for nested props: distinct key-sets / op ids
+    "siid": 5, "piid": 104,
+    "value_kind_hint": "enum",      // auto-guess; inventory's value_kind wins
+    "values": [7, 12],              // distinct discrete int values
+    "shape_sigs": [],               // for nested (dict) values: distinct sorted key-sets
+    "is_blob": false,               // true if value is an encoded string / byte list
     "first_seen": {"7": "2026-04-..", "12": "2026-05-25 12:32:24"},
+    "probe_name_hint": "S5P104_RAW",// ADVISORY only — last name the probe PRETTY used;
+                                    // NOT authoritative, NOT used by the gate (see below)
     "count": 41
   },
   ...
 }
 ```
 
-- For **nested** props (s2p50/56/51) it records distinct **shape signatures**
-  (sorted key-sets, or the `o`/op id for s2p50) instead of raw values.
-- For **blob** props (s1p1/s1p4 `[bytes]`) it records presence only (no values —
-  internal byte decode is tracked in `knowledge-gaps.md`, not here).
-- `kind_hint` auto-guess: small distinct set → `enum`; wide 0–255 spread →
-  `counter`; `[bytes]` → `blob`; nested dump → `nested`. Advisory only.
+- Value classification is purely structural, from the raw value's Python type:
+  `int` (not bool) → discrete value; `dict` → nested, record the sorted top-level
+  **key-set** as a shape signature; `str`/`list` (base64 / hex / byte array) →
+  `is_blob: true`, presence only (internal byte decode is tracked in
+  `knowledge-gaps.md`, not here).
+- `value_kind_hint` auto-guess: small distinct int set → `enum`; wide 0–255 spread
+  → `counter`; blob → `blob`; dict → `nested`. **Advisory only** — the inventory's
+  declared `value_kind` always wins.
+
+**Why NOT the probe's PRETTY names/decode (the feedback-loop trap):** the probe
+imports the integration's own modules, so its `pretty` names mirror the
+integration's *current* (possibly stale) naming plus some probe-local names — it
+labels `s1p53` `OBSTACLE_FLAG`, exactly the mislabel we're trying to catch. If the
+census drew names or meaning from PRETTY, a stale name would round-trip
+probe→census→inventory and re-confirm itself. So **names and meaning live ONLY in
+`inventory.yaml`** (the SoT); the census carries an optional `probe_name_hint`
+marked explicitly advisory, shown only in the `--unknowns` report as a "the probe
+currently calls this X" breadcrumb, never used by the gate.
 
 Writes **`docs/research/wire-census.json`** (committed, pretty-printed, stable key
 order so diffs are clean). Regenerated on the dev box after new captures.
@@ -85,8 +102,9 @@ order so diffs are clean). Regenerated on the dev box after new captures.
   hand-typing ~hundreds of values).
 - `--unknowns` — print every census value/property NOT registered in inventory,
   each annotated with **circumstance** (timestamp + the s2p1/s2p2/activity window
-  around its first sighting, pulled from `mqtt_message`) and an **auto-grep of
-  `OLD/`** (esp. `dreame-mower/.../device_code.py`) for candidate names.
+  around its first sighting, pulled from `mqtt_message`), an **auto-grep of
+  `OLD/`** (esp. `dreame-mower/.../device_code.py`) for candidate names, and the
+  advisory `probe_name_hint` (flagged "probe's CURRENT name — may be stale, verify").
 
 ### 2. Inventory schema additions (per observed entry)
 
