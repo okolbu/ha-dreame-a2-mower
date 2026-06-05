@@ -257,7 +257,7 @@ class SessionArchive:
             _LOGGER.warning(
                 "[archive] %d session(s) lack map_id (legacy schema); "
                 "they will render as [Map ?] in the replay picker. "
-                "Run tools/recover_sessions.py to retro-fit, or wipe and rebuild.",
+                "Run tools/session/rebuild_session.py to rebuild, or wipe and rebuild.",
                 legacy_count,
             )
 
