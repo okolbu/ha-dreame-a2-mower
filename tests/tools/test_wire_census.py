@@ -110,3 +110,20 @@ def test_seed_blocks_emits_valid_yaml_for_enum_and_nested():
     assert parsed["s2p50"]["observed_shapes"][0]["sig"] == "d,t"
     assert parsed["s1p1"]["value_kind"] == "blob"
     assert "observed_values" not in parsed["s1p1"]  # blobs: presence only
+
+
+import subprocess, sys, os
+
+
+def test_cli_writes_census_json(tmp_path):
+    logdir = tmp_path / "logs"
+    logdir.mkdir()
+    (logdir / "probe_log_1.jsonl").write_text(_line(5, 104, 7) + "\n" + _line(5, 104, 12) + "\n")
+    out = tmp_path / "wire-census.json"
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    r = subprocess.run(
+        [sys.executable, "tools/wire_census.py", "--log-dir", str(logdir), "--out", str(out)],
+        cwd=repo, capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
+    data = json.loads(out.read_text())
+    assert data["s5p104"]["values"] == [7, 12]
