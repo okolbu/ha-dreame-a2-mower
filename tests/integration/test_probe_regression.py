@@ -54,7 +54,7 @@ from custom_components.dreame_a2_mower.mower.state import MowerState
 # PROPERTY_MAPPING (or _BLOB_SLOTS / _SUPPRESSED_SLOTS) and remove it
 # from this list.
 _PROBE_KNOWN_UNDECODED: set[tuple[int, int]] = {
-    # s1 status fields beyond obstacle_flag — semantics not nailed down.
+    # s1 status fields beyond bluetooth_connected — semantics not nailed down.
     # (1, 50), (1, 51), (1, 52) suppressed in the novelty pipeline as
     # empty-dict / boundary-marker noise (see _SUPPRESSED_SLOTS).
     # s2 status block — most are mapped, these aren't yet.

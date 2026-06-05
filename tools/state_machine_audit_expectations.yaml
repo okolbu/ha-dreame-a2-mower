@@ -83,11 +83,11 @@ binary_sensor.mower_in_dock:
   reboot: required
   note: "Initial Location is AT_DOCK → True."
 
-binary_sensor.obstacle_detected:
+binary_sensor.bluetooth_connected:
   holder: mower_state
   idle: false
   reboot: required
-  note: "Mid-session live flag. Idle = no obstacle → False."
+  note: "s1p53 controlling-app BLE connection flag (relabelled from obstacle_detected 2026-06-05). Idle = no app BLE-connected → False."
 
 binary_sensor.human_presence_alert_voice:
   holder: mower_state

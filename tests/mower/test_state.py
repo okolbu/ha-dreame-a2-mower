@@ -50,7 +50,7 @@ def test_mower_state_f2_fields_default_to_none():
     """All F2 fields default to None on a fresh MowerState."""
     s = MowerState()
     assert s.error_code is None
-    assert s.obstacle_flag is None
+    assert s.bluetooth_connected is None
     assert s.area_mowed_m2 is None
     assert s.total_lawn_area_m2 is None
     assert s.mowing_phase is None
@@ -78,7 +78,7 @@ def test_mower_state_f2_construction_with_all_fields():
         battery_level=72,
         charging_status=ChargingStatus.NOT_CHARGING,
         error_code=0,
-        obstacle_flag=False,
+        bluetooth_connected=False,
         area_mowed_m2=12.5,
         total_lawn_area_m2=378.3,
         mowing_phase=2,

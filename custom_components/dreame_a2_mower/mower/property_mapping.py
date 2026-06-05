@@ -58,7 +58,7 @@ PROPERTY_MAPPING: dict[tuple[int, int], PropertyMappingEntry] = {
     (3, 2): PropertyMappingEntry(field_name="charging_status"),       # s3.2 CHARGING_STATUS
 
     # F2 additions:
-    (1, 53): PropertyMappingEntry(field_name="obstacle_flag"),       # bool
+    (1, 53): PropertyMappingEntry(field_name="bluetooth_connected"),       # bool
     (2, 2): PropertyMappingEntry(field_name="error_code"),           # int
     # s2.56 SESSION-STATUS — wire shape is a dict envelope, not a bare int:
     #   {"status": []}             → no active task

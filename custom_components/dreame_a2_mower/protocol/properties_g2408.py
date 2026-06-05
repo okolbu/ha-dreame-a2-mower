@@ -26,7 +26,7 @@ class Property(StrEnum):
     CHARGING_STATUS = "charging_status"
     MOWING_TELEMETRY = "mowing_telemetry"
     HEARTBEAT = "heartbeat"
-    OBSTACLE_FLAG = "obstacle_flag"
+    BLUETOOTH_CONNECTED = "bluetooth_connected"
     MULTIPLEXED_CONFIG = "multiplexed_config"
 
 
@@ -35,7 +35,7 @@ PROPERTY_MAP: Final[dict[Property, tuple[int, int]]] = {
     Property.CHARGING_STATUS: (3, 2),
     Property.MOWING_TELEMETRY: (1, 4),
     Property.HEARTBEAT: (1, 1),
-    Property.OBSTACLE_FLAG: (1, 53),
+    Property.BLUETOOTH_CONNECTED: (1, 53),
     Property.MULTIPLEXED_CONFIG: (2, 51),
 }
 
