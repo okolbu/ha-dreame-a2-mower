@@ -20,6 +20,11 @@ class _OssMixin:
         Source: legacy ``dreame/protocol.py`` ``get_interim_file_url()``.
         See also: docs/research/g2408-protocol.md §1.2 (OSS download).
         """
+        if not object_name:
+            # An empty object_name is never a valid OSS key; the cloud replies
+            # with error 40020 ("数据错误"). Skip the round-trip + the WARNING.
+            _LOGGER.debug("[OSS] get_interim_file_url: empty object_name — skipping")
+            return None
         strings = self._ensure_strings()
         api_response = self._api_call(
             f"{strings[23]}/{strings[39]}/{strings[55]}",

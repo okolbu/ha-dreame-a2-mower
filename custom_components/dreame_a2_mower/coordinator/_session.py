@@ -356,7 +356,7 @@ class _SessionMixin:
         elapsed_ms = int((_time.monotonic() - replay_start_unix) * 1000)
         tl_count = len(legs_timeline) if legs_timeline else 0
         total_pts = sum(len(leg["pts"]) for leg in legs_timeline) if legs_timeline else 0
-        LOGGER.warning(
+        LOGGER.debug(
             "[F5.9.1] render_work_log_session: rendered work-log PNG (%d bytes) "
             "for key=%s, track_points=%d, legs=%d, total_leg_points=%d, elapsed=%dms",
             len(png) if png else 0,
@@ -421,7 +421,7 @@ class _SessionMixin:
             and not self._real_task_state_observed
             and not self.data.pending_session_object_name
         ):
-            LOGGER.warning(
+            LOGGER.debug(
                 "[F5.6.1] _periodic_session_retry: skipping FINALIZE_INCOMPLETE "
                 "from boot-stale state (task_state_code still default None, no "
                 "fresh MQTT push observed yet, no pending OSS event). "
@@ -434,7 +434,7 @@ class _SessionMixin:
         # v1.0.0a48: bumped to WARNING so the trail shows up in the
         # default HA log. Only fires on non-NOOP actions, which means
         # at most a handful per mow.
-        LOGGER.warning(
+        LOGGER.debug(
             "[F5.6.1] _periodic_session_retry: action=%s "
             "task_state=%r prev=%r pending_oss=%r",
             action.name,
@@ -527,7 +527,7 @@ class _SessionMixin:
             )
             return
         if self._provisional_session_is_cloud_finalized():
-            LOGGER.warning(
+            LOGGER.debug(
                 "[F5.6.1] _finalize_non_mow_immediate(trigger=%s): session is cloud-finalized "
                 "(mow/patrol) — refusing to finalize non-mow path; this is a bug if called "
                 "for a real mow",
@@ -550,7 +550,7 @@ class _SessionMixin:
             # resume_hours in {0, None} it stays active until the mower undocks
             # (which clears _rain_delay_started_at) — in practice the mower
             # must undock to resume, so the session still resolves.
-            LOGGER.warning(
+            LOGGER.debug(
                 "[F5.6.1] _finalize_non_mow_immediate(trigger=%s): rain delay active "
                 "— vetoing finalize (mower paused at dock for rain, session not ended)",
                 trigger,
@@ -560,7 +560,7 @@ class _SessionMixin:
         # that entered between the guards above bails at the latch check.
         self._non_mow_finalize_in_progress = True
         try:
-            LOGGER.warning(
+            LOGGER.debug(
                 "[F5.6.1] _finalize_non_mow_immediate: trigger=%s — finalizing non-mow session "
                 "immediately (no dock-wait); live_map.total_points=%d",
                 trigger,

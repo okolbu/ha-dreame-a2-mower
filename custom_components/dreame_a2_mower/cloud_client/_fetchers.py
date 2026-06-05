@@ -27,7 +27,7 @@ class _FetchersMixin:
         try:
             cfg = get_cfg(self.action)
         except CfgActionError as ex:
-            _LOGGER.warning("fetch_cfg: routed-action error: %s", ex)
+            _LOGGER.debug("fetch_cfg: routed-action error: %s", ex)
             return None
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("fetch_cfg: unexpected error: %s", ex)
@@ -53,7 +53,7 @@ class _FetchersMixin:
         try:
             payload = probe_get(self.action, "LOCN")
         except CfgActionError as ex:
-            _LOGGER.warning("fetch_locn: routed-action error: %s", ex)
+            _LOGGER.debug("fetch_locn: routed-action error: %s", ex)
             return None
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("fetch_locn: unexpected error: %s", ex)
@@ -92,7 +92,7 @@ class _FetchersMixin:
         try:
             payload = probe_get(self.action, "DEV")
         except CfgActionError as ex:
-            _LOGGER.warning("fetch_dev: routed-action error: %s", ex)
+            _LOGGER.debug("fetch_dev: routed-action error: %s", ex)
             return None
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("fetch_dev: unexpected error: %s", ex)
@@ -126,7 +126,7 @@ class _FetchersMixin:
         try:
             payload = probe_get(self.action, "MIHIS")
         except CfgActionError as ex:
-            _LOGGER.warning("fetch_mihis: routed-action error: %s", ex)
+            _LOGGER.debug("fetch_mihis: routed-action error: %s", ex)
             return None
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("fetch_mihis: unexpected error: %s", ex)
@@ -166,7 +166,7 @@ class _FetchersMixin:
         try:
             payload = probe_get(self.action, "DOCK")
         except CfgActionError as ex:
-            _LOGGER.warning("fetch_dock: routed-action error: %s", ex)
+            _LOGGER.debug("fetch_dock: routed-action error: %s", ex)
             return None
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("fetch_dock: unexpected error: %s", ex)
@@ -202,7 +202,7 @@ class _FetchersMixin:
         try:
             payload = probe_get(self.action, "NET")
         except CfgActionError as ex:
-            _LOGGER.warning("fetch_net: routed-action error: %s", ex)
+            _LOGGER.debug("fetch_net: routed-action error: %s", ex)
             return None
         except Exception as ex:  # pragma: no cover — defensive
             _LOGGER.warning("fetch_net: unexpected error: %s", ex)

@@ -101,7 +101,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # system_log/list which only returns WARNING+. Once-per-setup,
         # so log noise is bounded; the count gives a quick health
         # signal that the persistent catalog is alive.
-        LOGGER.warning(
+        LOGGER.debug(
             "[novel] replayed %d known observations from %s",
             _replayed, _novel_path,
         )

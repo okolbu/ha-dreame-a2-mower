@@ -131,7 +131,7 @@ class _DeviceSyncMixin:
                         (s.spot_id, s.name, float(getattr(s, "area_m2", 0.0) or 0.0))
                         for s in getattr(map_data, "spot_zones", ())
                     ]
-                    LOGGER.warning(
+                    LOGGER.debug(
                         "[F5] target_area: SPOT mode wanted=%s matched=%s "
                         "available=%s — falling back to total_lawn_area_m2",
                         list(wanted), matched, available,

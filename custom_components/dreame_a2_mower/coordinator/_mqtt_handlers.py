@@ -433,7 +433,7 @@ class _MqttHandlersMixin:
             # v1.0.0a48: bumped to WARNING so the trail is visible in
             # the HA default log without enabling DEBUG. Each mow only
             # produces a handful of these so noise stays low.
-            LOGGER.warning(
+            LOGGER.debug(
                 "[F5] task_state_code transition %r → %r (live_map.is_active=%s)",
                 prev, new_task_state, self.live_map.is_active(),
             )
@@ -619,7 +619,7 @@ class _MqttHandlersMixin:
             and self.live_map.is_active()
             and not self._provisional_session_is_cloud_finalized()
         ):
-            LOGGER.warning(
+            LOGGER.debug(
                 "[F5] non-mow session end edge %r→%r — scheduling immediate finalize",
                 prev, new_task_state,
             )
@@ -1063,7 +1063,7 @@ class _MqttHandlersMixin:
                     self.live_map.is_active()
                     and not self._provisional_session_is_cloud_finalized()
                 ):
-                    LOGGER.warning(
+                    LOGGER.debug(
                         "[F5] s2p2=75 (arrived_at_maintenance_point) with non-mow "
                         "session active — scheduling immediate finalize"
                     )
@@ -1094,7 +1094,7 @@ class _MqttHandlersMixin:
                     and not self._provisional_session_is_cloud_finalized()
                 ):
                     self._prev_s2p56_empty = now_empty
-                    LOGGER.warning(
+                    LOGGER.debug(
                         "[F5] new-command boundary (s2p56 []→active) while a "
                         "prior session is still open — finalizing prior session "
                         "before starting the new one"
