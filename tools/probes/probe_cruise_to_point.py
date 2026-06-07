@@ -36,7 +36,7 @@ the HTTP reply alone is necessary but not sufficient — the firmware
 may also reject silently.
 
 Credentials are read from ``DREAME_USER`` / ``DREAME_PASS`` env vars
-or ``/data/claude/homeassistant/server-credentials.txt`` (email on
+or ``/data/claude/homeassistant/secrets/server-credentials.txt`` (email on
 line 1, password on line 2, country on optional line 3 — default
 ``eu``). Pass ``--credentials <path>`` to override.
 """
@@ -261,7 +261,7 @@ ENVELOPES: dict[str, callable] = {
 
 # --- Credentials + client setup ----------------------------------------------
 
-DEFAULT_CREDS_PATH = "/data/claude/homeassistant/server-credentials.txt"
+DEFAULT_CREDS_PATH = "/data/claude/homeassistant/secrets/server-credentials.txt"
 
 
 def _load_credentials(path: str) -> dict[str, str]:

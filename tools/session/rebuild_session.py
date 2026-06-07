@@ -286,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--tz", default="Europe/Oslo")
     parser.add_argument(
         "--ha-cred-file",
-        default="/data/claude/homeassistant/ha-credentials.txt",
+        default="/data/claude/homeassistant/secrets/ha-credentials.txt",
     )
     parser.add_argument(
         "--ha-sessions-dir", default="/config/dreame_a2_mower/sessions",

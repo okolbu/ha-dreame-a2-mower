@@ -67,7 +67,7 @@ echo "   /releases/latest → $LATEST_TAG"
 
 # Best-effort HACS refresh (matches release.sh's behavior).
 HA_HOST="${HA_HOST:-10.0.0.30}"
-HA_TOKEN_FILE="${HA_TOKEN_FILE:-/data/claude/homeassistant/ha-credentials.txt}"
+HA_TOKEN_FILE="${HA_TOKEN_FILE:-/data/claude/homeassistant/secrets/ha-credentials.txt}"
 if [[ -f "$HA_TOKEN_FILE" ]]; then
     TOKEN="$(sed -n '4p' "$HA_TOKEN_FILE")"
     if [[ -n "$TOKEN" ]]; then

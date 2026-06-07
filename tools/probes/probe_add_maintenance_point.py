@@ -92,7 +92,7 @@ DreameA2CloudClient = _cloud.DreameA2CloudClient
 
 
 def _load_creds() -> dict[str, str]:
-    p = Path("/data/claude/homeassistant/server-credentials.txt")
+    p = Path("/data/claude/homeassistant/secrets/server-credentials.txt")
     lines = [l.strip() for l in p.read_text().splitlines() if l.strip()]
     return {"username": lines[0], "password": lines[1],
             "country": lines[2] if len(lines) > 2 else "eu"}

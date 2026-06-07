@@ -37,7 +37,7 @@ REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$REPO_ROOT"
 
 MANIFEST="custom_components/dreame_a2_mower/manifest.json"
-HA_CRED="/data/claude/homeassistant/ha-credentials.txt"
+HA_CRED="/data/claude/homeassistant/secrets/ha-credentials.txt"
 
 NOTES_FILE=""
 EXPLICIT_VERSION=""

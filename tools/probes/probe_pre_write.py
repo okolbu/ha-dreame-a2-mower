@@ -63,7 +63,7 @@ terminal, ``probe_a2_mqtt.py`` will also show the device's ``s6p2`` echo if the
 firmware re-publishes the frame.
 
 Credentials: ``DREAME_USER`` / ``DREAME_PASS`` env vars or
-``/data/claude/homeassistant/server-credentials.txt`` (email line 1, password
+``/data/claude/homeassistant/secrets/server-credentials.txt`` (email line 1, password
 line 2, country optional line 3, default ``eu``). ``--credentials <path>`` overrides.
 """
 from __future__ import annotations
@@ -206,7 +206,7 @@ AUTO_ORDER = ["wrapped", "bare", "named"]
 
 # --- Credentials + client setup (mirrors probe_cruise_to_point.py) -----------
 
-DEFAULT_CREDS_PATH = "/data/claude/homeassistant/server-credentials.txt"
+DEFAULT_CREDS_PATH = "/data/claude/homeassistant/secrets/server-credentials.txt"
 
 
 def _load_credentials(path: str) -> dict[str, str]:
