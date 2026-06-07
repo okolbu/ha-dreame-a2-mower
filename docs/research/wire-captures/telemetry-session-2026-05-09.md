@@ -2,7 +2,7 @@
 
 Live capture from a normal mowing session that started at `2026-05-09 14:31:39` and was actively MOWING when the audit ran (~23 min in). Cross-validated against the user's note that 10-20 full sessions exist in the same probe log going back to 2026-05-05 at least.
 
-**Probe log:** `/data/claude/homeassistant/probe_log_20260419_130434.jsonl`
+**Probe log:** `/data/claude/homeassistant/probe/logs/probe_log_20260419_130434.jsonl`
 **Integration:** `v1.0.2a8`
 **Firmware:** `4.3.6_0550`
 **Spec commit:** `b17bc6a`

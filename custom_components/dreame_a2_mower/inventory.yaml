@@ -1356,7 +1356,7 @@ properties:
           continued mowing for ~19 more hours (two 4-hour rain-protection
           delays). The true session-end is signalled later by an empty status
           `[]` event or by the integration's cloud-summary gate.
-        evidence: "/data/claude/homeassistant/probe_log_20260514_211550.jsonl@2026-05-09 19:00:46→2026-05-10 14:11:55 + user confirmation"
+        evidence: "/data/claude/homeassistant/probe/logs/probe_log_20260514_211550.jsonl@2026-05-09 19:00:46→2026-05-10 14:11:55 + user confirmation"
       - date: "2026-05-16"
         status: retracted
         claim: |
