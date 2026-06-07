@@ -19,7 +19,7 @@ def test_probe_values_produce_correct_types(capsys):
             slot_to_fields[key] = [n for n, _ in entry.multi_field]
 
     slot_values = {}
-    for path in sorted(glob.glob('/data/claude/homeassistant/probe_log_*.jsonl')):
+    for path in sorted(glob.glob('/data/claude/homeassistant/probe/logs/probe_log_*.jsonl')):
         for line in Path(path).read_text(errors='replace').splitlines():
             try: e = json.loads(line)
             except: continue

@@ -80,13 +80,13 @@ _PROBE_KNOWN_UNDECODED: set[tuple[int, int]] = {
 def _probe_log_paths() -> list[Path]:
     """Return absolute paths to every available probe_log_*.jsonl.
 
-    Looks in the user's known location (``/data/claude/homeassistant/``)
+    Looks in the user's known location (``/data/claude/homeassistant/probe/logs/``)
     plus the repo's own ``tests/fixtures/`` in case a sample is checked
     in for CI.
     """
     candidates: list[str] = []
     candidates.extend(
-        glob.glob("/data/claude/homeassistant/probe_log_*.jsonl")
+        glob.glob("/data/claude/homeassistant/probe/logs/probe_log_*.jsonl")
     )
     candidates.extend(
         glob.glob(

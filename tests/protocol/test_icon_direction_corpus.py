@@ -41,7 +41,7 @@ import statistics
 import pytest
 
 # The probe corpus lives in the PARENT dir, outside the worktree.
-CORPUS = sorted(glob.glob("/data/claude/homeassistant/probe_log_*.jsonl"))
+CORPUS = sorted(glob.glob("/data/claude/homeassistant/probe/logs/probe_log_*.jsonl"))
 
 # Fixed projection. The affine constants cancel in an angle, so identity-ish
 # values are fine -- the point is to exercise the SAME formula shape the JS
