@@ -833,7 +833,7 @@ slot is likely absent or a no-op.
 
 ### s4p68 — `device_snapshot_bundle`
 
-Discovered 2026-05-06 in `dreame_cloud_dumps/dump_20260506T110907.json`
+Discovered 2026-05-06 in `cloud/dumps/dump_20260506T110907.json`
 via `dreame_cloud_dump.py`'s `_PROP_PROBES` sweep. Calling
 `get_properties(siid=4, piid=68)` returns a curated bundle of
 multiple unrelated properties' current values rather than a

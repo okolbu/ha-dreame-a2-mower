@@ -63,7 +63,7 @@ _BATCHES: tuple[Batch, ...] = (
     Batch(
         name="candidates list re-test",
         description=(
-            "Walk dreame_cloud_dumps/*.json 'candidates' list and re-probe "
+            "Walk cloud/dumps/*.json 'candidates' list and re-probe "
             "any target that returned non-error in the previous dump."
         ),
         estimated_calls=15,

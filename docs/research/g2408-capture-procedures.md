@@ -247,12 +247,12 @@ Every procedure follows this structure:
 **Estimated effort:** 1 day to set up; 1-2 weeks to accumulate samples; ~30 min to merge findings
 
 ### Prerequisites
-- `dreame_cloud_dump.py` script working and producing `dreame_cloud_dumps/dump_<timestamp>.json` files.
+- `dreame_cloud_dump.py` script working and producing `cloud/dumps/dump_<timestamp>.json` files.
 - A mechanism to run it on a schedule (cron, systemd timer, or HA automation that calls a shell script).
 
 ### Procedure
 1. Schedule `dreame_cloud_dump.py` to run hourly for 1-2 weeks.
-2. Each run writes a fresh dump under `dreame_cloud_dumps/`.
+2. Each run writes a fresh dump under `cloud/dumps/`.
 3. Periodically (every few days), run `python tools/inventory/inventory_audit.py --consistency` to surface any seen_on_wire / value-catalog contradictions.
 4. After the collection period, walk all dumps and look for endpoint flips:
    ```bash
@@ -260,7 +260,7 @@ Every procedure follows this structure:
    import json, glob
    from collections import defaultdict
    responses = defaultdict(lambda: {'ok': 0, 'r-1': 0, 'r-3': 0})
-   for path in sorted(glob.glob('dreame_cloud_dumps/dump_*.json')):
+   for path in sorted(glob.glob('cloud/dumps/dump_*.json')):
        d = json.load(open(path))
        for k, v in (d.get('cfg_individual') or {}).items():
            if isinstance(v, dict):

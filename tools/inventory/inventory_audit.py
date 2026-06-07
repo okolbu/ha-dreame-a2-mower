@@ -381,7 +381,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--cloud-dump-glob", type=str,
-        default=str(REPO_ROOT.parent / "dreame_cloud_dumps" / "dump_*.json"),
+        default=str(REPO_ROOT.parent / "cloud" / "dumps" / "dump_*.json"),
     )
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     parser.add_argument(

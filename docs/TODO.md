@@ -188,7 +188,7 @@ class+confidence overlay, e.g. "human 80%") is identified and documented, or rul
 Systematically ruled the photo list OUT of every device-keyed surface reachable
 with the integration's Dreame-Auth token (backend A):
 - **batch device-data** — `getDeviceData` ignores the `key` filter and returns the
-  full model; there is no AI/photo key. (Already true of every `dreame_cloud_dumps/`
+  full model; there is no AI/photo key. (Already true of every `cloud/dumps/`
   empty-batch read.)
 - **`iotstatus/history`** (the device-data time-series query) — property-history for
   s2p55 / s2p51 / s1p53 → `{"list":[]}`; also empty for s2p1/s2p2 and siid=1/2

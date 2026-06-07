@@ -16,7 +16,7 @@ _sources:
     dreame_mova_mower: "github.com/nicolasglg/dreame-mova-mower"
     legacy: "github.com/okolbu/ha-dreame-a2-mower-legacy"
   probe_log_corpus_glob: "../probe_log_*.jsonl"
-  cloud_dump_corpus_glob: "../dreame_cloud_dumps/dump_*.json"
+  cloud_dump_corpus_glob: "../cloud/dumps/dump_*.json"
 
 # Sections — each is a list of rows. Empty at bootstrap; populated
 # by Tasks 8 onward.
@@ -1210,7 +1210,7 @@ properties:
           so empty ai_obstacle is NOT a disabled-feature artifact. (Corrects the
           stale reference_app_config "Capture Photos AI Obstacles = Off" note;
           AOP maps to that exact switch per switch_global.py:475/871.)
-        evidence: "dreame_cloud_dumps/dump_2026050*..dump_20260512*.json AOP=1, REC=[1,1,1,1,1,1,0,1,3]"
+        evidence: "cloud/dumps/dump_2026050*..dump_20260512*.json AOP=1, REC=[1,1,1,1,1,1,0,1,3]"
       - date: "2026-05-31"
         status: presumed
         claim: |
@@ -2257,7 +2257,7 @@ properties:
 
           The ".0550" filename suffix is the device's RUNNING-firmware stamp
           (CFG.DEV.fw = 4.3.6_0550) applied to every device-uploaded OSS object —
-          it also appears on the session-summary `.0550.json` files (oss_dumps/)
+          it also appears on the session-summary `.0550.json` files (cloud/oss/)
           and patrol `.0550.json`. It is NOT an OTA-package version; all three
           PCDs carry the same 0550 stamp because the mower ran fw 0550 the whole
           time. The variable number in the filename decodes as the UTC
@@ -2544,7 +2544,7 @@ properties:
     category: "blob"
     payload_shape: "list of {code, did, piid, siid, value} property snapshots — bulk multi-property read, NOT a single-value property"
     semantic: |
-      Discovered 2026-05-06 in `dreame_cloud_dumps/dump_20260506T110907.json`
+      Discovered 2026-05-06 in `cloud/dumps/dump_20260506T110907.json`
       via `dreame_cloud_dump.py`'s `_PROP_PROBES` sweep. Calling
       `get_properties(siid=4, piid=68)` returns a curated bundle of
       multiple unrelated properties' current values rather than a
@@ -8890,12 +8890,12 @@ session_summary_fields:
       - date: "2026-05-30"
         status: verified
         claim: |
-          mode = mow-type op enum, decoded across 10 OSS summaries in oss_dumps/
+          mode = mow-type op enum, decoded across 10 OSS summaries in cloud/oss/
           (2026-05-20..26): mode=100 all-area mows, 101 edge (05-23 19:00 sched edge),
           102 zone (05-20 19:02), 103 spot (05-21/25/26 spot mows incl. multi-spot).
           1:1 with the s2p50 TASK op. Answers the prior open question (yes, mode
           distinguishes all-areas/edge/zone/spot).
-        evidence: "oss_dumps/ali_dreame_2026_05_2*_*.json.pretty.json mode fields cross-referenced with run type (s2p50 op when echoed + schedule)"
+        evidence: "cloud/oss/ali_dreame_2026_05_2*_*.json.pretty.json mode fields cross-referenced with run type (s2p50 op when echoed + schedule)"
       - date: "2026-05-30"
         status: verified
         claim: |
@@ -9019,11 +9019,11 @@ session_summary_fields:
       - date: "2026-05-30"
         status: partial
         claim: |
-          start_mode: 1 = scheduled, 0 = manual/app. Across oss_dumps/ (05-20..26)
+          start_mode: 1 = scheduled, 0 = manual/app. Across cloud/oss/ (05-20..26)
           every scheduled-time mow (e.g. 09:39, 11:38) has start_mode=1; every
           app-triggered run (15:19, 16:37, 19:18, 18:30, 19:02 spot/zone) has 0.
           Voice/HA-service starts not yet sampled.
-        evidence: "oss_dumps/ali_dreame_2026_05_2*_*.json.pretty.json start_mode cross-referenced with schedule vs app-trigger"
+        evidence: "cloud/oss/ali_dreame_2026_05_2*_*.json.pretty.json start_mode cross-referenced with schedule vs app-trigger"
       - date: "2026-05-15"
         status: presumed
         claim: "session_card.START_MODE_LABELS holds best-effort enum mappings; unmapped values render as 'raw=N' on the dashboard's Picked-session card"
@@ -9261,13 +9261,13 @@ session_summary_fields:
       - date: "2026-05-26"
         status: verified
         claim: "trajectory[].data is the lawn outline (closed polygon). Same extent across sessions on the same lawn; only changes when the user edits the boundary."
-        evidence: "oss_dumps/INDEX.txt — 17 session blobs over 11 days; trajectory.data extent x:[-1092,2089] y:[-1407,1733] across all sessions until 2026-05-21 18:22 when it grew to y:[-1407,2054] (boundary edit), then stayed constant. Closed-loop check: first ≈ last with ~0.15m gap."
+        evidence: "cloud/oss/INDEX.txt — 17 session blobs over 11 days; trajectory.data extent x:[-1092,2089] y:[-1407,1733] across all sessions until 2026-05-21 18:22 when it grew to y:[-1407,2054] (boundary edit), then stayed constant. Closed-loop check: first ≈ last with ~0.15m gap."
         retracts: "High-level planning path. Each entry has a composite id (two ints) and a data array of [x, y] waypoints. Purpose: likely the routing skeleton used by the firmware's path planner."
         reason: "Identical content across every session, including spot mows that took totally different paths — incompatible with the planning-path hypothesis."
       - date: "2026-05-26"
         status: verified
         claim: "trajectory[0].track carries the edge-mow path (mode 101). Three edge OSS blobs each had 1583-3313 valid track points; extent matches lawn boundary; coordinate frame is cm. Empty for all non-edge modes."
-        evidence: "oss_dumps/ali_dreame_2026_05_{16,17,23}_*.json — 3 edge mows, traj.track populated; oss_dumps/INDEX.txt cross-mode audit shows traj.track empty for modes 100/102/103."
+        evidence: "cloud/oss/ali_dreame_2026_05_{16,17,23}_*.json — 3 edge mows, traj.track populated; cloud/oss/INDEX.txt cross-mode audit shows traj.track empty for modes 100/102/103."
         retracts: "Edge mow / mode 101 → empty (firmware does not record the perimeter walk in OSS; live MQTT capture is the only source)."
         reason: "I only inspected trajectory[0].data on first survey and missed the sibling .track field. The edge path WAS in the OSS all along — under the wrong-looking parent."
 
@@ -9303,7 +9303,7 @@ session_summary_fields:
       - date: "2026-05-26"
         status: verified
         claim: "spot[N].track carries the mowing path for the spot mowed this session; other spots in the same array have just .data corners."
-        evidence: "oss_dumps/ — 4 spot mows verified: 2026-05-21 18:22 (8.2m²) → spot[2].track 176pts; 2026-05-25 21:10 (9m²) → spot[0].track 61pts; 2026-05-26 20:22 (9m²) → spot[0].track 61pts; 2026-05-26 20:56 (5m²) → spot[1].track 60pts. In each session, exactly ONE spot[N] has .track set."
+        evidence: "cloud/oss/ — 4 spot mows verified: 2026-05-21 18:22 (8.2m²) → spot[2].track 176pts; 2026-05-25 21:10 (9m²) → spot[0].track 61pts; 2026-05-26 20:22 (9m²) → spot[0].track 61pts; 2026-05-26 20:56 (5m²) → spot[1].track 60pts. In each session, exactly ONE spot[N] has .track set."
     open_questions:
       - "What's the firmware's emit cadence for spot.track points? 60 pts over 6 min = ~10s/pt — much sparser than s1p4 live (5Hz). Is it a fixed time interval, distance interval, or curated/decimated?"
 
@@ -9333,7 +9333,7 @@ session_summary_fields:
       - date: "2026-06-03"
         status: verified
         claim: "mode=107 patrol summary point=[{id:3,param:{},point:[-305,-548,2],time:60,type:2},{id:4,param:{},point:[-198,634,2],time:60,type:2}]; param EMPTY for both; ids 3,4 match the s2p56 queue and point_status."
-        evidence: "oss_dumps/ali_dreame_2026_06_03_BM169439_-112293549_184603810.0550.json.pretty.json"
+        evidence: "cloud/oss/ali_dreame_2026_06_03_BM169439_-112293549_184603810.0550.json.pretty.json"
 
   - id: "summary_point_status"
     key_path: "point_status"
@@ -9468,7 +9468,7 @@ session_summary_fields:
       - date: "2026-06-03"
         status: verified
         claim: "pref=[45,0] identical in the mode=107 patrol summary and the same-day mode=100 mow summary → global/account preference, not patrol input."
-        evidence: "oss_dumps patrol .0550 vs mow -112293549_090642791 .0550 (2026-06-03)"
+        evidence: "cloud/oss patrol .0550 vs mow -112293549_090642791 .0550 (2026-06-03)"
 
   - id: "summary_legs_meta"
     key_path: "_legs_meta"
@@ -9543,7 +9543,7 @@ session_summary_fields:
       - date: "2026-05-26"
         status: verified
         claim: "Sentinel is always exactly [2147483647, 2147483647]; 3260 occurrences across 17 OSS blobs with zero variants. All track rows are exactly length 2 — nothing encoded in row length either."
-        evidence: "tools/oss_audit (in-session diagnostic); 17 OSS blobs in /data/claude/homeassistant/oss_dumps/"
+        evidence: "tools/oss_audit (in-session diagnostic); 17 OSS blobs in /data/claude/homeassistant/cloud/oss/"
     open_questions:
       - "What event in the firmware triggers the sentinel? Lift-up detection? Brief localisation loss? Mid-row pause? Pattern unclear from cluster analysis."
       - "TODO: Plot sentinel positions as red dots on work-log map (at start OR end of surrounding segment, whichever is closer to the unknown drop position) to look for spatial clustering."
