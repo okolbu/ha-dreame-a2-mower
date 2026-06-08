@@ -63,6 +63,30 @@ export function iconRotation(headingDeg, prevScreenXY, curScreenXY) {
   return null;
 }
 
+// WiFi heatmap colour gradient — character-equivalent mirror of
+// wifi_map_render.py:_rssi_to_rgb. Returns { r, g, b } for a data cell or
+// null for the no-data sentinel (rssi === 1). The card supplies translucency
+// via the overlay layer's config opacity, so alpha is NOT mirrored here.
+// THE GRADIENT CONTRACT IS PINNED by tests/protocol/test_wifi_gradient_contract.py
+// — do not change the channel math without re-running it.
+export const WIFI_STRONGEST = -50; // dBm -> full green
+export const WIFI_WEAKEST = -99;   // dBm -> full red
+export function rssiToRgb(rssi) {
+  if (rssi === 1) return null; // no-data sentinel
+  let n = (rssi - WIFI_WEAKEST) / (WIFI_STRONGEST - WIFI_WEAKEST);
+  n = Math.max(0, Math.min(1, n));
+  let r;
+  let g;
+  if (n < 0.5) {
+    r = 255;
+    g = Math.round(n * 2 * 255);
+  } else {
+    r = Math.round((1 - n) * 2 * 255);
+    g = 255;
+  }
+  return { r, g, b: 0 };
+}
+
 // Build the mower-icon SVG group. The caller rotates the <g> by
 // iconRotation(...) about (0,0) and translates it to the projected screen
 // position. Starts hidden until first positioned.
@@ -97,5 +121,8 @@ if (typeof window !== "undefined") {
     iconRotation,
     buildMowerIconSvg,
     ICON_ART_FORWARD_DEG,
+    rssiToRgb,
+    WIFI_STRONGEST,
+    WIFI_WEAKEST,
   };
 }
