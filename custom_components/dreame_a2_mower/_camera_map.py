@@ -54,6 +54,7 @@ class DreameA2MapCamera(
         "track_snapshot", "latest_point", "point_seq", "last_known_point",
         "settings_dual_level_diagnostic", "nav_paths_pt_count_by_map",
         "calibration_points",  # legacy name; harmless if ever re-added
+        "wifi_overlay",        # cell grid; large + changes rarely, no restore value
     })
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
@@ -159,6 +160,9 @@ class DreameA2MapCamera(
                     attrs["forbidden_node_types"] = fnt
             # Full SETTINGS raw list — for inspection of the dual-level structure.
             attrs["settings_dual_level_diagnostic"] = cs.settings.raw
+        overlay = self.coordinator.active_map_wifi_overlay
+        if overlay is not None:
+            attrs["wifi_overlay"] = overlay
         return attrs
 
     @callback
@@ -180,6 +184,11 @@ class DreameA2MapCamera(
         got None" on every coordinator update. v1.0.0a57 calls it
         directly.
         """
+        # Warm the active-map WiFi body cache so wifi_overlay can be published
+        # on a subsequent broadcast (load is async + self-notifies on completion).
+        # This callback runs on the event loop, so the bare async_create_task in
+        # _schedule_active_map_wifi_load is safe here.
+        self.coordinator._schedule_active_map_wifi_load()
         cur = self.coordinator._base_png
         # Rotate access_token whenever the rendered PNG bytes change so
         # the frontend immediately re-fetches the updated image.
