@@ -361,6 +361,29 @@ HA writes drive the device…" below; it is NOT specific to these two fields.
 `tools/probes/probe_pre_write.py`; `inventory.yaml § PRE` + `§ s6p2` (2026-06-03
 verifications); historical doc; `docs/research/cloud-write-reference.md`.
 
+### SCHEDULE not refreshed — app schedule edits don't reach the integration
+
+**Why:** A Zone-mowing schedule added in the Dreame app ~19:00 (for a 21:30 run)
+was still NOT reflected in the integration ~3 h later (user-observed 2026-06-07).
+SCHEDULE is fetched as part of the empty-batch `fetch_full_cloud_state()`
+(`cloud_client/_fetchers.py`; families include SCHEDULE, parsed via
+`parse_schedule_batch`) which the 2-min `_refresh_cloud_state` timer should call —
+so a multi-hour staleness points at one of: **(a)** SCHEDULE isn't actually
+re-fetched on the periodic timer (only at startup); **(b)** it's fetched but not
+re-applied to the entity (a CloudState apply gap, or a version-guard that skips
+when the blob's `v` field didn't bump); or **(c)** the CLOUD's SCHEDULE blob is
+itself stale because the app wrote the schedule via a different surface (the
+Phase-3 cloud-write-surface problem — see the SCHEDULE write item below).
+**Done when:** a schedule edit made in the app is reflected in the integration's
+schedule entity within one refresh cycle; root cause identified and fixed (or, if
+(c), documented as a cloud-side limitation). First diagnostic step: right after an
+app edit, capture the live empty-batch `SCHEDULE.*` blob and diff it against what
+the entity holds — that isolates cloud-stale (c) from integration-stale (a/b).
+**Status:** open — user-reported 2026-06-07
+**Cross-refs:** `cloud_client/_fetchers.py` (`fetch_full_cloud_state` SCHEDULE branch);
+`coordinator/_refreshers.py` (`_refresh_cloud_state`); `protocol/schedule.py`; the
+SCHEDULE write-surface item further below in this file.
+
 ### Capture zone / edge action codes for SCHEDULE blob
 
 **Why:** The SCHEDULE blob format was decoded 2026-05-08 (see
@@ -375,7 +398,7 @@ dict in `sensor.py` is updated with the verified codes (plus
 appropriate test fixtures in `tests/protocol/test_schedule.py`).
 **Status:** blocked-by-user-data
 **Cross-refs:** `custom_components/dreame_a2_mower/protocol/schedule.py`;
-`/data/claude/homeassistant/schedule-doc.txt`
+`/data/claude/homeassistant/OLD/schedule-doc.txt`
 
 ### OTA_INFO field semantics
 

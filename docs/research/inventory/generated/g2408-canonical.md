@@ -552,6 +552,10 @@ observed shapes on g2408:
   NB the earlier "3-element = edge/spot/zone mows" attribution is imprecise:
   3-element correlates with SCHEDULED runs (morning all-area mode=100 included),
   not mow type. App-triggered runs (points, manual, the 2-spot mow) stay 2-element.
+  [CORRECTED 2026-06-07 — see verifications: the split tracks MOW TYPE = EDGE.
+  3-element ⟺ EDGE mow; 2-element ⟺ all-area / zone / spot / manual. Confirmed by
+  14/14 days of 07:58 all-area = 2-element, scheduled zone = 2-element, and all 10
+  three-element days being short evening edge sessions. NOT scheduled-correlated.]
 
 The integration extracts status[0][-1] (the LAST element = stage) as
 task_state_code: 0=running, 4=paused, 2=complete, None=no task. This is
@@ -572,8 +576,8 @@ Confirmed g2408 sub-state values from 2026-04-29/30 corpus. Note: wire shape
 is a dict, not a bare int — a common decode trap for apk-decompiled code.
 
 **Open questions:**
-- 3-element MIDDLE value (the X in [task_id, X, stage]) is always 0 in the corpus — undecoded. Likely a segment/lap index; capture a multi-segment scheduled run (e.g. a rain-paused mow's later segments) to see if it ever increments. (The THIRD/last value = stage 0=start/2=done is now decoded — 2026-05-30.)
-- Confirm the 3-element variant is SCHEDULED-correlated, not mow-type-correlated: cross-reference each 3-element session against its summary.mode (a 2026-05-30 spot-check found a morning mode=100 all-area scheduled mow that was 3-element, contradicting the old edge/spot/zone attribution). Needs a full per-session correlation.
+- 3-element MIDDLE value (the X in [task_id, X, stage]) = the EDGE INDEX within the zone — WHICH edge to mow (user insight 2026-06-07, discussed before but lost from docs; supersedes the old 'segment/lap index' guess). Maps to the app's schedule naming: 'Edge mowing Zone1-1' carries an edge selector → 3-element, while 'Zone mowing Zone1' and 'All-area' have none → 2-element. Always 0 because only ONE edge is currently defined (Zone1's single perimeter); a SECOND edge should make X=1 — the way to confirm. Likely the same value as the SCHEDULE blob's edge record (action=2) extra byte rec[7] (schedule_decode.py, currently 'reserved2'). [UNVERIFIED]
+- 3-element ⟺ EDGE mow (resolved 2026-06-07, see verifications; status partial). Remaining gap: independently confirm (via cloud summary.mode or s2p50 envelope) that the non-2026-06-06 evening 3-element days (2026-05-09/16/17/23/30, 2026-06-03/04) are all edge mows — currently inferred from timing/duration. (The middle value's meaning — edge index — is the separate open-question below.)
 
 **See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:80`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:56`
 
