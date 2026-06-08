@@ -24,7 +24,9 @@
 #   6. HACS still showing stale data even after a clean release → we offer
 #      to trigger HACS' WebSocket refresh on the local HA host.
 #
-# Requires: gh (authenticated), git (clean working tree), jq, python3
+# Requires: gh (authenticated), git (clean working tree), jq, and a python3 with
+#           pytest — defaults to /data/claude/homeassistant/.venv-vanilla (the
+#           system python3 is a broken 3.14); override via RELEASE_PYTHON=...
 #
 # Safety: aborts on any uncommitted changes, any failed test, or any
 # verification step. It will NOT push or release anything until the
@@ -38,6 +40,15 @@ cd "$REPO_ROOT"
 
 MANIFEST="custom_components/dreame_a2_mower/manifest.json"
 HA_CRED="/data/claude/homeassistant/secrets/ha-credentials.txt"
+
+# Interpreter for tests + helper snippets. The system python3 in this env is a
+# broken 3.14 with no pytest, so prefer the project's vanilla test venv. Override
+# with RELEASE_PYTHON=/path/to/python if you keep the venv elsewhere.
+PYTHON="${RELEASE_PYTHON:-/data/claude/homeassistant/.venv-vanilla/bin/python3}"
+if [[ ! -x "$PYTHON" ]]; then
+    echo "⚠️  $PYTHON not found — falling back to python3 on PATH" >&2
+    PYTHON="python3"
+fi
 
 NOTES_FILE=""
 EXPLICIT_VERSION=""
@@ -91,7 +102,7 @@ else
     # that sorts BEFORE the predecessor (because '1' < '9' lexically).
     # When the next alpha would grow a digit, auto-bump the patch
     # instead and reset to a1. See memory/feedback_hacs_version_ladder.
-    NEW="$(python3 -c "
+    NEW="$("$PYTHON" -c "
 import re, sys
 v = '$CURRENT'
 m = re.match(r'^(\d+)\.(\d+)\.(\d+)a(\d+)$', v)
@@ -135,7 +146,7 @@ fi
 
 # ── 3. tests ────────────────────────────────────────────────────────────
 echo "running tests…"
-python3 -m pytest tests/ -q --ignore=tests/archive >/tmp/release_pytest.log 2>&1 || {
+"$PYTHON" -m pytest tests/ -q --ignore=tests/archive >/tmp/release_pytest.log 2>&1 || {
     echo "❌ tests failed — see /tmp/release_pytest.log" >&2
     tail -20 /tmp/release_pytest.log >&2
     exit 1
@@ -146,7 +157,7 @@ echo "tests pass: $(tail -1 /tmp/release_pytest.log)"
 # Targeted regex replace on the version line only — `json.dump`'s
 # reformatting (e.g. expanding inline arrays into multiline form)
 # would diff additional lines and trip the strict diff check below.
-python3 - <<PY
+"$PYTHON" - <<PY
 import re, sys
 with open("$MANIFEST") as f: text = f.read()
 new = re.sub(
@@ -233,9 +244,9 @@ echo "   /releases/latest → $LATEST_TAG"
 echo
 
 # ── 6. optional HACS refresh on local HA ───────────────────────────────
-if [[ -f "$HA_CRED" ]] && command -v python3 >/dev/null; then
+if [[ -f "$HA_CRED" ]] && command -v "$PYTHON" >/dev/null; then
     echo "triggering HACS refresh on local HA…"
-    python3 - <<PY
+    "$PYTHON" - <<PY
 import json
 try:
     import websocket
