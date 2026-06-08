@@ -78,8 +78,9 @@ entities:
         status: presumed
         claim: "map camera serves coordinator._base_png (lawn + background only); trail+icon are client-side; publishes map_projection/point_seq/latest_point/track_snapshot/background_mode; calibration_points removed"
       - date: "2026-06-08"
-        status: presumed
-        claim: "now also publishes wifi_overlay (active-map WiFi heatmap cell grid: cells with cloud-frame coords + RSSI) consumed by the live-map card's translucent SVG overlay layer; anchoring not yet visually confirmed (Task 6)"
+        status: verified
+        claim: "now also publishes wifi_overlay (active-map WiFi heatmap cell grid: cells with cloud-frame coords + RSSI) consumed by the live-map card's translucent SVG overlay layer; overlay renders correctly on the live map (v1.0.24a1)"
+        evidence: "live-dashboard visual confirmation 2026-06-08 (v1.0.24a1): user toggled the WiFi overlay on and reported colors, cell alignment, and opacity all correct"
     references:
       code: "custom_components/dreame_a2_mower/_camera_map.py:14"
       wire_entry: "MAPL"

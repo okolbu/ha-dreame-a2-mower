@@ -2312,8 +2312,9 @@ properties:
           (firmware/ota state) + s1p3 (progress), neither yet wire-captured.
         evidence: "fw_download/path{1,2,3}_*.0550.pcd downloaded 2026-06-04 via iotfile/getDownloadUrl — all PCD v0.7, OSS bucket path iot/mapbin/000000/; s2p54 100→86→100 brackets the 05-10 push in probe_log_20260419_130434.jsonl@2026-05-10 19:03:50 (View-LiDAR upload dip); upstream mislabel at OLD/alternatives_archive_2026-05-05/alternatives/dreame-mower/custom_components/dreame_mower/dreame/const.py:94"
       - date: "2026-06-08"
-        status: presumed
-        claim: "Live-map WiFi overlay anchors cells to the cloud frame by inverting the cell-index formula used by wifi_match.score_candidates (same arithmetic; the card does NOT call that module): cell (cx,cy) -> cloud-metre box [start_x_m+cx*res .. start_x_m+(cx+1)*res] x [start_y_m+cy*res .. start_y_m+(cy+1)*res], then projecting both corners with the card's projectPoint (which already bakes the FLIP_TOP_BOTTOM convention, so no extra flip). Forward projection onto the live map not yet visually confirmed."
+        status: verified
+        claim: "Live-map WiFi overlay anchors cells to the cloud frame by inverting the cell-index formula used by wifi_match.score_candidates (same arithmetic; the card does NOT call that module): cell (cx,cy) -> cloud-metre box [start_x_m+cx*res .. start_x_m+(cx+1)*res] x [start_y_m+cy*res .. start_y_m+(cy+1)*res], then projecting both corners with the card's projectPoint (which already bakes the FLIP_TOP_BOTTOM convention, so no extra flip). Forward projection visually confirmed on the live map: cell alignment correct, no axis flip needed."
+        evidence: "live-dashboard visual confirmation 2026-06-08 (v1.0.24a1): user toggled the WiFi overlay on and reported colors, cell alignment, and opacity all correct"
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:125"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Events"
