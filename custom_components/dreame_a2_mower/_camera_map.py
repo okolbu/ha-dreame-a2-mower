@@ -54,7 +54,7 @@ class DreameA2MapCamera(
         "track_snapshot", "latest_point", "point_seq", "last_known_point",
         "settings_dual_level_diagnostic", "nav_paths_pt_count_by_map",
         "calibration_points",  # legacy name; harmless if ever re-added
-        "wifi_overlay",        # cell grid; large + changes rarely, no restore value
+        "wifi_overlay",        # fixed-size cell grid; changes only on archive refresh, no restore value
     })
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:

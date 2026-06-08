@@ -55,8 +55,14 @@ def test_wifi_overlay_present_when_cached(tmp_path):
     o = attrs["wifi_overlay"]
     assert o["width"] == 2 and o["height"] == 2
     assert o["start_x_m"] == 1.0 and o["start_y_m"] == 3.0
+    assert o["resolution_m"] == 2.0
 
 
 def test_wifi_overlay_absent_when_not_cached(tmp_path):
     cam = _make_camera(tmp_path, with_body=False)
     assert "wifi_overlay" not in cam.extra_state_attributes
+
+
+def test_wifi_overlay_is_unrecorded(tmp_path):
+    from custom_components.dreame_a2_mower.camera import DreameA2MapCamera
+    assert "wifi_overlay" in DreameA2MapCamera._unrecorded_attributes
