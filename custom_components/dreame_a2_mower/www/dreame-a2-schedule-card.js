@@ -84,9 +84,13 @@ class DreameA2ScheduleCard extends HTMLElement {
         .tab { padding: 6px 12px; border: 1px solid var(--divider-color); background: transparent; cursor: pointer; }
         .tab.active { background: var(--primary-color); color: var(--text-primary-color); }
         .grid { display: grid; grid-template-columns: 40px repeat(7, 1fr); gap: 1px; background: var(--divider-color); margin-bottom: 12px; font-size: 0.75em; }
-        .grid > div { background: var(--card-background-color); padding: 2px 4px; min-height: 18px; position: relative; }
+        .grid > div { background: var(--card-background-color); padding: 2px 4px; height: 18px; box-sizing: border-box; position: relative; }
         .grid .header { background: var(--secondary-background-color); text-align: center; font-weight: bold; }
-        .grid .plan-block { color: white; padding: 2px 4px; font-size: 0.7em; cursor: pointer; }
+        /* Absolutely positioned inside its start-hour cell: `top` carries the
+           start minute, `height` the duration — so 21:30 sits half-way down the
+           21:00 row instead of snapping to 21:00. z-index lifts it over the
+           hour cells it overflows into. */
+        .grid .plan-block { position: absolute; left: 0; right: 0; box-sizing: border-box; color: white; padding: 1px 4px; font-size: 0.7em; line-height: 1.2; cursor: pointer; overflow: hidden; border-radius: 2px; z-index: 2; }
         .plan { display: flex; justify-content: space-between; align-items: center; padding: 8px; margin: 4px 0; border: 1px solid var(--divider-color); }
         .plan-info { flex: 1; }
         .days { font-size: 0.85em; color: var(--secondary-text-color); }
@@ -143,23 +147,23 @@ class DreameA2ScheduleCard extends HTMLElement {
     for (let h = 0; h < 24; h++) {
       cells.push(`<div>${String(h).padStart(2, "0")}</div>`);
       for (let day = 0; day < 7; day++) {
-        // The app reserves PLAN_DURATION_MIN (120) per plan — paint
-        // both the start hour cell AND the next hour to match.
-        const planAtThisCell = plans.find((p) => {
-          const startMin = this._parseHhmm(p.time);
-          const startHr = Math.floor(startMin / 60);
+        // Render each plan once, in its start-HOUR cell, as an absolutely
+        // positioned block. `top` offsets by the start minute and `height`
+        // spans PLAN_DURATION_MIN (120 min = 200% of an hour cell) — the
+        // block overflows down over the next hour(s), so it reads as a true
+        // 21:30→23:30 bar rather than snapping to the 21:00 boundary.
+        const planHere = plans.find((p) => {
+          const startHr = Math.floor(this._parseHhmm(p.time) / 60);
           const dayMatches = (p.days || []).includes(WEEKDAY_LABELS[day]);
-          return dayMatches && (h === startHr || h === startHr + 1);
+          return dayMatches && h === startHr;
         });
-        if (planAtThisCell) {
-          const action = _actionTypeOf(planAtThisCell);
-          const startMin = this._parseHhmm(planAtThisCell.time);
-          const startHr = Math.floor(startMin / 60);
-          const isStartHour = h === startHr;
-          // Show the time label only on the starting hour cell; the
-          // continuation cell stays coloured but blank for clarity.
+        if (planHere) {
+          const action = _actionTypeOf(planHere);
+          const startMin = this._parseHhmm(planHere.time);
+          const topPct = ((startMin % 60) / 60) * 100;
+          const heightPct = (PLAN_DURATION_MIN / 60) * 100;
           cells.push(
-            `<div class='plan-block' style='background:${ACTION_COLORS[action]};' title='${planAtThisCell.time} ${ACTION_LABELS[action]}'>${isStartHour ? planAtThisCell.time : ""}</div>`,
+            `<div class='plan-block' style='background:${ACTION_COLORS[action]};top:${topPct}%;height:${heightPct}%;' title='${planHere.time} ${ACTION_LABELS[action]}'>${planHere.time}</div>`,
           );
         } else {
           cells.push("<div></div>");
