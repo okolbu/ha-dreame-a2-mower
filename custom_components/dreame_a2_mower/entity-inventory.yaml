@@ -82,9 +82,9 @@ entities:
         claim: "now also publishes wifi_overlay (active-map WiFi heatmap cell grid: cells with cloud-frame coords + RSSI) consumed by the live-map card's translucent SVG overlay layer; overlay renders correctly on the live map (v1.0.24a1)"
         evidence: "live-dashboard visual confirmation 2026-06-08 (v1.0.24a1): user toggled the WiFi overlay on and reported colors, cell alignment, and opacity all correct"
       - date: "2026-06-08"
-        status: partial
-        claim: "calibration_points RE-ADDED to extra_state_attributes (it had been dropped in the live-map rehaul, 81f7c74, which is what broke the WebGL LiDAR card's map underlay — the underlay fetches the camera's base PNG directly and never consumed the SVG live card). 3 mower-frame mm ↔ served-PNG pixel correspondences computed from map_projection via the renderer formula px=(bx2-x)/grid, py=(by2-y)/grid, then vertical flip y=(h-1)-py. Kept in _unrecorded_attributes (out of recorder). Code + unit test confirmed; live underlay render not yet visually re-confirmed."
-        evidence: "tests/integration/test_map_camera_attributes.py::test_extra_state_attributes_exposes_calibration_points + ::test_calibration_points_is_unrecorded (11 passed)"
+        status: verified
+        claim: "calibration_points RE-ADDED to extra_state_attributes (it had been dropped in the live-map rehaul, 81f7c74, which is what broke the WebGL LiDAR card's map underlay — the underlay fetches the camera's base PNG directly and never consumed the SVG live card). 3 mower-frame mm ↔ served-PNG pixel correspondences computed from map_projection via the renderer formula px=(bx2-x)/grid, py=(by2-y)/grid, then vertical flip y=(h-1)-py. Kept in _unrecorded_attributes (out of recorder)."
+        evidence: "tests/integration/test_map_camera_attributes.py::test_extra_state_attributes_exposes_calibration_points + ::test_calibration_points_is_unrecorded; live visual confirmation 2026-06-08 (v1.0.24a6): user toggled Map underlay on the LiDAR card and the base map textures back in"
     references:
       code: "custom_components/dreame_a2_mower/_camera_map.py:14"
       wire_entry: "MAPL"
