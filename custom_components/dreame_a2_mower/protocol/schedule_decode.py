@@ -36,7 +36,11 @@ def _decode_one_record(rec: bytes) -> tuple[int, int, int, int | None, bytes] | 
         return None
     weekday = rec[2] >> 4
     action = rec[2] & 0x0F
-    if not (1 <= weekday <= 7):
+    # Weekday nibble is tm_wday: 0=Sun, 1=Mon, ... 6=Sat. Verified byte-exact
+    # against the live Sunday-zone record aa08010a150001ed
+    # [probe_schedule_live.py@2026-06-08]. (Mon..Sat coincide with the old
+    # 1..7 ISO assumption; only Sunday differs — it is 0, not 7.)
+    if not (0 <= weekday <= 6):
         return None
     if action not in _ACTION_LEN or _ACTION_LEN[action] != rec_len:
         return None
@@ -86,14 +90,21 @@ def _decode_blob(blob_b64: str) -> tuple[SchedulePlan, ...]:
         rec = raw[i:i + rec_len]
         decoded = _decode_one_record(rec)
         if decoded is None:
-            _LOGGER.warning("schedule: malformed record at offset %d: %s",
+            # Defense in depth: a single content-malformed record (bad
+            # weekday/time/terminator) must NOT collapse the whole slot —
+            # that turned one unrecognised record into a blanked schedule.
+            # The length byte is already validated above, so we can resync
+            # by stepping over this record and keep decoding the rest.
+            _LOGGER.warning("schedule: skipping malformed record at offset %d: %s",
                             i, rec.hex())
-            return ()
+            i += rec_len
+            continue
         parsed.append(decoded)
         i += rec_len
     # Group records by (action, time, zone_id, extra_bytes); union weekday bits.
-    # Bit 0 = Mon, bit 6 = Sun (matches the firmware's weekday=1..7 numbering
-    # by subtracting 1 to get the bit position).
+    # Mask bit 0 = Mon, bit 6 = Sun. The wire weekday is tm_wday (0=Sun..6=Sat),
+    # so map nibble -> bit via (weekday + 6) % 7: Sun(0)->bit6, Mon(1)->bit0,
+    # ... Sat(6)->bit5.
     plans_by_key: dict[tuple, int] = {}
     plan_order: list[tuple] = []
     for time_min, weekday, action, zone_id, extra_bytes in parsed:
@@ -101,7 +112,7 @@ def _decode_blob(blob_b64: str) -> tuple[SchedulePlan, ...]:
         if key not in plans_by_key:
             plans_by_key[key] = 0
             plan_order.append(key)
-        plans_by_key[key] |= 1 << (weekday - 1)
+        plans_by_key[key] |= 1 << ((weekday + 6) % 7)
     return tuple(
         SchedulePlan(
             time_min=key[1],

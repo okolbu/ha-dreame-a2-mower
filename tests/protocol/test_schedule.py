@@ -103,6 +103,66 @@ def test_decode_real_slot0_with_zone_and_edge():
     )
 
 
+def test_decode_real_slot0_with_sunday_zone():
+    """Live slot 0 captured 2026-06-08 (probe_schedule_live.py, fw 4.3.6_0550,
+    v=35422) — the regression case. Records:
+      aa08010a150001ed  zone   Sun 21:30 zone_id=1   (weekday nibble 0 = Sun)
+      aa0710de0100ed    allarea Mon 07:58
+      aa0730de0100ed    allarea Wed 07:58
+      aa0750e00100ed    allarea Fri 08:00
+      aa09627424000100ed edge   Sat 19:00 zone_id=1 extra=0x00
+
+    The Sunday record's weekday nibble is 0 (tm_wday: 0=Sun..6=Sat). Before the
+    fix the decoder's `1 <= weekday <= 7` guard rejected it and dropped the WHOLE
+    slot, so the user's entire active schedule went blank.
+    """
+    raw = {
+        "d": [[0, 1, "Spr &amp; Sum Schedule",
+               "qggBChUAAe2qBxDeAQDtqgcw3gEA7aoHUOABAO2qCWJ0JAABAO0="]],
+        "v": 35422,
+    }
+    plans = parse_schedule_batch(raw).slots[0].plans
+    assert plans == (
+        SchedulePlan(time_min=21*60+30, weekday_mask=SUN, action_type=1,
+                     zone_id=1, extra_bytes=b""),
+        SchedulePlan(time_min=7*60+58, weekday_mask=MON | WED, action_type=0,
+                     zone_id=None, extra_bytes=b""),
+        SchedulePlan(time_min=8*60, weekday_mask=FRI, action_type=0,
+                     zone_id=None, extra_bytes=b""),
+        SchedulePlan(time_min=19*60, weekday_mask=SAT, action_type=2,
+                     zone_id=1, extra_bytes=b"\x00"),
+    )
+
+
+def test_roundtrip_sunday_zone_byte_identical():
+    """Encoder reproduces the real Sunday-zone record byte-exactly — proves the
+    tm_wday weekday convention (Sunday encodes as nibble 0, not 7)."""
+    plans = (
+        SchedulePlan(time_min=21*60+30, weekday_mask=SUN, action_type=1, zone_id=1),
+    )
+    # base64 of aa08010a150001ed
+    assert encode_schedule_blob(plans) == "qggBChUAAe0="
+    raw = {"d": [[0, 0, "x", encode_schedule_blob(plans)]], "v": 1}
+    assert parse_schedule_batch(raw).slots[0].plans == plans
+
+
+def test_decode_skips_unknown_record_keeps_rest_of_slot():
+    """Defense in depth: one content-malformed (but valid-length) record must
+    be skipped, NOT collapse the whole slot. A bad-terminator zone record sits
+    between two good all-area records; the two good ones still decode."""
+    import base64
+    good_mon = b"\xaa\x07\x10\xde\x01\x00\xed"   # Mon 07:58 all-area
+    bad_zone = b"\xaa\x08\x31\xc0\x13\x00\x01\xff"  # len ok, terminator 0xff bad
+    good_fri = b"\xaa\x07\x50\xe0\x01\x00\xed"   # Fri 08:00 all-area
+    blob = base64.b64encode(good_mon + bad_zone + good_fri).decode()
+    raw = {"d": [[0, 0, "Mixed", blob]], "v": 1}
+    plans = parse_schedule_batch(raw).slots[0].plans
+    assert plans == (
+        SchedulePlan(time_min=7*60+58, weekday_mask=MON, action_type=0),
+        SchedulePlan(time_min=8*60, weekday_mask=FRI, action_type=0),
+    )
+
+
 def test_decode_skips_record_with_bad_length_byte():
     """A record with len < 7 or len > 16 is rejected (whole slot drops)."""
     import base64
@@ -160,11 +220,26 @@ def test_parse_blob_bad_sentinel_yields_no_plans():
     assert parse_schedule_batch(raw).slots[0].plans == ()
 
 
-def test_parse_blob_bad_weekday_yields_no_plans():
-    """Weekday byte outside 1..7 → reject the slot."""
+def test_parse_blob_weekday_zero_is_sunday():
+    """tm_wday: high nibble 0 = Sunday (NOT out-of-range). Verified by the live
+    Sunday-zone capture 2026-06-08 — see test_decode_real_slot0_with_sunday_zone.
+    """
     import base64
-    # weekday = 0 (high nibble 0x00) — out of range
-    bad = base64.b64encode(b"\xaa\x07\x00\xde\x01\x00\xed").decode()
+    # weekday nibble 0 (Sunday), all-area, 07:58
+    blob = base64.b64encode(b"\xaa\x07\x00\xde\x01\x00\xed").decode()
+    raw = {"d": [[0, 0, "Sun", blob]], "v": 1}
+    plans = parse_schedule_batch(raw).slots[0].plans
+    assert plans == (
+        SchedulePlan(time_min=7*60+58, weekday_mask=SUN, action_type=0),
+    )
+
+
+def test_parse_blob_bad_weekday_yields_no_plans():
+    """Weekday nibble outside 0..6 (tm_wday range) → skip the record. nibble 8
+    is unreachable from real firmware, so a slot with only it yields no plans."""
+    import base64
+    # weekday nibble 8 (high nibble 0x80) — out of tm_wday range 0..6
+    bad = base64.b64encode(b"\xaa\x07\x80\xde\x01\x00\xed").decode()
     raw = {"d": [[0, 0, "Bad", bad]], "v": 1}
     assert parse_schedule_batch(raw).slots[0].plans == ()
 

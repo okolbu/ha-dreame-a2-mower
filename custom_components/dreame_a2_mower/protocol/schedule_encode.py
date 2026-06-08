@@ -51,7 +51,11 @@ def encode_schedule_blob(plans: tuple[SchedulePlan, ...]) -> str:
     out = bytearray()
     for weekday_idx, time_min, action, zone_id, extra in triples:
         rec_len = _ACTION_LEN[action]
-        day_byte = ((weekday_idx + 1) << 4) | (action & 0x0F)
+        # weekday_idx is the mask bit (0=Mon..6=Sun); the wire nibble is
+        # tm_wday (0=Sun..6=Sat). Invert the decoder's (nibble+6)%7 with
+        # (bit+1)%7: Mon(0)->1 ... Sat(5)->6, Sun(6)->0.
+        # Verified byte-exact against aa08010a150001ed [probe@2026-06-08].
+        day_byte = (((weekday_idx + 1) % 7) << 4) | (action & 0x0F)
         time_lo = time_min & 0xFF
         time_hi = (time_min >> 8) & 0x0F
         # Byte 4 high nibble carries action again (redundant, format

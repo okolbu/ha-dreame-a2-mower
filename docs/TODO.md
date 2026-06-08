@@ -363,26 +363,30 @@ verifications); historical doc; `docs/research/cloud-write-reference.md`.
 
 ### SCHEDULE not refreshed — app schedule edits don't reach the integration
 
-**Why:** A Zone-mowing schedule added in the Dreame app ~19:00 (for a 21:30 run)
-was still NOT reflected in the integration ~3 h later (user-observed 2026-06-07).
-SCHEDULE is fetched as part of the empty-batch `fetch_full_cloud_state()`
-(`cloud_client/_fetchers.py`; families include SCHEDULE, parsed via
-`parse_schedule_batch`) which the 2-min `_refresh_cloud_state` timer should call —
-so a multi-hour staleness points at one of: **(a)** SCHEDULE isn't actually
-re-fetched on the periodic timer (only at startup); **(b)** it's fetched but not
-re-applied to the entity (a CloudState apply gap, or a version-guard that skips
-when the blob's `v` field didn't bump); or **(c)** the CLOUD's SCHEDULE blob is
-itself stale because the app wrote the schedule via a different surface (the
-Phase-3 cloud-write-surface problem — see the SCHEDULE write item below).
-**Done when:** a schedule edit made in the app is reflected in the integration's
-schedule entity within one refresh cycle; root cause identified and fixed (or, if
-(c), documented as a cloud-side limitation). First diagnostic step: right after an
-app edit, capture the live empty-batch `SCHEDULE.*` blob and diff it against what
-the entity holds — that isolates cloud-stale (c) from integration-stale (a/b).
-**Status:** open — user-reported 2026-06-07
+**Status:** RESOLVED 2026-06-08 — decoder bug, not a refresh/cloud-stale problem.
+
+**Root cause (verified):** The cloud SCHEDULE blob WAS fresh and reaching the
+integration (live empty-batch fetch showed `v=35422` with the new record present)
+— hypotheses (a) periodic-refresh-missing and (c) cloud-stale are both DEBUNKED.
+The new entry was a **Sunday** 21:30 zone mow, and the SCHEDULE wire weekday nibble
+is `tm_wday` (0=Sun..6=Sat), NOT the `1=Mon..7=Sun` the decoder assumed. Sunday's
+nibble is `0`, which `_decode_one_record`'s `1 <= weekday <= 7` guard rejected →
+`_decode_blob` returned `()` for the **entire slot**, so the user's whole active
+"Spr & Sum Schedule" went blank (not just the new line). Mon..Sat coincide between
+the two conventions, which is why every prior schedule decoded fine and this hid
+for weeks.
+
+**Fix:** `protocol/schedule_decode.py` — weekday nibble accepted as 0..6 and
+mapped to the mask bit via `(nibble+6)%7`; `_decode_blob` now SKIPS a single
+content-malformed record instead of dropping the whole slot (defense in depth).
+`protocol/schedule_encode.py` — inverse `(bit+1)%7` so Sunday round-trips to
+nibble 0. Proven byte-exact against the live record `aa08010a150001ed`
+(probe/probe_schedule_live.py, 2026-06-08). Tests:
+`tests/protocol/test_schedule.py::test_decode_real_slot0_with_sunday_zone`,
+`::test_roundtrip_sunday_zone_byte_identical`,
+`::test_decode_skips_unknown_record_keeps_rest_of_slot`.
 **Cross-refs:** `cloud_client/_fetchers.py` (`fetch_full_cloud_state` SCHEDULE branch);
-`coordinator/_refreshers.py` (`_refresh_cloud_state`); `protocol/schedule.py`; the
-SCHEDULE write-surface item further below in this file.
+`coordinator/_cloud_state.py` (`_refresh_cloud_state`, 2-min timer); `protocol/schedule_decode.py`.
 
 ### Capture zone / edge action codes for SCHEDULE blob
 
@@ -396,9 +400,18 @@ each in the cloud blob would close out the catalogue.
 in the app, the next cloud dump is captured, and the `_ACTION_LABELS`
 dict in `sensor.py` is updated with the verified codes (plus
 appropriate test fixtures in `tests/protocol/test_schedule.py`).
-**Status:** blocked-by-user-data
-**Cross-refs:** `custom_components/dreame_a2_mower/protocol/schedule.py`;
-`/data/claude/homeassistant/OLD/schedule-doc.txt`
+**Status:** RESOLVED 2026-06-08 — live capture (probe/probe_schedule_live.py)
+caught a slot containing all three action types: all-area (`action=0`, 7-byte),
+zone (`action=1`, 8-byte, `aa08010a150001ed` = Sun 21:30 zone_id=1), and edge
+(`action=2`, 9-byte, `aa09627424000100ed` = Sat 19:00 zone_id=1 extra=0x00).
+Action codes 0/1/2 confirmed against real data; `_ACTION_LABELS` (all_area/zone/edge)
+already correct. The byte layout in `schedule_decode.py` is now live-verified
+(only the weekday convention needed correcting — see the resolved SCHEDULE-refresh
+item above). The edge `extra` byte (rec[7]) was 0x00 here; whether it is the
+edge-index selector remains [UNVERIFIED] (needs a 2nd defined edge — see s99/TASKID
+3-element note).
+**Cross-refs:** `custom_components/dreame_a2_mower/protocol/schedule_decode.py`;
+`probe/probe_schedule_live.py`
 
 ### OTA_INFO field semantics
 

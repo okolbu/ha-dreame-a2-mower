@@ -1469,7 +1469,9 @@ Record format (variable length, 7/8/9 bytes by action_type):
 
   byte 0:  0xAA — start sentinel
   byte 1:  total record length (7=All-area, 8=Zone, 9=Edge)
-  byte 2:  high nibble = weekday (1=Mon..7=Sun)
+  byte 2:  high nibble = weekday as tm_wday: 0=Sun, 1=Mon, ... 6=Sat
+                         (CORRECTED 2026-06-08 — was wrongly read as 1=Mon..7=Sun;
+                         Mon..Sat coincide, only Sunday differs: it is 0, not 7)
            low nibble  = action_type (0=All-area, 1=Zone, 2=Edge)
   byte 3:  time_lo
   byte 4:  high nibble = action_type (redundant — likely format discriminator)
