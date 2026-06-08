@@ -187,6 +187,7 @@ class _WifiArchiveMixin:
         not cached yet, so the next coordinator broadcast carries the overlay.
 
         No-op when already cached, no entry exists, or hass is unavailable.
+        Call from the event loop (e.g. an entity's coordinator-update callback); off-loop callers must wrap the schedule in ``hass.loop.call_soon_threadsafe``.
         """
         entry = self._resolve_active_map_wifi_entry()
         if entry is None:

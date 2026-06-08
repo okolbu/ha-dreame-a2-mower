@@ -72,3 +72,49 @@ def test_overlay_ignores_other_map(tmp_path):
     coord._wifi_body_cache["hm9"] = body
     coord._active_map_id = 0  # different map -> no entry
     assert coord.active_map_wifi_overlay is None
+
+
+def test_overlay_picks_newest_for_active_map(tmp_path):
+    coord = _build_coord(tmp_path)
+    # Object names embed a 10-digit unix epoch so WifiArchiveStore._parse_unix_ts
+    # can distinguish them (bare names like "old"/"new" both yield unix_ts=0).
+    older_name = "wifimap_1000000000.json"
+    newer_name = "wifimap_2000000000.json"
+    # Archive an older heatmap (map_id=0, 2×2 grid).
+    body_old = _archive_heatmap(
+        coord, object_name=older_name, map_id=0,
+        width=2, height=2, res_m=2, start_x_m=0.0, start_y_m=0.0,
+        unix_ts=1000000000,
+    )
+    # Archive a newer heatmap (map_id=0, 4×4 grid, different geometry).
+    body_new = _archive_heatmap(
+        coord, object_name=newer_name, map_id=0,
+        width=4, height=4, res_m=2, start_x_m=5.0, start_y_m=0.0,
+        unix_ts=2000000000,
+    )
+    # After two _archive_heatmap calls the index holds both entries.
+    coord._active_map_id = 0
+    coord._wifi_body_cache[older_name] = body_old
+    coord._wifi_body_cache[newer_name] = body_new
+    overlay = coord.active_map_wifi_overlay
+    assert overlay is not None
+    # The NEWER entry (ts=2000000000, 4×4) must win.
+    assert overlay["width"] == 4
+    assert overlay["start_x_m"] == 5.0
+
+
+def test_overlay_none_on_malformed_body(tmp_path):
+    coord = _build_coord(tmp_path)
+    bad_name = "wifimap_1500000000.json"
+    # Archive a well-formed heatmap (map_id=0, 2×2).
+    _archive_heatmap(coord, object_name=bad_name, map_id=0,
+                     width=2, height=2, res_m=2, start_x_m=0.0, start_y_m=0.0)
+    coord._active_map_id = 0
+    # Override the cache with a malformed body: width=2,height=2 but data has
+    # only 1 element (len=1 != 2*2=4) so active_map_wifi_overlay must bail out.
+    coord._wifi_body_cache[bad_name] = {
+        "data": [-50],   # len=1 != 2*2=4
+        "width": 2, "height": 2, "resolution": 2,
+        "startX": 0, "startY": 0,
+    }
+    assert coord.active_map_wifi_overlay is None
