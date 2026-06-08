@@ -147,11 +147,15 @@ class DreameA2ScheduleCard extends HTMLElement {
     for (let h = 0; h < 24; h++) {
       cells.push(`<div>${String(h).padStart(2, "0")}</div>`);
       for (let day = 0; day < 7; day++) {
-        // Render each plan once, in its start-HOUR cell, as an absolutely
-        // positioned block. top offsets by the start minute and height
-        // spans PLAN_DURATION_MIN (120 min = 200% of an hour cell) — the
-        // block overflows down over the next hour(s), so it reads as a true
-        // 21:30→23:30 bar rather than snapping to the 21:00 boundary.
+        // Render each plan once, in its start-HOUR cell. The grid CELL stays
+        // a normal in-flow item (so it keeps its day column / hour row); the
+        // coloured bar is an absolutely-positioned CHILD of that cell, offset
+        // by `top` = start minute and sized by `height` = PLAN_DURATION_MIN
+        // (120 min = 200% of an hour cell). The bar overflows down over the
+        // next hour(s) so 21:30 reads as a true 21:30→23:30 bar instead of
+        // snapping to 21:00. (The block must be a CHILD, not the cell itself
+        // — an absolute grid item is removed from the grid and escapes to the
+        // card.)
         const planHere = plans.find((p) => {
           const startHr = Math.floor(this._parseHhmm(p.time) / 60);
           const dayMatches = (p.days || []).includes(WEEKDAY_LABELS[day]);
@@ -163,7 +167,7 @@ class DreameA2ScheduleCard extends HTMLElement {
           const topPct = ((startMin % 60) / 60) * 100;
           const heightPct = (PLAN_DURATION_MIN / 60) * 100;
           cells.push(
-            `<div class='plan-block' style='background:${ACTION_COLORS[action]};top:${topPct}%;height:${heightPct}%;' title='${planHere.time} ${ACTION_LABELS[action]}'>${planHere.time}</div>`,
+            `<div><div class='plan-block' style='background:${ACTION_COLORS[action]};top:${topPct}%;height:${heightPct}%;' title='${planHere.time} ${ACTION_LABELS[action]}'>${planHere.time}</div></div>`,
           );
         } else {
           cells.push("<div></div>");
