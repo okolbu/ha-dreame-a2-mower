@@ -144,6 +144,35 @@ if gh release view "$NEW_TAG" >/dev/null 2>&1; then
     exit 1
 fi
 
+# ── 2c. frontend JS syntax check ────────────────────────────────────────
+# The bundled cards in www/ ship straight to the browser — pytest never
+# touches them, so a stray syntax error (e.g. a backtick inside a comment
+# that's inside a template literal) sails through and breaks the card at
+# runtime. `node --check` catches it. Skipped with a warning when node is
+# unavailable (this dev box has none); set REQUIRE_NODE_CHECK=1 to make a
+# missing node a hard failure instead.
+WWW_DIR="custom_components/dreame_a2_mower/www"
+if command -v node >/dev/null 2>&1; then
+    if compgen -G "$WWW_DIR/*.js" >/dev/null; then
+        echo "checking frontend JS syntax (node --check)…"
+        js_failed=0
+        for js in "$WWW_DIR"/*.js; do
+            if ! node --check "$js" 2>/tmp/release_jscheck.log; then
+                echo "❌ JS syntax error in $js:" >&2
+                cat /tmp/release_jscheck.log >&2
+                js_failed=1
+            fi
+        done
+        [[ "$js_failed" -eq 0 ]] || { echo "❌ frontend JS check failed" >&2; exit 1; }
+        echo "frontend JS syntax OK"
+    fi
+elif [[ "${REQUIRE_NODE_CHECK:-0}" == "1" ]]; then
+    echo "❌ node not found but REQUIRE_NODE_CHECK=1 — cannot verify www/*.js" >&2
+    exit 1
+else
+    echo "⚠️  node not found — skipping www/*.js syntax check (set REQUIRE_NODE_CHECK=1 to require it)" >&2
+fi
+
 # ── 3. tests ────────────────────────────────────────────────────────────
 echo "running tests…"
 "$PYTHON" -m pytest tests/ -q --ignore=tests/archive >/tmp/release_pytest.log 2>&1 || {
