@@ -3259,9 +3259,26 @@ opcodes:
       ⇒ generate-3dmap; nothing (or an upload-only effect) ⇒ uploadMap. The
       generate_3dmap button is bucket B (device_write_unproven) for exactly this
       reason.
+
+      LIVE-TESTED 2026-06-08 (docked-idle): op=10 {idx:0} via routed_action is
+      ACCEPTED — cloud reply {code:0, out:[{m:'r', r:0}], siid:2}, r=0 on two
+      sends, relay awake (fetch_cfg OK). This is categorically unlike CFG.PRE
+      (r=-3 hard-reject). BUT it produced NO new 3dmap OSS object: list_3dmap_objects()
+      was identical before and 150 s after (2 objects, 2026/04/20 + 2026/05/10
+      .0550.bin — matching the only two LiDAR maps in ~2 months of running). So
+      op=10 on g2408 is ACCEPTED-BUT-NO-EFFECT (same class as lock_robot op=12),
+      NOT an on-demand 3D-map generator. 3D-map rendering is firmware-gated on
+      internal conditions (enough map change / completed mow) — there is no
+      user-facing trigger in the Dreame app either (no "generate map" button, just
+      a 3D-view page). The "generate-3dmap" decision branch (new object ⇒ generate)
+      is DISPROVEN for on-demand use; the apk name (uploadMap vs generate-3dmap)
+      stays ambiguous, but on-demand generate-3dmap is ruled out. Button correctly
+      stays _U (device_write_unproven).
     status:
-      seen_on_wire: false
-      decoded: hypothesized
+      seen_on_wire: true
+      first_seen: "2026-06-08"
+      last_seen: "2026-06-08"
+      decoded: partial
     verifications:
       - date: "2026-06-04"
         status: partial
@@ -3269,12 +3286,17 @@ opcodes:
         evidence: "custom_components/dreame_a2_mower/mower/actions.py:261 (ACTION_TABLE[GENERATE_3D_MAP] routed_o=10); button.py DreameA2Generate3DMapButton"
         retracts: "the integration does not use this opcode (map fetches go through the OSS/REST path, not this action)"
         reason: "code maps GENERATE_3D_MAP → routed_o=10 and the generate_3dmap button fires it"
+      - date: "2026-06-08"
+        status: verified
+        claim: "g2408 op=10 {idx:0} (routed_action s2.50) is ACCEPTED (cloud r=0, code=0, two sends) but ACCEPTED-BUT-NO-EFFECT: no new 3dmap OSS object appears (list_3dmap_objects identical before/150s-after = 2 objs 2026/04/20+2026/05/10). On-demand generate-3dmap is ruled out; 3D-map render is firmware-gated, no app trigger exists. Distinct from PRE's r=-3 hard-reject. generate_3dmap button correctly stays _U."
+        evidence: "live probe 2026-06-08 ~17:47-17:55 docked-idle: client.routed_action(10,{idx:0}) → {code:0,out:[{m:'r',r:0}],siid:2} ×2; client.list_3dmap_objects() before==after (2 objects)"
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       integration_code: "custom_components/dreame_a2_mower/mower/actions.py:261"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
     open_questions:
-      - "Is g2408 op=10 'uploadMap' (this row's apk reading) or 'generate 3D map' (the integration's GENERATE_3D_MAP mapping)? Live press while docked, watch for s2p54 3dmap-progress + a new 3dmap OSS object. Resolves the name AND the bucket-B classification of the generate_3dmap button."
+      - "apk NAME of op=10 (uploadMap vs generate-3dmap) stays ambiguous, but on-demand 3D-map GENERATION via op=10 is DISPROVEN (live 2026-06-08: accepted r=0, no new 3dmap object). What ACTUALLY triggers a 3dmap render on g2408 (the 2 existing maps are 2026-04-20 + 2026-05-10) is still unknown — likely an internal 'enough map change' / post-mow firmware condition, not a callable action. The real upload flow is the s2p54-progress(0→100) → s99p20(object-name at ~61%) → s2p54=100 sequence (see s2p54 entry); it has fired 0 times in the current 19-day capture (last snapshot 05-10)."
+      - "[UNVERIFIED] 2026-06-08: user removed a map exclusion zone; mower began re-mapping; a DENSER 3D point cloud (incl. the newly-un-excluded area) appeared in BOTH the phone app AND a cloud-only iPad app instance — i.e. cloud-resident — yet list_3dmap_objects() (t='3dmap' OBJ) still returned only the 2 old snapshots and NO s2p54/s99p20 fired in our capture. Leading hypothesis: the apps render the continuously cloud-synced WORKING/SLAM map (mapl), which reflects live remapping, while the persistent .0550.bin 3D snapshots only refresh on the periodic s2p54→s99p20 upload. So our integration's 2D map (mapl) should already show the new area, but the LiDAR camera (OSS snapshot) lags until the next snapshot uploads. CAPTURE NEXT: watch for the next s2p54 climb→s99p20 push (the integration auto-ingests it) to confirm the snapshot then matches the apps; and identify whether the app's live 3D view pulls a current-map cloud surface distinct from the t='3dmap' OBJ snapshot list."
 
   - id: "o11"
     op: 11
@@ -4251,7 +4273,19 @@ cfg_keys:
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     open_questions:
-      - "unknown_flag [2] always=1 — purpose unknown."
+      - "unknown_flag [2] always=1 — purpose unknown. App charging-settings
+        page exposes a control for every OTHER BAT index and has no
+        unaccounted-for setting, so [2] has no user-facing mapping — likely
+        firmware-reserved or not applicable to the g2408. Not worth wiring a
+        write path; see TODO.md 'BAT[2] hardcoded 1' (left open as defensive
+        cleanup only)."
+    verifications:
+      - date: "2026-06-08"
+        status: presumed
+        claim: "BAT[2]/unknown_flag has no corresponding control on the app's
+          charging-settings page; every other BAT index maps to an app setting
+          and none are unaccounted for, so [2] is likely firmware-reserved or
+          not valid for this mower type rather than a decodable user setting."
 
   - id: "BP"
     name: "bp_unknown"

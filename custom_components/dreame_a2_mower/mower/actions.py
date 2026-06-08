@@ -296,9 +296,11 @@ ACTION_TABLE: dict[MowerAction, ActionEntry] = {
     # apk reference. Live-verify post-deployment.
     MowerAction.LOCK_BOT: {"siid": 2, "aiid": 50, "routed_o": 12},
     # GENERATE_3D_MAP — apk opcode 10 with d-payload {idx: <map_index>}.
-    # Triggers the device-side LIDAR 3D map render; long-running with
-    # progress reported on s2p54. From ioBroker.dreame v0.3.7
-    # main.js:3474. Untested on g2408.
+    # From ioBroker.dreame v0.3.7 main.js:3474. LIVE-TESTED on g2408
+    # 2026-06-08 (docked-idle): accepted (cloud r=0) but ACCEPTED-BUT-NO-EFFECT
+    # — no new 3dmap OSS object produced; on-demand 3D-map generation is ruled
+    # out (firmware-gated, no app trigger). Button stays _U. See inventory.yaml
+    # op=10 "upload_map/generate_3dmap" verifications.
     MowerAction.GENERATE_3D_MAP: {
         "siid": 2, "aiid": 50, "routed_o": 10,
         "payload_fn": _generate_3d_map_payload,

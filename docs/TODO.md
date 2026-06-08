@@ -811,6 +811,48 @@ atomic-calendar-revive dep. (~half-day; the work_log label match is pinned by
 
 ---
 
+### Live dense 3D/LiDAR map surface — the app shows it, we only ingest snapshots
+
+**Why:** 2026-06-08 the user removed a map exclusion zone; the mower began
+re-mapping the newly-opened area. BOTH app instances (action phone + cloud-only
+iPad) immediately showed a DENSER 3D LiDAR point cloud including the new area —
+i.e. it's cloud-resident and live. But our integration only ever sees the
+**infrequent `.0550.bin` 3D snapshots** (the `s2.50 m='g' t='OBJ' d={type:'3dmap'}`
+list, last objects 2026-04-20 + 2026-05-10) — the live dense map never appears
+there. This area was skipped historically because we assumed the OBJ list was
+the whole story.
+
+**What's been ruled out (live probes 2026-06-08):**
+- op=10 generate_3dmap — accepted (r=0) but no effect; does NOT trigger a render (see inventory op=10).
+- OBJ-list `m='g' t='OBJ'` with 11 type values — only `3dmap` + `wifimap` return objects; `map`/`olmap`/`lidar`/`live`/`current`/`pointcloud`/`model`/`2dmap`/`mapbin` all r=0 but empty.
+- Direct `siid:6` MIoT property read (`get_properties` p1–p4) → `null` (g2408 rejects direct reads; siid:6 is repurposed for SETTINGS/s6p2 on the mower, NOT the vacuum's MAP service).
+- Direct property-SET of `siid:99 piid:20` (s99p20) → `80001` (both `{"frame_type":"I"}` and int values, 2026-06-08). s99p20 is a device→cloud OUTPUT (announces a finished `.0550.bin`), not a settable trigger — you can't "set s99p20" to make a map, and the s6p2 analogy doesn't hold (s6p2 is also a device→cloud push; settings change via the s2.50 routed CFG write, then the device echoes s6p2). The trigger must be an ACTION (cf. vacuum REQUEST_MAP siid:6 aiid:1), not a property write.
+- The s2p54→s99.20 snapshot-upload flow has fired 0× in the 19-day capture (last snapshot 05-10), so no new 3dmap snapshot exists yet.
+
+**The lead (from `OLD/`):** the **dreame-vacuum** integration has the full
+live-map architecture the mower lineage descends from — a siid:6 MAP service
+(`MAP_DATA` p1, `FRAME_INFO` p2, `OBJECT_NAME` p3, `MAP_EXTEND_DATA` p4,
+`RECOVERY_MAP_LIST` p9) with a **`REQUEST_MAP` action (siid:6 aiid:1)** that
+sends `{"frame_type":"I"}` (full I-frame keyframe request) and `UPDATE_MAP_DATA`
+(aiid:2), fetched via `get_interim_file_url(obj_name)` and **polled every 120 s**
+for the live map (`alternatives/dreame-vacuum/.../dreame/{device.py:request_map,map.py,types.py}`).
+The g2408 moved its LiDAR-object push to s99.20 and repurposed siid:6, so the
+exact aiid/piid differ — but the **REQUEST_MAP I-frame → OBJECT_NAME →
+interim-URL** pattern is what to look for.
+**Done when:** the cloud surface the app uses for the live dense 3D map is
+identified and (if reachable) wired so the HA LiDAR camera tracks the live map,
+not just the periodic snapshot.
+**Method:** app-RPC capture (Phase 3) — sniff the action phone while opening the
+3D-view, watch for an I-frame/request-map call + the object name it then fetches.
+Blind-probing mower siid:6 actions is discouraged (cross-mower-type actions
+misfire — cf. the siid:2 aiid:3 = return-to-dock incident).
+**Status:** open (research — needs app-RPC capture).
+**Cross-refs:** inventory.yaml op=10 "upload_map/generate_3dmap" + s2p54 entries;
+memory `project_g2408_op10_3dmap_negative`;
+`OLD/alternatives_archive_2026-05-05/alternatives/dreame-vacuum/custom_components/dreame_vacuum/dreame/` (device.py `request_map`, types.py siid:6 MAP service); the Phase 3 app-RPC capture section below.
+
+---
+
 ## In-progress
 
 _(none currently)_
@@ -1023,51 +1065,6 @@ Once captured, the integration routes the affected ~28 entities through the new 
 
 ---
 
-## Phase 3.5: ioBroker-derived write surfaces (independent of the app sniff)
-
-**Why:** Investigation of `OLD/alternatives_archive_2026-05-05/ioBroker.dreame` (synced 2026-05-09, latest commit `fe0db96` v0.3.7) revealed two write surfaces our integration doesn't use, plus several action commands we don't expose. Full catalog: `docs/research/wire-captures/iobroker-write-catalog-2026-05-09.md`.
-
-**Tiers 1–3 are closed — see `docs/DONE.md`:** Tier 1 (CFG complex-payload
-formats) shipped in v1.0.2a10; Tier 2 (PRE preferences) and Tier 3 (AutoSwitch
-siid:4 piid:50) were ruled out as not-applicable to g2408. Only Tier 4 below
-remains open.
-
-**Tier 4 — new actions ⚠ MOSTLY ALREADY COVERED:**
-- find_robot op=9, stop, pause, dock, suppress_fault — already in our `MowerAction` enum.
-- lock_robot op=12 — live-probed; accepted-but-no-effect on g2408 (see memory `project_lock_robot_op12_incident`). Effectively closed; not worth surfacing.
-- Still uncovered: generate_3dmap op=10 with `d:{idx:0}` (needs new action shape), request_wifi_map siid:6 aiid:4 (different routing). Both deferred — need live probing in a docked window.
-
-**WARNING from ioBroker commit `74467a3`:** `siid:2 aiid:3 in:[4]` was historically called "start zone mowing" but **actually triggers RETURN-TO-DOCK** on g2408. They had to remove it. Don't probe blindly.
-
-**Status:** Tiers 1–3 closed (see DONE.md); Tier 4 has a small remaining surface (generate_3dmap / request_wifi_map shapes).
-**Cross-ref:** `docs/research/wire-captures/iobroker-write-catalog-2026-05-09.md` (live-verification section at the end).
-
----
-
-## Per-map device-info-page segmentation — research sub-devices
-
-**Why:** Several entities are map-specific (mowing height, edge-mowing, mowing direction, AI obstacle bits, etc.) and currently appear flat under the single Dreame device on the device-info page. The HA device page has only three fixed sections — Controls / Configuration / Diagnostic — so there's no native way to label a section "Map 1" vs "Map 2" within a single device. A custom dashboard can group them, but the device-info page itself can't.
-
-**Two paths to evaluate before committing:**
-
-1. **Naming convention** — prefix entity `name=` with the map label, e.g. `"Map 1: Mowing height"`, `"Map 2: Mowing height"`. Lightweight, works today, no breaking changes. Drawback: the prefix shows up in voice / automation contexts where it reads awkwardly.
-
-2. **Sub-devices** — HA 2024.10+ introduced device hierarchy via `via_device` and per-map child `DeviceInfo` (identifiers like `(DOMAIN, f"{entry_id}_map_{map_id}")`). Per-map entities live on the child device; each map becomes its own row in the devices list, with its own device-info page. Cleaner long-term but a sizable refactor and potentially affects entity unique_ids if not done carefully (could create entity orphans — see the `feedback_entity_rename_orphan.md` memory).
-
-**Research before deciding:**
-
-- Survey how other multi-map / multi-zone HA integrations handle this. Examples to look at: Roborock (multi-floor maps), Tasshack/Dreame (legacy fork — does the old integration use sub-devices?), Husqvarna Automower, Tesla (vehicle / charging), Mealie (recipes per shopping list)…
-- Specifically check: do they actually create sub-devices, or do they prefix names? What are the migration pain points if they ever moved from one to the other?
-- Check HA core docs / dev guidelines for whether sub-devices are recommended for "logical grouping inside one physical device" or only for "this physical device contains other physical devices."
-- Confirm whether a sub-device's entities can be referenced from the parent's dashboard / lovelace card without extra plumbing.
-
-**If sub-devices look viable**, plan the entity-id migration carefully — changing a unique_id pattern strands the old entity in the registry as "unavailable" (we hit this on the cloud_state architecture rename and had to remove orphans manually via WS `config/entity_registry/remove`).
-
-**Status:** open (research-only; no code change yet).
-**Cross-ref:** `feedback_entity_rename_orphan.md` (auto-memory), `custom_components/dreame_a2_mower/entity-inventory.yaml` per-entity entries (which entities are map-specific).
-
----
-
 ## Determine whether HA writes drive the device, or only update the cloud cache
 
 **Why:** A whole class of g2408 settings — AI Obstacle Recognition
@@ -1117,56 +1114,16 @@ entry "BT-only classification retracted".
 
 ---
 
-## Deferred — write-path audit findings (2026-05-09)
+## BAT[2] hardcoded `1` in build helpers (write-path audit, 2026-05-09)
 
-Surfaced during the post-fix audit for additional structural
-read/write mismatches like the SETTINGS dual-entry / SCHEDULE-mode
-bugs (commits `b25b5ac` / `4868016` / `b89c574`). No other
-dual-source storage shapes were found. Two encoder-side
-findings still open; both are write paths whose hardcoded shape
-doesn't match what the firmware actually stores.
-
-### PRE encoder inflates `list(2)` to `list(10)` with hardcoded defaults
-
-**Why:** Same class as the SCHEDULE `mode` bug. Live g2408 cloud has
-`PRE = [0, 0]` (verified 2026-05-09 via `/tmp/probe_cfg_arrays.py`),
-but `protocol/cfg_action.py:166` `set_pre()` rejects arrays with
-`< 10` elements and `select.py:181` `_build_pre_efficiency` always
-emits 10 elements, padding indices 2..9 with
-`_PRE_PAD_DEFAULTS = [60, 0, 0, 0, 0, 0, 0, 0]`. First time the user
-picks "Mowing Efficiency" in HA, the cloud's `[0, 0]` becomes
-`[0, mode, 60, 0, 0, 0, 0, 0, 0, 0]` — the integration is
-*inflating* a field that firmware kept short. Source comment claims
-"may be trimmed server-side" but this is unverified, and even if
-it is trimmed, the integration is sending data that doesn't reflect
-firmware state.
-**Done when:** `set_pre()` accepts the same length the firmware
-stores (relax the 10-element minimum); `_build_pre_efficiency`
-reads the current PRE list from `cs.cfg["PRE"]` and mutates only
-the index it owns; live test on g2408 confirms PRE round-trips at
-length 2 after a "Mowing Efficiency" toggle.
-**Status:** mostly moot 2026-06-03 — the live test was performed
-(`tools/probes/probe_pre_write.py`) and `t='PRE'` returned `out[0].r=-3`: the
-device has NO routed-action setter for PRE, so a PRE write never reaches
-the firmware regardless of array length. The "inflating a field firmware
-kept short" concern is therefore academic (nothing is stored device-side).
-`set_pre` now parses `out[0].r` and returns False on the r=-3 reject
-(no more false success). The only residual cleanup value is cosmetic:
-the efficiency select still *attempts* a write that can't succeed —
-consider making it read-only (like `switch_map.DreameA2MapEdgemasterSwitch`)
-OR leave it attempting-and-failing-honestly. Relaxing the len<10 guard /
-2-element RMW is NOT worth doing unless the Phase-3 app-RPC capture finds a
-PRE write path that *does* apply.
-**Cross-refs:** `docs/research/wire-captures/pre-write-r3-2026-06-03.md`;
-`custom_components/dreame_a2_mower/protocol/cfg_action.py:162`;
-`custom_components/dreame_a2_mower/select.py:175-200`; live probe
-`tools/probes/probe_pre_write.py`.
-
-### BAT[2] hardcoded `1` in build helpers
-
-**Why:** Three build helpers — `_build_bat_auto_recharge` (number.py),
+**Why:** The sole finding still open from the 2026-05-09 write-path audit —
+which checked for structural read/write mismatches like the SETTINGS
+dual-entry / SCHEDULE-mode bugs (commits `b25b5ac` / `4868016` /
+`b89c574`) and found no other dual-source storage shapes. (The audit's
+other finding, the PRE encoder inflation, is now closed — see DONE.md.)
+Three build helpers — `_build_bat_auto_recharge` (number.py),
 `_build_bat_resume` (number.py), `_build_bat_custom_charging`
-(switch.py:171) — all hardcode `BAT[2] = 1` instead of reading it
+(switch_global.py:130) — all hardcode `BAT[2] = 1` instead of reading it
 from MowerState. The decoder explicitly drops `BAT[2]` with
 `# unknown_flag (consistently 1; semantic TBD)`. Live data confirms
 `BAT[2] = 1` today (2026-05-09), so writes are correct now, but the
@@ -1176,31 +1133,6 @@ something else there, every BAT-related write clobbers it.
 from `bat_raw[2]` in the CFG decoder, and the three build helpers
 pass `int(state.bat_unknown_flag or 1)` instead of the literal `1`.
 **Status:** open (deferred — defensive cleanup, low priority)
-**Cross-refs:** `coordinator/_refreshers.py § _refresh_locn`;
-`custom_components/dreame_a2_mower/switch.py:158-181`;
-`custom_components/dreame_a2_mower/number.py:80-110`.
-
----
-
-## Deferred from Task 17 (cloud-discovery integration)
-
-### Legacy `_refresh_*` method consolidation
-
-**Why:** `_refresh_cfg`, `_refresh_mihis`, `_refresh_dev`, `_refresh_net`,
-`_poll_slow_properties` remain in place alongside `_refresh_cloud_state`.
-They run on their own schedules and are still authoritative for some fields.
-Task 17 dropped the three MIHIS-duplicate archive-seed paths
-(`mowing_count`, `total_mowing_time_min`, `total_mowed_area_m2`) since
-`_apply_cloud_state_to_mower_state` now covers them at startup, but a
-full audit of the legacy refresh methods was deferred.
-**Done when:** Each legacy method is walked:
-1. Identify whether everything it sets is now sourced from `cloud_state`
-   via `_apply_cloud_state_to_mower_state`.
-2. For methods that are fully covered, drop them and their schedules.
-3. For methods that set fields not yet in cloud_state, expand
-   `_apply_cloud_state_to_mower_state` to cover them, then drop the legacy method.
-4. Verify no entity contract is broken (run integration suite).
-**Status:** open (deferred — audit needed before any removal)
-**Cross-refs:** `coordinator.py` `_refresh_cfg` / `_refresh_mihis` /
-`_refresh_dev` / `_refresh_net` / `_poll_slow_properties`;
-`coordinator.py` `_apply_cloud_state_to_mower_state`
+**Cross-refs:** `custom_components/dreame_a2_mower/switch_global.py:130-147`;
+`custom_components/dreame_a2_mower/number.py:79-118`;
+`coordinator/_property_apply.py:566-574` (decoder dropping `bat_raw[2]`).

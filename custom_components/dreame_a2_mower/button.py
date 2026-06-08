@@ -213,12 +213,17 @@ class DreameA2LockBotButton(_DreameA2ActionButton):
 
 
 class DreameA2Generate3DMapButton(_DreameA2ActionButton):
-    """Trigger the on-device LIDAR 3D map render (apk opcode 10).
+    """Fire apk opcode 10 (``{m:'a', p:0, o:10, d:{idx:0}}``, ioBroker.dreame
+    v0.3.7 main.js:3474).
 
-    Long-running on the mower side; progress is published on s2p54
-    ("3dmap-progress") and a final URL on the LIDAR file slot.
-    Wire format ``{m:'a', p:0, o:10, d:{idx:0}}`` from ioBroker.dreame
-    v0.3.7 main.js:3474. Untested on g2408.
+    LIVE-TESTED on g2408 2026-06-08 (docked-idle): the device ACCEPTS op=10
+    (cloud r=0) but it is ACCEPTED-BUT-NO-EFFECT — no new 3dmap OSS object is
+    produced and on-demand 3D-map generation is ruled out (the render is
+    firmware-gated on internal map-change conditions; the Dreame app has no
+    "generate map" trigger either). Same class as lock_robot op=12. The button
+    therefore stays control-mode ``_U`` (device_write_unproven): it sends a
+    real, accepted command that has no observable effect on this firmware.
+    See inventory.yaml op=10 "upload_map/generate_3dmap" verifications.
     """
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
