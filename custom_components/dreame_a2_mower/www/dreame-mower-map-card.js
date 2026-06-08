@@ -75,8 +75,11 @@ class DreameMowerMapCard extends HTMLElement {
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     const p = a.map_projection;
     const iconUrl = this._cfg.icon_url || "/dreame_a2_mower/mower-icon.png";
-    // The wifi <g> is FIRST in document order so SVG paint order keeps the
-    // trail + mower icon on top of the overlay.
+    // The wifi <g> sits BETWEEN the base image and the trail: it paints OVER
+    // the opaque lawn PNG (so cells are visible) but UNDER the trail + mower
+    // icon (so they're never occluded). Its <g opacity> makes the lawn show
+    // through. The position-animation loop only touches #trail and #mower, so
+    // the overlay never interferes with live painting.
     this.shadowRoot.innerHTML =
       `<style>:host{display:block}.wrap{position:relative}` +
       `svg{width:100%;height:auto;display:block}` +
@@ -89,18 +92,14 @@ class DreameMowerMapCard extends HTMLElement {
       `#wifiToggle.on{background:rgb(120,200,120)}</style>` +
       `<div class="wrap">` +
       `<svg id="svg" viewBox="0 0 ${p.width_px} ${p.height_px}">` +
-      `<g id="wifi" opacity="${this._wifiOpacity}"></g>` +
       `<image id="base" href="${a.entity_picture}" x="0" y="0" ` +
       `width="${p.width_px}" height="${p.height_px}"/>` +
+      `<g id="wifi" opacity="${this._wifiOpacity}"></g>` +
       `<path id="trail" class="trail" d=""/>` +
       buildMowerIconSvg(iconUrl, ICON_PX) +
       `</svg>` +
       `<button id="wifiToggle" type="button">WiFi</button>` +
       `</div>`;
-    // Base image must sit ABOVE the wifi layer; re-order so wifi is behind it.
-    const svg = this.shadowRoot.getElementById("svg");
-    const wifi = this.shadowRoot.getElementById("wifi");
-    svg.insertBefore(wifi, svg.firstChild);
     const btn = this.shadowRoot.getElementById("wifiToggle");
     btn.addEventListener("click", () => this._toggleWifi());
   }
