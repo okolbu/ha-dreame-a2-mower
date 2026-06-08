@@ -28,6 +28,12 @@ def test_midband_is_orange_yellow():
     assert _rssi_to_rgb(-75)[:3] == (255, 250, 0)
 
 
+def test_first_upper_branch_value():
+    # -74 dBm: n ~ 0.510 -> upper branch (red ramps down, green full). Probes
+    # the (1-n)*2*255 ramp that the n==1.0 endpoint (test_strongest) can't.
+    assert _rssi_to_rgb(-74)[:3] == (250, 255, 0)
+
+
 def test_clamps_beyond_range():
     assert _rssi_to_rgb(-120)[:3] == (255, 0, 0)   # weaker than WEAKEST
     assert _rssi_to_rgb(-40)[:3] == (0, 255, 0)    # stronger than STRONGEST
