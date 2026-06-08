@@ -2255,7 +2255,7 @@ properties:
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-06-04"
+      last_seen: "2026-06-08"
       decoded: confirmed
     verifications:
       - date: "2026-05-31"
@@ -2311,6 +2311,9 @@ properties:
           is wrong for g2408. The real OTA wire signals are s1p2
           (firmware/ota state) + s1p3 (progress), neither yet wire-captured.
         evidence: "fw_download/path{1,2,3}_*.0550.pcd downloaded 2026-06-04 via iotfile/getDownloadUrl — all PCD v0.7, OSS bucket path iot/mapbin/000000/; s2p54 100→86→100 brackets the 05-10 push in probe_log_20260419_130434.jsonl@2026-05-10 19:03:50 (View-LiDAR upload dip); upstream mislabel at OLD/alternatives_archive_2026-05-05/alternatives/dreame-mower/custom_components/dreame_mower/dreame/const.py:94"
+      - date: "2026-06-08"
+        status: presumed
+        claim: "Live-map WiFi overlay anchors cells to the cloud frame by inverting wifi_match.score_candidates (cell (cx,cy) -> cloud box [startX_m+cx*res .. +(cx+1)*res] x [startY_m+cy*res .. ]) and projecting with the card's projectPoint; no flip needed. Forward projection onto the live map not yet visually confirmed."
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:125"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Events"

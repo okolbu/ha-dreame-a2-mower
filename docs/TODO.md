@@ -561,42 +561,6 @@ contributor diagnostics aren't lost.
 
 ---
 
-### WiFi heatmap overlay on the live map
-
-**Why:** v1.0.3a7 renders the WiFi heatmap as a standalone PNG
-(`camera.dreame_a2_mower_wifi_heatmap`). The decoded JSON includes
-`startX`, `startY`, `resolution`, `width`, `height` — all in the same
-cloud-frame coordinate system as the lawn map. So the heatmap can be
-reprojected onto the live-map renderer as a translucent layer, giving
-users a "WiFi coverage by lawn area" view they can toggle on/off.
-
-User suggestion 2026-05-09: "potentially a toggled heat map of
-colored squares on top of the main map. Potentially oriented from the
-dock?". Anchor is straightforward — same coordinate frame; the
-existing renderer already handles cloud-frame → image-frame
-transforms. Toggling can either be a switch entity ("WiFi overlay
-on/off"; `MowerState.wifi_map_overlay_enabled`) or a Lovelace
-picture-elements layer.
-
-**Done when:**
-1. `map_render` accepts a `wifi_map_data` kwarg that, when truthy,
-   composites the RSSI cells over the lawn pixels at the right cloud-
-   frame offsets and resolution.
-2. A user-controllable switch (`switch.show_wifi_overlay` or similar)
-   gates the overlay so it can be turned off.
-3. The Mower-tab live map updates when the switch flips and when
-   `MowerState.wifi_map_data` changes.
-4. Cell rendering is alpha-blended (~50% so the lawn underneath is
-   still visible) and uses the same red→yellow→green dBm gradient as
-   the standalone camera.
-
-**Status:** open (design+implement). Lower priority than the
-GPS-coords gap and the SETTINGS Phase 3 sniff.
-**Cross-refs:** `wifi_map_render.py`, `map_render` (live-map renderer),
-`docs/research/cloud-map-geometry.md`.
-
----
-
 ### GPS world-coordinate read path — find the surface the Dreame app uses
 
 **Why:** `device_tracker.dreame_a2_mower_location` is plumbed to the cloud `routed-action g.LOCN → {pos: [lon, lat]}` path, but on g2408 LOCN returns the `[-1, -1]` sentinel even with `switch.anti_theft_realtime_location` (CFG.ATA[2]) ON. The Dreame app's **Real-Time Location** sub-page nevertheless shows the mower at its correct world coordinates, so the app reads GPS from a different cloud / MQTT surface that the integration has not yet identified. The legacy fork hit the same wall (`coordinator.py:287-294`).

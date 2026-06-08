@@ -77,6 +77,9 @@ entities:
       - date: "2026-06-01"
         status: presumed
         claim: "map camera serves coordinator._base_png (lawn + background only); trail+icon are client-side; publishes map_projection/point_seq/latest_point/track_snapshot/background_mode; calibration_points removed"
+      - date: "2026-06-08"
+        status: presumed
+        claim: "now also publishes wifi_overlay (active-map WiFi heatmap cell grid: cells with cloud-frame coords + RSSI) consumed by the live-map card's translucent SVG overlay layer; anchoring not yet visually confirmed (Task 6)"
     references:
       code: "custom_components/dreame_a2_mower/_camera_map.py:14"
       wire_entry: "MAPL"
@@ -88,6 +91,8 @@ entities:
       map_projection exposes the coordinate transform; background_mode
       indicates the current render mode. calibration_points was removed.
       Map 1 renders at 637x717, Map 2 at 291x287.
+      Publishes wifi_overlay (active-map heatmap cell grid) consumed by the
+      live-map card's overlay layer (2026-06-08).
 
   - id: "camera.dreame_a2_mower_map_N_base"
     platform: camera
