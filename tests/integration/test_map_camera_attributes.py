@@ -2,8 +2,9 @@
 
 The map camera now serves the BASE png (lawn + background only) and publishes
 the live position stream + map projection so the bundled card draws the trail +
-mower icon client-side. The old `calibration_points` block (consumed by the
-retired LiDAR-texture approach) is gone.
+mower icon client-side. It also re-publishes the `calibration_points` block
+(mower-frame mm ↔ served-PNG pixel) the bundled WebGL LiDAR card affine-fits
+for its optional map underlay.
 """
 from __future__ import annotations
 
@@ -92,9 +93,23 @@ def test_extra_state_attributes_image_version_is_base_png_hash():
     assert attrs["image_version"] == hashlib.sha1(b"\x89PNGspecific").hexdigest()[:12]
 
 
-def test_extra_state_attributes_has_no_calibration_points():
+def test_extra_state_attributes_exposes_calibration_points():
+    # Renderer: px = (bx2 - x_mm)/grid, py = (by2 - y_mm)/grid, then the
+    # canvas is flipped vertically → served-PNG y = (h - 1) - py.
+    # md: bx2=20000, by2=21000, grid=50, height_px=420.
     attrs = _make_camera().extra_state_attributes
-    assert "calibration_points" not in attrs
+    calib = attrs["calibration_points"]
+    assert len(calib) == 3
+    assert calib[0] == {"mower": {"x": 0.0, "y": 0.0}, "map": {"x": 400.0, "y": -1.0}}
+    assert calib[1] == {"mower": {"x": 1000.0, "y": 0.0}, "map": {"x": 380.0, "y": -1.0}}
+    assert calib[2] == {"mower": {"x": 0.0, "y": 1000.0}, "map": {"x": 400.0, "y": 19.0}}
+
+
+def test_calibration_points_is_unrecorded():
+    # Large diagnostic attr — must stay out of the recorder DB.
+    from custom_components.dreame_a2_mower.camera import DreameA2MapCamera
+
+    assert "calibration_points" in DreameA2MapCamera._unrecorded_attributes
 
 
 def test_last_known_point_none_when_no_position():

@@ -104,9 +104,10 @@ class DreameA2MapCamera(
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Surface the served base PNG's hash, the map projection params,
-        and the live position stream the bundled map card uses to draw the
-        trail + mower icon client-side.
+        """Surface the served base PNG's hash, the map projection params
+        (incl. the mower-frame ↔ pixel ``calibration_points`` the WebGL LiDAR
+        card uses for its map underlay), and the live position stream the
+        bundled map card uses to draw the trail + mower icon client-side.
         """
         attrs: dict[str, Any] = {}
         png = self.coordinator._base_png
@@ -121,6 +122,28 @@ class DreameA2MapCamera(
                     "pixel_size_mm": float(md.pixel_size_mm),
                     "width_px": int(md.width_px), "height_px": int(md.height_px),
                 }
+                # Mower-frame mm ↔ served-PNG-pixel calibration the bundled
+                # WebGL LiDAR card affine-fits to texture the base map onto a
+                # ground quad (map underlay). Renderer formula
+                # (`map_render._cloud_to_px`): px = (bx2 - x_mm) / grid,
+                # py = (by2 - y_mm) / grid; the renderer then flips the canvas
+                # vertically before saving, so served-PNG y = (h - 1) - py.
+                # Three non-collinear mower-frame points suffice for the fit.
+                bx2 = float(md.bx2)
+                by2 = float(md.by2)
+                grid = float(md.pixel_size_mm)
+                h = int(md.height_px)
+                samples = ((0.0, 0.0), (1000.0, 0.0), (0.0, 1000.0))
+                attrs["calibration_points"] = [
+                    {
+                        "mower": {"x": x_mm, "y": y_mm},
+                        "map": {
+                            "x": (bx2 - x_mm) / grid,
+                            "y": (h - 1) - (by2 - y_mm) / grid,
+                        },
+                    }
+                    for x_mm, y_mm in samples
+                ]
             except (TypeError, ValueError, AttributeError):
                 pass
         attrs["point_seq"] = self.coordinator._live_point_seq

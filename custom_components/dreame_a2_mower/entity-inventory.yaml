@@ -81,6 +81,10 @@ entities:
         status: verified
         claim: "now also publishes wifi_overlay (active-map WiFi heatmap cell grid: cells with cloud-frame coords + RSSI) consumed by the live-map card's translucent SVG overlay layer; overlay renders correctly on the live map (v1.0.24a1)"
         evidence: "live-dashboard visual confirmation 2026-06-08 (v1.0.24a1): user toggled the WiFi overlay on and reported colors, cell alignment, and opacity all correct"
+      - date: "2026-06-08"
+        status: partial
+        claim: "calibration_points RE-ADDED to extra_state_attributes (it had been dropped in the live-map rehaul, 81f7c74, which is what broke the WebGL LiDAR card's map underlay — the underlay fetches the camera's base PNG directly and never consumed the SVG live card). 3 mower-frame mm ↔ served-PNG pixel correspondences computed from map_projection via the renderer formula px=(bx2-x)/grid, py=(by2-y)/grid, then vertical flip y=(h-1)-py. Kept in _unrecorded_attributes (out of recorder). Code + unit test confirmed; live underlay render not yet visually re-confirmed."
+        evidence: "tests/integration/test_map_camera_attributes.py::test_extra_state_attributes_exposes_calibration_points + ::test_calibration_points_is_unrecorded (11 passed)"
     references:
       code: "custom_components/dreame_a2_mower/_camera_map.py:14"
       wire_entry: "MAPL"
@@ -90,7 +94,9 @@ entities:
       trail + mower icon are drawn client-side by the map card from the
       published position stream (point_seq, latest_point, track_snapshot).
       map_projection exposes the coordinate transform; background_mode
-      indicates the current render mode. calibration_points was removed.
+      indicates the current render mode. calibration_points (3 mower-mm ↔
+      served-PNG pixel correspondences derived from map_projection) is the
+      affine the bundled WebGL LiDAR card fits for its optional map underlay.
       Map 1 renders at 637x717, Map 2 at 291x287.
       Publishes wifi_overlay (active-map heatmap cell grid) consumed by the
       live-map card's overlay layer (2026-06-08).
