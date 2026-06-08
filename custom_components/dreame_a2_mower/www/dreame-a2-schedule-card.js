@@ -86,8 +86,8 @@ class DreameA2ScheduleCard extends HTMLElement {
         .grid { display: grid; grid-template-columns: 40px repeat(7, 1fr); gap: 1px; background: var(--divider-color); margin-bottom: 12px; font-size: 0.75em; }
         .grid > div { background: var(--card-background-color); padding: 2px 4px; height: 18px; box-sizing: border-box; position: relative; }
         .grid .header { background: var(--secondary-background-color); text-align: center; font-weight: bold; }
-        /* Absolutely positioned inside its start-hour cell: `top` carries the
-           start minute, `height` the duration — so 21:30 sits half-way down the
+        /* Absolutely positioned inside its start-hour cell: top carries the
+           start minute, height the duration — so 21:30 sits half-way down the
            21:00 row instead of snapping to 21:00. z-index lifts it over the
            hour cells it overflows into. */
         .grid .plan-block { position: absolute; left: 0; right: 0; box-sizing: border-box; color: white; padding: 1px 4px; font-size: 0.7em; line-height: 1.2; cursor: pointer; overflow: hidden; border-radius: 2px; z-index: 2; }
@@ -148,7 +148,7 @@ class DreameA2ScheduleCard extends HTMLElement {
       cells.push(`<div>${String(h).padStart(2, "0")}</div>`);
       for (let day = 0; day < 7; day++) {
         // Render each plan once, in its start-HOUR cell, as an absolutely
-        // positioned block. `top` offsets by the start minute and `height`
+        // positioned block. top offsets by the start minute and height
         // spans PLAN_DURATION_MIN (120 min = 200% of an hour cell) — the
         // block overflows down over the next hour(s), so it reads as a true
         // 21:30→23:30 bar rather than snapping to the 21:00 boundary.
