@@ -121,6 +121,83 @@ class _WifiArchiveMixin:
             "archive_total": len(self._wifi_archive_index),
         }
 
+    # ---------- active-map overlay for the live-map card (2026-06-08) ----------
+
+    def _resolve_active_map_wifi_entry(self):
+        """Newest WiFi archive entry tagged with the ACTIVE map_id, or None.
+
+        Mirrors ``DreameA2WifiPerMapCamera._resolve_entry`` but keyed on the
+        live map's active map, so the overlay always matches what the live-map
+        card is showing. Returns None when no active map is set or no archived
+        heatmap carries that map_id yet.
+        """
+        active = getattr(self, "_active_map_id", None)
+        if active is None:
+            return None
+        index = getattr(self, "_wifi_archive_index", None) or []
+        matches = [e for e in index if int(getattr(e, "map_id", -1)) == int(active)]
+        if not matches:
+            return None
+        matches.sort(key=lambda e: int(e.unix_ts), reverse=True)
+        return matches[0]
+
+    @property
+    def active_map_wifi_overlay(self) -> "dict | None":
+        """Overlay payload for the active map's WiFi heatmap, or None.
+
+        Read-only and NON-BLOCKING: returns None when the body is not yet
+        cached (the camera warms the cache via
+        ``_schedule_active_map_wifi_load``). cm->m conversion happens here so
+        the card stays in the same metre frame as ``map_projection`` and the
+        live track points.
+
+        Payload: ``{data, width, height, resolution_m, start_x_m, start_y_m}``.
+        """
+        entry = self._resolve_active_map_wifi_entry()
+        if entry is None:
+            return None
+        body = self._get_wifi_body_cached(entry.object_name)
+        if not isinstance(body, dict):
+            return None
+        data = body.get("data")
+        width = body.get("width")
+        height = body.get("height")
+        if not (isinstance(data, list) and isinstance(width, int)
+                and isinstance(height, int)):
+            return None
+        if width <= 0 or height <= 0 or len(data) != width * height:
+            return None
+        try:
+            resolution_m = float(body.get("resolution", 1)) or 1.0
+            start_x_m = float(body.get("startX", 0)) / 100.0
+            start_y_m = float(body.get("startY", 0)) / 100.0
+        except (TypeError, ValueError):
+            return None
+        return {
+            "data": data,
+            "width": width,
+            "height": height,
+            "resolution_m": resolution_m,
+            "start_x_m": start_x_m,
+            "start_y_m": start_y_m,
+        }
+
+    def _schedule_active_map_wifi_load(self) -> None:
+        """Schedule an executor load of the active map's WiFi body if it is
+        not cached yet, so the next coordinator broadcast carries the overlay.
+
+        No-op when already cached, no entry exists, or hass is unavailable.
+        """
+        entry = self._resolve_active_map_wifi_entry()
+        if entry is None:
+            return
+        if self._get_wifi_body_cached(entry.object_name) is not None:
+            return
+        hass = getattr(self, "hass", None)
+        if hass is None:
+            return
+        hass.async_create_task(self._async_load_wifi_body(entry.object_name))
+
     def _download_and_archive_wifi(
         self, object_name: str, first_seen_unix: int
     ) -> dict | None:
