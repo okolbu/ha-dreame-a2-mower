@@ -4658,6 +4658,11 @@ cfg_keys:
           0/fw reads 123), [1]=map index, [2]=zone index. [15] bitmask bit0=Human
           bit1=Animal bit2=Object; [5] 0=Crisscross/1=Customize/2=Chequerboard."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-09"
+        status: retracted
+        claim: "PRE payload_shape corrected from a 2-element [zone_id, mode] array to the confirmed 19-element write array."
+        retracts: "Mowing preferences. g2408 has 2 elements [zone_id, mode], not the apk's 10. Alpha.86 removed the entities that read PRE[2..9]; only mow_mode and mow_mode_efficient (both reading PRE[1]) remain. zone_id selects which zone's preferences to apply; mode is the mowing mode for that zone. Sample: [0, 0]."
+        reason: "2026-06-09 app-MITM sweep confirmed the 19-element array; the prior 2-element claim was based on the integration's builder shape, not a wire capture. app-mitm:2026-06-09-settings-sweep"
     references:
       apk: "ioBroker.dreame/apk.md §setX PRE"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
