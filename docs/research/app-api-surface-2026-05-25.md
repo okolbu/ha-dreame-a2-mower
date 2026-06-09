@@ -28,6 +28,15 @@ g2408 `80001` ("device unreachable via cloud relay") error.
 | B | `app.dreame.tech/dreame-*` microservices | the app | Dreame OAuth (`/dreame-auth/oauth/token`) | account, notifications, smarthome, device-bind. |
 | C | `{region}.api-iot.aliyuncs.com` (Aliyun Link IoT) | the app | Aliyun API-GW signing (`x-ca-*`, HmacSHA1, `x-ca-key 33954864`) + `iotToken` from `/account/createSessionByAuthCode` | **tentative (proxyman WIP).** Classic Aliyun device identity seen: `productKey a5RAm2U4V72`, per-device `deviceSecret`. Living Link SDK (`user-agent: ALIYUN-ANDROID-DEMO`). |
 
+> **Correction 2026-06-09 [dreame-app-implementation-guide-2026-06-09.md]:**
+> Backend B is `eu.iot.dreame.tech:13267` (HTTP-over-TLS), NOT `app.dreame.tech`.
+> Backends A and B share that host:port; `POST …/dreame-iot-com-10000/device/
+> sendCommand` is the shared control relay and returns `code:0` while the mower
+> is online — the `80001` is asleep/slow-prop-specific, not RPC-inherent. The
+> auth bridge is `:13267/dreame-smarthome/aliIot/getAuthCodeV3` →
+> `api.link.aliyun.com/living/account/region/get` → Aliyun Link session. The
+> "app does not use backend A" claim is superseded.
+
 Key takeaway: the app does **not** use our backend (A). It rides Dreame OAuth
 (B) + an Aliyun Link IoT platform (C). Both B and C maintain a server-side
 **device shadow / last-known state**, which is the structural reason they would

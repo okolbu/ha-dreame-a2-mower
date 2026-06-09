@@ -1,6 +1,6 @@
 # Cloud read/write reference (g2408)
 
-> **Status — AUTHORITATIVE.** Last live-verified 2026-05-09 against g2408 fw 4.3.6_0550 / int v1.0.2a10. Sections labelled **TBD** at the bottom of the file are research-only — everything above is verified live unless explicitly flagged otherwise. Per-entity read/write paths live in `custom_components/dreame_a2_mower/entity-inventory.yaml`; this doc covers the *transport layer* (auth, endpoints, payload framing, response codes).
+> **Status — AUTHORITATIVE.** Last live-verified 2026-06-09 against g2408 fw 4.3.6_0550 / int v1.0.2a10. Sections labelled **TBD** at the bottom of the file are research-only — everything above is verified live unless explicitly flagged otherwise. Per-entity read/write paths live in `custom_components/dreame_a2_mower/entity-inventory.yaml`; this doc covers the *transport layer* (auth, endpoints, payload framing, response codes).
 
 This document is the canonical reference for talking to g2408's Dreame
 Cloud (`eu.iot.dreame.tech:19973`). It covers both READ and WRITE paths
@@ -250,3 +250,20 @@ Probes preserved in `/tmp/`:
 
 All bypass HA — pure Python with stubbed `homeassistant.const` import,
 direct cloud_client usage. Useful template for Phase 2/3 probing.
+
+## device/sendCommand — app-observed control path (2026-06-09, partial)
+
+`POST eu.iot.dreame.tech:13267/dreame-iot-com-10000/device/sendCommand`
+[dreame-app-implementation-guide-2026-06-09.md] — app-observed, not yet
+re-verified on our client.
+
+Outer: `{"id":N,"did":did,"data":{...},"sign":hmac,"timestamp":ms}`
+Inner: `{"id":N,"did":did,"method":"action|get_properties|set_properties",
+"from":"android","params":...}`. `action(siid:2,aiid:50)` multiplexes:
+`{"m":"g","t":KEY,"d":args}` (read), `{"m":"s","t":KEY,"d":value}` (CFG write),
+`{"m":"a","p":P,"o":opcode,"d":args}` (routed action). Spot mow live-confirmed:
+`{"m":"a","p":0,"o":103,"d":{"area":[1]}}` → code:0.
+
+**80001 reframe:** returns `code:0` online; the 80001 we attributed to the RPC
+path is asleep/slow-prop-specific. See tools/probes/read_key_probe.py and the
+sendCommand verification (Phase 1 Task 11).
