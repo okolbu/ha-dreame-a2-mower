@@ -2315,6 +2315,21 @@ properties:
         status: verified
         claim: "Live-map WiFi overlay anchors cells to the cloud frame by inverting the cell-index formula used by wifi_match.score_candidates (same arithmetic; the card does NOT call that module): cell (cx,cy) -> cloud-metre box [start_x_m+cx*res .. start_x_m+(cx+1)*res] x [start_y_m+cy*res .. start_y_m+(cy+1)*res], then projecting both corners with the card's projectPoint (which already bakes the FLIP_TOP_BOTTOM convention, so no extra flip). Forward projection visually confirmed on the live map: cell alignment correct, no axis flip needed."
         evidence: "live-dashboard visual confirmation 2026-06-08 (v1.0.24a1): user toggled the WiFi overlay on and reported colors, cell alignment, and opacity all correct"
+      - date: "2026-06-09"
+        status: verified
+        claim: |
+          OBJ-list parity confirmed: list_3dmap_objects() returns BOTH archived
+          PCDs reachable — ali_dreame/2026/04/20/BM169439/-112293549_154157120.0550.bin
+          (153261 pts, 2.45 MB) AND ali_dreame/2026/05/10/BM169439/-112293549_170348301.0550.bin
+          (51932 pts, 831 KB). The denser 04/20 scan IS reachable via our OBJ-list
+          (counters the op10_3dmap_negative concern that the dense LiDAR surface was
+          unreachable via archived PCDs). Density ≠ recency: the integration's default
+          LiDAR camera renders latest()-by-timestamp (sparse 05/10), while the app
+          showed the denser older 04/20. This is a render-default/selection UX matter,
+          not a fetch gap.
+        evidence: "tools/probes/lidar_parity_probe.py live run 2026-06-09"
+    open_questions:
+      - "Default-render-densest-vs-newest UX: integration renders latest-by-timestamp (05/10, 51932 pts); the Dreame app showed the older denser scan (04/20, 153261 pts). Should the integration offer a 'densest scan' picker or always show latest? [UX decision — Phase 2]."
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:125"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Events"
@@ -4851,7 +4866,7 @@ cfg_individual:
   - id: "AIOBS"
     name: "ai_obstacle_data"
     category: "cfg_individual"
-    payload_shape: "(observed: r=-3 in all 3 cloud dumps so far; payload-on-success unknown)"
+    payload_shape: "(observed: r=-3 in all 3 cloud dumps and live probe 2026-06-09; payload-on-success unknown)"
     semantic: |
       APK-documented endpoint. The 3 cloud dumps so far all returned
       r=-3. Was once suspected absent on g2408, but MISTA reversed that
@@ -4862,6 +4877,8 @@ cfg_individual:
       App-MITM 2026-06-09 confirms the app issues routed-get t=AIOBS;
       response shape is [UNKNOWN — to capture] — likely the photo index
       call (see tools/probes/read_key_probe.py).
+      Live probe 2026-06-09 bare GET returned r=-3 (mower docked, idle) —
+      bare GET requires args; the app likely sends additional arguments.
     status:
       seen_on_wire: false
       last_seen: "2026-06-09"
@@ -4873,11 +4890,16 @@ cfg_individual:
       - "Capture this endpoint during an AI-obstacle detection event (cloud-side trigger; s1p53 is the BLE-connection flag, NOT an obstacle signal)."
       - "Test whether more cloud dumps over time produce a successful response (cf. MISTA)."
       - "Does AIOBS response carry the photo index (photo_list)? App-MITM suggests this is the AI-obstacle photo-index call [UNKNOWN — to capture]."
+      - "Bare GET returns r=-3 — capture the args the app sends with AIOBS to get a successful response."
     verifications:
       - date: "2026-06-09"
         status: partial
         claim: "App issues routed-get t=AIOBS; response shape not yet captured on our client"
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: presumed
+        claim: "AIOBS bare GET (no args) returns r=-3 at idle — endpoint requires args; the app sends additional arguments to get a successful response."
+        evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
 
   - id: "CFG"
     name: "all_keys_cfg"
@@ -5032,7 +5054,7 @@ cfg_individual:
   - id: "MAPI"
     name: "map_info"
     category: "cfg_individual"
-    payload_shape: "(observed: r=-3 in all 3 cloud dumps so far; payload-on-success unknown)"
+    payload_shape: "(observed: r=-3 in all 3 cloud dumps + live probe 2026-06-09; payload-on-success unknown — requires args)"
     semantic: |
       APK-documented endpoint. The 3 cloud dumps so far all returned
       r=-3. r=-3 is empirically NOT proof of feature absence — see
@@ -5042,6 +5064,8 @@ cfg_individual:
       App-MITM 2026-06-09 confirms the app issues routed-get t=MAPI
       (map index); response shape is [UNKNOWN — to capture] —
       see tools/probes/read_key_probe.py.
+      Live probe 2026-06-09 bare GET returned r=-3 (mower docked, idle) —
+      endpoint requires a map_index or similar argument; the app sends args.
     status:
       seen_on_wire: false
       last_seen: "2026-06-09"
@@ -5051,12 +5075,17 @@ cfg_individual:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
       - "Capture with explicit map_index argument once we identify the inbound parameter shape."
-      - "Test with values from cfg_individual.MAPL once that endpoint stabilises."
+      - "Test with values from cfg_individual.MAPL (map IDs 0, 1) to probe what MAPI returns per map."
+      - "Bare GET returns r=-3 — capture the args the app sends with MAPI to get a successful response."
     verifications:
       - date: "2026-06-09"
         status: partial
         claim: "App issues routed-get t=MAPI (map index); response shape not yet captured on our client"
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: presumed
+        claim: "MAPI bare GET (no args) returns r=-3 at idle — endpoint requires args (map_index or similar); the app sends additional arguments."
+        evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
 
   - id: "MAPL"
     name: "map_list"
@@ -5076,21 +5105,29 @@ cfg_individual:
       semantic is undecoded.
       App-MITM 2026-06-09 confirms the app issues routed-get t=MAPL (map
       list) [dreame-app-implementation-guide-2026-06-09.md].
+      Live routed-get confirmed 2026-06-09: r=0, d=[[0,1,1,1,0],[1,0,1,1,0]]
+      (2-map device idle at dock; map0 index-1=1=active, map1 index-1=0=inactive;
+      indices 2–4 semantics still unknown).
     status:
-      seen_on_wire: false
+      seen_on_wire: true
       last_seen: "2026-06-09"
-      decoded: confirmed
+      decoded: partial
     references:
       apk: "ioBroker.dreame/apk.md §getX MAPL"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
       - "MAPL[i][2..4] semantics — observed [1, 1, 0] in both samples; needs map-edit captures (rename, set-mowing-direction, etc.) to discriminate."
       - "Does MAPL[i][1] update on dock-side map switch, or only on the active mowing map?"
+      - "Live probe 2026-06-09 d=[[0,1,1,1,0],[1,0,1,1,0]]: confirm map0=active(index-1=1), map1=inactive(index-1=0) interpretation by triggering an active-map switch."
     verifications:
       - date: "2026-06-09"
         status: partial
         claim: "App issues routed-get t=MAPL (map list); confirmed app-observed, response shape already partially decoded via cloud dump cross-correlation"
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: partial
+        claim: "MAPL routed-get returns r=0, d=[[0,1,1,1,0],[1,0,1,1,0]] — 2 map rows, 5 ints each; indices 2–4 semantics unknown."
+        evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
 
   - id: "MIHIS"
     name: "lifetime_mowing_aggregates"
@@ -5164,11 +5201,15 @@ cfg_individual:
         status: partial
         claim: "App issues routed-get t=MISTA (area counters, mid-run only); confirmed app-observed; response shape already decoded vs s1p4 corpus"
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: presumed
+        claim: "MISTA bare GET returns r=-1 at idle (mower docked) — consistent with documented pollability quirk; r=-1=idle, live data only during active mow."
+        evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
 
   - id: "MITRC"
     name: "mission_track"
     category: "cfg_individual"
-    payload_shape: "(observed: r=-1 in all 3 cloud dumps so far; payload-on-success unknown)"
+    payload_shape: "(observed: r=-1 in all 3 cloud dumps and live probe 2026-06-09; payload-on-success unknown — idle-only; mid-run likely required)"
     semantic: |
       APK-documented endpoint (apk-named "Mission Track" — likely
       carries live trail / completed track). The 3 cloud dumps so far
@@ -5179,6 +5220,9 @@ cfg_individual:
       App-MITM 2026-06-09 confirms the app issues routed-get t=MITRC
       with paged {idx, size} arguments [dreame-app-implementation-guide-2026-06-09.md];
       response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
+      Live probe 2026-06-09 sent {idx:0, size:20} and received r=-1 (mower
+      docked, idle) — consistent with all cloud dumps; r=-1=idle, mid-run probe
+      required to confirm whether it returns data during an active mission.
     status:
       seen_on_wire: false
       last_seen: "2026-06-09"
@@ -5195,32 +5239,42 @@ cfg_individual:
         status: partial
         claim: "App issues routed-get t=MITRC with paged {idx, size} arguments (history/track paging); response shape not yet captured on our client"
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: presumed
+        claim: "MITRC GET with {idx:0, size:20} returns r=-1 at idle — consistent with r=-1=idle pattern; mid-run probe needed to capture the actual payload."
+        evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
 
   - id: "MPOS"
     name: "live_position"
     category: "cfg_individual"
-    payload_shape: "(response shape unknown — to capture via read_key_probe.py)"
+    payload_shape: "{x: int, y: int, yaw: int} — map-frame position; units/frame not yet cross-checked"
     semantic: |
       Live mower position read via routed-get t=MPOS. App-MITM 2026-06-09
       confirms the app issues action(siid:2,aiid:50) {m:'g', t:'MPOS'} to read
       the live mower position [dreame-app-implementation-guide-2026-06-09.md].
-      Response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
-      Possible use: live-position fallback when s1p4 MQTT push is unavailable,
-      [UNVERIFIED].
+      Response shape CONFIRMED 2026-06-09: r=0, d={x:95, y:-4, yaw:0} — three
+      integer fields. Shape-confirmed (x, y, yaw as ints); units/frame not yet
+      cross-checked vs s1p4 live-position pushes.
+      Possible use: live-position fallback when s1p4 MQTT push is unavailable
+      [UNVERIFIED — not yet tested with MQTT disabled].
     status:
-      seen_on_wire: false
+      seen_on_wire: true
       last_seen: "2026-06-09"
-      decoded: hypothesized
+      decoded: partial
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
-      - "Decode the MPOS routed-get response; is it a live-position fallback for when s1p4 MQTT is down? Capture via read_key_probe.py."
-      - "Does MPOS response carry {x, y, heading} in the same frame as s1p4, or a different frame?"
+      - "Cross-check MPOS {x, y, yaw} units and frame against s1p4 live-position pushes — do they match directly or need coordinate transform?"
+      - "Confirm MPOS is a viable live-position fallback when s1p4 MQTT is down — test with MQTT disabled [UNKNOWN — to capture]."
     verifications:
       - date: "2026-06-09"
         status: partial
         claim: "App issues routed-get t=MPOS (live position); response shape not yet captured on our client"
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: partial
+        claim: "MPOS routed-get returns r=0, d={x:95, y:-4, yaw:0} — three integer fields; shape confirmed. Units/frame not yet cross-checked vs s1p4."
+        evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
 
   - id: "NET"
     name: "wifi_info"
@@ -5242,7 +5296,7 @@ cfg_individual:
   - id: "OBS"
     name: "obstacle_data"
     category: "cfg_individual"
-    payload_shape: "(observed: r=-3 in all 3 cloud dumps so far; payload-on-success unknown)"
+    payload_shape: "(observed: r=-3 in all 3 cloud dumps + live probe 2026-06-09; payload-on-success unknown — requires args)"
     semantic: |
       APK-documented endpoint. The 3 cloud dumps so far all returned
       r=-3. r=-3 is empirically NOT proof of feature absence — see
@@ -5252,6 +5306,8 @@ cfg_individual:
       App-MITM 2026-06-09 confirms the app issues routed-get t=OBS
       (obstacles); response shape is [UNKNOWN — to capture] —
       see tools/probes/read_key_probe.py.
+      Live probe 2026-06-09 bare GET returned r=-3 (mower docked, idle) —
+      endpoint requires args; the app likely sends additional arguments.
     status:
       seen_on_wire: false
       last_seen: "2026-06-09"
@@ -5262,11 +5318,16 @@ cfg_individual:
     open_questions:
       - "Capture immediately after an AI-obstacle event (cloud-side; s1p53 is BLE-connection, NOT obstacle — find the real on-wire trigger)."
       - "Cross-reference with AIOBS — both apk-described as obstacle endpoints, semantics distinct."
+      - "Bare GET returns r=-3 — capture the args the app sends with OBS to get a successful response."
     verifications:
       - date: "2026-06-09"
         status: partial
         claim: "App issues routed-get t=OBS (obstacles); response shape not yet captured on our client"
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: presumed
+        claim: "OBS bare GET (no args) returns r=-3 at idle — endpoint requires args; the app sends additional arguments to get a successful response."
+        evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
 
   - id: "PIN"
     name: "pin_status"
@@ -5289,7 +5350,7 @@ cfg_individual:
   - id: "PRE"
     name: "preference_endpoint"
     category: "cfg_individual"
-    payload_shape: "(observed: r=-3 on individual fetch in all 3 dumps; SAME-NAMED key in cfg_keys IS readable via all-keys CFG)"
+    payload_shape: "(observed: r=-3 on individual fetch in all 3 cloud dumps + live probe 2026-06-09; SAME-NAMED key in cfg_keys IS readable via all-keys CFG)"
     semantic: |
       APK-documented endpoint. The individual `getCFG t:'PRE'` fetch
       returns r=-3 in all 3 cloud dumps so far, but the **all-keys**
@@ -5303,8 +5364,11 @@ cfg_individual:
       endpoint that happens to share a name. `decoded: hypothesized`
       because we haven't confirmed individual-fetch will never work;
       with only 3 dumps the sample is too small.
+      Live probe 2026-06-09 bare GET confirmed r=-3 at idle — consistent
+      with cloud dumps; individual-fetch form still not working.
     status:
       seen_on_wire: false
+      last_seen: "2026-06-09"
       decoded: hypothesized
     references:
       apk: "ioBroker.dreame/apk.md §getX PRE"
@@ -5312,43 +5376,57 @@ cfg_individual:
     open_questions:
       - "Reconcile with cfg_keys.PRE: same name, different access paths. Same data via different paths, or different endpoints with shared name?"
       - "Test whether the individual-fetch starts working in later dumps (cf. MISTA flip)."
+    verifications:
+      - date: "2026-06-09"
+        status: presumed
+        claim: "PRE bare GET (no args) returns r=-3 at idle — individual-fetch form is consistently rejected; data is accessible via all-keys CFG fetch instead."
+        evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
 
   - id: "PREI"
     name: "preference_info"
     category: "cfg_individual"
-    payload_shape: "{type, ver: [[zone_id, ver], ...]}"
+    payload_shape: "{type: int, ver: [[map_id, version], ...]} — per-map PRE version counters"
     semantic: |
-      Preference info. type:0 observed. ver is a two-row version array —
-      likely per-PRE-row config-version counter. ver:[[0,78],[1,3]] means
-      zone 0 at version 78, zone 1 at version 3. Not wired.
-      Sample: {type:0, ver:[[0,78],[1,3]]}.
+      Per-map PRE (preference) version counters. type:0 observed; ver is a
+      per-map version array — ver:[[map_id, version], ...]. Live sample
+      2026-06-09: {type:0, ver:[[0,123],[1,3]]} — map0 at PRE version 123,
+      map1 at version 3. Each increment presumably reflects a preference
+      write on that map (zone settings, mowing mode, etc.).
+      Not wired; the per-map version could seed a cache-invalidation check.
       App-MITM 2026-06-09 confirms the app issues routed-get t=PREI
-      (PRE info/read) [dreame-app-implementation-guide-2026-06-09.md];
-      response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
+      [dreame-app-implementation-guide-2026-06-09.md].
     status:
-      seen_on_wire: false
+      seen_on_wire: true
       last_seen: "2026-06-09"
-      decoded: hypothesized
+      decoded: partial
     references:
       apk: "ioBroker.dreame/apk.md §getX PREI"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
-      - "PREI.type field — purpose unknown; observed always 0."
+      - "PREI.type field — purpose unknown; observed always 0. Does it ever take a non-zero value?"
+      - "Confirm that ver[i][1] increments on each PRE write to map i — capture before/after a zone-settings change."
     verifications:
       - date: "2026-06-09"
         status: partial
         claim: "App issues routed-get t=PREI (preference info/read); response shape not yet captured on our client"
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: partial
+        claim: "PREI routed-get returns r=0, d={type:0, ver:[[0,123],[1,3]]} — per-map PRE version counters; type field semantics unknown."
+        evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
 
   - id: "RGBPSTA"
     name: "led_state"
     category: "cfg_individual"
-    payload_shape: "(response shape unknown — to capture via read_key_probe.py)"
+    payload_shape: "(observed: r=-3 bare GET; payload-on-success unknown — requires args or different call path)"
     semantic: |
       LED state read via routed-get t=RGBPSTA. App-MITM 2026-06-09 confirms
       the app issues action(siid:2,aiid:50) {m:'g', t:'RGBPSTA'} to read the
       LED/indicator-light state [dreame-app-implementation-guide-2026-06-09.md].
-      Response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
+      Live probe 2026-06-09 bare GET (also probed with "id":-1) returned r=-3
+      (mower docked, idle) — endpoint requires args or a different call pattern;
+      the app likely sends additional arguments. Response shape still
+      [UNKNOWN — to capture].
     status:
       seen_on_wire: false
       last_seen: "2026-06-09"
@@ -5358,11 +5436,16 @@ cfg_individual:
     open_questions:
       - "Decode the RGBPSTA response shape; does it carry {r, g, b, brightness} or an enum mode?"
       - "Is RGBPSTA read-write (is there a corresponding SET path)?"
+      - "Bare GET (and id:-1 variant) returns r=-3 — capture the args the app sends with RGBPSTA to get a successful response."
     verifications:
       - date: "2026-06-09"
         status: partial
         claim: "App issues routed-get t=RGBPSTA (LED state); response shape not yet captured on our client"
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: presumed
+        claim: "RGBPSTA bare GET (no args, also id:-1) returns r=-3 at idle — endpoint requires args; the app sends additional arguments to get a successful response."
+        evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
 
   - id: "RPET"
     name: "rain_protection_end_time"
@@ -5384,30 +5467,37 @@ cfg_individual:
   - id: "SCHDTV3"
     name: "schedule_v3"
     category: "cfg_individual"
-    payload_shape: "(response shape unknown — to capture via read_key_probe.py)"
+    payload_shape: "int (scalar — likely schedule version or active-plan count; semantics unknown)"
     semantic: |
-      Schedule v3 read via routed-get t=SCHDTV3. App-MITM 2026-06-09 confirms
-      the app issues action(siid:2,aiid:50) {m:'g', t:'SCHDTV3'} to read the
-      schedule configuration [dreame-app-implementation-guide-2026-06-09.md].
-      Response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
-      The app's SCHDTV3 SET (schedule write) was not captured in this session
-      [dreame-app-implementation-guide-2026-06-09.md]; a second capture with
-      relays up is needed to get the write payload.
+      Schedule v3 endpoint. Live routed-get confirmed 2026-06-09: r=0, d=2
+      (scalar integer). Semantics unknown — could be the schedule-config
+      version counter, the number of active schedule entries, or a feature-
+      flag. Full schedule structure is NOT returned by bare GET [UNKNOWN —
+      the app may send args to retrieve the full list, or GET returns only
+      a version/count scalar and the schedule list is pushed separately].
+      App-MITM 2026-06-09 confirms the app issues action(siid:2,aiid:50)
+      {m:'g', t:'SCHDTV3'} [dreame-app-implementation-guide-2026-06-09.md].
+      The app's SCHDTV3 SET (schedule write) was not captured in this session;
+      a second capture with relays up is needed to get the write payload.
     status:
-      seen_on_wire: false
+      seen_on_wire: true
       last_seen: "2026-06-09"
-      decoded: hypothesized
+      decoded: partial
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
-      - "Decode the SCHDTV3 GET response shape (schedule list structure)."
+      - "Decode SCHDTV3 scalar d=2 — is it the schedule-config version, the count of active entries, or a feature flag? Correlate with add/delete schedule operations."
       - "Capture a SCHDTV3 SET (add/edit a schedule with relays up) to get the write payload shape — GET only was observed in app-MITM 2026-06-09."
-      - "schdtv3-set: Capture a SCHDTV3 SET (add/edit/delete a schedule in-app) to get the schedule write format; only GET seen [UNKNOWN — to capture]."
+      - "Does the app pass args to SCHDTV3 GET to retrieve the full schedule list, or is the full list pushed separately?"
     verifications:
       - date: "2026-06-09"
         status: partial
         claim: "App issues routed-get t=SCHDTV3 (schedule v3); GET observed but SET not captured; response shape not yet captured on our client"
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: partial
+        claim: "SCHDTV3 routed-get returns r=0, d=2 (scalar integer); full schedule structure not returned by bare GET; semantics of the scalar unknown."
+        evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
 
   - id: "CHECK"
     name: "self_check_command"
