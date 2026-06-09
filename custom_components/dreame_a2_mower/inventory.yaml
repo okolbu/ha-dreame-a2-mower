@@ -4577,13 +4577,50 @@ cfg_keys:
   - id: "PRE"
     name: "mowing_preferences"
     category: "cfg"
-    payload_shape: "list[int(2)] [zone_id, mode]"
+    payload_shape: "list[int(19)] — 19-element int array; transport action(siid:2,aiid:50) {m:'s',t:'PRE',d:[…19 ints…]}"
     semantic: |
-      Mowing preferences. g2408 has 2 elements [zone_id, mode], not the
-      apk's 10. Alpha.86 removed the entities that read PRE[2..9]; only
-      mow_mode and mow_mode_efficient (both reading PRE[1]) remain.
-      zone_id selects which zone's preferences to apply; mode is the
-      mowing mode for that zone. Sample: [0, 0].
+      Mowing preferences write array. 19 elements confirmed by 2026-06-09
+      app-MITM sweep (28 toggle-and-back writes, each index isolated).
+      Transport: action(siid:2,aiid:50) {m:'s',t:'PRE',d:[…19 ints…]} via
+      device/sendCommand; app receives code:0 (r=0 equivalent).
+      [app-mitm:2026-06-09-settings-sweep]
+
+      Baseline (General Mode, all-on): [0,0,0,0,55,1,8,1,0,1,1,2,1,20,10,7,1,2,0]
+
+      Index map (all confirmed [app-mitm:2026-06-09-settings-sweep] unless noted):
+        [0]  version/checksum byte — app writes 0, firmware echoes 123 on read.
+        [1]  map index — which map these prefs apply to.
+        [2]  zone index — 0=General Mode (all zones), 1…N=per-zone Custom Mode.
+             After zone split, new zones received zone-index 1 and 2 respectively.
+        [3]  Mowing Efficiency: 0=Standard, 1=Efficient. Confirmed by isolated toggle.
+        [4]  Mowing Height: cm×10 (range 30–70; e.g. 55=5.5 cm). Multi-value confirmed.
+        [5]  Mowing Direction mode: 0=Crisscross, 1=Customize (uses [6] angle),
+             2=Chequerboard. 3-value confirmed by isolating each mode.
+        [6]  Mowing Direction angle (degrees, used when [5]=1 Customize only).
+             Confirmed: 8↔64 via isolated write.
+        [7]  Automatic Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
+        [8]  reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+        [9]  Obstacle Avoidance on Edges: 0=off, 1=on. Confirmed by isolated toggle.
+        [10] EdgeMaster: 0=off, 1=on. Confirmed by isolated toggle.
+        [11] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+        [12] LiDAR Obstacle Recognition: 0=off, 1=on. Confirmed isolated; disabling
+             greys out Obstacle Avoidance Height in the app.
+        [13] Obstacle Avoidance Height: 5/10/15/20 cm. Multi-value confirmed.
+        [14] Obstacle Avoidance Distance: 10/15/20 cm. Multi-value confirmed.
+        [15] AI Obstacle Recognition bitmask: bit0(1)=Human, bit1(2)=Animal,
+             bit2(4)=Object. All-on=7. Bit order confirmed: Human-off 7→6.
+        [16] Safe Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
+        [17] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+        [18] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+
+      Per-zone (Custom Mode) writes use the same 19-int array with [2] set to the
+      zone index. Enable custom-mode per zone via PREP first
+      ({m:'s',t:'PREP',d:{idx:<zone_0based>,value:1}}).
+
+      Note: the 2026-06-03 r=-3 probe used d:{value:[0,1]} (wrong shape/path);
+      the correct write path is action s2.a50 with a flat 19-element d array —
+      the r=-3 was a path or shape mismatch, not a firmware veto.
+      All General Mode settings are device-writable — none are app-cache-only.
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
@@ -4614,15 +4651,21 @@ cfg_keys:
           d=[0,0,0,0,55,1,8,1,0,1,1,2,1,20,10,7,1,2,0]; d[4]=55 = mowing height
           5.5cm. Returned code:0 app-side.
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: verified
+        claim: "PRE write array indices 3,4,5,6,7,9,10,12,13,14,15,16 each mapped
+          and value-confirmed by isolated app toggles; [0]=version byte (app writes
+          0/fw reads 123), [1]=map index, [2]=zone index. [15] bitmask bit0=Human
+          bit1=Animal bit2=Object; [5] 0=Crisscross/1=Customize/2=Chequerboard."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       apk: "ioBroker.dreame/apk.md §setX PRE"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
       wire_capture: "docs/research/wire-captures/pre-write-r3-2026-06-03.md"
     open_questions:
-      - "pre-layout: Reconcile the app's 19-element PRE array (height at index 4) vs the integration's 10-element builder (height at index 2). Capture a 2nd PRE SET to map every index."
-      - "pre-edgemaster-bit: Locate the EdgeMaster bit by diffing an OFF vs ON PRE write (only ON captured). Then confirm m:s t:PRE returns code:0 on OUR client (our recorded r=-3 may have been a different path/payload)."
       - "cfg-write-path: Confirm the app uses the same device/sendCommand path (code:0) for CFG writes (height/RGBPSTA/notifications/rain/DND), a cleaner route than our 80001-prone path [UNKNOWN — to capture]."
+      - "pre-reserved: Confirm indices 8,11,17,18 are truly reserved (no-op) or locate their settings via Custom Mode or other pages [UNKNOWN — to capture]."
 
   - id: "PROT"
     name: "navigation_path"
