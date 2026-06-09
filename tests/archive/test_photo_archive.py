@@ -48,3 +48,25 @@ def test_archive_enforces_retention(tmp_path: Path) -> None:
     assert "newest.jpg" in names
     # Oldest file must also be gone from disk.
     assert not any(arc.root.glob("*oldest*"))
+
+
+def test_archive_enforces_size_cap(tmp_path: Path) -> None:
+    """max_bytes prunes oldest until total on-disk size is at or below the cap."""
+    photo = JPEG  # ~104 bytes
+    # Cap at ~2.5 photos worth so the 3rd archive evicts the oldest.
+    arc = PhotoArchive(tmp_path, max_bytes=len(photo) * 2 + 10)
+    arc.archive(name="oldest.jpg", unix_ts=1700000000, data=photo + b"\x01", is_person=False)
+    arc.archive(name="middle.jpg", unix_ts=1700000010, data=photo + b"\x02", is_person=False)
+    arc.archive(name="newest.jpg", unix_ts=1700000020, data=photo + b"\x03", is_person=False)
+
+    names = {p.name for p in arc.list_photos()}
+    assert "oldest.jpg" not in names  # evicted by size cap
+    assert names == {"middle.jpg", "newest.jpg"}
+    assert not any(arc.root.glob("*oldest*"))
+
+
+def test_size_cap_zero_means_unlimited(tmp_path: Path) -> None:
+    arc = PhotoArchive(tmp_path, max_bytes=0)
+    for i in range(5):
+        arc.archive(name=f"{i}.jpg", unix_ts=1700000000 + i, data=JPEG + bytes([i]), is_person=False)
+    assert arc.count == 5
