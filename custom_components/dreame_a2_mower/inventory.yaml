@@ -6142,6 +6142,11 @@ cfg_individual:
         status: verified
         claim: "Schedule write transport captured: 3-key txn SCHDDV3/SCHDIV3/SCHDSV3 (shared v=ms txn-id); SCHDTV3 is the read-side scalar only, not the write key."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-09"
+        status: retracted
+        claim: "SCHDTV3 SET write transport resolved — it is the SCHDDV3/SCHDIV3/SCHDSV3 3-key transaction (see those entries)."
+        retracts: "Capture a SCHDTV3 SET (add/edit a schedule with relays up) to get the write payload shape — GET only was observed in app-MITM 2026-06-09."
+        reason: "app-MITM 2026-06-09 captured the write transport (SCHDDV3 chunked protobuf + SCHDIV3 + SCHDSV3). app-mitm:2026-06-09-settings-sweep"
 
   - id: "CHECK"
     name: "self_check_command"
@@ -6242,8 +6247,24 @@ cfg_individual:
       - date: "2026-06-09"
         status: retracted
         claim: "Remote-control settings GET. Apk-documented at L176199 as getRemote = {m:'g', t:'REMOTE'}. Stored in the app's settings object as remote:{} (L182984). The exact fields of the remote settings dict are unknown — likely includes default cutting height and camera state for joystick sessions."
-        retracts: "Remote-control settings GET. Apk-documented at L176199 as getRemote = {m:'g', t:'REMOTE'}. Stored in the app's settings object as remote:{} (L182984). The exact fields of the remote settings dict are unknown — likely includes default cutting height and camera state for joystick sessions."
+        retracts: |
+          Remote-control settings GET. Apk-documented at L176199 as
+          getRemote = {m:'g', t:'REMOTE'}. Stored in the app's settings object
+          as remote:{} (L182984). The exact fields of the remote settings dict
+          are unknown — likely includes default cutting height and camera state
+          for joystick sessions.
+
+          Paired with SET commands via o:15 (remote_setting opcode). The GET
+          is used by the app to initialize the remote-control UI with persisted
+          defaults. Not wired in the integration.
+          App-MITM 2026-06-09 confirms the app issues routed-get t=REMOTE;
+          response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
         reason: "App-MITM 2026-06-09 live capture shows t=REMOTE returns 4G SIM status {activeTime, cardId(ICCID), expiredTime, leftDays} — not remote-control settings. The APK analysis pointing to joystick/height/camera was incorrect for this key."
+      - date: "2026-06-09"
+        status: retracted
+        claim: "Prior partial verification of REMOTE as remote-control settings endpoint retracted."
+        retracts: "App issues routed-get t=REMOTE (remote control settings); response shape not yet captured on our client"
+        reason: "app-MITM 2026-06-09 confirmed t=REMOTE is 4G SIM status, not remote-control settings. Prior partial claim was based on APK analysis only. app-mitm:2026-06-09-settings-sweep"
       - date: "2026-06-09"
         status: verified
         claim: "action m:g t='REMOTE' returns {activeTime, cardId(ICCID), expiredTime, leftDays} — 4G SIM status; cardId matches GPS card4G ICCID."
