@@ -4369,6 +4369,11 @@ cfg_keys:
           boolean, day=Stop-Point Term in days (1-7). Read shape [on,day]
           confirmed by correlation with app BP:[1,4]."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-09"
+        status: retracted
+        claim: "BP[0] and BP[1] semantics are now confirmed (Start-from-Stop-Point bool + Stop-Point Term days); the open question is resolved."
+        retracts: "BP[0] and BP[1] — no toggle correlation yet; shape matches WRP but meaning unknown."
+        reason: "Resolved by the 2026-06-09 app-MITM sweep; see the entry's verified record. app-mitm:2026-06-09-settings-sweep"
 
   - id: "CLS"
     name: "child_lock"
@@ -4703,6 +4708,11 @@ cfg_keys:
         status: verified
         claim: "PATH = Pathway Obstacle Avoidance master enable; write payload {value:0|1}."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-09"
+        status: retracted
+        claim: "PATH purpose is now confirmed as Pathway Obstacle Avoidance master enable; the open question is resolved."
+        retracts: "PATH — stable at true/1 through nav-path toggle; purpose still unknown."
+        reason: "Resolved by the 2026-06-09 app-MITM sweep; see the entry's verified record. app-mitm:2026-06-09-settings-sweep"
 
   - id: "PRE"
     name: "mowing_preferences"
