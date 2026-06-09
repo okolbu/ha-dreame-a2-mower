@@ -4231,15 +4231,28 @@ cfg_keys:
       Capture Photos of AI-Detected Obstacles. Confirmed 2026-04-24 via
       isolated single-toggle. Mapping {0: off, 1: on} matches the app.
       Surfaced as sensor.ai_obstacle_photos. Sample: 1 (on).
+      Write payload: {value:0|1}. [app-mitm:2026-06-09-settings-sweep]
+      Re-enabling AOP via the app shows a privacy-policy screen, but no
+      consent payload is transmitted — only AOP{value:1} hits the wire;
+      the policy text is fetched as a static GET from
+      protocol.dreame.tech. [app-mitm:2026-06-09-settings-sweep]
+      Integration can set AOP=1 directly without any consent ceremony.
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX AOP"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value:0|1}. Re-enabling via the app shows a
+          privacy screen but no consent is transmitted — only AOP{value:1} hits
+          the wire. Integration can set AOP=1 directly."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "ATA"
     name: "anti_theft_alarm"
@@ -4251,38 +4264,55 @@ cfg_keys:
       matches the s2p51 ANTI_THEFT decoder exactly.
       Toggle test: [0,0,0]→[1,0,0] Lift, →[1,1,0] Off-Map, →[1,1,1]
       Real-Time Location. Each index ∈ {0,1}.
+      Write payload: {value:[lift,offmap,realtime]}. [app-mitm:2026-06-09-settings-sweep]
       Surfaced as sensor.anti_theft (state=on if any sub-flag enabled,
       per-flag bools in attributes). Sample: [0,0,0].
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX ATA"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value:[lift,offmap,realtime]}; all three
+          indices confirmed: [0]=Lift Alarm, [1]=Off-Map Alarm,
+          [2]=Real-Time Location."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "BAT"
     name: "charging_config"
     category: "cfg"
-    payload_shape: "list[int(6)] [recharge_pct, resume_pct, unknown_flag, custom_charging, start_min, end_min]"
+    payload_shape: "list[int(6)] [recharge_pct, resume_pct, unknown_flag, custom_charging, start_min, end_min] (READ); typed write: {type,value}"
     semantic: |
-      Charging config. Confirmed 2026-04-24. Shape matches the s2p51
+      Charging config. Confirmed 2026-04-24. Read shape matches the s2p51
       CHARGING decoder exactly: [recharge_pct, resume_pct, unknown_flag,
       custom_charging, start_min, end_min].
       recharge_pct = auto-recharge when battery drops below this;
       resume_pct = resume mowing when battery above this;
-      unknown_flag consistently observed =1 (purpose TBD);
+      unknown_flag [2] consistently observed =1 (purpose TBD — see open_questions);
       custom_charging bool toggles the schedule window;
       start_min/end_min = window in minutes-from-midnight.
       Surfaced as sensor.charging_config.
       Sample: [15, 95, 1, 0, 1080, 480] → recharge@15%, resume@95%, window
       off, would-be 18:00→08:00.
+
+      WRITE payloads — BAT is a typed key (write only):
+      [app-mitm:2026-06-09-settings-sweep]
+      - Custom Charging Period: {type:"charging", value:[enabled(0/1), start_min, end_min]}
+        e.g. {type:"charging", value:[1, 1080, 480]} = enable 18:00→08:00.
+      - Auto-Recharge / Resume thresholds: {type:"power", value:[recharge_pct, resume_pct, flag]}
+        e.g. {type:"power", value:[10, 95, 1]}. value[0] choices: 10/15/20/25%.
+        value[2] = 1 observed (purpose unknown — NOT Auto-Recharge-after-Standby,
+        that toggle writes STUN separately). [UNKNOWN — to capture]
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX BAT"
@@ -4295,6 +4325,7 @@ cfg_keys:
         firmware-reserved or not applicable to the g2408. Not worth wiring a
         write path; see TODO.md 'BAT[2] hardcoded 1' (left open as defensive
         cleanup only)."
+      - "BAT typed-write value[2]/flag: purpose still unknown — NOT STUN (auto-recharge-after-standby has its own STUN key). [UNKNOWN — to capture]"
     verifications:
       - date: "2026-06-08"
         status: presumed
@@ -4302,25 +4333,42 @@ cfg_keys:
           charging-settings page; every other BAT index maps to an app setting
           and none are unaccounted for, so [2] is likely firmware-reserved or
           not valid for this mower type rather than a decodable user setting."
+      - date: "2026-06-09"
+        status: verified
+        claim: "BAT write uses typed payloads: {type:'charging',value:[en,start_min,end_min]}
+          for the scheduling window, and {type:'power',value:[recharge_pct,resume_pct,flag]}
+          for threshold settings. STUN is a separate key (NOT BAT.power[2])."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "BP"
-    name: "bp_unknown"
+    name: "start_from_stop_point"
     category: "cfg"
-    payload_shape: "list[int(2)] [?, ?]"
+    payload_shape: "list[int(2)] [start_from_stop_point(0/1), stop_point_term_days(1-7)]"
     semantic: |
-      TBD. Same shape as WRP list(2). Sample: [1, 4]. No toggle-correlation
-      test performed; semantics unknown. Exposed as diagnostic only.
+      Start-from-Stop-Point + Stop-Point Term. [app-mitm:2026-06-09-settings-sweep]
+      Write payload {on:bool, day:1-7}: on=Start-from-Stop-Point boolean,
+      day=Stop-Point Term in days. CFG read BP:[1,4]=[on,day]. Sample: [1,4].
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
-      last_seen: "2026-05-05"
-      decoded: hypothesized
+      last_seen: "2026-06-09"
+      decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX BP"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
-    open_questions:
-      - "BP[0] and BP[1] — no toggle correlation yet; shape matches WRP but meaning unknown."
+    verifications:
+      - date: "2026-06-09"
+        status: retracted
+        claim: "BP = [start_from_stop_point, stop_point_term_days]; write {on,day}."
+        retracts: "TBD. Same shape as WRP list(2). Sample: [1, 4]. No toggle-correlation\ntest performed; semantics unknown. Exposed as diagnostic only."
+        reason: "App Start-from-Stop-Point toggle + Term picker wrote BP{on,day}. app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-09"
+        status: verified
+        claim: "BP write payload is {on:bool, day:1-7}; on=Start-from-Stop-Point
+          boolean, day=Stop-Point Term in days (1-7). Read shape [on,day]
+          confirmed by correlation with app BP:[1,4]."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "CLS"
     name: "child_lock"
@@ -4335,15 +4383,24 @@ cfg_keys:
       sensor.child_lock_cfg. A switch.child_lock entity already exists
       wired to DreameMowerProperty.CHILD_LOCK, but on g2408 the
       authoritative read path is CFG.CLS. Sample: 0 (off).
+      Write payload: {value:0|1}. [app-mitm:2026-06-09-settings-sweep]
+      CLS is the WRITABLE surface (s4p27 set_properties is the read-side
+      only). [app-mitm:2026-06-09-settings-sweep]
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX CLS"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value:0|1}. CLS is the writable surface;
+          s4p27 set_properties is read-side only."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "CMS"
     name: "consumables_wear_meters"
@@ -4428,15 +4485,24 @@ cfg_keys:
       Do-Not-Disturb. Apk-catalogued. Shape [enabled, start_min, end_min]
       with start_min/end_min in minutes-from-midnight. Sample: [0, 1260, 420]
       = off, would-be 21:00→07:00.
+      Write payload: {value:0|1, time:[start_min, end_min]}.
+      [app-mitm:2026-06-09-settings-sweep] e.g. {value:0, time:[1260,420]}.
+      start_min/end_min confirmed as minutes-since-midnight (1260=21:00, 420=07:00).
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX DND"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value:0|1, time:[start_min,end_min]}; minutes-since-midnight
+          confirmed (1260=21:00, 420=07:00)."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "FDP"
     name: "frost_protection"
@@ -4449,15 +4515,21 @@ cfg_keys:
       Frost Protection. Confirmed 2026-04-24 via isolated single-toggle.
       Mapping {0: off, 1: on} matches the app. Surfaced as
       sensor.frost_protection. Sample: 1 (on).
+      Write payload: {value:0|1}. [app-mitm:2026-06-09-settings-sweep]
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX FDP"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload confirmed as {value:0|1}."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "LANG"
     name: "language"
@@ -4470,15 +4542,27 @@ cfg_keys:
       shape {"text": N, "voice": M} — decoded as Setting.LANGUAGE.
       Surfaced as sensor.robot_voice (state = voice language name where
       known, raw indices as attrs). Sample: [2, 7].
+      Write payload: typed key {type:"voice"|"text", value:idx}.
+      [app-mitm:2026-06-09-settings-sweep] voice and text are set
+      separately via the type discriminator. Confirmed indices: English=0,
+      Norwegian=7, Danish=9. Changing voice language triggers NO download
+      on g2408 — voice packs are device-side firmware.
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX LANG"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write is typed: {type:'voice'|'text', value:idx}. voice and text
+          language are set separately. Indices confirmed: En=0, No=7, Da=9.
+          Changing voice triggers no download — packs are device-side."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "LIT"
     name: "lights_led_period"
@@ -4496,10 +4580,16 @@ cfg_keys:
       sensor.headlight_schedule ([1]/[2] plus scenario flags and [7] as
       attributes). Sample: [0, 480, 1200, 1, 1, 1, 1, 1] = LEDs off
       (custom period disabled), would-be 08:00→20:00, all scenarios on.
+      Write payload: {value, time:[start,end], light:[Standby,Working,Charging,Error], fill}.
+      [app-mitm:2026-06-09-settings-sweep]
+      time=[start_min,end_min] in minutes-since-midnight (e.g. [480,1200]=08:00-20:00).
+      light order confirmed by sequential toggle: [0]=Standby, [1]=Working,
+      [2]=Charging, [3]=Error. [app-mitm:2026-06-09-settings-sweep]
+      fill = unknown purpose, observed as 1. [UNKNOWN — to capture]
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX LIT"
@@ -4507,6 +4597,13 @@ cfg_keys:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     open_questions:
       - "LIT[7] — unknown trailing toggle; app shows an extra field whose purpose isn't obvious."
+      - "LIT.fill — present in write payload with value observed as 1; purpose unknown. [UNKNOWN — to capture]"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value, time:[start_min,end_min], light:[Standby,Working,Charging,Error], fill}.
+          light order confirmed by sequential toggle. fill=1 observed but purpose unknown."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "LOW"
     name: "low_speed_nighttime"
@@ -4519,15 +4616,24 @@ cfg_keys:
       decoder. User example: [1, 1200, 480] = enabled, 20:00→08:00 next
       day. Surfaced as sensor.low_speed_nighttime.
       Sample: [1, 1200, 480].
+      Write payload: {value:0|1, time:[start_min, end_min]}.
+      [app-mitm:2026-06-09-settings-sweep] Same shape as DND; time in
+      minutes-since-midnight (1200=20:00).
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX LOW"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value:0|1, time:[start_min,end_min]}; same shape as DND;
+          time in minutes-since-midnight (1200=20:00)."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "MSG_ALERT"
     name: "notification_preferences"
@@ -4541,38 +4647,62 @@ cfg_keys:
       the decoder emits Setting.AMBIGUOUS_4LIST and resolution requires the
       getCFG diff via sensor.cfg_keys_raw._last_diff.
       Sample: [1, 1, 1, 1].
+      Write payload: {value:[Anomaly, Error, Task, Consumable]}.
+      [app-mitm:2026-06-09-settings-sweep] Each element 0/1; order confirmed
+      by sequential toggle. MSG_ALERT is a DEVICE-side CFG key, NOT
+      app-only — the notification-type filter IS an integration surface.
+      [app-mitm:2026-06-09-settings-sweep]
     status:
       seen_on_wire: true
       first_seen: "2026-04-30"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX MSG_ALERT"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value:[Anomaly,Error,Task,Consumable]}; each 0/1;
+          order confirmed by sequential toggle. MSG_ALERT is device-side CFG,
+          not app-only — notification-type filter is an integration surface."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "PATH"
-    name: "path_unknown"
+    name: "pathway_obstacle_avoidance"
     category: "cfg"
-    payload_shape: "int {0,1} (observed as bool true)"
+    payload_shape: "int {0,1}"
+    value_catalog:
+      0: "off"
+      1: "on"
     semantic: |
-      Unknown on g2408. Observed stable at 1 (true) through a Navigation
-      Path toggle test 2026-04-25 — NOT the Navigation Path setting despite
-      earlier user guess (PROT is Navigation Path). Semantic TBD.
-      Exposed as sensor.cfg_path_raw (disabled-by-default diagnostic) so
-      the raw int is visible for future toggle-correlation tests.
-      Sample: true (coerced to 1).
+      Pathway Obstacle Avoidance master enable. [app-mitm:2026-06-09-settings-sweep]
+      Write payload: {value:0|1}. 0=disabled, 1=enabled. The per-map/per-pathway
+      selection sub-menu (map1/map2 pathway IDs) is a SEPARATE write — deferred
+      pending pathways being drawn. [app-mitm:2026-06-09-settings-sweep]
+      Sample: 1 (on/true).
     status:
       seen_on_wire: true
       first_seen: "2026-04-25"
-      last_seen: "2026-05-05"
-      decoded: hypothesized
+      last_seen: "2026-06-09"
+      decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX PATH"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     open_questions:
-      - "PATH — stable at true/1 through nav-path toggle; purpose still unknown."
+      - "Per-pathway selection write (sub-menu with pathway IDs per map) — deferred, needs pathways drawn first. [UNKNOWN — to capture]"
+    verifications:
+      - date: "2026-06-09"
+        status: retracted
+        claim: "PATH = Pathway Obstacle Avoidance master enable; write {value:0|1}."
+        retracts: "Unknown on g2408. Observed stable at 1 (true) through a Navigation\nPath toggle test 2026-04-25 — NOT the Navigation Path setting despite\nearlier user guess (PROT is Navigation Path). Semantic TBD.\nExposed as sensor.cfg_path_raw (disabled-by-default diagnostic) so\nthe raw int is visible for future toggle-correlation tests.\nSample: true (coerced to 1)."
+        reason: "App MITM sweep 2026-06-09 confirmed PATH is Pathway Obstacle Avoidance master toggle; write {value:0|1} hits the wire. app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-09"
+        status: verified
+        claim: "PATH = Pathway Obstacle Avoidance master enable; write payload {value:0|1}."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "PRE"
     name: "mowing_preferences"
@@ -4686,15 +4816,22 @@ cfg_keys:
       sensor.navigation_path. The field name is cryptic but the toggle
       correlation is unambiguous: toggling Nav Path smart→direct flipped
       PROT 1→0 with no other CFG key moving. Sample: 1 (smart).
+      Write payload: {value:0|1}. 0=Direct Path, 1=Smart Path.
+      [app-mitm:2026-06-09-settings-sweep]
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX PROT"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value:0|1}; 0=Direct Path, 1=Smart Path."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "REC"
     name: "human_presence_detection"
@@ -4711,10 +4848,18 @@ cfg_keys:
       photos. push_min is the push-notification cooldown in minutes
       (observed: 3/10/20). Surfaced as sensor.human_presence_alert.
       Sample: [1, 1, 1, 1, 1, 1, 0, 1, 3].
+      Write payload: {value, sen:0/1/2, mode:[Standby,Mowing,Recharge,Patrol],
+      report:[VoiceInApp, CaptureHumanPhotos, PushInterval{3,10,20}]}.
+      [app-mitm:2026-06-09-settings-sweep]
+      sen: 0=Low/1=Medium/2=High. mode = Activation Scenarios (each 0/1),
+      order confirmed by sequential toggle: [0]=In Standby, [1]=In Mowing,
+      [2]=Recharge, [3]=In Point Patrol. report: [0]=Voice-Prompts/In-App-
+      Notifications; [1]=Capture Human Photos and Send; [2]=Push Interval
+      (3/10/20 min). [app-mitm:2026-06-09-settings-sweep]
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-16"
+      last_seen: "2026-06-09"
       decoded: confirmed
     verifications:
       - date: "2026-05-16"
@@ -4724,6 +4869,12 @@ cfg_keys:
           firmware 4.3.6_0550: 0=Low, 1=Medium, 2=High. App toggles
           mapped via ha_get_state polls between toggles.
         evidence: "ha_get_state series 2026-05-16: 21:22:48 (=1, app=Medium), 21:38:46 (=0, app=Low post-toggle), 21:39:58 (=2, app=High post-toggle)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value, sen:0/1/2, mode:[Standby,Mowing,Recharge,Patrol],
+          report:[VoiceInApp,CaptureHumanPhotos,PushInterval]}. mode order confirmed by
+          sequential toggle. report[1]=Capture Human Photos."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       apk: "ioBroker.dreame/apk.md §setX REC"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
@@ -4750,10 +4901,14 @@ cfg_keys:
       Whether the timeout duration is a firmware constant or stored in
       another (still uncatalogued) CFG slot is unknown — STUN itself is
       just an enable flag. Sample: 1 (on).
+      Write payload: {value:0|1}. [app-mitm:2026-06-09-settings-sweep]
+      STUN is its OWN key — NOT BAT.power[2] (confirmed by the sweep:
+      the Auto-Recharge-after-Standby toggle was NOT on the charging-settings
+      page with BAT). [app-mitm:2026-06-09-settings-sweep]
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX STUN"
@@ -4761,6 +4916,11 @@ cfg_keys:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     open_questions:
       - "STUN standby timeout duration — firmware constant or hidden CFG slot?"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value:0|1}. STUN is its own independent key, NOT BAT.power[2]."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "TIME"
     name: "timezone"
@@ -4829,15 +4989,24 @@ cfg_keys:
       getCFG diff via sensor.cfg_keys_raw._last_diff.
       Surfaced as sensor.voice_prompt_modes (state = count enabled 0..4,
       per-mode bools in attrs). Sample: [1, 1, 1, 1].
+      Write payload: {value:[Regular, WorkStatus, SpecialStatus, Error]}.
+      [app-mitm:2026-06-09-settings-sweep] Each element 0/1; order confirmed
+      by sequential toggle.
     status:
       seen_on_wire: true
       first_seen: "2026-04-30"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX VOICE"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value:[Regular,WorkStatus,SpecialStatus,Error]}; each 0/1;
+          order confirmed by sequential toggle."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "VOL"
     name: "robot_voice_volume"
@@ -4848,17 +5017,26 @@ cfg_keys:
       display: "%"
       scale: 1.0
     semantic: |
-      Robot Voice volume. Confirmed 2026-04-24. Mapping is percentage
-      0..100. Surfaced as sensor.robot_voice_volume. Sample: 72.
+      Robot Voice Volume. Confirmed 2026-04-24. Mapping is percentage 0..100.
+      Surfaced as sensor.robot_voice_volume. Also controls the camera page
+      volume slider (no separate camera-volume key). Sample: 72.
+      Write payload: {value:0-100}. [app-mitm:2026-06-09-settings-sweep]
+      e.g. {value:51} for 51% volume.
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX VOL"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value:0-100} percentage. Also confirmed as the
+          write target for camera page volume slider."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "WRF"
     name: "weather_forecast_reference"
@@ -4900,15 +5078,24 @@ cfg_keys:
       decoder. Surfaced as sensor.rain_protection. Distinct from
       binary_sensor.rain_protection_active which tracks "raining right now"
       via s2p2=56. Sample: [1, 4].
+      Write payload: {value:0|1, time:N_hours, sen:sensitivity_level}.
+      [app-mitm:2026-06-09-settings-sweep] value=on/off; time=resume delay
+      in HOURS (e.g. 4→5 confirmed); sen=sensitivity level.
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX WRP"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write payload is {value:0|1, time:N_hours, sen:sensitivity_level};
+          time is resume delay in HOURS (4→5 confirmed by live toggle)."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
 cfg_individual:
   - id: "AIOBS"
@@ -5380,20 +5567,37 @@ cfg_individual:
   - id: "PIN"
     name: "pin_status"
     category: "cfg_individual"
-    payload_shape: "{result, time}"
+    payload_shape: "write: {type:'auth'|'update', value:<int>}; read (m:g): {result, time}"
     semantic: |
-      Likely the lift-lockout PIN-state flow: result:0 = no PIN-required
-      event pending, time:0 = no last-PIN-entry timestamp. Partial
-      documentation in §3.4 byte[10] bit 1. Not wired.
-      Sample: {result:0, time:0}.
+      PIN / lift-lockout code. [app-mitm:2026-06-09-settings-sweep]
+      Write: {type:"auth"|"update", value:<int>} where value is the PIN
+      as a PLAINTEXT INTEGER (not hashed; protected by TLS only).
+      type="auth" = verify/authenticate with the existing PIN;
+      type="update" = set a new PIN value. (Actual PIN values redacted.)
+      Read (m:g → t:PIN): {result, time} — result:0=no-PIN-required event
+      pending; time=last lockout timestamp (0=none).
+      Not wired in the integration. Sample read: {result:0, time:0}.
     status:
-      seen_on_wire: false
-      decoded: hypothesized
+      seen_on_wire: true
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §getX PIN"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
-      - "PIN.result and PIN.time — exact semantics of the lift-lockout flow TBD."
+      - "PIN.result and PIN.time — exact semantics of the lift-lockout flow TBD (when does result become non-zero?)."
+    verifications:
+      - date: "2026-06-09"
+        status: retracted
+        claim: "PIN write payload confirmed: {type:'auth'|'update', value:<plaintext int>}; read {result,time}."
+        retracts: "Likely the lift-lockout PIN-state flow: result:0 = no PIN-required\nevent pending, time:0 = no last-PIN-entry timestamp. Partial\ndocumentation in §3.4 byte[10] bit 1. Not wired.\nSample: {result:0, time:0}."
+        reason: "App MITM sweep 2026-06-09 confirmed exact write payload: {type:auth|update, value:<plaintext int>}. The prior entry was hypothetical only. app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Write is {type:'auth'|'update', value:<plaintext int>} (TLS-protected, not hashed).
+          type=auth verifies existing PIN; type=update sets new PIN."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "PRE"
     name: "preference_endpoint"
@@ -5462,6 +5666,38 @@ cfg_individual:
         status: partial
         claim: "PREI routed-get returns r=0, d={type:0, ver:[[0,123],[1,3]]} — per-map PRE version counters; type field semantics unknown."
         evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
+
+  - id: "PREP"
+    name: "zone_preference_mode"
+    category: "cfg_individual"
+    payload_shape: "{idx:<zone0based>, value:0|1}"
+    semantic: |
+      Per-zone General↔Custom mode switch. [app-mitm:2026-06-09-settings-sweep]
+      Write: action s2.a50 {m:'s', t:'PREP', d:{idx:<zone_0based>, value:0|1}}.
+      value=0 = General Mode (zone uses global PRE settings);
+      value=1 = Custom Mode (zone has its own PRE array, PRE[2]=zone_index).
+      Response: {type:1}. idx is 0-based zone index.
+      Entering Custom Mode first enables PREP, then PRE writes with PRE[2]=zone_index
+      apply the per-zone settings. Exiting Custom Mode writes PREP{idx,value:0}.
+      Per zone; not a global flag. [app-mitm:2026-06-09-settings-sweep]
+    status:
+      seen_on_wire: true
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      apk: "ioBroker.dreame/apk.md §setX PRE"
+      integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    open_questions:
+      - "PREP.idx with multiple zones: is idx 0-based zone index or zone id from MAPL? With 1 zone observed, idx=0 is unambiguous; confirm with 2+ zones. [UNKNOWN — to capture]"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "PREP write {idx:<zone0based>, value:0|1} is the per-zone General↔Custom
+          mode switch. Response {type:1}. Confirmed by sequential Custom Mode
+          enable+disable + per-zone PRE writes."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "RGBPSTA"
     name: "led_state"
