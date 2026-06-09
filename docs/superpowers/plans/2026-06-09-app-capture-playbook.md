@@ -52,9 +52,9 @@ Expected: shows the "read for context, not current truth — inventory.yaml wins
 Create `docs/research/g2408-app-capture-playbook-2026-06-09.md` with:
 - The non-authoritative banner from Step 1.
 - A one-paragraph purpose: the running shopping list of in-app actions for the next Mac MITM session (rig at `/Users/ok/dreame-mitm/`), closing the gaps the 2026-06-08/09 session left open.
-- The entry format key: **Need / App action / Expected wire / Unblocks / Closes (`open_questions` ID)**.
-- **Tier 1 — closeable from the HA box (no Mac rig)** table, transcribed from the spec §3: `MPOS PRE/PREI AIOBS RGBPSTA MITRC SCHDTV3` reads → run via `tools/probes/read_key_probe.py`; Closes IDs `mpos-decode`, `pre-layout`, `aiobs-photo-index`, `rgbpsta-decode`, `mitrc-decode`, `schdtv3-shape`.
-- **Tier 2 — needs the Mac app-MITM** entries §4.1–4.8 from the spec, verbatim, each with its `Closes:` ID: `schdtv3-set`, `pre-layout`+`pre-edgemaster-bit`, `task-variant-params`, `transient-obstacle-photo-api`, `patrol-photo-bucket`, `aiobs-photo-index`, `cfg-write-path`, `lidar-dense-source` (the last conditional on the Phase 1 LiDAR-parity finding).
+- The entry format key: **Need / App action / Expected wire / Unblocks / Closes** — where **Closes** names the inventory **entry id** (the t-key, e.g. `MPOS`/`AIOBS`) for read-key gaps, or the string-prefixed token (e.g. `pre-layout`) for gaps inside multi-purpose entries. (`open_questions` are plain strings in this inventory, not `{id,text}` — see Task 3.)
+- **Tier 1 — closeable from the HA box (no Mac rig)** table, transcribed from the spec §3: `MPOS PREI/PRE AIOBS RGBPSTA MITRC SCHDTV3` reads → run via `tools/probes/read_key_probe.py`; Closes the matching t-key entries `MPOS`, `PREI` (+ token `pre-layout`), `AIOBS` (token `aiobs-photo-index`), `RGBPSTA`, `MITRC`, `SCHDTV3`.
+- **Tier 2 — needs the Mac app-MITM** entries §4.1–4.8 from the spec, verbatim, each with its `Closes:` reference: token `schdtv3-set`, tokens `pre-layout`+`pre-edgemaster-bit`, token `task-variant-params`, token `transient-obstacle-photo-api`, token `patrol-photo-bucket`, entry `AIOBS`/token `aiobs-photo-index`, token `cfg-write-path`, token `lidar-dense-source` (the last conditional on the Phase 1 LiDAR-parity finding).
 - **Parked** §5: TIME write (conflicts with `project_g2408_app_only_settings`), Meari `video_tx` camera, backend-C adoption.
 - **Artifact conventions** §6: `logs/miio-13267.jsonl`, `logs/api-calls.jsonl`, `relay/mqtt.log`, parser `scripts/parse-mqtt.py` (action params nested at `params.in[]`); media samples stay off-repo (privacy).
 - A closing **closure protocol**: after each capture, write the decoded wire into `inventory.yaml` (`partial`→`confirmed`), close the matching `open_questions` ID, journal it; then the matching Phase 1-plan/Phase 2 item is ready to build.
@@ -111,15 +111,28 @@ git commit -m "docs(research): link capture-procedures → app-capture playbook"
 **Files:**
 - Verify: `custom_components/dreame_a2_mower/inventory.yaml`
 
-- [ ] **Step 1: Check every `Closes:` ID in the playbook exists in the inventory**
+- [ ] **Step 1: Check every gap the playbook references exists in the inventory**
 
-Run:
+`open_questions` here are **plain strings** (not `{id,text}`). Read-key gaps are
+keyed by the inventory **entry id** (the t-key); the rest are string-prefixed
+tokens inside multi-purpose entries. Check both:
+
 ```bash
-for id in mpos-decode pre-layout pre-edgemaster-bit aiobs-photo-index rgbpsta-decode mitrc-decode schdtv3-shape schdtv3-set task-variant-params transient-obstacle-photo-api patrol-photo-bucket cfg-write-path; do
-  grep -q "id: $id" custom_components/dreame_a2_mower/inventory.yaml && echo "OK   $id" || echo "MISS $id";
+# Read-key gaps — keyed by entry id (the t-key)
+for k in MPOS AIOBS RGBPSTA SCHDTV3 MAPI MAPL MISTA OBS PREI REMOTE IOT MITRC; do
+  grep -q "id: \"$k\"" custom_components/dreame_a2_mower/inventory.yaml && echo "OK   $k" || echo "MISS $k";
+done
+# String-token gaps inside multi-purpose entries
+for t in pre-layout pre-edgemaster-bit transient-obstacle-photo-api patrol-photo-bucket aiobs-photo-index schdtv3-set task-variant-params cfg-write-path; do
+  grep -q "$t" custom_components/dreame_a2_mower/inventory.yaml && echo "OK   $t" || echo "MISS $t";
 done
 ```
-Expected: all `OK`. Any `MISS` means the Phase 1 plan (Tasks 1–2) hasn't created that `open_questions` entry yet — add it there (not here), or add the missing entry now if Phase 1 is already merged. `patrol-photo-bucket` and `cfg-write-path` are playbook-only IDs not in Phase 1 Tasks 1–2; add them to the relevant inventory entries (`summary_photo_list` / `cfg_keys`) as `open_questions` if absent.
+Expected: all `OK`. A `MISS` on a read-key means Phase 1 Task 1 didn't add that
+t-key entry — fix there. A `MISS` on a string token means the gap isn't recorded
+yet: `schdtv3-set`, `task-variant-params`, `cfg-write-path` are write-capture
+gaps the playbook introduces — add them as plain-string `open_questions`
+(prefixed `<token>:`) on the relevant entries (`SCHDTV3` / the routed-action
+TASK entry / `cfg_individual`) now.
 
 - [ ] **Step 2: If any were added, validate + commit**
 

@@ -110,6 +110,8 @@ CONF_COUNTRY: Final = "country"
 # F7.7.1: archive retention options.
 CONF_LIDAR_ARCHIVE_KEEP: Final = "lidar_archive_keep"
 CONF_LIDAR_ARCHIVE_MAX_MB: Final = "lidar_archive_max_mb"
+CONF_PHOTO_ARCHIVE_KEEP: Final = "photo_archive_keep"
+CONF_PHOTO_ARCHIVE_MAX_MB: Final = "photo_archive_max_mb"
 CONF_SESSION_ARCHIVE_KEEP: Final = "session_archive_keep"
 CONF_WIFI_ARCHIVE_KEEP: Final = "wifi_archive_keep"
 
@@ -136,6 +138,8 @@ DEFAULT_MODEL: Final = "dreame.mower.g2408"
 DEFAULT_COUNTRY: Final = "eu"
 DEFAULT_LIDAR_ARCHIVE_KEEP: Final = 20
 DEFAULT_LIDAR_ARCHIVE_MAX_MB: Final = 200
+DEFAULT_PHOTO_ARCHIVE_KEEP: Final = 200
+DEFAULT_PHOTO_ARCHIVE_MAX_MB: Final = 50
 DEFAULT_SESSION_ARCHIVE_KEEP: Final = 50
 # Per-map keep-newest-N for the WiFi heatmap archive. WiFi JSONs are tiny
 # (a few KB) so a byte cap is pointless — count is the meaningful lever; the

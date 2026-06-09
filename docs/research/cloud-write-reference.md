@@ -1,6 +1,6 @@
 # Cloud read/write reference (g2408)
 
-> **Status — AUTHORITATIVE.** Last live-verified 2026-05-09 against g2408 fw 4.3.6_0550 / int v1.0.2a10. Sections labelled **TBD** at the bottom of the file are research-only — everything above is verified live unless explicitly flagged otherwise. Per-entity read/write paths live in `custom_components/dreame_a2_mower/entity-inventory.yaml`; this doc covers the *transport layer* (auth, endpoints, payload framing, response codes).
+> **Status — AUTHORITATIVE.** Last live-verified 2026-06-09 against g2408 fw 4.3.6_0550 / int v1.0.2a10. Sections labelled **TBD** at the bottom of the file are research-only — everything above is verified live unless explicitly flagged otherwise. Per-entity read/write paths live in `custom_components/dreame_a2_mower/entity-inventory.yaml`; this doc covers the *transport layer* (auth, endpoints, payload framing, response codes).
 
 This document is the canonical reference for talking to g2408's Dreame
 Cloud (`eu.iot.dreame.tech:19973`). It covers both READ and WRITE paths
@@ -250,3 +250,86 @@ Probes preserved in `/tmp/`:
 
 All bypass HA — pure Python with stubbed `homeassistant.const` import,
 direct cloud_client usage. Useful template for Phase 2/3 probing.
+
+## device/sendCommand — app-observed control path (2026-06-09, partial)
+
+`POST eu.iot.dreame.tech:13267/dreame-iot-com-10000/device/sendCommand`
+[dreame-app-implementation-guide-2026-06-09.md] — app-observed, not yet
+re-verified on our client.
+
+Outer: `{"id":N,"did":did,"data":{...},"sign":hmac,"timestamp":ms}`
+Inner: `{"id":N,"did":did,"method":"action|get_properties|set_properties",
+"from":"android","params":...}`. `action(siid:2,aiid:50)` multiplexes:
+`{"m":"g","t":KEY,"d":args}` (read), `{"m":"s","t":KEY,"d":value}` (CFG write),
+`{"m":"a","p":P,"o":opcode,"d":args}` (routed action). Spot mow live-confirmed:
+`{"m":"a","p":0,"o":103,"d":{"area":[1]}}` → code:0.
+
+**80001 reframe [app-observed only — UNVERIFIED on our client]:** the app's
+`device/sendCommand` returned `code:0` online; whether the 80001 we see is
+asleep/slow-prop-specific (vs RPC-inherent) is [UNKNOWN — to capture] — run
+`tools/probes/read_key_probe.py` live against the online mower and compare
+code:0 vs 80001 responses. See also sendCommand verification (Phase 1 Task 11).
+
+### Our-client path vs the app (2026-06-09)
+
+Code inspection of `cloud_client/_rpc.py` [cloud_client/_rpc.py:36–97,
+99–190, 261–343]:
+
+- **Endpoint:** Our client builds the URL as
+  `f"{strings[37]}{host}/{strings[27]}/{strings[38]}"` → resolves to
+  `dreame-iot-com{host}/device/sendCommand` (strings[37]="dreame-iot-com",
+  strings[27]="device", strings[38]="sendCommand";
+  `_rpc.py:69` and `_rpc.py:116`). That relative path is then prefixed by
+  `get_api_url()` → `https://{country}.iot.dreame.tech:13267`
+  (`_rpc.py:43–45`; strings[0]=".iot.dreame.tech", strings[1]="13267") via
+  `_api_call` (`_rpc.py:36–41`). For `action` calls (the only method that
+  reaches the device firmware on g2408), `host` is forced to `-10000` when the
+  stored `_host` is non-numeric (`_rpc.py:64–66`, `_rpc.py:112–113`), so the
+  full endpoint is `https://eu.iot.dreame.tech:13267/dreame-iot-com-10000/device/sendCommand`.
+  **This is the same endpoint the app was observed hitting (`eu.iot.dreame.tech:13267
+  /dreame-iot-com-10000/device/sendCommand`)** [dreame-app-implementation-guide-2026-06-09.md].
+
+- **Inner envelope:** Our client sends
+  `{"did": str(did), "id": N, "method": method, "params": params, "from": "XXXXXX"}`
+  as the `data` field in the outer body (`_rpc.py:85–96` and `_rpc.py:131–144`).
+  The app sends `{"id":N, "did":did, "method":"action|get_properties|set_properties",
+  "from":"android", "params":...}` [dreame-app-implementation-guide-2026-06-09.md].
+  The only structural difference is our `from` value (see below) and minor key
+  ordering (immaterial to the server).
+
+- **`from` value:** Our client sends `"from": "XXXXXX"` (`_rpc.py:93`,
+  `_rpc.py:141`). The app sends `"from": "android"`. This is an obfuscated
+  string in the legacy codebase. Whether the server validates this field is
+  **[UNKNOWN — to capture]**: the integration has received `code:0` replies on
+  `routed_action` calls (routed through this path) — suggesting the server
+  either ignores the `from` field or accepts both values — but a controlled
+  A/B test has not been run.
+
+- **Outer envelope:** Our client does NOT add a `sign` (HMAC) or `timestamp`
+  field to the outer JSON body (`_rpc.py:85–96`, `_rpc.py:131–144`). The app
+  sends `{"id":N, "did":did, "data":{...}, "sign":hmac, "timestamp":ms}`
+  [dreame-app-implementation-guide-2026-06-09.md]. The server accepts our
+  unsigned requests — confirmed implicitly by `routed_action` `code:0` replies
+  during live mow sessions — so sign/timestamp are either optional or
+  server-generated server-side for the relay. **[UNKNOWN — to capture]** whether
+  there is any scenario where the absent signature causes a rejection.
+
+- **Content-Type:** The `request()` method (`_rpc.py:276–290`) has a
+  `"Content-Type": "application/x-www-form-urlencoded"` literal key in the
+  headers dict that is then overridden by `strings[51]: strings[52]` =
+  `"Content-Type": "application/json"` (Python dict semantics: last assignment
+  wins; `_rpc.py:284`). Effective Content-Type is therefore `application/json`,
+  matching the app.
+
+- **Verdict:** Our routed-action path **matches** the app's `device/sendCommand`
+  endpoint on host, port, and path. The inner `method`/`params`/`did`/`id`
+  envelope is structurally identical. The `from` string and missing
+  `sign`/`timestamp` are differences, but the server accepts our payloads for
+  `action` calls. No code change is needed based on the code-inspection evidence.
+  If live tests reveal 80001 on paths that return `code:0` in the app, the first
+  follow-up suspects are the `from` value and the absent signature (Phase 2).
+
+**Deferred live check [UNKNOWN — to capture]:** run `tools/probes/read_key_probe.py`
+against the live mower (online vs asleep) to confirm when `code:0` vs `80001`
+actually occurs, validating the app-observed reframe that 80001 is
+asleep/slow-prop-specific, not RPC-inherent.

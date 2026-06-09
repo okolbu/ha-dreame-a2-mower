@@ -2687,6 +2687,7 @@ actions:
     open_questions:
       - "Direct action(5,1) consistently returns 80001; routed path via s2a50
          o:100 is the confirmed working path."
+      - "task-variant-params: Capture app TASK starts (all-areas o=100 / edge o=101 / zone o=102 / pause / resume / dock o=6 / stop) to confirm params vs our builders [UNKNOWN — to capture]."
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)"]
       integration_code: "custom_components/dreame_a2_mower/mower/actions.py:195"
@@ -4571,7 +4572,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
-      last_seen: "2026-06-03"
+      last_seen: "2026-06-09"
       decoded: confirmed
     verifications:
       - date: "2026-06-03"
@@ -4590,11 +4591,23 @@ cfg_keys:
           BAT/LIT/REC/LANG. The prior "no write surface identified" was
           extrapolation; this is the first direct evidence on the PRE surface.
         evidence: "docs/research/wire-captures/pre-write-r3-2026-06-03.md (tools/probes/probe_pre_write.py --probe; CFG.VER=816 before)"
+      - date: "2026-06-09"
+        status: partial
+        claim: >-
+          App writes PRE via action(siid:2,aiid:50) {"m":"s","t":"PRE","d":[...]}
+          with a 19-element array, ON-state captured
+          d=[0,0,0,0,55,1,8,1,0,1,1,2,1,20,10,7,1,2,0]; d[4]=55 = mowing height
+          5.5cm. Returned code:0 app-side.
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
     references:
       apk: "ioBroker.dreame/apk.md §setX PRE"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
       wire_capture: "docs/research/wire-captures/pre-write-r3-2026-06-03.md"
+    open_questions:
+      - "pre-layout: Reconcile the app's 19-element PRE array (height at index 4) vs the integration's 10-element builder (height at index 2). Capture a 2nd PRE SET to map every index."
+      - "pre-edgemaster-bit: Locate the EdgeMaster bit by diffing an OFF vs ON PRE write (only ON captured). Then confirm m:s t:PRE returns code:0 on OUR client (our recorded r=-3 may have been a different path/payload)."
+      - "cfg-write-path: Confirm the app uses the same device/sendCommand path (code:0) for CFG writes (height/RGBPSTA/notifications/rain/DND), a cleaner route than our 80001-prone path [UNKNOWN — to capture]."
 
   - id: "PROT"
     name: "navigation_path"
@@ -4846,8 +4859,12 @@ cfg_individual:
       dump 2 and dump 3 — establishing that error responses are stateful
       or transient, not negative proof of firmware support. With only 3
       data points this row is kept at `decoded: hypothesized`.
+      App-MITM 2026-06-09 confirms the app issues routed-get t=AIOBS;
+      response shape is [UNKNOWN — to capture] — likely the photo index
+      call (see tools/probes/read_key_probe.py).
     status:
       seen_on_wire: false
+      last_seen: "2026-06-09"
       decoded: hypothesized
     references:
       apk: "ioBroker.dreame/apk.md §getX AIOBS"
@@ -4855,6 +4872,12 @@ cfg_individual:
     open_questions:
       - "Capture this endpoint during an AI-obstacle detection event (cloud-side trigger; s1p53 is the BLE-connection flag, NOT an obstacle signal)."
       - "Test whether more cloud dumps over time produce a successful response (cf. MISTA)."
+      - "Does AIOBS response carry the photo index (photo_list)? App-MITM suggests this is the AI-obstacle photo-index call [UNKNOWN — to capture]."
+    verifications:
+      - date: "2026-06-09"
+        status: partial
+        claim: "App issues routed-get t=AIOBS; response shape not yet captured on our client"
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
 
   - id: "CFG"
     name: "all_keys_cfg"
@@ -4947,14 +4970,22 @@ cfg_individual:
       IoT cloud connection alive flag (presumed). Not wired. Semantic
       unconfirmed; status:True observed when integration is online.
       Sample: {status: true}.
+      App-MITM 2026-06-09 confirms the app issues routed-get t=IOT;
+      response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
     status:
       seen_on_wire: false
+      last_seen: "2026-06-09"
       decoded: hypothesized
     references:
       apk: "ioBroker.dreame/apk.md §getX IOT"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
       - "IOT.status — does it flip to false on cloud disconnect or always true while reachable?"
+    verifications:
+      - date: "2026-06-09"
+        status: partial
+        claim: "App issues routed-get t=IOT; response shape not yet captured on our client"
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
 
   - id: "LOCN"
     name: "dock_gps_origin"
@@ -5008,8 +5039,12 @@ cfg_individual:
       MISTA which flipped from r=-3/r=-1 to a successful payload
       between dump 2 and dump 3. Downgraded to `decoded: hypothesized`
       pending further evidence.
+      App-MITM 2026-06-09 confirms the app issues routed-get t=MAPI
+      (map index); response shape is [UNKNOWN — to capture] —
+      see tools/probes/read_key_probe.py.
     status:
       seen_on_wire: false
+      last_seen: "2026-06-09"
       decoded: hypothesized
     references:
       apk: "ioBroker.dreame/apk.md §getX MAPI"
@@ -5017,6 +5052,11 @@ cfg_individual:
     open_questions:
       - "Capture with explicit map_index argument once we identify the inbound parameter shape."
       - "Test with values from cfg_individual.MAPL once that endpoint stabilises."
+    verifications:
+      - date: "2026-06-09"
+        status: partial
+        claim: "App issues routed-get t=MAPI (map index); response shape not yet captured on our client"
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
 
   - id: "MAPL"
     name: "map_list"
@@ -5034,8 +5074,11 @@ cfg_individual:
       while Map1 was added with index-1=1, suggesting an "is_active" flag.
       Indices 2–4 stayed unchanged (1, 1, 0) across both samples; their
       semantic is undecoded.
+      App-MITM 2026-06-09 confirms the app issues routed-get t=MAPL (map
+      list) [dreame-app-implementation-guide-2026-06-09.md].
     status:
       seen_on_wire: false
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §getX MAPL"
@@ -5043,6 +5086,11 @@ cfg_individual:
     open_questions:
       - "MAPL[i][2..4] semantics — observed [1, 1, 0] in both samples; needs map-edit captures (rename, set-mowing-direction, etc.) to discriminate."
       - "Does MAPL[i][1] update on dock-side map switch, or only on the active mowing map?"
+    verifications:
+      - date: "2026-06-09"
+        status: partial
+        claim: "App issues routed-get t=MAPL (map list); confirmed app-observed, response shape already partially decoded via cloud dump cross-correlation"
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
 
   - id: "MIHIS"
     name: "lifetime_mowing_aggregates"
@@ -5111,6 +5159,11 @@ cfg_individual:
       cross_reference: "s1p4_33b_total_area_centiares, s1p4_33b_area_mowed_centiares, s2p56"
     open_questions:
       - "Worth wiring as axis-4 sensor when MQTT unavailable? Otherwise redundant with s1p4 + s2p56."
+    verifications:
+      - date: "2026-06-09"
+        status: partial
+        claim: "App issues routed-get t=MISTA (area counters, mid-run only); confirmed app-observed; response shape already decoded vs s1p4 corpus"
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
 
   - id: "MITRC"
     name: "mission_track"
@@ -5123,8 +5176,12 @@ cfg_individual:
       absence — sibling MISTA flipped from r=-1 to a successful
       payload between dump 2 and dump 3. Downgraded to
       `decoded: hypothesized` pending further evidence.
+      App-MITM 2026-06-09 confirms the app issues routed-get t=MITRC
+      with paged {idx, size} arguments [dreame-app-implementation-guide-2026-06-09.md];
+      response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
     status:
       seen_on_wire: false
+      last_seen: "2026-06-09"
       decoded: hypothesized
     references:
       apk: "ioBroker.dreame/apk.md §getX MITRC"
@@ -5132,6 +5189,38 @@ cfg_individual:
     open_questions:
       - "Capture during an active mowing session — MITRC is apk-named 'mission tracking', likely carries live trail."
       - "Test whether more cloud dumps over time produce a successful response (cf. MISTA)."
+      - "Paged {idx, size} args confirmed by app-MITM [dreame-app-implementation-guide-2026-06-09.md] — what is the page size and total page count for a typical session?"
+    verifications:
+      - date: "2026-06-09"
+        status: partial
+        claim: "App issues routed-get t=MITRC with paged {idx, size} arguments (history/track paging); response shape not yet captured on our client"
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
+
+  - id: "MPOS"
+    name: "live_position"
+    category: "cfg_individual"
+    payload_shape: "(response shape unknown — to capture via read_key_probe.py)"
+    semantic: |
+      Live mower position read via routed-get t=MPOS. App-MITM 2026-06-09
+      confirms the app issues action(siid:2,aiid:50) {m:'g', t:'MPOS'} to read
+      the live mower position [dreame-app-implementation-guide-2026-06-09.md].
+      Response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
+      Possible use: live-position fallback when s1p4 MQTT push is unavailable,
+      [UNVERIFIED].
+    status:
+      seen_on_wire: false
+      last_seen: "2026-06-09"
+      decoded: hypothesized
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
+    open_questions:
+      - "Decode the MPOS routed-get response; is it a live-position fallback for when s1p4 MQTT is down? Capture via read_key_probe.py."
+      - "Does MPOS response carry {x, y, heading} in the same frame as s1p4, or a different frame?"
+    verifications:
+      - date: "2026-06-09"
+        status: partial
+        claim: "App issues routed-get t=MPOS (live position); response shape not yet captured on our client"
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
 
   - id: "NET"
     name: "wifi_info"
@@ -5160,8 +5249,12 @@ cfg_individual:
       MISTA which flipped from r=-3/r=-1 to a successful payload
       between dump 2 and dump 3. Downgraded to `decoded: hypothesized`
       pending further evidence.
+      App-MITM 2026-06-09 confirms the app issues routed-get t=OBS
+      (obstacles); response shape is [UNKNOWN — to capture] —
+      see tools/probes/read_key_probe.py.
     status:
       seen_on_wire: false
+      last_seen: "2026-06-09"
       decoded: hypothesized
     references:
       apk: "ioBroker.dreame/apk.md §getX OBS"
@@ -5169,6 +5262,11 @@ cfg_individual:
     open_questions:
       - "Capture immediately after an AI-obstacle event (cloud-side; s1p53 is BLE-connection, NOT obstacle — find the real on-wire trigger)."
       - "Cross-reference with AIOBS — both apk-described as obstacle endpoints, semantics distinct."
+    verifications:
+      - date: "2026-06-09"
+        status: partial
+        claim: "App issues routed-get t=OBS (obstacles); response shape not yet captured on our client"
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
 
   - id: "PIN"
     name: "pin_status"
@@ -5224,14 +5322,47 @@ cfg_individual:
       likely per-PRE-row config-version counter. ver:[[0,78],[1,3]] means
       zone 0 at version 78, zone 1 at version 3. Not wired.
       Sample: {type:0, ver:[[0,78],[1,3]]}.
+      App-MITM 2026-06-09 confirms the app issues routed-get t=PREI
+      (PRE info/read) [dreame-app-implementation-guide-2026-06-09.md];
+      response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
     status:
       seen_on_wire: false
+      last_seen: "2026-06-09"
       decoded: hypothesized
     references:
       apk: "ioBroker.dreame/apk.md §getX PREI"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
       - "PREI.type field — purpose unknown; observed always 0."
+    verifications:
+      - date: "2026-06-09"
+        status: partial
+        claim: "App issues routed-get t=PREI (preference info/read); response shape not yet captured on our client"
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
+
+  - id: "RGBPSTA"
+    name: "led_state"
+    category: "cfg_individual"
+    payload_shape: "(response shape unknown — to capture via read_key_probe.py)"
+    semantic: |
+      LED state read via routed-get t=RGBPSTA. App-MITM 2026-06-09 confirms
+      the app issues action(siid:2,aiid:50) {m:'g', t:'RGBPSTA'} to read the
+      LED/indicator-light state [dreame-app-implementation-guide-2026-06-09.md].
+      Response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
+    status:
+      seen_on_wire: false
+      last_seen: "2026-06-09"
+      decoded: hypothesized
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
+    open_questions:
+      - "Decode the RGBPSTA response shape; does it carry {r, g, b, brightness} or an enum mode?"
+      - "Is RGBPSTA read-write (is there a corresponding SET path)?"
+    verifications:
+      - date: "2026-06-09"
+        status: partial
+        claim: "App issues routed-get t=RGBPSTA (LED state); response shape not yet captured on our client"
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
 
   - id: "RPET"
     name: "rain_protection_end_time"
@@ -5249,6 +5380,34 @@ cfg_individual:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
       - "RPET.endTime — rain-protection-end unix timestamp or schedule repeat-end? Needs non-zero capture."
+
+  - id: "SCHDTV3"
+    name: "schedule_v3"
+    category: "cfg_individual"
+    payload_shape: "(response shape unknown — to capture via read_key_probe.py)"
+    semantic: |
+      Schedule v3 read via routed-get t=SCHDTV3. App-MITM 2026-06-09 confirms
+      the app issues action(siid:2,aiid:50) {m:'g', t:'SCHDTV3'} to read the
+      schedule configuration [dreame-app-implementation-guide-2026-06-09.md].
+      Response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
+      The app's SCHDTV3 SET (schedule write) was not captured in this session
+      [dreame-app-implementation-guide-2026-06-09.md]; a second capture with
+      relays up is needed to get the write payload.
+    status:
+      seen_on_wire: false
+      last_seen: "2026-06-09"
+      decoded: hypothesized
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
+    open_questions:
+      - "Decode the SCHDTV3 GET response shape (schedule list structure)."
+      - "Capture a SCHDTV3 SET (add/edit a schedule with relays up) to get the write payload shape — GET only was observed in app-MITM 2026-06-09."
+      - "schdtv3-set: Capture a SCHDTV3 SET (add/edit/delete a schedule in-app) to get the schedule write format; only GET seen [UNKNOWN — to capture]."
+    verifications:
+      - date: "2026-06-09"
+        status: partial
+        claim: "App issues routed-get t=SCHDTV3 (schedule v3); GET observed but SET not captured; response shape not yet captured on our client"
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
 
   - id: "CHECK"
     name: "self_check_command"
@@ -5337,13 +5496,21 @@ cfg_individual:
       Paired with SET commands via o:15 (remote_setting opcode). The GET
       is used by the app to initialize the remote-control UI with persisted
       defaults. Not wired in the integration.
+      App-MITM 2026-06-09 confirms the app issues routed-get t=REMOTE;
+      response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
     status:
       seen_on_wire: false
+      last_seen: "2026-06-09"
       decoded: hypothesized
     references:
       apk: "ioBroker.dreame/apk.md §Remote Control getRemote L176199"
     open_questions:
       - "What fields does the remote settings dict contain? Height, camera, max-speed?"
+    verifications:
+      - date: "2026-06-09"
+        status: partial
+        claim: "App issues routed-get t=REMOTE (remote control settings); response shape not yet captured on our client"
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
 
 heartbeat_bytes:
 
@@ -9460,16 +9627,12 @@ session_summary_fields:
       field. Photo timestamps fall inside the auto-capture-ON point's in-place
       rotation window, so they double as the per-point auto-capture evidence.
 
-      The photo BYTES are not yet retrievable: the filenames carry no path and are
-      NOT relative to the summary object — both getDownloadUrl and
-      getOss1dDownloadUrl return OSS NoSuchKey for the bare leaf, the did-prefixed
-      leaf, the no-extension leaf, and the summary-naming-mirror leaf in the
-      summary's own Aliyun directory (ruled out 2026-06-03). The leaf IS accepted
-      by the separate 479D Xiaomi-FDS bucket (signed URL host
-      awsde0.fds.api.xiaomi.com, key oss/479D/<uid>/<did>/<leaf>) but Object Not
-      Found at the subpaths tried. No list endpoint exists (aiphoto/list,
-      obstacle/photo/list, iotuserdata/aiObstacle/list all 404). Exact FDS subpath
-      needs app-capture or APK analysis. See o107 + project_g2408_ai_photo_probe.
+      As of 2026-06-03 the photo bytes were believed unreachable (479D/FDS bucket
+      hypothesis). App-MITM capture 2026-06-09 resolved this: photos ARE in the
+      dreame-eu OSS bucket, not 479D. The correct key layout is
+      oss/media/000000/oss/<uid>/<did>/ali_dreame/<unix_ts>[_person].jpg, where
+      the photo_list[] stems map 1:1 to these keys. See the 2026-06-09 partial
+      verification below and dreame-app-implementation-guide-2026-06-09.md §4.
     status:
       seen_on_wire: false
       decoded: partial
@@ -9480,6 +9643,24 @@ session_summary_fields:
         status: verified
         claim: "photo_list=[\"1780512275.jpg\",\"1780512296.jpg\",\"1780512302.jpg\"] on the mode=107 patrol; stems are UNIX-sec UTC matching point-1's auto-capture-ON rotation window (20:44:35/:56/20:45:02 local); point-2 (capture OFF) produced none. Photo bytes not retrievable — bare leaf is NoSuchKey in the summary's Aliyun dir; likely in the 479D Xiaomi-FDS bucket, subpath unknown."
         evidence: "summary photo_list field + getOss1dDownloadUrl NoSuchKey on ali_dreame/2026/06/03/BM169439/1780512275.jpg (2026-06-03)"
+      - date: "2026-06-09"
+        status: partial
+        claim: >-
+          Photos ARE reachable. Album (Patrol + AI-obstacle) photos live in
+          dreame-eu.oss-eu-central-1 at
+          oss/media/000000/oss/<uid>/<did>/ali_dreame/<unix_ts>[_person].jpg;
+          the .0550.json summary's photo_list[] leaves map 1:1 to <ts>.jpg.
+          _person.jpg = person/guard detection variant.
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: retracted
+        claim: "Album photos are reachable via the dreame-eu OSS bucket"
+        retracts: "Photo bytes not retrievable — bare leaf is NoSuchKey in the summary's Aliyun dir; likely in the 479D Xiaomi-FDS bucket, subpath unknown."
+        reason: "App capture shows photos in the SAME OSS bucket the integration already fetches LiDAR PCD from."
+    open_questions:
+      - "transient-obstacle-photo-api: The transient session-obstacle photos (live-map clickable icons that die after the session) use a different, uncaptured API — no real mow ran. Capture during a real obstacle-hitting mow."
+      - "patrol-photo-bucket: Confirm patrol photos land in the same ali_dreame/<ts>.jpg album bucket as AI-obstacle photos."
+      - "aiobs-photo-index: The pre-signed photo-index call (returns the album URL set) was not on HTTPS; likely a sendCommand t=AIOBS read or MQTT event (see the AIOBS inventory entry). Not needed for Phase 1 (photo_list suffices)."
 
   - id: "summary_photo_detected"
     key_path: "photo_detected"

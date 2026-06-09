@@ -1847,3 +1847,22 @@ via the existing get_interim_file_url. Both the parse field and the OSS fetcher
 already exist in our integration. Still PRESUMED (vacuum, not g2408 wire) until
 that capture. GH ref: Tasshack/dreame-vacuum#1326 (issue itself is a bug report,
 no impl detail — the code is the source).
+
+## 2026-06-09 — app-MITM capture reconciliation
+
+Live decrypted capture of `com.dreame.smartlife 2.5.6.4` driving the real online
+g2408 [dreame-app-implementation-guide-2026-06-09.md]. Key findings folded into
+inventory.yaml (partial status — app-observed, not our-client-verified):
+
+- **Photos reachable** — album (Patrol + AI-obstacle) photos at
+  `dreame-eu.oss-eu-central-1/oss/media/000000/oss/<uid>/<did>/ali_dreame/<ts>[_person].jpg`;
+  summary `photo_list[]` leaves map 1:1. Resolves the `project_g2408_ai_photo_probe` dead-end.
+- **Backend B = `eu.iot.dreame.tech:13267`** (not `app.dreame.tech`); A/B share host:port;
+  `device/sendCommand` returned `code:0` online; 80001=asleep/slow-prop is [UNVERIFIED — to capture].
+- **Spot mow `o=103 d:{area:[1]}`** live-confirmed (corroborates task_envelopes_verified).
+- **Routed-get `t`-key vocab**: MPOS MAPI MAPL MISTA OBS AIOBS PREI RGBPSTA SCHDTV3 REMOTE IOT MITRC.
+- **PRE writable by the app** via `{m:s,t:PRE,d:[19 elems]}`, d[4]=55=height (ON-state only; layout/EdgeMaster-bit open).
+
+Deferred captures (PRE OFF/ON diff, SCHDTV3 SET, TASK variants, transient
+obstacle photos, patrol photos) are tracked in
+`docs/research/g2408-app-capture-playbook-2026-06-09.md`.

@@ -59,6 +59,13 @@ docstrings in `custom_components/dreame_a2_mower/mower/state.py`.
 - `session_started_unix` — unix ts when current session started; set on s2p56=1
 - `session_track_segments` — tuple of leg-tracks (x_m, y_m); populated from s1p4 telemetry
 
+## Camera / album photos (2026-06-09)
+
+The mower has a camera (`feature: video_tx`). Album photos (Patrol + AI-obstacle,
+including `_person` person-detection shots) are fetched to a LOCAL on-disk
+archive (`archive/photos.py`) and never committed. They contain images of the
+property and people — treat the bucket paths and any saved frames as sensitive.
+
 ## Computed fields (inherits source's policy)
 
 - `position_north_m`, `position_east_m` — derived from `position_x_m`,
