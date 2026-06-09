@@ -3131,82 +3131,144 @@ opcodes:
 
   - id: "o3"
     op: 3
-    name: "cancel"
+    name: "stop_end"
     category: "opcode"
-    payload_shape: "{m:'a', d:{o:3}, t:'TASK'} (echo only)"
+    payload_shape: "SEND {m:'a', o:3} (app); ECHO {m:'a', d:{o:3}, t:'TASK'} (device → cloud)"
     semantic: |
-      Task cancelled echo — fires on s2p50 when the user hits Cancel / Stop
-      during an active mowing session. Fires ~1 s after s2p2=48. Does not
-      carry id/ids. Observed 2026-04-20 as a status echo from the firmware;
-      the integration does NOT send o:3 as a command — Stop/Pause are
-      action(5,2) and action(5,4).
+      End / stop the current task. [app-mitm:2026-06-09-settings-sweep] The
+      app sends this as a routed action (s2a50 {m:'a', o:3}) with no payload to
+      stop an active session. Firmware echoes it on s2p50 when the user hits
+      Cancel / Stop, firing ~1 s after s2p2=48. Does not carry id/ids.
 
-      Also listed in apk as joystick "stop" (o:2-7 group); in s2p50 echo
-      context it is the canonical "user-cancel" marker.
+      The integration does NOT send o:3 as a command — it uses the direct
+      action(siid=5, aiid=2) path (ACTION_TABLE[MowerAction.STOP]). The app
+      uses the routed-action form instead. Both paths accomplish the same result;
+      the o:3 s2p50 echo appears regardless of which path the sender used.
+
+      Also listed in apk as joystick "stop" (o:2–7 group); in s2p50 echo
+      context it is the canonical "user-cancel" / stop marker.
     status:
       seen_on_wire: true
       first_seen: "2026-04-20"
-      last_seen: "2026-04-20"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
       apk: "ioBroker.dreame/apk.md §Actions o:3 stopControl"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:3 as routed action s2a50 {m:'a', o:3} to stop/end a session. No payload fields. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o4"
     op: 4
-    name: "joystick_pause"
+    name: "pause"
     category: "opcode"
-    payload_shape: "{m:'a', o:4}"
+    payload_shape: "SEND {m:'a', o:4} (app); no echo payload"
     semantic: |
-      Joystick control — pause. Part of the o:2–7 manual joystick control
-      group. Apk-documented; not observed on g2408 wire.
+      Pause the current mowing session. [app-mitm:2026-06-09-settings-sweep]
+      The app sends this as a routed action (s2a50 {m:'a', o:4}) with no
+      payload to pause an active mow. DISTINCT from stop (o:3) — pause
+      preserves session state so the mower can resume; stop ends the task.
+
+      The integration does NOT send o:4 as a command — it uses the direct
+      action(siid=5, aiid=4) path (ACTION_TABLE[MowerAction.PAUSE]). The app
+      uses the routed-action form instead.
+
+      Previously noted as "joystick control — pause" (part of the o:2–7 group).
+      The app-mitm sweep confirms this is the primary PAUSE command for all
+      session types, not only joystick sessions. Whether o:4 echoes on s2p50
+      is not yet observed on the g2408 wire. [UNKNOWN — to capture]
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      last_seen: "2026-06-09"
+      decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    verifications:
+      - date: "2026-06-09"
+        status: retracted
+        claim: "Joystick control — pause. Part of the o:2–7 manual joystick control group. Apk-documented; not observed on g2408 wire."
+        retracts: "Joystick control — pause. Part of the o:2–7 manual joystick control group. Apk-documented; not observed on g2408 wire."
+        reason: "App-mitm 2026-06-09 confirms o:4 is the general PAUSE command for all session types, not only joystick control. The joystick framing was too narrow."
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:4 as routed action s2a50 {m:'a', o:4} to pause a mowing session. No payload fields. DISTINCT from stop (o:3). [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o5"
     op: 5
-    name: "joystick_continue"
+    name: "resume"
     category: "opcode"
-    payload_shape: "{m:'a', o:5}"
+    payload_shape: "SEND {m:'a', o:5} (app); no echo payload"
     semantic: |
-      Joystick control — continue / resume. Part of the o:2–7 manual joystick
-      control group. Apk-documented; not observed on g2408 wire.
+      Resume a paused mowing session. [app-mitm:2026-06-09-settings-sweep]
+      The app sends this as a routed action (s2a50 {m:'a', o:5}) with no
+      payload to resume after a pause (o:4). Counterpart to o:4 pause.
+
+      The integration does not currently use a routed o:5 form — resume is
+      handled implicitly (the START_MOWING / mow dispatch covers both new
+      and resume starts). Whether o:5 echoes on s2p50 is not yet observed.
+      [UNKNOWN — to capture]
+
+      Previously noted as "joystick control — continue / resume" (part of the
+      o:2–7 group). App-mitm confirms this is the general RESUME command.
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      last_seen: "2026-06-09"
+      decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    verifications:
+      - date: "2026-06-09"
+        status: retracted
+        claim: "Joystick control — continue / resume. Part of the o:2–7 manual joystick control group. Apk-documented; not observed on g2408 wire."
+        retracts: "Joystick control — continue / resume. Part of the o:2–7 manual joystick control group. Apk-documented; not observed on g2408 wire."
+        reason: "App-mitm 2026-06-09 confirms o:5 is the general RESUME command for all session types, not only joystick control."
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:5 as routed action s2a50 {m:'a', o:5} to resume a paused session. No payload fields. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o6"
     op: 6
-    name: "recharge"
+    name: "recharge_dock"
     category: "opcode"
-    payload_shape: "{m:'a', d:{o:6}, t:'TASK'} (echo only)"
+    payload_shape: "SEND {m:'a', o:6} (app); ECHO {m:'a', d:{o:6}, t:'TASK'} (device → cloud)"
     semantic: |
-      Explicit Recharge command echo — fires on s2p50 when the user taps the
-      app Recharge button (send mower home). Echo is unreliable: observed
-      2026-04-20 18:09:56, 18:25:57, 04-27 10:12:18, 04-29 20:47:18 (all on
-      dock-arrival), but on 2026-05-05 09:24 a confirmed app Recharge that
-      successfully drove the mower home fired zero o:6 echo at all. The cloud
-      occasionally drops this delivery.
+      Send mower home / recharge / dock. [app-mitm:2026-06-09-settings-sweep]
+      The app sends this as a routed action (s2a50 {m:'a', o:6}) with no
+      payload to command the mower to return to the dock.
+
+      Echo is unreliable: confirmed on s2p50 at 2026-04-20 18:09:56, 18:25:57,
+      04-27 10:12:18, 04-29 20:47:18, but on 2026-05-05 09:24 a confirmed app
+      Recharge that successfully drove the mower home fired zero o:6 echo. The
+      cloud occasionally drops this delivery.
 
       Detection of Recharge should lean on s2p1: ?→5→6 plus s3p2→1, NOT on
       the s2p50 o:6 echo.
+
+      The integration uses action(siid=5, aiid=3) for DOCK/RECHARGE
+      (ACTION_TABLE[MowerAction.DOCK / MowerAction.RECHARGE]); the app uses
+      the routed-action form instead.
     status:
       seen_on_wire: true
       first_seen: "2026-04-20"
-      last_seen: "2026-04-29"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
       apk: "ioBroker.dreame/apk.md §Actions o:6 pauseBackCharge"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:6 as routed action s2a50 {m:'a', o:6} to command dock/recharge. No payload fields. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o7"
     op: 7
@@ -3244,19 +3306,27 @@ opcodes:
     op: 9
     name: "find_bot"
     category: "opcode"
-    payload_shape: "{m:'a', o:9}"
+    payload_shape: "SEND {m:'a', o:9} (app and integration); no echo observed"
     semantic: |
-      Find My Mower — triggers audible beep and/or LED flash on the robot.
-      Used by the integration's FIND_BOT action via routed action s2a50.
+      Find My Mower / locate — triggers audible beep and/or LED flash on the
+      robot. [app-mitm:2026-06-09-settings-sweep] The app sends this as a
+      routed action (s2a50 {m:'a', o:9}) with no payload. The integration also
+      uses o:9 via routed_action (MowerAction.FIND_BOT → ACTION_TABLE routed_o=9).
       Apk-documented as findBot. No echo observed on s2p50 — command is
       fire-and-forget.
     status:
       seen_on_wire: false
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       integration_code: "custom_components/dreame_a2_mower/mower/actions.py:225"
-      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:9 as routed action s2a50 {m:'a', o:9} with no payload. Locate / find-my-robot. Confirmed send shape. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o10"
     op: 10
@@ -3349,6 +3419,34 @@ opcodes:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
 
+  - id: "o13"
+    op: 13
+    name: "cancel_dock_return"
+    category: "opcode"
+    payload_shape: "SEND {m:'a', o:13} (app); no echo observed"
+    semantic: |
+      Cancel an in-progress dock-return (end returning to station).
+      [app-mitm:2026-06-09-settings-sweep] The app sends this as a routed
+      action (s2a50 {m:'a', o:13}) with no payload when the user taps to
+      cancel a return-to-dock in progress.
+
+      DISTINCT from stop (o:3): o:3 ends an active MOWING session; o:13
+      specifically cancels the dock-return leg (the mower is already heading
+      home but the user wants it to stop en route). Whether it echoes on
+      s2p50 is not yet observed. [UNKNOWN — to capture]
+    status:
+      seen_on_wire: false
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      apk: "ioBroker.dreame/apk.md §m=a opcodes"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:13 as routed action s2a50 {m:'a', o:13} to cancel an in-progress dock return. No payload fields. DISTINCT from stop (o:3). [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
   - id: "o15"
     op: 15
     name: "remote_setting"
@@ -3399,34 +3497,46 @@ opcodes:
     op: 100
     name: "global_mower"
     category: "opcode"
-    payload_shape: "{m:'a', o:100, t:'TASK', area_id:N, region_id:[1], time:N, exe:T}"
+    payload_shape: "SEND {m:'a', o:100, d:{need_bp}} (app); ECHO {area_id:N, exe:T, o:100, region_id:[1], time:N, t:'TASK'} (flat-field, not wrapped in d:{})"
     semantic: |
-      All-area mowing session start. Observed as a flat-field s2p50 push
-      (not wrapped in d:{}) at session start: {area_id:N, exe:T, o:100,
-      region_id:[1], time:N, t:'TASK'}. The integration sends this via
-      routed action s2a50 {m:'a', o:100} for START_MOWING. Apk-documented
+      Start / all-area mow. [app-mitm:2026-06-09-settings-sweep] The app
+      sends routed action s2a50 {m:'a', o:100, d:{need_bp}} where need_bp
+      controls whether a boundary pre-pass is required before mowing.
+      The integration sends {m:'a', o:100} (no d field) for START_MOWING
+      via ACTION_TABLE; the need_bp field is app-specific. Apk-documented
       as globalMower.
 
+      Observed as a flat-field s2p50 echo (not wrapped in d:{}) at session
+      start: {area_id:N, exe:T, o:100, region_id:[1], time:N, t:'TASK'}.
       Echo arrives seconds after the routed action; confirms the mower has
       accepted the task. See §4.3 "Session start" for the full sequence.
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       integration_code: "custom_components/dreame_a2_mower/mower/actions.py:195"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p1 mode enum"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:100 as {m:'a', o:100, d:{need_bp}} for all-area mow. need_bp field confirmed present in app send. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+    open_questions:
+      - "need_bp exact semantics: 0=skip boundary pre-pass, 1=require it? [UNKNOWN — to capture] Exact value range and effect on session behaviour."
 
   - id: "o101"
     op: 101
     name: "edge_mower"
     category: "opcode"
-    payload_shape: "{m:'a', o:101, d:{edge:[[map_id, contour_id], ...]}, t:'TASK'}"
+    payload_shape: "SEND {m:'a', o:101, d:{edge:[[map_id, contour_id], ...]}} (app and integration)"
     semantic: |
-      Edge-mowing-only task launch. The firmware canonicalizes the inbound
-      d.edge [[m,c],...] list into group_id for its echo:
+      Edge mow. [app-mitm:2026-06-09-settings-sweep] App and integration both
+      send routed action s2a50 {m:'a', o:101, d:{edge:[[map_id, contour_id],...]}}
+      to launch an edge-mowing-only session. The firmware canonicalizes the
+      inbound d.edge [[m,c],...] list into group_id for its echo:
       {exe:T, group_id:[[m,c],...], o:101, status:T, time:N}.
 
       Echo is identical regardless of input (empty vs explicit contour list),
@@ -3441,39 +3551,53 @@ opcodes:
     status:
       seen_on_wire: true
       first_seen: "2026-04-26"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       integration_code: "custom_components/dreame_a2_mower/mower/actions.py:204"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:101 as {m:'a', o:101, d:{edge:[[map,contour]]}} for edge mow. Payload key is 'edge', value is list of [map_id, contour_id] pairs. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o102"
     op: 102
     name: "zone_mower"
     category: "opcode"
-    payload_shape: "{m:'a', o:102, d:{region:[zone_id, ...]}, t:'TASK'}"
+    payload_shape: "SEND {m:'a', o:102, d:{region:[zone_id, ...]}} (app and integration)"
     semantic: |
-      Zone-specific mowing task launch. zone_ids are scalar ints from
+      Zone mow. [app-mitm:2026-06-09-settings-sweep] App and integration both
+      send routed action s2a50 {m:'a', o:102, d:{region:[zoneId,...]}} to mow
+      one or more named zones. zone_ids are scalar ints from
       MAP.*.mowingAreas.value. Distinct from o:101 edge contours (which use
       [map_id, contour_index] 2-tuples). Observed in probe corpus per §4.6.
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       integration_code: "custom_components/dreame_a2_mower/mower/actions.py:199"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:102 as {m:'a', o:102, d:{region:[zoneIds]}} for zone mow. Payload key is 'region', value is list of zone id ints. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o103"
     op: 103
     name: "spot_mower"
     category: "opcode"
-    payload_shape: "{m:'a', o:103, d:{area:[spot_id, ...]}, t:'TASK'}"
+    payload_shape: "SEND {m:'a', o:103, d:{area:[spot_id, ...]}} (app and integration)"
     semantic: |
-      Spot mowing task launch. spot_ids from MAP.*.spotAreas.value. Echo:
+      Spot mow. [app-mitm:2026-06-09-settings-sweep] App and integration both
+      send routed action s2a50 {m:'a', o:103, d:{area:[spotId,...]}} to mow
+      one or more spot areas. spot_ids from MAP.*.spotAreas.value. Echo:
       {area_id:[N], exe:T, o:103, region_id:[], status:T, time:N}. Confirmed
       end-to-end live 2026-04-29. Cloud spotAreas.area=0 in echo — actual
       spot coordinates from telemetry, not from echo (per project memory
@@ -3481,7 +3605,7 @@ opcodes:
     status:
       seen_on_wire: true
       first_seen: "2026-04-29"
-      last_seen: "2026-05-31"
+      last_seen: "2026-06-09"
       decoded: confirmed
     verifications:
       - date: "2026-05-31"
@@ -3509,6 +3633,10 @@ opcodes:
           watch s2p50/s2p56 to verify the device acted). Generalises to ALL routed
           actions (op=100-103, etc.).
         evidence: "live probe_cruise_to_point.py --spot-control 1 --retries 5 then --routed-byid --retries 5 2026-05-31 (did -112293549); user confirmed 'now mowing spot 1'; warm follow-up op=9 + op=109 r:0 on attempt 1"
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:103 as {m:'a', o:103, d:{area:[spotIds]}} for spot mow. Payload key is 'area', value is list of spot id ints. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       integration_code: "custom_components/dreame_a2_mower/mower/actions.py:209"
@@ -3554,7 +3682,7 @@ opcodes:
     op: 107
     name: "start_cruise_point"
     category: "opcode"
-    payload_shape: "ECHO s2p50 {o:107, exe:true, status:true, error:0, estimate_time:N, time:T, t:'TASK'}. SEND payload (point list + per-point settings) NOT captured — see open_questions."
+    payload_shape: "SEND {m:'a', o:107, d:{point:[cruisePointId, ...]}} (app and integration — confirmed live 2026-06-04); ECHO s2p50 {o:107, exe:true, status:true, error:0, estimate_time:N, time:T, t:'TASK'}"
     semantic: |
       POINT PATROL (startCruisePoint) — the mower visits a user-placed list of
       map points in sequence. CONFIRMED on g2408 2026-06-03: a user-triggered
@@ -3578,10 +3706,10 @@ opcodes:
     status:
       seen_on_wire: true
       first_seen: "2026-06-03"
-      last_seen: "2026-06-03"
-      decoded: partial
+      last_seen: "2026-06-09"
+      decoded: confirmed
     open_questions:
-      - "SEND payload shape of the op=107 command (point list + per-point cycles + auto-capture flags) is uncaptured — the broker doesn't relay the app→device downlink to the /status/ monitor. Capture via integration-side routed_action logging, or check whether settings land in the s4 eiid1 session-summary OSS object at patrol end."
+      - "Per-point settings (cycles count, auto-capture flag) are not in the SEND payload captured by app-mitm — they may be embedded in the d:{point:[...]} structure or in per-point sub-objects. [UNKNOWN — to capture] Check if the point ids reference cruisePoints entries that already carry time/etime settings."
       - "s2p56 [[3,0],[4,-1]]: confirm point_id vs state field order and state vocab (0=active? -1=pending? 2=arrived as in o=109?) across more captures."
     verifications:
       - date: "2026-06-03"
@@ -3766,6 +3894,10 @@ opcodes:
           Not load-bearing (s2p2=51 suffices), but resolving it would give a second
           robust type signal + enable the command-time render trigger for patrols.
         evidence: "omit — hypothesis; needs a /status/-only capture during a patrol to compare against the # probe"
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:107 as {m:'a', o:107, d:{point:[cruisePointIds]}} for point patrol. Payload key is 'point', value is list of cruise point id ints. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
@@ -3967,16 +4099,21 @@ opcodes:
 
   - id: "o200"
     op: 200
-    name: "change_map"
+    name: "select_map"
     category: "opcode"
-    payload_shape: "echo: {d:{exe:true, o:200, status:true}, t:'TASK'}"
+    payload_shape: "SEND {m:'a', o:200, d:{idx:N}} (app — confirmed 2026-06-09); ECHO {d:{exe:true, o:200, status:true}, t:'TASK'}"
     semantic: |
-      Active-map switch. Apk-documented as changeMap. Confirmed on g2408
-      wire 2026-05-07 during a multi-map session in which the user
-      tapped the corner-window thumbnails in the app to swap between
-      Map 1 and Map 2.
+      Select active map. [app-mitm:2026-06-09-settings-sweep] App sends routed
+      action s2a50 {m:'a', o:200, d:{idx:N}} to switch the active map, where
+      idx is the target map index. The integration already uses this form
+      (MowerAction.SET_ACTIVE_MAP → routed_o=200, ACTION_TABLE payload_fn
+      _build_set_current_map_payload).
 
-      o:200 is **conditional** — fires on some swaps but not others.
+      Echo (inbound s2p50) confirmed on g2408 wire 2026-05-07 during a
+      multi-map session when the user tapped the corner-window thumbnails in
+      the app to swap between Map 1 and Map 2.
+
+      o:200 echo is **conditional** — fires on some swaps but not others.
       Two paired captures confirm: 21:52:05–07 (flip A→B, op:200 fired)
       and 21:52:36–38 (flip B→A, op:200 did NOT fire). Hypothesis:
       either direction-specific (only fires when going to a particular
@@ -3985,79 +4122,94 @@ opcodes:
 
       Per-swap signal that IS reliable: `s1p50={}` empty-ping fires
       on EVERY swap (confirmed on both 21:52:06 and 21:52:36 above).
-      The integration should treat s1p50 as the MAPL-repoll trigger
-      for sub-second active-map detection.
-
-      The OUTBOUND command form (presumably carrying a map_id) wasn't
-      captured because the probe logs only mqtt subscriptions, not
-      publishes. The single inbound echo was minimal:
-      `{exe:true, o:200, status:true}` — no map_id in payload.
-
-      Phase 1 of multi-map (a92) subscribes to s1p50 as a MAPL-repoll
-      trigger (in addition to mowing_started + 2-min cloud refresh).
-      Outbound command shape still unknown; capture procedure: extend
-      probe to log mqtt publishes, OR mitm-proxy the app's HTTPS
-      traffic, then tap thumbnails and diff.
+      The integration treats s1p50 as the MAPL-repoll trigger for
+      sub-second active-map detection.
     status:
       seen_on_wire: true
       first_seen: "2026-05-07"
-      last_seen: "2026-05-07"
+      last_seen: "2026-06-09"
       decoded: confirmed
     open_questions:
-      - "Outbound command payload shape (map_id field?). Inbound echo confirmed; outbound is still unknown because probe captures mqtt subscriptions only."
-      - "Does o:200 fire on every swap, or only the first/last in a quiet window? Today's session showed ~4 swap attempts but only 1 inbound echo."
+      - "Does o:200 echo fire on every swap, or only the first/last in a quiet window? Today's session showed ~4 swap attempts but only 1 inbound echo."
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    verifications:
+      - date: "2026-06-09"
+        status: retracted
+        claim: "Outbound command payload shape (map_id field?). Inbound echo confirmed; outbound is still unknown because probe captures mqtt subscriptions only."
+        retracts: "Outbound command payload shape (map_id field?). Inbound echo confirmed; outbound is still unknown because probe captures mqtt subscriptions only."
+        reason: "App-mitm 2026-06-09 captured the SEND form: {m:'a', o:200, d:{idx:N}}. The idx field is the target map index. Outbound shape is now confirmed."
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:200 as {m:'a', o:200, d:{idx:N}} to select the active map, where idx is the map index. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o201"
     op: 201
-    name: "exit_build_map"
+    name: "map_edit_commit"
     category: "opcode"
-    payload_shape: "{m:'a', d:{o:201, status:true, error:0}, t:'TASK'} (echo)"
+    payload_shape: "SEND {m:'a', o:201} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:201, status:true, error:0}, t:'TASK'} (device → cloud)"
     semantic: |
-      Apk: exitBuildMap — exits BUILDING/learning-map mode. On g2408, o:201
-      is observed as a status echo on s2p50 that closes every map-edit
-      sequence (create zone, resize, delete): the always-trailing
+      Map-edit commit / exit build map. [app-mitm:2026-06-09-settings-sweep]
+      App sends routed action s2a50 {m:'a', o:201} with no payload to commit
+      and close a map-edit sequence. Apk documents this as exitBuildMap.
+
+      On g2408, o:201 is observed as a status echo on s2p50 that closes every
+      map-edit sequence (create zone, resize, delete): the always-trailing
       {o:201, status:true, error:0} arrival is the integration's universal
       "refetch + rebuild map" trigger.
 
       The dual role (command: exit building mode / echo: map-edit complete)
       reflects that the same opcode number is reused in both contexts by the
       firmware. The integration keys on o:201 status:true error:0 for the
-      map rebuild trigger (§2.1).
+      map rebuild trigger (§2.1). Sequence: o:204 (begin) → o:215/o:218/o:234
+      (edit action) → o:201 (commit) → o:-1 (teardown).
     status:
       seen_on_wire: true
       first_seen: "2026-04-20"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:201 as {m:'a', o:201} (no payload) to commit and exit a map-edit sequence. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o204"
     op: 204
-    name: "edit_map"
+    name: "map_edit_begin"
     category: "opcode"
-    payload_shape: "{m:'a', d:{o:204, exe:T, status:T, ...}, t:'TASK'} (echo)"
+    payload_shape: "SEND {m:'a', o:204} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:204, exe:T, status:T, ...}, t:'TASK'} (device → cloud)"
     semantic: |
-      Map-edit request echo — fires first in a zone / exclusion-zone add /
-      edit / delete sequence, before the save or delete confirmation opcode.
-      Apk-documented as editMap. On g2408 observed as the first of the
-      map-edit pair (204 → 234/215/218 → 201).
+      Map-edit begin (enter map-edit mode). [app-mitm:2026-06-09-settings-sweep]
+      App sends routed action s2a50 {m:'a', o:204} with no payload to open a
+      map-edit session. Apk-documented as editMap. The firmware echoes o:204
+      (with exe:T, status:T) as the first signal in a zone / exclusion-zone
+      add / edit / delete sequence, before the save or delete confirmation
+      opcode. Full sequence: o:204 (begin) → o:215/o:218/o:234 (edit action)
+      → o:201 (commit) → o:-1 (teardown).
 
-      Observed 2026-04-20 and confirmed in the 2026-04-26 Designated Ignore
-      Obstacle Zone create/resize/delete corpus.
+      Confirmed in the 2026-04-26 Designated Ignore Obstacle Zone
+      create/resize/delete corpus.
     status:
       seen_on_wire: true
       first_seen: "2026-04-20"
-      last_seen: "2026-04-26"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:204 as {m:'a', o:204} (no payload) to begin a map-edit sequence. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o205"
     op: 205
@@ -4092,34 +4244,102 @@ opcodes:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p1 mode enum"
 
+  - id: "o208"
+    op: 208
+    name: "full_state_backup"
+    category: "opcode"
+    payload_shape: "SEND {m:'a', o:208, d:{idx:N}} (app — confirmed 2026-06-09)"
+    semantic: |
+      Full-state backup / restore. [app-mitm:2026-06-09-settings-sweep]
+      App sends routed action s2a50 {m:'a', o:208, d:{idx:N}} where idx is
+      the backup slot index.
+
+      WARNING: restoring a backup resets ALL mower settings AND schedules
+      to the backed-up state. This is a destructive operation — any settings
+      or schedule changes made after the backup was created will be lost.
+
+      Whether this creates a new backup at idx or RESTORES from an existing
+      backup at idx is [UNKNOWN — to capture] — both operations likely use
+      this opcode (separate idx ranges or a type field may distinguish them).
+      No echo observed on s2p50 for this opcode. [UNKNOWN — to capture]
+    status:
+      seen_on_wire: false
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    open_questions:
+      - "Does o:208 {idx:N} CREATE a backup at slot N, or RESTORE from slot N? How many slots exist? Is there a separate 'restore' vs 'backup' form (e.g. a type field)? [UNKNOWN — to capture]"
+    references:
+      apk: "ioBroker.dreame/apk.md §m=a opcodes"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:208 as {m:'a', o:208, d:{idx:N}} for full-state backup. WARNING: restore resets ALL settings+schedules. Payload carries idx (backup slot). [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
   - id: "o215"
     op: 215
-    name: "map_edit_confirm_legacy"
+    name: "add_no_go_zone"
     category: "opcode"
-    payload_shape: "{m:'a', d:{o:215, id:N, ids:[...], exe:T, status:T}, t:'TASK'} (echo)"
+    payload_shape: "SEND {m:'a', o:215, d:{id:N, type:T, points:[...], radius:R}} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:215, id:N, ids:[...], exe:T, status:T}, t:'TASK'}"
     semantic: |
-      Legacy map-edit confirmation echo. Older captures (2026-04-20) show
-      o:215 as the "second of the map-edit pair" (zone edit confirm), carrying
-      id and ids fields. Later captures (2026-04-26) show o:234 in the same
-      role. The integration triggers a MAP rebuild on o:215 OR o:201 with
-      status:true error:0 — covers both old and new confirmation opcode.
+      Add / save a no-go zone (virtual boundary). [app-mitm:2026-06-09-settings-sweep]
+      App sends routed action s2a50 {m:'a', o:215, d:{id, type, points, radius}}
+      to create a new exclusion zone. The firmware echoes o:215 on s2p50 with
+      id (assigned by server) and ids fields after the zone is saved.
+
+      Zone type encoding: [app-mitm:2026-06-09-settings-sweep]
+        type 1 = line (2 points, radius=0)
+        type 2 = polygon (corner points, radius=0)
+        type 3 = circle (center point + radius)
+
+      Mowing-shape preset types (decorative/preset shapes):
+        type 9  = Square (4 points)
+        type 13 = Heart
+        type 17 = Cloud
+        type 18 = Rainbow
+
+      Sequence: o:204 (begin) → o:215 (add zone) → o:201 (commit) → o:-1 (teardown).
+      The integration triggers a MAP rebuild on o:215 OR o:201 with status:true
+      error:0 — covers both confirmation opcodes.
+
+      Earlier captures (2026-04-20) saw o:215 as a map-edit echo in the same
+      "second slot" position; the app-mitm sweep confirms it is also the SEND
+      command for adding no-go zones, not only a legacy echo.
     status:
       seen_on_wire: true
       first_seen: "2026-04-20"
-      last_seen: "2026-04-20"
+      last_seen: "2026-06-09"
       decoded: confirmed
+    open_questions:
+      - "Shape type ids 12 (Circle), 14 (Triangle), 15 (Droplet), 16 (Mushroom) are [UNKNOWN — to capture] — inferred from the confirmed run with types 9/13/17/18, but their numeric IDs are not yet verified. Capture via app-mitm with those preset shapes selected."
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
       apk: "ioBroker.dreame/apk.md §Actions map-edit confirm"
+    verifications:
+      - date: "2026-06-09"
+        status: retracted
+        claim: "Legacy map-edit confirmation echo. Older captures (2026-04-20) show o:215 as the \"second of the map-edit pair\" (zone edit confirm), carrying id and ids fields. Later captures (2026-04-26) show o:234 in the same role. The integration triggers a MAP rebuild on o:215 OR o:201 with status:true error:0 — covers both old and new confirmation opcode."
+        retracts: "Legacy map-edit confirmation echo. Older captures (2026-04-20) show o:215 as the \"second of the map-edit pair\" (zone edit confirm), carrying id and ids fields. Later captures (2026-04-26) show o:234 in the same role. The integration triggers a MAP rebuild on o:215 OR o:201 with status:true error:0 — covers both old and new confirmation opcode."
+        reason: "App-mitm 2026-06-09 confirms o:215 is the add-no-go-zone COMMAND (with {id,type,points,radius} payload) that the app sends; the echo behaviour in older captures was the firmware's ack of that same command. The 'legacy' framing was incorrect — o:215 is current and active."
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:215 as {m:'a', o:215, d:{id,type,points,radius}} to add a no-go zone. type: 1=line/2=poly/3=circle; preset shapes: 9=Square/13=Heart/17=Cloud/18=Rainbow. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o218"
     op: 218
-    name: "delete_zone"
+    name: "delete_map_object"
     category: "opcode"
-    payload_shape: "{m:'a', d:{o:218, id:N, ids:[], exe:T, status:T}, t:'TASK'} (echo)"
+    payload_shape: "SEND {m:'a', o:218, d:{id:N, type:T}} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:218, id:N, ids:[], exe:T, status:T}, t:'TASK'}"
     semantic: |
-      Zone / exclusion-zone delete echo. Carries the deleted entity's id;
+      Delete a map object. [app-mitm:2026-06-09-settings-sweep] App sends
+      routed action s2a50 {m:'a', o:218, d:{id:N, type:T}} to delete a
+      map-layer object by its id and object-category type. type=4 is the
+      confirmed value for ignore-obstacle zones (object category 4).
+
+      The firmware echoes o:218 on s2p50 carrying the deleted entity's id;
       ids:[] in all observed captures. CONFIRMED via multiple captures
       matching user-delete narrative in the 2026-04-26 Designated Ignore
       Obstacle Zone corpus. One outlier capture from an untraced UI flow
@@ -4128,51 +4348,167 @@ opcodes:
     status:
       seen_on_wire: true
       first_seen: "2026-04-26"
-      last_seen: "2026-04-26"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
       apk: "ioBroker.dreame/apk.md §Actions map-edit delete"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:218 as {m:'a', o:218, d:{id:N, type:T}} to delete a map object. type field is the object category (e.g. type=4 for ignore-obstacle zones). [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "o219"
+    op: 219
+    name: "rename_zone"
+    category: "opcode"
+    payload_shape: "SEND {m:'a', o:219, d:{region:N, name:'...'}} (app — confirmed 2026-06-09)"
+    semantic: |
+      Rename a zone / mowing area. [app-mitm:2026-06-09-settings-sweep]
+      App sends routed action s2a50 {m:'a', o:219, d:{region:N, name:'...'}}
+      to rename a named zone. `region` is the zone id; `name` is the new
+      display name string.
+
+      Whether the firmware echoes o:219 on s2p50 is not yet observed.
+      [UNKNOWN — to capture]
+    status:
+      seen_on_wire: false
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      apk: "ioBroker.dreame/apk.md §m=a opcodes"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:219 as {m:'a', o:219, d:{region:N, name:'...'}} to rename a zone. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "o220"
+    op: 220
+    name: "split_zone"
+    category: "opcode"
+    payload_shape: "SEND {m:'a', o:220, d:{id:N, line_start:{x,y}, line_end:{x,y}}} (app — confirmed 2026-06-09)"
+    semantic: |
+      Split a zone by drawing a cut line. [app-mitm:2026-06-09-settings-sweep]
+      App sends routed action s2a50 {m:'a', o:220, d:{id, line_start, line_end}}
+      where id is the zone to split, and line_start/line_end are the endpoints
+      of the cut line in map coordinates.
+
+      WARNING: destructive operation — splitting clears that zone's schedule
+      and per-zone preferences. The two new sub-zones inherit neither; they
+      must be reconfigured. No echo observed on s2p50. [UNKNOWN — to capture]
+    status:
+      seen_on_wire: false
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      apk: "ioBroker.dreame/apk.md §m=a opcodes"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:220 as {m:'a', o:220, d:{id, line_start, line_end}} to split a zone by a cut line. Destructive: clears zone schedule+prefs. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "o221"
+    op: 221
+    name: "merge_zones"
+    category: "opcode"
+    payload_shape: "SEND {m:'a', o:221, d:{ids:[N, ...]}} (app — confirmed 2026-06-09)"
+    semantic: |
+      Merge two or more zones into one. [app-mitm:2026-06-09-settings-sweep]
+      App sends routed action s2a50 {m:'a', o:221, d:{ids:[zoneId,...]}} to
+      merge multiple zones. ids is a list of the zone ids to merge.
+
+      WARNING: destructive operation — the source zones and their schedules /
+      per-zone preferences are discarded; only the merged zone survives.
+      No echo observed on s2p50. [UNKNOWN — to capture]
+    status:
+      seen_on_wire: false
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      apk: "ioBroker.dreame/apk.md §m=a opcodes"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:221 as {m:'a', o:221, d:{ids:[zoneIds]}} to merge zones. Destructive: source zone schedules+prefs are lost. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o234"
     op: 234
-    name: "save_zone_geometry"
+    name: "add_ignore_obstacle_zone"
     category: "opcode"
-    payload_shape: "{m:'a', d:{o:234, id:N, ids:[], exe:T, status:T}, t:'TASK'} (echo)"
+    payload_shape: "SEND {m:'a', o:234, d:{id:-1, type:0, points:[...]}} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:234, id:N, ids:[], exe:T, status:T}, t:'TASK'}"
     semantic: |
-      Save zone / exclusion-zone geometry echo. CONFIRMED — fires for both
-      create new (new firmware-assigned id) and resize existing (same id).
-      Carries the saved entity's id; ids:[] in all observed captures. Sequence:
-      o:204 → o:234 → o:201. Confirmed 2026-04-26 from Designated Ignore
-      Obstacle Zone create/resize/delete tests.
+      Add an ignore-obstacle zone (object category 4). [app-mitm:2026-06-09-settings-sweep]
+      App sends routed action s2a50 {m:'a', o:234, d:{id:-1, type:0, points:[...]}}
+      to create a new ignore-obstacle zone. id:-1 signals a new zone (server
+      assigns the real id); type:0 is the fixed object category for ignore-obstacle
+      zones (category 4 in the delete opcode context); points is an array of
+      polygon corner coordinates.
+
+      The firmware echoes o:234 on s2p50 carrying the server-assigned entity id;
+      ids:[] in all observed captures. Sequence: o:204 → o:234 → o:201.
+      Confirmed 2026-04-26 from Designated Ignore Obstacle Zone
+      create/resize/delete tests.
+
+      NOTE: earlier entries described this as "save zone / exclusion-zone
+      geometry" covering both create-new and resize-existing. The app-mitm
+      sweep shows the SEND form specifically for the CREATE (id:-1) case.
+      Whether resize uses the same opcode with id:N (existing id) is
+      [UNKNOWN — to capture].
     status:
       seen_on_wire: true
       first_seen: "2026-04-26"
-      last_seen: "2026-04-26"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
       apk: "ioBroker.dreame/apk.md §Actions map-edit save geometry"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:234 as {m:'a', o:234, d:{id:-1, type:0, points:[...]}} to add a new ignore-obstacle zone. id:-1 means server assigns id; type:0 is the ignore-obstacle category. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o400"
     op: 400
-    name: "start_binocular"
+    name: "camera_live_view"
     category: "opcode"
-    payload_shape: "{m:'a', o:400}"
+    payload_shape: "SEND {m:'a', o:400, d:{on:0|1}} (app — confirmed 2026-06-09)"
     semantic: |
-      Camera-stream start (binocular/stereo camera activation). Apk-documented
-      as startBinocular. Not observed on g2408 wire; likely a camera-streaming
-      feature not yet wired in the integration.
+      Camera / live-view on/off. [app-mitm:2026-06-09-settings-sweep]
+      App sends routed action s2a50 {m:'a', o:400, d:{on:0|1}} to enable
+      (on=1) or disable (on=0) the live camera stream. Also fires automatically
+      at the start of a patrol run (the patrol feature turns the camera on
+      when it begins patrolling points to enable auto-capture).
+
+      Previously noted as "startBinocular" (apk name, no payload). The app-
+      mitm sweep confirms the actual SEND form includes {d:{on}} and the
+      opcode covers the live-view toggle, not only a discrete stream-start.
     status:
       seen_on_wire: false
-      decoded: hypothesized
-    open_questions:
-      - "Does g2408 support startBinocular? Related to takePic (o:401) flow?"
+      last_seen: "2026-06-09"
+      decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+    verifications:
+      - date: "2026-06-09"
+        status: retracted
+        claim: "Camera-stream start (binocular/stereo camera activation). Apk-documented as startBinocular. Not observed on g2408 wire; likely a camera-streaming feature not yet wired in the integration."
+        retracts: "Camera-stream start (binocular/stereo camera activation). Apk-documented as startBinocular. Not observed on g2408 wire; likely a camera-streaming feature not yet wired in the integration."
+        reason: "App-mitm 2026-06-09 confirms o:400 is the camera/live-view on/off toggle ({d:{on:0|1}}), fires at patrol start too, not a discrete stream-start. The apk name 'startBinocular' was misleading; it is a toggle, and it is used on g2408."
+      - date: "2026-06-09"
+        status: verified
+        claim: "App sends o:400 as {m:'a', o:400, d:{on:0|1}} for camera live-view on/off. Also fires at patrol start (auto-enables camera for auto-capture). [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o401"
     op: 401
