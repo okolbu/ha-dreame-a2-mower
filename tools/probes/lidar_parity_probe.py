@@ -29,8 +29,18 @@ def _ts() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
 
+def _pcd_points(body: bytes) -> int | str:
+    """Parse the declared point count from a PCD ASCII header (the `POINTS <n>`
+    line lives in the first few hundred bytes, before `DATA binary`). Done inline
+    to avoid importing protocol.pcd, which would trigger the integration package
+    __init__ (homeassistant.*) that the probe stubs don't cover."""
+    import re
+    head = body[:512].decode("ascii", "replace")
+    m = re.search(r"^POINTS\s+(\d+)", head, re.MULTILINE)
+    return int(m.group(1)) if m else "no POINTS line in header"
+
+
 def main() -> None:
-    from custom_components.dreame_a2_mower.protocol.pcd import decode_pcd_header
     cloud = connect()
     names = cloud.list_3dmap_objects()
     print(f"[{_ts()}] list_3dmap_objects → {names!r}")
@@ -43,14 +53,7 @@ def main() -> None:
         if not body:
             print(f"[{_ts()}] {name}: no body")
             continue
-        try:
-            # decode_pcd_header returns (PCDHeader, body_offset); we only need
-            # the header here. PCDHeader.points holds the declared point count.
-            hdr, _offset = decode_pcd_header(body)
-            pts = hdr.points
-        except Exception as ex:  # noqa: BLE001
-            pts = f"header-decode-failed: {ex!r}"
-        print(f"[{_ts()}] {name}: {len(body)} bytes, points={pts}")
+        print(f"[{_ts()}] {name}: {len(body)} bytes, points={_pcd_points(body)}")
     print("App reference: <did>_154157120.0550.bin, 153261 points, 2026/04/20.")
 
 
