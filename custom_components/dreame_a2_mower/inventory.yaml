@@ -2135,6 +2135,11 @@ properties:
         claim: "EdgeMaster has an app-side write slot at PRE[10]; the prior 'no PRE slot on g2408' claim is withdrawn. (Whether g2408 firmware honors a PRE[10] write is unverified — the EdgeMaster control remains read-only-noop pending live verification.)"
         retracts: "EdgeMaster (s6p2[2]) has no PRE slot on g2408 and PRE has no setter regardless, so neither is writable through this surface."
         reason: "2026-06-09 app-MITM isolated toggle wrote EdgeMaster via PRE[10]. app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-09"
+        status: retracted
+        claim: "Mowing Efficiency maps to CFG.PRE[3], not PRE[1] (PRE[1] is the map index in the confirmed 19-element PRE write array)."
+        retracts: "Mowing Efficiency (s6p2[1]) maps to CFG.PRE[1]; a direct write of t='PRE' returned r=-3 (no setter) with the relay confirmed awake — see § PRE 2026-06-03 verification."
+        reason: "2026-06-09 app-MITM sweep confirmed the 19-element PRE index map: PRE[3]=Mowing Efficiency, PRE[1]=map index. app-mitm:2026-06-09-settings-sweep"
     open_questions:
       - "What is byte[3]? Usually 2, one 198 outlier — possibly a mid-session status flag or schema/frame-type marker. Needs more samples around mid-mow setting changes."
 
@@ -5107,7 +5112,11 @@ cfg_keys:
       Note: the 2026-06-03 r=-3 probe used d:{value:[0,1]} (wrong shape/path);
       the correct write path is action s2.a50 with a flat 19-element d array —
       the r=-3 was a path or shape mismatch, not a firmware veto.
-      All General Mode settings are device-writable — none are app-cache-only.
+      The app sends all General Mode settings via `action s2.a50 {m:s,t:PRE}`
+      and the relay returns code:0 (accepted) for every index.
+      [app-mitm:2026-06-09-settings-sweep] Whether the g2408 firmware actually
+      executes each PRE write is not yet observed — device-side effect is
+      `[UNVERIFIED]` pending live verification.
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
@@ -5973,8 +5982,9 @@ cfg_individual:
     semantic: |
       APK-documented endpoint. The individual `getCFG t:'PRE'` fetch
       returns r=-3 in all 3 cloud dumps so far, but the **all-keys**
-      CFG fetch (`getCFG t:'CFG'`) DOES return a `PRE` key with the
-      [zone_id, mode] 2-element list (see `cfg_keys.PRE`). So the
+      CFG fetch (`getCFG t:'CFG'`) DOES return a `PRE` key. PRE is a
+      19-element write array (shape corrected 2026-06-09 — see
+      `cfg_keys.PRE`). [app-mitm:2026-06-09-settings-sweep] So the
       data exists on g2408 — only the individual-target fetch path
       doesn't work. This is a clear case where r=-3 isn't proof of
       feature absence; it just means "this endpoint name doesn't
@@ -6000,6 +6010,11 @@ cfg_individual:
         status: presumed
         claim: "PRE bare GET (no args) returns r=-3 at idle — individual-fetch form is consistently rejected; data is accessible via all-keys CFG fetch instead."
         evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
+      - date: "2026-06-09"
+        status: retracted
+        claim: "cfg_individual PRE shape corrected to the 19-element write array (was described as a 2-element [zone_id, mode] list)."
+        retracts: "[zone_id, mode] 2-element list (see `cfg_keys.PRE`). So the data exists on g2408 — only the individual-target fetch path doesn't work."
+        reason: "2026-06-09 app-MITM sweep confirmed 19-element PRE; aligns with cfg_keys.PRE. app-mitm:2026-06-09-settings-sweep"
 
   - id: "PREI"
     name: "preference_info"

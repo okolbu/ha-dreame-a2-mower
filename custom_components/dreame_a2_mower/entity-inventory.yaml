@@ -793,9 +793,11 @@ entities:
         evidence: "tests/integration/test_pre_shadow_sensors.py::test_map_mowing_efficiency_select_returns_*"
       - date: "2026-06-09"
         status: verified
-        claim: "Device write path captured via 2026-06-09 app-MITM sweep
-          (PRE[3] byte in s6.2 payload — PRE[3] is Mowing Efficiency; PRE[1]
-          is the map index) but intentionally NOT wired; control_mode remains
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep.
+          PRE write-array index [3] = Mowing Efficiency (PRE[1]=map index,
+          PRE[2]=zone index). NB the s6p2 MQTT push still reports efficiency
+          at position [1] — that is the read side, distinct from the PRE[3]
+          write index. Intentionally NOT wired; control_mode remains
           read_only_noop until a feature phase wires and live-verifies the
           write. Whether g2408 firmware honors a PRE[3] write for this field
           is a separate live-verify question for the feature phase."
