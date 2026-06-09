@@ -382,11 +382,11 @@ entities:
         evidence: "probe_log_20260510_190812.jsonl@20:10:48 + 20:11:14 + 20:11:50 + 20:12:34"
       - date: "2026-06-09"
         status: verified
-        claim: "Device write path captured via 2026-06-09 app-MITM sweep
-          (PRE[2] byte in s6.2 payload) but intentionally NOT wired;
-          control_mode remains read_only_noop until a feature phase wires and
-          live-verifies the write. Whether g2408 firmware honors a PRE write
-          for edgemaster is a separate live-verify question for the feature phase."
+        claim: "App write slot for EdgeMaster is PRE[10] (PRE[2] is the zone
+          index, not EdgeMaster — corrected from stale citation). Captured via
+          2026-06-09 app-MITM isolated toggle. Intentionally NOT wired;
+          control_mode remains read_only_noop pending live verification that
+          g2408 firmware actually honors a PRE[10] write for this field."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "s6p2"
@@ -794,10 +794,11 @@ entities:
       - date: "2026-06-09"
         status: verified
         claim: "Device write path captured via 2026-06-09 app-MITM sweep
-          (PRE[1] byte in s6.2 payload) but intentionally NOT wired;
-          control_mode remains read_only_noop until a feature phase wires and
-          live-verifies the write. Whether g2408 firmware honors a PRE write
-          for this field is a separate live-verify question for the feature phase."
+          (PRE[3] byte in s6.2 payload — PRE[3] is Mowing Efficiency; PRE[1]
+          is the map index) but intentionally NOT wired; control_mode remains
+          read_only_noop until a feature phase wires and live-verifies the
+          write. Whether g2408 firmware honors a PRE[3] write for this field
+          is a separate live-verify question for the feature phase."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "s6p2"
@@ -3092,8 +3093,9 @@ entities:
           led_in_error (CFG.LIT[6]), human_presence_alert (CFG.REC[0]).
           All intentionally NOT wired; control_mode remains as-is (see
           control_mode_by_key) until a feature phase wires and live-verifies each
-          write. For the REC-backed keys (led_* and human_presence_alert) the
-          LIT/REC list-reconstruct problem must be solved before writing safely;
+          write. For the LIT-backed keys (led_period/led_in_standby/led_in_working/
+          led_in_charging/led_in_error) and the REC-backed key (human_presence_alert)
+          the LIT/REC list-reconstruct problem must be solved before writing safely;
           whether g2408 firmware honors writes to these fields is a separate
           live-verify question for the feature phase."
         evidence: "app-mitm:2026-06-09-settings-sweep"

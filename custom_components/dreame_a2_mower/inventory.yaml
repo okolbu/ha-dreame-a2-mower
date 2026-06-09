@@ -2124,6 +2124,11 @@ properties:
           (read-only reflector of the app's Mowing-Settings save); it is not a
           write target. The app's actual write RPC is still uncaptured (Phase 3).
         evidence: "docs/research/wire-captures/pre-write-r3-2026-06-03.md"
+      - date: "2026-06-09"
+        status: retracted
+        claim: "EdgeMaster has an app-side write slot at PRE[10]; the prior 'no PRE slot on g2408' claim is withdrawn. (Whether g2408 firmware honors a PRE[10] write is unverified — the EdgeMaster control remains read-only-noop pending live verification.)"
+        retracts: "EdgeMaster (s6p2[2]) has no PRE slot on g2408 and PRE has no setter regardless, so neither is writable through this surface."
+        reason: "2026-06-09 app-MITM isolated toggle wrote EdgeMaster via PRE[10]. app-mitm:2026-06-09-settings-sweep"
     open_questions:
       - "What is byte[3]? Usually 2, one 198 outlier — possibly a mid-session status flag or schema/frame-type marker. Needs more samples around mid-mow setting changes."
 
