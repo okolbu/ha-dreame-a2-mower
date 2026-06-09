@@ -141,16 +141,8 @@ Expected: finds the existing PRE / `s6p2` entries (PRE write currently recorded 
           5.5cm. Returned code:0 app-side.
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
     open_questions:
-      - id: pre-layout
-        text: >-
-          Reconcile the app's 19-element PRE array (height at index 4) vs the
-          integration's 10-element builder (height at index 2). Capture a 2nd PRE
-          SET to map every index.
-      - id: pre-edgemaster-bit
-        text: >-
-          Locate the EdgeMaster bit by diffing an OFF vs ON PRE write (only ON
-          captured). Then confirm m:s t:PRE returns code:0 on OUR client (our
-          recorded r=-3 may have been a different path/payload).
+      - "pre-layout: Reconcile the app's 19-element PRE array (height at index 4) vs the integration's 10-element builder (height at index 2). Capture a 2nd PRE SET to map every index."
+      - "pre-edgemaster-bit: Locate the EdgeMaster bit by diffing an OFF vs ON PRE write (only ON captured). Then confirm m:s t:PRE returns code:0 on OUR client (our recorded r=-3 may have been a different path/payload)."
 ```
 
 - [ ] **Step 3: Locate the photo entries**
@@ -179,16 +171,17 @@ Append to the `summary_photo_list` entry:
         retracts: "photos exist app-side only and the integration cannot reach them"
         reason: "App capture shows photos in the SAME OSS bucket the integration already fetches LiDAR PCD from."
     open_questions:
-      - id: transient-obstacle-photo-api
-        text: >-
-          The transient session-obstacle photos (live-map clickable icons that
-          die after the session) use a different, uncaptured API — no real mow
-          ran. Capture during a real obstacle-hitting mow (Spec B §4.4).
-      - id: aiobs-photo-index
-        text: >-
-          The pre-signed photo-index call (returns the album URL set) was not on
-          HTTPS; likely a sendCommand t=AIOBS read or MQTT event. Not needed for
-          Phase 1 (photo_list suffices) but pin it for a durable list path.
+      - "transient-obstacle-photo-api: The transient session-obstacle photos (live-map clickable icons that die after the session) use a different, uncaptured API — no real mow ran. Capture during a real obstacle-hitting mow (Spec B §4.4)."
+      - "patrol-photo-bucket: Confirm patrol photos land in the same ali_dreame/<ts>.jpg album bucket as AI-obstacle photos (Spec B §4.5)."
+      - "aiobs-photo-index: The pre-signed photo-index call (returns the album URL set) was not on HTTPS; likely a sendCommand t=AIOBS read or MQTT event (see the AIOBS inventory entry). Not needed for Phase 1 (photo_list suffices) but pin it for a durable list path."
+
+> NOTE: `open_questions` in this inventory are **plain strings**, not `{id, text}`
+> dicts (the existing schema; the validator enforces it). Keep the leading
+> `<token>:` so the playbook's closure grep can still find the gap. The 12
+> routed-`t`-key gaps from Task 1 are keyed by their inventory **entry id** (the
+> t-key itself — `MPOS`, `AIOBS`, `RGBPSTA`, `SCHDTV3`, …); only the gaps that
+> live inside a multi-purpose entry (PRE, photos, cfg-write) need the
+> string-prefixed token.
 ```
 
 > NOTE: before writing the `retracts:` line, grep the entry's `semantic:` prose
