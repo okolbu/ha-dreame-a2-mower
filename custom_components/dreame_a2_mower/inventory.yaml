@@ -5866,13 +5866,23 @@ cfg_individual:
       v1.0.0a77 — populates wifi_ssid / wifi_ip and seeds wifi_rssi_dbm
       at startup before s1p1 byte[17] live RSSI takes over.
       Sample: {current:"REDACTED-SSID", list:[{ip:"192.0.2.128", rssi:-66, ssid:"REDACTED-SSID"}]}.
+      App-MITM 2026-06-09 confirms action m:g t='NET' → {current:<ssid>,
+      list:[{ip, rssi(dBm), ssid}]}; rssi in dBm (e.g. -64 ≈ 70-80% signal).
+      [app-mitm:2026-06-09-settings-sweep]
     status:
       seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §getX NET"
       integration_code: "custom_components/dreame_a2_mower/cloud_client.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "action m:g t='NET' → {current:<ssid>, list:[{ip, rssi(dBm), ssid}]}; rssi in dBm (e.g. -64 ≈ 70-80%); payload shape confirmed by app-MITM live capture."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "OBS"
     name: "obstacle_data"
@@ -6106,9 +6116,10 @@ cfg_individual:
       the app may send args to retrieve the full list, or GET returns only
       a version/count scalar and the schedule list is pushed separately].
       App-MITM 2026-06-09 confirms the app issues action(siid:2,aiid:50)
-      {m:'g', t:'SCHDTV3'} [dreame-app-implementation-guide-2026-06-09.md].
-      The app's SCHDTV3 SET (schedule write) was not captured in this session;
-      a second capture with relays up is needed to get the write payload.
+      {m:'g', t:'SCHDTV3'} [app-mitm:2026-06-09-settings-sweep].
+      The WRITE transport is a 3-key transaction using SCHDDV3/SCHDIV3/SCHDSV3
+      (see those cfg_individual entries); this key is the read-side scalar only.
+      [app-mitm:2026-06-09-settings-sweep]
     status:
       seen_on_wire: true
       last_seen: "2026-06-09"
@@ -6117,7 +6128,6 @@ cfg_individual:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
       - "Decode SCHDTV3 scalar d=2 — is it the schedule-config version, the count of active entries, or a feature flag? Correlate with add/delete schedule operations."
-      - "Capture a SCHDTV3 SET (add/edit a schedule with relays up) to get the write payload shape — GET only was observed in app-MITM 2026-06-09."
       - "Does the app pass args to SCHDTV3 GET to retrieve the full schedule list, or is the full list pushed separately?"
     verifications:
       - date: "2026-06-09"
@@ -6128,6 +6138,10 @@ cfg_individual:
         status: partial
         claim: "SCHDTV3 routed-get returns r=0, d=2 (scalar integer); full schedule structure not returned by bare GET; semantics of the scalar unknown."
         evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Schedule write transport captured: 3-key txn SCHDDV3/SCHDIV3/SCHDSV3 (shared v=ms txn-id); SCHDTV3 is the read-side scalar only, not the write key."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "CHECK"
     name: "self_check_command"
@@ -6203,34 +6217,216 @@ cfg_individual:
       - "How does ARM interact with ATA and PIN? Are they layered or mutually exclusive?"
 
   - id: "REMOTE"
-    name: "remote_control_settings"
+    name: "sim_4g_status"
     category: "cfg_individual"
-    payload_shape: "{remote: {}}"
+    payload_shape: "{activeTime, cardId(ICCID), expiredTime, leftDays}"
     semantic: |
-      Remote-control settings GET. Apk-documented at L176199 as
-      getRemote = {m:'g', t:'REMOTE'}. Stored in the app's settings object
-      as remote:{} (L182984). The exact fields of the remote settings dict
-      are unknown — likely includes default cutting height and camera state
-      for joystick sessions.
-
-      Paired with SET commands via o:15 (remote_setting opcode). The GET
-      is used by the app to initialize the remote-control UI with persisted
-      defaults. Not wired in the integration.
-      App-MITM 2026-06-09 confirms the app issues routed-get t=REMOTE;
-      response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
+      4G SIM card status read. App-MITM 2026-06-09 confirmed via
+      action(siid:2, aiid:50) {m:'g', t:'REMOTE'} → {activeTime, cardId(ICCID),
+      expiredTime, leftDays}. [app-mitm:2026-06-09-settings-sweep]
+      Surfaced in the app's Connections / Link Module page. cardId is the
+      SIM ICCID — the same ICCID reported as card4G in the GPS getRecords
+      endpoint, confirming they share the same 4G SIM. [app-mitm:2026-06-09-settings-sweep]
+      leftDays seen as 894 while the app displayed 839 (different calculation
+      method). [app-mitm:2026-06-09-settings-sweep]
+      Not wired in the integration (read-only status; integration uses the
+      GPS getRecords endpoint for card4G/ICCID cross-reference).
     status:
       seen_on_wire: false
+      first_seen: "2026-06-09"
       last_seen: "2026-06-09"
-      decoded: hypothesized
+      decoded: confirmed
     references:
-      apk: "ioBroker.dreame/apk.md §Remote Control getRemote L176199"
-    open_questions:
-      - "What fields does the remote settings dict contain? Height, camera, max-speed?"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     verifications:
       - date: "2026-06-09"
+        status: retracted
+        claim: "Remote-control settings GET. Apk-documented at L176199 as getRemote = {m:'g', t:'REMOTE'}. Stored in the app's settings object as remote:{} (L182984). The exact fields of the remote settings dict are unknown — likely includes default cutting height and camera state for joystick sessions."
+        retracts: "Remote-control settings GET. Apk-documented at L176199 as getRemote = {m:'g', t:'REMOTE'}. Stored in the app's settings object as remote:{} (L182984). The exact fields of the remote settings dict are unknown — likely includes default cutting height and camera state for joystick sessions."
+        reason: "App-MITM 2026-06-09 live capture shows t=REMOTE returns 4G SIM status {activeTime, cardId(ICCID), expiredTime, leftDays} — not remote-control settings. The APK analysis pointing to joystick/height/camera was incorrect for this key."
+      - date: "2026-06-09"
+        status: verified
+        claim: "action m:g t='REMOTE' returns {activeTime, cardId(ICCID), expiredTime, leftDays} — 4G SIM status; cardId matches GPS card4G ICCID."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "AI_HUMAN"
+    name: "ai_human_photo_consent"
+    category: "cfg_individual"
+    payload_shape: "iotuserdata KV: AI_HUMAN.0=JSON-string-encoded bool; AI_HUMAN.info=counter int"
+    semantic: |
+      Per-device human-photo send consent, stored in the iotuserdata
+      key-value store (NOT in CFG). Transport:
+        POST :13267/dreame-user-iot/iotuserdata/setDeviceData
+          {did, data:{"AI_HUMAN.0":"\"true\"|\"false\"", "AI_HUMAN.info":"<N>"}, sign, timestamp}
+        GET …/getDeviceData {keys:["AI_HUMAN.0"]} → {"AI_HUMAN.0":"\"true\""}
+      [app-mitm:2026-06-09-settings-sweep]
+      AI_HUMAN.0 = send-human-photos consent, encoded as a JSON-string bool
+      ("\"true\"" / "\"false\""). AI_HUMAN.info = counter/version int (6 and
+      7 both seen); NOT a fixed version number. [app-mitm:2026-06-09-settings-sweep]
+      Revoking consent cascades automatically: sets REC.report[1]
+      (Capture Human Photos) → 0. [app-mitm:2026-06-09-settings-sweep]
+      Human-photo capture requires ALL of: AOP=1 AND REC.report[1]=1 AND
+      AI_HUMAN.0="true". [app-mitm:2026-06-09-settings-sweep]
+      iotuserdata/{get,set}DeviceData is a general account-preference KV
+      store keyed by did+sign; other keys include AUTO_TIMEZONE.0
+      (app timezone auto-sync preference — NOT a mower CFG) and
+      prop.s_auto_upgrade (firmware auto-update preference).
+      [app-mitm:2026-06-09-settings-sweep]
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "AI_HUMAN.0='\"true\"'/'\"\false\"' (JSON-string bool) is the consent key in iotuserdata; revoking cascades REC.report[1]→0; capture requires AOP=1+REC.report[1]=1+AI_HUMAN.0=true."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "SCHDDV3"
+    name: "schedule_data_v3_write"
+    category: "cfg_individual"
+    payload_shape: "{s:<offset>, l:<len>, d:\"<base64 chunk>\", v:<txn_ms>}"
+    semantic: |
+      Schedule data write — chunked base64 protobuf blob. Part of a 3-key
+      write transaction (SCHDDV3 + SCHDIV3 + SCHDSV3) tied by shared v =
+      millisecond timestamp txn-id. Transport: action(siid:2, aiid:50)
+      {m:'s', t:'SCHDDV3', d:{s:<offset>, l:<len>, d:"<chunk>", v:<txn>}}.
+      [app-mitm:2026-06-09-settings-sweep]
+      Chunked by offset s; reassemble all chunks → JSON array
+      [seasonIdx, enabled, "<name>", "<base64 blob>"]. The base64 blob is
+      the protobuf that protocol/schedule_decode.py already decodes for the
+      read path — the encode direction + this transport is what Phase E adds.
+      [app-mitm:2026-06-09-settings-sweep]
+      Example (Spring/Summer, Thu 12:04 edge entry): 54-byte blob with
+      repeating edaa07*/edaa09* groups = per-entry records (day/time/task).
+      Protobuf field layout: diff known-schedule edits to map fields —
+      [UNKNOWN — to capture]. [app-mitm:2026-06-09-settings-sweep]
+      See also: SCHDIV3 (length descriptor), SCHDSV3 (slot enable/summary).
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      integration_code: "custom_components/dreame_a2_mower/protocol/schedule_decode.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
+    open_questions:
+      - "Protobuf field layout of the base64 blob: diff one-day, one-time, one-task edits to map each wire field to its semantic."
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "SCHDDV3 {s,l,d,v} is the chunked schedule-write key; blob format is same protobuf as schedule_decode.py read path; transport confirmed by app-MITM."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "SCHDIV3"
+    name: "schedule_index_v3_write"
+    category: "cfg_individual"
+    payload_shape: "{i:<index>, l:<total_len>, v:<txn_ms>}"
+    semantic: |
+      Schedule length/index descriptor write. Part of the 3-key write
+      transaction with SCHDDV3 and SCHDSV3 (shared v = ms txn-id). Transport:
+      action(siid:2, aiid:50) {m:'s', t:'SCHDIV3', d:{i, l:<total len>, v:<txn>}}.
+      [app-mitm:2026-06-09-settings-sweep]
+      l = total reassembled length of the SCHDDV3 payload in bytes. Sent
+      alongside or after the SCHDDV3 chunks so the receiver knows when
+      reassembly is complete. [app-mitm:2026-06-09-settings-sweep]
+      i semantics [UNKNOWN — to capture]: likely the schedule slot index or
+      chunk sequence number. [app-mitm:2026-06-09-settings-sweep]
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
+    open_questions:
+      - "SCHDIV3.i semantics: slot index, chunk count, or sequence number?"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "SCHDIV3 {i, l:<total_len>, v:<txn>} is the length/index descriptor; transport confirmed by app-MITM."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "SCHDSV3"
+    name: "schedule_slot_enable_v3"
+    category: "cfg_individual"
+    payload_shape: "{i:<slot 0|1>, v:<packed int>, s:[enabled, flag]}"
+    semantic: |
+      Per-seasonal-slot enable/summary write. Part of the 3-key write
+      transaction with SCHDDV3 and SCHDIV3 (shared v = ms txn-id). Transport:
+      action(siid:2, aiid:50) {m:'s', t:'SCHDSV3', d:{i, v, s:[enabled, flag]}}.
+      [app-mitm:2026-06-09-settings-sweep]
+      i = schedule slot: 0 = Spring/Summer, 1 = Autumn/Winter.
+      s[0] = slot enabled (0=disabled, 1=enabled; confirmed by live toggle
+      Spring/Summer disabled→enabled = s[0] 0→1). [app-mitm:2026-06-09-settings-sweep]
+      s[1] = second flag, seen as 0; semantics [UNKNOWN — to capture].
+      v = packed integer encoding schedule days/times. Seen values: 18696,
+      32923, 65535 (0xFFFF). Bit layout [UNKNOWN — to capture]: needs
+      per-day/per-time isolated edits to decode. [app-mitm:2026-06-09-settings-sweep]
+      Also emitted standalone (without full SCHDDV3/SCHDIV3) when toggling
+      slot enabled/disabled only. [app-mitm:2026-06-09-settings-sweep]
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: partial
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
+    open_questions:
+      - "SCHDSV3.v packed-int bit layout: which bits encode day-of-week and which encode time? Decode by editing one day then one time in isolation."
+      - "SCHDSV3.s[1] semantics: always 0? Or set in some schedule states?"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "SCHDSV3 {i:<slot 0/1>, v:<packed int>, s:[enabled,flag]} is the slot enable/summary key; i=0=Spring/Summer, i=1=Autumn/Winter; s[0]=enabled confirmed by live toggle."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-09"
         status: partial
-        claim: "App issues routed-get t=REMOTE (remote control settings); response shape not yet captured on our client"
-        evidence: "dreame-app-implementation-guide-2026-06-09.md"
+        claim: "SCHDSV3.v packed integer (seen 18696, 32923, 65535) encodes schedule days/times; bit layout is unknown — needs isolated per-day/per-time edits to decode."
+
+  - id: "MAP_cache"
+    name: "decoded_map_cache"
+    category: "cfg_individual"
+    payload_shape: "iotuserdata KV: MAP.0, MAP.1, … MAP.N (concat = JSON array of map objects)"
+    semantic: |
+      App-side decoded map cache stored in the iotuserdata KV store. Transport:
+        GET :13267/dreame-user-iot/iotuserdata/getDeviceData
+          {keys:["MAP.0","MAP.1",…]} → concat values = JSON array of maps
+      [app-mitm:2026-06-09-settings-sweep]
+      Each map object (one per mapIndex, both maps present) contains all
+      decoded zone/point data: mowingAreas (type:0), forbiddenAreas,
+      paths (type:1), spotAreas (type:3, shapeType:7), cleanPoints (type:6,
+      shapeType:5), cruisePoints (type:8, shapeType:5, +time/etime),
+      obstacles, contours (type:7), notObsAreas (type:10=ignore-obstacle,
+      shapeType:2, +angle). Per-element path:[{x,y}] in MM.
+      Per-map: md5sum, totalArea, boundary:{x1,y1,x2,y2}, name, mapIndex,
+      cut, merged, hasBack. [app-mitm:2026-06-09-settings-sweep]
+      Element type enum confirmed: 0=mowing, 1=path, 3=spot, 6=cleanPoint,
+      7=contour, 8=cruise/patrol, 10=ignore-obstacle. [app-mitm:2026-06-09-settings-sweep]
+      Integration shortcut: read MAP.* to get the fully-decoded map without
+      parsing the binary OSS blob (same per-map md5sum). Written by the app
+      when viewing/editing the map — may be stale or absent without a prior
+      app session. [app-mitm:2026-06-09-settings-sweep]
+      A read-side populated-check is needed to confirm the cache is present
+      when the app has not recently viewed the map. [UNKNOWN — to capture]
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
+    open_questions:
+      - "Is MAP.* populated on a fresh mower that has never had the app open to the map view? Confirm presence/absence without the app."
+      - "MAP.info key: what fields does it carry (length, version, timestamp)?"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "getDeviceData MAP.0..MAP.N → concat = JSON array of fully-decoded maps; element types 0/1/3/6/7/8/10 confirmed; coordinates in MM; per-map md5sum matches OSS blob."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
 heartbeat_bytes:
 
@@ -11021,3 +11217,212 @@ lidar_pcd:
     references:
       integration_code: "custom_components/dreame_a2_mower/coordinator.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Events"
+
+api_endpoints:
+
+  - id: "gps_get_records"
+    name: "location_getRecords"
+    category: "api_endpoint"
+    payload_shape: "POST :13267/dreame-mower-service-app/location/getRecords → {locationRecords:{records:[{did, card4G(ICCID), gpsLat, gpsLong, updateTime}]}}"
+    semantic: |
+      GPS world-coordinate read for the Real-Time Location feature.
+      [app-mitm:2026-06-09-settings-sweep]
+      Endpoint: POST eu.iot.dreame.tech/dreame-mower-service-app/location/getRecords
+      Response: {locationRecords:{records:[{did:<did>, card4G:"<SIM ICCID>",
+        gpsLat:"[REDACTED-LAT]", gpsLong:"[REDACTED-LON]",
+        updateTime:"YYYY-MM-DD HH:MM:SS", reversed0..2:null}]}}
+      gpsLat/gpsLong = WGS84 decimal degrees, returned as STRINGS.
+      [app-mitm:2026-06-09-settings-sweep]
+      Location is reported via the 4G SIM (card4G = ICCID = REMOTE.cardId).
+      updateTime = last GPS fix timestamp. records is a list = location history.
+      [app-mitm:2026-06-09-settings-sweep]
+      Gated by ATA[2]=1 (Real-Time Location enabled).
+      Accuracy validated: captured [REDACTED-LAT],[REDACTED-LON] vs known dock
+      [REDACTED-LAT],[REDACTED-LON] = ~4 m offset (2.4 m lat + 3.5 m lon) — usable.
+      [app-mitm:2026-06-09-settings-sweep]
+      Integration GPS sensor source: poll this endpoint, parse gpsLat/Long as float.
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "POST …/location/getRecords → {locationRecords:{records:[{card4G(ICCID), gpsLat, gpsLong(WGS84 strings), updateTime}]}}; ~4 m accuracy confirmed against known dock coordinates."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "oss_photo_list"
+    name: "iotoss_userDidOssList"
+    category: "api_endpoint"
+    payload_shape: "POST :13267/dreame-user-iot/iotoss/userDidOssList?current&size {did, type:\"jpg\"|\"thumb\"} → {records:[{id,type,category,filepath(SIGNED OSS URL),fileSize,uploadTime,key,ext,videoPath}]}"
+    semantic: |
+      OSS photo/video gallery index. [app-mitm:2026-06-09-settings-sweep]
+      Endpoint: POST eu.iot.dreame.tech/dreame-user-iot/iotoss/userDidOssList?current=<N>&size=<M>
+      Request body: {did, type:"jpg"|"thumb"}
+      type="jpg" = Photos tab; type="thumb" = Videos tab (videos listed by thumb).
+      [app-mitm:2026-06-09-settings-sweep]
+      Response records: [{id, type, category, filepath:<SIGNED OSS URL>,
+        fileSize, uploadTime, key, ext, videoPath}]
+      Server returns signed filepath URLs — the app holds no OSS credentials.
+      Signed URLs work across app instances (not bound to session).
+      [app-mitm:2026-06-09-settings-sweep]
+      Paged (current/size, UI uses 12/page, up to 10000); ordered upload_time desc.
+      videoPath on thumb records → the mp4 URL. ext.duration on video records.
+      Fetch filepath → JPEG; metadata is embedded in JPEG COM marker (FFFE)
+      as base64 JSON {d:[{c:class, f:conf 0-1, x,y,w,h}], o:activityOpcode, s, sub}.
+      o=100=all-area mow, o=107=patrol. _person.jpg suffix = person detection.
+      Auto-capture = 3 photos per point, independent of cycle count.
+      [app-mitm:2026-06-09-settings-sweep]
+      6-month retention. Gated by AOP=1 + REC.report[1]=1 + AI_HUMAN.0=true.
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      integration_code: "custom_components/dreame_a2_mower/coordinator.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "POST …/userDidOssList {did, type:'jpg'|'thumb'} → {records:[{filepath(signed OSS), fileSize, uploadTime, videoPath}]}; server signs URLs; type='thumb'=video tab; auto-capture=3 photos/point."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "oss_storage_quota"
+    name: "iotoss_checkDevOssStorage"
+    category: "api_endpoint"
+    payload_shape: "POST :13267/dreame-user-iot/iotoss/checkDevOssStorage → {total:\"209715200\"(200MB), used:\"<bytes>\"}"
+    semantic: |
+      OSS per-device storage quota check. [app-mitm:2026-06-09-settings-sweep]
+      Endpoint: POST eu.iot.dreame.tech/dreame-user-iot/iotoss/checkDevOssStorage
+      Response: {total:"209715200", used:"<bytes>"} (both as STRING-encoded ints).
+      total = 200 MB (209715200 bytes); live sample: 43.8 MB used of 200 MB.
+      [app-mitm:2026-06-09-settings-sweep]
+      Server-side cap; integration may surface as a sensor (used_mb / total_mb).
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "POST …/checkDevOssStorage → {total:'209715200'(200MB as string), used:'<bytes>' as string}; 200 MB cap confirmed live."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "oss_manual_upload"
+    name: "iotoss_addOssNew_ossUploaded"
+    category: "api_endpoint"
+    payload_shape: "POST iotoss/addOssNew {category:0,did,fileSize,filename,model,source:2,type,uid,key} → {ossId, url(signed PUT)}; PUT file; POST iotoss/ossUploaded {ossId,…,ext:\"{duration:N}\"}"
+    semantic: |
+      Manual photo/video upload from live-view app-side capture to OSS.
+      [app-mitm:2026-06-09-settings-sweep]
+      Step 1: POST addOssNew {category:0, did, fileSize, filename:"<ts>.<ext>",
+        model, source:2(=MANUAL), type:"jpg"|"mp4"|"thumb", uid, key}
+        → {ossId, url:<signed PUT URL>}
+      Step 2: PUT file bytes to the signed url
+      Step 3: POST ossUploaded {ossId, …same fields…, ext:"{\"duration\":N}"(video)}
+      [app-mitm:2026-06-09-settings-sweep]
+      source=2 marks manual capture (vs device auto-capture).
+      Video requires 3 calls: addOssNew(mp4) + addOssNew(thumb, same key) +
+      ossUploaded(thumb with ext.duration). Videos listed in userDidOssList
+      type="thumb"; videoPath → mp4 URL. [app-mitm:2026-06-09-settings-sweep]
+      OSS key scheme: oss/media/000000/oss/<uid>/<did>/ali_dreame/<ts>.<ext>.
+      60-second record cap (same bucket as device auto-capture photos).
+      [app-mitm:2026-06-09-settings-sweep]
+      NOT relevant for integration (integration is server-side; this is
+      the client-side P2P stream → OSS path). Documented for completeness.
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "addOssNew {source:2,type:'jpg'|'mp4'|'thumb'} → signed PUT url → ossUploaded {ext:{duration:N}} — 3-step upload chain for manual live-view captures; video = mp4+thumb same key."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "message_center"
+    name: "message_record_and_messaging_endpoints"
+    category: "api_endpoint"
+    payload_shape: "GET /dreame-message-push/v1/message-record/list?version=v1; GET …/homestat; GET /dreame-messaging/user/share-messages; GET …/device-messages; PUT …/device-messages/mark-read-by-deviceid"
+    semantic: |
+      Message center — all 5 tabs. [app-mitm:2026-06-09-settings-sweep]
+      System + Service + Activity (single call):
+        GET /dreame-message-push/v1/message-record/list?version=v1
+        → {systemMsg:{msgRecord:[{id, multiLangDisplay:"{zh/en:{name,content,link}}"}]},
+           serviceMsg:{unread, msgRecord, categoryUnread:{member_msg,activity_msg,order_msg,social_msg}}}
+      IMPORTANT: use /v1/ — /v2/ returns 0 records. Marketing system messages
+      (e.g. SOMMERSALG summer-sale with Shopify link) are present in v1 systemMsg.
+      [app-mitm:2026-06-09-settings-sweep]
+      Unread counts:
+        GET /dreame-message-push/v1/message-record/homestat?version=v1
+        → {msgUnreads:[{deviceId,msgUnread}], shareUnread, systemMsgUnread, serviceMsgUnread}
+      Sharing:
+        GET /dreame-messaging/user/share-messages?limit&offset&version=v1
+      Per-device fault/event notifications:
+        GET /dreame-messaging/user/device-messages
+        → per-device fault/event list (carries source:{siid,piid,value})
+        PUT /dreame-messaging/user/device-messages/mark-read-by-deviceid (mark read)
+      [app-mitm:2026-06-09-settings-sweep]
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "message-record/list?version=v1 covers System+Service+Activity incl. marketing; v2 returns 0 records; device-messages carries source:{siid,piid,value}; all 5 tabs confirmed."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "tencent_video"
+    name: "dreame_third_video_tx"
+    category: "api_endpoint"
+    payload_shape: "POST :13267/dreame-third-video/tx/{user/accesstoken, dev/isDevUser, mgr/dev/getIdentity, dev/getP2PInfo}"
+    semantic: |
+      Tencent IoT Video (XP2P/TRTC) live-view credential fetch chain.
+      [app-mitm:2026-06-09-settings-sweep]
+      All endpoints on eu.iot.dreame.tech:13267/dreame-third-video/tx/:
+        user/accesstoken → {token, userId, expireAt} (video service token)
+        dev/isDevUser   → {isDevUser} (ownership check)
+        mgr/dev/getIdentity → {secretId, secretKey, deviceId, deviceName}
+          (Tencent IoT device credentials — SECRET VALUES REDACTED)
+        dev/getP2PInfo  → {p2pInfo:"XP2P…%<sdkVer>"} (XP2P P2P connect string,
+          Tencent IoT-Video SDK v2.4.49 seen)
+      [app-mitm:2026-06-09-settings-sweep]
+      Media hosts (port 443): iot.cloud.tencent.com, *.trtcube-license.cn (TRTC license).
+      Device feature tag: feature:"video_tx", vendor:"tx" (Tencent).
+      Live-view enable: routed action o=400 {on:true} (fires before cred-fetch;
+      also fires at patrol start for auto-capture). Stop: o=400 {on:false}.
+      [app-mitm:2026-06-09-settings-sweep]
+      The live STREAM is Tencent XP2P P2P / TRTC (UDP device↔app via Tencent
+      relay) — off our HTTP/MQTT relays; no video bytes captured.
+      [app-mitm:2026-06-09-settings-sweep]
+      CRED-FETCH chain decoded: confirmed. STREAM bytes: [UNKNOWN — to capture]
+      (requires Tencent IoT-Video XP2P SDK integration).
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: partial
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    open_questions:
+      - "XP2P stream format: what codec/container does the device produce? H.264 or H.265? Container for HA camera entity?"
+      - "Can the Tencent creds be used with an open-source XP2P client or only the proprietary SDK?"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Tencent live-view cred chain: user/accesstoken → dev/isDevUser → mgr/dev/getIdentity → dev/getP2PInfo; all 4 endpoints confirmed; stream is XP2P P2P off-relay (no bytes captured)."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
