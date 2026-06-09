@@ -143,9 +143,10 @@ so they need an integration-slot or a probe call to observe — not the status t
 **CFG keys (getCFG / setX):**
 | Key | Status | Gap | Validate |
 |---|---|---|---|
-| BP | hypothesized | `BP` semantics still unknown; companion `PATH` **confirmed** as Pathway Obstacle Avoidance master enable 2026-06-09 | CFG-DIFF: create a pathway in app, snapshot getCFG before/after |
+| BP | **confirmed** (2026-06-09) | ~~semantics unknown~~ RESOLVED: `BP{on:bool, day:1-7}` confirmed by app-MITM sweep; `on`=Start-from-Stop-Point, `day`=Stop-Point Term 1–7 days. Read `BP:[1,4]=[on,day]`. See inventory § BP. | no further action needed |
 | DLS | hypothesized | daylight-savings flag, stable 0 | CFG-DIFF across a DST boundary |
-| PRE / PREI | hypothesized | g2408 PRE=[0,0]; not the vacuum 10-elt shape | confirmed-absent shape; encoder over-inflates (see TODO PRE bug) |
+| PRE | **confirmed** (2026-06-09) | ~~g2408 PRE=[0,0]; not the vacuum 10-elt shape~~ RESOLVED: 19-element int array fully decoded by isolated app toggles; all 12 General Mode settings mapped (indices 3/4/5/6/7/9/10/12/13/14/15/16); [1]=map index, [2]=zone index. See inventory § PRE. | no further action needed |
+| PREI | hypothesized | separate from PRE; semantics unknown | CFG-DIFF if seen in reads |
 | AIOBS / OBS | hypothesized | AI-obstacle data blob shape | wait-for-event |
 | CMS[3] | **partial** | unidentified (Link/Garage/MCA10/summary) — -1 always here | needs a unit WITH one of those accessories |
 | IOT, ARM, WINFO, CHECK, RPET | hypothesized | connection-status / alarm / weather / self-check / rain-end-time (`REMOTE` **confirmed** 2026-06-09 as 4G SIM status {activeTime, cardId, expiredTime, leftDays}) | CFG-DIFF or LABEL per feature |

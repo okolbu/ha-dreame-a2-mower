@@ -11452,3 +11452,102 @@ api_endpoints:
         status: verified
         claim: "Tencent live-view cred chain: user/accesstoken → dev/isDevUser → mgr/dev/getIdentity → dev/getP2PInfo; all 4 endpoints confirmed; stream is XP2P P2P off-relay (no bytes captured)."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "push_prefs"
+    name: "message_push_preferences"
+    category: "api_endpoint"
+    payload_shape: "PUT /dreame-message-push/v1/message-set {msgType,msgSwitch,unReadMarkSwitch}; PUT /dreame-messaging/user/message-settings {devShare,devices:[{notify,…}],homeShare,noDisturb,noDisturbFrom,noDisturbTo,…}"
+    semantic: |
+      App-side / account-level push-notification preferences. NOT a mower
+      device CFG surface — N/A for the integration. [app-mitm:2026-06-09-settings-sweep]
+      Two endpoints, both on eu.iot.dreame.tech:13267:
+        PUT /dreame-message-push/v1/message-set
+          {msgType:"system_msg_switch", msgSwitch:bool, unReadMarkSwitch:bool}
+          → response also shows serviceMsgSwitch/other msgTypes for Service/Activity tabs.
+        PUT /dreame-messaging/user/message-settings
+          {devShare:bool, devices:[{notify:bool, unReadMark:bool, share:bool}],
+           homeShare:bool, noDisturb:bool, noDisturbFrom:<h>, noDisturbTo:<h>,
+           devShareUnReadMark:bool}
+      Controls per-device and per-account notification preferences (mute, DND
+      hours, sharing flags). These are app/account push preferences and are
+      orthogonal to the mower's device-side MSG_ALERT setting (which filters
+      which alert categories the mower generates).
+      [app-mitm:2026-06-09-settings-sweep]
+      Not wired in the integration; documented here for completeness.
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "PUT message-set and message-settings are account/app push-pref writes; N/A for mower integration. Both endpoint shapes confirmed."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "account_side_n_a"
+    name: "account_and_region_surfaces"
+    category: "api_endpoint"
+    payload_shape: "N/A (account-level endpoints; not wired in the integration)"
+    semantic: |
+      Account-level and region endpoints captured in the 2026-06-09 app-MITM
+      sweep. All are N/A for the mower integration. [app-mitm:2026-06-09-settings-sweep]
+
+      DEVICE RENAME (account-level, not a mower CFG):
+        POST :13267/dreame-user-iot/iotuserbind/device/rename
+          {deviceCustomName, did, sign, timestamp}
+        → sets account-visible customName (same as listV2 customName).
+        Not a device setting; the integration has no rename action.
+        [app-mitm:2026-06-09-settings-sweep]
+
+      REGION (read-only, account-bound):
+        POST api.link.aliyun.com/living/account/region/get → {region:"eu"} (read only).
+        No region SET/update endpoint exists. Region is fixed at account registration;
+        "changing region" requires re-login to a different regional server via the app.
+        The integration follows the account's region/get result — it cannot write or
+        switch region. [app-mitm:2026-06-09-settings-sweep]
+
+      COUNTRY → REGION MAPPING (app cosmetic; same region for EU countries):
+        POST /dreame-user/v1/set-country {countryCode:"SE"|"NO"|…}
+        → triggers country-keyed re-init (queryUrlByCountryBatch, privacy/by-country,
+          mall tab, device re-list) but does NOT change the Alibaba region.
+        Country→region map from server config: dreame-system/dreame-app/setting/query
+          item euPrivacyCountries = EU-country list → region:"eu-central-1".
+        Confirmed: Norway→Sweden both → region:"eu" unchanged.
+        [app-mitm:2026-06-09-settings-sweep]
+        N/A for integration: country selection is a cosmetic/app preference; the
+        integration is region-agnostic (uses the authenticated region from region/get).
+
+      SMARTHOME HOME/ROOM (vacuum lineage, N/A for mower):
+        POST /dreame-user-iot/smarthome/home/addOrUpdate {homeId, homeName}
+        POST /dreame-user-iot/smarthome/room/addOrUpdate {homeId, rooms:[{roomName, roomTemplateId}]}
+        GET dreame-user-iot/smarthome/home, home/checkRoomUpdate, scene-log/getLog
+        These are vacuum/smarthome family features (room templates Kitchen=5, etc.).
+        The mower does not use rooms; all smarthome endpoints are N/A.
+        [app-mitm:2026-06-09-settings-sweep]
+
+      ROBOT SHARING (deferred — needs target account):
+        GET /dreame-user/v1/query?<email/phone> → account check
+        GET /dreame-user/v1/contacts → saved share contacts
+        POST /dreame-user-iot/iotuserbind/device/sharedUserList → existing shares
+        Actual share/invite POST deferred (needs valid target account, not tested).
+        [app-mitm:2026-06-09-settings-sweep]
+
+      DEVICE UNBIND (DO NOT TEST — destructive):
+        Likely iotuserbind/device/unbind style. Unbinds the device; risks losing
+        cloud-stored maps/sessions. Capture only with a throwaway binding.
+        [app-mitm:2026-06-09-settings-sweep]
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-09"
+      last_seen: "2026-06-09"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device rename is account-level (iotuserbind/device/rename); region is read-only (no SET endpoint); country→region cosmetic (NO/SE both stay eu); smarthome home/room is vacuum lineage (N/A for mower). All confirmed N/A for the integration."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
