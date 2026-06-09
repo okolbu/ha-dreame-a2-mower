@@ -1866,3 +1866,5 @@ inventory.yaml (partial status — app-observed, not our-client-verified):
 Deferred captures (PRE OFF/ON diff, SCHDTV3 SET, TASK variants, transient
 obstacle photos, patrol photos) are tracked in
 `docs/research/g2408-app-capture-playbook-2026-06-09.md`.
+
+- 2026-06-09 — App settings-sweep MITM complete; facts promoted to inventory.yaml. See `wire-captures/app-settings-sweep-2026-06-09.md`.
