@@ -264,9 +264,11 @@ Inner: `{"id":N,"did":did,"method":"action|get_properties|set_properties",
 `{"m":"a","p":P,"o":opcode,"d":args}` (routed action). Spot mow live-confirmed:
 `{"m":"a","p":0,"o":103,"d":{"area":[1]}}` → code:0.
 
-**80001 reframe:** returns `code:0` online; the 80001 we attributed to the RPC
-path is asleep/slow-prop-specific. See tools/probes/read_key_probe.py and the
-sendCommand verification (Phase 1 Task 11).
+**80001 reframe [app-observed only — UNVERIFIED on our client]:** the app's
+`device/sendCommand` returned `code:0` online; whether the 80001 we see is
+asleep/slow-prop-specific (vs RPC-inherent) is [UNKNOWN — to capture] — run
+`tools/probes/read_key_probe.py` live against the online mower and compare
+code:0 vs 80001 responses. See also sendCommand verification (Phase 1 Task 11).
 
 ### Our-client path vs the app (2026-06-09)
 

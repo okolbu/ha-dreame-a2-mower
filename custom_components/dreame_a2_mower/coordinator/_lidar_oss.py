@@ -4,7 +4,6 @@ See spec docs/superpowers/specs/2026-05-15-coordinator-decomposition-design.md.
 """
 from __future__ import annotations
 
-import asyncio
 import base64
 import dataclasses
 import json
@@ -99,7 +98,7 @@ def _photo_ts_from_name(name: str) -> int:
     return int(m.group(1)) if m else 0
 
 
-async def fetch_photos_from_summary(cloud, archive, raw_dict, *, sign) -> int:
+def fetch_photos_from_summary(cloud, archive, raw_dict, *, sign) -> int:
     """Fetch every photo_list leaf into the PhotoArchive. Returns count added.
 
     [dreame-app-implementation-guide-2026-06-09.md] photo_list entries are
@@ -627,10 +626,8 @@ class _LidarOssMixin:
         # Album photos (Patrol + AI-obstacle). [dreame-app-implementation-guide-2026-06-09.md]
         try:
             n = await self.hass.async_add_executor_job(
-                lambda: asyncio.run(
-                    fetch_photos_from_summary(
-                        self._cloud, self._photo_archive, raw_dict, sign=self._photo_sign_fn
-                    )
+                lambda: fetch_photos_from_summary(
+                    self._cloud, self._photo_archive, raw_dict, sign=self._photo_sign_fn
                 )
             )
             if n:

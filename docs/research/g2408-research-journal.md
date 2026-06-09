@@ -1858,7 +1858,7 @@ inventory.yaml (partial status — app-observed, not our-client-verified):
   `dreame-eu.oss-eu-central-1/oss/media/000000/oss/<uid>/<did>/ali_dreame/<ts>[_person].jpg`;
   summary `photo_list[]` leaves map 1:1. Resolves the `project_g2408_ai_photo_probe` dead-end.
 - **Backend B = `eu.iot.dreame.tech:13267`** (not `app.dreame.tech`); A/B share host:port;
-  `device/sendCommand` returns `code:0` online (80001 = asleep/slow-prop).
+  `device/sendCommand` returned `code:0` online; 80001=asleep/slow-prop is [UNVERIFIED — to capture].
 - **Spot mow `o=103 d:{area:[1]}`** live-confirmed (corroborates task_envelopes_verified).
 - **Routed-get `t`-key vocab**: MPOS MAPI MAPL MISTA OBS AIOBS PREI RGBPSTA SCHDTV3 REMOTE IOT MITRC.
 - **PRE writable by the app** via `{m:s,t:PRE,d:[19 elems]}`, d[4]=55=height (ON-state only; layout/EdgeMaster-bit open).

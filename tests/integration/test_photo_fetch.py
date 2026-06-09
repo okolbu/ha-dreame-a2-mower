@@ -2,7 +2,6 @@
 
 Tests are HA-free and run against the pure helper directly.
 """
-import asyncio
 from custom_components.dreame_a2_mower.coordinator._lidar_oss import fetch_photos_from_summary
 
 
@@ -23,9 +22,9 @@ def test_fetch_photos_from_summary(tmp_path):
     from custom_components.dreame_a2_mower.archive.photos import PhotoArchive
     arc = PhotoArchive(tmp_path)
     raw = {"photo_list": ["1780512275.jpg", "1780512300_person.jpg"]}
-    n = asyncio.run(fetch_photos_from_summary(
+    n = fetch_photos_from_summary(
         _FakeCloud(), arc, raw, sign=lambda c, k: c.get_interim_file_url(k),
-    ))
+    )
     assert n == 2
     assert arc.count == 2
     assert arc.latest_person().name == "1780512300_person.jpg"
@@ -34,7 +33,7 @@ def test_fetch_photos_from_summary(tmp_path):
 def test_fetch_photos_empty_list(tmp_path):
     from custom_components.dreame_a2_mower.archive.photos import PhotoArchive
     arc = PhotoArchive(tmp_path)
-    n = asyncio.run(fetch_photos_from_summary(
+    n = fetch_photos_from_summary(
         _FakeCloud(), arc, {}, sign=lambda c, k: c.get_interim_file_url(k),
-    ))
+    )
     assert n == 0
