@@ -20,7 +20,12 @@ def _make_coordinator(archive):
 
 
 def _make_album_camera(coordinator):
-    """Construct a DreameA2AlbumPhotoCamera bypassing Camera.__init__."""
+    """Construct a DreameA2AlbumPhotoCamera bypassing Camera.__init__.
+
+    With CoordinatorEntity added to the base, ``__new__`` skips all
+    ``__init__`` calls.  We set ``coordinator`` manually (same value that
+    ``CoordinatorEntity.__init__`` would assign) so the entity methods work.
+    """
     from custom_components.dreame_a2_mower._camera_photos import (
         DreameA2AlbumPhotoCamera,
     )
@@ -33,7 +38,10 @@ def _make_album_camera(coordinator):
 
 
 def _make_person_camera(coordinator):
-    """Construct a DreameA2PersonPhotoCamera bypassing Camera.__init__."""
+    """Construct a DreameA2PersonPhotoCamera bypassing Camera.__init__.
+
+    Same pattern as ``_make_album_camera``.
+    """
     from custom_components.dreame_a2_mower._camera_photos import (
         DreameA2PersonPhotoCamera,
     )
@@ -129,3 +137,45 @@ def test_album_camera_returns_none_when_file_missing(tmp_path):
     coord = _make_coordinator(arc)
     cam = _make_album_camera(coord)
     assert cam._latest_bytes() is None
+
+
+def test_available_is_index_only_not_byte_read(tmp_path):
+    """``available`` must be True based on the index even when the JPEG file
+    has been deleted from disk — proving it does NOT read bytes to decide.
+
+    Protocol:
+    1. Archive a photo (writes both the JPEG and index.json).
+    2. Delete the JPEG file from disk.
+    3. Load a *fresh* PhotoArchive over the same directory (reads index.json
+       only — it never touches the JPEG until ``read_bytes`` is called).
+    4. ``available`` must be True (index entry exists).
+    5. ``_latest_bytes()`` must be None (JPEG is gone → read_bytes returns None).
+
+    This distinguishes index-only availability from byte-read availability.
+    """
+    from custom_components.dreame_a2_mower.archive.photos import PhotoArchive
+
+    # Step 1: archive a photo so index.json is written
+    arc = PhotoArchive(tmp_path)
+    entry = arc.archive(
+        name="1.jpg", unix_ts=1, data=b"\xff\xd8A" + b"0" * 20, is_person=False
+    )
+    assert entry is not None
+
+    # Step 2: delete the JPEG file
+    (arc.root / entry.filename).unlink()
+
+    # Step 3: fresh PhotoArchive reads only index.json (no JPEG touch)
+    fresh_arc = PhotoArchive(tmp_path)
+    coord = _make_coordinator(fresh_arc)
+    cam = _make_album_camera(coord)
+
+    # Step 4: available is True — index still has the entry
+    assert cam.available is True, (
+        "available should be True based on the index entry, not require the JPEG"
+    )
+
+    # Step 5: _latest_bytes() is None — JPEG is gone
+    assert cam._latest_bytes() is None, (
+        "_latest_bytes() should return None when the JPEG file is missing"
+    )
