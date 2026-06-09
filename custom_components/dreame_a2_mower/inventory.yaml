@@ -947,6 +947,7 @@ properties:
     value_kind: nested
     observed_shapes:
       - {sig: 'end,start,value', status: unknown}
+      - {sig: 'result,time', status: unknown}
       - {sig: 'text,voice', status: unknown}
       - {sig: 'time,tz', status: unknown}
       - {sig: 'type', status: unknown}
@@ -969,12 +970,17 @@ properties:
       brush_min, robot_min, link_module_min]} — discriminated from the 4-bool
       shape by any element > 1 or < 0.
 
+      Shape {result, time}: first seen 2026-06-09 18:17:34 during app-MITM.
+      LEAD: matches PIN read response shape from the findings doc — m:g t:'PIN'
+      → {result(0=ok), time(lockout_ms)}. [UNKNOWN — to verify by correlating
+      the 18:17:34 capture with PIN-read activity in the MITM log]
+
       Detail in s2p51_shapes section (Task 11). Confirmed 2026-04-17 through
       2026-04-30 via live toggle testing.
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-09"
       decoded: confirmed
     references:
       integration_code: "custom_components/dreame_a2_mower/protocol/config_s2p51.py"
