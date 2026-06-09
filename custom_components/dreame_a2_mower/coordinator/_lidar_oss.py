@@ -93,6 +93,44 @@ def merge_mow_type_fields(raw_dict: dict, *, mode: int, start_mode: int) -> None
         raw_dict["start_mode_label"] = sm
 
 
+def _photo_ts_from_name(name: str) -> int:
+    import re
+    m = re.match(r"(\d{9,11})", name)
+    return int(m.group(1)) if m else 0
+
+
+async def fetch_photos_from_summary(cloud, archive, raw_dict, *, sign) -> int:
+    """Fetch every photo_list leaf into the PhotoArchive. Returns count added.
+
+    [dreame-app-implementation-guide-2026-06-09.md] photo_list entries are
+    <ts>[_person].jpg leaves; the OSS key is built via protocol/photo_keys.
+    `sign(cloud, key)` is the signing endpoint (get_interim_file_url or
+    get_file_url) — injected so this stays testable and so the live-confirmed
+    endpoint can be swapped in. Cloud I/O here is synchronous; callers run the
+    whole coroutine in an executor job.
+    """
+    from ..protocol.photo_keys import build_photo_object_key, is_person_photo
+    names = raw_dict.get("photo_list") or []
+    if not isinstance(names, list):
+        return 0
+    added = 0
+    for name in names:
+        if not isinstance(name, str) or not name:
+            continue
+        ts = _photo_ts_from_name(name)
+        key = build_photo_object_key(uid=str(cloud._uid), did=str(cloud._did), name=name)
+        url = sign(cloud, key)
+        if not url:
+            continue
+        body = cloud.get_file(url)
+        if not body:
+            continue
+        entry = archive.archive(name=name, unix_ts=ts, data=body, is_person=is_person_photo(name))
+        if entry is not None:
+            added += 1
+    return added
+
+
 def finalize_classify_raw_dict(raw_dict: dict, cloud_segments) -> None:
     """Smooth raw_dict['track'] roles and store cloud_track verbatim.
 
@@ -196,6 +234,11 @@ class _LidarOssMixin:
                 map_id=map_id,
             )
         return self.lidar_archives[map_id]
+
+    @property
+    def photo_archive(self):
+        """Return the shared PhotoArchive (album photos — not map-scoped)."""
+        return self._photo_archive
 
     def list_lidar_archive_entries(self) -> list[tuple[int, Any]]:
         """Aggregate all LiDAR scans across maps, newest first.
@@ -580,6 +623,20 @@ class _LidarOssMixin:
         # archiving. Extracted into _inject_live_map_into_raw_dict so the
         # FINALIZE_INCOMPLETE path can reuse the same logic.
         self._inject_live_map_into_raw_dict(raw_dict)
+
+        # Album photos (Patrol + AI-obstacle). [dreame-app-implementation-guide-2026-06-09.md]
+        try:
+            n = await self.hass.async_add_executor_job(
+                lambda: asyncio.run(
+                    fetch_photos_from_summary(
+                        self._cloud, self._photo_archive, raw_dict, sign=self._photo_sign_fn
+                    )
+                )
+            )
+            if n:
+                LOGGER.info("[PHOTOS] archived %d album photo(s); total=%d", n, self._photo_archive.count)
+        except Exception as ex:  # noqa: BLE001 — photos never break finalize
+            LOGGER.warning("[PHOTOS] fetch failed: %s", ex)
 
         # Recorder-merge safety net (2026-05-16 spec): fill gaps in the
         # battery/wifi sample arrays from HA's recorder history. Idempotent;

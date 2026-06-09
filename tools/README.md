@@ -56,6 +56,12 @@ Read-only Dreame-cloud probe that dumps device properties for inventory verifica
 
 *When:* When verifying an inventory claim against live cloud property values (read-only).
 
+### `python tools/probes/oss_photo_probe.py`  —  👤 owner
+
+Probe get_interim_file_url vs get_file_url for a photo_list OSS key.
+
+*When:* When verifying which OSS signing endpoint resolves a photo key. Read-only.
+
 ### `python tools/probes/probe_add_maintenance_point.py`  —  👤 owner
 
 Probe candidate map-edit payloads for adding a maintenance point.

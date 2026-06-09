@@ -21,6 +21,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from ..archive.lidar import LidarArchive
+from ..archive.photos import PhotoArchive
 from ..archive.session import ArchivedSession, SessionArchive
 from ..wifi_archive_store import WifiArchiveEntry, WifiArchiveStore
 from ..cloud_client import DreameA2CloudClient
@@ -28,6 +29,8 @@ from ..const import (
     CONF_COUNTRY,
     CONF_LIDAR_ARCHIVE_KEEP,
     CONF_LIDAR_ARCHIVE_MAX_MB,
+    CONF_PHOTO_ARCHIVE_KEEP,
+    CONF_PHOTO_ARCHIVE_MAX_MB,
     CONF_PASSWORD,
     CONF_SESSION_ARCHIVE_KEEP,
     CONF_STATION_BEARING_DEG,
@@ -35,6 +38,8 @@ from ..const import (
     CONF_WIFI_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_MAX_MB,
+    DEFAULT_PHOTO_ARCHIVE_KEEP,
+    DEFAULT_PHOTO_ARCHIVE_MAX_MB,
     DEFAULT_SESSION_ARCHIVE_KEEP,
     DEFAULT_WIFI_ARCHIVE_KEEP,
     DOMAIN,
@@ -216,6 +221,19 @@ class _CoreMixin:
         # installs don't wait for the next s99.20 "View LiDAR Map" push). Set
         # True after the first successful 3dmap list (even if empty).
         self._lidar_backfill_done: bool = False
+
+        # Album photos (Patrol + AI-obstacle). [dreame-app-implementation-guide-2026-06-09.md]
+        # Layout: <config>/dreame_a2_mower/photos/  (flat — not per-map; see PhotoArchive docs).
+        photo_dir = Path(hass.config.path(DOMAIN, "photos"))
+        self._photo_archive: PhotoArchive = PhotoArchive(
+            photo_dir,
+            retention=int(opts.get(CONF_PHOTO_ARCHIVE_KEEP, DEFAULT_PHOTO_ARCHIVE_KEEP)),
+            max_bytes=int(opts.get(CONF_PHOTO_ARCHIVE_MAX_MB, DEFAULT_PHOTO_ARCHIVE_MAX_MB)) * 1024 * 1024,
+        )
+        # The signing endpoint for photo OSS keys. Defaults to get_interim_file_url
+        # (the LiDAR path); flip to get_file_url if tools/probes/oss_photo_probe.py
+        # confirms that endpoint resolves media keys. [UNVERIFIED until live run]
+        self._photo_sign_fn = lambda c, k: c.get_interim_file_url(k)
 
         # WiFi archive — persists heatmap objects fetched from OSS.
         # Layout: <config>/dreame_a2_mower/wifi_archive/
