@@ -23,6 +23,9 @@ deliberate, ordered list of app actions to close those gaps so the next session 
 a checklist rather than improvisation. **The capture is ongoing** — close items as
 they land and add new gaps as they appear.
 
+**Results of the 2026-06-09 session** (the one this playbook was written for) are
+condensed in `docs/research/wire-captures/app-settings-sweep-2026-06-09.md`.
+
 Cross-links: extends `docs/research/g2408-capture-procedures.md` (general
 how-to); each entry references the `inventory.yaml open_questions` ID it closes.
 

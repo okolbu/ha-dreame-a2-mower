@@ -164,6 +164,8 @@ The integration's `protocol/cfg_action.py` provides typed wrappers (`get_cfg`,
 > `docs/research/inventory/generated/g2408-canonical.md`. Search for the
 > chapters: "CFG keys", "cfg_individual endpoints", "Routed-action opcodes".
 
+> **2026-06-09 confirmation:** Routed opcode map + PRE/CFG write payloads confirmed by app-MITM sweep — see `inventory.yaml § opcodes / cfg_keys`. [app-mitm:2026-06-09-settings-sweep]
+
 ### URL nuance
 
 The endpoint shape is:

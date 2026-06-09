@@ -216,6 +216,8 @@ every CFG write was being rejected with `r: -3`.
 
 Source for the named-key catalog: ioBroker.dreame v0.3.7 (`OLD/alternatives_archive_2026-05-05/ioBroker.dreame/main.js:884-916, 3506-3565`). Per-key live-verification: `wire-captures/iobroker-write-catalog-2026-05-09.md`.
 
+> **2026-06-09 confirmation:** The full CFG/PRE/routed write dictionary (all key names, d-payload shapes, and PRE index layout) is now confirmed by app-MITM — canonical record in `inventory.yaml § opcodes / cfg_keys`. Wire-capture evidence: `docs/research/wire-captures/app-settings-sweep-2026-06-09.md`. [app-mitm:2026-06-09-settings-sweep]
+
 ## CFG keys still rejected (Phase 3)
 
 `BAT` (list[6] mixed), `REC` (list[9] mixed), `LANG` (list[2] mixed) all

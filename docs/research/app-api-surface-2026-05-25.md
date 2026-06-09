@@ -134,10 +134,16 @@ are a separate test; a shadow *read* can't substitute for them.
    The cloud's retention is short (~10 records, ~6-7 days), so any code
    that fires while we aren't listening can be lost — argues for an
    "MQTT-triggered fetch latest" pattern rather than periodic catch-up.
-   `message-record/list` with `categories ∈ {1..5}` returned `code=0
-   records=0` — that endpoint is not where mower notifications live;
-   System / Sharing / Service / Activity tabs in the app are user-account
-   scoped, not per-device.
+   **CORRECTED 2026-06-09 [app-mitm:2026-06-09-settings-sweep]:** The
+   earlier probe used `/v2/message-record/list`, which returns 0 records.
+   The `/v1/message-record/list?version=v1` endpoint DOES return records:
+   System messages (incl. marketing — e.g. SOMMERSALG summer-sale with
+   Shopify link), Service messages, and Activity. These tabs are
+   user-account-scoped (not per-device), which is why the earlier probe
+   interpreted 0 records as "no mower notifications" — the mower-specific
+   fault/event notifications live in `device-messages` (item 2 above),
+   while the `message-record/list` v1 endpoint carries account-level
+   System/Service/Activity. See `inventory.yaml § message_center`.
 3. Whether writes/actions have an 80001-resilient path (`setDeviceData` /
    `sendCommand` variants) — separate, side-effecting test.
 
