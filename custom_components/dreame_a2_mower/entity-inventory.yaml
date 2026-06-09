@@ -289,6 +289,58 @@ entities:
       context even before a session is picked. Access_token rotated on
       each PNG change for cache-busting (broadcast-render-broadcast pattern).
 
+  - id: "camera.dreame_a2_mower_album_photo"
+    platform: camera
+    class: "DreameA2AlbumPhotoCamera"
+    class_file: "custom_components/dreame_a2_mower/_camera_photos.py:53"
+    device: parent
+    source:
+      wire: "local PhotoArchive populated by coordinator photo_list OSS fetch [dreame-app-implementation-guide-2026-06-09.md]"
+      state_path: "coordinator.photo_archive.latest() → read_bytes(filename)"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-09"
+    verifications:
+      - date: "2026-06-09"
+        status: presumed
+        claim: "Serves JPEG bytes for the most-recently-archived photo (any type) from coordinator.photo_archive.latest(). Returns None (unavailable) when archive is empty. Pull-only — no coordinator listener; archive grows monotonically so availability reflects current state without subscription."
+        evidence: "_camera_photos.py:53-76"
+    references:
+      code: "custom_components/dreame_a2_mower/_camera_photos.py:53"
+    notes: |
+      Parent-device camera. entity_id: camera.dreame_a2_mower_album_photo.
+      unique_id suffix: album_photo (via mower_unique_id).
+      Serves the newest photo regardless of type (person or non-person).
+      Read-only; no access_token rotation (pull-only, no selection event).
+
+  - id: "camera.dreame_a2_mower_person_photo"
+    platform: camera
+    class: "DreameA2PersonPhotoCamera"
+    class_file: "custom_components/dreame_a2_mower/_camera_photos.py:79"
+    device: parent
+    source:
+      wire: "local PhotoArchive populated by coordinator photo_list OSS fetch [dreame-app-implementation-guide-2026-06-09.md]"
+      state_path: "coordinator.photo_archive.latest_person() → read_bytes(filename)"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-09"
+    verifications:
+      - date: "2026-06-09"
+        status: presumed
+        claim: "Serves JPEG bytes for the most-recently-archived photo flagged is_person=True from coordinator.photo_archive.latest_person(). Returns None (unavailable) when no person photos have been archived. Pull-only — no coordinator listener."
+        evidence: "_camera_photos.py:79-97"
+    references:
+      code: "custom_components/dreame_a2_mower/_camera_photos.py:79"
+    notes: |
+      Parent-device camera. entity_id: camera.dreame_a2_mower_person_photo.
+      unique_id suffix: person_photo (via mower_unique_id).
+      Only available when at least one is_person=True photo is archived.
+      Person-detection discriminator: _person.jpg suffix in the photo name
+      [UNVERIFIED — photo naming pattern observed in app but not confirmed
+      from a live g2408 photo_list payload].
+
   # ------------------------------------------------------------------
   # EdgeMaster (s6p2[2]) — parent-level + per-map mirrors
   # ------------------------------------------------------------------

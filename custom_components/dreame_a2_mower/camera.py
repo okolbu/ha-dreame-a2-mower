@@ -24,6 +24,10 @@ from ._camera_wifi import (
     DreameA2WifiSelectedCamera,
     DreameA2WifiPerMapCamera,
 )
+from ._camera_photos import (
+    DreameA2AlbumPhotoCamera,
+    DreameA2PersonPhotoCamera,
+)
 from ._camera_views import (
     LidarPcdDownloadView,
     LidarSelectedPcdView,
@@ -67,5 +71,9 @@ async def async_setup_entry(
     # map_id equals the camera's map_id.
     for map_id in sorted(coordinator.cloud_state.maps_by_id.keys()):
         entities.append(DreameA2WifiPerMapCamera(coordinator, map_id))
+
+    # Album photo cameras — latest overall photo + latest person detection.
+    entities.append(DreameA2AlbumPhotoCamera(coordinator))
+    entities.append(DreameA2PersonPhotoCamera(coordinator))
 
     async_add_entities(entities)
