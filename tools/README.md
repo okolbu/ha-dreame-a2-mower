@@ -56,6 +56,12 @@ Read-only Dreame-cloud probe that dumps device properties for inventory verifica
 
 *When:* When verifying an inventory claim against live cloud property values (read-only).
 
+### `python tools/probes/lidar_parity_probe.py`  —  👤 owner
+
+List 3dmap OBJ objects, fetch newest, decode PCD header, print name/bytes/point-count vs app reference.
+
+*When:* When checking whether our OBJ-list 3dmap object matches the dense PCD the app renders.
+
 ### `python tools/probes/oss_photo_probe.py`  —  👤 owner
 
 Probe get_interim_file_url vs get_file_url for a photo_list OSS key.
@@ -79,6 +85,12 @@ Probe candidate cruise-to-point command payload shapes on the live g2408.
 Probe whether CFG.PRE is writable on the g2408 vs cloud-cache-only.
 
 *When:* When testing whether CFG.PRE (mowing efficiency) is device-writable. WRITES to the live device.
+
+### `python tools/probes/read_key_probe.py`  —  👤 owner
+
+Issue routed-get for each app t-key and pretty-print raw responses inline with timestamps.
+
+*When:* When mapping app t-key vocabulary to Phase 2 entity values. Read-only.
 
 ## `state_machine/`
 
