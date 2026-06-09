@@ -374,12 +374,20 @@ entities:
     write_path: read-only
     status:
       seen_working: true
-      last_verified: "2026-05-14"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-14"
         status: verified
         claim: "byte[2] toggles cleanly Off→On→Off on map1, then On→Off→On on map2 after map switch"
         evidence: "probe_log_20260510_190812.jsonl@20:10:48 + 20:11:14 + 20:11:50 + 20:12:34"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (PRE[2] byte in s6.2 payload) but intentionally NOT wired;
+          control_mode remains read_only_noop until a feature phase wires and
+          live-verifies the write. Whether g2408 firmware honors a PRE write
+          for edgemaster is a separate live-verify question for the feature phase."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "s6p2"
       code: "custom_components/dreame_a2_mower/switch.py:1259"
@@ -777,12 +785,20 @@ entities:
     write_path: read-only
     status:
       seen_working: true
-      last_verified: "2026-05-15"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-15"
         status: verified
         claim: "added as the per-map replacement for the removed parent-level select.mowing_efficiency; reads PRE shadow symmetric to DreameA2MapEdgemasterSwitch"
         evidence: "tests/integration/test_pre_shadow_sensors.py::test_map_mowing_efficiency_select_returns_*"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (PRE[1] byte in s6.2 payload) but intentionally NOT wired;
+          control_mode remains read_only_noop until a feature phase wires and
+          live-verifies the write. Whether g2408 firmware honors a PRE write
+          for this field is a separate live-verify question for the feature phase."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "s6p2"
       docs: "docs/research/g2408-protocol.md § s6.2"
@@ -811,12 +827,19 @@ entities:
     write_path: "setDeviceData chunked-batch (cloud-cache-only on g2408 — device firmware does NOT apply; see docs/research/wire-captures/settings-surface-cloud-only-2026-05-09.md)"
     status:
       seen_working: false
-      last_verified: "2026-05-09"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-09"
         status: verified
         claim: "HA write succeeds at HTTP layer and updates cloud cache, but device firmware doesn't apply; Dreame app shows stale device-real value"
         evidence: "docs/research/wire-captures/settings-surface-cloud-only-2026-05-09.md"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.edgeMowingAuto via setDeviceData chunked-batch) but intentionally
+          NOT wired; control_mode remains read_only_confirmed until a feature phase
+          wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       code: "custom_components/dreame_a2_mower/switch.py:854"
       docs: "docs/research/wire-captures/settings-surface-cloud-only-2026-05-09.md"
@@ -838,12 +861,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field=\"edgeMowingSafe\", value=int(bool)) via _settings_switch_optimistic_write (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads edgeMowingSafe from cloud_state.settings.by_map_id_canonical, writes via coordinator.write_settings(map_id, field='edgeMowingSafe', value=0/1). Wiring read from switch_global.py:717 + coordinator/_writes.py:185; not re-confirmed live this pass."
         evidence: "switch_global.py:738-763 (is_on + async_turn_on/off → _settings_switch_optimistic_write); coordinator/_writes.py:185 (write_settings)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.edgeMowingSafe via setDeviceData chunked-batch) but intentionally
+          NOT wired; control_mode remains read_only_confirmed until a feature phase
+          wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/switch_global.py:717"
@@ -865,12 +895,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field=\"edgeMowingObstacleAvoidance\", value=int(bool)) via _settings_switch_optimistic_write (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads edgeMowingObstacleAvoidance from cloud_state.settings.by_map_id_canonical, writes via coordinator.write_settings(map_id, field='edgeMowingObstacleAvoidance', value=0/1). Wiring read from switch_global.py:766 + coordinator/_writes.py:185; not re-confirmed live this pass."
         evidence: "switch_global.py:787-812 (is_on + async_turn_on/off → _settings_switch_optimistic_write); coordinator/_writes.py:185 (write_settings)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.edgeMowingObstacleAvoidance via setDeviceData chunked-batch) but
+          intentionally NOT wired; control_mode remains read_only_confirmed until a
+          feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/switch_global.py:766"
@@ -892,12 +929,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field=\"obstacleAvoidanceEnabled\", value=int(bool)) via _settings_switch_optimistic_write (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads obstacleAvoidanceEnabled from cloud_state.settings.by_map_id_canonical, writes via coordinator.write_settings(map_id, field='obstacleAvoidanceEnabled', value=0/1). Wiring read from switch_global.py:815 + coordinator/_writes.py:185; not re-confirmed live this pass."
         evidence: "switch_global.py:836-861 (is_on + async_turn_on/off → _settings_switch_optimistic_write); coordinator/_writes.py:185 (write_settings)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.obstacleAvoidanceEnabled via setDeviceData chunked-batch) but
+          intentionally NOT wired; control_mode remains read_only_confirmed until a
+          feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/switch_global.py:815"
@@ -920,12 +964,19 @@ entities:
     write_path: "coordinator.write_ai_human_enabled(bool) → cloud_client.write_chunked_key(\"AI_HUMAN\", \"\\\"true\\\"\"/\"\\\"false\\\"\") (coordinator/_writes.py:116)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads cloud_state.ai_human_enabled, writes via coordinator.write_ai_human_enabled(bool) which calls write_chunked_key('AI_HUMAN', '\"true\"'/'\"false\"'). Wiring read from switch_global.py:864 + coordinator/_writes.py:116; not re-confirmed live this pass."
         evidence: "switch_global.py:880-884 (is_on → cs.ai_human_enabled); switch_global.py:892-935 (async_turn_on/off → coord.write_ai_human_enabled); coordinator/_writes.py:116-135 (write_ai_human_enabled)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (write_chunked_key AI_HUMAN {\"0\":\"true\"/\"false\"}) but intentionally
+          NOT wired; control_mode remains read_only_pending until a feature phase
+          wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud AI_HUMAN (no inventory.yaml entry for AI_HUMAN chunked-batch key)"
       code: "custom_components/dreame_a2_mower/switch_global.py:864"
@@ -952,12 +1003,19 @@ entities:
     write_path: "setDeviceData chunked-batch (cloud-cache-only — same class as edgeMowingAuto)"
     status:
       seen_working: false
-      last_verified: "2026-05-14"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-14"
         status: presumed
         claim: "field exists in cloud SETTINGS and accepts values 0/1, but Dreame app shows no corresponding toggle; behavioural effect on device unknown"
         evidence: "docs/research/cloud-discovery/2026-05-08-empty-list-batch-dump.json (entry0/map0=0, entry0/map1=0, entry1/map0=1, entry1/map1=1)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.edgeMowingWalkMode via setDeviceData chunked-batch) but intentionally
+          NOT wired; control_mode remains read_only_confirmed until a feature phase
+          wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       code: "custom_components/dreame_a2_mower/select.py:1706"
       docs: "docs/TODO.md § edgeMowingWalkMode — identify the app-side setting"
@@ -1156,7 +1214,7 @@ entities:
     write_path: read-only
     status:
       seen_working: true
-      last_verified: "2026-05-16"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-16"
         status: retracted
@@ -1180,6 +1238,14 @@ entities:
         status: presumed
         claim: "Ported from code 2026-05-31: descriptor-driven base class; reads via value_fn(coordinator.data), writes via coordinator.write_setting(cfg_key, wire_value). Wiring read from number.py:250 + coordinator/_writes.py; not re-confirmed live this pass."
         evidence: "number.py:250 (class body), number.py:128 (NUMBERS descriptor list), coordinator/_writes.py:258 (write_setting)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (CFG REC[1] via write_chunked_key) but intentionally NOT wired;
+          control_mode remains read_only_noop until a feature phase wires and
+          live-verifies the write. Whether g2408 firmware honors a REC write
+          for this field is a separate live-verify question for the feature phase."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "inventory.yaml id=REC"
       code: "custom_components/dreame_a2_mower/number.py:250"
@@ -1218,7 +1284,16 @@ entities:
     write_path: "coordinator.write_setting(desc.cfg_key, wire_value); read-only when cfg_key is None"
     status:
       seen_working: false
-      last_verified: "2026-06-04"
+      last_verified: "2026-06-09"
+    verifications:
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write paths captured via 2026-06-09 app-MITM sweep for
+          the read-only keys in this entry: auto_recharge_battery_pct and
+          resume_battery_pct (both CFG.BAT list[6]) but intentionally NOT wired;
+          control_mode remains read_only_confirmed for each until a feature phase
+          wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     notes: >
       Config-driven DreameA2Number instances from the NUMBERS descriptor tuple
       (number.py). VOL=volume is a working-9 CFG key (device-applied); the two
@@ -1694,12 +1769,19 @@ entities:
     write_path: "coordinator.write_setting('WRP', {value, time}) via DreameA2SettingSelect.async_select_option → coordinator/_writes.py:258"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads MowerState.rain_protection_resume_hours via SETTING_SELECTS descriptor value_fn, writes WRP full-list via coordinator.write_setting('WRP', {value, time}). Read from select_global.py:253-275 + 343-355; not re-confirmed live."
         evidence: "select_global.py:343-356 (WRP descriptor); select_global.py:488-522 (async_select_option → write_setting); _build_wrp_resume_hours in select_global.py:253"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (CFG WRP {value, time}) but intentionally NOT wired;
+          control_mode remains read_only_pending until a feature phase wires and
+          live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "WRP"
       code: "custom_components/dreame_a2_mower/select_global.py:439"
@@ -1748,12 +1830,19 @@ entities:
     write_path: "coordinator.write_setting('LANG', {type:'text', value:<idx>}) via DreameA2SettingSelect.async_select_option → coordinator/_writes.py:258"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads MowerState.language_text_idx via SETTING_SELECTS descriptor, writes LANG {type:'text', value:idx} via coordinator.write_setting. Read from select_global.py:391-412 + coordinator/_writes.py:258; not re-confirmed live."
         evidence: "select_global.py:391-412 (lcd_language descriptor); select_global.py:207-222 (_build_text_language wire builder)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (CFG LANG {type:'text', value:<idx>}) but intentionally NOT wired;
+          control_mode remains read_only_pending until a feature phase wires and
+          live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "LANG"
       code: "custom_components/dreame_a2_mower/select_global.py:439"
@@ -1775,12 +1864,19 @@ entities:
     write_path: "coordinator.write_setting('LANG', {type:'voice', value:<idx>}) via DreameA2SettingSelect.async_select_option → coordinator/_writes.py:258"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads MowerState.language_voice_idx via SETTING_SELECTS descriptor, writes LANG {type:'voice', value:idx} via coordinator.write_setting. Read from select_global.py:417-431 + coordinator/_writes.py:258; not re-confirmed live."
         evidence: "select_global.py:417-431 (voice_language descriptor); select_global.py:234-241 (_build_voice_language wire builder)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (CFG LANG {type:'voice', value:<idx>}) but intentionally NOT wired;
+          control_mode remains read_only_pending until a feature phase wires and
+          live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "LANG"
       code: "custom_components/dreame_a2_mower/select_global.py:439"
@@ -1996,12 +2092,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field='mowingDirection', value=idx*90) via _settings_select_optimistic_write (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads mowingDirection from cloud_state.settings.by_map_id_canonical[map_id], converts to 0°/90°/180°/270° label; writes via coordinator.write_settings(map_id, field='mowingDirection', value=idx*90). Read from select_map_settings.py:388-445 + coordinator/_writes.py:185; not re-confirmed live."
         evidence: "select_map_settings.py:404-406 (unique_id: map_unique_id(coord, map_id, 'settings_mowing_direction')); select_map_settings.py:415-428 (current_option); select_map_settings.py:436-445 (async_select_option → _settings_select_optimistic_write)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.mowingDirection via setDeviceData chunked-batch) but intentionally
+          NOT wired; control_mode remains read_only_confirmed until a feature phase
+          wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       code: "custom_components/dreame_a2_mower/select_map_settings.py:388"
     notes: |
@@ -2021,12 +2124,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field='mowingDirectionMode', value=idx) via _settings_select_optimistic_write (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads mowingDirectionMode from cloud_state.settings.by_map_id_canonical[map_id], maps 0/1/2 to Striped/Crisscross/Chequerboard; writes via coordinator.write_settings(map_id, field='mowingDirectionMode', value=idx). Read from select_map_settings.py:448-505 + coordinator/_writes.py:185; not re-confirmed live."
         evidence: "select_map_settings.py:464-466 (unique_id: map_unique_id(coord, map_id, 'settings_mowing_direction_mode')); select_map_settings.py:475-489 (current_option); select_map_settings.py:497-505 (async_select_option → _settings_select_optimistic_write)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.mowingDirectionMode via setDeviceData chunked-batch) but intentionally
+          NOT wired; control_mode remains read_only_confirmed until a feature phase
+          wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       code: "custom_components/dreame_a2_mower/select_map_settings.py:448"
     notes: |
@@ -2586,12 +2696,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field='mowingHeight', value=int(cm)) via _settings_optimistic_write (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads mowingHeight from cloud_state.settings.by_map_id_canonical[map_id], range 3-7 cm step 1; writes via coordinator.write_settings(map_id, field='mowingHeight', value=int(cm)). Wire unit likely mm (s6p2[0] is mm) — needs live validation before reducing step to 0.5. Read from number.py:390-410 + _PerMapSettingsNumberBase:380-387; not re-confirmed live."
         evidence: "number.py:390-410 (class attrs + _SETTING_FIELD='mowingHeight'); number.py:380-387 (async_set_native_value → _settings_optimistic_write)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.mowingHeight via setDeviceData chunked-batch; also known as
+          PRE[4] in s6.2 payload) but intentionally NOT wired; control_mode remains
+          read_only_confirmed until a feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/number.py:390"
@@ -2616,12 +2733,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field='cutterPosition', value=int) via _settings_optimistic_write (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads cutterPosition from cloud_state.settings.by_map_id_canonical[map_id], range 0-3 step 1 (no unit); writes via coordinator.write_settings(map_id, field='cutterPosition', value=int). Read from number.py:412-422; not re-confirmed live."
         evidence: "number.py:412-422 (class attrs + _SETTING_FIELD='cutterPosition'); number.py:380-387 (async_set_native_value → _settings_optimistic_write)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.cutterPosition via setDeviceData chunked-batch) but intentionally
+          NOT wired; control_mode remains read_only_confirmed until a feature phase
+          wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/number.py:412"
@@ -2643,12 +2767,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field='cutterPositionHeight', value=int(cm)) via _settings_optimistic_write (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads cutterPositionHeight from cloud_state.settings.by_map_id_canonical[map_id], range 0-5 cm step 1; writes via coordinator.write_settings(map_id, field='cutterPositionHeight', value=int(cm)). Read from number.py:424-434; not re-confirmed live."
         evidence: "number.py:424-434 (class attrs + _SETTING_FIELD='cutterPositionHeight'); number.py:380-387 (async_set_native_value → _settings_optimistic_write)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.cutterPositionHeight via setDeviceData chunked-batch) but
+          intentionally NOT wired; control_mode remains read_only_confirmed until a
+          feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/number.py:424"
@@ -2669,12 +2800,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field='edgeMowingNum', value=int) via _settings_optimistic_write (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads edgeMowingNum from cloud_state.settings.by_map_id_canonical[map_id], range 1-3 step 1 (number of edge passes); writes via coordinator.write_settings(map_id, field='edgeMowingNum', value=int). Read from number.py:437-447; not re-confirmed live."
         evidence: "number.py:437-447 (class attrs + _SETTING_FIELD='edgeMowingNum'); number.py:380-387 (async_set_native_value → _settings_optimistic_write)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.edgeMowingNum via setDeviceData chunked-batch) but intentionally
+          NOT wired; control_mode remains read_only_confirmed until a feature phase
+          wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/number.py:437"
@@ -2696,12 +2834,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field='obstacleAvoidanceHeight', value=int(cm)) via _settings_optimistic_write (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads obstacleAvoidanceHeight from cloud_state.settings.by_map_id_canonical[map_id], range 0-30 cm step 1; writes via coordinator.write_settings(map_id, field='obstacleAvoidanceHeight', value=int(cm)). Read from number.py:449-459; not re-confirmed live."
         evidence: "number.py:449-459 (class attrs + _SETTING_FIELD='obstacleAvoidanceHeight'); number.py:380-387 (async_set_native_value → _settings_optimistic_write)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.obstacleAvoidanceHeight via setDeviceData chunked-batch) but
+          intentionally NOT wired; control_mode remains read_only_confirmed until a
+          feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/number.py:449"
@@ -2723,12 +2868,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field='obstacleAvoidanceDistance', value=int(cm)) via _settings_optimistic_write (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads obstacleAvoidanceDistance from cloud_state.settings.by_map_id_canonical[map_id], range 0-30 cm step 1; writes via coordinator.write_settings(map_id, field='obstacleAvoidanceDistance', value=int(cm)). Read from number.py:462-472; not re-confirmed live."
         evidence: "number.py:462-472 (class attrs + _SETTING_FIELD='obstacleAvoidanceDistance'); number.py:380-387 (async_set_native_value → _settings_optimistic_write)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.obstacleAvoidanceDistance via setDeviceData chunked-batch) but
+          intentionally NOT wired; control_mode remains read_only_confirmed until a
+          feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/number.py:462"
@@ -2750,12 +2902,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field='obstacleAvoidanceSensitivity', value=int) via _settings_optimistic_write (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads obstacleAvoidanceSensitivity from cloud_state.settings.by_map_id_canonical[map_id], range 1-3 step 1 (no unit); writes via coordinator.write_settings(map_id, field='obstacleAvoidanceSensitivity', value=int). Read from number.py:475-485; not re-confirmed live."
         evidence: "number.py:475-485 (class attrs + _SETTING_FIELD='obstacleAvoidanceSensitivity'); number.py:380-387 (async_set_native_value → _settings_optimistic_write)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.obstacleAvoidanceSensitivity via setDeviceData chunked-batch) but
+          intentionally NOT wired; control_mode remains read_only_confirmed until a
+          feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/number.py:475"
@@ -2782,12 +2941,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field='obstacleAvoidanceAi', value=new_bitmask) via _AiRecognitionBitSwitch._toggle — read-modify-write on the bitmask (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads obstacleAvoidanceAi bitmask bit 0 (_AI_HUMANS_BIT=1) from cloud_state.settings.by_map_id_canonical; writes new bitmask via coordinator.write_settings(map_id, field='obstacleAvoidanceAi', value=new). Optimistic MowerState.settings_obstacle_avoidance_ai update + rollback on failure. Read from switch_global.py:937-948 + _switch_base.py:190-215; not re-confirmed live."
         evidence: "switch_global.py:937-948 (_BIT=_AI_HUMANS_BIT=1, translation_key='ai_recognition_humans'); _switch_base.py:175-182 (is_on → raw & _BIT); _switch_base.py:190-215 (_toggle → write_settings)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.obstacleAvoidanceAi bit 0 via setDeviceData chunked-batch) but
+          intentionally NOT wired; control_mode remains read_only_confirmed until a
+          feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/switch_global.py:937"
@@ -2811,12 +2977,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field='obstacleAvoidanceAi', value=new_bitmask) via _AiRecognitionBitSwitch._toggle — read-modify-write on the bitmask (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads obstacleAvoidanceAi bitmask bit 1 (_AI_ANIMALS_BIT=2) from cloud_state.settings.by_map_id_canonical; writes new bitmask via coordinator.write_settings(map_id, field='obstacleAvoidanceAi', value=new). Read from switch_global.py:950-961 + _switch_base.py:190-215; not re-confirmed live."
         evidence: "switch_global.py:950-961 (_BIT=_AI_ANIMALS_BIT=2, translation_key='ai_recognition_animals'); _switch_base.py:175-182 (is_on → raw & _BIT); _switch_base.py:190-215 (_toggle → write_settings)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.obstacleAvoidanceAi bit 1 via setDeviceData chunked-batch) but
+          intentionally NOT wired; control_mode remains read_only_confirmed until a
+          feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/switch_global.py:950"
@@ -2838,12 +3011,19 @@ entities:
     write_path: "coordinator.write_settings(map_id, field='obstacleAvoidanceAi', value=new_bitmask) via _AiRecognitionBitSwitch._toggle — read-modify-write on the bitmask (cloud-cache-only on g2408)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: reads obstacleAvoidanceAi bitmask bit 2 (_AI_OBJECTS_BIT=4) from cloud_state.settings.by_map_id_canonical; writes new bitmask via coordinator.write_settings(map_id, field='obstacleAvoidanceAi', value=new). Read from switch_global.py:963-974 + _switch_base.py:190-215; not re-confirmed live."
         evidence: "switch_global.py:963-974 (_BIT=_AI_OBJECTS_BIT=4, translation_key='ai_recognition_objects'); _switch_base.py:175-182 (is_on → raw & _BIT); _switch_base.py:190-215 (_toggle → write_settings)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write path captured via 2026-06-09 app-MITM sweep
+          (SETTINGS.obstacleAvoidanceAi bit 2 via setDeviceData chunked-batch) but
+          intentionally NOT wired; control_mode remains read_only_confirmed until a
+          feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/switch_global.py:963"
@@ -2895,12 +3075,28 @@ entities:
     write_path: "coordinator.write_setting(desc.cfg_key, wire_value) where wire_value = desc.build_value_fn(state, enabled) if set, else int(enabled); read-only when cfg_key is None"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-09"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: DreameA2Switch.is_on = entity_description.value_fn(coordinator.data); async_turn_on/off calls coordinator.write_setting(desc.cfg_key, wire_value) with optional field_updates_fn for optimistic MowerState update; logs warning + no-ops when cfg_key is None. Read from _switch_base.py:55-141 + switch.py; not re-confirmed live this pass."
         evidence: "_switch_base.py:78-79 (is_on → value_fn(coordinator.data)); _switch_base.py:98-141 (_async_set_value → write_setting); switch.py:92 (SWITCHES descriptor instantiation)"
+      - date: "2026-06-09"
+        status: verified
+        claim: "Device write paths captured via 2026-06-09 app-MITM sweep for all
+          read-only keys in this entry: dnd (CFG.DND {value, time:[start,end]}),
+          low_speed_at_night (CFG.LOW {value, time:[start,end]}),
+          custom_charging_period (CFG.BAT list[6]), rain_protection (CFG.WRP {value,
+          time}), led_period (CFG.LIT[0]), led_in_standby (CFG.LIT[3]),
+          led_in_working (CFG.LIT[4]), led_in_charging (CFG.LIT[5]),
+          led_in_error (CFG.LIT[6]), human_presence_alert (CFG.REC[0]).
+          All intentionally NOT wired; control_mode remains as-is (see
+          control_mode_by_key) until a feature phase wires and live-verifies each
+          write. For the REC-backed keys (led_* and human_presence_alert) the
+          LIT/REC list-reconstruct problem must be solved before writing safely;
+          whether g2408 firmware honors writes to these fields is a separate
+          live-verify question for the feature phase."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "varies — see notes for per-key CFG surfaces"
       code: "custom_components/dreame_a2_mower/_switch_base.py:55"
