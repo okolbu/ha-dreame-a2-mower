@@ -4571,7 +4571,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
-      last_seen: "2026-06-03"
+      last_seen: "2026-06-09"
       decoded: confirmed
     verifications:
       - date: "2026-06-03"
@@ -4590,11 +4590,22 @@ cfg_keys:
           BAT/LIT/REC/LANG. The prior "no write surface identified" was
           extrapolation; this is the first direct evidence on the PRE surface.
         evidence: "docs/research/wire-captures/pre-write-r3-2026-06-03.md (tools/probes/probe_pre_write.py --probe; CFG.VER=816 before)"
+      - date: "2026-06-09"
+        status: partial
+        claim: >-
+          App writes PRE via action(siid:2,aiid:50) {"m":"s","t":"PRE","d":[...]}
+          with a 19-element array, ON-state captured
+          d=[0,0,0,0,55,1,8,1,0,1,1,2,1,20,10,7,1,2,0]; d[4]=55 = mowing height
+          5.5cm. Returned code:0 app-side.
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
     references:
       apk: "ioBroker.dreame/apk.md §setX PRE"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
       wire_capture: "docs/research/wire-captures/pre-write-r3-2026-06-03.md"
+    open_questions:
+      - "pre-layout: Reconcile the app's 19-element PRE array (height at index 4) vs the integration's 10-element builder (height at index 2). Capture a 2nd PRE SET to map every index."
+      - "pre-edgemaster-bit: Locate the EdgeMaster bit by diffing an OFF vs ON PRE write (only ON captured). Then confirm m:s t:PRE returns code:0 on OUR client (our recorded r=-3 may have been a different path/payload)."
 
   - id: "PROT"
     name: "navigation_path"
@@ -9613,16 +9624,12 @@ session_summary_fields:
       field. Photo timestamps fall inside the auto-capture-ON point's in-place
       rotation window, so they double as the per-point auto-capture evidence.
 
-      The photo BYTES are not yet retrievable: the filenames carry no path and are
-      NOT relative to the summary object — both getDownloadUrl and
-      getOss1dDownloadUrl return OSS NoSuchKey for the bare leaf, the did-prefixed
-      leaf, the no-extension leaf, and the summary-naming-mirror leaf in the
-      summary's own Aliyun directory (ruled out 2026-06-03). The leaf IS accepted
-      by the separate 479D Xiaomi-FDS bucket (signed URL host
-      awsde0.fds.api.xiaomi.com, key oss/479D/<uid>/<did>/<leaf>) but Object Not
-      Found at the subpaths tried. No list endpoint exists (aiphoto/list,
-      obstacle/photo/list, iotuserdata/aiObstacle/list all 404). Exact FDS subpath
-      needs app-capture or APK analysis. See o107 + project_g2408_ai_photo_probe.
+      As of 2026-06-03 the photo bytes were believed unreachable (479D/FDS bucket
+      hypothesis). App-MITM capture 2026-06-09 resolved this: photos ARE in the
+      dreame-eu OSS bucket, not 479D. The correct key layout is
+      oss/media/000000/oss/<uid>/<did>/ali_dreame/<unix_ts>[_person].jpg, where
+      the photo_list[] stems map 1:1 to these keys. See the 2026-06-09 partial
+      verification below and dreame-app-implementation-guide-2026-06-09.md §4.
     status:
       seen_on_wire: false
       decoded: partial
@@ -9633,6 +9640,24 @@ session_summary_fields:
         status: verified
         claim: "photo_list=[\"1780512275.jpg\",\"1780512296.jpg\",\"1780512302.jpg\"] on the mode=107 patrol; stems are UNIX-sec UTC matching point-1's auto-capture-ON rotation window (20:44:35/:56/20:45:02 local); point-2 (capture OFF) produced none. Photo bytes not retrievable — bare leaf is NoSuchKey in the summary's Aliyun dir; likely in the 479D Xiaomi-FDS bucket, subpath unknown."
         evidence: "summary photo_list field + getOss1dDownloadUrl NoSuchKey on ali_dreame/2026/06/03/BM169439/1780512275.jpg (2026-06-03)"
+      - date: "2026-06-09"
+        status: partial
+        claim: >-
+          Photos ARE reachable. Album (Patrol + AI-obstacle) photos live in
+          dreame-eu.oss-eu-central-1 at
+          oss/media/000000/oss/<uid>/<did>/ali_dreame/<unix_ts>[_person].jpg;
+          the .0550.json summary's photo_list[] leaves map 1:1 to <ts>.jpg.
+          _person.jpg = person/guard detection variant.
+        evidence: "dreame-app-implementation-guide-2026-06-09.md"
+      - date: "2026-06-09"
+        status: retracted
+        claim: "Album photos are reachable via the dreame-eu OSS bucket"
+        retracts: "Photo bytes not retrievable — bare leaf is NoSuchKey in the summary's Aliyun dir; likely in the 479D Xiaomi-FDS bucket, subpath unknown."
+        reason: "App capture shows photos in the SAME OSS bucket the integration already fetches LiDAR PCD from."
+    open_questions:
+      - "transient-obstacle-photo-api: The transient session-obstacle photos (live-map clickable icons that die after the session) use a different, uncaptured API — no real mow ran. Capture during a real obstacle-hitting mow."
+      - "patrol-photo-bucket: Confirm patrol photos land in the same ali_dreame/<ts>.jpg album bucket as AI-obstacle photos."
+      - "aiobs-photo-index: The pre-signed photo-index call (returns the album URL set) was not on HTTPS; likely a sendCommand t=AIOBS read or MQTT event (see the AIOBS inventory entry). Not needed for Phase 1 (photo_list suffices)."
 
   - id: "summary_photo_detected"
     key_path: "photo_detected"
