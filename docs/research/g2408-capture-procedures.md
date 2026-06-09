@@ -12,6 +12,12 @@ For the saga of how each slot got figured out see
 `docs/research/g2408-research-journal.md`.
 For open work see `docs/TODO.md`.
 
+> **App-side write/photo captures:** for the specific in-app actions that
+> reveal write formats and photo APIs we don't yet have (schedule SET, PRE
+> OFF/ON diff, TASK variants, real-mow obstacle photos, patrol photos), see
+> [g2408-app-capture-playbook-2026-06-09.md](g2408-app-capture-playbook-2026-06-09.md).
+> That doc maps each gap to the exact app action and the inventory `open_questions` it closes.
+
 ## Trigger types
 
 | Type | Meaning |

@@ -2687,6 +2687,7 @@ actions:
     open_questions:
       - "Direct action(5,1) consistently returns 80001; routed path via s2a50
          o:100 is the confirmed working path."
+      - "task-variant-params: Capture app TASK starts (all-areas o=100 / edge o=101 / zone o=102 / pause / resume / dock o=6 / stop) to confirm params vs our builders [UNKNOWN — to capture]."
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)"]
       integration_code: "custom_components/dreame_a2_mower/mower/actions.py:195"
@@ -4606,6 +4607,7 @@ cfg_keys:
     open_questions:
       - "pre-layout: Reconcile the app's 19-element PRE array (height at index 4) vs the integration's 10-element builder (height at index 2). Capture a 2nd PRE SET to map every index."
       - "pre-edgemaster-bit: Locate the EdgeMaster bit by diffing an OFF vs ON PRE write (only ON captured). Then confirm m:s t:PRE returns code:0 on OUR client (our recorded r=-3 may have been a different path/payload)."
+      - "cfg-write-path: Confirm the app uses the same device/sendCommand path (code:0) for CFG writes (height/RGBPSTA/notifications/rain/DND), a cleaner route than our 80001-prone path [UNKNOWN — to capture]."
 
   - id: "PROT"
     name: "navigation_path"
@@ -5400,6 +5402,7 @@ cfg_individual:
     open_questions:
       - "Decode the SCHDTV3 GET response shape (schedule list structure)."
       - "Capture a SCHDTV3 SET (add/edit a schedule with relays up) to get the write payload shape — GET only was observed in app-MITM 2026-06-09."
+      - "schdtv3-set: Capture a SCHDTV3 SET (add/edit/delete a schedule in-app) to get the schedule write format; only GET seen [UNKNOWN — to capture]."
     verifications:
       - date: "2026-06-09"
         status: partial
