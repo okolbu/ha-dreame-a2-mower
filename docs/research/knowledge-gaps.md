@@ -36,7 +36,11 @@ Corpus numbers below are from `probe_log_*.jsonl` (9 logs, 2026-04-17…05-30;
 66,149 s1p1 + 69,254 s1p4 frames) via the census snippet at the end. Baseline
 inventory tally at time of writing (2026-05-30, post fault-code + s4-eiid1 decode):
 **195 confirmed / 116 hypothesized / 10 unknown / 6 partial / 4 verified**
-across 331 entries.
+across 331 entries. Last updated 2026-06-09 (app-MITM sweep: resolved
+SCHDTV3/GPS/PATH/PIN/REMOTE/photo-metadata/map-edit/message-record gaps;
+added SCHDSV3 v-layout, BAT[2], LIT.fill, draw-by-driving, OTA flow,
+XP2P stream, per-pathway, shape ids 12/14/15/16, MAP.* freshness, Tencent
+getIdentity).
 
 Validation-process shorthands are defined in [§Validation playbook](#validation-playbook).
 
@@ -139,17 +143,36 @@ so they need an integration-slot or a probe call to observe — not the status t
 **CFG keys (getCFG / setX):**
 | Key | Status | Gap | Validate |
 |---|---|---|---|
-| BP, PATH | hypothesized | placeholder semantics — suspected Pathway Obstacle Avoidance | CFG-DIFF: create a pathway in app, snapshot getCFG before/after |
+| BP | hypothesized | `BP` semantics still unknown; companion `PATH` **confirmed** as Pathway Obstacle Avoidance master enable 2026-06-09 | CFG-DIFF: create a pathway in app, snapshot getCFG before/after |
 | DLS | hypothesized | daylight-savings flag, stable 0 | CFG-DIFF across a DST boundary |
-| PIN | hypothesized | PIN status read/write shape unknown | LABEL: change PIN with probe running (BT-only suspected) |
 | PRE / PREI | hypothesized | g2408 PRE=[0,0]; not the vacuum 10-elt shape | confirmed-absent shape; encoder over-inflates (see TODO PRE bug) |
 | AIOBS / OBS | hypothesized | AI-obstacle data blob shape | wait-for-event |
 | CMS[3] | **partial** | unidentified (Link/Garage/MCA10/summary) — -1 always here | needs a unit WITH one of those accessories |
-| IOT, ARM, REMOTE, WINFO, CHECK, RPET | hypothesized | connection-status / alarm / remote-settings / weather / self-check / rain-end-time | CFG-DIFF or LABEL per feature |
+| IOT, ARM, WINFO, CHECK, RPET | hypothesized | connection-status / alarm / weather / self-check / rain-end-time (`REMOTE` **confirmed** 2026-06-09 as 4G SIM status {activeTime, cardId, expiredTime, leftDays}) | CFG-DIFF or LABEL per feature |
+| SCHDSV3 `v` field | **partial** | `{i, v, s:[...]}` shape confirmed 2026-06-09; `v` is a packed int encoding day-of-week + time per seasonal slot — **bit layout unknown** `[UNKNOWN — to capture]` | edit individual days then times in isolation, diff `v` before/after |
+| BAT `value[2]` / flag | **partial** | BAT typed-write shape confirmed; `value[2]` (third element) purpose unknown — NOT STUN `[UNKNOWN — to capture]` | CFG-DIFF: toggle auto-recharge-after-standby + diff BAT write |
+| LIT `fill` field | **partial** | LIT write shape confirmed; `fill` present in payload (observed as 1) — purpose unknown `[UNKNOWN — to capture]` | CFG-DIFF: toggle LIT settings in app, diff fill field |
+
+**Schedule write transport** — resolved 2026-06-09: SCHDTV3 is a read-side scalar
+only; the write is a 3-key transaction (SCHDDV3 chunked protobuf + SCHDIV3 length
+descriptor + SCHDSV3 enable/summary), all tied by a shared `v` ms-timestamp txn-id.
+Open sub-gap: SCHDSV3 `v` packed-int bit layout (see CFG-keys table above).
+`PIN` write shape — resolved 2026-06-09: `{type:'auth'|'update', value:<plaintext int>}`.
+Photo metadata source — resolved 2026-06-09: embedded JPEG COM marker (FFFE) + index
+from `userDidOssList`. Map-edit write path — resolved 2026-06-09: confirmed sequence
+o:204 (begin) → o:215/o:218/o:234 (add/delete/add-ignore) → o:201 (commit) → o:-1
+(teardown). Message-record reachability — resolved 2026-06-09: v1 endpoint confirmed
+(GET `/dreame-message-push/v1/message-record/list?version=v1`; v2 returns 0 records).
 
 **Batch device-data / map retvals:** MAPD, MAPI, MITRC, OBS (hypothesized);
 MAPL, MISTA (confirmed w/ open qs). Gap: per-field decode of the map-info and
 mission-track structures. Validate: fetch via probe + diff against a known map state.
+
+**MAP.* cache freshness** — `[UNKNOWN — to capture]` Is MAP.* populated on a fresh
+mower that has never had the app open to the map view? Does the integration's
+10-min refresh pull a stale/empty blob if the phone app has never been opened?
+Capture: reset or provision a mower without opening the app, run
+`DreameA2CloudClient.fetch_map()` and confirm whether MAP.* carries live data.
 
 **Routed-action opcodes (s2p50 TASK / o-codes):** many hypothesized — o104/105
 (plan/obstacle mower), o107/108 (cruise point/side), o110 (learn map), o205/206
@@ -180,11 +203,35 @@ Validate: correlate event args with the session that fired them.
 - **Reorient popup driver** — off the sniffed wire (popup edges land in the MQTT
   silent window on bare heartbeats; cloud poll/push suspected). Best MQTT proxy is
   the `[undock → s1p50/s1p51]` bracket. (inventory § s1p51 open_q.)
-- **GPS world-coordinate read path** — LOCN returns sentinel; the app's surface is
-  unidentified. (TODO.)
-- **Write path (Phase 3)** — ~28 entities write to a cloud-cache surface the device
-  doesn't apply; the app's real write RPC is uncaptured. (TODO.)
+- **GPS world-coordinate read path** — **resolved 2026-06-09**: confirmed via
+  `POST eu.iot.dreame.tech/dreame-mower-service-app/location/getRecords`; response
+  carries `{gpsLat, gpsLong, card4G(ICCID)}`. Integration wiring deferred (Phase B).
+- **Write path (Phase 3)** — integration write path for ~28 entities is now partially
+  captured (app-MITM 2026-06-09: `device/sendCommand` code:0 via `:13267`; CFG and
+  action writes confirmed; schedule write transport confirmed). Remaining open:
+  confirming HA uses the same `sendCommand` path vs. the 80001 relay for CFG writes
+  `[UNKNOWN — to capture]`. Map-edit opcodes (204/215/218/234/201) confirmed.
 - **summary_map track over-segmentation** — TRACK_BREAK_MARKER trigger unknown. (TODO.)
+- **Draw-by-driving zone definition wire** — BT-gated feature; wire shape unknown
+  `[UNKNOWN — to capture]`. Capture when a BT-enabled probe session is available:
+  use app to draw a zone by driving, capture the MQTT/cloud command emitted.
+- **OTA apply flow** — s1p2 (OTA state) / s1p3 (OTA progress) never captured
+  (no real pending update during any probe session) `[UNKNOWN — to capture]`.
+  Capture: keep probe running through a real firmware update event.
+- **Live-camera XP2P stream payload** — Tencent IoT-Video SDK off-relay P2P;
+  credential chain confirmed (user/accesstoken → isDevUser → getIdentity → getP2PInfo)
+  but stream bytes not captured `[UNKNOWN — to capture]`. Codec (H.264 vs H.265)
+  and container format unknown. Capture: Tencent IoT-Video XP2P SDK intercept.
+- **Tencent `getIdentity` secret rotation / stream codec** — `[UNKNOWN — to capture]`
+  How frequently does getIdentity rotate secretId/secretKey? Can an open-source XP2P
+  client consume the stream, or does it require the proprietary SDK?
+- **Per-pathway selection sub-menu** — app shows a per-map pathway-ID selector when
+  Pathway Obstacle Avoidance is enabled; write transport unknown `[UNKNOWN — to capture]`
+  (deferred: needs pathways drawn first, then CFG-DIFF on the per-pathway list).
+- **Map-edit mowing-shape type ids 12/14/15/16** — o:215 `type` field confirmed for
+  9=Square/13=Heart/17=Cloud/18=Rainbow; Circle(12)/Triangle(14)/Droplet(15)/
+  Mushroom(16) are inferred from APK labels, not captured `[UNKNOWN — to capture]`.
+  Capture: draw each shape in app-MITM session, read `type` in the o:215 payload.
 
 ---
 
@@ -217,5 +264,5 @@ Referenced as shorthands above:
 2. **s5p106** (1426 occ) + **s5p105** — frequent, unknown, fire during reorient.
 3. **s2p2 codes 20/33** — need a repro within cloud retention for the text.
 4. **s1p4 `[10-21]` motion vectors** — high-value for richer telemetry; XTAB-able now.
-5. **CFG BP/PATH** — one app-side pathway creation + CFG-DIFF closes it.
+5. **CFG BP** — one app-side pathway creation + CFG-DIFF closes it (`PATH` confirmed 2026-06-09; `BP` semantics still open).
 </content>
