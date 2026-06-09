@@ -33,43 +33,31 @@ def _ts() -> str:
     return datetime.now().strftime("%H:%M:%S")
 
 
+def is_person_photo(name: str) -> bool:
+    return name.lower().endswith("_person.jpg")
+
+
 def main(name: str) -> None:
-    from custom_components.dreame_a2_mower.protocol.photo_keys import (
-        build_photo_object_key,
-        is_person_photo,
-    )
-
     cloud = connect()
-    # _uid and _did are the real private attribute names on DreameA2CloudClient
-    # (see cloud_client/__init__.py lines 80, 97 — set in __init__ and used by
-    # get_file_url, mqtt_topic, object_name etc.).
-    key = build_photo_object_key(uid=str(cloud._uid), did=str(cloud._did), name=name)
-    print(f"[{_ts()}] photo key = {key}  (person={is_person_photo(name)})")
-
-    for label, fn in (
-        ("get_interim_file_url", cloud.get_interim_file_url),
-        ("get_file_url", cloud.get_file_url),
-    ):
-        try:
-            url = fn(key)
-        except Exception as ex:  # noqa: BLE001
-            print(f"[{_ts()}] {label}: raised {ex!r}")
-            continue
-
-        # NOTE — get_file_url caveat: the implementation in _oss.py line 64
-        # passes `"filename": object_name[1:]` (strips the first character).
-        # Our key has NO leading slash, so [1:] strips the first real character
-        # (the leading 'o' of 'oss/media/…'). This is likely wrong and may
-        # cause a 'key not found' response. The probe is precisely to observe
-        # which endpoint+form works; if get_file_url fails, try passing
-        # '/' + key to give [1:] the slash to strip instead.
-        print(f"[{_ts()}] {label}: url={str(url)[:120]!r}")
-        if url:
-            body = cloud.get_file(url)
-            ok = bool(body) and body[:2] == b"\xff\xd8"
-            print(
-                f"[{_ts()}] {label}: downloaded {len(body or b'')} bytes, jpeg={ok}"
-            )
+    uid, did = str(cloud._uid), str(cloud._did)
+    # LIVE-VERIFIED 2026-06-09: get_interim_file_url (cloud getDownloadUrl)
+    # prepends `oss/media/000000/oss/` itself, so the object_name is the BARE
+    # form <uid>/<did>/ali_dreame/<name>. get_file_url is the wrong signer
+    # (479D path + [1:] strip). This matches protocol/photo_keys.build_photo_object_key.
+    obj = f"{uid}/{did}/ali_dreame/{name}"
+    print(f"[{_ts()}] uid={uid} did={did} name={name} (person={is_person_photo(name)})")
+    print(f"[{_ts()}] object_name = {obj!r}")
+    try:
+        url = cloud.get_interim_file_url(obj)
+    except Exception as ex:  # noqa: BLE001
+        print(f"[{_ts()}] get_interim_file_url raised: {ex!r}")
+        return
+    keypath = str(url).split("?", 1)[0] if url else url
+    print(f"[{_ts()}] signed key → {keypath!r}")
+    if url:
+        body = cloud.get_file(url)
+        ok = bool(body) and body[:2] == b"\xff\xd8"
+        print(f"[{_ts()}] downloaded {len(body or b'')} bytes, jpeg={ok}")
 
 
 if __name__ == "__main__":

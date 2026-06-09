@@ -230,9 +230,11 @@ class _CoreMixin:
             retention=int(opts.get(CONF_PHOTO_ARCHIVE_KEEP, DEFAULT_PHOTO_ARCHIVE_KEEP)),
             max_bytes=int(opts.get(CONF_PHOTO_ARCHIVE_MAX_MB, DEFAULT_PHOTO_ARCHIVE_MAX_MB)) * 1024 * 1024,
         )
-        # The signing endpoint for photo OSS keys. Defaults to get_interim_file_url
-        # (the LiDAR path); flip to get_file_url if tools/probes/oss_photo_probe.py
-        # confirms that endpoint resolves media keys. [UNVERIFIED until live run]
+        # The signing endpoint for photo OSS keys. LIVE-VERIFIED 2026-06-09
+        # (tools/probes/oss_photo_probe.py): get_interim_file_url is correct — it
+        # prepends `oss/media/000000/oss/` to the bare object_name from
+        # protocol/photo_keys.build_photo_object_key, and a real photo downloaded
+        # as a 57 KB JPEG. (get_file_url is wrong: 479D path + leading-char strip.)
         self._photo_sign_fn = lambda c, k: c.get_interim_file_url(k)
 
         # WiFi archive — persists heatmap objects fetched from OSS.

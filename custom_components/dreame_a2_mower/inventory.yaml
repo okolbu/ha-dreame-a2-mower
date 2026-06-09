@@ -9657,6 +9657,18 @@ session_summary_fields:
         claim: "Album photos are reachable via the dreame-eu OSS bucket"
         retracts: "Photo bytes not retrievable — bare leaf is NoSuchKey in the summary's Aliyun dir; likely in the 479D Xiaomi-FDS bucket, subpath unknown."
         reason: "App capture shows photos in the SAME OSS bucket the integration already fetches LiDAR PCD from."
+      - date: "2026-06-09"
+        status: verified
+        claim: >-
+          Album photo fetch confirmed END-TO-END on our client. get_interim_file_url
+          (cloud getDownloadUrl) PREPENDS `oss/media/000000/oss/` itself, so the
+          object_name passed is the BARE form <uid>/<did>/ali_dreame/<name>
+          (e.g. BM169439/-112293549/ali_dreame/1780512275.jpg) — the full prefixed
+          key double-prefixes and 404s. get_file_url is the WRONG signer (479D path
+          + leading-char strip). A real 2026-06-03 photo downloaded as a 57373-byte
+          JPEG (ffd8 magic). Fixed protocol/photo_keys.build_photo_object_key to
+          return the bare form.
+        evidence: "tools/probes/oss_photo_probe.py live run 2026-06-09 (57373-byte JPEG)"
     open_questions:
       - "transient-obstacle-photo-api: The transient session-obstacle photos (live-map clickable icons that die after the session) use a different, uncaptured API — no real mow ran. Capture during a real obstacle-hitting mow."
       - "patrol-photo-bucket: Confirm patrol photos land in the same ali_dreame/<ts>.jpg album bucket as AI-obstacle photos."
