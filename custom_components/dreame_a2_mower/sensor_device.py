@@ -491,6 +491,46 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.charging_status.value if s.charging_status is not None else None,
     ),
+    # ------ Phase D: OSS storage quota sensors ------
+    # Bytes → MB conversion (1 MiB = 1 048 576 bytes).  None-safe: returns
+    # None when the cloud hasn't delivered the quota block yet.
+    DreameA2SensorEntityDescription(
+        key="oss_storage_used",
+        name="OSS storage used",
+        icon="mdi:cloud-upload",
+        native_unit_of_measurement="MB",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda s: (
+            round(s.oss_storage_used / 1048576) if s.oss_storage_used is not None else None
+        ),
+    ),
+    DreameA2SensorEntityDescription(
+        key="oss_storage_total",
+        name="OSS storage total",
+        icon="mdi:cloud",
+        native_unit_of_measurement="MB",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda s: (
+            round(s.oss_storage_total / 1048576) if s.oss_storage_total is not None else None
+        ),
+    ),
+    DreameA2SensorEntityDescription(
+        key="oss_storage_pct",
+        name="OSS storage used %",
+        icon="mdi:cloud-percent",
+        native_unit_of_measurement=PERCENTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        suggested_display_precision=0,
+        value_fn=lambda s: (
+            round(s.oss_storage_used / s.oss_storage_total * 100)
+            if s.oss_storage_used is not None and s.oss_storage_total
+            else None
+        ),
+    ),
+
     # ------ Phase C: SIM / messaging diagnostic sensors ------
     DreameA2SensorEntityDescription(
         key="sim_card_id",
@@ -750,6 +790,61 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         # physical device).
         value_fn=lambda coord: (
             getattr(getattr(coord, "_cloud", None), "mac_address", None)
+        ),
+    ),
+
+    # ------ Phase D: per-type photo + video count sensors ------
+    # All four read from the coordinator's archive objects so counts reflect
+    # the on-disk state without waiting for a MowerState push.
+
+    DreameA2DiagnosticSensorEntityDescription(
+        key="photos_obstacle",
+        name="Obstacle photos",
+        icon="mdi:camera-burst",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda coord: coord._photo_archive.count_by_category("obstacle"),
+    ),
+    DreameA2DiagnosticSensorEntityDescription(
+        key="photos_patrol",
+        name="Patrol photos",
+        icon="mdi:camera-marker",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda coord: coord._photo_archive.count_by_category("patrol"),
+    ),
+    DreameA2DiagnosticSensorEntityDescription(
+        key="photos_person",
+        name="Person photos",
+        icon="mdi:camera-account",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda coord: coord._photo_archive.count_by_category("person"),
+    ),
+    DreameA2DiagnosticSensorEntityDescription(
+        key="videos",
+        name="Videos",
+        icon="mdi:video",
+        state_class=SensorStateClass.MEASUREMENT,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda coord: coord._video_archive.count,
+    ),
+    # latest_video: state = duration (seconds) of the newest clip; attribute
+    # "mp4_path" = absolute filesystem path to the MP4 file (for HA media
+    # player / downloader integrations). None when archive is empty.
+    DreameA2DiagnosticSensorEntityDescription(
+        key="latest_video",
+        name="Latest video",
+        icon="mdi:video-box",
+        native_unit_of_measurement="s",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda coord: (
+            (coord._video_archive.latest() or None) and coord._video_archive.latest().duration
+        ),
+        extra_state_attributes_fn=lambda coord: (
+            {"mp4_path": str(coord._video_archive.root / v.mp4_filename)}
+            if (v := coord._video_archive.latest()) is not None
+            else {}
         ),
     ),
 
