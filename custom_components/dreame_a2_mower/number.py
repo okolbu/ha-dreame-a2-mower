@@ -40,6 +40,7 @@ from .const import CONF_STATION_BEARING_DEG, DOMAIN, LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .mower.state import MowerState
+from .protocol import cfg_payloads as _cfgp
 
 # ---------------------------------------------------------------------------
 # Descriptor
@@ -60,6 +61,7 @@ class DreameA2NumberEntityDescription(NumberEntityDescription):
     value_fn: Callable[[MowerState], float | int | None]
     cfg_key: str | None = None
     build_value_fn: Callable[[MowerState, float], Any] | None = None
+    build_from_cfg_fn: Callable[[Any, float], Any] | None = None
     field_updates_fn: Callable[[MowerState, float], dict[str, Any]] | None = None
 
 
@@ -146,7 +148,7 @@ NUMBERS: tuple[DreameA2NumberEntityDescription, ...] = (
 
     # ------------------------------------------------------------------
     # Settable: BAT[0] — auto-recharge threshold
-    # Wire shape confirmed: list(6), all 6 fields in MowerState.
+    # RMW via cfg_payloads.build_bat_power; preserves resume/flag from raw.
     # ------------------------------------------------------------------
     DreameA2NumberEntityDescription(
         key="auto_recharge_battery_pct",
@@ -158,13 +160,13 @@ NUMBERS: tuple[DreameA2NumberEntityDescription, ...] = (
         mode=NumberMode.SLIDER,
         value_fn=lambda s: s.auto_recharge_battery_pct,
         cfg_key="BAT",
-        build_value_fn=_build_bat_auto_recharge,
+        build_from_cfg_fn=lambda raw, v: _cfgp.build_bat_power(raw, recharge=int(v)),
         field_updates_fn=_bat_auto_recharge_field_updates,
     ),
 
     # ------------------------------------------------------------------
     # Settable: BAT[1] — resume-after-charge threshold
-    # Wire shape confirmed: list(6), all 6 fields in MowerState.
+    # RMW via cfg_payloads.build_bat_power; preserves recharge/flag from raw.
     # ------------------------------------------------------------------
     DreameA2NumberEntityDescription(
         key="resume_battery_pct",
@@ -176,38 +178,34 @@ NUMBERS: tuple[DreameA2NumberEntityDescription, ...] = (
         mode=NumberMode.SLIDER,
         value_fn=lambda s: s.resume_battery_pct,
         cfg_key="BAT",
-        build_value_fn=_build_bat_resume,
+        build_from_cfg_fn=lambda raw, v: _cfgp.build_bat_power(raw, resume=int(v)),
         field_updates_fn=_bat_resume_field_updates,
     ),
 
     # ------------------------------------------------------------------
-    # Read-only: REC[1] — human presence alert sensitivity
+    # Settable (A1): REC[1] — human presence alert sensitivity
     #
-    # The REC wire list has 9 elements.  Only [0] (enabled) and [1]
-    # (sensitivity) are decoded into MowerState.  Elements [2..8]
+    # RMW via cfg_payloads.build_rec; preserves mode/report from raw.
+    # The full 9-element REC raw list is used so undecoded slots [2..8]
     # (standby, mowing, recharge, patrol, alert, photo_consent, push_min)
-    # are NOT stored — so a safe full-list reconstruction is impossible.
+    # are preserved exactly — no more need to store them in MowerState.
     #
-    # Shipped as read-only (DIAGNOSTIC) in F4.  Will become settable once
-    # the remaining REC fields are added to MowerState in a future task.
+    # REC[1] enum: 0=Low, 1=Medium, 2=High (per inventory.yaml id="REC",
+    # decoded 2026-04-24, sample [1,1,1,1,1,1,0,1,3]; re-confirmed on
+    # live g2408 2026-05-16 — app showed "Medium" while wire reported 1).
     # ------------------------------------------------------------------
     DreameA2NumberEntityDescription(
         key="human_presence_alert_sensitivity",
         name="Human presence alert sensitivity",
-        # REC[1] enum: 0=Low, 1=Medium, 2=High (per inventory.yaml id="REC",
-        # decoded 2026-04-24, sample [1,1,1,1,1,1,0,1,3]; re-confirmed on
-        # live g2408 2026-05-16 — app showed "Medium" while wire reported 1).
-        # Was originally shipped as 0-100 % which rendered as "1% of 100%"
-        # on the dashboard — fixed 2026-05-16. SelectEntity with Low/Med/High
-        # labels would be more honest UX but a number-with-corrected-range
-        # avoids the rename-orphan churn until the write path lands.
         native_min_value=0,
         native_max_value=2,
         native_step=1,
         mode=NumberMode.SLIDER,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.human_presence_alert_sensitivity,
-        # cfg_key intentionally omitted — read-only in F4
+        cfg_key="REC",
+        build_from_cfg_fn=lambda raw, v: _cfgp.build_rec(raw, sen=int(v)),
+        field_updates_fn=lambda s, v: {"human_presence_alert_sensitivity": int(v)},
     ),
 )
 
@@ -289,8 +287,21 @@ class DreameA2Number(
             )
             return
 
-        # Build the full wire value expected by the firmware.
-        if desc.build_value_fn is not None:
+        # RMW path: build wire value from raw cfg base (preserves undecoded slots).
+        if desc.build_from_cfg_fn is not None:
+            cs = getattr(self.coordinator, "cloud_state", None)
+            raw = cs.cfg.get(desc.cfg_key) if cs is not None else None
+            wire_value = desc.build_from_cfg_fn(raw, value)
+            if wire_value is None:
+                LOGGER.warning(
+                    "number.%s: no cfg base for %s; write aborted",
+                    getattr(self, "entity_id", desc.key),
+                    desc.cfg_key,
+                )
+                self.async_write_ha_state()
+                return
+        # Legacy path: build wire value from MowerState (or pass value through).
+        elif desc.build_value_fn is not None:
             wire_value = desc.build_value_fn(self.coordinator.data, value)
         else:
             wire_value = value
