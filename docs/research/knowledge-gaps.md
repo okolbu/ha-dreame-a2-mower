@@ -212,6 +212,14 @@ Validate: correlate event args with the session that fired them.
   action writes confirmed; schedule write transport confirmed). Remaining open:
   confirming HA uses the same `sendCommand` path vs. the 80001 relay for CFG writes
   `[UNKNOWN — to capture]`. Map-edit opcodes (204/215/218/234/201) confirmed.
+- **SETTINGS-only per-map fields (Phase A2 deferred)** — The per-map SETTINGS fields
+  `cutterPosition`, `cutterPositionHeight`, `edgeMowingNum`, `edgeMowingWalkMode`,
+  `obstacleAvoidanceSensitivity`, `edgeCuttingAttachment` have NO confirmed PRE
+  index. Whether a SETTINGS-only write to these fields changes the mower's
+  behavior is unverified — for the PRE-mapped fields, SETTINGS-only writes were
+  confirmed cloud-cache-only (device firmware did NOT apply). Capture step: toggle
+  each in an app-MITM session and diff PRE vs SETTINGS before/after to determine
+  which store the firmware reads. `[UNKNOWN — to capture]`
 - **summary_map track over-segmentation** — TRACK_BREAK_MARKER trigger unknown. (TODO.)
 - **Draw-by-driving zone definition wire** — BT-gated feature; wire shape unknown
   `[UNKNOWN — to capture]`. Capture when a BT-enabled probe session is available:

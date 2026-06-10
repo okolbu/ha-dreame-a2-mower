@@ -391,6 +391,10 @@ entities:
       - date: "2026-06-10"
         status: presumed
         claim: "PRE[10] write at map_index is honored by g2408 firmware to toggle EdgeMaster [UNVERIFIED]"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[10]) through coordinator.write_map_general_setting; PRE-only (edgemaster reads s6p2 shadow; no SETTINGS field). set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "s6p2"
       code: "custom_components/dreame_a2_mower/switch.py:1259"
@@ -785,10 +789,10 @@ entities:
     source:
       wire: "s6p2[1]"
       state_path: "state_machine.snapshot().pre_shadow_by_map_id[map_id][\"mowing_efficiency\"]"
-    write_path: read-only
+    write_path: "coordinator.write_map_general_setting(map_id, pre_index=3, pre_value=idx, settings_field='efficientMode', settings_value=idx) via pre_settings_optimistic_write"
     status:
       seen_working: true
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-15"
         status: verified
@@ -804,6 +808,10 @@ entities:
           read_only_noop until a feature phase wires and live-verifies the
           write. Whether g2408 firmware honors a PRE[3] write for this field
           is a separate live-verify question for the feature phase."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[3]) through coordinator.write_map_general_setting; dual-write to SETTINGS.efficientMode. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "s6p2"
@@ -830,10 +838,10 @@ entities:
     source:
       wire: "cloud SETTINGS.entryN.<map>.edgeMowingAuto"
       state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id][\"edgeMowingAuto\"]"
-    write_path: "setDeviceData chunked-batch (cloud-cache-only on g2408 — device firmware does NOT apply; see docs/research/wire-captures/settings-surface-cloud-only-2026-05-09.md)"
+    write_path: "coordinator.write_map_general_setting(map_id, pre_index=7, pre_value=int(enabled), settings_field='edgeMowingAuto', settings_value=int(enabled)) via pre_settings_optimistic_write"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-09"
         status: verified
@@ -845,6 +853,10 @@ entities:
           (SETTINGS.edgeMowingAuto via setDeviceData chunked-batch) but intentionally
           NOT wired; control_mode remains read_only_confirmed until a feature phase
           wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[7]) through coordinator.write_map_general_setting; dual-write to SETTINGS.edgeMowingAuto. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       code: "custom_components/dreame_a2_mower/switch.py:854"
@@ -864,10 +876,10 @@ entities:
     source:
       wire: "cloud SETTINGS.entryN.<map>.edgeMowingSafe"
       state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id][\"edgeMowingSafe\"]"
-    write_path: "coordinator.write_settings(map_id, field=\"edgeMowingSafe\", value=int(bool)) via _settings_switch_optimistic_write (cloud-cache-only on g2408)"
+    write_path: "coordinator.write_map_general_setting(map_id, pre_index=16, pre_value=int(enabled), settings_field='edgeMowingSafe', settings_value=int(enabled)) via pre_settings_optimistic_write"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -879,6 +891,10 @@ entities:
           (SETTINGS.edgeMowingSafe via setDeviceData chunked-batch) but intentionally
           NOT wired; control_mode remains read_only_confirmed until a feature phase
           wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[16]) through coordinator.write_map_general_setting; dual-write to SETTINGS.edgeMowingSafe. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
@@ -898,10 +914,10 @@ entities:
     source:
       wire: "cloud SETTINGS.entryN.<map>.edgeMowingObstacleAvoidance"
       state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id][\"edgeMowingObstacleAvoidance\"]"
-    write_path: "coordinator.write_settings(map_id, field=\"edgeMowingObstacleAvoidance\", value=int(bool)) via _settings_switch_optimistic_write (cloud-cache-only on g2408)"
+    write_path: "coordinator.write_map_general_setting(map_id, pre_index=9, pre_value=int(enabled), settings_field='edgeMowingObstacleAvoidance', settings_value=int(enabled)) via pre_settings_optimistic_write"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -913,6 +929,10 @@ entities:
           (SETTINGS.edgeMowingObstacleAvoidance via setDeviceData chunked-batch) but
           intentionally NOT wired; control_mode remains read_only_confirmed until a
           feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[9]) through coordinator.write_map_general_setting; dual-write to SETTINGS.edgeMowingObstacleAvoidance. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
@@ -932,10 +952,10 @@ entities:
     source:
       wire: "cloud SETTINGS.entryN.<map>.obstacleAvoidanceEnabled"
       state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id][\"obstacleAvoidanceEnabled\"]"
-    write_path: "coordinator.write_settings(map_id, field=\"obstacleAvoidanceEnabled\", value=int(bool)) via _settings_switch_optimistic_write (cloud-cache-only on g2408)"
+    write_path: "coordinator.write_map_general_setting(map_id, pre_index=12, pre_value=int(enabled), settings_field='obstacleAvoidanceEnabled', settings_value=int(enabled)) via pre_settings_optimistic_write"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -947,6 +967,10 @@ entities:
           (SETTINGS.obstacleAvoidanceEnabled via setDeviceData chunked-batch) but
           intentionally NOT wired; control_mode remains read_only_confirmed until a
           feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[12]) through coordinator.write_map_general_setting; dual-write to SETTINGS.obstacleAvoidanceEnabled. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
@@ -2114,10 +2138,10 @@ entities:
     source:
       wire: "cloud SETTINGS.entryN.<map>.mowingDirection"
       state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id]['mowingDirection'] → OPTIONS[int(v)//90]"
-    write_path: "coordinator.write_settings(map_id, field='mowingDirection', value=idx*90) via _settings_select_optimistic_write (cloud-cache-only on g2408)"
+    write_path: "coordinator.write_map_general_setting(map_id, pre_index=6, pre_value=idx*90, settings_field='mowingDirection', settings_value=idx*90) via pre_settings_optimistic_write"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -2129,6 +2153,10 @@ entities:
           (SETTINGS.mowingDirection via setDeviceData chunked-batch) but intentionally
           NOT wired; control_mode remains read_only_confirmed until a feature phase
           wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[6]) through coordinator.write_map_general_setting; dual-write to SETTINGS.mowingDirection. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       code: "custom_components/dreame_a2_mower/select_map_settings.py:388"
@@ -2146,10 +2174,10 @@ entities:
     source:
       wire: "cloud SETTINGS.entryN.<map>.mowingDirectionMode"
       state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id]['mowingDirectionMode'] → OPTIONS[int(v)]"
-    write_path: "coordinator.write_settings(map_id, field='mowingDirectionMode', value=idx) via _settings_select_optimistic_write (cloud-cache-only on g2408)"
+    write_path: "coordinator.write_map_general_setting(map_id, pre_index=5, pre_value=idx, settings_field='mowingDirectionMode', settings_value=idx) via pre_settings_optimistic_write"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -2161,6 +2189,10 @@ entities:
           (SETTINGS.mowingDirectionMode via setDeviceData chunked-batch) but intentionally
           NOT wired; control_mode remains read_only_confirmed until a feature phase
           wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[5]) through coordinator.write_map_general_setting; dual-write to SETTINGS.mowingDirectionMode. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       code: "custom_components/dreame_a2_mower/select_map_settings.py:448"
@@ -2718,10 +2750,10 @@ entities:
     source:
       wire: "cloud SETTINGS.entryN.<map>.mowingHeight"
       state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id]['mowingHeight']"
-    write_path: "coordinator.write_settings(map_id, field='mowingHeight', value=int(cm)) via _settings_optimistic_write (cloud-cache-only on g2408)"
+    write_path: "coordinator.write_map_general_setting(map_id, pre_index=4, pre_value=round(value*10), settings_field='mowingHeight', settings_value=int(value)) via pre_settings_optimistic_write"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -2733,6 +2765,10 @@ entities:
           (SETTINGS.mowingHeight via setDeviceData chunked-batch; also known as
           PRE[4] in s6.2 payload) but intentionally NOT wired; control_mode remains
           read_only_confirmed until a feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[4]) through coordinator.write_map_general_setting; dual-write to SETTINGS.mowingHeight. PRE value is cm*10 (e.g. 5.5cm → 55); SETTINGS value is int cm. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
@@ -2856,10 +2892,10 @@ entities:
     source:
       wire: "cloud SETTINGS.entryN.<map>.obstacleAvoidanceHeight"
       state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id]['obstacleAvoidanceHeight']"
-    write_path: "coordinator.write_settings(map_id, field='obstacleAvoidanceHeight', value=int(cm)) via _settings_optimistic_write (cloud-cache-only on g2408)"
+    write_path: "coordinator.write_map_general_setting(map_id, pre_index=13, pre_value=int(value), settings_field='obstacleAvoidanceHeight', settings_value=int(value)) via pre_settings_optimistic_write"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -2871,6 +2907,10 @@ entities:
           (SETTINGS.obstacleAvoidanceHeight via setDeviceData chunked-batch) but
           intentionally NOT wired; control_mode remains read_only_confirmed until a
           feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[13]) through coordinator.write_map_general_setting; dual-write to SETTINGS.obstacleAvoidanceHeight. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
@@ -2890,10 +2930,10 @@ entities:
     source:
       wire: "cloud SETTINGS.entryN.<map>.obstacleAvoidanceDistance"
       state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id]['obstacleAvoidanceDistance']"
-    write_path: "coordinator.write_settings(map_id, field='obstacleAvoidanceDistance', value=int(cm)) via _settings_optimistic_write (cloud-cache-only on g2408)"
+    write_path: "coordinator.write_map_general_setting(map_id, pre_index=14, pre_value=int(value), settings_field='obstacleAvoidanceDistance', settings_value=int(value)) via pre_settings_optimistic_write"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -2905,6 +2945,10 @@ entities:
           (SETTINGS.obstacleAvoidanceDistance via setDeviceData chunked-batch) but
           intentionally NOT wired; control_mode remains read_only_confirmed until a
           feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[14]) through coordinator.write_map_general_setting; dual-write to SETTINGS.obstacleAvoidanceDistance. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
@@ -2963,10 +3007,10 @@ entities:
     source:
       wire: "cloud SETTINGS.entryN.<map>.obstacleAvoidanceAi (bit 0)"
       state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id]['obstacleAvoidanceAi'] & 0x01"
-    write_path: "coordinator.write_settings(map_id, field='obstacleAvoidanceAi', value=new_bitmask) via _AiRecognitionBitSwitch._toggle — read-modify-write on the bitmask (cloud-cache-only on g2408)"
+    write_path: "coordinator.write_map_general_ai_bit(map_id, bit=0x01, on=enabled, settings_value=new_bitmask) — RMW PRE[15] bitmask + dual-write to SETTINGS.obstacleAvoidanceAi"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -2978,6 +3022,10 @@ entities:
           (SETTINGS.obstacleAvoidanceAi bit 0 via setDeviceData chunked-batch) but
           intentionally NOT wired; control_mode remains read_only_confirmed until a
           feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre_ai_bit, PRE[15] bit 0=Humans) through coordinator.write_map_general_ai_bit; dual-write to SETTINGS.obstacleAvoidanceAi. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
@@ -2999,10 +3047,10 @@ entities:
     source:
       wire: "cloud SETTINGS.entryN.<map>.obstacleAvoidanceAi (bit 1)"
       state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id]['obstacleAvoidanceAi'] & 0x02"
-    write_path: "coordinator.write_settings(map_id, field='obstacleAvoidanceAi', value=new_bitmask) via _AiRecognitionBitSwitch._toggle — read-modify-write on the bitmask (cloud-cache-only on g2408)"
+    write_path: "coordinator.write_map_general_ai_bit(map_id, bit=0x02, on=enabled, settings_value=new_bitmask) — RMW PRE[15] bitmask + dual-write to SETTINGS.obstacleAvoidanceAi"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -3014,6 +3062,10 @@ entities:
           (SETTINGS.obstacleAvoidanceAi bit 1 via setDeviceData chunked-batch) but
           intentionally NOT wired; control_mode remains read_only_confirmed until a
           feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre_ai_bit, PRE[15] bit 1=Animals) through coordinator.write_map_general_ai_bit; dual-write to SETTINGS.obstacleAvoidanceAi. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
@@ -3033,10 +3085,10 @@ entities:
     source:
       wire: "cloud SETTINGS.entryN.<map>.obstacleAvoidanceAi (bit 2)"
       state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id]['obstacleAvoidanceAi'] & 0x04"
-    write_path: "coordinator.write_settings(map_id, field='obstacleAvoidanceAi', value=new_bitmask) via _AiRecognitionBitSwitch._toggle — read-modify-write on the bitmask (cloud-cache-only on g2408)"
+    write_path: "coordinator.write_map_general_ai_bit(map_id, bit=0x04, on=enabled, settings_value=new_bitmask) — RMW PRE[15] bitmask + dual-write to SETTINGS.obstacleAvoidanceAi"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -3048,6 +3100,10 @@ entities:
           (SETTINGS.obstacleAvoidanceAi bit 2 via setDeviceData chunked-batch) but
           intentionally NOT wired; control_mode remains read_only_confirmed until a
           feature phase wires and live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre_ai_bit, PRE[15] bit 2=Objects) through coordinator.write_map_general_ai_bit; dual-write to SETTINGS.obstacleAvoidanceAi. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
