@@ -23,5 +23,11 @@
     "LIT": [0, 480, 1200, 1, 1, 1, 1, 1],
     "REC": [1, 1, 1, 1, 1, 1, 0, 1, 3],
     "LANG": [7, 7]
+  },
+  "pre": {
+    "baseline": [0,0,0,0,55,1,8,1,0,1,1,2,1,20,10,7,1,2,0],
+    "get_args_examples": [{"idx":0,"region":0},{"idx":1,"region":1},{"idx":1,"region":2}],
+    "set_is_bare_array": true,
+    "index_map": {"version":0,"map_idx":1,"region":2,"efficiency":3,"height_x10":4,"direction_mode":5,"direction_angle":6,"auto_edge":7,"oa_on_edges":9,"edgemaster":10,"lidar":12,"oa_height":13,"oa_distance":14,"ai_bitmask":15,"safe_edge":16}
   }
 }
