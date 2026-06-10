@@ -5,7 +5,9 @@ Verifies:
   calling async_turn_on DOES call coordinator.write_setting.
 - A writable CFG switch (child_lock) has read_only=False and
   async_turn_on DOES call coordinator.write_setting.
-- An AI recognition bit-switch (Humans) has read_only=True and padlock icon.
+- AI recognition bit-switch (Humans) is now device_writable (Task 10).
+- DreameA2EdgeMowingAutoSwitch is now device_writable (Task 10).
+- DreameA2MapEdgemasterSwitch is device_writable (Task 9/10).
 """
 from __future__ import annotations
 
@@ -159,38 +161,33 @@ def test_child_lock_turn_on_calls_write_setting():
 
 
 # ---------------------------------------------------------------------------
-# AI recognition bit-switch: Humans  (read_only_confirmed)
+# AI recognition bit-switch: Humans  (device_writable since Task 10)
 # ---------------------------------------------------------------------------
 
-def test_ai_recognition_humans_is_read_only():
+def test_ai_recognition_humans_is_not_read_only():
     coord = _make_coord(
         settings_by_map={_MAP_ID: {"obstacleAvoidanceAi": 0b001}},
     )
     ent = DreameA2AiRecognitionHumansSwitch(coord, map_id=_MAP_ID)
-    assert ent.read_only is True
+    assert ent.read_only is False
 
 
-def test_ai_recognition_humans_has_padlock_icon():
+def test_ai_recognition_humans_has_no_padlock_icon():
     coord = _make_coord(
         settings_by_map={_MAP_ID: {"obstacleAvoidanceAi": 0b001}},
     )
     ent = DreameA2AiRecognitionHumansSwitch(coord, map_id=_MAP_ID)
-    assert ent.icon == "mdi:lock-outline"
+    assert ent.icon != "mdi:lock-outline"
 
 
-def test_ai_recognition_humans_turn_on_does_not_write_and_snaps_back():
-    """AI recognition toggle must snap-back without calling write_settings."""
+def test_ai_recognition_humans_extra_attrs_mark_writable():
     coord = _make_coord(
-        settings_by_map={_MAP_ID: {"obstacleAvoidanceAi": 0b000}},
+        settings_by_map={_MAP_ID: {"obstacleAvoidanceAi": 0b001}},
     )
-    coord.write_settings = AsyncMock(return_value=True)  # spy
     ent = DreameA2AiRecognitionHumansSwitch(coord, map_id=_MAP_ID)
-    ent.async_write_ha_state = MagicMock()
-
-    asyncio.run(ent.async_turn_on())
-
-    coord.write_settings.assert_not_called()
-    ent.async_write_ha_state.assert_called_once()  # snap-back fired
+    attrs = ent.extra_state_attributes
+    assert attrs["read_only"] is False
+    assert attrs["control_mode"] == "device_writable"
 
 
 # ---------------------------------------------------------------------------
@@ -241,7 +238,7 @@ def test_ai_human_detection_turn_off_does_not_call_write_ai_human_enabled():
 
 
 # ---------------------------------------------------------------------------
-# DreameA2EdgeMowingAutoSwitch  (previously missed — read_only_confirmed)
+# DreameA2EdgeMowingAutoSwitch  (device_writable since Task 10)
 # ---------------------------------------------------------------------------
 
 def test_edge_mowing_auto_has_honesty_mixin():
@@ -250,33 +247,28 @@ def test_edge_mowing_auto_has_honesty_mixin():
     assert isinstance(ent, _ControlHonestyMixin)
 
 
-def test_edge_mowing_auto_is_read_only():
+def test_edge_mowing_auto_is_not_read_only():
     coord = _make_coord(settings_by_map={_MAP_ID: {"edgeMowingAuto": 1}})
     ent = DreameA2EdgeMowingAutoSwitch(coord, map_id=_MAP_ID)
-    assert ent.read_only is True
+    assert ent.read_only is False
 
 
-def test_edge_mowing_auto_has_padlock_icon():
+def test_edge_mowing_auto_has_no_padlock_icon():
     coord = _make_coord(settings_by_map={_MAP_ID: {"edgeMowingAuto": 1}})
     ent = DreameA2EdgeMowingAutoSwitch(coord, map_id=_MAP_ID)
-    assert ent.icon == "mdi:lock-outline"
+    assert ent.icon != "mdi:lock-outline"
 
 
-def test_edge_mowing_auto_turn_on_does_not_call_settings_write():
-    """read_only guard must fire BEFORE _settings_switch_optimistic_write."""
-    coord = _make_coord(settings_by_map={_MAP_ID: {"edgeMowingAuto": 0}})
-    coord.write_settings = AsyncMock(return_value=True)  # spy
+def test_edge_mowing_auto_extra_attrs_mark_writable():
+    coord = _make_coord(settings_by_map={_MAP_ID: {"edgeMowingAuto": 1}})
     ent = DreameA2EdgeMowingAutoSwitch(coord, map_id=_MAP_ID)
-    ent.async_write_ha_state = MagicMock()
-
-    asyncio.run(ent.async_turn_on())
-
-    coord.write_settings.assert_not_called()
-    ent.async_write_ha_state.assert_called_once()  # snap-back fired
+    attrs = ent.extra_state_attributes
+    assert attrs["read_only"] is False
+    assert attrs["control_mode"] == "device_writable"
 
 
 # ---------------------------------------------------------------------------
-# DreameA2MapEdgemasterSwitch  (previously missed — read_only_noop)
+# DreameA2MapEdgemasterSwitch  (device_writable since Task 9)
 # ---------------------------------------------------------------------------
 
 def _make_coord_with_state_machine():
@@ -296,27 +288,25 @@ def test_edgemaster_has_honesty_mixin():
     assert isinstance(ent, _ControlHonestyMixin)
 
 
-def test_edgemaster_is_read_only():
+def test_edgemaster_is_not_read_only():
     coord = _make_coord_with_state_machine()
     ent = DreameA2MapEdgemasterSwitch(coord, map_id=_MAP_ID)
-    assert ent.read_only is True
+    assert ent.read_only is False
 
 
-def test_edgemaster_has_padlock_icon():
+def test_edgemaster_has_no_padlock_icon():
     coord = _make_coord_with_state_machine()
     ent = DreameA2MapEdgemasterSwitch(coord, map_id=_MAP_ID)
-    # read_only_noop → padlock overrides _attr_icon = "mdi:mower"
-    assert ent.icon == "mdi:lock-outline"
+    # device_writable → no padlock; _attr_icon = "mdi:mower" should be returned
+    assert ent.icon != "mdi:lock-outline"
 
 
-def test_edgemaster_turn_on_snaps_back():
-    """EdgeMaster turn_on must snap-back, never call coordinator write."""
+def test_edgemaster_control_mode_is_device_writable():
+    """EdgeMaster must report device_writable in extra_state_attributes."""
+    from custom_components.dreame_a2_mower.control_honesty import ControlMode
     coord = _make_coord_with_state_machine()
-    coord.write_settings = AsyncMock()  # spy — must NOT be called
     ent = DreameA2MapEdgemasterSwitch(coord, map_id=_MAP_ID)
-    ent.async_write_ha_state = MagicMock()
-
-    asyncio.run(ent.async_turn_on())
-
-    coord.write_settings.assert_not_called()
-    ent.async_write_ha_state.assert_called_once()  # snap-back fired
+    assert ent.control_mode == ControlMode.DEVICE_WRITABLE
+    attrs = ent.extra_state_attributes
+    assert attrs["read_only"] is False
+    assert attrs["control_mode"] == "device_writable"

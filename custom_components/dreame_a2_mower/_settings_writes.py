@@ -107,30 +107,3 @@ async def pre_settings_optimistic_write(
         },
         blocking=False,
     )
-
-
-async def pre_settings_ai_bit_write(
-    entity, *, state_field: str, new_value: bool, map_id: int, bit: int,
-    settings_value: int,
-) -> None:
-    """AI-recognition bit variant — calls coordinator.write_map_general_ai_bit."""
-    coord = entity.coordinator
-    old_value = getattr(coord.data, state_field)
-    coord.data = dataclasses.replace(coord.data, **{state_field: new_value})
-    entity.async_write_ha_state()
-    ok = await coord.write_map_general_ai_bit(
-        map_id=map_id, bit=bit, on=bool(new_value), settings_value=settings_value,
-    )
-    if ok:
-        return
-    coord.data = dataclasses.replace(coord.data, **{state_field: old_value})
-    entity.async_write_ha_state()
-    await entity.hass.services.async_call(
-        "persistent_notification", "create",
-        service_data={
-            "title": "Dreame A2 Mower: setting write rejected",
-            "message": f"The mower rejected the AI-recognition write. Reverted to {old_value!r}.",
-            "notification_id": f"dreame_a2_write_fail_{entity.entity_id}",
-        },
-        blocking=False,
-    )

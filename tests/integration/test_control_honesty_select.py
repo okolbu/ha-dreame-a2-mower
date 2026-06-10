@@ -1,9 +1,9 @@
 """Integration tests for control-honesty markers on the select platform.
 
 Verifies:
-- A read-only per-map settings select (DreameA2PerMapMowingDirectionSelect)
-  has read_only=True, padlock icon, and async_select_option does NOT call
-  coordinator.write_settings and DOES call async_write_ha_state (snap-back).
+- Per-map settings select (DreameA2PerMapMowingDirectionSelect) is now
+  device_writable (Task 10): read_only=False, no padlock icon, and
+  async_select_option DOES call _settings_select_optimistic_write.
 - DreameA2SettingSelect navigation_path: read_only=False, select_option
   DOES call coordinator.write_setting.
 - DreameA2ActionModeSelect: read_only=False,
@@ -60,44 +60,43 @@ def _setting_desc(key: str):
 
 
 # ---------------------------------------------------------------------------
-# DreameA2PerMapMowingDirectionSelect — read_only_confirmed
+# DreameA2PerMapMowingDirectionSelect — device_writable since Task 10
 # ---------------------------------------------------------------------------
 
-def test_per_map_mowing_direction_is_read_only():
+def test_per_map_mowing_direction_is_not_read_only():
     coord = _make_map_coord()
     ent = DreameA2PerMapMowingDirectionSelect(coord, map_id=_MAP_ID)
-    assert ent.read_only is True
+    assert ent.read_only is False
 
 
-def test_per_map_mowing_direction_has_padlock_icon():
+def test_per_map_mowing_direction_has_no_padlock_icon():
     coord = _make_map_coord()
     ent = DreameA2PerMapMowingDirectionSelect(coord, map_id=_MAP_ID)
-    assert ent.icon == "mdi:lock-outline"
+    assert ent.icon != "mdi:lock-outline"
 
 
-def test_per_map_mowing_direction_extra_attrs_mark_read_only():
+def test_per_map_mowing_direction_extra_attrs_mark_writable():
     coord = _make_map_coord()
     ent = DreameA2PerMapMowingDirectionSelect(coord, map_id=_MAP_ID)
     attrs = ent.extra_state_attributes
-    assert attrs["read_only"] is True
-    assert attrs["control_mode"] == "read_only_confirmed"
+    assert attrs["read_only"] is False
+    assert attrs["control_mode"] == "device_writable"
 
 
-def test_per_map_mowing_direction_select_option_does_not_call_write_settings_and_snaps_back():
-    """async_select_option on a read-only select must NOT call _settings_optimistic_write
-    and MUST call async_write_ha_state (snap-back)."""
+def test_per_map_mowing_direction_select_option_calls_pre_settings_write():
+    """async_select_option on the now-writable select MUST call
+    pre_settings_optimistic_write (PRE dual-write path)."""
     coord = _make_map_coord(settings_by_map={_MAP_ID: {"mowingDirection": 0}})
     ent = DreameA2PerMapMowingDirectionSelect(coord, map_id=_MAP_ID)
     ent.async_write_ha_state = MagicMock()
 
     with patch(
-        "custom_components.dreame_a2_mower.select_map_settings._settings_select_optimistic_write",
+        "custom_components.dreame_a2_mower.select_map_settings.pre_settings_optimistic_write",
         new_callable=AsyncMock,
     ) as mock_opt_write:
         asyncio.run(ent.async_select_option("90°"))
 
-    mock_opt_write.assert_not_called()
-    ent.async_write_ha_state.assert_called_once()  # snap-back fired
+    mock_opt_write.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

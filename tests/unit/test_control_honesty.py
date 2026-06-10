@@ -14,7 +14,7 @@ def test_read_only_modes_membership():
 def test_resolve_direct_scalar_id():
     assert resolve_control_mode(
         platform="number", key="map_N_settings_mowing_height"
-    ) is ControlMode.READ_ONLY_CONFIRMED
+    ) is ControlMode.DEVICE_WRITABLE
 
 
 def test_resolve_generic_switch_by_leaf():

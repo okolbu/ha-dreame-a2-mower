@@ -778,7 +778,7 @@ entities:
 
   - id: "select.dreame_a2_mower_map_N_mowing_efficiency"
     platform: select
-    control_mode: read_only_noop
+    control_mode: device_writable
     class: "DreameA2MapMowingEfficiencySelect"
     class_file: "custom_components/dreame_a2_mower/select.py"
     device: per-map
@@ -823,7 +823,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_automatic_edge_mowing"
     platform: switch
-    control_mode: read_only_confirmed
+    control_mode: device_writable
     class: "DreameA2EdgeMowingAutoSwitch"
     class_file: "custom_components/dreame_a2_mower/switch.py:854"
     device: per-map
@@ -857,7 +857,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_safe_edge_mowing"
     platform: switch
-    control_mode: read_only_confirmed
+    control_mode: device_writable
     class: "DreameA2EdgeMowingSafeSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:717"
     device: per-map
@@ -891,7 +891,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_obstacle_avoidance_on_edges"
     platform: switch
-    control_mode: read_only_confirmed
+    control_mode: device_writable
     class: "DreameA2EdgeMowingObstacleAvoidanceSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:766"
     device: per-map
@@ -925,7 +925,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_lidar_obstacle_recognition"
     platform: switch
-    control_mode: read_only_confirmed
+    control_mode: device_writable
     class: "DreameA2ObstacleAvoidanceEnabledSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:815"
     device: per-map
@@ -2107,7 +2107,7 @@ entities:
 
   - id: "select.dreame_a2_mower_map_N_settings_mowing_direction"
     platform: select
-    control_mode: read_only_confirmed
+    control_mode: device_writable
     class: "DreameA2PerMapMowingDirectionSelect"
     class_file: "custom_components/dreame_a2_mower/select_map_settings.py:388"
     device: per-map
@@ -2139,7 +2139,7 @@ entities:
 
   - id: "select.dreame_a2_mower_map_N_settings_mowing_direction_mode"
     platform: select
-    control_mode: read_only_confirmed
+    control_mode: device_writable
     class: "DreameA2PerMapMowingDirectionModeSelect"
     class_file: "custom_components/dreame_a2_mower/select_map_settings.py:448"
     device: per-map
@@ -2711,7 +2711,7 @@ entities:
 
   - id: "number.dreame_a2_mower_map_N_settings_mowing_height"
     platform: number
-    control_mode: read_only_confirmed
+    control_mode: device_writable
     class: "DreameA2PerMapMowingHeightNumber"
     class_file: "custom_components/dreame_a2_mower/number.py:390"
     device: per-map
@@ -2849,7 +2849,7 @@ entities:
 
   - id: "number.dreame_a2_mower_map_N_settings_obstacle_avoidance_height"
     platform: number
-    control_mode: read_only_confirmed
+    control_mode: device_writable
     class: "DreameA2PerMapObstacleAvoidanceHeightNumber"
     class_file: "custom_components/dreame_a2_mower/number.py:449"
     device: per-map
@@ -2883,7 +2883,7 @@ entities:
 
   - id: "number.dreame_a2_mower_map_N_settings_obstacle_avoidance_distance"
     platform: number
-    control_mode: read_only_confirmed
+    control_mode: device_writable
     class: "DreameA2PerMapObstacleAvoidanceDistanceNumber"
     class_file: "custom_components/dreame_a2_mower/number.py:462"
     device: per-map
@@ -2956,7 +2956,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_ai_recognition_humans"
     platform: switch
-    control_mode: read_only_confirmed
+    control_mode: device_writable
     class: "DreameA2AiRecognitionHumansSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:937"
     device: per-map
@@ -2992,7 +2992,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_ai_recognition_animals"
     platform: switch
-    control_mode: read_only_confirmed
+    control_mode: device_writable
     class: "DreameA2AiRecognitionAnimalsSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:950"
     device: per-map
@@ -3026,7 +3026,7 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_ai_recognition_objects"
     platform: switch
-    control_mode: read_only_confirmed
+    control_mode: device_writable
     class: "DreameA2AiRecognitionObjectsSwitch"
     class_file: "custom_components/dreame_a2_mower/switch_global.py:963"
     device: per-map

@@ -52,23 +52,3 @@ async def test_pre_helper_reverts_on_failure():
     ent.hass.services.async_call.assert_awaited()
 
 
-@pytest.mark.asyncio
-async def test_pre_ai_bit_helper_calls_and_reverts():
-    ent, coord = _entity()
-    # success
-    await sw.pre_settings_ai_bit_write(
-        ent, state_field="settings_mowing_height", new_value=True,
-        map_id=0, bit=0, settings_value=7,
-    )
-    coord.write_map_general_ai_bit.assert_awaited_once_with(
-        map_id=0, bit=0, on=True, settings_value=7,
-    )
-    # failure reverts
-    ent2, coord2 = _entity()
-    coord2.write_map_general_ai_bit = AsyncMock(return_value=False)
-    coord2.data.settings_mowing_height = 5.5
-    await sw.pre_settings_ai_bit_write(
-        ent2, state_field="settings_mowing_height", new_value=True,
-        map_id=0, bit=0, settings_value=7,
-    )
-    ent2.hass.services.async_call.assert_awaited()
