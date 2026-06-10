@@ -81,6 +81,7 @@ def test_build_lang_text():
     (cp.build_dnd, {"value": True}), (cp.build_low, {"value": True}),
     (cp.build_lit, {"value": True}), (cp.build_rec, {"value": True}),
     (cp.build_bat_charging, {"enabled": True}), (cp.build_bat_power, {"recharge": 10, "resume": 90}),
+    (cp.build_wrp, {"value": True}),
 ])
 def test_builders_return_none_on_empty_base(fn, args):
     assert fn(None, **args) is None

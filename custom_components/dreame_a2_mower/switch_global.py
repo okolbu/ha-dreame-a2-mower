@@ -482,13 +482,12 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     ),
 
     # ------------------------------------------------------------------
-    # Read-only: LIT[0] — LED period (main enable)
+    # Settable (Phase A1): LIT[0] — LED period (main enable); RMW via cfg_payloads.build_lit
     #
     # CFG.LIT = list(8) [enabled, start_min, end_min, standby, working,
     #                    charging, error, unknown_trailing_toggle].
-    # MowerState stores indices 0, 3, 4, 5, 6 but NOT 1 (start_min),
-    # 2 (end_min), or 7 (unknown_trailing_toggle).  The full 8-element
-    # list cannot be safely reconstructed → read-only in F4.
+    # build_lit reads the raw 8-element list from CFG and patches only
+    # the target index, preserving undecoded slots — no reconstruction needed.
     # ------------------------------------------------------------------
     DreameA2SwitchEntityDescription(
         key="led_period",
@@ -502,8 +501,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     ),
 
     # ------------------------------------------------------------------
-    # Read-only: LIT[3] — LED in standby
-    # Same reason as led_period (LIT indices 1, 2, 7 not in MowerState).
+    # Settable (Phase A1): LIT[3] — LED in standby; RMW via cfg_payloads.build_lit
     # ------------------------------------------------------------------
     DreameA2SwitchEntityDescription(
         key="led_in_standby",
@@ -517,7 +515,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     ),
 
     # ------------------------------------------------------------------
-    # Read-only: LIT[4] — LED while working
+    # Settable (Phase A1): LIT[4] — LED while working; RMW via cfg_payloads.build_lit
     # ------------------------------------------------------------------
     DreameA2SwitchEntityDescription(
         key="led_in_working",
@@ -531,7 +529,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     ),
 
     # ------------------------------------------------------------------
-    # Read-only: LIT[5] — LED while charging
+    # Settable (Phase A1): LIT[5] — LED while charging; RMW via cfg_payloads.build_lit
     # ------------------------------------------------------------------
     DreameA2SwitchEntityDescription(
         key="led_in_charging",
@@ -545,7 +543,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     ),
 
     # ------------------------------------------------------------------
-    # Read-only: LIT[6] — LED on error
+    # Settable (Phase A1): LIT[6] — LED on error; RMW via cfg_payloads.build_lit
     # ------------------------------------------------------------------
     DreameA2SwitchEntityDescription(
         key="led_in_error",
@@ -559,13 +557,12 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     ),
 
     # ------------------------------------------------------------------
-    # Read-only: REC[0] — human presence alert enabled
+    # Settable (Phase A1): REC[0] — human presence alert enabled; RMW via cfg_payloads.build_rec
     #
     # CFG.REC = list(9) [enabled, sensitivity, standby, mowing, recharge,
     #                    patrol, alert, photo_consent, push_min].
-    # MowerState stores only [0] (enabled) and [1] (sensitivity).
-    # Elements [2..8] are not decoded → full 9-element list cannot be
-    # safely reconstructed → read-only in F4.
+    # build_rec reads the raw 9-element list from CFG and patches only
+    # the target index, preserving undecoded slots — no reconstruction needed.
     # ------------------------------------------------------------------
     DreameA2SwitchEntityDescription(
         key="human_presence_alert",
