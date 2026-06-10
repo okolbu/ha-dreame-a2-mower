@@ -67,3 +67,23 @@ def write_schedule_row(
         _send(send_action, "SCHDDV3",
               {"s": off, "l": len(chunk.encode("utf-8")), "d": chunk, "v": txn_id})
     _send(send_action, "SCHDSV3", {"i": slot, "v": version, "s": [enabled, flag]})
+
+
+def read_schedule_rows(send_action) -> list[list]:
+    """Read the authoritative schedule rows for RMW.
+
+    Probes SCHDTV3; the unwrapped payload's `d.rows` carries the
+    [slot, enabled, name, b64blob] rows (the relay reassembles chunks on read).
+    Returns [] on any malformed/empty response.
+    """
+    try:
+        raw = send_action(ROUTED_ACTION_SIID, ROUTED_ACTION_AIID,
+                          [{"m": "r", "t": "SCHDTV3"}])
+        payload = _unwrap(raw)
+    except CfgActionError:
+        return []
+    d = payload.get("d") if isinstance(payload, dict) else None
+    rows = d.get("rows") if isinstance(d, dict) else None
+    if not isinstance(rows, list):
+        return []
+    return [r for r in rows if isinstance(r, list) and len(r) == 4]

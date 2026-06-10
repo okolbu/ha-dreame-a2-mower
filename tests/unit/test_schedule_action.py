@@ -67,3 +67,22 @@ def test_write_schedule_row_raises_on_error():
             slot=0, enabled=1, name="Spr", blob_b64="qghRIBIAAu0=",
             version=5, flag=0, txn_id=1,
         )
+
+
+def test_read_schedule_rows_from_probe_rows():
+    # SCHDTV3 probe returns the full table in d.rows -> return as-is.
+    def send(siid, aiid, params):
+        t = params[0]["t"]
+        if t == "SCHDTV3":
+            return {"result": {"out": [{"m": "r", "r": 0, "d": {
+                "rows": [[0, 1, "Spr", "qghRIBIAAu0="], [1, 0, "Aut", ""]],
+            }}]}}
+        raise AssertionError(f"unexpected t={t}")
+    rows = sa.read_schedule_rows(send)
+    assert rows == [[0, 1, "Spr", "qghRIBIAAu0="], [1, 0, "Aut", ""]]
+
+
+def test_read_schedule_rows_malformed_returns_empty():
+    def send(siid, aiid, params):
+        return {"result": {"out": [{"m": "r", "r": 0, "d": {}}]}}
+    assert sa.read_schedule_rows(send) == []
