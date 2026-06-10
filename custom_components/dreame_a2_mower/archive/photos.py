@@ -34,6 +34,8 @@ class ArchivedPhoto:
     size_bytes: int
     md5: str
     is_person: bool
+    category: str = "obstacle"
+    detection: dict | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -43,17 +45,24 @@ class ArchivedPhoto:
             "size_bytes": self.size_bytes,
             "md5": self.md5,
             "is_person": self.is_person,
+            "category": self.category,
+            "detection": self.detection,
         }
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "ArchivedPhoto":
+        is_person = bool(d.get("is_person", False))
+        raw_cat = d.get("category")
+        category = raw_cat if raw_cat else ("person" if is_person else "obstacle")
         return cls(
             filename=str(d.get("filename", "")),
             name=str(d.get("name", "")),
             unix_ts=int(d.get("unix_ts", 0)),
             size_bytes=int(d.get("size_bytes", 0)),
             md5=str(d.get("md5", "")),
-            is_person=bool(d.get("is_person", False)),
+            is_person=is_person,
+            category=category,
+            detection=d.get("detection") or None,
         )
 
 
@@ -86,6 +95,7 @@ class PhotoArchive:
         self._index: list[ArchivedPhoto] = []
         self._retention = int(retention) if retention else 0
         self._max_bytes = int(max_bytes) if max_bytes else 0
+        self._per_cat: int = 0
         self._index_loaded: bool = False
 
     def _index_path(self) -> Path:
@@ -164,7 +174,14 @@ class PhotoArchive:
             return None
 
     def archive(
-        self, *, name: str, unix_ts: int, data: bytes, is_person: bool
+        self,
+        *,
+        name: str,
+        unix_ts: int,
+        data: bytes,
+        is_person: bool,
+        category: str = "obstacle",
+        detection: dict | None = None,
     ) -> ArchivedPhoto | None:
         """Persist one JPEG. Idempotent by md5. Returns the archive record on
         first insert, ``None`` when the md5 already exists or the payload is
@@ -192,11 +209,14 @@ class PhotoArchive:
             size_bytes=len(data),
             md5=md5,
             is_person=bool(is_person),
+            category=str(category) if category else "obstacle",
+            detection=detection,
         )
         self._index.append(photo)
         self._save_index()
         self._enforce_retention()
         self._enforce_size_cap()
+        self._enforce_per_category_retention()
         return photo
 
     def _enforce_retention(self) -> None:
@@ -270,3 +290,56 @@ class PhotoArchive:
         """Update the cumulative-size cap and prune immediately if needed."""
         self._max_bytes = int(max_bytes) if max_bytes else 0
         self._enforce_size_cap()
+
+    def set_per_category_retention(self, keep: int) -> None:
+        """Update the per-category count cap and prune immediately if needed."""
+        self._per_cat = int(keep) if keep else 0
+        self._enforce_per_category_retention()
+
+    def count_by_category(self, cat: str) -> int:
+        """Return the number of archived photos whose ``category`` matches *cat*."""
+        self.load_index()
+        return sum(1 for p in self._index if p.category == cat)
+
+    def _enforce_per_category_retention(self) -> None:
+        """For each category, keep at most ``_per_cat`` newest photos.
+
+        Drops file + index entry for any excess, then saves the index.
+        No-op when ``_per_cat <= 0``.
+        """
+        keep = self._per_cat
+        if keep <= 0:
+            return
+        # group by category
+        from collections import defaultdict
+        by_cat: dict[str, list[ArchivedPhoto]] = defaultdict(list)
+        for photo in self._index:
+            by_cat[photo.category].append(photo)
+
+        to_drop: list[ArchivedPhoto] = []
+        for photos in by_cat.values():
+            if len(photos) <= keep:
+                continue
+            # keep newest by unix_ts
+            sorted_photos = sorted(photos, key=lambda p: p.unix_ts)
+            excess = len(sorted_photos) - keep
+            to_drop.extend(sorted_photos[:excess])
+
+        if not to_drop:
+            return
+
+        for photo in to_drop:
+            try:
+                (self._root / photo.filename).unlink(missing_ok=True)
+            except OSError as ex:
+                _LOGGER.warning(
+                    "PhotoArchive: failed to prune %s: %s", photo.filename, ex,
+                )
+        drop_filenames = {p.filename for p in to_drop}
+        self._index = [p for p in self._index if p.filename not in drop_filenames]
+        self._save_index()
+        _LOGGER.info(
+            "PhotoArchive: pruned %d photo(s) past per-category retention=%d",
+            len(to_drop),
+            keep,
+        )
