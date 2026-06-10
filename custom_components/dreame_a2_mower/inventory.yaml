@@ -3156,10 +3156,11 @@ opcodes:
       stop an active session. Firmware echoes it on s2p50 when the user hits
       Cancel / Stop, firing ~1 s after s2p2=48. Does not carry id/ids.
 
-      The integration does NOT send o:3 as a command — it uses the direct
-      action(siid=5, aiid=2) path (ACTION_TABLE[MowerAction.STOP]). The app
-      uses the routed-action form instead. Both paths accomplish the same result;
-      the o:3 s2p50 echo appears regardless of which path the sender used.
+      The integration sends o:3 (End/Stop) via the routed path
+      (ACTION_TABLE[MowerAction.STOP].routed_o=3) as of Phase B; the prior
+      direct action(siid=5,aiid=2) path returned 80001 on g2408.
+      [app-mitm:2026-06-09-settings-sweep] The o:3 s2p50 echo appears
+      regardless of which path the sender used.
 
       Also listed in apk as joystick "stop" (o:2–7 group); in s2p50 echo
       context it is the canonical "user-cancel" / stop marker.
@@ -3198,9 +3199,10 @@ opcodes:
       payload to pause an active mow. DISTINCT from stop (o:3) — pause
       preserves session state so the mower can resume; stop ends the task.
 
-      The integration does NOT send o:4 as a command — it uses the direct
-      action(siid=5, aiid=4) path (ACTION_TABLE[MowerAction.PAUSE]). The app
-      uses the routed-action form instead.
+      The integration sends o:4 (Pause) via the routed path
+      (ACTION_TABLE[MowerAction.PAUSE].routed_o=4) as of Phase B; the prior
+      direct action(siid=5,aiid=4) path returned 80001 on g2408.
+      [app-mitm:2026-06-09-settings-sweep]
 
       Previously noted as "joystick control — pause" (part of the o:2–7 group).
       The app-mitm sweep confirms this is the primary PAUSE command for all
@@ -3243,10 +3245,11 @@ opcodes:
       The app sends this as a routed action (s2a50 {m:'a', o:5}) with no
       payload to resume after a pause (o:4). Counterpart to o:4 pause.
 
-      The integration does not currently use a routed o:5 form — resume is
-      handled implicitly (the START_MOWING / mow dispatch covers both new
-      and resume starts). Whether o:5 echoes on s2p50 is not yet observed.
-      [UNKNOWN — to capture]
+      The integration sends o:5 (Resume/continue a paused mow) via
+      ACTION_TABLE[MowerAction.RESUME].routed_o=5 as of Phase B (exposed as
+      the Resume button), distinct from START_MOWING (o=100).
+      [app-mitm:2026-06-09-settings-sweep] Whether o:5 echoes on s2p50 is
+      not yet observed. [UNKNOWN — to capture]
 
       Previously noted as "joystick control — continue / resume" (part of the
       o:2–7 group). App-mitm confirms this is the general RESUME command.
@@ -3295,9 +3298,10 @@ opcodes:
       Detection of Recharge should lean on s2p1: ?→5→6 plus s3p2→1, NOT on
       the s2p50 o:6 echo.
 
-      The integration uses action(siid=5, aiid=3) for DOCK/RECHARGE
-      (ACTION_TABLE[MowerAction.DOCK / MowerAction.RECHARGE]); the app uses
-      the routed-action form instead.
+      The integration sends o:6 (Recharge/return-to-dock) via the routed path
+      (ACTION_TABLE[MowerAction.DOCK / RECHARGE].routed_o=6) as of Phase B;
+      the prior direct action(siid=5,aiid=3) path returned 80001 on g2408.
+      [app-mitm:2026-06-09-settings-sweep]
     status:
       seen_on_wire: true
       first_seen: "2026-04-20"
