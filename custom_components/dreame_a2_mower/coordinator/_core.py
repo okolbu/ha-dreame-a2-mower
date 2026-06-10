@@ -502,17 +502,43 @@ class _CoreMixin:
                     exc_info=True,
                 )
 
-            # Schedule LOCN refresh every 60 seconds; also fire one immediately
-            # so GPS position is populated at startup.
-            async def _periodic_locn(_now: Any) -> None:
-                await self._refresh_locn()
+            # Schedule GPS refresh every 60 seconds via getRecords; also fire
+            # one immediately so position_lat/lon are populated at startup.
+            # Supersedes the LOCN routed-action path (which is retained as a
+            # method but no longer scheduled — see _refresh_locn in _refreshers.py).
+            async def _periodic_gps(_now: Any) -> None:
+                await self._refresh_gps()
 
             self.entry.async_on_unload(
                 async_track_time_interval(
-                    self.hass, _periodic_locn, timedelta(seconds=60)
+                    self.hass, _periodic_gps, timedelta(seconds=60)
                 )
             )
-            await self._refresh_locn()
+            await self._refresh_gps()
+
+            # Schedule REMOTE refresh every 6 hours; also fire one immediately
+            # so 4G SIM status (left_days, card_id, etc.) is populated at startup.
+            async def _periodic_remote(_now: Any) -> None:
+                await self._refresh_remote()
+
+            self.entry.async_on_unload(
+                async_track_time_interval(
+                    self.hass, _periodic_remote, timedelta(hours=6)
+                )
+            )
+            await self._refresh_remote()
+
+            # Schedule message-record refresh every hour; also fire one immediately
+            # so service/system unread counts are populated at startup.
+            async def _periodic_messages(_now: Any) -> None:
+                await self._refresh_messages()
+
+            self.entry.async_on_unload(
+                async_track_time_interval(
+                    self.hass, _periodic_messages, timedelta(hours=1)
+                )
+            )
+            await self._refresh_messages()
 
             # Schedule DEV refresh every 6 hours; also fire one immediately
             # so the hardware serial / firmware version land at startup

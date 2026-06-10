@@ -218,6 +218,49 @@ class _RefreshersMixin:
         if new_state != self.data:
             self.async_set_updated_data(new_state)
 
+    async def _refresh_gps(self) -> None:
+        """Absolute GPS via getRecords → position_lat/lon (+ attrs). None clears."""
+        if not hasattr(self, "_cloud"):
+            return
+        gps = await self.hass.async_add_executor_job(self._cloud.fetch_gps)
+        if gps is None:
+            if self.data.position_lat is not None or self.data.position_lon is not None:
+                self.async_set_updated_data(dataclasses.replace(
+                    self.data, position_lat=None, position_lon=None))
+            return
+        new = dataclasses.replace(
+            self.data, position_lat=gps["lat"], position_lon=gps["lon"],
+            gps_update_time=gps.get("update_time"), gps_card4g=gps.get("card4g"))
+        if new != self.data:
+            self.async_set_updated_data(new)
+
+    async def _refresh_remote(self) -> None:
+        """4G SIM status via REMOTE."""
+        if not hasattr(self, "_cloud"):
+            return
+        r = await self.hass.async_add_executor_job(self._cloud.fetch_remote)
+        if not r:
+            return
+        new = dataclasses.replace(
+            self.data, sim_active_time=r.get("active_time"), sim_card_id=r.get("card_id"),
+            sim_expired_time=r.get("expired_time"), sim_left_days=r.get("left_days"))
+        if new != self.data:
+            self.async_set_updated_data(new)
+
+    async def _refresh_messages(self) -> None:
+        """Account message-list unread counts via message-record/list v1."""
+        if not hasattr(self, "_cloud"):
+            return
+        m = await self.hass.async_add_executor_job(self._cloud.fetch_message_record)
+        if not m:
+            return
+        new = dataclasses.replace(
+            self.data, service_messages_unread=m.get("service_unread"),
+            system_messages_unread=m.get("system_unread"),
+            latest_service_message=m.get("latest"))
+        if new != self.data:
+            self.async_set_updated_data(new)
+
     async def _refresh_dev(self) -> None:
         """Fetch DEV {fw, mac, ota, sn} and update MowerState.
 

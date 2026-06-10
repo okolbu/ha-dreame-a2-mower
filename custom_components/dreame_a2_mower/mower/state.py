@@ -160,6 +160,21 @@ class MowerState:
     position_lat: float | None = None
     position_lon: float | None = None
 
+    # Source: getRecords GPS (Phase C). Persistence: volatile.
+    gps_update_time: str | None = None
+    gps_card4g: str | None = None
+
+    # Source: getRecords REMOTE (Phase C) — 4G SIM status. Persistence: volatile.
+    sim_active_time: str | None = None
+    sim_card_id: str | None = None
+    sim_expired_time: str | None = None
+    sim_left_days: int | None = None
+
+    # Source: message-record/list v1 (Phase C). Persistence: volatile.
+    service_messages_unread: int | None = None
+    system_messages_unread: int | None = None
+    latest_service_message: str | None = None
+
     # Source: s1.1 byte[17] signed live RSSI (preferred while mowing /
     # connected) with a CFG.NET fallback that populates immediately on
     # HA startup so the sensor isn't Unknown for ~45 s waiting for the
