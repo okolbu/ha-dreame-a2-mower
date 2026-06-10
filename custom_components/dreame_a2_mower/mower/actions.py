@@ -47,6 +47,8 @@ class MowerAction(Enum):
     DOCK = auto()
     RECHARGE = auto()  # alias for DOCK with explicit "head to charger now" semantic
     STOP = auto()
+    RESUME = auto()  # op=5 continue a paused mow
+    CANCEL_DOCK_RETURN = auto()  # op=13 cancel an in-progress dock-return (distinct from STOP)
     FIND_BOT = auto()
     LOCK_BOT_TOGGLE = auto()
     LOCK_BOT = auto()  # Distinct from LOCK_BOT_TOGGLE — direct lockBot opcode (apk op=12)
@@ -257,10 +259,15 @@ ACTION_TABLE: dict[MowerAction, ActionEntry] = {
         "routed_t": "TASK", "routed_o": 108,
         "payload_fn": _edge_patrol_payload,
     },
-    MowerAction.PAUSE: {"siid": 5, "aiid": 4},
-    MowerAction.DOCK: {"siid": 5, "aiid": 3},
-    MowerAction.RECHARGE: {"siid": 5, "aiid": 3},  # same wire call as DOCK
-    MowerAction.STOP: {"siid": 5, "aiid": 2},
+    MowerAction.PAUSE: {"siid": 5, "aiid": 4, "routed_o": 4},
+    MowerAction.DOCK: {"siid": 5, "aiid": 3, "routed_o": 6},
+    MowerAction.RECHARGE: {"siid": 5, "aiid": 3, "routed_o": 6},  # same wire call as DOCK
+    MowerAction.STOP: {"siid": 5, "aiid": 2, "routed_o": 3},
+    # RESUME — op=5 continue a paused mow (app capture 2026-06-09, no payload).
+    MowerAction.RESUME: {"siid": 5, "aiid": 1, "routed_o": 5},
+    # CANCEL_DOCK_RETURN — op=13 cancel an in-progress dock-return; distinct
+    # from STOP (op=3). App capture 2026-06-09, no payload.
+    MowerAction.CANCEL_DOCK_RETURN: {"siid": 5, "aiid": 1, "routed_o": 13},
     # FIND_BOT → legacy DreameMowerAction.LOCATE: {siid: 7, aiid: 1}
     # routed_o=9 per cfg_action.py:182 (findBot opcode)
     MowerAction.FIND_BOT: {"siid": 7, "aiid": 1, "routed_o": 9},
