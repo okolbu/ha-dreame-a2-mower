@@ -803,3 +803,12 @@ class _FetchersMixin:
         except Exception as ex:
             _LOGGER.warning("set_pre failed: %s", ex)
             return False
+
+    def get_pre(self, idx: int, region: int) -> list | None:
+        """Scoped PRE read for map `idx`, zone `region`. None on failure."""
+        from ..protocol import cfg_action  # type: ignore[import]
+        try:
+            return cfg_action.get_pre(self.action, idx=idx, region=region)
+        except Exception as ex:  # pragma: no cover - defensive
+            _LOGGER.warning("get_pre(idx=%s,region=%s) failed: %s", idx, region, ex)
+            return None

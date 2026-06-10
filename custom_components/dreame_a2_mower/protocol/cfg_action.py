@@ -75,6 +75,20 @@ def get_cfg(send_action) -> dict:
     return d
 
 
+def get_pre(send_action, *, idx: int, region: int) -> list:
+    """Read the PRE preferences array for map `idx`, zone `region`.
+    Returns the bare array (the response payload's `d`)."""
+    raw = send_action(
+        ROUTED_ACTION_SIID, ROUTED_ACTION_AIID,
+        [{"m": "g", "t": "PRE", "d": {"idx": int(idx), "region": int(region)}}],
+    )
+    payload = _unwrap(raw)
+    d = payload.get("d") if isinstance(payload, dict) else None
+    if not isinstance(d, list):
+        raise CfgActionError(f"get_pre returned no array `d`: {payload!r}")
+    return d
+
+
 def get_dock_pos(send_action) -> dict:
     """Fetch dock position + lawn-connection status."""
     raw = send_action(
