@@ -158,6 +158,22 @@ so they need an integration-slot or a probe call to observe — not the status t
 only; the write is a 3-key transaction (SCHDDV3 chunked protobuf + SCHDIV3 length
 descriptor + SCHDSV3 enable/summary), all tied by a shared `v` ms-timestamp txn-id.
 Open sub-gap: SCHDSV3 `v` packed-int bit layout (see CFG-keys table above).
+Schedule-blob run-record open items (from the 2026-06-10 schedule-write decode,
+`[app-mitm:2026-06-10-schedule-write]`):
+- **byte[5] meaning** — `[UNKNOWN — to capture]` always 0x00 in all 3 captured
+  modes (all-area / zone-full / zone-edge); purpose unconfirmed. Capture: diff a
+  run record where the app sets a value that lands in byte[5].
+- **2nd-edge `seg=1`** — `[UNKNOWN — to capture]` only `seg=0` observed; the test
+  device has a single edge/zone, so the second-edge selector is unconfirmed.
+  Capture: define a second edge/zone and schedule an edge run on it.
+- **multi-day-per-run** — `[UNKNOWN — to capture]` whether multiple weekdays for one
+  run are a bitmask in byte[2] high bits vs. multiple run records is unconfirmed.
+  Capture: schedule a run on two days, diff the blob.
+- **SCHDSV3 `flag` (s[1])** — `[UNKNOWN — to capture]` second state element is 0 in
+  all captures; semantics unknown. Capture: toggle schedule states, diff s[1].
+- **slot allocation on add-new** — `[UNKNOWN — to capture]` how a brand-new schedule
+  slot id is chosen on add (vs. edit of an existing slot) is unconfirmed. Capture:
+  add a third schedule and observe the SCHDIV3 `i` / row slot index.
 `PIN` write shape — resolved 2026-06-09: `{type:'auth'|'update', value:<plaintext int>}`.
 Photo metadata source — resolved 2026-06-09: embedded JPEG COM marker (FFFE) + index
 from `userDidOssList`. Map-edit write path — resolved 2026-06-09: confirmed sequence

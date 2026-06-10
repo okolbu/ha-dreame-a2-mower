@@ -78,6 +78,14 @@ the prior claim that's being withdrawn — not a paraphrase. Grep for
 the prose in the entry's `semantic:` block and flag it for the user if
 it needs rewording.
 
+- **App-MITM is wire-verified.** Captures from snooping the app↔mower link
+  (mitmproxy on :13267, e.g. the 2026-06-09 settings sweep and 2026-06-10
+  schedule-write decode) count as wire-verification across the board — not only
+  for calendar entities, and not limited to integration-originated wire. A claim
+  proven by a clean single-variable diff against an app↔mower capture may be
+  marked `confirmed` and a control flipped writable, tagged
+  `[app-mitm:<date>-<topic>]`.
+
 ### Where this rule does NOT apply
 
 - Refactors that don't change wire understanding or entity sources.

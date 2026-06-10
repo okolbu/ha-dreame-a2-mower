@@ -6494,7 +6494,7 @@ cfg_individual:
     status:
       seen_on_wire: false
       first_seen: "2026-06-09"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       integration_code: "custom_components/dreame_a2_mower/protocol/schedule_decode.py"
@@ -6506,6 +6506,10 @@ cfg_individual:
         status: verified
         claim: "SCHDDV3 {s,l,d,v} is the chunked schedule-write key; blob format is same protobuf as schedule_decode.py read path; transport confirmed by app-MITM."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Mow schedule writes via SCHD*V3 chunked routed-action transaction (SCHDIV3 header + SCHDDV3 <=50B chunks sharing one txn id + SCHDSV3 state) on siid:2/aiid:50. Row = [slot,enabled,name,b64blob]; blob = concatenated 7/8/9-byte run records (mode 0/1/2). SCHEDULE.* KV is a cache mirror the device ignores. [app-mitm:2026-06-10-schedule-write]"
+        evidence: "dreame-app-schedule-write-2026-06-10.md (app<->mower MITM, records 3237+)"
 
   - id: "SCHDIV3"
     name: "schedule_index_v3_write"
