@@ -161,7 +161,14 @@ def probe_get(send_action, target: str) -> Any:
 def set_pre(send_action, pre_array: list) -> Any:
     """Write the PRE preferences array. Caller is responsible for
     read-modify-write semantics (read CFG.PRE, modify the slot,
-    pass the full updated array here)."""
+    pass the full updated array here).
+
+    Wire shape: ``{m:'s', t:'PRE', d:<bare array>}`` — the ``d`` field is
+    the array itself, NOT wrapped under a ``value`` key.  The prior
+    ``{"value": pre_array}`` wrapping was wrong and caused the device to
+    return ``r=-3`` on every PRE write (captured 2026-06-09 app MITM:
+    the app sends ``d:[...]`` bare and the device accepts it).
+    """
     if not isinstance(pre_array, list) or len(pre_array) < 10:
         raise ValueError(
             f"PRE array must have at least 10 elements, got {len(pre_array) if isinstance(pre_array, list) else type(pre_array).__name__}"
@@ -169,7 +176,7 @@ def set_pre(send_action, pre_array: list) -> Any:
     return send_action(
         ROUTED_ACTION_SIID,
         ROUTED_ACTION_AIID,
-        [{"m": "s", "t": "PRE", "d": {"value": pre_array}}],
+        [{"m": "s", "t": "PRE", "d": pre_array}],
     )
 
 

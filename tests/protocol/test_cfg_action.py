@@ -56,7 +56,13 @@ def test_set_pre_validates_array_length():
         set_pre(lambda *_a, **_kw: None, [0, 1, 2])  # too short
 
 
-def test_set_pre_sends_value_envelope():
+def test_set_pre_sends_bare_array():
+    """PRE setter uses d:<bare array>, NOT d:{"value":[...]}.
+
+    The old {"value": pre_array} wrapping caused the device to return r=-3
+    on every write (wrong-envelope artifact). The app sends the bare array
+    and the device accepts it (app MITM capture 2026-06-09).
+    """
     captured = []
 
     def fake_send(siid, aiid, params):
@@ -65,7 +71,7 @@ def test_set_pre_sends_value_envelope():
 
     pre = [0, 0, 35, 100, 80, 0, 0, 0, 0, 1]
     set_pre(fake_send, pre)
-    assert captured == [(2, 50, [{"m": "s", "t": "PRE", "d": {"value": pre}}])]
+    assert captured == [(2, 50, [{"m": "s", "t": "PRE", "d": pre}])]
 
 
 def test_call_action_op_basic():

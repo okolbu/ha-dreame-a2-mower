@@ -738,10 +738,11 @@ class _FetchersMixin:
             return False
 
     def set_pre(self, pre_array: list) -> bool:
-        """Write the full 10-element PRE preferences array.
+        """Write the full PRE preferences array.
 
         Delegates to ``protocol.cfg_action.set_pre`` which constructs the
-        routed-action envelope ``{m:'s', t:'PRE', d:{value: pre_array}}``.
+        routed-action envelope ``{m:'s', t:'PRE', d:<bare array>}``.
+        The ``d`` field is the array itself — NOT wrapped under ``value``.
 
         The caller is responsible for read-modify-write semantics: read the
         current PRE array via fetch_cfg(), mutate the target element, and
@@ -754,12 +755,13 @@ class _FetchersMixin:
         same bug class as the pre-v1.0.2a9 ``set_cfg``. We parse
         ``out[0].r`` here just like ``set_cfg`` does.
 
-        Known result on g2408 fw 4.3.6_0550: ``t='PRE'`` has NO setter at
-        the s2.50 routed-action address — every PRE write returns
-        ``out[0].r=-3`` (relay-confirmed, not a sleeping-relay 80001).
-        So this returns False on g2408; the caller's optimistic update is
-        reverted and HA surfaces the rejection instead of a false success.
-        See docs/research/wire-captures/pre-write-r3-2026-06-03.md.
+        Prior r=-3 verdict debunked (2026-06-09 app MITM capture): the
+        original code wrapped the array as ``d:{"value": pre_array}``, and
+        the device returned ``r=-3`` on every write.  The app sends the bare
+        array ``d:[...]`` and the device accepts it (r=0).  The r=-3 was a
+        wrong-envelope artifact, not evidence that g2408 has no PRE setter.
+        See docs/research/wire-captures/pre-write-r3-2026-06-03.md (the
+        old -3 evidence) and the 2026-06-09 app-capture findings.
 
         Source: protocol/cfg_action.py set_pre(); docs/research/g2408-protocol.md §6.2.
         """

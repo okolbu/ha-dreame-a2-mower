@@ -1,16 +1,16 @@
 """Tests for cloud_client.set_pre response parsing.
 
 set_pre delegates to protocol.cfg_action.set_pre (which builds the
-``{m:'s', t:'PRE', d:{value: <array>}}`` routed-action envelope) and then
+``{m:'s', t:'PRE', d:<bare array>}`` routed-action envelope) and then
 inspects ``out[0].r`` — returning True only when the device accepted the
 write (r=0), mirroring set_cfg. The HTTP-layer ``code`` is always 0 on a
 reachable cloud even when the device rejects, so a shallow non-None check
 would report false success.
 
-Known g2408 reality (fw 4.3.6_0550): ``t='PRE'`` has no routed-action setter,
-so every PRE write returns ``out[0].r=-3`` — see
-docs/research/wire-captures/pre-write-r3-2026-06-03.md. The reject test below
-pins that this surfaces as False rather than a false success.
+Prior r=-3 results were a wrong-envelope artifact: the old code wrapped the
+array as ``d:{"value": pre_array}`` which the device rejected with r=-3.
+The app sends the bare array ``d:[...]`` and the device accepts it
+(app MITM capture 2026-06-09).
 """
 from __future__ import annotations
 
@@ -40,11 +40,12 @@ def test_set_pre_returns_true_on_r0():
     # cfg_action.set_pre calls action(siid, aiid, [payload]) positionally.
     args = client.action.call_args.args
     payload = args[2][0]
-    assert payload == {"m": "s", "t": "PRE", "d": {"value": _PRE}}
+    # d must be the bare array — NOT {"value": _PRE} (wrong-envelope, 2026-06-09 fix).
+    assert payload == {"m": "s", "t": "PRE", "d": _PRE}
 
 
 def test_set_pre_returns_false_when_device_rejects():
-    """out[0].r=-3 (the live g2408 verdict) → set_pre returns False."""
+    """out[0].r=-3 → set_pre returns False (surfaces rejection to caller)."""
     client = _make_client(_REJECTED)
     assert client.set_pre(_PRE) is False
 
