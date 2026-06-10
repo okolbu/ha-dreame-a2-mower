@@ -336,6 +336,20 @@ def _make_ha_stub() -> None:
     http_mod.HomeAssistantView = _HomeAssistantViewStub  # type: ignore[attr-defined]
     sys.modules["homeassistant.components.http"] = http_mod
 
+    # homeassistant.components.time — used by time.py entity builders
+    time_mod = types.ModuleType("homeassistant.components.time")
+
+    @dataclasses.dataclass(frozen=True, kw_only=True)
+    class _TimeEntityDescription:  # noqa: D101
+        key: str = ""
+        name: str = ""
+        icon: str = ""
+        entity_category: object = None
+
+    time_mod.TimeEntity = object  # type: ignore[attr-defined]
+    time_mod.TimeEntityDescription = _TimeEntityDescription  # type: ignore[attr-defined]
+    sys.modules["homeassistant.components.time"] = time_mod
+
     # homeassistant.components.select — used by select.py entity builders
     sel_mod = types.ModuleType("homeassistant.components.select")
 

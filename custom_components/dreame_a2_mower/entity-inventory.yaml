@@ -3153,32 +3153,36 @@ entities:
     source:
       wire: "cloud CFG (CFG.DND / CFG.LOW / CFG.BAT — integer minutes-since-midnight fields)"
       state_path: "entity_description.minutes_fn(coordinator.data) → _to_time(minutes) → datetime.time"
-    write_path: read-only
+    write_path: "coordinator.write_setting(cfg_key, wire_dict, field_updates=...) via RMW builder in protocol.cfg_payloads; blocked by read_only_noop control_mode (Task 8 will promote to device_write_unproven)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: DreameA2Time.native_value = _to_time(entity_description.minutes_fn(coordinator.data)); async_set_value logs warning and no-ops (schedule editing is BT-only per protocol-doc §1.1 on g2408). Platform 'time' is a real registered HA platform (homeassistant.components.time.TimeEntity). Read from time.py:117-167; not re-confirmed live."
         evidence: "time.py:117-153 (class DreameA2Time(CoordinatorEntity, TimeEntity)); time.py:160-167 (async_setup_entry registered under DOMAIN); time.py:1 (module docstring confirms time platform)"
+      - date: "2026-06-10"
+        status: presumed
+        claim: "Phase A1 Task 7: DreameA2TimeEntityDescription now carries cfg_key + build_from_cfg_fn + field_updates_fn; async_set_value converts datetime.time to minutes, RMW-builds wire payload via cfg_payloads builders, writes via coordinator.write_setting. All 6 entities wired; LIT start/end have no MowerState minute fields and are not present. control_mode remains read_only_noop until Task 8 promotes them."
     references:
       wire_entry: "inventory.yaml id=DND; inventory.yaml id=LOW; inventory.yaml id=BAT"
       code: "custom_components/dreame_a2_mower/time.py:117"
     notes: |
       Config-driven base class. One HA entity instantiated per entry in
-      the TIMES tuple (time.py:72). Descriptor keys backed as of 2026-05-31:
+      the TIMES tuple (time.py:72). Descriptor keys as of 2026-06-10 (Phase A1):
         dnd_start_time               (CFG.DND[1] / MowerState.dnd_start_min)
         dnd_end_time                 (CFG.DND[2] / MowerState.dnd_end_min)
         low_speed_at_night_start_time (CFG.LOW[1] / MowerState.low_speed_at_night_start_min)
         low_speed_at_night_end_time  (CFG.LOW[2] / MowerState.low_speed_at_night_end_min)
         charging_start_time          (CFG.BAT[4] / MowerState.charging_start_min)
         charging_end_time            (CFG.BAT[5] / MowerState.charging_end_min)
-      All six are DIAGNOSTIC, read-only. Minutes-since-midnight integer from
-      MowerState; converted to datetime.time via _to_time(minutes). Returns None
-      when minutes is None (field not yet populated from cloud) or out of range
-      0-1439. Write is deferred — schedule editing is BT-only on g2408 in F4;
-      async_set_value logs a warning and no-ops.
+      LIT start/end time entities do NOT exist (MowerState has no lit_start_min / lit_end_min
+      fields; those are display-only via switch.led_period backed by CFG.LIT).
+      Minutes-since-midnight int from MowerState; converted to datetime.time via
+      _to_time(minutes). Returns None when minutes is None or out of range 0-1439.
+      Write path: datetime.time → m (minutes) → RMW builder → write_setting. Gated
+      behind control_mode (read_only_noop until Task 8 promotes).
 
   # ------------------------------------------------------------------
   # Action buttons (button.py — _DreameA2ActionButton subclasses)
