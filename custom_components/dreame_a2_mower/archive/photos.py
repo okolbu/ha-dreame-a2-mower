@@ -148,6 +148,16 @@ class PhotoArchive:
         self.load_index()
         return any(p.md5 == md5 for p in self._index)
 
+    def has_name(self, name: str) -> bool:
+        """Return True if any index entry has the given OSS leaf name.
+
+        Used by _refresh_oss_gallery as the gallery dedup key — the OSS
+        leaf is stable and known before downloading, so we can skip the
+        fetch entirely when the photo is already present.
+        """
+        self.load_index()
+        return any(p.name == name for p in self._index)
+
     def latest(self) -> ArchivedPhoto | None:
         self.load_index()
         if not self._index:

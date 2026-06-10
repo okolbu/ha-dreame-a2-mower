@@ -170,6 +170,10 @@ class MowerState:
     sim_expired_time: str | None = None
     sim_left_days: int | None = None
 
+    # Source: OSS gallery sync (_refresh_oss_gallery, Phase D). Persistence: volatile.
+    oss_storage_used: int | None = None
+    oss_storage_total: int | None = None
+
     # Source: message-record/list v1 (Phase C). Persistence: volatile.
     service_messages_unread: int | None = None
     system_messages_unread: int | None = None

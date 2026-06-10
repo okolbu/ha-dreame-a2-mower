@@ -239,6 +239,11 @@ class _LidarOssMixin:
         """Return the shared PhotoArchive (album photos — not map-scoped)."""
         return self._photo_archive
 
+    @property
+    def video_archive(self):
+        """Return the shared VideoArchive (patrol/AI-obstacle video clips)."""
+        return self._video_archive
+
     def list_lidar_archive_entries(self) -> list[tuple[int, Any]]:
         """Aggregate all LiDAR scans across maps, newest first.
 
@@ -790,3 +795,72 @@ class _LidarOssMixin:
             )
         )
 
+    async def _refresh_oss_gallery(self) -> None:
+        """Canonical OSS media sync: archive new photos (categorized via COM
+        metadata) + videos, and update quota. Runs hourly + on session-end."""
+        if not hasattr(self, "_cloud") or self._cloud is None:
+            return
+        from ..protocol import photo_meta
+        import json as _json
+        from datetime import datetime, timezone
+
+        def _ts(rec):
+            ut = rec.get("uploadTime")
+            try:
+                return int(datetime.strptime(ut, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc).timestamp())
+            except (TypeError, ValueError):
+                return 0
+
+        def _leaf(url):
+            # the OSS object leaf, e.g. ".../ali_dreame/1780952775_person.jpg?Expires=..."
+            base = (url or "").split("?", 1)[0]
+            return base.rsplit("/", 1)[-1] if base else ""
+
+        # --- photos ---
+        photos = await self.hass.async_add_executor_job(self._cloud.list_oss_media, "jpg")
+        for rec in (photos or []):
+            name = _leaf(rec.get("filepath"))
+            if not name or self._photo_archive.has_name(name):
+                continue
+            data = await self.hass.async_add_executor_job(self._cloud.get_file, rec.get("filepath"))
+            if not data:
+                continue
+            is_person = name.lower().endswith("_person.jpg")
+            meta = photo_meta.parse_jpeg_com(data)
+            if is_person:
+                category = "person"
+            elif meta and meta.get("o") == 107:
+                category = "patrol"
+            else:
+                category = "obstacle"
+            detection = (meta or {}).get("detections", [None])[0] if meta and meta.get("detections") else None
+            await self.hass.async_add_executor_job(
+                lambda d=data, n=name, t=_ts(rec), ip=is_person, c=category, det=detection:
+                self._photo_archive.archive(name=n, unix_ts=t, data=d, is_person=ip, category=c, detection=det))
+
+        # --- videos ---
+        videos = await self.hass.async_add_executor_job(self._cloud.list_oss_media, "thumb")
+        for rec in (videos or []):
+            vid = str(rec.get("id") or rec.get("key") or "")
+            if not vid or self._video_archive.has(vid):
+                continue
+            thumb = await self.hass.async_add_executor_job(self._cloud.get_file, rec.get("filepath"))
+            mp4 = await self.hass.async_add_executor_job(self._cloud.get_file, rec.get("videoPath"))
+            if not mp4 or not thumb:
+                continue
+            try:
+                duration = int(_json.loads(rec.get("ext") or "{}").get("duration") or 0)
+            except (ValueError, TypeError):
+                duration = 0
+            await self.hass.async_add_executor_job(
+                lambda v=vid, m=mp4, th=thumb, t=_ts(rec), du=duration:
+                self._video_archive.archive(video_id=v, mp4=m, thumb=th, unix_ts=t, duration=du))
+
+        # --- quota ---
+        quota = await self.hass.async_add_executor_job(self._cloud.fetch_oss_quota)
+        if quota:
+            import dataclasses
+            new = dataclasses.replace(self.data, oss_storage_used=quota.get("used"),
+                                      oss_storage_total=quota.get("total"))
+            if new != self.data:
+                self.async_set_updated_data(new)

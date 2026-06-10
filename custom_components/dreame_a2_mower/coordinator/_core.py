@@ -23,6 +23,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from ..archive.lidar import LidarArchive
 from ..archive.photos import PhotoArchive
 from ..archive.session import ArchivedSession, SessionArchive
+from ..archive.videos import VideoArchive
 from ..wifi_archive_store import WifiArchiveEntry, WifiArchiveStore
 from ..cloud_client import DreameA2CloudClient
 from ..const import (
@@ -35,12 +36,17 @@ from ..const import (
     CONF_SESSION_ARCHIVE_KEEP,
     CONF_STATION_BEARING_DEG,
     CONF_USERNAME,
+    CONF_VIDEO_ARCHIVE_KEEP,
+    CONF_VIDEO_ARCHIVE_MAX_MB,
     CONF_WIFI_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_MAX_MB,
     DEFAULT_PHOTO_ARCHIVE_KEEP,
     DEFAULT_PHOTO_ARCHIVE_MAX_MB,
+    DEFAULT_PHOTO_ARCHIVE_PER_CATEGORY,
     DEFAULT_SESSION_ARCHIVE_KEEP,
+    DEFAULT_VIDEO_ARCHIVE_KEEP,
+    DEFAULT_VIDEO_ARCHIVE_MAX_MB,
     DEFAULT_WIFI_ARCHIVE_KEEP,
     DOMAIN,
     EVENT_TYPE_DOCK_ARRIVED,
@@ -236,6 +242,21 @@ class _CoreMixin:
         # protocol/photo_keys.build_photo_object_key, and a real photo downloaded
         # as a 57 KB JPEG. (get_file_url is wrong: 479D path + leading-char strip.)
         self._photo_sign_fn = lambda c, k: c.get_interim_file_url(k)
+
+        # Phase D: set per-category retention on the photo archive so each
+        # detection type (obstacle / person / patrol) keeps at most
+        # DEFAULT_PHOTO_ARCHIVE_PER_CATEGORY images on disk.
+        self._photo_archive.set_per_category_retention(DEFAULT_PHOTO_ARCHIVE_PER_CATEGORY)
+
+        # Video archive — persists patrol/AI-obstacle MP4 clips + thumbs.
+        # Layout: <config>/dreame_a2_mower/videos/  (flat — not per-map).
+        # Retention and byte cap mirror the photo archive pattern.
+        video_dir = Path(hass.config.path(DOMAIN, "videos"))
+        self._video_archive: VideoArchive = VideoArchive(
+            video_dir,
+            retention=int(opts.get(CONF_VIDEO_ARCHIVE_KEEP, DEFAULT_VIDEO_ARCHIVE_KEEP)),
+            max_bytes=int(opts.get(CONF_VIDEO_ARCHIVE_MAX_MB, DEFAULT_VIDEO_ARCHIVE_MAX_MB)) * 1024 * 1024,
+        )
 
         # WiFi archive — persists heatmap objects fetched from OSS.
         # Layout: <config>/dreame_a2_mower/wifi_archive/
@@ -539,6 +560,18 @@ class _CoreMixin:
                 )
             )
             await self._refresh_messages()
+
+            # Schedule OSS gallery sync every hour; also fire one immediately
+            # so album photos and videos are populated at startup (Phase D).
+            async def _periodic_oss_gallery(_now: Any) -> None:
+                await self._refresh_oss_gallery()
+
+            self.entry.async_on_unload(
+                async_track_time_interval(
+                    self.hass, _periodic_oss_gallery, timedelta(hours=1)
+                )
+            )
+            await self._refresh_oss_gallery()
 
             # Schedule DEV refresh every 6 hours; also fire one immediately
             # so the hardware serial / firmware version land at startup
