@@ -812,3 +812,144 @@ class _FetchersMixin:
         except Exception as ex:  # pragma: no cover - defensive
             _LOGGER.warning("get_pre(idx=%s,region=%s) failed: %s", idx, region, ex)
             return None
+
+    def fetch_gps(self) -> dict | None:
+        """Absolute GPS via dreame-mower-service-app/location/getRecords.
+
+        Returns the newest record as ``{lat, lon, update_time, card4g}``
+        (float lat/lon, string timestamps), or ``None`` on any failure.
+        ``gpsLat``/``gpsLong`` are decimal-degree strings in the wire
+        payload.
+
+        Note: the endpoint is ATA[2]-gated — it returns an empty records
+        list when Real-Time Location is disabled in the app.
+        """
+        self._ensure_strings()
+        strings = getattr(self, "_strings", None) or self.strings
+        headers = {
+            "Accept": "*/*",
+            "Accept-Language": "en-US;q=0.8",
+            "Accept-Encoding": "gzip, deflate",
+            strings[47]: strings[3],
+            strings[49]: strings[5],
+            strings[50]: getattr(self, "_ti", None) or strings[6],
+            strings[51]: strings[52],
+            strings[46]: getattr(self, "_key", ""),
+        }
+        if getattr(self, "_country", None) == "cn":
+            headers[strings[48]] = strings[4]
+        try:
+            url = f"{self.get_api_url()}/dreame-mower-service-app/location/getRecords"
+            resp = self._session.post(
+                url,
+                headers=headers,
+                json={"did": str(self.did)},
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                _LOGGER.warning("fetch_gps: HTTP %d (body: %s)", resp.status_code, resp.text[:200])
+                return None
+            body = resp.json()
+        except Exception as ex:  # pragma: no cover
+            _LOGGER.warning("fetch_gps: %s", ex)
+            return None
+        recs = (((body or {}).get("locationRecords") or {}).get("records")) or []
+        if not isinstance(recs, list) or not recs:
+            return None
+        newest = max(recs, key=lambda r: r.get("updateTime") or "")
+        try:
+            return {
+                "lat": float(newest["gpsLat"]),
+                "lon": float(newest["gpsLong"]),
+                "update_time": newest.get("updateTime"),
+                "card4g": newest.get("card4G"),
+            }
+        except (KeyError, TypeError, ValueError):
+            return None
+
+    def fetch_remote(self) -> dict | None:
+        """4G SIM status via routed m:g t:REMOTE.
+
+        Returns ``{active_time, card_id, expired_time, left_days}`` or
+        ``None`` on failure (device not present, firmware-gated, or
+        transport error).
+        """
+        from ..protocol.cfg_action import CfgActionError, probe_get  # type: ignore[import]
+
+        try:
+            payload = probe_get(self.action, "REMOTE")
+        except CfgActionError as ex:
+            _LOGGER.debug("fetch_remote: %s", ex)
+            return None
+        except Exception as ex:  # pragma: no cover
+            _LOGGER.warning("fetch_remote: %s", ex)
+            return None
+        # probe_get returns out[0] — the {m, t, d, ...} envelope.
+        # Extract the inner data dict from the 'd' key.
+        d = payload.get("d") if isinstance(payload, dict) and isinstance(payload.get("d"), dict) else (
+            payload if isinstance(payload, dict) else None
+        )
+        if not isinstance(d, dict) or "cardId" not in d:
+            _LOGGER.debug("fetch_remote: unexpected payload shape: %r", payload)
+            return None
+        return {
+            "active_time": d.get("activeTime"),
+            "card_id": d.get("cardId"),
+            "expired_time": d.get("expiredTime"),
+            "left_days": d.get("leftDays"),
+        }
+
+    def fetch_message_record(self) -> dict | None:
+        """System + service messages via /dreame-message-push/v1/message-record/list.
+
+        Returns ``{service_unread, system_unread, latest}`` where ``latest``
+        is the ``en.name`` of the first serviceMsg record (or ``None``).
+        Returns ``None`` on any failure.
+        """
+        self._ensure_strings()
+        strings = getattr(self, "_strings", None) or self.strings
+        headers = {
+            "Accept": "*/*",
+            "Accept-Language": "en-US;q=0.8",
+            "Accept-Encoding": "gzip, deflate",
+            strings[47]: strings[3],
+            strings[49]: strings[5],
+            strings[50]: getattr(self, "_ti", None) or strings[6],
+            strings[51]: strings[52],
+            strings[46]: getattr(self, "_key", ""),
+        }
+        if getattr(self, "_country", None) == "cn":
+            headers[strings[48]] = strings[4]
+        try:
+            url = f"{self.get_api_url()}/dreame-message-push/v1/message-record/list"
+            resp = self._session.get(
+                url,
+                headers=headers,
+                params={"version": "v1"},
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                _LOGGER.warning("fetch_message_record: HTTP %d (body: %s)", resp.status_code, resp.text[:200])
+                return None
+            body = resp.json()
+        except Exception as ex:  # pragma: no cover
+            _LOGGER.warning("fetch_message_record: %s", ex)
+            return None
+        data = (body or {}).get("data") or {}
+        svc = data.get("serviceMsg") or {}
+        sysm = data.get("systemMsg") or {}
+        latest = None
+        recs = svc.get("msgRecord") or []
+        if recs and isinstance(recs[0], dict):
+            import json as _json
+            try:
+                disp = _json.loads(recs[0].get("multiLangDisplay") or "{}")
+                en = disp.get("en") or next(iter(disp.values()), {})
+                latest = (en or {}).get("name")
+            except (ValueError, TypeError):
+                latest = None
+        return {
+            "service_unread": svc.get("unread"),
+            "system_unread": sysm.get("unread"),
+            "latest": latest,
+        }
