@@ -29,7 +29,8 @@ each with its own brainstorm → spec → plan → build cycle.
 | Phase | Scope | Status |
 |---|---|---|
 | 0 | Knowledge capture (inventory + docs) | done |
-| A | Writable-settings flip (~30 controls via PRE indices + CFG keys) | planned |
+| A1 | Writable CFG "More Settings" (WRP/DND/LOW/BAT/LIT/REC/LANG → ~26 controls) | **done** (v1.0.24a9, 2026-06-10) |
+| A2 | Writable PRE General-Mode per-map settings (needs the `d:[...]` envelope fix; efficiency/height/direction/edge/OA/AI-recognition) | planned (next) |
 | B | Core-control verdict confirm (pause/stop/dock/resume + cancel-dock-return o=13) | planned |
 | C | New read sources (GPS, NET/REMOTE, MAP.* decoded cache, message center) | planned |
 | D | Photo & video archive (OSS: userDidOssList + embedded-JPEG metadata + quota + mp4) | planned |
