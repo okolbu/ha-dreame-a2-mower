@@ -78,46 +78,10 @@ def _vol_field_updates(state: MowerState, value: float) -> dict[str, Any]:
     return {"volume_pct": int(value)}
 
 
-def _build_bat_auto_recharge(state: MowerState, value: float) -> list:
-    """Build the full BAT list with auto_recharge_battery_pct overridden.
-
-    CFG.BAT = list(6) [recharge_pct, resume_pct, unknown_flag(=1),
-                        custom_charging, start_min, end_min].
-    Confirmed on g2408 (docs/research §6.2 + coordinator._property_apply.cfg_to_state_updates).
-
-    All 6 fields are present in MowerState (F4.3.1), so the full list
-    can be reconstructed safely.  The unknown_flag at index 2 is set to
-    1 (the only observed value).
-    """
-    return [
-        int(value),                                     # [0] recharge_pct  (new)
-        int(state.resume_battery_pct or 95),            # [1] resume_pct
-        1,                                              # [2] unknown_flag (always 1)
-        int(state.custom_charging_enabled or False),    # [3] custom_charging
-        int(state.charging_start_min or 0),             # [4] start_min
-        int(state.charging_end_min or 0),               # [5] end_min
-    ]
-
-
 def _bat_auto_recharge_field_updates(
     state: MowerState, value: float
 ) -> dict[str, Any]:
     return {"auto_recharge_battery_pct": int(value)}
-
-
-def _build_bat_resume(state: MowerState, value: float) -> list:
-    """Build the full BAT list with resume_battery_pct overridden.
-
-    Same shape as _build_bat_auto_recharge; only index 1 changes.
-    """
-    return [
-        int(state.auto_recharge_battery_pct or 15),    # [0] recharge_pct
-        int(value),                                     # [1] resume_pct   (new)
-        1,                                              # [2] unknown_flag (always 1)
-        int(state.custom_charging_enabled or False),    # [3] custom_charging
-        int(state.charging_start_min or 0),             # [4] start_min
-        int(state.charging_end_min or 0),               # [5] end_min
-    ]
 
 
 def _bat_resume_field_updates(state: MowerState, value: float) -> dict[str, Any]:

@@ -130,15 +130,15 @@ async def test_lcd_language_english_idx2():
 # ---------------------------------------------------------------------------
 
 @pytest.mark.asyncio
-async def test_wrp_resume_5h_writes_correct_payload():
-    """Selecting '5 hours' with cfg WRP=[1,4] writes {value:1, time:5, sen:1}."""
+async def test_wrp_resume_6h_writes_correct_payload():
+    """Selecting '6 hours' with cfg WRP=[1,4] writes {value:1, time:6, sen:1}."""
     desc = _get_desc("rain_protection_resume_hours")
     ent, coord = _make_select(desc, {"WRP": [1, 4]})
-    await ent.async_select_option("5 hours")
+    await ent.async_select_option("6 hours")
     coord.write_setting.assert_awaited_once()
     args, _ = coord.write_setting.call_args
     assert args[0] == "WRP"
-    assert args[1] == {"value": 1, "time": 5, "sen": 1}
+    assert args[1] == {"value": 1, "time": 6, "sen": 1}
 
 
 @pytest.mark.asyncio

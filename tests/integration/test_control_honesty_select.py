@@ -9,8 +9,8 @@ Verifies:
 - DreameA2ActionModeSelect: read_only=False,
   extra_state_attributes["control_mode"]=="integration_local",
   selecting still performs normal action (not snapped back).
-- DreameA2SettingSelect rain_protection_resume_hours: read_only=True,
-  padlock icon, select does NOT call write_setting.
+- DreameA2SettingSelect rain_protection_resume_hours: read_only=False
+  (device_writable since Task 8), select DOES call write_setting.
 """
 from __future__ import annotations
 
@@ -173,30 +173,24 @@ def test_action_mode_select_option_performs_normal_action():
 
 
 # ---------------------------------------------------------------------------
-# DreameA2SettingSelect rain_protection_resume_hours — read_only_pending
+# DreameA2SettingSelect rain_protection_resume_hours — device_writable (Task 8)
 # ---------------------------------------------------------------------------
 
-def test_rain_protection_resume_hours_is_read_only():
+def test_rain_protection_resume_hours_is_not_read_only():
     coord = _make_mower_coord(rain_protection_resume_hours=2)
     ent = DreameA2SettingSelect(coord, _setting_desc("rain_protection_resume_hours"))
-    assert ent.read_only is True
+    assert ent.read_only is False
 
 
-def test_rain_protection_resume_hours_has_padlock_icon():
+def test_rain_protection_resume_hours_has_no_padlock_icon():
     coord = _make_mower_coord(rain_protection_resume_hours=2)
     ent = DreameA2SettingSelect(coord, _setting_desc("rain_protection_resume_hours"))
-    assert ent.icon == "mdi:lock-outline"
+    assert ent.icon != "mdi:lock-outline"
 
 
-def test_rain_protection_resume_hours_select_option_does_not_call_write_setting():
-    """async_select_option on rain_protection_resume_hours must NOT call
-    coordinator.write_setting and MUST call async_write_ha_state (snap-back)."""
+def test_rain_protection_resume_hours_extra_attrs_mark_writable():
     coord = _make_mower_coord(rain_protection_resume_hours=2)
-    coord.write_setting = AsyncMock(return_value=True)
     ent = DreameA2SettingSelect(coord, _setting_desc("rain_protection_resume_hours"))
-    ent.async_write_ha_state = MagicMock()
-
-    asyncio.run(ent.async_select_option("4 hours"))
-
-    coord.write_setting.assert_not_called()
-    ent.async_write_ha_state.assert_called_once()  # snap-back fired
+    attrs = ent.extra_state_attributes
+    assert attrs["read_only"] is False
+    assert attrs["control_mode"] == "device_writable"

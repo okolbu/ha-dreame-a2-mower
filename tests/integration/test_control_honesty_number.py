@@ -7,6 +7,7 @@ Verifies:
   async_write_ha_state (snap-back).
 - The "volume" DreameA2Number is read_only=False and async_set_native_value
   DOES call coordinator.write_setting.
+- human_presence_alert_sensitivity is now read_only=False (device_writable, Task 8).
 - DreameA2TrailRenderWidthNumber is read_only=False and
   extra_state_attributes["control_mode"] == "integration_local";
   a set still executes normally (not snapped back).
@@ -132,32 +133,27 @@ def test_volume_number_set_value_calls_write_setting():
 
 
 # ---------------------------------------------------------------------------
-# DreameA2Number: human_presence_alert_sensitivity (read-only noop)
+# DreameA2Number: human_presence_alert_sensitivity (device_writable, Task 8)
 # ---------------------------------------------------------------------------
 
-def test_human_presence_alert_sensitivity_is_read_only():
+def test_human_presence_alert_sensitivity_is_not_read_only():
     coord = _make_mower_coord(human_presence_alert_sensitivity=1)
     ent = DreameA2Number(coord, _number_desc("human_presence_alert_sensitivity"))
-    assert ent.read_only is True
+    assert ent.read_only is False
 
 
-def test_human_presence_alert_sensitivity_has_padlock_icon():
+def test_human_presence_alert_sensitivity_has_no_padlock_icon():
     coord = _make_mower_coord(human_presence_alert_sensitivity=1)
     ent = DreameA2Number(coord, _number_desc("human_presence_alert_sensitivity"))
-    assert ent.icon == "mdi:lock-outline"
+    assert ent.icon != "mdi:lock-outline"
 
 
-def test_human_presence_alert_sensitivity_set_value_snaps_back_not_write():
-    """The read-only number must NOT reach coordinator.write_setting."""
+def test_human_presence_alert_sensitivity_extra_attrs_mark_writable():
     coord = _make_mower_coord(human_presence_alert_sensitivity=1)
-    coord.write_setting = AsyncMock(return_value=True)
     ent = DreameA2Number(coord, _number_desc("human_presence_alert_sensitivity"))
-    ent.async_write_ha_state = MagicMock()
-
-    asyncio.run(ent.async_set_native_value(2.0))
-
-    coord.write_setting.assert_not_called()
-    ent.async_write_ha_state.assert_called_once()
+    attrs = ent.extra_state_attributes
+    assert attrs["read_only"] is False
+    assert attrs["control_mode"] == "device_writable"
 
 
 # ---------------------------------------------------------------------------

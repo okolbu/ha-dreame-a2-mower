@@ -19,13 +19,13 @@ def test_resolve_direct_scalar_id():
 
 def test_resolve_generic_switch_by_leaf():
     assert resolve_control_mode(platform="switch", key="child_lock") is ControlMode.DEVICE_WRITABLE
-    assert resolve_control_mode(platform="switch", key="dnd") is ControlMode.READ_ONLY_CONFIRMED
-    assert resolve_control_mode(platform="switch", key="led_period") is ControlMode.READ_ONLY_NOOP
+    assert resolve_control_mode(platform="switch", key="dnd") is ControlMode.DEVICE_WRITABLE
+    assert resolve_control_mode(platform="switch", key="led_period") is ControlMode.DEVICE_WRITABLE
 
 
 def test_resolve_setting_select_is_direct_scalar():
     assert resolve_control_mode(platform="select", key="navigation_path") is ControlMode.DEVICE_WRITABLE
-    assert resolve_control_mode(platform="select", key="lcd_language") is ControlMode.READ_ONLY_PENDING
+    assert resolve_control_mode(platform="select", key="lcd_language") is ControlMode.DEVICE_WRITABLE
 
 
 def test_resolve_unknown_raises():
@@ -82,5 +82,8 @@ async def test_reject_readonly_write_republishes_and_does_not_write():
     assert e.published == 1 and e.wrote is False
 
 
-def test_resolve_generic_scalar_time():
-    assert resolve_control_mode(platform="time", key="anything") is ControlMode.READ_ONLY_NOOP
+def test_resolve_generic_time_wired_leaves():
+    """The 6 wired time leaves are now DEVICE_WRITABLE."""
+    assert resolve_control_mode(platform="time", key="dnd_start_time") is ControlMode.DEVICE_WRITABLE
+    assert resolve_control_mode(platform="time", key="dnd_end_time") is ControlMode.DEVICE_WRITABLE
+    assert resolve_control_mode(platform="time", key="charging_end_time") is ControlMode.DEVICE_WRITABLE

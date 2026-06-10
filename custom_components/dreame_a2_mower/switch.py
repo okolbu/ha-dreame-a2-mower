@@ -60,11 +60,8 @@ from .switch_global import (
     _build_ata_lift,
     _build_ata_offmap,
     _build_ata_realtime,
-    _build_bat_custom_charging,
     _build_cls,
-    _build_dnd,
     _build_int_toggle,
-    _build_low,
     _build_msg_alert_anomaly,
     _build_msg_alert_consumables,
     _build_msg_alert_error,
@@ -73,7 +70,6 @@ from .switch_global import (
     _build_voice_regular,
     _build_voice_special,
     _build_voice_work,
-    _build_wrp,
 )
 from .switch_map import DreameA2MapEdgemasterSwitch
 

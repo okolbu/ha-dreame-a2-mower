@@ -53,60 +53,12 @@ def _dnd_field_updates(state: MowerState, enabled: bool) -> dict[str, Any]:
     return {"dnd_enabled": enabled}
 
 
-# ---------------------------------------------------------------------------
-# Legacy MowerState-based builders — RETAINED for test back-compat only.
-# The SWITCHES descriptors now use build_from_cfg_fn + _cfgp instead.
-# Task 8 will update the tests and remove these.
-# ---------------------------------------------------------------------------
-
-def _build_dnd(state: MowerState, enabled: bool) -> dict:
-    """Legacy MowerState-based DND builder (test back-compat)."""
-    return {
-        "value": int(enabled),
-        "time": [
-            int(state.dnd_start_min or 1200),
-            int(state.dnd_end_min or 480),
-        ],
-    }
-
-
 def _wrp_field_updates(state: MowerState, enabled: bool) -> dict[str, Any]:
     return {"rain_protection_enabled": enabled}
 
 
-def _build_wrp(state: MowerState, enabled: bool) -> dict:
-    """Legacy MowerState-based WRP builder (test back-compat)."""
-    return {
-        "value": int(enabled),
-        "time": int(state.rain_protection_resume_hours or 0),
-    }
-
-
 def _low_field_updates(state: MowerState, enabled: bool) -> dict[str, Any]:
     return {"low_speed_at_night_enabled": enabled}
-
-
-def _build_low(state: MowerState, enabled: bool) -> dict:
-    """Legacy MowerState-based LOW builder (test back-compat)."""
-    return {
-        "value": int(enabled),
-        "time": [
-            int(state.low_speed_at_night_start_min or 1200),
-            int(state.low_speed_at_night_end_min or 480),
-        ],
-    }
-
-
-def _build_bat_custom_charging(state: MowerState, enabled: bool) -> list:
-    """Legacy MowerState-based BAT builder (test back-compat)."""
-    return [
-        int(state.auto_recharge_battery_pct or 15),    # [0] recharge_pct
-        int(state.resume_battery_pct or 95),            # [1] resume_pct
-        1,                                              # [2] unknown_flag (always 1)
-        int(enabled),                                   # [3] custom_charging  (new)
-        int(state.charging_start_min or 0),             # [4] start_min
-        int(state.charging_end_min or 0),               # [5] end_min
-    ]
 
 
 def _bat_custom_charging_field_updates(

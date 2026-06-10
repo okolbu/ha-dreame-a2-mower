@@ -5,8 +5,8 @@ values that get sent to the mower firmware.  A bug here would send a
 malformed array without any other test catching it.
 
 All builder functions live in:
-  - custom_components.dreame_a2_mower.number   (_build_vol, _build_bat_*)
-  - custom_components.dreame_a2_mower.switch   (_build_cls, _build_dnd, ...)
+  - custom_components.dreame_a2_mower.number   (_build_vol)
+  - custom_components.dreame_a2_mower.switch   (_build_cls, _build_ata_*, ...)
   - custom_components.dreame_a2_mower.select   (_build_pre_efficiency,
                                                 _build_wrp_resume_hours)
 
@@ -20,8 +20,6 @@ import pytest
 
 from custom_components.dreame_a2_mower.mower.state import MowerState
 from custom_components.dreame_a2_mower.number import (
-    _build_bat_auto_recharge,
-    _build_bat_resume,
     _build_vol,
 )
 from custom_components.dreame_a2_mower.select import (
@@ -33,11 +31,8 @@ from custom_components.dreame_a2_mower.switch import (
     _build_ata_lift,
     _build_ata_offmap,
     _build_ata_realtime,
-    _build_bat_custom_charging,
     _build_cls,
-    _build_dnd,
     _build_int_toggle,
-    _build_low,
     _build_msg_alert_anomaly,
     _build_msg_alert_consumables,
     _build_msg_alert_error,
@@ -46,7 +41,6 @@ from custom_components.dreame_a2_mower.switch import (
     _build_voice_regular,
     _build_voice_special,
     _build_voice_work,
-    _build_wrp,
 )
 
 
@@ -70,92 +64,6 @@ class TestBuildVol:
         assert _build_vol(MowerState(), 100) == 100
 
 
-class TestBuildBatAutoRecharge:
-    def test_shape(self) -> None:
-        state = MowerState(
-            auto_recharge_battery_pct=15,
-            resume_battery_pct=95,
-            custom_charging_enabled=False,
-            charging_start_min=0,
-            charging_end_min=0,
-        )
-        result = _build_bat_auto_recharge(state, 25)
-        assert len(result) == 6
-
-    def test_slot_0_is_new_value(self) -> None:
-        state = MowerState(
-            auto_recharge_battery_pct=15,
-            resume_battery_pct=95,
-            custom_charging_enabled=False,
-            charging_start_min=0,
-            charging_end_min=0,
-        )
-        result = _build_bat_auto_recharge(state, 20)
-        assert result[0] == 20
-
-    def test_slot_1_is_resume_pct(self) -> None:
-        state = MowerState(resume_battery_pct=90, custom_charging_enabled=False,
-                           charging_start_min=0, charging_end_min=0)
-        result = _build_bat_auto_recharge(state, 15)
-        assert result[1] == 90
-
-    def test_slot_2_is_always_1(self) -> None:
-        """unknown_flag at index 2 must always be 1 (only observed value)."""
-        state = MowerState()
-        result = _build_bat_auto_recharge(state, 15)
-        assert result[2] == 1
-
-    def test_slot_3_is_custom_charging(self) -> None:
-        state = MowerState(custom_charging_enabled=True)
-        result = _build_bat_auto_recharge(state, 15)
-        assert result[3] == 1
-
-    def test_slot_4_5_are_charging_window(self) -> None:
-        state = MowerState(charging_start_min=480, charging_end_min=960)
-        result = _build_bat_auto_recharge(state, 15)
-        assert result[4] == 480
-        assert result[5] == 960
-
-    def test_none_defaults_resume(self) -> None:
-        """resume_battery_pct None → defaults to 95."""
-        result = _build_bat_auto_recharge(MowerState(), 15)
-        assert result[1] == 95
-
-    def test_none_defaults_custom_charging_off(self) -> None:
-        result = _build_bat_auto_recharge(MowerState(), 15)
-        assert result[3] == 0
-
-    def test_none_defaults_charging_window_zero(self) -> None:
-        result = _build_bat_auto_recharge(MowerState(), 15)
-        assert result[4] == 0
-        assert result[5] == 0
-
-
-class TestBuildBatResume:
-    def test_shape(self) -> None:
-        result = _build_bat_resume(MowerState(), 95)
-        assert len(result) == 6
-
-    def test_slot_1_is_new_value(self) -> None:
-        state = MowerState(auto_recharge_battery_pct=15)
-        result = _build_bat_resume(state, 80)
-        assert result[1] == 80
-
-    def test_slot_0_is_auto_recharge(self) -> None:
-        state = MowerState(auto_recharge_battery_pct=20)
-        result = _build_bat_resume(state, 95)
-        assert result[0] == 20
-
-    def test_slot_2_is_always_1(self) -> None:
-        result = _build_bat_resume(MowerState(), 95)
-        assert result[2] == 1
-
-    def test_none_defaults_auto_recharge(self) -> None:
-        """auto_recharge_battery_pct None → defaults to 15."""
-        result = _build_bat_resume(MowerState(), 95)
-        assert result[0] == 15
-
-
 # ---------------------------------------------------------------------------
 # switch.py builders
 # ---------------------------------------------------------------------------
@@ -166,125 +74,6 @@ class TestBuildCls:
 
     def test_false_gives_0(self) -> None:
         assert _build_cls(MowerState(), False) == 0
-
-
-class TestBuildDnd:
-    """DND wire format: ``{value, time:[start_min, end_min]}`` (named-key
-    dict, verified live 2026-05-09)."""
-
-    def test_shape(self) -> None:
-        result = _build_dnd(MowerState(), True)
-        assert isinstance(result, dict)
-        assert set(result.keys()) == {"value", "time"}
-        assert isinstance(result["time"], list) and len(result["time"]) == 2
-
-    def test_value_is_enabled(self) -> None:
-        assert _build_dnd(MowerState(), True)["value"] == 1
-        assert _build_dnd(MowerState(), False)["value"] == 0
-
-    def test_time_start_min(self) -> None:
-        state = MowerState(dnd_start_min=1320)
-        assert _build_dnd(state, True)["time"][0] == 1320
-
-    def test_time_end_min(self) -> None:
-        state = MowerState(dnd_end_min=360)
-        assert _build_dnd(state, True)["time"][1] == 360
-
-    def test_none_defaults_start(self) -> None:
-        """dnd_start_min None → factory default 1200 (20:00)."""
-        assert _build_dnd(MowerState(), True)["time"][0] == 1200
-
-    def test_none_defaults_end(self) -> None:
-        """dnd_end_min None → factory default 480 (08:00)."""
-        assert _build_dnd(MowerState(), True)["time"][1] == 480
-
-
-class TestBuildWrp:
-    """WRP wire format: ``{value, time:<resume_hours>}`` (named-key dict,
-    end-to-end live-confirmed 2026-05-09 — HA→cloud→device→app round trip).
-    Optional ``sen`` field omitted (not surfaced in app, not echoed in
-    getCFG)."""
-
-    def test_shape(self) -> None:
-        result = _build_wrp(MowerState(), True)
-        assert isinstance(result, dict)
-        assert set(result.keys()) == {"value", "time"}
-
-    def test_value_is_enabled(self) -> None:
-        assert _build_wrp(MowerState(), True)["value"] == 1
-        assert _build_wrp(MowerState(), False)["value"] == 0
-
-    def test_time_is_resume_hours(self) -> None:
-        state = MowerState(rain_protection_resume_hours=4)
-        assert _build_wrp(state, True)["time"] == 4
-
-    def test_none_defaults_resume_hours(self) -> None:
-        """rain_protection_resume_hours None → 0 (don't auto-resume)."""
-        assert _build_wrp(MowerState(), True)["time"] == 0
-
-
-class TestBuildLow:
-    """LOW wire format: ``{value, time:[start_min, end_min]}`` (named-key
-    dict, verified live 2026-05-09)."""
-
-    def test_shape(self) -> None:
-        result = _build_low(MowerState(), True)
-        assert isinstance(result, dict)
-        assert set(result.keys()) == {"value", "time"}
-        assert isinstance(result["time"], list) and len(result["time"]) == 2
-
-    def test_value_is_enabled(self) -> None:
-        assert _build_low(MowerState(), True)["value"] == 1
-        assert _build_low(MowerState(), False)["value"] == 0
-
-    def test_time_start_min(self) -> None:
-        state = MowerState(low_speed_at_night_start_min=1320)
-        assert _build_low(state, True)["time"][0] == 1320
-
-    def test_time_end_min(self) -> None:
-        state = MowerState(low_speed_at_night_end_min=360)
-        assert _build_low(state, True)["time"][1] == 360
-
-    def test_none_defaults_start(self) -> None:
-        assert _build_low(MowerState(), True)["time"][0] == 1200
-
-    def test_none_defaults_end(self) -> None:
-        assert _build_low(MowerState(), True)["time"][1] == 480
-
-
-class TestBuildBatCustomCharging:
-    def test_shape(self) -> None:
-        result = _build_bat_custom_charging(MowerState(), True)
-        assert len(result) == 6
-
-    def test_slot_3_is_new_value(self) -> None:
-        assert _build_bat_custom_charging(MowerState(), True)[3] == 1
-        assert _build_bat_custom_charging(MowerState(), False)[3] == 0
-
-    def test_slot_2_is_always_1(self) -> None:
-        """unknown_flag hard-coded to 1 (same as number.py builders)."""
-        assert _build_bat_custom_charging(MowerState(), True)[2] == 1
-
-    def test_slot_0_is_auto_recharge(self) -> None:
-        state = MowerState(auto_recharge_battery_pct=20)
-        assert _build_bat_custom_charging(state, False)[0] == 20
-
-    def test_slot_1_is_resume_pct(self) -> None:
-        state = MowerState(resume_battery_pct=90)
-        assert _build_bat_custom_charging(state, False)[1] == 90
-
-    def test_slot_4_5_are_charging_window(self) -> None:
-        state = MowerState(charging_start_min=480, charging_end_min=960)
-        result = _build_bat_custom_charging(state, True)
-        assert result[4] == 480
-        assert result[5] == 960
-
-    def test_none_defaults(self) -> None:
-        result = _build_bat_custom_charging(MowerState(), False)
-        assert result[0] == 15  # auto_recharge default
-        assert result[1] == 95  # resume default
-        assert result[4] == 0
-        assert result[5] == 0
 
 
 class TestBuildAtaLift:

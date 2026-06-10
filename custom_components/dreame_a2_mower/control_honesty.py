@@ -41,7 +41,7 @@ _N = ControlMode.READ_ONLY_NOOP
 
 CONTROL_MODES: dict[str, ControlMode | dict[str, ControlMode]] = {
     # number
-    "number.dreame_a2_mower_human_presence_alert_sensitivity": _N,
+    "number.dreame_a2_mower_human_presence_alert_sensitivity": _W,
     "number.dreame_a2_mower_trail_render_width": _L,
     "number.dreame_a2_mower_station_bearing_deg": _L,
     "number.dreame_a2_mower_map_N_settings_mowing_height": _C,
@@ -53,15 +53,15 @@ CONTROL_MODES: dict[str, ControlMode | dict[str, ControlMode]] = {
     "number.dreame_a2_mower_map_N_settings_obstacle_avoidance_sensitivity": _C,
     "number.dreame_a2_mower_<key>": {
         "volume": _W,
-        "auto_recharge_battery_pct": _C,
-        "resume_battery_pct": _C,
+        "auto_recharge_battery_pct": _W,
+        "resume_battery_pct": _W,
     },
     # select
     "select.dreame_a2_mower_navigation_path": _W,
-    "select.dreame_a2_mower_rain_protection_resume_hours": _P,
+    "select.dreame_a2_mower_rain_protection_resume_hours": _W,
     "select.dreame_a2_mower_language": _N,
-    "select.dreame_a2_mower_lcd_language": _P,
-    "select.dreame_a2_mower_voice_language": _P,
+    "select.dreame_a2_mower_lcd_language": _W,
+    "select.dreame_a2_mower_voice_language": _W,
     "select.dreame_a2_mower_work_log": _L,
     "select.dreame_a2_mower_lidar_archive": _L,
     "select.dreame_a2_mower_active_map": _U,
@@ -92,13 +92,20 @@ CONTROL_MODES: dict[str, ControlMode | dict[str, ControlMode]] = {
         "ai_obstacle_photos": _W, "msg_alert_anomaly": _W, "msg_alert_error": _W,
         "msg_alert_task": _W, "msg_alert_consumables": _W, "voice_regular_notification": _W,
         "voice_work_status": _W, "voice_special_status": _W, "voice_error_status": _W,
-        "dnd": _C, "low_speed_at_night": _C, "custom_charging_period": _C,
-        "rain_protection": _P,
-        "led_period": _N, "led_in_standby": _N, "led_in_working": _N,
-        "led_in_charging": _N, "led_in_error": _N, "human_presence_alert": _N,
+        "dnd": _W, "low_speed_at_night": _W, "custom_charging_period": _W,
+        "rain_protection": _W,
+        "led_period": _W, "led_in_standby": _W, "led_in_working": _W,
+        "led_in_charging": _W, "led_in_error": _W, "human_presence_alert": _W,
     },
-    # time
-    "time.dreame_a2_mower_<key>": _N,
+    # time — split per-leaf so the 6 wired leaves are _W; others stay _N
+    "time.dreame_a2_mower_<key>": {
+        "dnd_start_time": _W,
+        "dnd_end_time": _W,
+        "low_speed_at_night_start_time": _W,
+        "low_speed_at_night_end_time": _W,
+        "charging_start_time": _W,
+        "charging_end_time": _W,
+    },
     # lawn_mower / button (dict-only; no entity wiring)
     "lawn_mower.dreame_a2_mower": _W,
     "button.dreame_a2_mower_map_N_head_to_point": _W,

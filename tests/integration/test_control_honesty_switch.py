@@ -1,9 +1,8 @@
 """Integration tests for control-honesty markers on the switch platform.
 
 Verifies:
-- A read-only CFG switch (dnd) shows padlock icon, read_only=True, and
-  calling async_turn_on does NOT call coordinator.write_setting but DOES
-  call async_write_ha_state (snap-back).
+- A CFG switch (dnd) now has read_only=False (device_writable) and
+  calling async_turn_on DOES call coordinator.write_setting.
 - A writable CFG switch (child_lock) has read_only=False and
   async_turn_on DOES call coordinator.write_setting.
 - An AI recognition bit-switch (Humans) has read_only=True and padlock icon.
@@ -84,39 +83,50 @@ def _desc(key: str):
 
 
 # ---------------------------------------------------------------------------
-# read-only CFG switch: dnd
+# now-writable CFG switch: dnd (promoted to device_writable in Task 8)
 # ---------------------------------------------------------------------------
 
-def test_dnd_switch_is_read_only():
+def test_dnd_switch_is_not_read_only():
     coord = _make_coord(dnd_enabled=True)
     ent = DreameA2Switch(coord, _desc("dnd"))
-    assert ent.read_only is True
+    assert ent.read_only is False
 
 
-def test_dnd_switch_has_padlock_icon():
+def test_dnd_switch_has_no_padlock_icon():
     coord = _make_coord(dnd_enabled=True)
     ent = DreameA2Switch(coord, _desc("dnd"))
-    assert ent.icon == "mdi:lock-outline"
+    assert ent.icon != "mdi:lock-outline"
 
 
-def test_dnd_switch_extra_attrs_mark_read_only():
+def test_dnd_switch_extra_attrs_mark_writable():
     coord = _make_coord(dnd_enabled=True)
     ent = DreameA2Switch(coord, _desc("dnd"))
     attrs = ent.extra_state_attributes
-    assert attrs["read_only"] is True
+    assert attrs["read_only"] is False
+    assert attrs["control_mode"] == "device_writable"
 
 
-def test_dnd_turn_on_does_not_call_write_setting_and_snaps_back():
-    """async_turn_on on a read-only switch must NOT call coordinator.write_setting."""
+def test_dnd_turn_on_calls_write_setting():
+    """async_turn_on on the now-writable dnd switch MUST call coordinator.write_setting.
+
+    The dnd switch uses build_from_cfg_fn (RMW path) so the coordinator's
+    cloud_state.cfg must carry a valid DND base value.
+    """
+    import dataclasses
     coord = _make_coord(dnd_enabled=False)
+    # Seed the DND CFG base so the RMW path can proceed.
+    # DND is read as list[3]: [enabled, start_min, end_min] (positional list format).
+    coord.cloud_state = dataclasses.replace(
+        coord.cloud_state,
+        cfg={"DND": [0, 1200, 480]},
+    )
     coord.write_setting = AsyncMock(return_value=True)  # spy
     ent = DreameA2Switch(coord, _desc("dnd"))
     ent.async_write_ha_state = MagicMock()
 
     asyncio.run(ent.async_turn_on())
 
-    coord.write_setting.assert_not_called()
-    ent.async_write_ha_state.assert_called_once()  # snap-back fired
+    coord.write_setting.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
