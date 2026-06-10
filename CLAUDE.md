@@ -295,11 +295,17 @@ were removed in the 2026-05-25 refresher consolidation
 | Timer | Interval | Why separate |
 |---|---|---|
 | `_refresh_cloud_state` | 2 min | Full state: cfg, mihis, mapl, settings, maps, props. Ports CFG via `cfg_to_state_updates`, MIHIS + SETTINGS, and active-map via `_apply_mapl(cs.mapl)`. |
-| `_refresh_locn` | 60 s | GPS position wants low latency. |
+| `_refresh_gps` | 60 s | Absolute GPS via location/getRecords → device_tracker (position_lat/lon). |
 | `_refresh_dock` | 60 s | Dock position sensors (x/y/yaw/in_region). Location not set here — s2p1 is the sole location authority. |
 | `_refresh_net` | 1 h | NET is not part of the full-state fetch. |
+| `_refresh_remote` | 6 h | 4G SIM status (REMOTE) → SIM sensors. |
+| `_refresh_messages` | 1 h | Account message-list unread (message-record/list v1). |
 | `_refresh_dev` | 6 h | DEV is not part of the full-state fetch. |
 | `_poll_slow_properties` | 1 h | s6.3 + s1.5 serial-while-unknown; feeds the state machine. |
+
+> **Note:** `_refresh_locn` is **retained but unscheduled** (kept for a future
+> dock-location entity that will surface the dock's absolute WGS84 fix).
+> It no longer writes `position_lat`/`position_lon` — that is now `_refresh_gps`.
 
 `CloudState` does **not** carry `locn`/`dock` — those flow straight to
 `MowerState` via their 60 s timers. The CFG→MowerState port lives in the pure

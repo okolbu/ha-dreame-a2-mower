@@ -2787,7 +2787,7 @@ entities:
     class_file: "custom_components/dreame_a2_mower/device_tracker.py:26"
     device: parent
     source:
-      wire: "location/getRecords (absolute WGS84, ~4m, via 4G SIM), polled every 60s via _refresh_locn"
+      wire: "location/getRecords (absolute WGS84, ~4m, via 4G SIM), polled every 60s via _refresh_gps"
       state_path: "coordinator.data.position_lat / coordinator.data.position_lon (MowerState); falls back to RestoreEntity last-known lat/lon on getRecords failure"
     write_path: read-only
     status:
@@ -2807,7 +2807,7 @@ entities:
       code: "custom_components/dreame_a2_mower/device_tracker.py:26"
     notes: |
       Source is location/getRecords (absolute WGS84, ~4m accuracy, via 4G SIM),
-      polled every 60s via _refresh_locn. extra_state_attributes exposes
+      polled every 60s via _refresh_gps. extra_state_attributes exposes
       gps_update_time and gps_card4g from MowerState (Phase C).
       entity_registry_enabled_default=False so it doesn't clutter the entity
       list on fresh installs. RestoreEntity keeps the last known fix across HA

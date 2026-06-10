@@ -224,9 +224,11 @@ class _RefreshersMixin:
             return
         gps = await self.hass.async_add_executor_job(self._cloud.fetch_gps)
         if gps is None:
-            if self.data.position_lat is not None or self.data.position_lon is not None:
+            if (self.data.position_lat is not None or self.data.position_lon is not None
+                    or self.data.gps_update_time is not None or self.data.gps_card4g is not None):
                 self.async_set_updated_data(dataclasses.replace(
-                    self.data, position_lat=None, position_lon=None))
+                    self.data, position_lat=None, position_lon=None,
+                    gps_update_time=None, gps_card4g=None))
             return
         new = dataclasses.replace(
             self.data, position_lat=gps["lat"], position_lon=gps["lon"],

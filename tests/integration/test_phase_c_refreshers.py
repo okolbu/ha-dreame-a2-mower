@@ -32,9 +32,12 @@ async def test_refresh_gps_sets_position():
 @pytest.mark.asyncio
 async def test_refresh_gps_none_clears():
     c = _coord(gps=None)
-    c.data = dataclasses.replace(c.data, position_lat=9.9, position_lon=9.9)
+    c.data = dataclasses.replace(
+        c.data, position_lat=9.9, position_lon=9.9,
+        gps_update_time="2026-01-01T00:00:00", gps_card4g="FAKE")
     await c._refresh_gps()
     assert c.data.position_lat is None and c.data.position_lon is None
+    assert c.data.gps_update_time is None and c.data.gps_card4g is None
 
 
 @pytest.mark.asyncio
