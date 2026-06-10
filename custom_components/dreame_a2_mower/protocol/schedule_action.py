@@ -35,3 +35,35 @@ def chunk_row_json(row_json: str) -> list[tuple[int, str]]:
     for off in range(0, len(raw), CHUNK_SIZE):
         out.append((off, raw[off:off + CHUNK_SIZE].decode("utf-8")))
     return out
+
+
+def _send(send_action, t: str, d: Any) -> None:
+    """Fire one routed-action leg and raise if the device rejects it."""
+    raw = send_action(ROUTED_ACTION_SIID, ROUTED_ACTION_AIID, [{"m": "s", "t": t, "d": d}])
+    _unwrap(raw)  # raises CfgActionError on r!=0 / malformed envelope
+
+
+def write_schedule_row(
+    send_action,
+    *,
+    slot: int,
+    enabled: int,
+    name: str,
+    blob_b64: str,
+    version: int,
+    flag: int,
+    txn_id: int,
+) -> None:
+    """Write one schedule slot row via the chunked SCHD*V3 transaction.
+
+    Order: SCHDIV3 header -> N SCHDDV3 chunks (shared txn_id) -> SCHDSV3 state.
+    `version` is the schedule version (SCHDSV3 `v`); `txn_id` is the shared
+    header/chunk `v`. Raises CfgActionError if any leg returns r!=0.
+    """
+    row_json = json.dumps([slot, enabled, name, blob_b64], separators=(",", ":"))
+    total_len = len(row_json.encode("utf-8"))
+    _send(send_action, "SCHDIV3", {"i": slot, "l": total_len, "v": txn_id})
+    for off, chunk in chunk_row_json(row_json):
+        _send(send_action, "SCHDDV3",
+              {"s": off, "l": len(chunk.encode("utf-8")), "d": chunk, "v": txn_id})
+    _send(send_action, "SCHDSV3", {"i": slot, "v": version, "s": [enabled, flag]})
