@@ -34,6 +34,7 @@ from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .mower.state import ActionMode, MowerState
 from ._select_base import DreameA2SettingsSelectDescription
+from .protocol import cfg_payloads as _cfgp
 
 
 # ---------------------------------------------------------------------------
@@ -352,7 +353,7 @@ SETTING_SELECTS: tuple[DreameA2SettingsSelectDescription, ...] = (
             else f"{s.rain_protection_resume_hours} hours"
         ),
         cfg_key="WRP",
-        build_value_fn=_build_wrp_resume_hours,
+        build_from_cfg_fn=lambda raw, opt: _cfgp.build_wrp(raw, time=int(opt.split()[0])),
         field_updates_fn=_wrp_resume_hours_field_updates,
     ),
 
@@ -408,7 +409,7 @@ SETTING_SELECTS: tuple[DreameA2SettingsSelectDescription, ...] = (
             else None
         ),
         cfg_key="LANG",
-        build_value_fn=_build_text_language,
+        build_from_cfg_fn=lambda raw, opt: _cfgp.build_lang(raw, kind="text", value=TEXT_LANGUAGE_NAMES.index(opt)),
         field_updates_fn=_text_language_field_updates,
     ),
     # ------------------------------------------------------------------
@@ -427,7 +428,7 @@ SETTING_SELECTS: tuple[DreameA2SettingsSelectDescription, ...] = (
             else None
         ),
         cfg_key="LANG",
-        build_value_fn=_build_voice_language,
+        build_from_cfg_fn=lambda raw, opt: _cfgp.build_lang(raw, kind="voice", value=VOICE_LANGUAGE_NAMES.index(opt)),
         field_updates_fn=_voice_language_field_updates,
     ),
 )
@@ -502,7 +503,19 @@ class DreameA2SettingSelect(
             return
 
         # Build the full wire value.
-        if desc.build_value_fn is not None:
+        if desc.build_from_cfg_fn is not None:
+            cs = getattr(self.coordinator, "cloud_state", None)
+            raw = cs.cfg.get(desc.cfg_key) if cs is not None else None
+            wire_value = desc.build_from_cfg_fn(raw, option)
+            if wire_value is None:
+                # No cached base to RMW from — don't send a partial payload.
+                LOGGER.warning(
+                    "select.%s: no cfg base for %s; write aborted",
+                    getattr(self, "entity_id", desc.key), desc.cfg_key,
+                )
+                self.async_write_ha_state()  # snap back
+                return
+        elif desc.build_value_fn is not None:
             wire_value = desc.build_value_fn(self.coordinator.data, option)
         else:
             wire_value = option

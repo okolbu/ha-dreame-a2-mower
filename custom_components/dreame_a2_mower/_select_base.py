@@ -41,12 +41,20 @@ class DreameA2SettingsSelectDescription(SelectEntityDescription):
                          Takes (current_state, new_option_string).
     ``field_updates_fn`` — returns {field_name: value} for the optimistic
                             state update applied by coordinator.write_setting.
+    ``build_from_cfg_fn`` — RMW builder: takes (raw_cfg_list, option_str) and
+                             returns the full wire dict to pass to write_setting,
+                             or None if the raw base is missing/too short (caller
+                             must then revert).  When set, takes priority over
+                             build_value_fn.  The option string is passed raw so
+                             each lambda can apply its own option→int resolution
+                             (e.g. list.index, int(opt.split()[0])).
     """
 
     value_fn: Callable[[MowerState], str | None]
     cfg_key: str | None = None
     build_value_fn: Callable[[MowerState, str], Any] | None = None
     field_updates_fn: Callable[[MowerState, str], dict[str, Any]] | None = None
+    build_from_cfg_fn: Callable[[Any, str], Any] | None = None
 
 
 # ---------------------------------------------------------------------------
