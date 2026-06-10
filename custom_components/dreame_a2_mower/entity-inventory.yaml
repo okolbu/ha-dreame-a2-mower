@@ -1568,6 +1568,101 @@ entities:
         session_track_point_count — sum(len(leg) for leg in MowerState.session_track_segments)
         human_presence_push_interval_min — MowerState.human_presence_alert_push_interval_min (REC[8])
         charging_status_code_raw  — MowerState.charging_status.value (s3p2 raw int)
+        sim_card_id               — MowerState.sim_card_id (REMOTE/SIM)
+        sim_left_days             — MowerState.sim_left_days (REMOTE/SIM, unit=d)
+        sim_active_time           — MowerState.sim_active_time (REMOTE/SIM)
+        sim_expired_time          — MowerState.sim_expired_time (REMOTE/SIM)
+        service_messages_unread   — MowerState.service_messages_unread (message-record-v1)
+
+  - id: "sensor.dreame_a2_mower_sim_card_id"
+    platform: sensor
+    class: "DreameA2Sensor"
+    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    device: parent
+    source:
+      wire: "REMOTE/SIM (Phase C getRecords refresh)"
+      state_path: "MowerState.sim_card_id"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-10"
+    verifications:
+      - date: "2026-06-10"
+        status: verified
+        claim: "DreameA2Sensor descriptor key=sim_card_id; value_fn=lambda s: s.sim_card_id; entity_category=DIAGNOSTIC"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "sensor.dreame_a2_mower_sim_left_days"
+    platform: sensor
+    class: "DreameA2Sensor"
+    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    device: parent
+    source:
+      wire: "REMOTE/SIM (Phase C getRecords refresh)"
+      state_path: "MowerState.sim_left_days"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-10"
+    verifications:
+      - date: "2026-06-10"
+        status: verified
+        claim: "DreameA2Sensor descriptor key=sim_left_days; value_fn=lambda s: s.sim_left_days; entity_category=DIAGNOSTIC; native_unit_of_measurement=d"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "sensor.dreame_a2_mower_sim_active_time"
+    platform: sensor
+    class: "DreameA2Sensor"
+    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    device: parent
+    source:
+      wire: "REMOTE/SIM (Phase C getRecords refresh)"
+      state_path: "MowerState.sim_active_time"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-10"
+    verifications:
+      - date: "2026-06-10"
+        status: verified
+        claim: "DreameA2Sensor descriptor key=sim_active_time; value_fn=lambda s: s.sim_active_time; entity_category=DIAGNOSTIC"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "sensor.dreame_a2_mower_sim_expired_time"
+    platform: sensor
+    class: "DreameA2Sensor"
+    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    device: parent
+    source:
+      wire: "REMOTE/SIM (Phase C getRecords refresh)"
+      state_path: "MowerState.sim_expired_time"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-10"
+    verifications:
+      - date: "2026-06-10"
+        status: verified
+        claim: "DreameA2Sensor descriptor key=sim_expired_time; value_fn=lambda s: s.sim_expired_time; entity_category=DIAGNOSTIC"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "sensor.dreame_a2_mower_service_messages_unread"
+    platform: sensor
+    class: "DreameA2Sensor"
+    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    device: parent
+    source:
+      wire: "message-record-v1 (Phase C message refresh)"
+      state_path: "MowerState.service_messages_unread"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-10"
+    verifications:
+      - date: "2026-06-10"
+        status: verified
+        claim: "DreameA2Sensor descriptor key=service_messages_unread; value_fn=lambda s: s.service_messages_unread; entity_category=DIAGNOSTIC"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "sensor.dreame_a2_mower_human_presence_push_interval"
     platform: sensor
@@ -2692,29 +2787,32 @@ entities:
     class_file: "custom_components/dreame_a2_mower/device_tracker.py:26"
     device: parent
     source:
-      wire: "LOCN (cloud routed-action, polled every 60s via _refresh_locn)"
-      state_path: "coordinator.data.position_lat / coordinator.data.position_lon (MowerState); falls back to RestoreEntity last-known lat/lon on LOCN failure"
+      wire: "location/getRecords (absolute WGS84, ~4m, via 4G SIM), polled every 60s via _refresh_locn"
+      state_path: "coordinator.data.position_lat / coordinator.data.position_lon (MowerState); falls back to RestoreEntity last-known lat/lon on getRecords failure"
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: latitude/longitude properties read coordinator.data.position_lat/lon; fall back to _restored_lat/lon from async_get_last_state on LOCN failure. entity_registry_enabled_default=False (disabled by default). LOCN returns [-1,-1] sentinel on g2408 because dock-origin GPS hasn't been configured — entity stays unavailable until that surface is identified. Read from device_tracker.py:26-96; not re-confirmed live."
         evidence: "device_tracker.py:82-89 (latitude/longitude → live or restored); device_tracker.py:56-57 (_attr_entity_registry_enabled_default = False)"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Source updated Phase C: position_lat/lon now populated by location/getRecords (absolute WGS84 via 4G SIM) rather than LOCN routed-action. extra_state_attributes now exposes gps_update_time and gps_card4g from MowerState. entity_registry_enabled_default remains False."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
-      wire_entry: "LOCN"
+      wire_entry: "location/getRecords"
       code: "custom_components/dreame_a2_mower/device_tracker.py:26"
     notes: |
-      On g2408, LOCN returns the sentinel [-1, -1] because the dock-origin
-      GPS coordinate hasn't been configured in the Dreame app. The entity
-      therefore remains unavailable in practice until the GPS world-coordinate
-      read path is identified (see docs/TODO.md "GPS world-coordinate read path"
-      — known open gap). entity_registry_enabled_default=False so it doesn't
-      clutter the entity list on fresh installs. RestoreEntity keeps the last
-      known fix across HA restarts so the map marker persists when LOCN polling
-      temporarily fails (cloud 80001 error).
+      Source is location/getRecords (absolute WGS84, ~4m accuracy, via 4G SIM),
+      polled every 60s via _refresh_locn. extra_state_attributes exposes
+      gps_update_time and gps_card4g from MowerState (Phase C).
+      entity_registry_enabled_default=False so it doesn't clutter the entity
+      list on fresh installs. RestoreEntity keeps the last known fix across HA
+      restarts so the map marker persists when getRecords polling temporarily
+      fails (cloud 80001 error).
 
   # ------------------------------------------------------------------
   # Calendar entity

@@ -27,15 +27,15 @@ class DreameA2MowerGpsTracker(
 ):
     """Maps MowerState.position_lat/lon to HA's device_tracker.
 
-    Source: LOCN routed action (`{pos: [lon, lat]}`), polled every 60s
-    on a separate timer from the main coordinator (so the GPS entity
-    stays alive when the bulk cloud state refresh fails). Sentinel
-    `[-1, -1]` means the dock origin isn't configured.
+    Source: location/getRecords (absolute WGS84, ~4m, via 4G SIM),
+    polled every 60s on a separate timer from the main coordinator
+    (so the GPS entity stays alive when the bulk cloud state refresh
+    fails). Sentinel `[-1, -1]` means the dock origin isn't configured.
 
     Robustness:
     - ``RestoreEntity``: last-known lat/lon survive HA restarts.
-      When LOCN fails (mower offline → cloud 80001), we keep showing
-      the most recent fix instead of going `unavailable` (which
+      When getRecords fails (mower offline → cloud 80001), we keep
+      showing the most recent fix instead of going `unavailable` (which
       removes the marker from the HA map card).
     - ``available`` only gates on having coords; it does NOT gate on
       the main coordinator's ``last_update_success``. The map should
@@ -47,11 +47,9 @@ class DreameA2MowerGpsTracker(
     _attr_name = "Location"
     _attr_icon = "mdi:robot-mower"
     _attr_source_type = SourceType.GPS
-    # GPS dock-origin configuration isn't implemented yet, so this entity
-    # is permanently `unavailable` until that lands. Disable-by-default
-    # so it doesn't clutter the entity list on fresh installs. Existing
-    # installs are unaffected — users can re-enable via the entity
-    # registry once dock-origin support arrives.
+    # Disabled by default — absolute WGS84 fix via getRecords is
+    # functional but the dock-origin GPS coordinate still needs
+    # app-side configuration. Users can enable once confirmed.
     _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
@@ -90,6 +88,17 @@ class DreameA2MowerGpsTracker(
     @property
     def available(self) -> bool:
         # Available iff we have coords (live or restored). NOT gated
-        # on coordinator.last_update_success — LOCN has its own
+        # on coordinator.last_update_success — getRecords has its own
         # success path independent of the bulk refresh.
         return self.latitude is not None and self.longitude is not None
+
+    @property
+    def extra_state_attributes(self) -> dict:
+        """Expose GPS metadata from getRecords alongside the position."""
+        data = self.coordinator.data
+        attrs: dict = {}
+        if data.gps_update_time is not None:
+            attrs["gps_update_time"] = data.gps_update_time
+        if data.gps_card4g is not None:
+            attrs["gps_card4g"] = data.gps_card4g
+        return attrs

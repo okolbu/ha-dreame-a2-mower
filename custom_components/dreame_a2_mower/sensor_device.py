@@ -491,6 +491,43 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.charging_status.value if s.charging_status is not None else None,
     ),
+    # ------ Phase C: SIM / messaging diagnostic sensors ------
+    DreameA2SensorEntityDescription(
+        key="sim_card_id",
+        name="SIM ICCID",
+        icon="mdi:sim",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda s: s.sim_card_id,
+    ),
+    DreameA2SensorEntityDescription(
+        key="sim_left_days",
+        name="SIM days remaining",
+        icon="mdi:sim-alert",
+        native_unit_of_measurement="d",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda s: s.sim_left_days,
+    ),
+    DreameA2SensorEntityDescription(
+        key="sim_active_time",
+        name="SIM activated",
+        icon="mdi:sim",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda s: s.sim_active_time,
+    ),
+    DreameA2SensorEntityDescription(
+        key="sim_expired_time",
+        name="SIM expires",
+        icon="mdi:sim-off",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda s: s.sim_expired_time,
+    ),
+    DreameA2SensorEntityDescription(
+        key="service_messages_unread",
+        name="Unread messages",
+        icon="mdi:email-alert",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda s: s.service_messages_unread,
+    ),
 )
 
 
