@@ -40,8 +40,7 @@ async def test_gallery_sync_archives_photo_and_video_and_quota():
 async def test_gallery_sync_skips_already_archived():
     c = _coord([{"id": "p1", "filepath": "https://fake/a.jpg", "uploadTime": "x", "videoPath": ""}], [], None)
     c._video_archive.has = MagicMock(return_value=True)
-    # photo already present:
-    c._photo_archive.has = MagicMock(return_value=True)
+    # photo already present — dedup is by OSS leaf name (has_name), not md5 has():
     c._photo_archive.has_name = MagicMock(return_value=True)
     await c._refresh_oss_gallery()
     c._photo_archive.archive.assert_not_called()

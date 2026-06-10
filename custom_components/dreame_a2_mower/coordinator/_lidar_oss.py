@@ -797,7 +797,8 @@ class _LidarOssMixin:
 
     async def _refresh_oss_gallery(self) -> None:
         """Canonical OSS media sync: archive new photos (categorized via COM
-        metadata) + videos, and update quota. Runs hourly + on session-end."""
+        metadata) + videos, and update quota. Runs hourly + at startup (the
+        per-session photo_list fetch remains the immediate session-end path)."""
         if not hasattr(self, "_cloud") or self._cloud is None:
             return
         from ..protocol import photo_meta
