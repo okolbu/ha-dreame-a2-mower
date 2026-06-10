@@ -364,17 +364,17 @@ entities:
 
   - id: "switch.dreame_a2_mower_map_N_edgemaster"
     platform: switch
-    control_mode: read_only_noop
+    control_mode: device_writable
     class: "DreameA2MapEdgemasterSwitch"
-    class_file: "custom_components/dreame_a2_mower/switch.py:1259"
+    class_file: "custom_components/dreame_a2_mower/switch_map.py"
     device: per-map
     source:
       wire: "s6p2[2]"
       state_path: "state_machine.snapshot().pre_shadow_by_map_id[map_id][\"edgemaster\"]"
-    write_path: read-only
+    write_path: "coordinator.write_map_general_setting(map_id=..., pre_index=10, pre_value=int(enabled))"
     status:
       seen_working: true
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-14"
         status: verified
@@ -388,6 +388,9 @@ entities:
           control_mode remains read_only_noop pending live verification that
           g2408 firmware actually honors a PRE[10] write for this field."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: presumed
+        claim: "PRE[10] write at map_index is honored by g2408 firmware to toggle EdgeMaster [UNVERIFIED]"
     references:
       wire_entry: "s6p2"
       code: "custom_components/dreame_a2_mower/switch.py:1259"

@@ -24,7 +24,7 @@ from .coordinator import DreameA2MowerCoordinator
 class DreameA2MapEdgemasterSwitch(
     _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
 ):
-    """Per-map EdgeMaster — read-only (read_only_noop).
+    """Per-map EdgeMaster — PRE-only write (DEVICE_WRITABLE).
 
     Reads from the s6.2 PRE shadow (state_machine.snapshot().pre_shadow_by_map_id).
     Each s6.2 push from the device is tagged with the active map_id at push
@@ -32,11 +32,10 @@ class DreameA2MapEdgemasterSwitch(
     in the Dreame app on each map. Unavailable until the first save on that
     map has been observed since install.
 
-    No working device-write surface for EdgeMaster has been identified on
-    g2408 firmware (NOT a Bluetooth-transport issue — see
-    docs/research/wire-captures/settings-surface-cloud-only-2026-05-09.md).
-    control_mode=read_only_noop; async_turn_on / async_turn_off snap back via
-    _reject_readonly_write. The change is NOT applied to the device.
+    Writes via coordinator.write_map_general_setting(map_id=..., pre_index=10,
+    pre_value=int(enabled)) — PRE-only, no SETTINGS field (edgemaster has no
+    SETTINGS surface on g2408 firmware; the device's s6.2 push refreshes the
+    shadow after the PRE write is accepted).
     """
 
     _attr_has_entity_name = True
@@ -83,9 +82,25 @@ class DreameA2MapEdgemasterSwitch(
         return super().available
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        if self.read_only:
-            return await self._reject_readonly_write()
+        await self._set(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._set(False)
+
+    async def _set(self, enabled: bool) -> None:
         if self.read_only:
             return await self._reject_readonly_write()
+        ok = await self.coordinator.write_map_general_setting(
+            map_id=self._map_id, pre_index=10, pre_value=int(enabled),
+        )  # PRE-only: no settings_field (edgemaster has no SETTINGS field; reads s6p2 shadow)
+        if not ok:
+            await self.hass.services.async_call(
+                "persistent_notification", "create",
+                service_data={
+                    "title": "Dreame A2 Mower: setting write rejected",
+                    "message": f"The mower rejected EdgeMaster={enabled}.",
+                    "notification_id": f"dreame_a2_write_fail_{self.entity_id}",
+                },
+                blocking=False,
+            )
+        self.async_write_ha_state()  # re-read shadow (refreshes from s6p2 push)
