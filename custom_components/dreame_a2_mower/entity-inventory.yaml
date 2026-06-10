@@ -3327,7 +3327,7 @@ entities:
     source:
       wire: "none (fire-and-forget action)"
       state_path: "n/a — button entity has no state"
-    write_path: "coordinator.dispatch_action(MowerAction.PAUSE, {}) — wire: s5a4 (siid=5, aiid=4)"
+    write_path: "coordinator.dispatch_action(MowerAction.PAUSE, {}) — routed via s2a50 with routed_o=4 (direct s5a4 returned 80001 on g2408) [app-mitm:2026-06-09-settings-sweep]"
     status:
       seen_working: false
       last_verified: "2026-06-10"
@@ -3345,8 +3345,10 @@ entities:
       code: "custom_components/dreame_a2_mower/button.py:123"
     notes: |
       Availability-guarded: only enabled when the state-machine snapshot
-      reports current_activity = MOWING or FAST_MAPPING. Wire: siid=5, aiid=4
-      (same as lawn_mower.pause). Greyed out when idle, docked, or returning.
+      reports current_activity = MOWING or FAST_MAPPING. Routed via s2a50
+      routed_o=4 (direct siid=5 aiid=4 returned 80001 on g2408; routed path
+      confirmed working — app-mitm:2026-06-09-settings-sweep). Same underlying
+      action as lawn_mower.pause. Greyed out when idle, docked, or returning.
 
   - id: "button.dreame_a2_mower_stop_mowing"
     platform: button
@@ -3357,7 +3359,7 @@ entities:
     source:
       wire: "none (fire-and-forget action)"
       state_path: "n/a — button entity has no state"
-    write_path: "coordinator.dispatch_action(MowerAction.STOP, {}) — wire: s5a2 (siid=5, aiid=2)"
+    write_path: "coordinator.dispatch_action(MowerAction.STOP, {}) — routed via s2a50 with routed_o=3 (direct s5a2 returned 80001 on g2408) [app-mitm:2026-06-09-settings-sweep]"
     status:
       seen_working: false
       last_verified: "2026-06-10"
@@ -3375,7 +3377,9 @@ entities:
       code: "custom_components/dreame_a2_mower/button.py:137"
     notes: |
       Availability-guarded: enabled while MOWING, FAST_MAPPING, PAUSED, or
-      RETURNING. Wire: siid=5, aiid=2. Also covers "end return to station"
+      RETURNING. Routed via s2a50 routed_o=3 (direct siid=5 aiid=2 returned
+      80001 on g2408; routed path confirmed working —
+      app-mitm:2026-06-09-settings-sweep). Also covers "end return to station"
       semantics when the mower is in RETURNING state.
 
   - id: "button.dreame_a2_mower_resume_mowing"
@@ -3439,7 +3443,7 @@ entities:
     source:
       wire: "none (fire-and-forget action)"
       state_path: "n/a — button entity has no state"
-    write_path: "coordinator.dispatch_action(MowerAction.RECHARGE, {}) — wire: s5a3 (siid=5, aiid=3); alias for DOCK"
+    write_path: "coordinator.dispatch_action(MowerAction.RECHARGE, {}) — routed via s2a50 with routed_o=6 (direct s5a3 returned 80001 on g2408); alias for DOCK [app-mitm:2026-06-09-settings-sweep]"
     status:
       seen_working: false
       last_verified: "2026-06-10"
@@ -3457,9 +3461,11 @@ entities:
       code: "custom_components/dreame_a2_mower/button.py:154"
     notes: |
       Availability-guarded: greyed out when already RETURNING or when
-      snapshot.charging is True. Wire: siid=5, aiid=3 (same as lawn_mower
-      DOCK action — RECHARGE is a semantic alias). Mirrors the Dreame app's
-      "Recharge" tile which disables in those states.
+      snapshot.charging is True. Routed via s2a50 routed_o=6 (direct siid=5
+      aiid=3 returned 80001 on g2408; routed path confirmed working —
+      app-mitm:2026-06-09-settings-sweep). RECHARGE is a semantic alias for
+      DOCK (same action). Mirrors the Dreame app's "Recharge" tile which
+      disables in those states.
 
   - id: "button.dreame_a2_mower_find_bot"
     platform: button

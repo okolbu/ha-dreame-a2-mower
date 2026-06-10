@@ -15,11 +15,13 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from custom_components.dreame_a2_mower.button import (
+    DreameA2CancelDockReturnButton,
     DreameA2FindBotButton,
     DreameA2Generate3DMapButton,
     DreameA2LockBotButton,
     DreameA2PauseMowingButton,
     DreameA2RechargeButton,
+    DreameA2ResumeMowingButton,
     DreameA2StartMowingButton,
     DreameA2StopMowingButton,
 )
@@ -36,6 +38,8 @@ _WRITABLE = (
     DreameA2PauseMowingButton,
     DreameA2StopMowingButton,
     DreameA2RechargeButton,
+    DreameA2ResumeMowingButton,
+    DreameA2CancelDockReturnButton,
 )
 
 
