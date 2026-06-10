@@ -567,3 +567,62 @@ class _WritesMixin:
             MowerAction.START_EDGE_PATROL, {"contour_ids": [list(c) for c in contour_ids]}
         )
 
+    # ------------------------------------------------------------------
+    # PRE dual-write helpers (Phase A2 — per-map General settings)
+    # ------------------------------------------------------------------
+
+    async def _write_pre_scoped(self, map_id: int, apply_fn) -> bool:
+        """Scoped PRE read for (map_id, region 0) → apply_fn(array) → set_pre.
+        apply_fn returns the full write array or None (no base). True only on
+        device accept (set_pre out[0].r==0)."""
+        if not hasattr(self, "_cloud") or self._cloud is None:
+            LOGGER.warning("_write_pre_scoped: cloud client not ready")
+            return False
+        raw = await self.hass.async_add_executor_job(self._cloud.get_pre, map_id, 0)
+        new_array = apply_fn(raw)
+        if new_array is None:
+            LOGGER.warning("_write_pre_scoped: no PRE base for map %s — aborted", map_id)
+            return False
+        return await self.hass.async_add_executor_job(self._cloud.set_pre, new_array)
+
+    async def write_map_general_setting(
+        self, *, map_id: int, pre_index: int, pre_value,
+        settings_field: str | None = None, settings_value=None,
+    ) -> bool:
+        """Dual-write a per-map General-Mode setting: PRE (device) first, then
+        SETTINGS (cloud record) if settings_field given. A SETTINGS failure is
+        logged but does NOT revert the device. Returns the PRE-write result."""
+        from ..protocol import cfg_payloads
+        ok = await self._write_pre_scoped(
+            map_id,
+            lambda raw: cfg_payloads.apply_pre(raw, map_idx=map_id, index=pre_index, value=pre_value),
+        )
+        if not ok:
+            return False
+        if settings_field is not None:
+            s_ok = await self.write_settings(map_id=map_id, field=settings_field, value=settings_value)
+            if not s_ok:
+                LOGGER.warning(
+                    "write_map_general_setting: PRE ok but SETTINGS %s failed "
+                    "(device changed; cloud record stale until reconcile)", settings_field,
+                )
+        return True
+
+    async def write_map_general_ai_bit(
+        self, *, map_id: int, bit: int, on: bool, settings_value: int,
+    ) -> bool:
+        """Dual-write one AI-recognition bit: PRE[15] bit + SETTINGS.obstacleAvoidanceAi."""
+        from ..protocol import cfg_payloads
+        ok = await self._write_pre_scoped(
+            map_id,
+            lambda raw: cfg_payloads.apply_pre_ai_bit(raw, map_idx=map_id, bit=bit, on=on),
+        )
+        if not ok:
+            return False
+        s_ok = await self.write_settings(
+            map_id=map_id, field="obstacleAvoidanceAi", value=settings_value,
+        )
+        if not s_ok:
+            LOGGER.warning("write_map_general_ai_bit: PRE ok but SETTINGS failed (stale until reconcile)")
+        return True
+
