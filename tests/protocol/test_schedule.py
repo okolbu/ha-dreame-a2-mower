@@ -6,7 +6,6 @@ from custom_components.dreame_a2_mower.cloud_state import (
     SchedulePlan,
 )
 from custom_components.dreame_a2_mower.protocol.schedule import (
-    build_schedule_set_value,
     encode_schedule_blob,
     parse_schedule_batch,
 )
@@ -326,66 +325,3 @@ def test_encode_rejects_empty_weekday_mask():
         return
     raise AssertionError("expected ValueError for empty weekday_mask")
 
-
-def test_build_schedule_set_value_amp_html_escaped():
-    """The wire format escapes `&` to `&amp;` (matches the read shape).
-
-    Default ScheduleSlot.mode=0; this slot has no plans so it's encoded
-    as a placeholder/empty slot.
-    """
-    slots = (
-        ScheduleSlot(
-            slot_id=0,
-            name="Spr & Sum Schedule",
-            raw_blob_b64="",
-            plans=(),
-        ),
-    )
-    json_str = build_schedule_set_value(slots, version=1000)
-    assert "Spr &amp; Sum Schedule" in json_str
-    assert '"v":1000' in json_str
-    # Round-trip via the read decoder for parity.
-    import json
-    parsed = json.loads(json_str)
-    assert parsed == {"d": [[0, 0, "Spr &amp; Sum Schedule", ""]], "v": 1000}
-
-
-def test_build_schedule_set_value_preserves_mode():
-    """Mode round-trips: a slot parsed with mode=1 must re-encode with
-    mode=1, NOT 0. Hardcoding 0 here used to flip the active slot off
-    on every save.
-    """
-    slots = (
-        ScheduleSlot(slot_id=0, name="Active", raw_blob_b64="", plans=(), mode=1),
-        ScheduleSlot(slot_id=1, name="Empty", raw_blob_b64="", plans=(), mode=0),
-    )
-    json_str = build_schedule_set_value(slots, version=42)
-    import json
-    parsed = json.loads(json_str)
-    assert parsed["d"][0][1] == 1
-    assert parsed["d"][1][1] == 0
-
-
-def test_build_schedule_set_value_full_roundtrip():
-    """A built JSON value parses back to the same plans via parse_schedule_batch."""
-    import json
-    slots = (
-        ScheduleSlot(
-            slot_id=0,
-            name="A",
-            raw_blob_b64="",
-            plans=(SchedulePlan(time_min=478, weekday_mask=MON | WED, action_type=0),),
-        ),
-        ScheduleSlot(
-            slot_id=1,
-            name="",
-            raw_blob_b64="",
-            plans=(SchedulePlan(time_min=540, weekday_mask=MON | THU, action_type=0),),
-        ),
-    )
-    json_str = build_schedule_set_value(slots, version=2)
-    parsed = json.loads(json_str)
-    decoded = parse_schedule_batch(parsed)
-    assert decoded.version == 2
-    assert decoded.slots[0].plans == slots[0].plans
-    assert decoded.slots[1].plans == slots[1].plans

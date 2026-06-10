@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import base64
 
-from ..cloud_state import SchedulePlan, ScheduleSlot
+from ..cloud_state import SchedulePlan
 from .schedule_decode import _ACTION_LEN, _RECORD_END, _RECORD_START
 
 
@@ -71,30 +71,3 @@ def encode_schedule_blob(plans: tuple[SchedulePlan, ...]) -> str:
         assert len(rec) == rec_len, f"emit len {len(rec)} != expected {rec_len}"
         out.extend(rec)
     return base64.b64encode(bytes(out)).decode("ascii")
-
-
-def build_schedule_set_value(
-    slots: tuple[ScheduleSlot, ...],
-    version: int,
-) -> str:
-    """Build the JSON-string value for the SCHEDULE.0 cloud-batch write.
-
-    Mirrors the read shape: `{"d": [[id, mode, name, blob_b64], ...], "v": v}`.
-
-    `mode` (entry index 1) is the slot's active/empty flag — live
-    g2408 cloud emits 1 for the user's primary slot and 0 for the
-    empty/secondary one. Hardcoding 0 here previously turned an
-    active slot off on every save; we now round-trip it from the
-    parsed slot.
-    `name` is HTML-escape-encoded on the wire (the `&` in "Spr & Sum"
-    appears as `&amp;`); we round-trip-escape here for parity.
-    """
-    import json as _json
-    d_list = []
-    for slot in slots:
-        # Re-escape `&` to match the wire convention. Other HTML entities
-        # (`<`, `>`, `"`) appear unescaped in the read shape, so only `&`.
-        wire_name = (slot.name or "").replace("&", "&amp;")
-        blob = encode_schedule_blob(slot.plans)
-        d_list.append([slot.slot_id, int(slot.mode), wire_name, blob])
-    return _json.dumps({"d": d_list, "v": version}, separators=(",", ":"))

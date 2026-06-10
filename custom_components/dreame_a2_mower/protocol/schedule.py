@@ -12,7 +12,6 @@ from .schedule_decode import (
     parse_schedule_batch,
 )
 from .schedule_encode import (
-    build_schedule_set_value,
     encode_schedule_blob,
 )
 
@@ -20,6 +19,5 @@ __all__ = [
     "_decode_blob",
     "_decode_one_record",
     "parse_schedule_batch",
-    "build_schedule_set_value",
     "encode_schedule_blob",
 ]
