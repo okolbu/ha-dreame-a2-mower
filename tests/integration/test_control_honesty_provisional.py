@@ -1,9 +1,14 @@
 """Provisional marking for device_write_unproven controls.
 
-These are real device RPCs not yet live-proven on g2408 (stop/pause/dock,
-lock_bot, generate_3dmap). They stay operable (no padlock, no snap-back) but
-carry a `provisional` extra-state-attribute so the UI / automations can tell
-them apart from a confirmed control.
+lock_bot and generate_3dmap are real device RPCs not yet live-proven on g2408.
+They stay operable (no padlock, no snap-back) but carry a `provisional`
+extra-state-attribute so the UI / automations can tell them apart from a
+confirmed control.
+
+pause_mowing, stop_mowing, and recharge were promoted to device_writable
+(Task 3 / phase-b-core-control-verdicts, 2026-06-10) after wiring via routed
+op=4/3/6 was confirmed by app-mitm capture (2026-06-09). They now share the
+same DEVICE_WRITABLE bucket as start_mowing and find_bot.
 """
 from __future__ import annotations
 
@@ -19,14 +24,19 @@ from custom_components.dreame_a2_mower.button import (
     DreameA2StopMowingButton,
 )
 
+# Still unproven on g2408 — accepted-but-no-effect observed for both.
 _UNPROVEN = (
-    DreameA2PauseMowingButton,
-    DreameA2StopMowingButton,
-    DreameA2RechargeButton,
     DreameA2LockBotButton,
     DreameA2Generate3DMapButton,
 )
-_CONFIRMED = (DreameA2StartMowingButton, DreameA2FindBotButton)
+# Confirmed writable: wired via routed opcodes, live-confirmed or app-mitm verified.
+_WRITABLE = (
+    DreameA2StartMowingButton,
+    DreameA2FindBotButton,
+    DreameA2PauseMowingButton,
+    DreameA2StopMowingButton,
+    DreameA2RechargeButton,
+)
 
 
 def test_unproven_buttons_are_provisional_not_readonly():
@@ -41,9 +51,11 @@ def test_unproven_buttons_are_provisional_not_readonly():
         assert btn.icon != "mdi:lock-outline", cls.__name__
 
 
-def test_confirmed_buttons_are_not_provisional():
-    for cls in _CONFIRMED:
+def test_writable_buttons_are_not_provisional():
+    for cls in _WRITABLE:
         btn = cls(MagicMock())
         assert btn.provisional is False, cls.__name__
         assert btn.read_only is False, cls.__name__
-        assert btn.extra_state_attributes["control_mode"] == "device_writable", cls.__name__
+        attrs = btn.extra_state_attributes
+        assert attrs["control_mode"] == "device_writable", cls.__name__
+        assert attrs["provisional"] is False, cls.__name__

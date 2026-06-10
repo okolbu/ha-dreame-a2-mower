@@ -3320,7 +3320,7 @@ entities:
 
   - id: "button.dreame_a2_mower_pause_mowing"
     platform: button
-    control_mode: device_write_unproven
+    control_mode: device_writable
     class: "DreameA2PauseMowingButton"
     class_file: "custom_components/dreame_a2_mower/button.py:123"
     device: parent
@@ -3330,12 +3330,16 @@ entities:
     write_path: "coordinator.dispatch_action(MowerAction.PAUSE, {}) — wire: s5a4 (siid=5, aiid=4)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: async_press dispatches MowerAction.PAUSE (s5a4, siid=5 aiid=4). available returns True only when current_activity is MOWING or FAST_MAPPING (state_machine snapshot). Read from button.py:123-134; not re-confirmed live as a standalone button (lawn_mower.pause uses same action)."
         evidence: "button.py:125 (_action = MowerAction.PAUSE); button.py:129-134 (available guard → snapshot.current_activity)"
+      - date: "2026-06-10"
+        status: verified
+        claim: "now wired + writable via routed op=4/3/6 (was 80001 no-op via direct siid:5)"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "s5a4"
       code: "custom_components/dreame_a2_mower/button.py:123"
@@ -3346,7 +3350,7 @@ entities:
 
   - id: "button.dreame_a2_mower_stop_mowing"
     platform: button
-    control_mode: device_write_unproven
+    control_mode: device_writable
     class: "DreameA2StopMowingButton"
     class_file: "custom_components/dreame_a2_mower/button.py:137"
     device: parent
@@ -3356,12 +3360,16 @@ entities:
     write_path: "coordinator.dispatch_action(MowerAction.STOP, {}) — wire: s5a2 (siid=5, aiid=2)"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: async_press dispatches MowerAction.STOP (s5a2, siid=5 aiid=2). available returns True when current_activity is MOWING, FAST_MAPPING, PAUSED, or RETURNING. Read from button.py:137-152; not re-confirmed live."
         evidence: "button.py:139 (_action = MowerAction.STOP); button.py:143-151 (available guard → snapshot.current_activity in 4-state set)"
+      - date: "2026-06-10"
+        status: verified
+        claim: "now wired + writable via routed op=4/3/6 (was 80001 no-op via direct siid:5)"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "s5a2"
       code: "custom_components/dreame_a2_mower/button.py:137"
@@ -3424,7 +3432,7 @@ entities:
 
   - id: "button.dreame_a2_mower_recharge"
     platform: button
-    control_mode: device_write_unproven
+    control_mode: device_writable
     class: "DreameA2RechargeButton"
     class_file: "custom_components/dreame_a2_mower/button.py:154"
     device: parent
@@ -3434,12 +3442,16 @@ entities:
     write_path: "coordinator.dispatch_action(MowerAction.RECHARGE, {}) — wire: s5a3 (siid=5, aiid=3); alias for DOCK"
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: async_press dispatches MowerAction.RECHARGE (s5a3, siid=5 aiid=3 — same wire as DOCK). available: not RETURNING and not snapshot.charging. Read from button.py:154-172; not re-confirmed live as a standalone button press (lawn_mower.dock uses same wire)."
         evidence: "button.py:163 (_action = MowerAction.RECHARGE); button.py:167-171 (available → not RETURNING and not snap.charging)"
+      - date: "2026-06-10"
+        status: verified
+        claim: "now wired + writable via routed op=4/3/6 (was 80001 no-op via direct siid:5)"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "s5a3"
       code: "custom_components/dreame_a2_mower/button.py:154"
