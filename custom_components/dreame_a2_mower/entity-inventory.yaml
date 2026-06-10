@@ -341,6 +341,33 @@ entities:
       [UNVERIFIED — photo naming pattern observed in app but not confirmed
       from a live g2408 photo_list payload].
 
+  - id: "camera.dreame_a2_mower_latest_video"
+    platform: camera
+    class: "DreameA2LatestVideoThumbCamera"
+    class_file: "custom_components/dreame_a2_mower/_camera_photos.py:136"
+    device: parent
+    source:
+      wire: "local VideoArchive populated by coordinator video_list OSS fetch [dreame-app-implementation-guide-2026-06-09.md]"
+      state_path: "coordinator.video_archive.latest() → read_bytes(thumb_filename)"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-10"
+    verifications:
+      - date: "2026-06-10"
+        status: presumed
+        claim: "Serves the thumbnail JPEG for the most-recently-archived video clip from coordinator.video_archive.latest(). Returns None (unavailable) when archive is empty. Pull-only — reads disk via executor job."
+        evidence: "_camera_photos.py:136-172"
+    references:
+      code: "custom_components/dreame_a2_mower/_camera_photos.py:136"
+    notes: |
+      Parent-device camera. entity_id: camera.dreame_a2_mower_latest_video.
+      unique_id suffix: latest_video_thumb (via mower_unique_id).
+      Reads <video_archive.root>/<ArchivedVideo.thumb_filename> — the thumbnail
+      JPEG written alongside the MP4 during video archiving.
+      Only available when at least one video clip has been archived.
+      Read-only; pull-only, no access_token rotation needed.
+
   # ------------------------------------------------------------------
   # EdgeMaster (s6p2[2]) — parent-level + per-map mirrors
   # ------------------------------------------------------------------

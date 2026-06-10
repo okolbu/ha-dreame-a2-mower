@@ -27,6 +27,7 @@ from ._camera_wifi import (
 from ._camera_photos import (
     DreameA2AlbumPhotoCamera,
     DreameA2PersonPhotoCamera,
+    DreameA2LatestVideoThumbCamera,
 )
 from ._camera_views import (
     LidarPcdDownloadView,
@@ -75,5 +76,7 @@ async def async_setup_entry(
     # Album photo cameras — latest overall photo + latest person detection.
     entities.append(DreameA2AlbumPhotoCamera(coordinator))
     entities.append(DreameA2PersonPhotoCamera(coordinator))
+    # Video thumbnail camera — latest video clip's thumbnail JPEG.
+    entities.append(DreameA2LatestVideoThumbCamera(coordinator))
 
     async_add_entities(entities)
