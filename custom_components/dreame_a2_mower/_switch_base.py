@@ -217,18 +217,22 @@ class _AiRecognitionBitSwitch(
             LOGGER.warning("%s: no cloud_state — toggle deferred", self.entity_id)
             return
         old = cs.settings.by_map_id_canonical.get(self._map_id, {}).get("obstacleAvoidanceAi") or 0
-        new = (old | self._BIT) if on else (old & ~self._BIT)
-        if new == old:
+        new_mask = (old | self._BIT) if on else (old & ~self._BIT)
+        if new_mask == old:
             return
-        # Optimistic update on MowerState mirror (used by other entities on same map).
+        # _BIT is a mask (1/2/4); bit_length()-1 gives the 0-based bit index (0/1/2).
+        bit = self._BIT.bit_length() - 1
+        # Optimistic update on MowerState mirror (settings_obstacle_avoidance_ai stores the
+        # full bitmask int; we write the new combined mask here, not a per-bit bool).
         coord.data = dataclasses.replace(
-            coord.data, settings_obstacle_avoidance_ai=new
+            coord.data, settings_obstacle_avoidance_ai=new_mask
         )
         self.async_write_ha_state()
-        ok = await coord.write_settings(
+        ok = await coord.write_map_general_ai_bit(
             map_id=self._map_id,
-            field="obstacleAvoidanceAi",
-            value=new,
+            bit=bit,
+            on=on,
+            settings_value=new_mask,
         )
         if ok:
             return
@@ -241,7 +245,7 @@ class _AiRecognitionBitSwitch(
             service_data={
                 "title": "Dreame A2 Mower: setting write rejected",
                 "message": (
-                    f"The cloud rejected the AI recognition toggle. "
+                    f"The mower rejected the AI recognition toggle. "
                     f"Previous bitfield value: 0b{old:03b}."
                 ),
                 "notification_id": f"dreame_a2_write_fail_{self.entity_id}",

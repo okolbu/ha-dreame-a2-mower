@@ -32,6 +32,7 @@ from ._switch_base import (
 )
 from ._settings_writes import (
     settings_optimistic_write as _settings_switch_optimistic_write,
+    pre_settings_optimistic_write,
 )
 from .protocol import cfg_payloads as _cfgp
 
@@ -627,19 +628,19 @@ class DreameA2EdgeMowingAutoSwitch(
     async def async_turn_on(self, **kwargs: Any) -> None:
         if self.read_only:
             return await self._reject_readonly_write()
-        await _settings_switch_optimistic_write(
-            self, field="edgeMowingAuto", new_value=True,
-            state_field="settings_edge_mowing_auto",
-            map_id=self._map_id,
+        await pre_settings_optimistic_write(
+            self, state_field="settings_edge_mowing_auto", new_value=True,
+            map_id=self._map_id, pre_index=7, pre_value=1,
+            settings_field="edgeMowingAuto", settings_value=1,
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         if self.read_only:
             return await self._reject_readonly_write()
-        await _settings_switch_optimistic_write(
-            self, field="edgeMowingAuto", new_value=False,
-            state_field="settings_edge_mowing_auto",
-            map_id=self._map_id,
+        await pre_settings_optimistic_write(
+            self, state_field="settings_edge_mowing_auto", new_value=False,
+            map_id=self._map_id, pre_index=7, pre_value=0,
+            settings_field="edgeMowingAuto", settings_value=0,
         )
 
 
@@ -681,19 +682,19 @@ class DreameA2EdgeMowingSafeSwitch(
     async def async_turn_on(self, **kwargs: Any) -> None:
         if self.read_only:
             return await self._reject_readonly_write()
-        await _settings_switch_optimistic_write(
-            self, field="edgeMowingSafe", new_value=True,
-            state_field="settings_edge_mowing_safe",
-            map_id=self._map_id,
+        await pre_settings_optimistic_write(
+            self, state_field="settings_edge_mowing_safe", new_value=True,
+            map_id=self._map_id, pre_index=16, pre_value=1,
+            settings_field="edgeMowingSafe", settings_value=1,
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         if self.read_only:
             return await self._reject_readonly_write()
-        await _settings_switch_optimistic_write(
-            self, field="edgeMowingSafe", new_value=False,
-            state_field="settings_edge_mowing_safe",
-            map_id=self._map_id,
+        await pre_settings_optimistic_write(
+            self, state_field="settings_edge_mowing_safe", new_value=False,
+            map_id=self._map_id, pre_index=16, pre_value=0,
+            settings_field="edgeMowingSafe", settings_value=0,
         )
 
 
@@ -735,19 +736,19 @@ class DreameA2EdgeMowingObstacleAvoidanceSwitch(
     async def async_turn_on(self, **kwargs: Any) -> None:
         if self.read_only:
             return await self._reject_readonly_write()
-        await _settings_switch_optimistic_write(
-            self, field="edgeMowingObstacleAvoidance", new_value=True,
-            state_field="settings_edge_mowing_obstacle_avoidance",
-            map_id=self._map_id,
+        await pre_settings_optimistic_write(
+            self, state_field="settings_edge_mowing_obstacle_avoidance", new_value=True,
+            map_id=self._map_id, pre_index=9, pre_value=1,
+            settings_field="edgeMowingObstacleAvoidance", settings_value=1,
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         if self.read_only:
             return await self._reject_readonly_write()
-        await _settings_switch_optimistic_write(
-            self, field="edgeMowingObstacleAvoidance", new_value=False,
-            state_field="settings_edge_mowing_obstacle_avoidance",
-            map_id=self._map_id,
+        await pre_settings_optimistic_write(
+            self, state_field="settings_edge_mowing_obstacle_avoidance", new_value=False,
+            map_id=self._map_id, pre_index=9, pre_value=0,
+            settings_field="edgeMowingObstacleAvoidance", settings_value=0,
         )
 
 
@@ -789,19 +790,19 @@ class DreameA2ObstacleAvoidanceEnabledSwitch(
     async def async_turn_on(self, **kwargs: Any) -> None:
         if self.read_only:
             return await self._reject_readonly_write()
-        await _settings_switch_optimistic_write(
-            self, field="obstacleAvoidanceEnabled", new_value=True,
-            state_field="settings_obstacle_avoidance_enabled",
-            map_id=self._map_id,
+        await pre_settings_optimistic_write(
+            self, state_field="settings_obstacle_avoidance_enabled", new_value=True,
+            map_id=self._map_id, pre_index=12, pre_value=1,
+            settings_field="obstacleAvoidanceEnabled", settings_value=1,
         )
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         if self.read_only:
             return await self._reject_readonly_write()
-        await _settings_switch_optimistic_write(
-            self, field="obstacleAvoidanceEnabled", new_value=False,
-            state_field="settings_obstacle_avoidance_enabled",
-            map_id=self._map_id,
+        await pre_settings_optimistic_write(
+            self, state_field="settings_obstacle_avoidance_enabled", new_value=False,
+            map_id=self._map_id, pre_index=12, pre_value=0,
+            settings_field="obstacleAvoidanceEnabled", settings_value=0,
         )
 
 
