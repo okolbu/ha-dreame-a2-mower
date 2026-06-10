@@ -78,6 +78,7 @@ worst-of indicator.
 | `sensor.latest_session_area_m2` | sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.latest_session_duration_min` | sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.latest_session_unix_ts` | sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
+| `sensor.latest_video` | sensor | other | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.lidar_archive_count` | sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.mac_address` | sensor | other | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.mower_location` | sensor | snapshot | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
@@ -86,8 +87,14 @@ worst-of indicator.
 | `sensor.mqtt_age_s` | sensor | other | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.mqtt_connectivity` | sensor | snapshot | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.novel_observations` | sensor | snapshot | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
+| `sensor.oss_storage_pct` | sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
+| `sensor.oss_storage_total` | sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
+| `sensor.oss_storage_used` | sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.ota_capable_raw` | sensor | other | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.ota_status` | sensor | cloud_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
+| `sensor.photos_obstacle` | sensor | other | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
+| `sensor.photos_patrol` | sensor | other | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
+| `sensor.photos_person` | sensor | other | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.position_east_m` | sensor | snapshot | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.position_north_m` | sensor | snapshot | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.position_x_m` | sensor | snapshot | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
@@ -113,6 +120,7 @@ worst-of indicator.
 | `sensor.total_lawn_area_m2` | sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.total_mowed_area_m2` | sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.total_mowing_time_min` | sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
+| `sensor.videos` | sensor | other | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.weather_forecast_reference` | sensor | other | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.wifi_heatmap_age` | sensor | other | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |
 | `sensor.wifi_ip` | sensor | mower_state | GREEN | GREEN: ok | GREEN: ok | GREEN: ok |

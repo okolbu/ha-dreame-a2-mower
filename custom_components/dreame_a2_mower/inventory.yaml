@@ -11470,15 +11470,19 @@ api_endpoints:
     status:
       seen_on_wire: false
       first_seen: "2026-06-09"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
-      integration_code: "custom_components/dreame_a2_mower/coordinator.py"
+      integration_code: "custom_components/dreame_a2_mower/coordinator/_lidar_oss.py (_refresh_oss); oss_media_archive.py (PhotoArchive/VideoArchive)"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
     verifications:
       - date: "2026-06-09"
         status: verified
         claim: "POST …/userDidOssList {did, type:'jpg'|'thumb'} → {records:[{filepath(signed OSS), fileSize, uploadTime, videoPath}]}; server signs URLs; type='thumb'=video tab; auto-capture=3 photos/point."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "NOW WIRED + SURFACED: canonical gallery sync via _refresh_oss → PhotoArchive (categorized by JPEG COM metadata; obstacle/patrol/person) + VideoArchive (duration from ext.duration). Surfaced as sensors photos_obstacle/patrol/person + videos + latest_video + camera latest_video_thumb. Per-session photo_list (ai_obstacle) is subordinate; canonical source is now userDidOssList archive."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "oss_storage_quota"
@@ -11491,18 +11495,23 @@ api_endpoints:
       Response: {total:"209715200", used:"<bytes>"} (both as STRING-encoded ints).
       total = 200 MB (209715200 bytes); live sample: 43.8 MB used of 200 MB.
       [app-mitm:2026-06-09-settings-sweep]
-      Server-side cap; integration may surface as a sensor (used_mb / total_mb).
+      Server-side cap; integration surfaces as oss_storage_used/oss_storage_total/oss_storage_pct sensors.
     status:
       seen_on_wire: false
       first_seen: "2026-06-09"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
+      integration_code: "custom_components/dreame_a2_mower/coordinator/_lidar_oss.py (_refresh_oss); MowerState.oss_storage_used / oss_storage_total; sensor_device.py keys oss_storage_used/total/pct"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
     verifications:
       - date: "2026-06-09"
         status: verified
         claim: "POST …/checkDevOssStorage → {total:'209715200'(200MB as string), used:'<bytes>' as string}; 200 MB cap confirmed live."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "NOW WIRED + SURFACED: _refresh_oss polls checkDevOssStorage; stores bytes in MowerState.oss_storage_used / oss_storage_total (int|None); surfaced as oss_storage_used (MB), oss_storage_total (MB), oss_storage_pct (%) diagnostic sensors."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "oss_manual_upload"

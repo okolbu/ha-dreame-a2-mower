@@ -633,6 +633,61 @@ sensor.wifi_ssid:
   reboot: unavailable_ok
   note: "Device identity; populated once on first cloud-info or MQTT push."
 
+# Phase D: OSS storage quota + photo/video archive sensors (added 2026-06-10)
+# oss_storage_used/total/pct: read from MowerState (lambda s: s.oss_storage_*);
+#   populated by the _refresh_oss (checkDevOssStorage) poller; None until first poll.
+# photos_obstacle/patrol/person, videos, latest_video: read from coordinator
+#   archive objects (_photo_archive, _video_archive); None until first OSS sync.
+#   All unavailable at cold-start; unavailable_ok because they are cloud-archive-backed.
+
+sensor.oss_storage_used:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "OSS quota used (bytes → MB) from cloud checkDevOssStorage; None at cold-start until first OSS quota poll."
+
+sensor.oss_storage_total:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "OSS quota total (bytes → MB) from cloud checkDevOssStorage; None at cold-start until first OSS quota poll."
+
+sensor.oss_storage_pct:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "OSS quota used % (derived from oss_storage_used/total); None at cold-start until first OSS quota poll."
+
+sensor.photos_obstacle:
+  holder: other
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "Count of obstacle photos in coordinator._photo_archive; None at cold-start until first OSS media sync."
+
+sensor.photos_patrol:
+  holder: other
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "Count of patrol photos in coordinator._photo_archive; None at cold-start until first OSS media sync."
+
+sensor.photos_person:
+  holder: other
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "Count of person-detection photos in coordinator._photo_archive; None at cold-start until first OSS media sync."
+
+sensor.videos:
+  holder: other
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "Count of video clips in coordinator._video_archive; None at cold-start until first OSS media sync."
+
+sensor.latest_video:
+  holder: other
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "Duration (s) of the most-recently-archived video clip; None at cold-start until first OSS media sync."
+
 # ---------------------------------------------------------------------------
 # select
 # ---------------------------------------------------------------------------

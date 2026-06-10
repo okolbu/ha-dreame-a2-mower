@@ -257,6 +257,25 @@ Validate: correlate event args with the session that fired them.
   9=Square/13=Heart/17=Cloud/18=Rainbow; Circle(12)/Triangle(14)/Droplet(15)/
   Mushroom(16) are inferred from APK labels, not captured `[UNKNOWN — to capture]`.
   Capture: draw each shape in app-MITM session, read `type` in the o:215 payload.
+- **Type-3 transient obstacle photo / map-icon link** — obstacle JPEG bytes are
+  archived via `userDidOssList` (category=obstacle; confirmed 2026-06-09). The
+  *icon-linkage* — i.e. which map waypoint/obstacle-icon in the live-session data
+  corresponds to a specific photo — is `[UNKNOWN — to capture]`. Capture step:
+  mid-session, when an obstacle icon appears in the live map, click the icon in
+  the app while MITM-intercepting; capture the request and response that loads
+  the photo from that icon.
+- **iotoss auth mode: JWT vs body sign** — the integration sends userDidOssList and
+  checkDevOssStorage requests with a JWT Bearer header (standard for other endpoints).
+  The app-MITM capture 2026-06-09 showed the app sends an additional body `sign`
+  field `[UNKNOWN — to capture]`. If the endpoint rejects JWT-only auth live, the sign
+  algorithm must be RE'd. Capture step: confirm the integration's live requests are
+  accepted (r=0, records returned) on the next connected run; if rejected, diff the
+  failing vs. app request and recover the sign computation.
+- **mp4 HA Media browser playback** — the `sensor.dreame_a2_mower_latest_video`
+  attribute `mp4_path` exposes the local filesystem path. Wiring this as a proper HA
+  `media_source` provider (so the clip is playable in the Media browser) is a
+  follow-up `[UNKNOWN — to capture]`; requires implementing the MediaSource integration
+  platform and registering the video archive root as a browsable media directory.
 
 ---
 
