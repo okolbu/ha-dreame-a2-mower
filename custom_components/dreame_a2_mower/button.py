@@ -44,6 +44,8 @@ async def async_setup_entry(
         DreameA2PauseMowingButton(coordinator),
         DreameA2StopMowingButton(coordinator),
         DreameA2RechargeButton(coordinator),
+        DreameA2ResumeMowingButton(coordinator),
+        DreameA2CancelDockReturnButton(coordinator),
         DreameA2FindBotButton(coordinator),
         DreameA2LockBotButton(coordinator),
         DreameA2Generate3DMapButton(coordinator),
@@ -158,6 +160,18 @@ class DreameA2StopMowingButton(_DreameA2ActionButton):
             CurrentActivity.PAUSED,
             CurrentActivity.RETURNING,
         )
+
+
+class DreameA2ResumeMowingButton(_DreameA2ActionButton):
+    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
+        super().__init__(coordinator, "resume_mowing", "Resume", "mdi:play-circle")
+        self._action = MowerAction.RESUME
+
+
+class DreameA2CancelDockReturnButton(_DreameA2ActionButton):
+    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
+        super().__init__(coordinator, "cancel_dock_return", "Cancel dock return", "mdi:home-export-outline")
+        self._action = MowerAction.CANCEL_DOCK_RETURN
 
 
 class DreameA2RechargeButton(_DreameA2ActionButton):

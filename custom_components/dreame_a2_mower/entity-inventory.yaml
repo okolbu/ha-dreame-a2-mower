@@ -3370,6 +3370,58 @@ entities:
       RETURNING. Wire: siid=5, aiid=2. Also covers "end return to station"
       semantics when the mower is in RETURNING state.
 
+  - id: "button.dreame_a2_mower_resume_mowing"
+    platform: button
+    control_mode: device_writable
+    class: "DreameA2ResumeMowingButton"
+    class_file: "custom_components/dreame_a2_mower/button.py"
+    device: parent
+    source:
+      wire: "none (fire-and-forget action)"
+      state_path: "n/a — button entity has no state"
+    write_path: "coordinator.dispatch_action(MowerAction.RESUME, {}) — wire: s2a50 routed_o=5 (resume paused mow)"
+    status:
+      seen_working: false
+      last_verified: "2026-06-10"
+    verifications:
+      - date: "2026-06-10"
+        status: verified
+        claim: "wired via dispatch_action → routed_action op=5 (resume paused mow; app-capture 2026-06-09)"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+    references:
+      wire_entry: "o5"
+      code: "custom_components/dreame_a2_mower/button.py"
+    notes: |
+      Resumes a paused mowing session. Wire: s2a50 routed_o=5. No
+      availability guard — always available (mirrors app behaviour where
+      Resume is shown when paused). Fire-and-forget: no state echo.
+
+  - id: "button.dreame_a2_mower_cancel_dock_return"
+    platform: button
+    control_mode: device_writable
+    class: "DreameA2CancelDockReturnButton"
+    class_file: "custom_components/dreame_a2_mower/button.py"
+    device: parent
+    source:
+      wire: "none (fire-and-forget action)"
+      state_path: "n/a — button entity has no state"
+    write_path: "coordinator.dispatch_action(MowerAction.CANCEL_DOCK_RETURN, {}) — wire: s2a50 routed_o=13 (cancel in-progress dock-return)"
+    status:
+      seen_working: false
+      last_verified: "2026-06-10"
+    verifications:
+      - date: "2026-06-10"
+        status: verified
+        claim: "wired via dispatch_action → routed_action op=13 (cancel dock-return; app-capture 2026-06-09)"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+    references:
+      wire_entry: "o13"
+      code: "custom_components/dreame_a2_mower/button.py"
+    notes: |
+      Cancels an in-progress dock-return (distinct from STOP which also
+      works during RETURNING). Wire: s2a50 routed_o=13. No availability
+      guard. Fire-and-forget: no state echo.
+
   - id: "button.dreame_a2_mower_recharge"
     platform: button
     control_mode: device_write_unproven
