@@ -19,3 +19,11 @@ def test_sim_sensors_read_state():
 
 def test_unread_sensor_reads_state():
     assert _desc("service_messages_unread").value_fn(MowerState(service_messages_unread=2)) == 2
+
+
+def test_unread_sensor_exposes_attributes():
+    d = _desc("service_messages_unread")
+    assert d.extra_attributes_fn is not None
+    attrs = d.extra_attributes_fn(MowerState(system_messages_unread=1, latest_service_message="Sale"))
+    assert attrs["system_messages_unread"] == 1
+    assert attrs.get("latest_message") == "Sale"

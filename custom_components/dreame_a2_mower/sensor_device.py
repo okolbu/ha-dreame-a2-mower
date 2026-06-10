@@ -527,6 +527,10 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         icon="mdi:email-alert",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.service_messages_unread,
+        extra_attributes_fn=lambda s: {
+            "system_messages_unread": s.system_messages_unread,
+            "latest_message": s.latest_service_message,
+        },
     ),
 )
 
@@ -895,6 +899,14 @@ class DreameA2Sensor(
     @property
     def native_value(self) -> Any:
         return self.entity_description.value_fn(self.coordinator.data)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        fn = self.entity_description.extra_attributes_fn
+        if fn is None:
+            return None
+        raw = fn(self.coordinator.data)
+        return {k: v for k, v in raw.items() if v is not None} if raw else None
 
 
 class DreameA2DiagnosticSensor(

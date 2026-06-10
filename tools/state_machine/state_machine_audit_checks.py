@@ -261,10 +261,13 @@ def check_reboot(ed: "EntityDescriptor", exp: Expectation) -> Result:
 # Surfacing details (Phase C, 2026-06-10):
 #   gps_update_time   — device_tracker.extra_state_attributes (GPS timestamp)
 #   gps_card4g        — device_tracker.extra_state_attributes (4G GPS provider flag)
-#   system_messages_unread — MowerState accumulator; surfaced as context on
-#                            the service_messages_unread sensor's extra_state_attributes
-#                            (not yet wired; tracking: Phase C open item)
-#   latest_service_message — MowerState accumulator; same as above
+#   system_messages_unread — MowerState accumulator; surfaced as "system_messages_unread"
+#                            attribute on the service_messages_unread sensor via
+#                            DreameA2SensorEntityDescription.extra_attributes_fn
+#                            (wired 2026-06-10, Phase C honesty fix)
+#   latest_service_message — MowerState accumulator; surfaced as "latest_message"
+#                            attribute on the service_messages_unread sensor via the
+#                            same extra_attributes_fn (wired 2026-06-10)
 #
 # To remove an entry: confirm the field is referenced by a value_fn visible to
 # discover_entities() (sensor/binary_sensor/switch/select/number/time) AND

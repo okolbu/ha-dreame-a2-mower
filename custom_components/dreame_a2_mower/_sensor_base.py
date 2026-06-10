@@ -33,9 +33,15 @@ from .mower.state import MowerState
 
 @dataclass(frozen=True, kw_only=True)
 class DreameA2SensorEntityDescription(SensorEntityDescription):
-    """Sensor descriptor with a typed value_fn."""
+    """Sensor descriptor with a typed value_fn.
+
+    ``extra_attributes_fn``, if set, is called with ``MowerState`` and
+    its result is returned by the entity's ``extra_state_attributes``
+    property.  None values in the returned dict are omitted.
+    """
 
     value_fn: Callable[[MowerState], Any]
+    extra_attributes_fn: Callable[[MowerState], dict[str, Any]] | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
