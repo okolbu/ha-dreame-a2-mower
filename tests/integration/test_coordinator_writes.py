@@ -101,9 +101,13 @@ def test_write_settings_unknown_map_id_returns_false():
     coord._cloud.write_chunked_key.assert_not_called()
 
 
-def test_write_schedule_uses_write_chunked_key():
-    """write_schedule routes through cloud_client.write_chunked_key, not the
-    raw set_batch_device_datas method, so it picks up chunking + lock."""
+def test_write_schedule_uses_device_plane_not_kv():
+    """write_schedule routes through the SCHD*V3 routed-action transport
+    (siid:2/aiid:50 via _cloud.action), NOT the device-ignored SCHEDULE.* KV.
+
+    The KV write_chunked_key path was retired 2026-06-10 (the device ignores
+    the SCHEDULE.* cache mirror; see dreame-app-schedule-write-2026-06-10.md).
+    """
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
     from custom_components.dreame_a2_mower.cloud_state import (
         CloudState, ScheduleData, ScheduleSlot, SettingsRoot,
@@ -113,6 +117,11 @@ def test_write_schedule_uses_write_chunked_key():
     coord._cloud = MagicMock()
     coord._cloud.write_chunked_key = MagicMock(
         return_value=(True, {"code": 0, "success": True})
+    )
+    # _cloud.action is the routed-action callable; return a success envelope
+    # for every leg (read probe + write legs).
+    coord._cloud.action = MagicMock(
+        return_value={"result": {"out": [{"m": "r", "r": 0, "d": {}}]}}
     )
     coord.hass = MagicMock()
     async def _run(fn, *a, **k):
@@ -131,11 +140,15 @@ def test_write_schedule_uses_write_chunked_key():
         return None
     coord._refresh_cloud_state = MagicMock(side_effect=_stub_refresh)
     new_slots = (ScheduleSlot(slot_id=0, name="A", raw_blob_b64="", plans=()),)
-    asyncio.run(coord.write_schedule(new_slots))
-    args, _ = coord._cloud.write_chunked_key.call_args
-    assert args[0] == "SCHEDULE"
-    # value should contain v=11 (incremented from current 10)
-    assert '"v":11' in args[1]
+    ok = asyncio.run(coord.write_schedule(new_slots))
+    assert ok is True
+    # KV path retired — never touched.
+    coord._cloud.write_chunked_key.assert_not_called()
+    # Routed-action transport used: a SCHDTV3 read probe + the write legs.
+    ts = [c.args[2][0]["t"] for c in coord._cloud.action.call_args_list]
+    assert "SCHDTV3" in ts        # read-modify-write base
+    assert "SCHDIV3" in ts        # row header
+    assert "SCHDSV3" in ts        # row state (version bump)
 
 
 def test_write_ai_human_enabled_uses_write_chunked_key():

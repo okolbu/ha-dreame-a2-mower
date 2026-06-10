@@ -3542,8 +3542,12 @@ entities:
     verifications:
       - date: "2026-05-31"
         status: presumed
-        claim: "Ported from code 2026-05-31: DreameA2Time.native_value = _to_time(entity_description.minutes_fn(coordinator.data)); async_set_value logs warning and no-ops (schedule editing is BT-only per protocol-doc §1.1 on g2408). Platform 'time' is a real registered HA platform (homeassistant.components.time.TimeEntity). Read from time.py:117-167; not re-confirmed live."
+        claim: "Ported from code 2026-05-31: DreameA2Time.native_value = _to_time(entity_description.minutes_fn(coordinator.data)); async_set_value logs warning and no-ops. Platform 'time' is a real registered HA platform (homeassistant.components.time.TimeEntity). Read from time.py:117-167; not re-confirmed live."
         evidence: "time.py:117-153 (class DreameA2Time(CoordinatorEntity, TimeEntity)); time.py:160-167 (async_setup_entry registered under DOMAIN); time.py:1 (module docstring confirms time platform)"
+      - date: "2026-06-10"
+        status: retracted
+        retracts: "schedule editing is BT-only per protocol-doc §1.1 on g2408"
+        reason: "Mow-schedule editing is writable via the SCHD*V3 routed-action transport (siid:2/aiid:50); BT-only was already debunked for settings (inventory.yaml:2115). The time.* entities are DND/charging/low-speed CFG times, not the mow schedule. [app-mitm:2026-06-10-schedule-write]"
       - date: "2026-06-10"
         status: presumed
         claim: "Phase A1 Task 7: DreameA2TimeEntityDescription now carries cfg_key + build_from_cfg_fn + field_updates_fn; async_set_value converts datetime.time to minutes, RMW-builds wire payload via cfg_payloads builders, writes via coordinator.write_setting. All 6 entities wired; LIT start/end have no MowerState minute fields and are not present. control_mode remains read_only_noop until Task 8 promotes them."

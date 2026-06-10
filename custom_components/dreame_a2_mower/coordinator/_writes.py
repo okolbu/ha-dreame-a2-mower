@@ -56,6 +56,8 @@ from ..mower.state import ChargingStatus, MowerState
 from ..mower.state_machine import MowerStateMachine
 from ..mqtt_client import DreameA2MqttClient
 from ..observability.schemas import SCHEMA_SESSION_SUMMARY, SchemaCheck
+from ..protocol.schedule_action import read_schedule_rows, write_schedule_row
+from ..protocol.schedule_encode import encode_schedule_blob
 from ._property_apply import (
     _BLOB_SLOTS,
     _INVENTORY,
@@ -81,35 +83,90 @@ if TYPE_CHECKING:
 class _WritesMixin:
     """Methods extracted from coordinator.py — see spec for groupings."""
 
+    def _next_schedule_txn_id(self) -> int:
+        """Monotonic ms-epoch txn id (shared across a write's header+chunks)."""
+        import time as _time
+
+        txn = int(_time.time() * 1000)
+        last = getattr(self, "_last_schedule_txn_id", 0)
+        if txn <= last:
+            txn = last + 1
+        self._last_schedule_txn_id = txn
+        return txn
+
     async def write_schedule(
         self,
         new_slots: tuple[Any, ...] | list[Any],
     ) -> bool:
-        """Push a new SCHEDULE blob to the cloud via write_chunked_key.
+        """Push changed schedule slots to the device via the SCHD*V3 transport.
 
         new_slots is a sequence of ScheduleSlot dataclasses (.plans is the
-        source of truth; .raw_blob_b64 is ignored — re-encoded). Bumps
-        the schedule version by 1 and refreshes cloud_state on success.
+        source of truth; .raw_blob_b64 is ignored — re-encoded). Reads the
+        authoritative rows, writes only slots whose re-encoded blob or name
+        changed, preserving each slot's enabled/flag, bumping the schedule
+        version. The SCHEDULE.* KV is intentionally NOT written (the device
+        ignores it; see dreame-app-schedule-write-2026-06-10.md).
         """
-        from ..protocol.schedule import build_schedule_set_value
-
         if not hasattr(self, "_cloud") or self._cloud is None:
             LOGGER.warning("write_schedule: cloud client not ready")
             return False
+
         cs = self.cloud_state
-        current_v = cs.schedule.version if cs is not None else 0
-        new_v = current_v + 1
-        json_value = build_schedule_set_value(tuple(new_slots), version=new_v)
-        LOGGER.info(
-            "[schedule-write] v %d → %d, len(d)=%d, json_len=%d",
-            current_v, new_v, len(new_slots), len(json_value),
+        base_version = cs.schedule.version if cs is not None else 0
+        new_version = base_version + 1
+
+        rows = await self.hass.async_add_executor_job(
+            read_schedule_rows, self._cloud.action
         )
+        by_slot = {
+            r[0]: r for r in rows if isinstance(r, list) and len(r) == 4
+        }
+
+        ok = True
         async with self._chunked_write_lock:
-            ok, response = await self.hass.async_add_executor_job(
-                self._cloud.write_chunked_key, "SCHEDULE", json_value,
-            )
-            if not ok:
-                LOGGER.warning("[schedule-write] rejected: %r", response)
+            for slot in new_slots:
+                blob_b64 = encode_schedule_blob(tuple(slot.plans))
+                # Name is HTML-escaped on the wire — only `&` (the device read
+                # row carries `Spr &amp; Sum`); `<`/`>`/`"` appear unescaped.
+                # decode does html.unescape, so compare AND write the escaped
+                # form, else `&`-names never match the skip gate and drift via
+                # double-escape on each save.
+                wire_name = (slot.name or "").replace("&", "&amp;")
+                prev = by_slot.get(slot.slot_id)
+                prev_blob = prev[3] if prev else None
+                prev_name = prev[2] if prev else None
+                if (
+                    prev is not None
+                    and blob_b64 == prev_blob
+                    and wire_name == prev_name
+                ):
+                    continue  # unchanged — skip (idempotent, no version churn)
+                enabled = int(prev[1]) if prev else 1
+                flag = 0  # SCHDSV3 second state element; 0 in every capture
+                txn_id = self._next_schedule_txn_id()
+                try:
+                    await self.hass.async_add_executor_job(
+                        lambda s=slot, b=blob_b64, e=enabled, t=txn_id, n=wire_name: write_schedule_row(
+                            self._cloud.action,
+                            slot=s.slot_id,
+                            enabled=e,
+                            name=n,
+                            blob_b64=b,
+                            version=new_version,
+                            flag=flag,
+                            txn_id=t,
+                        )
+                    )
+                    LOGGER.info(
+                        "[schedule-write] slot %d, %d plan(s), v→%d, blob_len=%d",
+                        slot.slot_id, len(slot.plans), new_version, len(blob_b64),
+                    )
+                except Exception as exc:  # noqa: BLE001 — surface, keep going
+                    ok = False
+                    LOGGER.warning(
+                        "[schedule-write] slot %d rejected: %r", slot.slot_id, exc
+                    )
+
         await self._refresh_cloud_state()
         return ok
 

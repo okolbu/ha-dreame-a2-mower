@@ -148,8 +148,9 @@ TIMES: tuple[DreameA2TimeEntityDescription, ...] = (
 class DreameA2Time(_ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], TimeEntity):
     """Read-only time entity backed by MowerState int-minutes field.
 
-    Displays schedule slot start/end times. async_set_value is a no-op
-    with a warning — schedule editing is BT-only on g2408 in F4.
+    Backs DND / charging / low-speed-at-night CFG time fields (NOT the mow
+    schedule). Writable entities write via coordinator.write_setting; the
+    rest reject writes via the control-honesty mixin.
     """
 
     _attr_has_entity_name = True
