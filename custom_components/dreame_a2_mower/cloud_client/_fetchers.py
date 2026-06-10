@@ -825,6 +825,8 @@ class _FetchersMixin:
         list when Real-Time Location is disabled in the app.
         """
         self._ensure_strings()
+        if getattr(self, "_key_expire", None) and time.time() > self._key_expire:
+            self.login()
         strings = getattr(self, "_strings", None) or self.strings
         headers = {
             "Accept": "*/*",
@@ -907,6 +909,8 @@ class _FetchersMixin:
         Returns ``None`` on any failure.
         """
         self._ensure_strings()
+        if getattr(self, "_key_expire", None) and time.time() > self._key_expire:
+            self.login()
         strings = getattr(self, "_strings", None) or self.strings
         headers = {
             "Accept": "*/*",
