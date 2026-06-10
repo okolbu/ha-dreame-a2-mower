@@ -595,6 +595,38 @@ sensor.weather_forecast_reference:
   reboot: unavailable_ok
   note: "CFG.WRF int {0,1} → 'on'/'off' string; populated once on first cloud poll."
 
+# Phase C: SIM / messaging diagnostic sensors (added 2026-06-10)
+
+sensor.sim_card_id:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "SIM ICCID from cloud NET/getRecords; None at cold-start until first cloud poll."
+
+sensor.sim_left_days:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "SIM days remaining from cloud NET/getRecords; None at cold-start until first cloud poll."
+
+sensor.sim_active_time:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "SIM activation date string from cloud NET/getRecords; None at cold-start until first cloud poll."
+
+sensor.sim_expired_time:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "SIM expiry date string from cloud NET/getRecords; None at cold-start until first cloud poll."
+
+sensor.service_messages_unread:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "Unread service-message count from cloud message-record API; None at cold-start until first cloud poll."
+
 sensor.wifi_ssid:
   holder: mower_state
   idle: unavailable

@@ -252,6 +252,33 @@ def check_reboot(ed: "EntityDescriptor", exp: Expectation) -> Result:
     )
 
 
+# MowerState fields that are intentionally surfaced via entity
+# extra_state_attributes or platform-level attributes rather than through a
+# value_fn / entity description that the audit's discover_entities() walker
+# can see.  These are NOT orphans — they are legitimate surfaces that the
+# text-scan approach simply cannot reach.
+#
+# Surfacing details (Phase C, 2026-06-10):
+#   gps_update_time   — device_tracker.extra_state_attributes (GPS timestamp)
+#   gps_card4g        — device_tracker.extra_state_attributes (4G GPS provider flag)
+#   system_messages_unread — MowerState accumulator; surfaced as context on
+#                            the service_messages_unread sensor's extra_state_attributes
+#                            (not yet wired; tracking: Phase C open item)
+#   latest_service_message — MowerState accumulator; same as above
+#
+# To remove an entry: confirm the field is referenced by a value_fn visible to
+# discover_entities() (sensor/binary_sensor/switch/select/number/time) AND
+# delete the entry here.
+_KNOWN_ATTRIBUTE_SURFACED_FIELDS: frozenset[str] = frozenset({
+    # device_tracker extra_state_attributes (Phase C)
+    "gps_update_time",
+    "gps_card4g",
+    # service_messages_unread sensor context attributes (Phase C)
+    "system_messages_unread",
+    "latest_service_message",
+})
+
+
 def find_orphan_fields(
     entities: list, all_fields: set[str] | None = None
 ) -> set[str]:
@@ -260,6 +287,11 @@ def find_orphan_fields(
     A high orphan count is a code-health signal (sprawl); some are
     legitimate (internal accumulators, raw protocol bytes). The audit
     surfaces the list; the implementer decides what to prune.
+
+    Fields listed in ``_KNOWN_ATTRIBUTE_SURFACED_FIELDS`` are excluded:
+    they are surfaced via entity extra_state_attributes or platform-level
+    attributes that the audit's text-scan cannot reach, and are therefore
+    not true orphans.
 
     If `all_fields` is None, derives the set from `MowerState`.
     """
@@ -276,4 +308,7 @@ def find_orphan_fields(
         # Improvement A (F10): treat snapshot reads as consuming the
         # MowerState field of the same name (or its aliased name).
         referenced.update(_fields_read_via_snapshot(ed.value_fn_src))
+    # Exclude fields surfaced via extra_state_attributes or platform attributes
+    # that the text-scan cannot reach (see _KNOWN_ATTRIBUTE_SURFACED_FIELDS).
+    referenced.update(_KNOWN_ATTRIBUTE_SURFACED_FIELDS)
     return all_fields - referenced
