@@ -46,6 +46,7 @@ class DreameA2SwitchEntityDescription(SwitchEntityDescription):
     value_fn: Callable[[MowerState], bool | None]
     cfg_key: str | None = None
     build_value_fn: Callable[[MowerState, bool], Any] | None = None
+    build_from_cfg_fn: Callable[[Any, bool], Any] | None = None
     field_updates_fn: Callable[[MowerState, bool], dict[str, Any]] | None = None
 
 
@@ -120,7 +121,19 @@ class DreameA2Switch(
             return
 
         # Build the full wire value expected by the firmware.
-        if desc.build_value_fn is not None:
+        if desc.build_from_cfg_fn is not None:
+            cs = getattr(self.coordinator, "cloud_state", None)
+            raw = cs.cfg.get(desc.cfg_key) if cs is not None else None
+            wire_value = desc.build_from_cfg_fn(raw, enabled)
+            if wire_value is None:
+                # No cached base to RMW from — don't send a partial payload.
+                LOGGER.warning(
+                    "switch.%s: no cfg base for %s; write aborted",
+                    getattr(self, "entity_id", desc.key), desc.cfg_key,
+                )
+                self.async_write_ha_state()  # snap back
+                return
+        elif desc.build_value_fn is not None:
             wire_value = desc.build_value_fn(self.coordinator.data, enabled)
         else:
             wire_value = int(enabled)
