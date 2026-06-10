@@ -123,3 +123,37 @@ def build_lang(raw: Any, *, kind: str, value: int) -> dict | None:
     if kind not in ("voice", "text"):
         return None
     return {"type": kind, "value": int(value)}
+
+
+# --- PRE (General-Mode per-map preferences) builders ---------------------
+# PRE READS as a positional array via get PRE {idx,region}; WRITES as a bare
+# array {m:s,t:PRE,d:[...]} with version at [0]=0, map at [1], region at [2].
+
+_PRE_MIN_LEN = 17  # need index 16 (safe_edge) addressable
+
+
+def apply_pre(raw: Any, *, map_idx: int, index: int, value: Any) -> list | None:
+    """RMW one PRE index. Returns the full write array (version=0, map_idx,
+    region=0 General, target index set, rest preserved) or None if the base
+    is missing/too short."""
+    if not raw or len(raw) < _PRE_MIN_LEN or index >= len(raw):
+        return None
+    out = [int(x) for x in raw]
+    out[0] = 0                      # version write-byte (app writes 0)
+    out[1] = int(map_idx)           # map index
+    out[2] = 0                      # General region
+    out[index] = _i(value)
+    return out
+
+
+def apply_pre_ai_bit(raw: Any, *, map_idx: int, bit: int, on: bool) -> list | None:
+    """RMW one bit of PRE[15] (AI obstacle-recognition bitmask)."""
+    if not raw or len(raw) < _PRE_MIN_LEN:
+        return None
+    out = [int(x) for x in raw]
+    out[0] = 0
+    out[1] = int(map_idx)
+    out[2] = 0
+    mask = 1 << int(bit)
+    out[15] = (out[15] | mask) if on else (out[15] & ~mask)
+    return out

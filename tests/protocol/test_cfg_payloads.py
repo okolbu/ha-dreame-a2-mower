@@ -86,3 +86,35 @@ def test_build_lang_text():
 def test_builders_return_none_on_empty_base(fn, args):
     assert fn(None, **args) is None
     assert fn([], **args) is None
+
+
+PRE_BASE = _FIX["pre"]["baseline"]  # [0,0,0,0,55,1,8,1,0,1,1,2,1,20,10,7,1,2,0]
+
+
+def test_apply_pre_sets_index_and_scope():
+    out = cp.apply_pre(PRE_BASE, map_idx=1, index=4, value=60)
+    assert out[0] == 0      # version write-byte
+    assert out[1] == 1      # map idx
+    assert out[2] == 0      # General region
+    assert out[4] == 60     # height changed
+    assert out[3] == PRE_BASE[3] and out[5] == PRE_BASE[5] and out[16] == PRE_BASE[16]
+    assert len(out) == len(PRE_BASE)
+
+
+def test_apply_pre_efficiency_passthrough():
+    out = cp.apply_pre(PRE_BASE, map_idx=0, index=3, value=1)
+    assert out[3] == 1 and out[1] == 0 and out[2] == 0
+
+
+def test_apply_pre_ai_bit_set_and_clear():
+    out = cp.apply_pre_ai_bit(PRE_BASE, map_idx=0, bit=0, on=False)  # baseline [15]=7
+    assert out[15] == 6
+    base6 = list(PRE_BASE); base6[15] = 6
+    out2 = cp.apply_pre_ai_bit(base6, map_idx=0, bit=0, on=True)
+    assert out2[15] == 7
+
+
+def test_apply_pre_none_base():
+    assert cp.apply_pre(None, map_idx=0, index=4, value=60) is None
+    assert cp.apply_pre([0, 0], map_idx=0, index=16, value=1) is None  # too short for idx 16
+    assert cp.apply_pre_ai_bit(None, map_idx=0, bit=0, on=True) is None
