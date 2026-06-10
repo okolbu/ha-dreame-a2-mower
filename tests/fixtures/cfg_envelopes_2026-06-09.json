@@ -1,0 +1,27 @@
+{
+  "_source": "dreame-app-capture-2026-06-09/miio-cloud-13267-http.jsonl (private, off-GitHub); non-secret CFG setting envelopes only",
+  "_notes": "BAT_power [15,95,1] = [recharge,resume,flag] derived from the read list; the captured BAT write was the charging type. BAT_power shape is inventory-confirmed (type:power,value:[recharge,resume,flag]), not capture-verbatim.",
+  "writes": {
+    "WRP":  {"value": 0, "time": 4, "sen": 1},
+    "DND":  {"value": 1, "time": [1260, 420]},
+    "LOW":  {"value": 0, "time": [1200, 480]},
+    "BAT_charging": {"type": "charging", "value": [0, 1080, 480]},
+    "BAT_power":    {"type": "power", "value": [15, 95, 1]},
+    "LIT":  {"value": 1, "time": [480, 1200], "light": [1, 1, 1, 1], "fill": 1},
+    "REC":  {"value": 0, "sen": 1, "mode": [1, 1, 1, 1], "report": [0, 1, 3]},
+    "LANG_voice": {"type": "voice", "value": 0},
+    "LANG_text":  {"type": "text", "value": 7},
+    "PROT": {"value": 1}, "CLS": {"value": 1}, "ATA": {"value": [1, 0, 0]},
+    "FDP": {"value": 0}, "STUN": {"value": 0}, "AOP": {"value": 0},
+    "MSG_ALERT": {"value": [0, 1, 1, 1]}, "VOICE": {"value": [0, 1, 1, 1]}, "VOL": {"value": 51}
+  },
+  "reads": {
+    "WRP": [1, 4],
+    "DND": [0, 1260, 420],
+    "LOW": [1, 1200, 480],
+    "BAT": [15, 95, 1, 1, 1080, 480],
+    "LIT": [0, 480, 1200, 1, 1, 1, 1, 1],
+    "REC": [1, 1, 1, 1, 1, 1, 0, 1, 3],
+    "LANG": [7, 7]
+  }
+}
