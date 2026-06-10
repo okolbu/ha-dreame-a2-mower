@@ -392,6 +392,15 @@ class DreameA2PerMapMowingHeightNumber(_PerMapSettingsNumberBase):
     _attr_native_step = 1
     _attr_native_unit_of_measurement = "cm"
 
+    async def async_set_native_value(self, value: float) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
+        await _pre_settings_optimistic_write(
+            self, state_field=self._STATE_FIELD, new_value=value,
+            map_id=self._map_id, pre_index=4, pre_value=round(value * 10),
+            settings_field="mowingHeight", settings_value=value,
+        )
+
 
 class DreameA2PerMapCutterPositionNumber(_PerMapSettingsNumberBase):
     """Per-map cutter position."""
@@ -442,6 +451,15 @@ class DreameA2PerMapObstacleAvoidanceHeightNumber(_PerMapSettingsNumberBase):
     _attr_native_step = 1
     _attr_native_unit_of_measurement = "cm"
 
+    async def async_set_native_value(self, value: float) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
+        await _pre_settings_optimistic_write(
+            self, state_field=self._STATE_FIELD, new_value=int(value),
+            map_id=self._map_id, pre_index=13, pre_value=int(value),
+            settings_field="obstacleAvoidanceHeight", settings_value=int(value),
+        )
+
 
 class DreameA2PerMapObstacleAvoidanceDistanceNumber(_PerMapSettingsNumberBase):
     """Per-map obstacle avoidance distance (cm)."""
@@ -454,6 +472,15 @@ class DreameA2PerMapObstacleAvoidanceDistanceNumber(_PerMapSettingsNumberBase):
     _attr_native_max_value = 30
     _attr_native_step = 1
     _attr_native_unit_of_measurement = "cm"
+
+    async def async_set_native_value(self, value: float) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
+        await _pre_settings_optimistic_write(
+            self, state_field=self._STATE_FIELD, new_value=int(value),
+            map_id=self._map_id, pre_index=14, pre_value=int(value),
+            settings_field="obstacleAvoidanceDistance", settings_value=int(value),
+        )
 
 
 class DreameA2PerMapObstacleAvoidanceSensitivityNumber(_PerMapSettingsNumberBase):
@@ -672,6 +699,9 @@ class DreameA2TrailRenderWidthNumber(
             update_listeners()
 
 
-# Shared optimistic-write helper. Renamed alias kept so callsites in
+# Shared optimistic-write helpers. Renamed alias kept so callsites in
 # this module stay unchanged.
-from ._settings_writes import settings_optimistic_write as _settings_optimistic_write  # noqa: E402
+from ._settings_writes import (  # noqa: E402
+    pre_settings_optimistic_write as _pre_settings_optimistic_write,
+    settings_optimistic_write as _settings_optimistic_write,
+)

@@ -27,6 +27,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._devices import map_device_info, map_unique_id
 from ._settings_writes import (
+    pre_settings_optimistic_write,
     settings_optimistic_write as _settings_select_optimistic_write,
 )
 from .const import LOGGER
@@ -449,10 +450,10 @@ class DreameA2PerMapMowingDirectionSelect(
             idx = self._OPTIONS.index(option)
         except ValueError:
             return
-        await _settings_select_optimistic_write(
-            self, field="mowingDirection", new_value=idx * 90,
-            state_field="settings_mowing_direction",
-            map_id=self._map_id,
+        await pre_settings_optimistic_write(
+            self, state_field="settings_mowing_direction", new_value=idx * 90,
+            map_id=self._map_id, pre_index=6, pre_value=idx * 90,
+            settings_field="mowingDirection", settings_value=idx * 90,
         )
 
 
@@ -514,10 +515,10 @@ class DreameA2PerMapMowingDirectionModeSelect(
         if option not in self._OPTIONS:
             return
         idx = self._OPTIONS.index(option)
-        await _settings_select_optimistic_write(
-            self, field="mowingDirectionMode", new_value=idx,
-            state_field="settings_mowing_direction_mode",
-            map_id=self._map_id,
+        await pre_settings_optimistic_write(
+            self, state_field="settings_mowing_direction_mode", new_value=idx,
+            map_id=self._map_id, pre_index=5, pre_value=idx,
+            settings_field="mowingDirectionMode", settings_value=idx,
         )
 
 
@@ -606,6 +607,14 @@ class DreameA2MapMowingEfficiencySelect(
     async def async_select_option(self, option: str) -> None:
         if self.read_only:
             return await self._reject_readonly_write()
+        if option not in self._OPTIONS:
+            return
+        idx = self._OPTIONS.index(option)
+        await pre_settings_optimistic_write(
+            self, state_field="pre_mowing_efficiency", new_value=idx,
+            map_id=self._map_id, pre_index=3, pre_value=idx,
+            settings_field="efficientMode", settings_value=idx,
+        )
 
 
 class DreameA2PerMapEdgeMowingWalkModeSelect(
