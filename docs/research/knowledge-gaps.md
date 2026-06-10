@@ -182,6 +182,22 @@ lock_robot incident memory), o15 (remote setting), joystick o2/4/5/7. Gap: confi
 each fires the intended action on g2408. Validate: **docked-window probe only**
 (the o-code brute-force start-action incident — never blind-probe aiid≠50).
 
+- **lock_bot (routed o=12):** `[UNKNOWN — to capture]` No lock/unlock button exists in
+  the current Dreame app UI; the backend MAY add support in a future firmware/app
+  version. On current g2408 firmware op=12 is ACCEPTED-BUT-NO-EFFECT (cloud r=0, no
+  panel-lock observed, no s2p50 echo). Parallel channel to CFG.CLS write (child lock)
+  — which one firmware reads is unknown. Integration `lock_bot` entity stays
+  DEVICE_WRITE_UNPROVEN. Capture step: watch for a future app lock control or
+  backend feature flag.
+
+- **generate_3dmap (routed o=10):** `[UNKNOWN — to capture]` What ACTUALLY triggers a
+  3D-map snapshot on g2408 is still unknown — op=10 is ACCEPTED-BUT-NO-EFFECT
+  (live probe 2026-06-08: r=0 ×2, no new 3dmap OSS object). The 2 existing snapshots
+  (2026-04-20, 2026-05-10) were created by an internal firmware condition (likely
+  post-mow or enough-map-change), not a callable action. Integration `generate_3dmap`
+  entity stays DEVICE_WRITE_UNPROVEN. Capture step: identify what fires the
+  s2p54-progress(0→100) → s99p20(object-name) upload sequence on the next occurrence.
+
 **OSS session-summary fields:** `mode` now **confirmed** (100=all/101=edge/102=zone/
 103=spot/108=patrol — the mow-type op) and `start_mode` **partial** (1=scheduled,
 0=manual/app; open: do voice/HA-service starts collapse to 0?). Still

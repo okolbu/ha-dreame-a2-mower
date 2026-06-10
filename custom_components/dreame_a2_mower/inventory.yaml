@@ -3166,7 +3166,7 @@ opcodes:
     status:
       seen_on_wire: true
       first_seen: "2026-04-20"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
@@ -3176,6 +3176,15 @@ opcodes:
       - date: "2026-06-09"
         status: verified
         claim: "App sends o:3 as routed action s2a50 {m:'a', o:3} to stop/end a session. No payload fields. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: retracted
+        claim: "The integration does NOT send o:3 as a command — it uses the direct action(siid=5, aiid=2) path (ACTION_TABLE[MowerAction.STOP]). The app uses the routed-action form instead."
+        retracts: "The integration does NOT send o:3 as a command — it uses the direct action(siid=5, aiid=2) path (ACTION_TABLE[MowerAction.STOP]). The app uses the routed-action form instead."
+        reason: "Phase B wired STOP via ACTION_TABLE.routed_o=3 (s2a50 {m:'a', o:3}), replacing the direct siid:5/aiid:2 path that returned 80001 on g2408."
+      - date: "2026-06-10"
+        status: verified
+        claim: "Integration now wires MowerAction.STOP via ACTION_TABLE routed_o=3 (s2a50 {m:'a', o:3}), replacing the direct siid:5/aiid:2 path (was 80001 no-op on g2408). Evidence: app-mitm:2026-06-09-settings-sweep confirms the routed form is what the app sends."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o4"
@@ -3199,7 +3208,7 @@ opcodes:
       is not yet observed on the g2408 wire. [UNKNOWN — to capture]
     status:
       seen_on_wire: false
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
@@ -3213,6 +3222,15 @@ opcodes:
       - date: "2026-06-09"
         status: verified
         claim: "App sends o:4 as routed action s2a50 {m:'a', o:4} to pause a mowing session. No payload fields. DISTINCT from stop (o:3). [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: retracted
+        claim: "The integration does NOT send o:4 as a command — it uses the direct action(siid=5, aiid=4) path (ACTION_TABLE[MowerAction.PAUSE]). The app uses the routed-action form instead."
+        retracts: "The integration does NOT send o:4 as a command — it uses the direct action(siid=5, aiid=4) path (ACTION_TABLE[MowerAction.PAUSE]). The app uses the routed-action form instead."
+        reason: "Phase B wired PAUSE via ACTION_TABLE.routed_o=4 (s2a50 {m:'a', o:4}), replacing the direct siid:5/aiid:4 path that returned 80001 on g2408."
+      - date: "2026-06-10"
+        status: verified
+        claim: "Integration now wires MowerAction.PAUSE via ACTION_TABLE routed_o=4 (s2a50 {m:'a', o:4}), replacing the direct siid:5/aiid:4 path (was 80001 no-op on g2408). Evidence: app-mitm:2026-06-09-settings-sweep confirms the routed form is what the app sends."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o5"
@@ -3234,7 +3252,7 @@ opcodes:
       o:2–7 group). App-mitm confirms this is the general RESUME command.
     status:
       seen_on_wire: false
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
@@ -3248,6 +3266,15 @@ opcodes:
       - date: "2026-06-09"
         status: verified
         claim: "App sends o:5 as routed action s2a50 {m:'a', o:5} to resume a paused session. No payload fields. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: retracted
+        claim: "The integration does not currently use a routed o:5 form — resume is handled implicitly (the START_MOWING / mow dispatch covers both new and resume starts)."
+        retracts: "The integration does not currently use a routed o:5 form — resume is handled implicitly (the START_MOWING / mow dispatch covers both new and resume starts)."
+        reason: "Phase B added MowerAction.RESUME → ACTION_TABLE routed_o=5 (s2a50 {m:'a', o:5}), wiring an explicit resume path."
+      - date: "2026-06-10"
+        status: verified
+        claim: "Integration now wires MowerAction.RESUME via ACTION_TABLE routed_o=5 (s2a50 {m:'a', o:5}). New DreameA2ResumeMowingButton entity added (Phase B)."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o6"
@@ -3274,7 +3301,7 @@ opcodes:
     status:
       seen_on_wire: true
       first_seen: "2026-04-20"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
@@ -3284,6 +3311,15 @@ opcodes:
       - date: "2026-06-09"
         status: verified
         claim: "App sends o:6 as routed action s2a50 {m:'a', o:6} to command dock/recharge. No payload fields. [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: retracted
+        claim: "The integration uses action(siid=5, aiid=3) for DOCK/RECHARGE (ACTION_TABLE[MowerAction.DOCK / MowerAction.RECHARGE]); the app uses the routed-action form instead."
+        retracts: "The integration uses action(siid=5, aiid=3) for DOCK/RECHARGE (ACTION_TABLE[MowerAction.DOCK / MowerAction.RECHARGE]); the app uses the routed-action form instead."
+        reason: "Phase B wired DOCK/RECHARGE via ACTION_TABLE routed_o=6 (s2a50 {m:'a', o:6}), replacing the direct siid:5/aiid:3 path that returned 80001 on g2408."
+      - date: "2026-06-10"
+        status: verified
+        claim: "Integration now wires MowerAction.DOCK and MowerAction.RECHARGE via ACTION_TABLE routed_o=6 (s2a50 {m:'a', o:6}), replacing the direct siid:5/aiid:3 path (was 80001 no-op on g2408). Evidence: app-mitm:2026-06-09-settings-sweep confirms the routed form is what the app sends."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o7"
@@ -3431,6 +3467,7 @@ opcodes:
       decoded: hypothesized
     open_questions:
       - "Does o:12 work in parallel with CFG.CLS write, or is one canonical?"
+      - "[UNKNOWN — to capture] No lock/unlock button exists in the current Dreame app UI for this device; the backend MAY add support later. On current g2408 firmware op=12 is ACCEPTED-BUT-NO-EFFECT (same class as op=10; no panel-lock observed, no echo on s2p50). Integration lock_bot entity stays DEVICE_WRITE_UNPROVEN. Capture step: watch for a future app lock control or backend flag that enables it."
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
@@ -3452,7 +3489,7 @@ opcodes:
       s2p50 is not yet observed. [UNKNOWN — to capture]
     status:
       seen_on_wire: false
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
@@ -3461,6 +3498,10 @@ opcodes:
       - date: "2026-06-09"
         status: verified
         claim: "App sends o:13 as routed action s2a50 {m:'a', o:13} to cancel an in-progress dock return. No payload fields. DISTINCT from stop (o:3). [app-mitm:2026-06-09-settings-sweep]"
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Integration now wires MowerAction.CANCEL_DOCK_RETURN via ACTION_TABLE routed_o=13 (s2a50 {m:'a', o:13}). New DreameA2CancelDockReturnButton entity added (Phase B)."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "o15"
