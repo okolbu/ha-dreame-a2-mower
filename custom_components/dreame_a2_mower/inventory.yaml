@@ -4592,7 +4592,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX AOP"
@@ -4604,6 +4604,10 @@ cfg_keys:
         claim: "Write payload is {value:0|1}. Re-enabling via the app shows a
           privacy screen but no consent is transmitted — only AOP{value:1} hits
           the wire. Integration can set AOP=1 directly."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1 transport-parity audit: the integration's set_cfg envelope ({m:s,t:AOP,d:{value:X}}, scalar wrapped as {value:X}) MATCHES the captured app envelope for this key — no change needed."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "ATA"
@@ -4622,7 +4626,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX ATA"
@@ -4634,6 +4638,10 @@ cfg_keys:
         claim: "Write payload is {value:[lift,offmap,realtime]}; all three
           indices confirmed: [0]=Lift Alarm, [1]=Off-Map Alarm,
           [2]=Real-Time Location."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1 transport-parity audit: the integration's set_cfg envelope ({m:s,t:ATA,d:{value:[lift,offmap,realtime]}}, list wrapped as {value:[...]}) MATCHES the captured app envelope for this key — no change needed."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "BAT"
@@ -4664,7 +4672,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX BAT"
@@ -4690,6 +4698,10 @@ cfg_keys:
         claim: "BAT write uses typed payloads: {type:'charging',value:[en,start_min,end_min]}
           for the scheduling window, and {type:'power',value:[recharge_pct,resume_pct,flag]}
           for threshold settings. STUN is a separate key (NOT BAT.power[2])."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: write wired in the integration via RMW builders (protocol/cfg_payloads); BAT reads as a positional list [recharge_pct,resume_pct,flag,custom_charging,start_min,end_min] and writes as the typed dict the app sends — e.g. charging window: {type:'charging',value:[1,1080,480]}, power thresholds: {type:'power',value:[15,95,1]}. Integration envelope matches the capture."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "BP"
@@ -4746,7 +4758,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX CLS"
@@ -4757,6 +4769,10 @@ cfg_keys:
         status: verified
         claim: "Write payload is {value:0|1}. CLS is the writable surface;
           s4p27 set_properties is read-side only."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1 transport-parity audit: the integration's set_cfg envelope ({m:s,t:CLS,d:{value:X}}, scalar wrapped as {value:X}) MATCHES the captured app envelope for this key — no change needed."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "CMS"
@@ -4848,7 +4864,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX DND"
@@ -4859,6 +4875,10 @@ cfg_keys:
         status: verified
         claim: "Write payload is {value:0|1, time:[start_min,end_min]}; minutes-since-midnight
           confirmed (1260=21:00, 420=07:00)."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: write wired in the integration via RMW builder (protocol/cfg_payloads); DND reads as a positional list [enabled,start_min,end_min] and writes as the named dict the app sends — e.g. DND read [0,1260,420] -> write {value:0,time:[1260,420]}. Integration envelope matches the capture."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "FDP"
@@ -4876,7 +4896,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX FDP"
@@ -4886,6 +4906,10 @@ cfg_keys:
       - date: "2026-06-09"
         status: verified
         claim: "Write payload confirmed as {value:0|1}."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1 transport-parity audit: the integration's set_cfg envelope ({m:s,t:FDP,d:{value:X}}, scalar wrapped as {value:X}) MATCHES the captured app envelope for this key — no change needed."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "LANG"
@@ -4907,7 +4931,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX LANG"
@@ -4919,6 +4943,10 @@ cfg_keys:
         claim: "Write is typed: {type:'voice'|'text', value:idx}. voice and text
           language are set separately. Indices confirmed: En=0, No=7, Da=9.
           Changing voice triggers no download — packs are device-side."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: write wired in the integration via RMW builder (protocol/cfg_payloads); LANG reads as a positional list [text_idx,voice_idx] and writes as the typed dict the app sends — e.g. LANG read [2,7] -> write {type:'voice',value:7} or {type:'text',value:2}. Integration envelope matches the capture."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "LIT"
@@ -4946,7 +4974,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX LIT"
@@ -4960,6 +4988,10 @@ cfg_keys:
         status: verified
         claim: "Write payload is {value, time:[start_min,end_min], light:[Standby,Working,Charging,Error], fill}.
           light order confirmed by sequential toggle. fill=1 observed but purpose unknown."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: write wired in the integration via RMW builder (protocol/cfg_payloads); LIT reads as a positional list [enabled,start_min,end_min,standby,working,charging,error,fill] and writes as the named dict the app sends — e.g. LIT read [0,480,1200,1,1,1,1,1] -> write {value:0,time:[480,1200],light:[1,1,1,1],fill:1}. Integration envelope matches the capture."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "LOW"
@@ -4979,7 +5011,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX LOW"
@@ -4990,6 +5022,10 @@ cfg_keys:
         status: verified
         claim: "Write payload is {value:0|1, time:[start_min,end_min]}; same shape as DND;
           time in minutes-since-midnight (1200=20:00)."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: write wired in the integration via RMW builder (protocol/cfg_payloads); LOW reads as a positional list [enabled,start_min,end_min] and writes as the named dict the app sends — e.g. LOW read [1,1200,480] -> write {value:1,time:[1200,480]}. Integration envelope matches the capture."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "MSG_ALERT"
@@ -5012,7 +5048,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-30"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX MSG_ALERT"
@@ -5024,6 +5060,10 @@ cfg_keys:
         claim: "Write payload is {value:[Anomaly,Error,Task,Consumable]}; each 0/1;
           order confirmed by sequential toggle. MSG_ALERT is device-side CFG,
           not app-only — notification-type filter is an integration surface."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1 transport-parity audit: the integration's set_cfg envelope ({m:s,t:MSG_ALERT,d:{value:[...]}}, list wrapped as {value:[...]}) MATCHES the captured app envelope for this key — no change needed."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "PATH"
@@ -5187,7 +5227,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX PROT"
@@ -5197,6 +5237,10 @@ cfg_keys:
       - date: "2026-06-09"
         status: verified
         claim: "Write payload is {value:0|1}; 0=Direct Path, 1=Smart Path."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1 transport-parity audit: the integration's set_cfg envelope ({m:s,t:PROT,d:{value:X}}, scalar wrapped as {value:X}) MATCHES the captured app envelope for this key — no change needed."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "REC"
@@ -5225,7 +5269,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     verifications:
       - date: "2026-05-16"
@@ -5240,6 +5284,10 @@ cfg_keys:
         claim: "Write payload is {value, sen:0/1/2, mode:[Standby,Mowing,Recharge,Patrol],
           report:[VoiceInApp,CaptureHumanPhotos,PushInterval]}. mode order confirmed by
           sequential toggle. report[1]=Capture Human Photos."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: write wired in the integration via RMW builder (protocol/cfg_payloads); REC reads as a positional list [enabled,sensitivity,...] and writes as the named dict the app sends — e.g. REC read [1,1,1,1,1,1,0,1,3] -> write {value:1,sen:1,mode:[1,1,1,1],report:[0,1,3]}. Integration envelope matches the capture."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       apk: "ioBroker.dreame/apk.md §setX REC"
@@ -5274,7 +5322,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX STUN"
@@ -5286,6 +5334,10 @@ cfg_keys:
       - date: "2026-06-09"
         status: verified
         claim: "Write payload is {value:0|1}. STUN is its own independent key, NOT BAT.power[2]."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1 transport-parity audit: the integration's set_cfg envelope ({m:s,t:STUN,d:{value:X}}, scalar wrapped as {value:X}) MATCHES the captured app envelope for this key — no change needed."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "TIME"
@@ -5361,7 +5413,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-30"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX VOICE"
@@ -5372,6 +5424,10 @@ cfg_keys:
         status: verified
         claim: "Write payload is {value:[Regular,WorkStatus,SpecialStatus,Error]}; each 0/1;
           order confirmed by sequential toggle."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1 transport-parity audit: the integration's set_cfg envelope ({m:s,t:VOICE,d:{value:[...]}}, list wrapped as {value:[...]}) MATCHES the captured app envelope for this key — no change needed."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "VOL"
@@ -5391,7 +5447,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX VOL"
@@ -5402,6 +5458,10 @@ cfg_keys:
         status: verified
         claim: "Write payload is {value:0-100} percentage. Also confirmed as the
           write target for camera page volume slider."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1 transport-parity audit: the integration's set_cfg envelope ({m:s,t:VOL,d:{value:X}}, scalar wrapped as {value:X}) MATCHES the captured app envelope for this key — no change needed."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "WRF"
@@ -5450,7 +5510,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §setX WRP"
@@ -5461,6 +5521,10 @@ cfg_keys:
         status: verified
         claim: "Write payload is {value:0|1, time:N_hours, sen:sensitivity_level};
           time is resume delay in HOURS (4→5 confirmed by live toggle)."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: write wired in the integration via RMW builder (protocol/cfg_payloads); WRP reads as a positional list [enabled,resume_hours] and writes as the named dict the app sends — e.g. WRP read [1,4] -> write {value:1,time:4,sen:<omitted as not stored in MowerState>}. Integration envelope matches the capture."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
 cfg_individual:

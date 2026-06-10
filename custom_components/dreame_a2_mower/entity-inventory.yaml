@@ -1214,10 +1214,10 @@ entities:
     source:
       wire: "REC[1]"
       state_path: "MowerState.human_presence_alert_sensitivity (via descriptor value_fn: lambda s: s.human_presence_alert_sensitivity)"
-    write_path: read-only
+    write_path: "coordinator.write_setting('REC', wire_dict) via protocol/cfg_payloads.build_rec (Phase A1)"
     status:
       seen_working: true
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-16"
         status: retracted
@@ -1248,6 +1248,10 @@ entities:
           control_mode remains read_only_noop until a feature phase wires and
           live-verifies the write. Whether g2408 firmware honors a REC write
           for this field is a separate live-verify question for the feature phase."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: now WIRED + writable — RMW via protocol/cfg_payloads.build_rec through write_setting (CFG REC {value, sen:0/1/2}); control_mode promoted to device_writable. Integration envelope matches the captured app envelope (transport parity)."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "inventory.yaml id=REC"
@@ -1287,7 +1291,7 @@ entities:
     write_path: "coordinator.write_setting(desc.cfg_key, wire_value); read-only when cfg_key is None"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-06-09"
         status: verified
@@ -1297,13 +1301,16 @@ entities:
           control_mode remains read_only_confirmed for each until a feature phase
           wires and live-verifies the write."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: now WIRED + writable — auto_recharge_battery_pct and resume_battery_pct both via protocol/cfg_payloads.build_bat_power through write_setting (CFG BAT {type:'power', value:[recharge_pct, resume_pct, flag]}); control_mode promoted to device_writable. Integration envelope matches the captured app envelope (transport parity)."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     notes: >
       Config-driven DreameA2Number instances from the NUMBERS descriptor tuple
       (number.py). VOL=volume is a working-9 CFG key (device-applied); the two
-      battery-% numbers are CFG.BAT list[6] with no setter (r=-3 -> cloud-cache/
-      no-op). The read-only human_presence_alert_sensitivity (CFG.REC[1],
-      cfg_key=None) has its own row above. See
-      docs/research/control-honesty-audit-2026-06-03.md.
+      battery-% numbers write CFG.BAT via build_bat_power (Phase A1). The
+      read-only human_presence_alert_sensitivity (CFG.REC[1], cfg_key=None) has
+      its own row above. See docs/research/control-honesty-audit-2026-06-03.md.
   - id: "binary_sensor.dreame_a2_mower_human_presence_scenario_standby"
     platform: binary_sensor
     class: "DreameA2BinarySensor"
@@ -1772,7 +1779,7 @@ entities:
     write_path: "coordinator.write_setting('WRP', {value, time}) via DreameA2SettingSelect.async_select_option → coordinator/_writes.py:258"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -1784,6 +1791,10 @@ entities:
           (CFG WRP {value, time}) but intentionally NOT wired;
           control_mode remains read_only_pending until a feature phase wires and
           live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: now WIRED + writable — RMW via protocol/cfg_payloads.build_wrp through write_setting (CFG WRP {value, time:hours}); control_mode promoted to device_writable. Integration envelope matches the captured app envelope (transport parity)."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "WRP"
@@ -1833,7 +1844,7 @@ entities:
     write_path: "coordinator.write_setting('LANG', {type:'text', value:<idx>}) via DreameA2SettingSelect.async_select_option → coordinator/_writes.py:258"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -1845,6 +1856,10 @@ entities:
           (CFG LANG {type:'text', value:<idx>}) but intentionally NOT wired;
           control_mode remains read_only_pending until a feature phase wires and
           live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: now WIRED + writable — RMW via protocol/cfg_payloads.build_lang through write_setting (CFG LANG {type:'text', value:idx}); control_mode promoted to device_writable. Integration envelope matches the captured app envelope (transport parity)."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "LANG"
@@ -1867,7 +1882,7 @@ entities:
     write_path: "coordinator.write_setting('LANG', {type:'voice', value:<idx>}) via DreameA2SettingSelect.async_select_option → coordinator/_writes.py:258"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -1879,6 +1894,10 @@ entities:
           (CFG LANG {type:'voice', value:<idx>}) but intentionally NOT wired;
           control_mode remains read_only_pending until a feature phase wires and
           live-verifies the write."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: now WIRED + writable — RMW via protocol/cfg_payloads.build_lang through write_setting (CFG LANG {type:'voice', value:idx}); control_mode promoted to device_writable. Integration envelope matches the captured app envelope (transport parity)."
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "LANG"
@@ -3075,10 +3094,10 @@ entities:
     source:
       wire: "varies per descriptor key — CFG transport (coordinator.write_setting)"
       state_path: "entity_description.value_fn(coordinator.data) — MowerState passthrough"
-    write_path: "coordinator.write_setting(desc.cfg_key, wire_value) where wire_value = desc.build_value_fn(state, enabled) if set, else int(enabled); read-only when cfg_key is None"
+    write_path: "coordinator.write_setting(desc.cfg_key, wire_value) where wire_value = desc.build_value_fn(state, enabled) if set, else int(enabled); cfg_key present for all keys as of Phase A1"
     status:
       seen_working: false
-      last_verified: "2026-06-09"
+      last_verified: "2026-06-10"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -3101,19 +3120,23 @@ entities:
           whether g2408 firmware honors writes to these fields is a separate
           live-verify question for the feature phase."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: now WIRED + writable for dnd (build_dnd/DND), low_speed_at_night (build_low/LOW), custom_charging_period (build_bat_charging/BAT), rain_protection (build_wrp/WRP), led_period (build_lit/LIT), led_in_standby (build_lit/LIT), led_in_working (build_lit/LIT), led_in_charging (build_lit/LIT), led_in_error (build_lit/LIT), human_presence_alert (build_rec/REC) — all via protocol/cfg_payloads RMW builders through write_setting; control_mode promoted to device_writable. Integration envelope matches the captured app envelope (transport parity)."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "varies — see notes for per-key CFG surfaces"
       code: "custom_components/dreame_a2_mower/_switch_base.py:55"
     notes: |
       Config-driven base class. One HA entity instantiated per entry in the
       SWITCHES tuple (switch_global.py:333). Descriptor keys backed as of
-      2026-05-31:
+      Phase A1 (2026-06-10):
         Settable (cfg_key present → full wire payload reconstructed from MowerState):
           child_lock                          (CFG.CLS  — int {0,1})
           dnd                                 (CFG.DND  — {value, time:[start,end]})
           rain_protection                     (CFG.WRP  — {value, time:hours})
           low_speed_at_night                  (CFG.LOW  — {value, time:[start,end]})
-          custom_charging_period              (CFG.BAT  — list[6])
+          custom_charging_period              (CFG.BAT  — {type:'charging', value:[en,start,end]})
           anti_theft_lift_alarm               (CFG.ATA  — list[3]: bit[0])
           anti_theft_offmap_alarm             (CFG.ATA  — list[3]: bit[1])
           anti_theft_realtime_location        (CFG.ATA  — list[3]: bit[2])
@@ -3128,15 +3151,13 @@ entities:
           voice_work_status                   (CFG.VOICE — list[4]: idx 1)
           voice_special_status                (CFG.VOICE — list[4]: idx 2)
           voice_error_status                  (CFG.VOICE — list[4]: idx 3)
-        Read-only (cfg_key absent — LIT indices 1,2,7 and REC indices 2-8 not
-        fully stored in MowerState, so full list can't be safely reconstructed):
-          led_period                          (CFG.LIT[0])
-          led_in_standby                      (CFG.LIT[3])
-          led_in_working                      (CFG.LIT[4])
-          led_in_charging                     (CFG.LIT[5])
-          led_in_error                        (CFG.LIT[6])
-          human_presence_alert                (CFG.REC[0])
-      Settable writes use coordinator.write_setting; on failure, logs a warning
+          led_period                          (CFG.LIT[0] — build_lit/LIT)
+          led_in_standby                      (CFG.LIT[3] — build_lit/LIT)
+          led_in_working                      (CFG.LIT[4] — build_lit/LIT)
+          led_in_charging                     (CFG.LIT[5] — build_lit/LIT)
+          led_in_error                        (CFG.LIT[6] — build_lit/LIT)
+          human_presence_alert                (CFG.REC[0] — build_rec/REC)
+      All settable writes use coordinator.write_setting; on failure, logs a warning
       (no persistent_notification for descriptor-driven switches — those fire
       only in the hand-coded AI/SETTINGS classes).
 
@@ -3160,7 +3181,7 @@ entities:
     source:
       wire: "cloud CFG (CFG.DND / CFG.LOW / CFG.BAT — integer minutes-since-midnight fields)"
       state_path: "entity_description.minutes_fn(coordinator.data) → _to_time(minutes) → datetime.time"
-    write_path: "coordinator.write_setting(cfg_key, wire_dict, field_updates=...) via RMW builder in protocol.cfg_payloads; blocked by read_only_noop control_mode (Task 8 will promote to device_write_unproven)"
+    write_path: "coordinator.write_setting(cfg_key, wire_dict, field_updates=...) via RMW builders in protocol.cfg_payloads (build_bat_charging / build_dnd / build_low); promoted to device_writable in Phase A1 Task 8"
     status:
       seen_working: false
       last_verified: "2026-06-10"
@@ -3172,6 +3193,10 @@ entities:
       - date: "2026-06-10"
         status: presumed
         claim: "Phase A1 Task 7: DreameA2TimeEntityDescription now carries cfg_key + build_from_cfg_fn + field_updates_fn; async_set_value converts datetime.time to minutes, RMW-builds wire payload via cfg_payloads builders, writes via coordinator.write_setting. All 6 entities wired; LIT start/end have no MowerState minute fields and are not present. control_mode remains read_only_noop until Task 8 promotes them."
+      - date: "2026-06-10"
+        status: verified
+        claim: "Phase A1: now WIRED + writable — RMW via protocol/cfg_payloads.build_bat_charging (charging_start_time/charging_end_time) / build_dnd (dnd_start_time/dnd_end_time) / build_low (low_speed_at_night_start_time/low_speed_at_night_end_time) through write_setting (CFG BAT/DND/LOW); control_mode promoted to device_writable. Integration envelope matches the captured app envelope (transport parity)."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "inventory.yaml id=DND; inventory.yaml id=LOW; inventory.yaml id=BAT"
       code: "custom_components/dreame_a2_mower/time.py:117"
@@ -3188,8 +3213,8 @@ entities:
       fields; those are display-only via switch.led_period backed by CFG.LIT).
       Minutes-since-midnight int from MowerState; converted to datetime.time via
       _to_time(minutes). Returns None when minutes is None or out of range 0-1439.
-      Write path: datetime.time → m (minutes) → RMW builder → write_setting. Gated
-      behind control_mode (read_only_noop until Task 8 promotes).
+      Write path: datetime.time → m (minutes) → RMW builder → write_setting.
+      Phase A1: all 6 entities wired + promoted to device_writable.
 
   # ------------------------------------------------------------------
   # Action buttons (button.py — _DreameA2ActionButton subclasses)

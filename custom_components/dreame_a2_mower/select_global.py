@@ -259,7 +259,9 @@ def _build_wrp_resume_hours(state: MowerState, option: str) -> dict:
     cloud + device-app round-trip).  The enabled bit is read from
     rain_protection_enabled (defaulting to False so the write preserves
     whatever state the switch is in).  The optional ``sen`` field is
-    omitted — see _build_wrp in switch.py for rationale.
+    omitted — the ``sen`` field is not stored in MowerState so it is
+    excluded from the RMW write (same logic as build_wrp in
+    protocol/cfg_payloads.py which also omits it).
 
     option is one of the RESUME_HOURS_OPTIONS strings.  The numeric
     value is extracted by splitting on the first space.
