@@ -33,6 +33,7 @@ from ._switch_base import (
 from ._settings_writes import (
     settings_optimistic_write as _settings_switch_optimistic_write,
 )
+from .protocol import cfg_payloads as _cfgp
 
 
 # ---------------------------------------------------------------------------
@@ -48,19 +49,18 @@ def _cls_field_updates(state: MowerState, enabled: bool) -> dict[str, Any]:
     return {"child_lock_enabled": enabled}
 
 
+def _dnd_field_updates(state: MowerState, enabled: bool) -> dict[str, Any]:
+    return {"dnd_enabled": enabled}
+
+
+# ---------------------------------------------------------------------------
+# Legacy MowerState-based builders — RETAINED for test back-compat only.
+# The SWITCHES descriptors now use build_from_cfg_fn + _cfgp instead.
+# Task 8 will update the tests and remove these.
+# ---------------------------------------------------------------------------
+
 def _build_dnd(state: MowerState, enabled: bool) -> dict:
-    """DND wire value: ``{value, time:[start_min, end_min]}``.
-
-    Verified live 2026-05-09: g2408 accepts the named-key format
-    ``{"value":<0|1>, "time":[<start>, <end>]}`` for both on and off
-    states (bare ``{"value":0}`` is rejected with r=-3 — always send
-    the full form regardless of enabled bit). cloud_client.set_cfg
-    sends a dict as ``d`` directly. See
-    docs/research/wire-captures/iobroker-write-catalog-2026-05-09.md.
-
-    Defaults: start_min=1200 (20:00), end_min=480 (08:00) — the confirmed
-    factory values observed on g2408.
-    """
+    """Legacy MowerState-based DND builder (test back-compat)."""
     return {
         "value": int(enabled),
         "time": [
@@ -70,50 +70,24 @@ def _build_dnd(state: MowerState, enabled: bool) -> dict:
     }
 
 
-def _dnd_field_updates(state: MowerState, enabled: bool) -> dict[str, Any]:
-    return {"dnd_enabled": enabled}
+def _wrp_field_updates(state: MowerState, enabled: bool) -> dict[str, Any]:
+    return {"rain_protection_enabled": enabled}
 
 
 def _build_wrp(state: MowerState, enabled: bool) -> dict:
-    """WRP wire value: ``{value, time:<resume_hours>}``.
-
-    Verified live 2026-05-09 (cloud + device app round-trip 4h→6h→4h):
-    g2408 accepts the named-key format and the firmware applies it
-    (Dreame app reflected the change in real time). cloud_client.set_cfg
-    sends a dict as ``d`` directly. See
-    docs/research/wire-captures/iobroker-write-catalog-2026-05-09.md.
-
-    The ioBroker catalog also lists a ``sen`` (rain-sensor sensitivity)
-    field, and g2408 silently accepts ``sen ∈ {0,1,2,3}`` in the
-    payload (r=0 across all four). However the value isn't echoed back
-    in getCFG (the cloud read returns only the 2-element ``[enabled,
-    hours]`` shape) and the Dreame app doesn't surface a sensitivity
-    UI on this firmware — scale and effect are unknown. We omit ``sen``
-    entirely from our writes so we don't push a value we can't read
-    back. Verified 2026-05-09 that WRP accepts ``{value, time}`` alone.
-
-    Default resume_hours=0 means "Don't Mow After Rain" (no auto-resume).
-    """
+    """Legacy MowerState-based WRP builder (test back-compat)."""
     return {
         "value": int(enabled),
         "time": int(state.rain_protection_resume_hours or 0),
     }
 
 
-def _wrp_field_updates(state: MowerState, enabled: bool) -> dict[str, Any]:
-    return {"rain_protection_enabled": enabled}
+def _low_field_updates(state: MowerState, enabled: bool) -> dict[str, Any]:
+    return {"low_speed_at_night_enabled": enabled}
 
 
 def _build_low(state: MowerState, enabled: bool) -> dict:
-    """LOW wire value: ``{value, time:[start_min, end_min]}``.
-
-    Verified live 2026-05-09: g2408 accepts the named-key format. Same
-    "always send the full form regardless of enabled bit" rule as DND.
-    cloud_client.set_cfg sends a dict as ``d`` directly. See
-    docs/research/wire-captures/iobroker-write-catalog-2026-05-09.md.
-
-    Defaults mirror DND defaults: 20:00→08:00.
-    """
+    """Legacy MowerState-based LOW builder (test back-compat)."""
     return {
         "value": int(enabled),
         "time": [
@@ -123,20 +97,8 @@ def _build_low(state: MowerState, enabled: bool) -> dict:
     }
 
 
-def _low_field_updates(state: MowerState, enabled: bool) -> dict[str, Any]:
-    return {"low_speed_at_night_enabled": enabled}
-
-
 def _build_bat_custom_charging(state: MowerState, enabled: bool) -> list:
-    """BAT wire value: list(6) [recharge_pct, resume_pct, unknown_flag,
-    custom_charging, start_min, end_min].
-
-    CFG.BAT confirmed on g2408 (coordinator._property_apply.cfg_to_state_updates §BAT).
-    All 6 fields are stored in MowerState, so full reconstruction is safe.
-
-    BAT[2] = unknown_flag is consistently 1 in all observed data; the
-    hard-coded value is the same as in number.py (F4.6.1 decision).
-    """
+    """Legacy MowerState-based BAT builder (test back-compat)."""
     return [
         int(state.auto_recharge_battery_pct or 15),    # [0] recharge_pct
         int(state.resume_battery_pct or 95),            # [1] resume_pct
@@ -358,7 +320,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         icon="mdi:sleep",
         value_fn=lambda s: s.dnd_enabled,
         cfg_key="DND",
-        build_value_fn=_build_dnd,
+        build_from_cfg_fn=lambda raw, on: _cfgp.build_dnd(raw, value=on),
         field_updates_fn=_dnd_field_updates,
     ),
 
@@ -373,7 +335,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         icon="mdi:weather-rainy",
         value_fn=lambda s: s.rain_protection_enabled,
         cfg_key="WRP",
-        build_value_fn=_build_wrp,
+        build_from_cfg_fn=lambda raw, on: _cfgp.build_wrp(raw, value=on),
         field_updates_fn=_wrp_field_updates,
     ),
 
@@ -388,7 +350,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         icon="mdi:weather-night",
         value_fn=lambda s: s.low_speed_at_night_enabled,
         cfg_key="LOW",
-        build_value_fn=_build_low,
+        build_from_cfg_fn=lambda raw, on: _cfgp.build_low(raw, value=on),
         field_updates_fn=_low_field_updates,
     ),
 
@@ -405,7 +367,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         icon="mdi:battery-clock",
         value_fn=lambda s: s.custom_charging_enabled,
         cfg_key="BAT",
-        build_value_fn=_build_bat_custom_charging,
+        build_from_cfg_fn=lambda raw, on: _cfgp.build_bat_charging(raw, enabled=on),
         field_updates_fn=_bat_custom_charging_field_updates,
     ),
 
@@ -582,7 +544,9 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         icon="mdi:led-on",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.led_period_enabled,
-        # cfg_key intentionally omitted — read-only in F4
+        cfg_key="LIT",
+        build_from_cfg_fn=lambda raw, on: _cfgp.build_lit(raw, value=on),
+        field_updates_fn=lambda s, on: {"led_period_enabled": on},
     ),
 
     # ------------------------------------------------------------------
@@ -595,7 +559,9 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         icon="mdi:led-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.led_in_standby,
-        # cfg_key intentionally omitted — read-only in F4
+        cfg_key="LIT",
+        build_from_cfg_fn=lambda raw, on: _cfgp.build_lit(raw, standby=on),
+        field_updates_fn=lambda s, on: {"led_in_standby": on},
     ),
 
     # ------------------------------------------------------------------
@@ -607,7 +573,9 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         icon="mdi:led-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.led_in_working,
-        # cfg_key intentionally omitted — read-only in F4
+        cfg_key="LIT",
+        build_from_cfg_fn=lambda raw, on: _cfgp.build_lit(raw, working=on),
+        field_updates_fn=lambda s, on: {"led_in_working": on},
     ),
 
     # ------------------------------------------------------------------
@@ -619,7 +587,9 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         icon="mdi:led-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.led_in_charging,
-        # cfg_key intentionally omitted — read-only in F4
+        cfg_key="LIT",
+        build_from_cfg_fn=lambda raw, on: _cfgp.build_lit(raw, charging=on),
+        field_updates_fn=lambda s, on: {"led_in_charging": on},
     ),
 
     # ------------------------------------------------------------------
@@ -631,7 +601,9 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         icon="mdi:led-alert",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.led_in_error,
-        # cfg_key intentionally omitted — read-only in F4
+        cfg_key="LIT",
+        build_from_cfg_fn=lambda raw, on: _cfgp.build_lit(raw, error=on),
+        field_updates_fn=lambda s, on: {"led_in_error": on},
     ),
 
     # ------------------------------------------------------------------
@@ -649,7 +621,9 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         icon="mdi:motion-sensor",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.human_presence_alert_enabled,
-        # cfg_key intentionally omitted — read-only in F4 (REC partially decoded)
+        cfg_key="REC",
+        build_from_cfg_fn=lambda raw, on: _cfgp.build_rec(raw, value=on),
+        field_updates_fn=lambda s, on: {"human_presence_alert_enabled": on},
     ),
 
     # NOTE — parent-level `edgemaster` removed 2026-05-15. It was a
