@@ -791,9 +791,8 @@ class _FetchersMixin:
             if r != 0:
                 msg = outs[0].get("msg") or outs[0].get("e") or ""
                 _LOGGER.warning(
-                    "set_pre: device rejected (out[0].r=%r msg=%r). t='PRE' has "
-                    "no routed-action setter on g2408 — see "
-                    "docs/research/wire-captures/pre-write-r3-2026-06-03.md",
+                    "set_pre: device rejected (out[0].r=%r msg=%r) — envelope is "
+                    "the app's bare array; non-zero r is a genuine device rejection",
                     r, msg,
                 )
                 return False
