@@ -5750,11 +5750,17 @@ cfg_individual:
       Sample: {pos: [-1, -1]} (not configured).
     status:
       seen_on_wire: false
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §getX LOCN"
       integration_code: "custom_components/dreame_a2_mower/cloud_client.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
+    verifications:
+      - date: "2026-06-10"
+        status: verified
+        claim: "LOCN position_lat/lon write is RETIRED as the mower-position source — superseded by gps_get_records (device_tracker). fetch_locn is retained (unscheduled) for a future dock-location entity. This is a progression: LOCN's prior behaviour as dock-origin store was real; the integration no longer uses it for the live mower position."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "MAPD"
     name: "map_data"
@@ -6384,12 +6390,12 @@ cfg_individual:
       endpoint, confirming they share the same 4G SIM. [app-mitm:2026-06-09-settings-sweep]
       leftDays seen as 894 while the app displayed 839 (different calculation
       method). [app-mitm:2026-06-09-settings-sweep]
-      Not wired in the integration (read-only status; integration uses the
-      GPS getRecords endpoint for card4G/ICCID cross-reference).
+      Wired in the integration: 4 diagnostic SIM sensors (cardId/activeTime/expiredTime/leftDays).
+      [app-mitm:2026-06-09-settings-sweep]
     status:
       seen_on_wire: false
       first_seen: "2026-06-09"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
@@ -6418,6 +6424,15 @@ cfg_individual:
       - date: "2026-06-09"
         status: verified
         claim: "action m:g t='REMOTE' returns {activeTime, cardId(ICCID), expiredTime, leftDays} — 4G SIM status; cardId matches GPS card4G ICCID."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: retracted
+        claim: "Not wired in the integration (read-only status; integration uses the GPS getRecords endpoint for card4G/ICCID cross-reference)."
+        retracts: "Not wired in the integration (read-only status; integration uses the GPS getRecords endpoint for card4G/ICCID cross-reference)."
+        reason: "Phase C wiring complete: REMOTE is now wired and surfaced as 4 diagnostic SIM sensors (cardId/activeTime/expiredTime/leftDays). app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "REMOTE now WIRED + surfaced: 4 diagnostic SIM sensors (cardId/activeTime/expiredTime/leftDays) in the integration."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "AI_HUMAN"
@@ -11415,7 +11430,7 @@ api_endpoints:
     status:
       seen_on_wire: false
       first_seen: "2026-06-09"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
@@ -11423,6 +11438,10 @@ api_endpoints:
       - date: "2026-06-09"
         status: verified
         claim: "POST …/location/getRecords → {locationRecords:{records:[{card4G(ICCID), gpsLat, gpsLong(WGS84 strings), updateTime}]}}; ~4 m accuracy confirmed against known dock coordinates."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "gps_get_records now WIRED + surfaced: feeds the device_tracker entity with absolute WGS84 coordinates (newest record by updateTime). Replaces the non-functional LOCN-projection as the mower-position source."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "oss_photo_list"
@@ -11547,7 +11566,7 @@ api_endpoints:
     status:
       seen_on_wire: false
       first_seen: "2026-06-09"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-10"
       decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
@@ -11555,6 +11574,10 @@ api_endpoints:
       - date: "2026-06-09"
         status: verified
         claim: "message-record/list?version=v1 covers System+Service+Activity incl. marketing; v2 returns 0 records; device-messages carries source:{siid,piid,value}; all 5 tabs confirmed."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: verified
+        claim: "message-record/list v1 now WIRED + surfaced (minimal): service/system unread-count sensor via homestat endpoint (serviceMsgUnread + systemMsgUnread)."
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "tencent_video"
