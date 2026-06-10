@@ -76,6 +76,61 @@ async def test_write_schedule_uses_device_plane_not_kv(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_write_schedule_escapes_ampersand_name(monkeypatch):
+    """`&`-names round-trip via the wire `&amp;` convention.
+
+    The device row carries `Spr &amp; Sum`; decode html.unescapes it to
+    `Spr & Sum`. The write must re-escape so an unchanged slot is skipped
+    (no perpetual rewrite / double-escape drift), and a real write sends the
+    escaped form.
+    """
+    import custom_components.dreame_a2_mower.coordinator._writes as W
+    from custom_components.dreame_a2_mower.protocol.schedule_encode import (
+        encode_schedule_blob,
+    )
+
+    plan = SchedulePlan(
+        time_min=780, weekday_mask=0b100, action_type=0, zone_id=None, extra_bytes=b""
+    )
+    blob = encode_schedule_blob((plan,))
+    # Authoritative device row: name escaped, blob matches → must be skipped.
+    rows = [[0, 1, "Spr &amp; Sum", blob]]
+    # Slot carries the decoded (unescaped) name, as cloud_state would.
+    slots = [
+        ScheduleSlot(
+            slot_id=0, name="Spr & Sum", raw_blob_b64="", plans=(plan,), mode=1
+        )
+    ]
+    c, captured, write_row, read_rows = _make_coord(rows)
+    monkeypatch.setattr(W, "write_schedule_row", write_row, raising=False)
+    monkeypatch.setattr(W, "read_schedule_rows", read_rows, raising=False)
+    c.cloud_state = SimpleNamespace(schedule=ScheduleData(version=3, slots=()))
+
+    ok = await c.write_schedule(slots)
+    assert ok is True
+    assert captured["row_writes"] == []  # escaped-name compare → skipped
+
+    # Now change the plan so it DOES write — name must go out escaped.
+    plan2 = SchedulePlan(
+        time_min=781, weekday_mask=0b100, action_type=0, zone_id=None, extra_bytes=b""
+    )
+    slots2 = [
+        ScheduleSlot(
+            slot_id=0, name="Spr & Sum", raw_blob_b64="", plans=(plan2,), mode=1
+        )
+    ]
+    c2, captured2, write_row2, read_rows2 = _make_coord(rows)
+    monkeypatch.setattr(W, "write_schedule_row", write_row2, raising=False)
+    monkeypatch.setattr(W, "read_schedule_rows", read_rows2, raising=False)
+    c2.cloud_state = SimpleNamespace(schedule=ScheduleData(version=3, slots=()))
+
+    ok2 = await c2.write_schedule(slots2)
+    assert ok2 is True
+    assert len(captured2["row_writes"]) == 1
+    assert captured2["row_writes"][0]["name"] == "Spr &amp; Sum"
+
+
+@pytest.mark.asyncio
 async def test_write_schedule_skips_unchanged_slot(monkeypatch):
     """A slot whose re-encoded blob AND name match the authoritative row is skipped."""
     import custom_components.dreame_a2_mower.coordinator._writes as W

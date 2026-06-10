@@ -126,13 +126,19 @@ class _WritesMixin:
         async with self._chunked_write_lock:
             for slot in new_slots:
                 blob_b64 = encode_schedule_blob(tuple(slot.plans))
+                # Name is HTML-escaped on the wire — only `&` (the device read
+                # row carries `Spr &amp; Sum`); `<`/`>`/`"` appear unescaped.
+                # decode does html.unescape, so compare AND write the escaped
+                # form, else `&`-names never match the skip gate and drift via
+                # double-escape on each save.
+                wire_name = (slot.name or "").replace("&", "&amp;")
                 prev = by_slot.get(slot.slot_id)
                 prev_blob = prev[3] if prev else None
                 prev_name = prev[2] if prev else None
                 if (
                     prev is not None
                     and blob_b64 == prev_blob
-                    and slot.name == prev_name
+                    and wire_name == prev_name
                 ):
                     continue  # unchanged — skip (idempotent, no version churn)
                 enabled = int(prev[1]) if prev else 1
@@ -140,11 +146,11 @@ class _WritesMixin:
                 txn_id = self._next_schedule_txn_id()
                 try:
                     await self.hass.async_add_executor_job(
-                        lambda s=slot, b=blob_b64, e=enabled, t=txn_id: write_schedule_row(
+                        lambda s=slot, b=blob_b64, e=enabled, t=txn_id, n=wire_name: write_schedule_row(
                             self._cloud.action,
                             slot=s.slot_id,
                             enabled=e,
-                            name=s.name,
+                            name=n,
                             blob_b64=b,
                             version=new_version,
                             flag=flag,

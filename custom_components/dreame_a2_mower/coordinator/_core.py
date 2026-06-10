@@ -326,6 +326,9 @@ class _CoreMixin:
         # Hold time per write is sub-second; cross-blob writes are rare
         # so a single mutex (vs per-blob) keeps reasoning simple.
         self._chunked_write_lock: asyncio.Lock = asyncio.Lock()
+        # Monotonic txn id for the SCHD*V3 schedule write (shared across a
+        # write's header+chunks); _next_schedule_txn_id bumps it.
+        self._last_schedule_txn_id: int = 0
         # Debounce timer for tripwire-driven cloud refreshes.
         # When the firmware pushes a "settings-saved" MQTT slot
         # (see _SETTINGS_TRIPWIRE_SLOTS), we schedule a deferred
