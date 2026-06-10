@@ -59,9 +59,9 @@ def test_circular_mean_weighted_by_segment_length():
 
 
 @pytest.mark.parametrize("mode,last,expected", [
-    # Striped (0) — same as last
+    # Crisscross (0) — same as last
     (0, 0, 0), (0, 45, 45), (0, 90, 90), (0, 135, 135),
-    # Crisscross (1) — last + 45 mod 180
+    # Customize (1) — last + 45 mod 180
     (1, 0, 45), (1, 45, 90), (1, 90, 135), (1, 135, 0),
     # Chequerboard (2) — last + 90 mod 180
     (2, 0, 90), (2, 45, 135), (2, 90, 0), (2, 135, 45),

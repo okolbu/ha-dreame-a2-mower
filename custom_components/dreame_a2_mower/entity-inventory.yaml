@@ -2194,14 +2194,24 @@ entities:
         status: verified
         claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[5]) through coordinator.write_map_general_setting; dual-write to SETTINGS.mowingDirectionMode. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-10"
+        status: retracted
+        claim: "Ported from code 2026-05-31: reads mowingDirectionMode from cloud_state.settings.by_map_id_canonical[map_id], maps 0/1/2 to Striped/Crisscross/Chequerboard"
+        retracts: "Ported from code 2026-05-31: reads mowingDirectionMode from cloud_state.settings.by_map_id_canonical[map_id], maps 0/1/2 to Striped/Crisscross/Chequerboard; writes via coordinator.write_settings(map_id, field='mowingDirectionMode', value=idx). Read from select_map_settings.py:448-505 + coordinator/_writes.py:185; not re-confirmed live."
+        reason: "Label-to-index mapping was wrong. CONFIRMED device enum (inventory.yaml PRE[5] + 2026-06-09 app-MITM capture): 0=Crisscross, 1=Customize, 2=Chequerboard. 'Striped' does not exist on g2408 firmware. Corrected in _OPTIONS 2026-06-10."
+      - date: "2026-06-10"
+        status: verified
+        claim: "Correct device enum confirmed: PRE[5] / SETTINGS.mowingDirectionMode: 0=Crisscross, 1=Customize, 2=Chequerboard. _OPTIONS corrected to match. Customize pairs with per-map mowing_direction angle (PRE[6])."
+        evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       code: "custom_components/dreame_a2_mower/select_map_settings.py:448"
     notes: |
-      Options: Striped (0) / Crisscross (1) / Chequerboard (2). Mowing pattern
-      selector. Write path is coordinator.write_settings via SETTINGS chunked-batch
-      (cloud-cache-only on g2408 — device firmware does NOT apply). Entity is
+      Options: Crisscross (0) / Customize (1) / Chequerboard (2). Mowing pattern
+      selector. Write path is PRE dual-write (PRE[5] via coordinator.write_map_general_setting)
+      + SETTINGS.mowingDirectionMode; control_mode=device_writable (Phase A2). Entity is
       unavailable until mowingDirectionMode appears in the SETTINGS blob.
-      translation_key: "mowing_pattern".
+      translation_key: "mowing_pattern". Customize mode enables the per-map
+      mowing_direction angle select (PRE[6]).
 
   # ------------------------------------------------------------------
   # Device sensors — cloud-state + integration-local (sensor_device.py)

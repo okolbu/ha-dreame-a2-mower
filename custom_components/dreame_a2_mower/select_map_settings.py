@@ -460,9 +460,14 @@ class DreameA2PerMapMowingDirectionSelect(
 class DreameA2PerMapMowingDirectionModeSelect(
     _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
 ):
-    """Per-map mowing pattern — Striped / Crisscross / Chequerboard."""
+    """Per-map mowing pattern — Crisscross / Customize / Chequerboard.
 
-    _OPTIONS = ("Striped", "Crisscross", "Chequerboard")
+    Device enum (PRE[5] / SETTINGS.mowingDirectionMode):
+      0 = Crisscross, 1 = Customize, 2 = Chequerboard.
+    Customize pairs with the per-map mowing_direction angle select (PRE[6]).
+    """
+
+    _OPTIONS = ("Crisscross", "Customize", "Chequerboard")
 
     _attr_has_entity_name = True
     _attr_translation_key = "mowing_pattern"

@@ -65,7 +65,7 @@ def test_per_map_mowing_pattern_reads_correct_map(coordinator_with_two_maps):
     import custom_components.dreame_a2_mower.select as select_mod
     e0 = select_mod.DreameA2PerMapMowingDirectionModeSelect(coord, map_id=0)
     e1 = select_mod.DreameA2PerMapMowingDirectionModeSelect(coord, map_id=1)
-    assert e0.current_option == "Striped"
+    assert e0.current_option == "Crisscross"
     assert e1.current_option == "Chequerboard"
 
 
