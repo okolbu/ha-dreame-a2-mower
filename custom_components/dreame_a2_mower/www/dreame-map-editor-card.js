@@ -2,7 +2,8 @@
 // SVG overlays for the map's no-go / ignore / mow-shape edit objects.
 //
 // Reads camera.dreame_a2_mower_map .attributes:
-//   map_projection, entity_picture, editable_objects, map_id, available_map_ids
+//   map_projection, editor_base_url (clean no-exclusions bg; falls back to
+//   entity_picture), editable_objects, map_id, available_map_ids
 // and writes via the dreame_a2_mower create_no_go_zone / create_ignore_obstacle
 // / create_mow_shape / delete_map_object services.
 //
@@ -91,12 +92,18 @@ class DreameMapEditorCard extends HTMLElement {
     const ent = hass.states[this._cfg.entity];
     if (!ent || !ent.attributes) return;
     const a = ent.attributes;
-    if (!a.map_projection || !a.entity_picture) return;
+    // The editor uses a no-exclusions background (editor_base_url) so the
+    // no-go/ignore zones render ONLY as the editable overlays below — the
+    // normal entity_picture bakes them in, which double-draws/ghosts while a
+    // device edit is still propagating to the cloud. Fall back to
+    // entity_picture when the clean URL isn't published (backward compat).
+    const baseHref = a.editor_base_url || a.entity_picture;
+    if (!a.map_projection || !baseHref) return;
     this._proj = a.map_projection;
     this._ensureSvg(a);
     const img = this.shadowRoot.getElementById("base");
-    if (img && img.getAttribute("href") !== a.entity_picture) {
-      img.setAttribute("href", a.entity_picture);
+    if (img && img.getAttribute("href") !== baseHref) {
+      img.setAttribute("href", baseHref);
     }
     if (this._editMapId == null && a.map_id != null) this._editMapId = a.map_id;
     this._syncMapIds(a);
@@ -131,7 +138,7 @@ class DreameMapEditorCard extends HTMLElement {
       `<div class="bar" id="bar"></div>` +
       `<div class="wrap">` +
       `<svg id="svg" viewBox="0 0 ${p.width_px} ${p.height_px}">` +
-      `<image id="base" href="${a.entity_picture}" x="0" y="0" ` +
+      `<image id="base" href="${a.editor_base_url || a.entity_picture}" x="0" y="0" ` +
       `width="${p.width_px}" height="${p.height_px}"/>` +
       `<g id="objects"></g>` +
       `<g id="draft"></g>` +

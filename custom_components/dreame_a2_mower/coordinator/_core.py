@@ -286,6 +286,7 @@ class _CoreMixin:
         self._base_png: bytes | None = None
         self._base_png_mode: object | None = None    # BackgroundMode of _base_png
         self._base_png_md5: str | None = None         # MapData.md5 of _base_png
+        self._editor_base_png: bytes | None = None    # clean base (no exclusions) for the map-editor card
         # Live position stream published on the map camera entity (Task 5).
         self._live_point_seq: int = 0
         self._latest_point: list | None = None        # [x_m, y_m, heading|None, t]

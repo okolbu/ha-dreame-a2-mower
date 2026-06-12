@@ -51,7 +51,12 @@ class MapImageView(HomeAssistantView):
             return web.Response(status=404, text="No mower coordinator")
 
         map_id_raw = request.query.get("map_id")
-        if map_id_raw is not None:
+        if request.query.get("clean"):
+            # Map-editor card background: the active-map base with exclusion
+            # zones STRIPPED, so the editable overlays are the only place the
+            # no-go/ignore areas are drawn (no double-draw during edit lag).
+            png = coordinator._editor_base_png
+        elif map_id_raw is not None:
             try:
                 map_id = int(map_id_raw)
             except (TypeError, ValueError):

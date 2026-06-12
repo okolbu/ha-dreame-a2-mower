@@ -7,9 +7,11 @@ Covers:
 """
 from __future__ import annotations
 
+import dataclasses
 import io
 from PIL import Image
 
+from custom_components.dreame_a2_mower.map_decoder import ExclusionZone, MapData, MowingZone
 from custom_components.dreame_a2_mower.map_render.main_view import render_base
 from custom_components.dreame_a2_mower.map_render.background import BackgroundMode
 from custom_components.dreame_a2_mower.mower.state import ActionMode
@@ -21,6 +23,104 @@ _PNG_SIG = b"\x89PNG\r\n\x1a\n"
 
 def _png_size(b: bytes) -> tuple[int, int]:
     return Image.open(io.BytesIO(b)).size
+
+
+def _map_with_exclusion() -> MapData:
+    """10m × 10m map with one mowing zone and one no-go exclusion polygon.
+
+    The exclusion ``points`` are already in renderer coords (the renderer
+    divides by ``pixel_size_mm`` and offsets by bx1/by1), so a 2m×2m square
+    near the centre lands solidly inside the lawn and paints red exclusion
+    fill onto the dark-green base.
+    """
+    return MapData(
+        md5="test-clean-bg",
+        width_px=200,
+        height_px=200,
+        pixel_size_mm=50.0,
+        bx1=0.0,
+        by1=0.0,
+        bx2=10000.0,
+        by2=10000.0,
+        cloud_x_reflect=10000.0,
+        cloud_y_reflect=10000.0,
+        rotation_deg=0.0,
+        boundary_polygon=(
+            (0.0, 0.0), (10000.0, 0.0), (10000.0, 10000.0), (0.0, 10000.0),
+        ),
+        mowing_zones=(
+            MowingZone(
+                zone_id=1,
+                name="lawn",
+                path=(
+                    (0.0, 0.0), (10000.0, 0.0),
+                    (10000.0, 10000.0), (0.0, 10000.0),
+                ),
+                area_m2=100.0,
+            ),
+        ),
+        exclusion_zones=(
+            ExclusionZone(
+                points=(
+                    (3000.0, 3000.0), (5000.0, 3000.0),
+                    (5000.0, 5000.0), (3000.0, 5000.0),
+                ),
+                subtype=None,
+                obj_id=1,
+            ),
+        ),
+        spot_zones=(),
+        contour_paths=(),
+        available_contour_ids=(),
+        maintenance_points=(),
+        patrol_points=(),
+        dock_xy=None,
+        total_area_m2=100.0,
+        nav_paths=(),
+    )
+
+
+def _reddish_pixel_count(png_bytes: bytes) -> int:
+    """Count pixels whose red dominates green+blue — the exclusion fill paints
+    a strongly-red (excl_fill (177,0,0,50) alpha-composited over dark-green
+    lawn) region the clean render lacks. Dark-green lawn pixels are
+    green-dominant, so this isolates the exclusion fill."""
+    img = Image.open(io.BytesIO(png_bytes)).convert("RGB")
+    n = 0
+    for r, g, b in img.getdata():
+        if r > g + 20 and r > b + 20:
+            n += 1
+    return n
+
+
+def test_render_base_clean_variant_same_size_fewer_exclusion_pixels():
+    """The clean (exclusion_zones=()) render keeps the IDENTICAL canvas size as
+    the normal base (so the card's projectPoint overlays still align), but
+    drops the red exclusion fill. This is the CRITICAL INVARIANT for the
+    map-editor card's clean background."""
+    md = _map_with_exclusion()
+    clean_md = dataclasses.replace(md, exclusion_zones=())
+
+    normal = render_base(md, background_mode=BackgroundMode.GREEN)
+    clean = render_base(clean_md, background_mode=BackgroundMode.GREEN)
+
+    # (a) Identical pixel dimensions + coordinate mapping (projection alignment).
+    assert _png_size(normal) == _png_size(clean) == (md.width_px, md.height_px), (
+        f"clean render must keep the same canvas: "
+        f"normal={_png_size(normal)} clean={_png_size(clean)} "
+        f"md=({md.width_px}, {md.height_px})"
+    )
+
+    # (b) The normal render has red exclusion fill the clean one lacks.
+    normal_red = _reddish_pixel_count(normal)
+    clean_red = _reddish_pixel_count(clean)
+    assert normal_red > 0, (
+        "expected the normal base render to paint some red exclusion fill"
+    )
+    assert clean_red < normal_red, (
+        f"clean render must have FEWER exclusion-coloured pixels: "
+        f"clean={clean_red} normal={normal_red}"
+    )
 
 
 class _FakeState:

@@ -47,17 +47,21 @@ def _set_activity(coord, *, activity, mow_session):
 
 
 def _make_coord(*, action_mode=ActionMode.ALL_AREAS, md5="md5-aaa"):
+    from tests.map_render.conftest import make_map_data
+
     coord = types.SimpleNamespace()
     coord.state_machine = MowerStateMachine()
     coord._active_map_id = 1
     coord.data = types.SimpleNamespace(action_mode=action_mode)
-    coord.cloud_state = types.SimpleNamespace(
-        maps_by_id={1: types.SimpleNamespace(md5=md5)}
-    )
+    # Real MapData (dataclass) — _render_base does dataclasses.replace() on it to
+    # render the clean (no-exclusions) editor base, which a SimpleNamespace can't.
+    map_data = dataclasses.replace(make_map_data(), md5=md5)
+    coord.cloud_state = types.SimpleNamespace(maps_by_id={1: map_data})
     coord.hass = _FakeHass()
     coord._base_png = None
     coord._base_png_mode = None
     coord._base_png_md5 = None
+    coord._editor_base_png = None
     coord._active_map_base_png = None
     coord._active_map_base_md5 = None
 
@@ -91,7 +95,10 @@ async def test_render_base_renders_and_caches_when_mode_changes():
     assert coord._base_png == _FAKE_PNG
     assert coord._base_png_mode == BackgroundMode.STRIPES
     assert coord._base_png_md5 == "md5-aaa"
-    assert len(coord.hass.calls) == 1
+    assert coord._editor_base_png == _FAKE_PNG
+    # Two executor renders per pass: the live BASE + the clean (no-exclusions)
+    # editor base.
+    assert len(coord.hass.calls) == 2
 
 
 @pytest.mark.asyncio
@@ -101,10 +108,10 @@ async def test_render_base_noop_on_unchanged_mode_and_md5():
         coord, activity=CurrentActivity.IDLE, mow_session=MowSession.BETWEEN_SESSIONS
     )
     await coord._render_base()
-    assert len(coord.hass.calls) == 1
+    assert len(coord.hass.calls) == 2  # live base + clean editor base
     # Second call, nothing changed: dedup short-circuits before the executor.
     await coord._render_base()
-    assert len(coord.hass.calls) == 1
+    assert len(coord.hass.calls) == 2
     assert coord._base_png_mode == BackgroundMode.STRIPES
 
 
@@ -117,7 +124,7 @@ async def test_render_base_rerenders_when_activity_flips_to_repositioning():
     )
     await coord._render_base()
     assert coord._base_png_mode == BackgroundMode.STRIPES
-    assert len(coord.hass.calls) == 1
+    assert len(coord.hass.calls) == 2  # live base + clean editor base
 
     # Flip to REPOSITIONING (off-dock, reorienting) -> GREEN. This is the
     # stripe-lag fix: the mode flips on the activity transition, ~41s before
@@ -129,7 +136,7 @@ async def test_render_base_rerenders_when_activity_flips_to_repositioning():
     )
     await coord._render_base()
     assert coord._base_png_mode == BackgroundMode.GREEN
-    assert len(coord.hass.calls) == 2
+    assert len(coord.hass.calls) == 4  # +2 for the re-render (live + clean)
 
 
 @pytest.mark.asyncio
