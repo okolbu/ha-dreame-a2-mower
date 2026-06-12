@@ -18,9 +18,12 @@
 //           url, thumb_url}
 
 const CATEGORY_LABELS = {
+  ai_human: "AI · Human",
+  ai_animal: "AI · Animal",
+  ai_object: "AI · Object",
   obstacle: "Obstacle",
   patrol: "Patrol",
-  person: "Person",
+  manual: "Manual",
 };
 
 class DreameA2PhotoGalleryCard extends HTMLElement {
@@ -54,7 +57,7 @@ class DreameA2PhotoGalleryCard extends HTMLElement {
 
   _categories() {
     // Distinct photo categories present, in a stable display order.
-    const order = ["obstacle", "patrol", "person"];
+    const order = ["ai_human", "ai_animal", "ai_object", "obstacle", "patrol", "manual"];
     const present = new Set();
     for (const it of this._items()) {
       if (it.type === "photo" && it.category) present.add(it.category);
@@ -240,9 +243,12 @@ class DreameA2PhotoGalleryCard extends HTMLElement {
     let txt = item.date || "";
     if (item.type === "video") {
       if (item.duration) txt += " · " + this._fmtDuration(item.duration);
-    } else if (item.detection && item.detection.cls != null) {
-      const conf = Math.round((item.detection.conf || 0) * 100);
-      txt += " · " + item.detection.cls + " " + conf + "%";
+    } else if (Array.isArray(item.detections) && item.detections.length) {
+      const d = item.detections[0];
+      if (d && d.cls != null) {
+        const conf = Math.round((d.conf || 0) * 100);
+        txt += " · " + d.cls + " " + conf + "%";
+      }
     }
     return txt;
   }
