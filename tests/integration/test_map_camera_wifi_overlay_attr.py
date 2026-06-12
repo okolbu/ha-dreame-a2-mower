@@ -23,6 +23,7 @@ def _make_camera(tmp_path: Path, *, with_body: bool):
     )
     coord = object.__new__(DreameA2MowerCoordinator)
     coord._base_png = b"\x89PNGbase"
+    coord._editor_base_png = None
     coord._base_png_mode = SimpleNamespace(value="green")
     coord._live_point_seq = 0
     coord._latest_point = None

@@ -143,6 +143,17 @@ class DreameA2MapCamera(
         png = self.coordinator._base_png
         if png:
             attrs["image_version"] = hashlib.sha1(png).hexdigest()[:12]
+        # Clean (no-exclusions) base URL for the map-editor card. The card uses
+        # this as its background so no-go/ignore zones render ONLY as the
+        # editable overlays — no double-draw/ghosting while a device edit is
+        # still propagating to the cloud-baked image. The ?v= busts the browser
+        # cache when the underlying image changes.
+        editor_png = self.coordinator._editor_base_png
+        if editor_png:
+            attrs["editor_base_url"] = (
+                "/api/dreame_a2_mower/map.png?clean=1&v="
+                + hashlib.sha1(editor_png).hexdigest()[:12]
+            )
         md = self.coordinator.cloud_state.maps_by_id.get(self.coordinator._active_map_id)
         if md is not None:
             try:

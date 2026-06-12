@@ -14,7 +14,9 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 
-def _make_camera(*, base_png=b"\x89PNGbase", position=None, heading=None):
+def _make_camera(
+    *, base_png=b"\x89PNGbase", position=None, heading=None, editor_base_png=None
+):
     from custom_components.dreame_a2_mower.camera import DreameA2MapCamera
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
     from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
@@ -32,6 +34,7 @@ def _make_camera(*, base_png=b"\x89PNGbase", position=None, heading=None):
     )
     coord = object.__new__(DreameA2MowerCoordinator)
     coord._base_png = base_png
+    coord._editor_base_png = editor_base_png
     coord._base_png_mode = SimpleNamespace(value="green")
     coord._live_point_seq = 7
     coord._latest_point = [1.0, 2.0, 90.0, 1234.0]
@@ -103,6 +106,24 @@ def test_extra_state_attributes_exposes_calibration_points():
     assert calib[0] == {"mower": {"x": 0.0, "y": 0.0}, "map": {"x": 400.0, "y": -1.0}}
     assert calib[1] == {"mower": {"x": 1000.0, "y": 0.0}, "map": {"x": 380.0, "y": -1.0}}
     assert calib[2] == {"mower": {"x": 0.0, "y": 1000.0}, "map": {"x": 400.0, "y": 19.0}}
+
+
+def test_editor_base_url_absent_without_clean_png():
+    # No _editor_base_png → no editor_base_url (card falls back to entity_picture).
+    attrs = _make_camera(editor_base_png=None).extra_state_attributes
+    assert "editor_base_url" not in attrs
+
+
+def test_editor_base_url_published_when_clean_png_present():
+    # With a clean (no-exclusions) base PNG, publish the ?clean=1 URL with a
+    # content-hash ?v= so the map-editor card uses it as its background.
+    cam = _make_camera(editor_base_png=b"\x89PNGclean")
+    attrs = cam.extra_state_attributes
+    v = hashlib.sha1(b"\x89PNGclean").hexdigest()[:12]
+    assert attrs["editor_base_url"] == f"/api/dreame_a2_mower/map.png?clean=1&v={v}"
+    assert attrs["editor_base_url"].startswith(
+        "/api/dreame_a2_mower/map.png?clean=1&v="
+    )
 
 
 def test_calibration_points_is_unrecorded():

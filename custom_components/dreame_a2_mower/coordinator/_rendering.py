@@ -181,6 +181,22 @@ class _RenderingMixin:
                 "[MAP] base render: bg=%s map=%s md5=%s",
                 mode.value, active_id, md5,
             )
+            # Map-editor card background: same canvas (bx*/by*/width_px/height_px
+            # are decode-time fields, untouched by dataclasses.replace), but with
+            # the exclusion zones STRIPPED so the editor's overlays are the ONLY
+            # place no-go/ignore areas are drawn — avoids the double-draw/ghosting
+            # while the device→cloud edit propagation lags.
+            import dataclasses
+            clean_md = dataclasses.replace(map_data, exclusion_zones=())
+            editor_png = await self.hass.async_add_executor_job(
+                partial(
+                    render_base, clean_md,
+                    background_mode=mode, state=self.data,
+                    map_id=active_id, obstacle_polygons_m=obstacles,
+                )
+            )
+            if editor_png:
+                self._editor_base_png = editor_png
         # Keep the Work Log camera's empty-state CLEAN base fresh too.
         await self._render_active_map_base()
 
