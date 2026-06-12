@@ -1,6 +1,6 @@
 // Dreame A2 Mower — Photo/Video Gallery Card.
 //
-// Thumbnail gallery of archived obstacle / patrol / person photos + videos,
+// Thumbnail gallery of archived AI-detection / patrol / obstacle photos + videos,
 // with filter tabs and a click-to-enlarge lightbox. Reads the
 // `items` attribute of a sensor (default sensor.dreame_a2_mower_photo_gallery)
 // produced by the integration's OSS gallery manifest — each item is already a
@@ -12,8 +12,9 @@
 //     # entity: sensor.dreame_a2_mower_photo_gallery   (default)
 //
 // Item shapes (newest-first):
-//   photo: {type:"photo", id, ts, date, category:"obstacle"|"patrol"|"person",
-//           detection:{cls,conf}|null, url, thumb_url}
+//   photo: {type:"photo", id, ts, date,
+//           category:"ai_human"|"ai_animal"|"ai_object"|"obstacle"|"patrol"|"manual",
+//           detections:[{cls,conf,...}, ...], url, thumb_url}
 //   video: {type:"video", id, ts, date, category:"video", duration:int(sec),
 //           url, thumb_url}
 
