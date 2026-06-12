@@ -70,6 +70,13 @@ _tab_header_settings_zones: &tab_header_settings_zones
 
     <span style="font-size:0.75em;color:var(--secondary-text-color)">🔒 = control is present but the device write path isn't unlocked yet (changes snap back).</span>
 
+_tab_header_map_editor: &tab_header_map_editor
+  type: markdown
+  content: |
+    <hr style="border:0;border-top:3px solid var(--primary-color);margin:12px 0 0 0;"/>
+
+    ## ✏️ Map Editor — Active map: {{ states('select.dreame_a2_mower_active_map') }} &nbsp;<span style="font-size:0.75em;color:var(--secondary-text-color)">draw / edit no-go, ignore & mow shapes — writes to the device; switch maps in-card</span>
+
 _tab_header_schedule: &tab_header_schedule
   type: markdown
   content: |
@@ -797,6 +804,50 @@ views:
                     id_param: contour_ids
                     map_id: 0
                     action_label: Start edge patrol
+
+  - title: Map Editor
+    path: map-editor
+    type: panel
+    icon: mdi:vector-square-edit
+    cards:
+      - type: vertical-stack
+        cards:
+          - *tab_header_map_editor
+
+          # Interactive map-editor card (bundled, served from the integration
+          # static path). REQUIRES the Lovelace resource (type: module):
+          #   /dreame_a2_mower/dreame-map-editor-card.js
+          # (it imports _dreame-map-core.js + _dreame-map-edit-geom.js as ES
+          # modules — both are pulled in automatically, no separate resource
+          # entries needed.) Reads camera.dreame_a2_mower_map's map_projection,
+          # entity_picture, editable_objects, map_id, available_map_ids.
+          #
+          # Workflow: pick a tool in the toolbar, click the map to drop a
+          # shape (or click an existing no-go/ignore overlay to select it),
+          # use the bounding-box handles to resize/rotate/move, then Create
+          # (new) / Save (edit-in-place) / Delete. The map-id selector in the
+          # toolbar chooses which map the edit targets (defaults to active).
+          - type: custom:dreame-map-editor-card
+            entity: camera.dreame_a2_mower_map
+
+          - type: markdown
+            content: |
+              ### How it works
+              - **No-go** (rectangle / circle / line / polygon) and
+                **ignore-obstacle** (polygon) shapes can be **created, edited
+                in place, moved, resized, rotated, and deleted**.
+              - **Mow-shapes** (square / circle / heart / triangle / teardrop /
+                mushroom / cloud / rainbow) are **create-only** — the cloud
+                doesn't expose existing ones for selection yet.
+              - Edits go straight to the mower via the
+                `dreame_a2_mower.create_no_go_zone` /
+                `create_ignore_obstacle` / `create_mow_shape` /
+                `delete_map_object` services. After a successful write the
+                overlay refreshes on the next camera update (~10 min, or sooner
+                if a session is active).
+              - Overlays should sit exactly over the areas baked into the map
+                image. If they look offset, the map projection is stale — let
+                the camera refresh, don't re-draw to compensate.
 
   - title: Schedule
     path: schedule
