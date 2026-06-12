@@ -56,7 +56,8 @@ from .._render_direction import infer_mow_direction
 from ..mower.state_machine import MowerStateMachine
 from ..mqtt_client import DreameA2MqttClient
 from ..observability.schemas import SCHEMA_SESSION_SUMMARY, SchemaCheck
-from ..protocol import session_summary as _session_summary
+from ..protocol import photo_meta, session_summary as _session_summary
+from ..protocol.photo_category import categorize
 
 from ._property_apply import (
     _BLOB_SLOTS,
@@ -124,7 +125,14 @@ def fetch_photos_from_summary(cloud, archive, raw_dict, *, sign) -> int:
         body = cloud.get_file(url)
         if not body:
             continue
-        entry = archive.archive(name=name, unix_ts=ts, data=body, is_person=is_person_photo(name))
+        from ..protocol.photo_meta import parse_jpeg_com
+        meta = parse_jpeg_com(body)
+        category = categorize(name=name, record={"type": "jpg"}, com=meta)
+        detections = (meta or {}).get("detections") or []
+        entry = archive.archive(
+            name=name, unix_ts=ts, data=body, is_person=is_person_photo(name),
+            category=category, detections=detections,
+        )
         if entry is not None:
             added += 1
     return added
@@ -807,7 +815,6 @@ class _LidarOssMixin:
         """
         if not hasattr(self, "_cloud") or self._cloud is None:
             return
-        from ..protocol import photo_meta
         import json as _json
         from datetime import datetime, timezone
 
@@ -843,18 +850,13 @@ class _LidarOssMixin:
                     name, len(data), data[:4].hex(),
                 )
                 continue
-            is_person = name.lower().endswith("_person.jpg")
             meta = photo_meta.parse_jpeg_com(data)
-            if is_person:
-                category = "person"
-            elif meta and meta.get("o") == 107:
-                category = "patrol"
-            else:
-                category = "obstacle"
-            detection = (meta or {}).get("detections", [None])[0] if meta and meta.get("detections") else None
+            is_person = name.lower().endswith("_person.jpg")
+            category = categorize(name=name, record=rec, com=meta)
+            detections = (meta or {}).get("detections") or []
             await self.hass.async_add_executor_job(
-                lambda d=data, n=name, t=_ts(rec), ip=is_person, c=category, det=detection:
-                self._photo_archive.archive(name=n, unix_ts=t, data=d, is_person=ip, category=c, detection=det))
+                lambda d=data, n=name, t=_ts(rec), ip=is_person, c=category, det=detections:
+                self._photo_archive.archive(name=n, unix_ts=t, data=d, is_person=ip, category=c, detections=det))
 
         # --- videos ---
         videos = await self.hass.async_add_executor_job(

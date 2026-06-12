@@ -117,3 +117,25 @@ async def test_gallery_backfill_threads_max_pages(tmp_path):
     await c._refresh_oss_gallery(max_pages=7)
     for call in c._cloud.list_oss_media.call_args_list:
         assert call.kwargs.get("max_pages") == 7
+
+
+@pytest.mark.asyncio
+async def test_sync_categorizes_via_categorizer(tmp_path):
+    # A person photo (COM person detection) -> ai_human; a no-COM photo -> manual.
+    # _coord_real_archives is the existing helper in this file.
+    photos = [
+        {"id": "p1", "filepath": "https://fake/1_person.jpg", "type": "jpg",
+         "uploadTime": "2026-06-08 21:07:08", "videoPath": ""},
+    ]
+    c = _coord_real_archives(tmp_path, photos, [], {"total": 100, "used": 1})
+    # get_file returns a JPEG with a COM person detection — stub photo_meta.
+    import custom_components.dreame_a2_mower.coordinator._lidar_oss as L
+    orig = L.photo_meta.parse_jpeg_com
+    L.photo_meta.parse_jpeg_com = lambda data: {"o": 101, "detections": [{"cls": "person", "conf": 0.7, "x": 1, "y": 2, "w": 3, "h": 4}], "s": None, "sub": None}
+    try:
+        await c._refresh_oss_gallery()
+    finally:
+        L.photo_meta.parse_jpeg_com = orig
+    cats = [p.category for p in c._photo_archive.list_photos()]
+    assert "ai_human" in cats
+    assert c._photo_archive.list_photos()[0].detections[0]["cls"] == "person"
