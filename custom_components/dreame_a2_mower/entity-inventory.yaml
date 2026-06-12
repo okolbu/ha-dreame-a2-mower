@@ -2554,6 +2554,7 @@ entities:
         weather_forecast_reference — coord.data.weather_forecast_reference (CFG.WRF) → "on"/"off"
         timezone         — coord.data.timezone (CFG.TIME)
         cfg_version            — coord.data.cfg_version (CFG.VER)
+        mpos                   — coord.data.mpos_x, mpos_y, mpos_yaw (RAW cloud MPOS routed-get; frame/units UNVERIFIED — surfaced for physical-match characterisation; disabled-by-default)
       Snapshot-backed sensors survive HA restarts; MowerState-backed sensors
       in DIAGNOSTIC_SENSORS use value_fn(coord) not value_fn(coord.data) to
       access the state machine directly.
@@ -4029,3 +4030,36 @@ entities:
       SPOT mode or the start_spot_mowing service). Spot mow end-to-end
       confirmed working in prior live test (g2408_task_envelopes_verified
       memory entry, 2026-04-29) via coordinator path, not via this button.
+
+  # ------------------------------------------------------------------
+  # MPOS diagnostic entities (added 2026-06-12)
+  # ------------------------------------------------------------------
+
+  - id: "button.dreame_a2_mower_refresh_mpos"
+    platform: button
+    control_mode: integration_local
+    class: "DreameA2RefreshMposButton"
+    class_file: "custom_components/dreame_a2_mower/button.py:316"
+    device: parent
+    source:
+      wire: "integration action — no device wire"
+      state_path: "n/a (button; stateless)"
+    write_path: "coordinator._refresh_mpos() — on-demand fetch of RAW MPOS {x,y,yaw} via cloud routed-get MPOS; populates MowerState.mpos_* fields"
+    status:
+      seen_working: false
+      last_verified: "2026-06-12"
+    verifications:
+      - date: "2026-06-12"
+        status: presumed
+        claim: "async_press calls coordinator._refresh_mpos() directly. EntityCategory.DIAGNOSTIC. Reads button.py:316-339; not re-confirmed live. MPOS routed-get wire shape is [UNVERIFIED] — frame/units unknown."
+        evidence: "button.py:337-339 (async_press → self.coordinator._refresh_mpos()); button.py:330 (_attr_entity_category = EntityCategory.DIAGNOSTIC)"
+    references:
+      wire_entry: "MPOS"
+      code: "custom_components/dreame_a2_mower/button.py:316"
+    notes: |
+      Diagnostic escape-hatch: triggers an on-demand cloud routed-get for the
+      RAW MPOS {x,y,yaw} triple. Results appear on sensor.dreame_a2_mower_mpos.
+      EntityCategory.DIAGNOSTIC. Icon: mdi:crosshairs-gps.
+      The MPOS wire surface is UNVERIFIED (frame/units unknown) — this button
+      exists to support physical-match characterisation, NOT to drive position.
+      unique_id suffix is "refresh_mpos".

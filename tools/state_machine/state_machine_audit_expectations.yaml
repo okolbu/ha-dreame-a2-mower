@@ -965,3 +965,13 @@ time.low_speed_at_night_start_time:
   idle: unavailable
   reboot: unavailable_ok
   note: "CFG-backed (cloud cache); briefly Unknown at cold-start until cloud poll fills (~5-30s)."
+
+# Phase E: MPOS diagnostic sensor (added 2026-06-12)
+# mpos: raw cloud routed-get {x,y,yaw}; None until user presses 'Refresh MPOS'.
+# Frame/units UNVERIFIED — surfaced for physical-match characterisation only.
+
+sensor.mpos:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "RAW cloud MPOS {x,y,yaw} from _refresh_mpos(); None at cold-start until user presses 'Refresh MPOS'. Frame/units UNVERIFIED."

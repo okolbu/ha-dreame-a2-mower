@@ -148,6 +148,7 @@ def _eval_globals() -> dict[str, Any]:
         _format_active_selection,
         _api_endpoints_value,
         _freshness_value,
+        _mpos_value,
         _mqtt_age_value,
     )
     from custom_components.dreame_a2_mower.binary_sensor import (
@@ -166,6 +167,7 @@ def _eval_globals() -> dict[str, Any]:
         "_format_active_selection": _format_active_selection,
         "_api_endpoints_value": _api_endpoints_value,
         "_freshness_value": _freshness_value,
+        "_mpos_value": _mpos_value,
         "_mqtt_age_value": _mqtt_age_value,
         "_cloud_connected_value": _cloud_connected_value,
     }
