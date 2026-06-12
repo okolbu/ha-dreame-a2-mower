@@ -4342,6 +4342,43 @@ opcodes:
         claim: "App sends o:208 as {m:'a', o:208, d:{idx:N}} for full-state backup. WARNING: restore resets ALL settings+schedules. Payload carries idx (backup slot). [app-mitm:2026-06-09-settings-sweep]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
+  - id: "o214"
+    op: 214
+    name: "edit_spot"
+    category: "opcode"
+    payload_shape: "SEND {m:'a', o:214, d:{id:N, points:[[x,y],[x,y],[x,y],[x,y]]}} (app — confirmed 2026-06-12); commit via o:201"
+    semantic: |
+      Create / edit a spot map element — a single axis-aligned 4-corner
+      rectangle used to target a small area. [app-mitm:2026-06-12-mapedit-rotate-edit]
+      NET-NEW opcode this session — NOT in the prior g2408-canonical catalog.
+
+      Spot has its OWN dedicated in-app map editor (separate from the shared
+      shape/area editor that uses o:215). It has NO rotation — the UI only drags
+      a resize handle; all four corners stay axis-aligned. Geometry is the
+      4-corner rectangle carried entirely in `points` (metres).
+
+      `id` is the create/edit discriminator (same convention as o:215):
+      id:-1 = create new (device assigns a real id on commit — observed id 4);
+      id:<real> = edit/resize that spot in place. DELETE is via o:218
+      {id, type:1} (spot = category 1 in the o:218 delete enum), NOT o:214.
+
+      Sequence: o:204 (begin) → o:214 {id} → o:201 (commit). NOTE: this spot
+      map ELEMENT (o:214) is distinct from the spot RUN action (o:103), which
+      only starts a mow at an already-existing spot.
+    status:
+      seen_on_wire: true
+      first_seen: "2026-06-12"
+      last_seen: "2026-06-12"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+      apk: "dreame-app-mapedit-rotate-edit-2026-06-12.md § Spots"
+    verifications:
+      - date: "2026-06-12"
+        status: verified
+        claim: "App sends o:214 {id, points:[4 axis-aligned corners]} to create (id:-1, device-assigned id 4) and edit/resize (id:<real>) a spot map element; no rotation; delete via o:218 {id,type:1}. NET-NEW opcode, not in prior canonical catalog. [app-mitm:2026-06-12-mapedit-rotate-edit]"
+        evidence: "app-mitm:2026-06-12-mapedit-rotate-edit"
+
   - id: "o215"
     op: 215
     name: "add_no_go_zone"
@@ -4416,6 +4453,14 @@ opcodes:
       map-layer object by its id and object-category type. type=4 is the
       confirmed value for ignore-obstacle zones (object category 4).
 
+      The `type` field is the element-category enum, now fully mapped from the
+      2026-06-12 map-edit CRUD capture [app-mitm:2026-06-12-mapedit-rotate-edit]:
+      0 = no-go zone / mowing-shape, 1 = spot, 3 = maintenance-point,
+      4 = ignore-obstacle zone. (Quirk: the ignore-obstacle element is added &
+      edited with type:0 in its OWN opcode o:234, but is DELETED here with
+      type:4 — the o:218 enum is the canonical element category, distinct from
+      the o:234 add-payload `type`.)
+
       The firmware echoes o:218 on s2p50 carrying the deleted entity's id;
       ids:[] in all observed captures. CONFIRMED via multiple captures
       matching user-delete narrative in the 2026-04-26 Designated Ignore
@@ -4425,7 +4470,7 @@ opcodes:
     status:
       seen_on_wire: true
       first_seen: "2026-04-26"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-12"
       decoded: confirmed
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
@@ -4436,6 +4481,10 @@ opcodes:
         status: verified
         claim: "App sends o:218 as {m:'a', o:218, d:{id:N, type:T}} to delete a map object. type field is the object category (e.g. type=4 for ignore-obstacle zones). [app-mitm:2026-06-09-settings-sweep]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-12"
+        status: verified
+        claim: "o:218 delete `type` is the full element-category enum: 0=no-go/mowing-shape, 1=spot, 3=maintenance-point, 4=ignore-obstacle zone. Confirmed by deleting one element of each kind in the map-edit CRUD capture. Quirk: ignore-obstacle adds/edits with o:234 type:0 but deletes with o:218 type:4. [app-mitm:2026-06-12-mapedit-rotate-edit]"
+        evidence: "app-mitm:2026-06-12-mapedit-rotate-edit"
 
   - id: "o219"
     op: 219
@@ -4516,6 +4565,70 @@ opcodes:
         claim: "App sends o:221 as {m:'a', o:221, d:{ids:[zoneIds]}} to merge zones. Destructive: source zone schedules+prefs are lost. [app-mitm:2026-06-09-settings-sweep]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
+  - id: "o223"
+    op: 223
+    name: "edit_oriented_point"
+    category: "opcode"
+    payload_shape: "SEND {m:'a', o:223, d:{id:N, points:[x, y, heading]}} (app — seen 2026-06-12 in an older capture)"
+    semantic: |
+      Move / edit an oriented point — a single point carrying a heading
+      [x, y, heading] (heading in radians). [app-mitm:2026-06-12-mapedit-rotate-edit]
+      Seen on the wire (older capture) but the element KIND is [UNVERIFIED]:
+      inferred to be a cruise / clean point (cf. cruisePoints type=8), DISTINCT
+      from the maintenance point — which uses its own opcode o:224. Only a
+      move/edit (id:<real>) was observed; create (id:-1) and delete are
+      [UNKNOWN — to capture]. Do not conflate with o:224 (maintenance point).
+    status:
+      seen_on_wire: true
+      first_seen: "2026-06-12"
+      last_seen: "2026-06-12"
+      decoded: partial
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+      apk: "dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points"
+    verifications:
+      - date: "2026-06-12"
+        status: partial
+        claim: "o:223 {id, [x,y,heading]} moves an oriented point (seen on wire, older capture). Element kind UNVERIFIED — inferred cruise/cleanPoint, distinct from the o:224 maintenance point. No create/delete captured. [app-mitm:2026-06-12-mapedit-rotate-edit]"
+        evidence: "app-mitm:2026-06-12-mapedit-rotate-edit"
+
+  - id: "o224"
+    op: 224
+    name: "edit_maintenance_point"
+    category: "opcode"
+    payload_shape: "SEND {m:'a', o:224, d:{id:N, points:[x, y, heading]}} (app — confirmed 2026-06-12); commit via o:201"
+    semantic: |
+      Create / edit a maintenance point — a single ORIENTED point
+      [x, y, heading] (heading in radians) marking where the mower parks for
+      maintenance. [app-mitm:2026-06-12-mapedit-rotate-edit] NET-NEW opcode this
+      session — NOT in the prior g2408-canonical catalog.
+
+      Maintenance point has its OWN dedicated in-app map editor (separate from
+      the shared shape/area editor). Unlike spot (o:214) and shapes (o:215), the
+      heading is carried EXPLICITLY as the third element of `points`, not baked
+      into corner coordinates.
+
+      `id` is the create/edit discriminator (same convention as o:215):
+      id:-1 = create new (device assigns a real id on commit — observed id 6);
+      id:<real> = move/edit that maintenance point in place. DELETE is via
+      o:218 {id, type:3} (maintenance-point = category 3 in the o:218 delete
+      enum), NOT o:224.
+
+      Sequence: o:204 (begin) → o:224 {id} → o:201 (commit).
+    status:
+      seen_on_wire: true
+      first_seen: "2026-06-12"
+      last_seen: "2026-06-12"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+      apk: "dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points"
+    verifications:
+      - date: "2026-06-12"
+        status: verified
+        claim: "App sends o:224 {id, [x,y,heading]} to create (id:-1, device-assigned id 6) and move/edit (id:<real>) a maintenance point (oriented point, heading in rad); delete via o:218 {id,type:3}. NET-NEW opcode, not in prior canonical catalog. [app-mitm:2026-06-12-mapedit-rotate-edit]"
+        evidence: "app-mitm:2026-06-12-mapedit-rotate-edit"
+
   - id: "o234"
     op: 234
     name: "add_ignore_obstacle_zone"
@@ -4536,16 +4649,20 @@ opcodes:
 
       NOTE: earlier entries described this as "save zone / exclusion-zone
       geometry" covering both create-new and resize-existing. The app-mitm
-      sweep shows the SEND form specifically for the CREATE (id:-1) case.
-      Edit-in-place (resize/move) via id:N (existing id) is taken BY ANALOGY
-      with the wire-confirmed o:215 edit-in-place (2026-06-12), where id:<real>
-      replaces the object in place and rotate/resize bake into points. This
-      analogy is [UNVERIFIED for o:234 specifically — capture an o:234 edit
-      with a real id to confirm].
+      sweep shows the SEND form for the CREATE (id:-1) case.
+      Edit-in-place (resize/move/rotate) via id:<real> is now WIRE-CONFIRMED for
+      o:234 specifically [app-mitm:2026-06-12-mapedit-rotate-edit]: an existing
+      ignore-obstacle zone (id 101) was rotated ~9° and resized in place via
+      o:234 {id:101, type:0, points:[[-3.19,1.99],[-7.4,2.68],[-6.34,9.12],
+      [-2.13,8.43]]} — same opcode as create, id:<real> the only discriminator,
+      rotate/resize baked entirely into `points` (no angle field). This matches
+      the o:215 edit-in-place convention. The ignore-obstacle zone has its OWN
+      dedicated in-app editor (toolbar: Rectangle | Delete; rectangle primitive
+      only). DELETE is via o:218 {id, type:4}, NOT o:234.
     status:
       seen_on_wire: true
       first_seen: "2026-04-26"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-12"
       decoded: confirmed
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
@@ -4556,6 +4673,10 @@ opcodes:
         status: verified
         claim: "App sends o:234 as {m:'a', o:234, d:{id:-1, type:0, points:[...]}} to add a new ignore-obstacle zone. id:-1 means server assigns id; type:0 is the ignore-obstacle category. [app-mitm:2026-06-09-settings-sweep]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-12"
+        status: verified
+        claim: "o:234 EDIT-IN-PLACE confirmed: existing ignore-obstacle zone (id 101) rotated ~9° + resized via o:234 {id:101, type:0, points:[4 corners]} — same opcode as create, id:<real> the only discriminator, rotate/resize baked into points (no angle field). Has its own in-app editor (Rectangle-only). Delete via o:218 {id,type:4}, not o:234. [app-mitm:2026-06-12-mapedit-rotate-edit]"
+        evidence: "app-mitm:2026-06-12-mapedit-rotate-edit"
 
   - id: "o400"
     op: 400
@@ -11637,10 +11758,17 @@ api_endpoints:
       [app-mitm:2026-06-09-settings-sweep]
       CRED-FETCH chain decoded: confirmed. STREAM bytes: [UNKNOWN — to capture]
       (requires Tencent IoT-Video XP2P SDK integration).
+      TWO-WAY AUDIO ("Talk"): pressing Talk in the app produces ZERO control
+      command on the wire — the intercom (app mic → mower speaker) and the live
+      ambient audio both ride entirely over the XP2P P2P stream, not the
+      HTTP/MQTT channel. Manual photo/video snapshots are client-side grabs from
+      this same P2P stream, uploaded via addOssNew/ossUploaded (see manual-
+      upload entry). The lone VOL write once seen alongside Talk was a UI volume
+      hint, not a Talk command. [app-mitm:2026-06-12-live-video]
     status:
       seen_on_wire: false
       first_seen: "2026-06-09"
-      last_seen: "2026-06-09"
+      last_seen: "2026-06-12"
       decoded: partial
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
@@ -11652,6 +11780,10 @@ api_endpoints:
         status: verified
         claim: "Tencent live-view cred chain: user/accesstoken → dev/isDevUser → mgr/dev/getIdentity → dev/getP2PInfo; all 4 endpoints confirmed; stream is XP2P P2P off-relay (no bytes captured)."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-12"
+        status: verified
+        claim: "Two-way audio ('Talk') and live ambient audio ride entirely over the XP2P P2P stream — pressing Talk emits ZERO control command on the HTTP/MQTT wire. Manual photo/video snapshots are client-side grabs from the same P2P stream uploaded via addOssNew. [app-mitm:2026-06-12-live-video]"
+        evidence: "app-mitm:2026-06-12-live-video"
 
   - id: "push_prefs"
     name: "message_push_preferences"

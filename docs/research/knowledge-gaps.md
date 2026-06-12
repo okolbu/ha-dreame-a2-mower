@@ -323,13 +323,28 @@ Validate: correlate event args with the session that fired them.
   confirm/correct the mapping. Also `[UNKNOWN — to capture]`:
   type ids 10 and 11 — no shape occupies the gap between square(9) and circle(12) in this app
   build, so they appear unused on g2408.
-- **Type-3 transient obstacle photo / map-icon link** — obstacle JPEG bytes are
-  archived via `userDidOssList` (category=obstacle; confirmed 2026-06-09). The
-  *icon-linkage* — i.e. which map waypoint/obstacle-icon in the live-session data
-  corresponds to a specific photo — is `[UNKNOWN — to capture]`. Capture step:
-  mid-session, when an obstacle icon appears in the live map, click the icon in
-  the app while MITM-intercepting; capture the request and response that loads
-  the photo from that icon.
+- **Type-3 transient (normal) obstacle photo** — `[UNKNOWN — to capture]`,
+  verified-negative across the whole corpus as of 2026-06-12. There are THREE
+  photo types: (1) patrol photos and (2) AI-obstacle photos both land in the
+  persistent gallery (`userDidOssList`, Aliyun OSS `ali_dreame/` prefix —
+  confirmed 2026-06-09); (3) **normal obstacle photos** captured each time the
+  mower navigates around an obstacle are EPHEMERAL — viewable ONLY by tapping an
+  obstacle icon on the LIVE session map, and the icons go dead once the session
+  ends. Type-3 has NEVER been captured `[app-mitm:2026-06-12-obstacle-photos]`:
+  the map-blob `ai_obstacle` array was empty in every capture, MQTT :19973
+  carried zero photo refs, and no obstacle/detection/IPC endpoint was ever
+  touched — because every capture was emulator-driven UI with no REAL mow + REAL
+  detection, the only scenario that arms type-3. Two competing hypotheses for
+  what tapping a live icon does, both `[UNVERIFIED]`: (a) read a now-populated
+  `ai_obstacle [x,y,type,possibility,key,file_name,random]` entry from the live
+  map blob and mint a signed URL to the SAME `ali_dreame/` OSS (dreame-vacuum
+  analogue), or (b) hit a distinct endpoint (lead:
+  `/smart-app/ipc/detection/event/list`). Capture step: during a REAL mow run
+  `scripts/arm-obstacle-capture.sh` (snapshots gallery baseline + arms all 3
+  surfaces), TAP each live obstacle icon while the session is active, then
+  `scripts/harvest-obstacle-capture.sh` to diff for non-empty `ai_obstacle`,
+  NEW OSS GETs, and any new detection/photo endpoint — a new object key OR a
+  populated `ai_obstacle` confirms type-3 and disambiguates (a) vs (b).
 - **iotoss auth mode: JWT vs body sign** — the integration sends userDidOssList and
   checkDevOssStorage requests with a JWT Bearer header (standard for other endpoints).
   The app-MITM capture 2026-06-09 showed the app sends an additional body `sign`

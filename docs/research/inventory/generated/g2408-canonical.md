@@ -407,6 +407,11 @@ Also overloads to a consumables runtime counter shape {value: [blade_min,
 brush_min, robot_min, link_module_min]} — discriminated from the 4-bool
 shape by any element > 1 or < 0.
 
+Shape {result, time}: first seen 2026-06-09 18:17:34 during app-MITM.
+LEAD: matches PIN read response shape from the findings doc — m:g t:'PIN'
+→ {result(0=ok), time(lockout_ms)}. [UNKNOWN — to verify by correlating
+the 18:17:34 capture with PIN-read activity in the MITM log]
+
 Detail in s2p51_shapes section (Task 11). Confirmed 2026-04-17 through
 2026-04-30 via live toggle testing.
 
@@ -1120,6 +1125,9 @@ archived (dedup by object_name → no re-download) into the active map's
 LidarArchive. Relay 80001 leaves it unretried-this-cycle and the next refresh
 tries again; the live s99.20 push remains the primary source for new scans.
 
+**Open questions:**
+- Default-render-densest-vs-newest UX: integration renders latest-by-timestamp (05/10, 51932 pts); the Dreame app showed the older denser scan (04/20, 153261 pts). Should the integration offer a 'densest scan' picker or always show latest? [UX decision — Phase 2].
+
 **See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:125`, `docs/research/inventory/generated/g2408-canonical.md § Events`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 99 piid:20`
 
 ## Events
@@ -1209,6 +1217,7 @@ o101, o102, o103 for the respective TASK envelope shapes.
 
 **Open questions:**
 - Direct action(5,1) consistently returns 80001; routed path via s2a50 o:100 is the confirmed working path.
+- task-variant-params: Capture app TASK starts (all-areas o=100 / edge o=101 / zone o=102 / pause / resume / dock o=6 / stop) to confirm params vs our builders [UNKNOWN — to capture].
 
 **See also:** `custom_components/dreame_a2_mower/mower/actions.py:195`, `apk: ioBroker.dreame/apk.md §Actions o:100 globalMower`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)`
 
@@ -1400,36 +1409,44 @@ never reached.
 | o_minus_1 | error_abort | {m:'a', d:{o:-1, status:true, exe:true}, t:'TASK'} | WIRED |  |
 | o0 | reset_control | {m:'a', o:0} | APK-KNOWN |  |
 | o2 | joystick_start | {m:'a', o:2} | APK-KNOWN |  |
-| o3 | cancel | {m:'a', d:{o:3}, t:'TASK'} (echo only) | WIRED |  |
-| o4 | joystick_pause | {m:'a', o:4} | APK-KNOWN |  |
-| o5 | joystick_continue | {m:'a', o:5} | APK-KNOWN |  |
-| o6 | recharge | {m:'a', d:{o:6}, t:'TASK'} (echo only) | WIRED |  |
+| o3 | stop_end | SEND {m:'a', o:3} (app); ECHO {m:'a', d:{o:3}, t:'TASK'} (device → cloud) | WIRED |  |
+| o4 | pause | SEND {m:'a', o:4} (app); no echo payload | APK-KNOWN |  |
+| o5 | resume | SEND {m:'a', o:5} (app); no echo payload | APK-KNOWN |  |
+| o6 | recharge_dock | SEND {m:'a', o:6} (app); ECHO {m:'a', d:{o:6}, t:'TASK'} (device → cloud) | WIRED |  |
 | o7 | joystick_stop_back | {m:'a', o:7} | APK-KNOWN |  |
 | o8 | set_ota | {m:'a', o:8, d:{...}} | APK-KNOWN |  |
-| o9 | find_bot | {m:'a', o:9} | WIRED |  |
+| o9 | find_bot | SEND {m:'a', o:9} (app and integration); no echo observed | WIRED |  |
 | o10 | upload_map (apk) / generate_3dmap (integration) — UNRESOLVED | {m:'a', o:10, d:{idx:<map_index>}} | WIRED |  |
 | o11 | suppress_fault | {m:'a', o:11} | WIRED |  |
 | o12 | lock_bot | {m:'a', o:12, d:{lock: 0|1}} | APK-KNOWN |  |
+| o13 | cancel_dock_return | SEND {m:'a', o:13} (app); no echo observed | APK-KNOWN |  |
 | o15 | remote_setting | {m:'a', p:0, o:15, d:{c: 0|1} | {h: height*10}} | SEEN-UNDECODED |  |
-| o100 | global_mower | {m:'a', o:100, t:'TASK', area_id:N, region_id:[1], time:N, exe:T} | WIRED |  |
-| o101 | edge_mower | {m:'a', o:101, d:{edge:[[map_id, contour_id], ...]}, t:'TASK'} | WIRED |  |
-| o102 | zone_mower | {m:'a', o:102, d:{region:[zone_id, ...]}, t:'TASK'} | WIRED |  |
-| o103 | spot_mower | {m:'a', o:103, d:{area:[spot_id, ...]}, t:'TASK'} | WIRED |  |
+| o100 | global_mower | SEND {m:'a', o:100, d:{need_bp}} (app); ECHO {area_id:N, exe:T, o:100, region_id:[1], time:N, t:'TASK'} (flat-field, not wrapped in d:{}) | WIRED |  |
+| o101 | edge_mower | SEND {m:'a', o:101, d:{edge:[[map_id, contour_id], ...]}} (app and integration) | WIRED |  |
+| o102 | zone_mower | SEND {m:'a', o:102, d:{region:[zone_id, ...]}} (app and integration) | WIRED |  |
+| o103 | spot_mower | SEND {m:'a', o:103, d:{area:[spot_id, ...]}} (app and integration) | WIRED |  |
 | o104 | plan_mower | {m:'a', o:104, d:{...}} | APK-KNOWN |  |
 | o105 | obstacle_mower | {m:'a', o:105, d:{...}} | APK-KNOWN |  |
-| o107 | start_cruise_point | ECHO s2p50 {o:107, exe:true, status:true, error:0, estimate_time:N, time:T, t:'TASK'}. SEND payload (point list + per-point settings) NOT captured — see open_questions. | SEEN-UNDECODED |  |
+| o107 | start_cruise_point | SEND {m:'a', o:107, d:{point:[cruisePointId, ...]}} (app and integration — confirmed live 2026-06-04); ECHO s2p50 {o:107, exe:true, status:true, error:0, estimate_time:N, time:T, t:'TASK'} | DECODED-UNWIRED |  |
 | o108 | start_cruise_side | SEND {m:'a', o:108, d:{edge:[[m,c]]}} (contour pairs, CONFIRMED LIVE 2026-06-04); ECHO s2p50 {o:108, exe:true, status:true, t:'TASK'} | DECODED-UNWIRED |  |
 | o109 | start_clean_point | SEND {m:'a', p:0, o:109, d:{point:[point_id]}} via routed_action; ECHO s2p50 {o:109, exe:true, status:true|false, [estimate_time, time]} | WIRED |  |
 | o110 | start_learning_map | {m:'a', o:110} | APK-KNOWN |  |
-| o200 | change_map | echo: {d:{exe:true, o:200, status:true}, t:'TASK'} | DECODED-UNWIRED |  |
-| o201 | exit_build_map | {m:'a', d:{o:201, status:true, error:0}, t:'TASK'} (echo) | WIRED |  |
-| o204 | edit_map | {m:'a', d:{o:204, exe:T, status:T, ...}, t:'TASK'} (echo) | WIRED |  |
+| o200 | select_map | SEND {m:'a', o:200, d:{idx:N}} (app — confirmed 2026-06-09); ECHO {d:{exe:true, o:200, status:true}, t:'TASK'} | DECODED-UNWIRED |  |
+| o201 | map_edit_commit | SEND {m:'a', o:201} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:201, status:true, error:0}, t:'TASK'} (device → cloud) | WIRED |  |
+| o204 | map_edit_begin | SEND {m:'a', o:204} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:204, exe:T, status:T, ...}, t:'TASK'} (device → cloud) | WIRED |  |
 | o205 | clear_map | {m:'a', o:205} | APK-KNOWN |  |
 | o206 | expand_map | {m:'a', o:206} | APK-KNOWN |  |
-| o215 | map_edit_confirm_legacy | {m:'a', d:{o:215, id:N, ids:[...], exe:T, status:T}, t:'TASK'} (echo) | WIRED |  |
-| o218 | delete_zone | {m:'a', d:{o:218, id:N, ids:[], exe:T, status:T}, t:'TASK'} (echo) | WIRED |  |
-| o234 | save_zone_geometry | {m:'a', d:{o:234, id:N, ids:[], exe:T, status:T}, t:'TASK'} (echo) | WIRED |  |
-| o400 | start_binocular | {m:'a', o:400} | APK-KNOWN |  |
+| o208 | full_state_backup | SEND {m:'a', o:208, d:{idx:N}} (app — confirmed 2026-06-09) | APK-KNOWN |  |
+| o214 | edit_spot | SEND {m:'a', o:214, d:{id:N, points:[[x,y],[x,y],[x,y],[x,y]]}} (app — confirmed 2026-06-12); commit via o:201 | DECODED-UNWIRED |  |
+| o215 | add_no_go_zone | SEND {m:'a', o:215, d:{id:N, type:T, points:[...], radius:R}} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:215, id:N, ids:[...], exe:T, status:T}, t:'TASK'} | WIRED |  |
+| o218 | delete_map_object | SEND {m:'a', o:218, d:{id:N, type:T}} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:218, id:N, ids:[], exe:T, status:T}, t:'TASK'} | WIRED |  |
+| o219 | rename_zone | SEND {m:'a', o:219, d:{region:N, name:'...'}} (app — confirmed 2026-06-09) | APK-KNOWN |  |
+| o220 | split_zone | SEND {m:'a', o:220, d:{id:N, line_start:{x,y}, line_end:{x,y}}} (app — confirmed 2026-06-09) | APK-KNOWN |  |
+| o221 | merge_zones | SEND {m:'a', o:221, d:{ids:[N, ...]}} (app — confirmed 2026-06-09) | APK-KNOWN |  |
+| o223 | edit_oriented_point | SEND {m:'a', o:223, d:{id:N, points:[x, y, heading]}} (app — seen 2026-06-12 in an older capture) | SEEN-UNDECODED |  |
+| o224 | edit_maintenance_point | SEND {m:'a', o:224, d:{id:N, points:[x, y, heading]}} (app — confirmed 2026-06-12); commit via o:201 | DECODED-UNWIRED |  |
+| o234 | add_ignore_obstacle_zone | SEND {m:'a', o:234, d:{id:-1, type:0, points:[...]}} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:234, id:N, ids:[], exe:T, status:T}, t:'TASK'} | WIRED |  |
+| o400 | camera_live_view | SEND {m:'a', o:400, d:{on:0|1}} (app — confirmed 2026-06-09) | APK-KNOWN |  |
 | o401 | take_pic | {m:'a', o:401} | WIRED |  |
 | o503 | cutter_bias | {m:'a', o:503, d:{...}} | APK-KNOWN |  |
 
@@ -1472,44 +1489,78 @@ documented; not observed on g2408 wire.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
-### o3 — `cancel`
+### o3 — `stop_end`
 
-Task cancelled echo — fires on s2p50 when the user hits Cancel / Stop
-during an active mowing session. Fires ~1 s after s2p2=48. Does not
-carry id/ids. Observed 2026-04-20 as a status echo from the firmware;
-the integration does NOT send o:3 as a command — Stop/Pause are
-action(5,2) and action(5,4).
+End / stop the current task. [app-mitm:2026-06-09-settings-sweep] The
+app sends this as a routed action (s2a50 {m:'a', o:3}) with no payload to
+stop an active session. Firmware echoes it on s2p50 when the user hits
+Cancel / Stop, firing ~1 s after s2p2=48. Does not carry id/ids.
 
-Also listed in apk as joystick "stop" (o:2-7 group); in s2p50 echo
-context it is the canonical "user-cancel" marker.
+The integration sends o:3 (End/Stop) via the routed path
+(ACTION_TABLE[MowerAction.STOP].routed_o=3) as of Phase B; the prior
+direct action(siid=5,aiid=2) path returned 80001 on g2408.
+[app-mitm:2026-06-09-settings-sweep] The o:3 s2p50 echo appears
+regardless of which path the sender used.
+
+Also listed in apk as joystick "stop" (o:2–7 group); in s2p50 echo
+context it is the canonical "user-cancel" / stop marker.
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §Actions o:3 stopControl`
 
-### o4 — `joystick_pause`
+### o4 — `pause`
 
-Joystick control — pause. Part of the o:2–7 manual joystick control
-group. Apk-documented; not observed on g2408 wire.
+Pause the current mowing session. [app-mitm:2026-06-09-settings-sweep]
+The app sends this as a routed action (s2a50 {m:'a', o:4}) with no
+payload to pause an active mow. DISTINCT from stop (o:3) — pause
+preserves session state so the mower can resume; stop ends the task.
+
+The integration sends o:4 (Pause) via the routed path
+(ACTION_TABLE[MowerAction.PAUSE].routed_o=4) as of Phase B; the prior
+direct action(siid=5,aiid=4) path returned 80001 on g2408.
+[app-mitm:2026-06-09-settings-sweep]
+
+Previously noted as "joystick control — pause" (part of the o:2–7 group).
+The app-mitm sweep confirms this is the primary PAUSE command for all
+session types, not only joystick sessions. Whether o:4 echoes on s2p50
+is not yet observed on the g2408 wire. [UNKNOWN — to capture]
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
-### o5 — `joystick_continue`
+### o5 — `resume`
 
-Joystick control — continue / resume. Part of the o:2–7 manual joystick
-control group. Apk-documented; not observed on g2408 wire.
+Resume a paused mowing session. [app-mitm:2026-06-09-settings-sweep]
+The app sends this as a routed action (s2a50 {m:'a', o:5}) with no
+payload to resume after a pause (o:4). Counterpart to o:4 pause.
+
+The integration sends o:5 (Resume/continue a paused mow) via
+ACTION_TABLE[MowerAction.RESUME].routed_o=5 as of Phase B (exposed as
+the Resume button), distinct from START_MOWING (o=100).
+[app-mitm:2026-06-09-settings-sweep] Whether o:5 echoes on s2p50 is
+not yet observed. [UNKNOWN — to capture]
+
+Previously noted as "joystick control — continue / resume" (part of the
+o:2–7 group). App-mitm confirms this is the general RESUME command.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
-### o6 — `recharge`
+### o6 — `recharge_dock`
 
-Explicit Recharge command echo — fires on s2p50 when the user taps the
-app Recharge button (send mower home). Echo is unreliable: observed
-2026-04-20 18:09:56, 18:25:57, 04-27 10:12:18, 04-29 20:47:18 (all on
-dock-arrival), but on 2026-05-05 09:24 a confirmed app Recharge that
-successfully drove the mower home fired zero o:6 echo at all. The cloud
-occasionally drops this delivery.
+Send mower home / recharge / dock. [app-mitm:2026-06-09-settings-sweep]
+The app sends this as a routed action (s2a50 {m:'a', o:6}) with no
+payload to command the mower to return to the dock.
+
+Echo is unreliable: confirmed on s2p50 at 2026-04-20 18:09:56, 18:25:57,
+04-27 10:12:18, 04-29 20:47:18, but on 2026-05-05 09:24 a confirmed app
+Recharge that successfully drove the mower home fired zero o:6 echo. The
+cloud occasionally drops this delivery.
 
 Detection of Recharge should lean on s2p1: ?→5→6 plus s3p2→1, NOT on
 the s2p50 o:6 echo.
+
+The integration sends o:6 (Recharge/return-to-dock) via the routed path
+(ACTION_TABLE[MowerAction.DOCK / RECHARGE].routed_o=6) as of Phase B;
+the prior direct action(siid=5,aiid=3) path returned 80001 on g2408.
+[app-mitm:2026-06-09-settings-sweep]
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §Actions o:6 pauseBackCharge`
 
@@ -1532,12 +1583,14 @@ on g2408 wire. Expected to carry OTA metadata in d field.
 
 ### o9 — `find_bot`
 
-Find My Mower — triggers audible beep and/or LED flash on the robot.
-Used by the integration's FIND_BOT action via routed action s2a50.
+Find My Mower / locate — triggers audible beep and/or LED flash on the
+robot. [app-mitm:2026-06-09-settings-sweep] The app sends this as a
+routed action (s2a50 {m:'a', o:9}) with no payload. The integration also
+uses o:9 via routed_action (MowerAction.FIND_BOT → ACTION_TABLE routed_o=9).
 Apk-documented as findBot. No echo observed on s2p50 — command is
 fire-and-forget.
 
-**See also:** `custom_components/dreame_a2_mower/mower/actions.py:225`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+**See also:** `custom_components/dreame_a2_mower/mower/actions.py:225`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
 ### o10 — `upload_map (apk) / generate_3dmap (integration) — UNRESOLVED`
 
@@ -1553,8 +1606,24 @@ live press while docked: a s2p54 3dmap-progress push + a new 3dmap OSS object
 generate_3dmap button is bucket B (device_write_unproven) for exactly this
 reason.
 
+LIVE-TESTED 2026-06-08 (docked-idle): op=10 {idx:0} via routed_action is
+ACCEPTED — cloud reply {code:0, out:[{m:'r', r:0}], siid:2}, r=0 on two
+sends, relay awake (fetch_cfg OK). This is categorically unlike CFG.PRE
+(r=-3 hard-reject). BUT it produced NO new 3dmap OSS object: list_3dmap_objects()
+was identical before and 150 s after (2 objects, 2026/04/20 + 2026/05/10
+.0550.bin — matching the only two LiDAR maps in ~2 months of running). So
+op=10 on g2408 is ACCEPTED-BUT-NO-EFFECT (same class as lock_robot op=12),
+NOT an on-demand 3D-map generator. 3D-map rendering is firmware-gated on
+internal conditions (enough map change / completed mow) — there is no
+user-facing trigger in the Dreame app either (no "generate map" button, just
+a 3D-view page). The "generate-3dmap" decision branch (new object ⇒ generate)
+is DISPROVEN for on-demand use; the apk name (uploadMap vs generate-3dmap)
+stays ambiguous, but on-demand generate-3dmap is ruled out. Button correctly
+stays _U (device_write_unproven).
+
 **Open questions:**
-- Is g2408 op=10 'uploadMap' (this row's apk reading) or 'generate 3D map' (the integration's GENERATE_3D_MAP mapping)? Live press while docked, watch for s2p54 3dmap-progress + a new 3dmap OSS object. Resolves the name AND the bucket-B classification of the generate_3dmap button.
+- apk NAME of op=10 (uploadMap vs generate-3dmap) stays ambiguous, but on-demand 3D-map GENERATION via op=10 is DISPROVEN (live 2026-06-08: accepted r=0, no new 3dmap object). What ACTUALLY triggers a 3dmap render on g2408 (the 2 existing maps are 2026-04-20 + 2026-05-10) is still unknown — likely an internal 'enough map change' / post-mow firmware condition, not a callable action. The real upload flow is the s2p54-progress(0→100) → s99p20(object-name at ~61%) → s2p54=100 sequence (see s2p54 entry); it has fired 0 times in the current 19-day capture (last snapshot 05-10).
+- [UNVERIFIED] 2026-06-08: user removed a map exclusion zone; mower began re-mapping; a DENSER 3D point cloud (incl. the newly-un-excluded area) appeared in BOTH the phone app AND a cloud-only iPad app instance — i.e. cloud-resident — yet list_3dmap_objects() (t='3dmap' OBJ) still returned only the 2 old snapshots and NO s2p54/s99p20 fired in our capture. Leading hypothesis: the apps render the continuously cloud-synced WORKING/SLAM map (mapl), which reflects live remapping, while the persistent .0550.bin 3D snapshots only refresh on the periodic s2p54→s99p20 upload. So our integration's 2D map (mapl) should already show the new area, but the LiDAR camera (OSS snapshot) lags until the next snapshot uploads. CAPTURE NEXT: watch for the next s2p54 climb→s99p20 push (the integration auto-ingests it) to confirm the snapshot then matches the apps; and identify whether the app's live 3D view pulls a current-map cloud surface distinct from the t='3dmap' OBJ snapshot list.
 
 **See also:** `custom_components/dreame_a2_mower/mower/actions.py:261`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
@@ -1574,8 +1643,23 @@ this opcode; this opcode may be an alternative channel or app-only path.
 
 **Open questions:**
 - Does o:12 work in parallel with CFG.CLS write, or is one canonical?
+- [UNKNOWN — to capture] No lock/unlock button exists in the current Dreame app UI for this device; the backend MAY add support later. On current g2408 firmware op=12 is ACCEPTED-BUT-NO-EFFECT (same class as op=10; no panel-lock observed, no echo on s2p50). Integration lock_bot entity stays DEVICE_WRITE_UNPROVEN. Capture step: watch for a future app lock control or backend flag that enables it.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+
+### o13 — `cancel_dock_return`
+
+Cancel an in-progress dock-return (end returning to station).
+[app-mitm:2026-06-09-settings-sweep] The app sends this as a routed
+action (s2a50 {m:'a', o:13}) with no payload when the user taps to
+cancel a return-to-dock in progress.
+
+DISTINCT from stop (o:3): o:3 ends an active MOWING session; o:13
+specifically cancels the dock-return leg (the mower is already heading
+home but the user wants it to stop en route). Whether it echoes on
+s2p50 is not yet observed. [UNKNOWN — to capture]
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
 ### o15 — `remote_setting`
 
@@ -1605,21 +1689,29 @@ implement joystick driving.
 
 ### o100 — `global_mower`
 
-All-area mowing session start. Observed as a flat-field s2p50 push
-(not wrapped in d:{}) at session start: {area_id:N, exe:T, o:100,
-region_id:[1], time:N, t:'TASK'}. The integration sends this via
-routed action s2a50 {m:'a', o:100} for START_MOWING. Apk-documented
+Start / all-area mow. [app-mitm:2026-06-09-settings-sweep] The app
+sends routed action s2a50 {m:'a', o:100, d:{need_bp}} where need_bp
+controls whether a boundary pre-pass is required before mowing.
+The integration sends {m:'a', o:100} (no d field) for START_MOWING
+via ACTION_TABLE; the need_bp field is app-specific. Apk-documented
 as globalMower.
 
+Observed as a flat-field s2p50 echo (not wrapped in d:{}) at session
+start: {area_id:N, exe:T, o:100, region_id:[1], time:N, t:'TASK'}.
 Echo arrives seconds after the routed action; confirms the mower has
 accepted the task. See §4.3 "Session start" for the full sequence.
+
+**Open questions:**
+- need_bp exact semantics: 0=skip boundary pre-pass, 1=require it? [UNKNOWN — to capture] Exact value range and effect on session behaviour.
 
 **See also:** `custom_components/dreame_a2_mower/mower/actions.py:195`, `docs/research/inventory/generated/g2408-canonical.md § s2p1 mode enum`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
 ### o101 — `edge_mower`
 
-Edge-mowing-only task launch. The firmware canonicalizes the inbound
-d.edge [[m,c],...] list into group_id for its echo:
+Edge mow. [app-mitm:2026-06-09-settings-sweep] App and integration both
+send routed action s2a50 {m:'a', o:101, d:{edge:[[map_id, contour_id],...]}}
+to launch an edge-mowing-only session. The firmware canonicalizes the
+inbound d.edge [[m,c],...] list into group_id for its echo:
 {exe:T, group_id:[[m,c],...], o:101, status:T, time:N}.
 
 Echo is identical regardless of input (empty vs explicit contour list),
@@ -1636,7 +1728,9 @@ Observed in probe corpus from 2026-04-26 onward.
 
 ### o102 — `zone_mower`
 
-Zone-specific mowing task launch. zone_ids are scalar ints from
+Zone mow. [app-mitm:2026-06-09-settings-sweep] App and integration both
+send routed action s2a50 {m:'a', o:102, d:{region:[zoneId,...]}} to mow
+one or more named zones. zone_ids are scalar ints from
 MAP.*.mowingAreas.value. Distinct from o:101 edge contours (which use
 [map_id, contour_index] 2-tuples). Observed in probe corpus per §4.6.
 
@@ -1644,7 +1738,9 @@ MAP.*.mowingAreas.value. Distinct from o:101 edge contours (which use
 
 ### o103 — `spot_mower`
 
-Spot mowing task launch. spot_ids from MAP.*.spotAreas.value. Echo:
+Spot mow. [app-mitm:2026-06-09-settings-sweep] App and integration both
+send routed action s2a50 {m:'a', o:103, d:{area:[spotId,...]}} to mow
+one or more spot areas. spot_ids from MAP.*.spotAreas.value. Echo:
 {area_id:[N], exe:T, o:103, region_id:[], status:T, time:N}. Confirmed
 end-to-end live 2026-04-29. Cloud spotAreas.area=0 in echo — actual
 spot coordinates from telemetry, not from echo (per project memory
@@ -1697,7 +1793,7 @@ current capture path, patrol settings are unobservable on the wire. Next
 candidate is the s4 eiid1 session-summary OSS object at patrol end.
 
 **Open questions:**
-- SEND payload shape of the op=107 command (point list + per-point cycles + auto-capture flags) is uncaptured — the broker doesn't relay the app→device downlink to the /status/ monitor. Capture via integration-side routed_action logging, or check whether settings land in the s4 eiid1 session-summary OSS object at patrol end.
+- Per-point settings (cycles count, auto-capture flag) are not in the SEND payload captured by app-mitm — they may be embedded in the d:{point:[...]} structure or in per-point sub-objects. [UNKNOWN — to capture] Check if the point ids reference cruisePoints entries that already carry time/etime settings.
 - s2p56 [[3,0],[4,-1]]: confirm point_id vs state field order and state vocab (0=active? -1=pending? 2=arrived as in o=109?) across more captures.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
@@ -1759,14 +1855,19 @@ corpus; the integration does not currently wire this action.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
-### o200 — `change_map`
+### o200 — `select_map`
 
-Active-map switch. Apk-documented as changeMap. Confirmed on g2408
-wire 2026-05-07 during a multi-map session in which the user
-tapped the corner-window thumbnails in the app to swap between
-Map 1 and Map 2.
+Select active map. [app-mitm:2026-06-09-settings-sweep] App sends routed
+action s2a50 {m:'a', o:200, d:{idx:N}} to switch the active map, where
+idx is the target map index. The integration already uses this form
+(MowerAction.SET_ACTIVE_MAP → routed_o=200, ACTION_TABLE payload_fn
+_build_set_current_map_payload).
 
-o:200 is **conditional** — fires on some swaps but not others.
+Echo (inbound s2p50) confirmed on g2408 wire 2026-05-07 during a
+multi-map session when the user tapped the corner-window thumbnails in
+the app to swap between Map 1 and Map 2.
+
+o:200 echo is **conditional** — fires on some swaps but not others.
 Two paired captures confirm: 21:52:05–07 (flip A→B, op:200 fired)
 and 21:52:36–38 (flip B→A, op:200 did NOT fire). Hypothesis:
 either direction-specific (only fires when going to a particular
@@ -1775,50 +1876,45 @@ suppresses the duplicate echo). More captures needed to settle.
 
 Per-swap signal that IS reliable: `s1p50={}` empty-ping fires
 on EVERY swap (confirmed on both 21:52:06 and 21:52:36 above).
-The integration should treat s1p50 as the MAPL-repoll trigger
-for sub-second active-map detection.
-
-The OUTBOUND command form (presumably carrying a map_id) wasn't
-captured because the probe logs only mqtt subscriptions, not
-publishes. The single inbound echo was minimal:
-`{exe:true, o:200, status:true}` — no map_id in payload.
-
-Phase 1 of multi-map (a92) subscribes to s1p50 as a MAPL-repoll
-trigger (in addition to mowing_started + 2-min cloud refresh).
-Outbound command shape still unknown; capture procedure: extend
-probe to log mqtt publishes, OR mitm-proxy the app's HTTPS
-traffic, then tap thumbnails and diff.
+The integration treats s1p50 as the MAPL-repoll trigger for
+sub-second active-map detection.
 
 **Open questions:**
-- Outbound command payload shape (map_id field?). Inbound echo confirmed; outbound is still unknown because probe captures mqtt subscriptions only.
-- Does o:200 fire on every swap, or only the first/last in a quiet window? Today's session showed ~4 swap attempts but only 1 inbound echo.
+- Does o:200 echo fire on every swap, or only the first/last in a quiet window? Today's session showed ~4 swap attempts but only 1 inbound echo.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
-### o201 — `exit_build_map`
+### o201 — `map_edit_commit`
 
-Apk: exitBuildMap — exits BUILDING/learning-map mode. On g2408, o:201
-is observed as a status echo on s2p50 that closes every map-edit
-sequence (create zone, resize, delete): the always-trailing
+Map-edit commit / exit build map. [app-mitm:2026-06-09-settings-sweep]
+App sends routed action s2a50 {m:'a', o:201} with no payload to commit
+and close a map-edit sequence. Apk documents this as exitBuildMap.
+
+On g2408, o:201 is observed as a status echo on s2p50 that closes every
+map-edit sequence (create zone, resize, delete): the always-trailing
 {o:201, status:true, error:0} arrival is the integration's universal
 "refetch + rebuild map" trigger.
 
 The dual role (command: exit building mode / echo: map-edit complete)
 reflects that the same opcode number is reused in both contexts by the
 firmware. The integration keys on o:201 status:true error:0 for the
-map rebuild trigger (§2.1).
+map rebuild trigger (§2.1). Sequence: o:204 (begin) → o:215/o:218/o:234
+(edit action) → o:201 (commit) → o:-1 (teardown).
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
-### o204 — `edit_map`
+### o204 — `map_edit_begin`
 
-Map-edit request echo — fires first in a zone / exclusion-zone add /
-edit / delete sequence, before the save or delete confirmation opcode.
-Apk-documented as editMap. On g2408 observed as the first of the
-map-edit pair (204 → 234/215/218 → 201).
+Map-edit begin (enter map-edit mode). [app-mitm:2026-06-09-settings-sweep]
+App sends routed action s2a50 {m:'a', o:204} with no payload to open a
+map-edit session. Apk-documented as editMap. The firmware echoes o:204
+(with exe:T, status:T) as the first signal in a zone / exclusion-zone
+add / edit / delete sequence, before the save or delete confirmation
+opcode. Full sequence: o:204 (begin) → o:215/o:218/o:234 (edit action)
+→ o:201 (commit) → o:-1 (teardown).
 
-Observed 2026-04-20 and confirmed in the 2026-04-26 Designated Ignore
-Obstacle Zone create/resize/delete corpus.
+Confirmed in the 2026-04-26 Designated Ignore Obstacle Zone
+create/resize/delete corpus.
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
@@ -1840,19 +1936,95 @@ Not directly observed on g2408 wire in probe corpus.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § s2p1 mode enum`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
-### o215 — `map_edit_confirm_legacy`
+### o208 — `full_state_backup`
 
-Legacy map-edit confirmation echo. Older captures (2026-04-20) show
-o:215 as the "second of the map-edit pair" (zone edit confirm), carrying
-id and ids fields. Later captures (2026-04-26) show o:234 in the same
-role. The integration triggers a MAP rebuild on o:215 OR o:201 with
-status:true error:0 — covers both old and new confirmation opcode.
+Full-state backup / restore. [app-mitm:2026-06-09-settings-sweep]
+App sends routed action s2a50 {m:'a', o:208, d:{idx:N}} where idx is
+the backup slot index.
+
+WARNING: restoring a backup resets ALL mower settings AND schedules
+to the backed-up state. This is a destructive operation — any settings
+or schedule changes made after the backup was created will be lost.
+
+Whether this creates a new backup at idx or RESTORES from an existing
+backup at idx is [UNKNOWN — to capture] — both operations likely use
+this opcode (separate idx ranges or a type field may distinguish them).
+No echo observed on s2p50 for this opcode. [UNKNOWN — to capture]
+
+**Open questions:**
+- Does o:208 {idx:N} CREATE a backup at slot N, or RESTORE from slot N? How many slots exist? Is there a separate 'restore' vs 'backup' form (e.g. a type field)? [UNKNOWN — to capture]
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+
+### o214 — `edit_spot`
+
+Create / edit a spot map element — a single axis-aligned 4-corner
+rectangle used to target a small area. [app-mitm:2026-06-12-mapedit-rotate-edit]
+NET-NEW opcode this session — NOT in the prior g2408-canonical catalog.
+
+Spot has its OWN dedicated in-app map editor (separate from the shared
+shape/area editor that uses o:215). It has NO rotation — the UI only drags
+a resize handle; all four corners stay axis-aligned. Geometry is the
+4-corner rectangle carried entirely in `points` (metres).
+
+`id` is the create/edit discriminator (same convention as o:215):
+id:-1 = create new (device assigns a real id on commit — observed id 4);
+id:<real> = edit/resize that spot in place. DELETE is via o:218
+{id, type:1} (spot = category 1 in the o:218 delete enum), NOT o:214.
+
+Sequence: o:204 (begin) → o:214 {id} → o:201 (commit). NOTE: this spot
+map ELEMENT (o:214) is distinct from the spot RUN action (o:103), which
+only starts a mow at an already-existing spot.
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: dreame-app-mapedit-rotate-edit-2026-06-12.md § Spots`
+
+### o215 — `add_no_go_zone`
+
+Add / save a no-go zone (virtual boundary). [app-mitm:2026-06-09-settings-sweep]
+App sends routed action s2a50 {m:'a', o:215, d:{id, type, points, radius}}
+to create a new exclusion zone. The firmware echoes o:215 on s2p50 with
+id (assigned by server) and ids fields after the zone is saved.
+
+Zone type encoding: [app-mitm:2026-06-09-settings-sweep]
+  type 1 = line (2 points, radius=0)
+  type 2 = polygon (corner points, radius=0)
+  type 3 = circle (center point + radius)
+
+Mowing-shape preset types (decorative/preset shapes):
+  type 9  = Square (4 points)
+  type 13 = Heart
+  type 17 = Cloud
+  type 18 = Rainbow
+
+Sequence: o:204 (begin) → o:215 (add zone) → o:201 (commit) → o:-1 (teardown).
+The integration triggers a MAP rebuild on o:215 OR o:201 with status:true
+error:0 — covers both confirmation opcodes.
+
+Earlier captures (2026-04-20) saw o:215 as a map-edit echo in the same
+"second slot" position; the app-mitm sweep confirms it is also the SEND
+command for adding no-go zones, not only a legacy echo.
+
+**Open questions:**
+- Shape type ids 9 (Square), 13 (Heart), 15 (Teardrop), 17 (Cloud), 18 (Rainbow) are WIRE-CONFIRMED (appear in o:215 capture payloads; 15 confirmed 2026-06-12 [app-mitm:2026-06-12-mapedit-rotate-edit]). Type ids 12 (Circle), 14 (Triangle), 16 (Mushroom) are [UNVERIFIED] — INFERRED from the Shapes-screen (IMG_4615.PNG) left→right ordering filling the 9,12-18 sequence, NOT seen on the wire. Capture: draw each in app-MITM and read its type in o:215 to confirm/correct. Type ids 10 and 11 (the gap between square=9 and circle=12) are [UNKNOWN — to capture] — no shape occupies them in this app's Shapes screen, so they appear unused on g2408.
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §Actions map-edit confirm`
 
-### o218 — `delete_zone`
+### o218 — `delete_map_object`
 
-Zone / exclusion-zone delete echo. Carries the deleted entity's id;
+Delete a map object. [app-mitm:2026-06-09-settings-sweep] App sends
+routed action s2a50 {m:'a', o:218, d:{id:N, type:T}} to delete a
+map-layer object by its id and object-category type. type=4 is the
+confirmed value for ignore-obstacle zones (object category 4).
+
+The `type` field is the element-category enum, now fully mapped from the
+2026-06-12 map-edit CRUD capture [app-mitm:2026-06-12-mapedit-rotate-edit]:
+0 = no-go zone / mowing-shape, 1 = spot, 3 = maintenance-point,
+4 = ignore-obstacle zone. (Quirk: the ignore-obstacle element is added &
+edited with type:0 in its OWN opcode o:234, but is DELETED here with
+type:4 — the o:218 enum is the canonical element category, distinct from
+the o:234 add-payload `type`.)
+
+The firmware echoes o:218 on s2p50 carrying the deleted entity's id;
 ids:[] in all observed captures. CONFIRMED via multiple captures
 matching user-delete narrative in the 2026-04-26 Designated Ignore
 Obstacle Zone corpus. One outlier capture from an untraced UI flow
@@ -1861,24 +2033,117 @@ o:204 → o:218 → o:201.
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §Actions map-edit delete`
 
-### o234 — `save_zone_geometry`
+### o219 — `rename_zone`
 
-Save zone / exclusion-zone geometry echo. CONFIRMED — fires for both
-create new (new firmware-assigned id) and resize existing (same id).
-Carries the saved entity's id; ids:[] in all observed captures. Sequence:
-o:204 → o:234 → o:201. Confirmed 2026-04-26 from Designated Ignore
-Obstacle Zone create/resize/delete tests.
+Rename a zone / mowing area. [app-mitm:2026-06-09-settings-sweep]
+App sends routed action s2a50 {m:'a', o:219, d:{region:N, name:'...'}}
+to rename a named zone. `region` is the zone id; `name` is the new
+display name string.
+
+Whether the firmware echoes o:219 on s2p50 is not yet observed.
+[UNKNOWN — to capture]
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+
+### o220 — `split_zone`
+
+Split a zone by drawing a cut line. [app-mitm:2026-06-09-settings-sweep]
+App sends routed action s2a50 {m:'a', o:220, d:{id, line_start, line_end}}
+where id is the zone to split, and line_start/line_end are the endpoints
+of the cut line in map coordinates.
+
+WARNING: destructive operation — splitting clears that zone's schedule
+and per-zone preferences. The two new sub-zones inherit neither; they
+must be reconfigured. No echo observed on s2p50. [UNKNOWN — to capture]
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+
+### o221 — `merge_zones`
+
+Merge two or more zones into one. [app-mitm:2026-06-09-settings-sweep]
+App sends routed action s2a50 {m:'a', o:221, d:{ids:[zoneId,...]}} to
+merge multiple zones. ids is a list of the zone ids to merge.
+
+WARNING: destructive operation — the source zones and their schedules /
+per-zone preferences are discarded; only the merged zone survives.
+No echo observed on s2p50. [UNKNOWN — to capture]
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+
+### o223 — `edit_oriented_point`
+
+Move / edit an oriented point — a single point carrying a heading
+[x, y, heading] (heading in radians). [app-mitm:2026-06-12-mapedit-rotate-edit]
+Seen on the wire (older capture) but the element KIND is [UNVERIFIED]:
+inferred to be a cruise / clean point (cf. cruisePoints type=8), DISTINCT
+from the maintenance point — which uses its own opcode o:224. Only a
+move/edit (id:<real>) was observed; create (id:-1) and delete are
+[UNKNOWN — to capture]. Do not conflate with o:224 (maintenance point).
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points`
+
+### o224 — `edit_maintenance_point`
+
+Create / edit a maintenance point — a single ORIENTED point
+[x, y, heading] (heading in radians) marking where the mower parks for
+maintenance. [app-mitm:2026-06-12-mapedit-rotate-edit] NET-NEW opcode this
+session — NOT in the prior g2408-canonical catalog.
+
+Maintenance point has its OWN dedicated in-app map editor (separate from
+the shared shape/area editor). Unlike spot (o:214) and shapes (o:215), the
+heading is carried EXPLICITLY as the third element of `points`, not baked
+into corner coordinates.
+
+`id` is the create/edit discriminator (same convention as o:215):
+id:-1 = create new (device assigns a real id on commit — observed id 6);
+id:<real> = move/edit that maintenance point in place. DELETE is via
+o:218 {id, type:3} (maintenance-point = category 3 in the o:218 delete
+enum), NOT o:224.
+
+Sequence: o:204 (begin) → o:224 {id} → o:201 (commit).
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points`
+
+### o234 — `add_ignore_obstacle_zone`
+
+Add an ignore-obstacle zone (object category 4). [app-mitm:2026-06-09-settings-sweep]
+App sends routed action s2a50 {m:'a', o:234, d:{id:-1, type:0, points:[...]}}
+to create a new ignore-obstacle zone. id:-1 signals a new zone (server
+assigns the real id); type:0 is the fixed object category for ignore-obstacle
+zones (category 4 in the delete opcode context); points is an array of
+polygon corner coordinates.
+
+The firmware echoes o:234 on s2p50 carrying the server-assigned entity id;
+ids:[] in all observed captures. Sequence: o:204 → o:234 → o:201.
+Confirmed 2026-04-26 from Designated Ignore Obstacle Zone
+create/resize/delete tests.
+
+NOTE: earlier entries described this as "save zone / exclusion-zone
+geometry" covering both create-new and resize-existing. The app-mitm
+sweep shows the SEND form for the CREATE (id:-1) case.
+Edit-in-place (resize/move/rotate) via id:<real> is now WIRE-CONFIRMED for
+o:234 specifically [app-mitm:2026-06-12-mapedit-rotate-edit]: an existing
+ignore-obstacle zone (id 101) was rotated ~9° and resized in place via
+o:234 {id:101, type:0, points:[[-3.19,1.99],[-7.4,2.68],[-6.34,9.12],
+[-2.13,8.43]]} — same opcode as create, id:<real> the only discriminator,
+rotate/resize baked entirely into `points` (no angle field). This matches
+the o:215 edit-in-place convention. The ignore-obstacle zone has its OWN
+dedicated in-app editor (toolbar: Rectangle | Delete; rectangle primitive
+only). DELETE is via o:218 {id, type:4}, NOT o:234.
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §Actions map-edit save geometry`
 
-### o400 — `start_binocular`
+### o400 — `camera_live_view`
 
-Camera-stream start (binocular/stereo camera activation). Apk-documented
-as startBinocular. Not observed on g2408 wire; likely a camera-streaming
-feature not yet wired in the integration.
+Camera / live-view on/off. [app-mitm:2026-06-09-settings-sweep]
+App sends routed action s2a50 {m:'a', o:400, d:{on:0|1}} to enable
+(on=1) or disable (on=0) the live camera stream. Also fires automatically
+at the start of a patrol run (the patrol feature turns the camera on
+when it begins patrolling points to enable auto-capture).
 
-**Open questions:**
-- Does g2408 support startBinocular? Related to takePic (o:401) flow?
+Previously noted as "startBinocular" (apk name, no payload). The app-
+mitm sweep confirms the actual SEND form includes {d:{on}} and the
+opcode covers the live-view toggle, not only a discrete stream-start.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
@@ -1916,8 +2181,8 @@ payload shape (calibration parameters) unknown.
 |----|------|-------|--------|------|
 | AOP | ai_obstacle_photos | int {0,1} | WIRED |  |
 | ATA | anti_theft_alarm | list[int(3)] [lift_alarm, offmap_alarm, realtime_location] | WIRED |  |
-| BAT | charging_config | list[int(6)] [recharge_pct, resume_pct, unknown_flag, custom_charging, start_min, end_min] | WIRED |  |
-| BP | bp_unknown | list[int(2)] [?, ?] | WIRED |  |
+| BAT | charging_config | list[int(6)] [recharge_pct, resume_pct, unknown_flag, custom_charging, start_min, end_min] (READ); typed write: {type,value} | WIRED |  |
+| BP | start_from_stop_point | list[int(2)] [start_from_stop_point(0/1), stop_point_term_days(1-7)] | WIRED |  |
 | CLS | child_lock | int {0,1} | WIRED |  |
 | CMS | consumables_wear_meters | list[int(4)] [blade_min, brush_min, robot_min, aux_min] | WIRED |  |
 | DLS | daylight_savings | int=0 | WIRED |  |
@@ -1927,8 +2192,8 @@ payload shape (calibration parameters) unknown.
 | LIT | lights_led_period | list[int(8)] [enabled, start_min, end_min, standby, working, charging, error, unknown] | WIRED |  |
 | LOW | low_speed_nighttime | list[int(3)] [enabled, start_min, end_min] | WIRED |  |
 | MSG_ALERT | notification_preferences | list[int(4)] [anomaly, error, task, consumables] | WIRED |  |
-| PATH | path_unknown | int {0,1} (observed as bool true) | WIRED |  |
-| PRE | mowing_preferences | list[int(2)] [zone_id, mode] | WIRED |  |
+| PATH | pathway_obstacle_avoidance | int {0,1} | WIRED |  |
+| PRE | mowing_preferences | list[int(19)] — 19-element int array; transport action(siid:2,aiid:50) {m:'s',t:'PRE',d:[…19 ints…]} | WIRED |  |
 | PROT | navigation_path | int {0,1} | WIRED |  |
 | REC | human_presence_detection | list[int(9)] [enabled, sensitivity, standby, mowing, recharge, patrol, alert, photo_consent, push_min] | WIRED |  |
 | STUN | auto_recharge_standby | int {0,1} | WIRED |  |
@@ -1944,6 +2209,12 @@ payload shape (calibration parameters) unknown.
 Capture Photos of AI-Detected Obstacles. Confirmed 2026-04-24 via
 isolated single-toggle. Mapping {0: off, 1: on} matches the app.
 Surfaced as sensor.ai_obstacle_photos. Sample: 1 (on).
+Write payload: {value:0|1}. [app-mitm:2026-06-09-settings-sweep]
+Re-enabling AOP via the app shows a privacy-policy screen, but no
+consent payload is transmitted — only AOP{value:1} hits the wire;
+the policy text is fetched as a static GET from
+protocol.dreame.tech. [app-mitm:2026-06-09-settings-sweep]
+Integration can set AOP=1 directly without any consent ceremony.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX AOP`
 
@@ -1954,6 +2225,7 @@ verified 2026-04-27. Shape [lift_alarm, offmap_alarm, realtime_location]
 matches the s2p51 ANTI_THEFT decoder exactly.
 Toggle test: [0,0,0]→[1,0,0] Lift, →[1,1,0] Off-Map, →[1,1,1]
 Real-Time Location. Each index ∈ {0,1}.
+Write payload: {value:[lift,offmap,realtime]}. [app-mitm:2026-06-09-settings-sweep]
 Surfaced as sensor.anti_theft (state=on if any sub-flag enabled,
 per-flag bools in attributes). Sample: [0,0,0].
 
@@ -1961,30 +2233,38 @@ per-flag bools in attributes). Sample: [0,0,0].
 
 ### BAT — `charging_config`
 
-Charging config. Confirmed 2026-04-24. Shape matches the s2p51
+Charging config. Confirmed 2026-04-24. Read shape matches the s2p51
 CHARGING decoder exactly: [recharge_pct, resume_pct, unknown_flag,
 custom_charging, start_min, end_min].
 recharge_pct = auto-recharge when battery drops below this;
 resume_pct = resume mowing when battery above this;
-unknown_flag consistently observed =1 (purpose TBD);
+unknown_flag [2] consistently observed =1 (purpose TBD — see open_questions);
 custom_charging bool toggles the schedule window;
 start_min/end_min = window in minutes-from-midnight.
 Surfaced as sensor.charging_config.
 Sample: [15, 95, 1, 0, 1080, 480] → recharge@15%, resume@95%, window
 off, would-be 18:00→08:00.
 
+WRITE payloads — BAT is a typed key (write only):
+[app-mitm:2026-06-09-settings-sweep]
+- Custom Charging Period: {type:"charging", value:[enabled(0/1), start_min, end_min]}
+  e.g. {type:"charging", value:[1, 1080, 480]} = enable 18:00→08:00.
+- Auto-Recharge / Resume thresholds: {type:"power", value:[recharge_pct, resume_pct, flag]}
+  e.g. {type:"power", value:[10, 95, 1]}. value[0] choices: 10/15/20/25%.
+  value[2] = 1 observed (purpose unknown — NOT Auto-Recharge-after-Standby,
+  that toggle writes STUN separately). [UNKNOWN — to capture]
+
 **Open questions:**
-- unknown_flag [2] always=1 — purpose unknown.
+- unknown_flag [2] always=1 — purpose unknown. App charging-settings page exposes a control for every OTHER BAT index and has no unaccounted-for setting, so [2] has no user-facing mapping — likely firmware-reserved or not applicable to the g2408. Not worth wiring a write path; see TODO.md 'BAT[2] hardcoded 1' (left open as defensive cleanup only).
+- BAT typed-write value[2]/flag: purpose still unknown — NOT STUN (auto-recharge-after-standby has its own STUN key). [UNKNOWN — to capture]
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX BAT`
 
-### BP — `bp_unknown`
+### BP — `start_from_stop_point`
 
-TBD. Same shape as WRP list(2). Sample: [1, 4]. No toggle-correlation
-test performed; semantics unknown. Exposed as diagnostic only.
-
-**Open questions:**
-- BP[0] and BP[1] — no toggle correlation yet; shape matches WRP but meaning unknown.
+Start-from-Stop-Point + Stop-Point Term. [app-mitm:2026-06-09-settings-sweep]
+Write payload {on:bool, day:1-7}: on=Start-from-Stop-Point boolean,
+day=Stop-Point Term in days. CFG read BP:[1,4]=[on,day]. Sample: [1,4].
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX BP`
 
@@ -1995,6 +2275,9 @@ Mapping {0: off, 1: on} matches the app. Surfaced as
 sensor.child_lock_cfg. A switch.child_lock entity already exists
 wired to DreameMowerProperty.CHILD_LOCK, but on g2408 the
 authoritative read path is CFG.CLS. Sample: 0 (off).
+Write payload: {value:0|1}. [app-mitm:2026-06-09-settings-sweep]
+CLS is the WRITABLE surface (s4p27 set_properties is the read-side
+only). [app-mitm:2026-06-09-settings-sweep]
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX CLS`
 
@@ -2038,6 +2321,9 @@ managed automatically via TIME (IANA timezone). Sample: 0.
 Do-Not-Disturb. Apk-catalogued. Shape [enabled, start_min, end_min]
 with start_min/end_min in minutes-from-midnight. Sample: [0, 1260, 420]
 = off, would-be 21:00→07:00.
+Write payload: {value:0|1, time:[start_min, end_min]}.
+[app-mitm:2026-06-09-settings-sweep] e.g. {value:0, time:[1260,420]}.
+start_min/end_min confirmed as minutes-since-midnight (1260=21:00, 420=07:00).
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX DND`
 
@@ -2046,6 +2332,7 @@ with start_min/end_min in minutes-from-midnight. Sample: [0, 1260, 420]
 Frost Protection. Confirmed 2026-04-24 via isolated single-toggle.
 Mapping {0: off, 1: on} matches the app. Surfaced as
 sensor.frost_protection. Sample: 1 (on).
+Write payload: {value:0|1}. [app-mitm:2026-06-09-settings-sweep]
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX FDP`
 
@@ -2057,6 +2344,11 @@ Observed indices: voice_idx=7 → Norwegian. Transported via s2p51
 shape {"text": N, "voice": M} — decoded as Setting.LANGUAGE.
 Surfaced as sensor.robot_voice (state = voice language name where
 known, raw indices as attrs). Sample: [2, 7].
+Write payload: typed key {type:"voice"|"text", value:idx}.
+[app-mitm:2026-06-09-settings-sweep] voice and text are set
+separately via the type discriminator. Confirmed indices: English=0,
+Norwegian=7, Danish=9. Changing voice language triggers NO download
+on g2408 — voice packs are device-side firmware.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX LANG`
 
@@ -2073,9 +2365,16 @@ Surfaced as sensor.headlight_enabled (on/off from [0]) +
 sensor.headlight_schedule ([1]/[2] plus scenario flags and [7] as
 attributes). Sample: [0, 480, 1200, 1, 1, 1, 1, 1] = LEDs off
 (custom period disabled), would-be 08:00→20:00, all scenarios on.
+Write payload: {value, time:[start,end], light:[Standby,Working,Charging,Error], fill}.
+[app-mitm:2026-06-09-settings-sweep]
+time=[start_min,end_min] in minutes-since-midnight (e.g. [480,1200]=08:00-20:00).
+light order confirmed by sequential toggle: [0]=Standby, [1]=Working,
+[2]=Charging, [3]=Error. [app-mitm:2026-06-09-settings-sweep]
+fill = unknown purpose, observed as 1. [UNKNOWN — to capture]
 
 **Open questions:**
 - LIT[7] — unknown trailing toggle; app shows an extra field whose purpose isn't obvious.
+- LIT.fill — present in write payload with value observed as 1; purpose unknown. [UNKNOWN — to capture]
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX LIT`
 
@@ -2087,6 +2386,9 @@ minutes-from-midnight. Shape matches the s2p51 LOW_SPEED_NIGHT
 decoder. User example: [1, 1200, 480] = enabled, 20:00→08:00 next
 day. Surfaced as sensor.low_speed_nighttime.
 Sample: [1, 1200, 480].
+Write payload: {value:0|1, time:[start_min, end_min]}.
+[app-mitm:2026-06-09-settings-sweep] Same shape as DND; time in
+minutes-since-midnight (1200=20:00).
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX LOW`
 
@@ -2099,30 +2401,85 @@ Wire shape collides with VOICE — both ride s2p51 {value: [b,b,b,b]};
 the decoder emits Setting.AMBIGUOUS_4LIST and resolution requires the
 getCFG diff via sensor.cfg_keys_raw._last_diff.
 Sample: [1, 1, 1, 1].
+Write payload: {value:[Anomaly, Error, Task, Consumable]}.
+[app-mitm:2026-06-09-settings-sweep] Each element 0/1; order confirmed
+by sequential toggle. MSG_ALERT is a DEVICE-side CFG key, NOT
+app-only — the notification-type filter IS an integration surface.
+[app-mitm:2026-06-09-settings-sweep]
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX MSG_ALERT`
 
-### PATH — `path_unknown`
+### PATH — `pathway_obstacle_avoidance`
 
-Unknown on g2408. Observed stable at 1 (true) through a Navigation
-Path toggle test 2026-04-25 — NOT the Navigation Path setting despite
-earlier user guess (PROT is Navigation Path). Semantic TBD.
-Exposed as sensor.cfg_path_raw (disabled-by-default diagnostic) so
-the raw int is visible for future toggle-correlation tests.
-Sample: true (coerced to 1).
+Pathway Obstacle Avoidance master enable. [app-mitm:2026-06-09-settings-sweep]
+Write payload: {value:0|1}. 0=disabled, 1=enabled. The per-map/per-pathway
+selection sub-menu (map1/map2 pathway IDs) is a SEPARATE write — deferred
+pending pathways being drawn. [app-mitm:2026-06-09-settings-sweep]
+Sample: 1 (on/true).
 
 **Open questions:**
-- PATH — stable at true/1 through nav-path toggle; purpose still unknown.
+- Per-pathway selection write (sub-menu with pathway IDs per map) — deferred, needs pathways drawn first. [UNKNOWN — to capture]
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX PATH`
 
 ### PRE — `mowing_preferences`
 
-Mowing preferences. g2408 has 2 elements [zone_id, mode], not the
-apk's 10. Alpha.86 removed the entities that read PRE[2..9]; only
-mow_mode and mow_mode_efficient (both reading PRE[1]) remain.
-zone_id selects which zone's preferences to apply; mode is the
-mowing mode for that zone. Sample: [0, 0].
+Mowing preferences write array. 19 elements confirmed by 2026-06-09
+app-MITM sweep (28 toggle-and-back writes, each index isolated).
+Transport: action(siid:2,aiid:50) {m:'s',t:'PRE',d:[…19 ints…]} via
+device/sendCommand; app receives code:0 (r=0 equivalent).
+[app-mitm:2026-06-09-settings-sweep]
+
+Baseline (General Mode, all-on): [0,0,0,0,55,1,8,1,0,1,1,2,1,20,10,7,1,2,0]
+
+Index map (all confirmed [app-mitm:2026-06-09-settings-sweep] unless noted):
+  [0]  version/checksum byte — app writes 0, firmware echoes 123 on read.
+  [1]  map index — which map these prefs apply to.
+  [2]  zone index — 0=General Mode (all zones), 1…N=per-zone Custom Mode.
+       After zone split, new zones received zone-index 1 and 2 respectively.
+  [3]  Mowing Efficiency: 0=Standard, 1=Efficient. Confirmed by isolated toggle.
+  [4]  Mowing Height: cm×10 (range 30–70; e.g. 55=5.5 cm). Multi-value confirmed.
+  [5]  Mowing Direction mode: 0=Crisscross, 1=Customize (uses [6] angle),
+       2=Chequerboard. 3-value confirmed by isolating each mode.
+  [6]  Mowing Direction angle (degrees, used when [5]=1 Customize only).
+       Confirmed: 8↔64 via isolated write.
+  [7]  Automatic Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
+  [8]  reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+  [9]  Obstacle Avoidance on Edges: 0=off, 1=on. Confirmed by isolated toggle.
+  [10] EdgeMaster: 0=off, 1=on. Confirmed by isolated toggle.
+  [11] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+  [12] LiDAR Obstacle Recognition: 0=off, 1=on. Confirmed isolated; disabling
+       greys out Obstacle Avoidance Height in the app.
+  [13] Obstacle Avoidance Height: 5/10/15/20 cm. Multi-value confirmed.
+  [14] Obstacle Avoidance Distance: 10/15/20 cm. Multi-value confirmed.
+  [15] AI Obstacle Recognition bitmask: bit0(1)=Human, bit1(2)=Animal,
+       bit2(4)=Object. All-on=7. Bit order confirmed: Human-off 7→6.
+  [16] Safe Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
+  [17] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+  [18] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+
+Per-zone (Custom Mode) writes use the same 19-int array with [2] set to the
+zone index. Enable custom-mode per zone via PREP first
+({m:'s',t:'PREP',d:{idx:<zone_0based>,value:1}}).
+
+Correct write envelope (bare-array, device-scoped):
+  SET: action s2.a50 {m:s,t:PRE,d:[<19 ints>]} — d is the bare array, NOT
+       wrapped under a 'value' key. [app-mitm:2026-06-09-settings-sweep]
+  GET: action s2.a50 {m:g,t:PRE,d:{idx:<map_idx>,region:<zone_idx>}}
+The app always dual-writes: PRE first (device firmware reads it), then
+SETTINGS chunked-batch (cloud record for app-side readback). A SETTINGS-only
+write is cloud-cache-only — the device firmware does NOT apply it, which is
+why SETTINGS-only writes never changed mower behavior. [app-mitm:2026-06-09-settings-sweep]
+The 2026-06-03 r=-3 probe used d:{value:[0,1]} (wrong envelope — array
+wrapped under a 'value' key instead of bare); the r=-3 was a shape/path
+mismatch, NOT a firmware veto of the PRE surface. [app-mitm:2026-06-09-settings-sweep]
+Whether the g2408 firmware actually executes each PRE write is not yet
+observed — device-side effect is `[UNVERIFIED]` pending live verification.
+
+**Open questions:**
+- cfg-write-path: Confirm the app uses the same device/sendCommand path (code:0) for CFG writes (height/RGBPSTA/notifications/rain/DND), a cleaner route than our 80001-prone path [UNKNOWN — to capture].
+- pre-reserved: Confirm indices 8,11,17,18 are truly reserved (no-op) or locate their settings via Custom Mode or other pages [UNKNOWN — to capture].
+- settings-only-fields: SETTINGS-only fields cutterPosition/cutterPositionHeight/edgeMowingNum/edgeMowingWalkMode/obstacleAvoidanceSensitivity/edgeCuttingAttachment have NO PRE index; whether a SETTINGS-only write changes the mower is unverified. Capture: toggle each in app-MITM and diff PRE vs SETTINGS to see which store carries it [UNKNOWN — to capture].
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX PRE`
 
@@ -2134,6 +2491,8 @@ cfg_keys_raw diff visible on HA alpha.123+. Mapping {0: "direct",
 sensor.navigation_path. The field name is cryptic but the toggle
 correlation is unambiguous: toggling Nav Path smart→direct flipped
 PROT 1→0 with no other CFG key moving. Sample: 1 (smart).
+Write payload: {value:0|1}. 0=Direct Path, 1=Smart Path.
+[app-mitm:2026-06-09-settings-sweep]
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX PROT`
 
@@ -2149,6 +2508,14 @@ photo_consent is the privacy opt-in for sending captured human
 photos. push_min is the push-notification cooldown in minutes
 (observed: 3/10/20). Surfaced as sensor.human_presence_alert.
 Sample: [1, 1, 1, 1, 1, 1, 0, 1, 3].
+Write payload: {value, sen:0/1/2, mode:[Standby,Mowing,Recharge,Patrol],
+report:[VoiceInApp, CaptureHumanPhotos, PushInterval{3,10,20}]}.
+[app-mitm:2026-06-09-settings-sweep]
+sen: 0=Low/1=Medium/2=High. mode = Activation Scenarios (each 0/1),
+order confirmed by sequential toggle: [0]=In Standby, [1]=In Mowing,
+[2]=Recharge, [3]=In Point Patrol. report: [0]=Voice-Prompts/In-App-
+Notifications; [1]=Capture Human Photos and Send; [2]=Push Interval
+(3/10/20 min). [app-mitm:2026-06-09-settings-sweep]
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX REC`
 
@@ -2167,6 +2534,10 @@ station for too long. Automatically returning to the station."
 Whether the timeout duration is a firmware constant or stored in
 another (still uncatalogued) CFG slot is unknown — STUN itself is
 just an enable flag. Sample: 1 (on).
+Write payload: {value:0|1}. [app-mitm:2026-06-09-settings-sweep]
+STUN is its OWN key — NOT BAT.power[2] (confirmed by the sweep:
+the Auto-Recharge-after-Standby toggle was NOT on the charging-settings
+page with BAT). [app-mitm:2026-06-09-settings-sweep]
 
 **Open questions:**
 - STUN standby timeout duration — firmware constant or hidden CFG slot?
@@ -2203,13 +2574,19 @@ the decoder emits Setting.AMBIGUOUS_4LIST and resolution requires the
 getCFG diff via sensor.cfg_keys_raw._last_diff.
 Surfaced as sensor.voice_prompt_modes (state = count enabled 0..4,
 per-mode bools in attrs). Sample: [1, 1, 1, 1].
+Write payload: {value:[Regular, WorkStatus, SpecialStatus, Error]}.
+[app-mitm:2026-06-09-settings-sweep] Each element 0/1; order confirmed
+by sequential toggle.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX VOICE`
 
 ### VOL — `robot_voice_volume`
 
-Robot Voice volume. Confirmed 2026-04-24. Mapping is percentage
-0..100. Surfaced as sensor.robot_voice_volume. Sample: 72.
+Robot Voice Volume. Confirmed 2026-04-24. Mapping is percentage 0..100.
+Surfaced as sensor.robot_voice_volume. Also controls the camera page
+volume slider (no separate camera-volume key). Sample: 72.
+Write payload: {value:0-100}. [app-mitm:2026-06-09-settings-sweep]
+e.g. {value:51} for 51% volume.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX VOL`
 
@@ -2230,6 +2607,9 @@ hours after rain ends. Wire shape mirrors the s2p51 RAIN_PROTECTION
 decoder. Surfaced as sensor.rain_protection. Distinct from
 binary_sensor.rain_protection_active which tracks "raining right now"
 via s2p2=56. Sample: [1, 4].
+Write payload: {value:0|1, time:N_hours, sen:sensitivity_level}.
+[app-mitm:2026-06-09-settings-sweep] value=on/off; time=resume delay
+in HOURS (e.g. 4→5 confirmed); sen=sensitivity level.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX WRP`
 
@@ -2237,7 +2617,8 @@ via s2p2=56. Sample: [1, 4].
 
 | id | name | shape | status | unit |
 |----|------|-------|--------|------|
-| AIOBS | ai_obstacle_data | (observed: r=-3 in all 3 cloud dumps so far; payload-on-success unknown) | APK-KNOWN |  |
+| AIOBS | ai_obstacle_data | (observed: r=-3 in all 3 cloud dumps and live probe 2026-06-09; payload-on-success unknown) | APK-KNOWN |  |
+| AI_HUMAN | ai_human_photo_consent | iotuserdata KV: AI_HUMAN.0=JSON-string-encoded bool; AI_HUMAN.info=counter int | UNCLASSIFIED |  |
 | ARM | arm_alarm | {m:'s', t:'ARM', d:{value}} | APK-KNOWN |  |
 | CFG | all_keys_cfg | {d: {AOP, ATA, BAT, BP, CLS, CMS, DLS, DND, FDP, LANG, LIT, LOW, MSG_ALERT, PATH, PRE, PROT, REC, STUN, TIME, VER, VOICE, VOL, WRF, WRP}} | WIRED |  |
 | CHECK | self_check_command | {m:'s', t:'CHECK', d:{mode, status}} | APK-KNOWN |  |
@@ -2247,18 +2628,26 @@ via s2p2=56. Sample: [1, 4].
 | IOT | iot_connection_status | {status: bool} | APK-KNOWN |  |
 | LOCN | dock_gps_origin | {pos: [lon, lat]} | WIRED |  |
 | MAPD | map_data | (observed: r=-3 in all 3 cloud dumps so far; payload-on-success unknown) | APK-KNOWN |  |
-| MAPI | map_info | (observed: r=-3 in all 3 cloud dumps so far; payload-on-success unknown) | APK-KNOWN |  |
-| MAPL | map_list | list[[int×5], ...] — one row per map_id | APK-KNOWN |  |
+| MAPI | map_info | (observed: r=-3 in all 3 cloud dumps + live probe 2026-06-09; payload-on-success unknown — requires args) | APK-KNOWN |  |
+| MAPL | map_list | list[[int×5], ...] — one row per map_id | SEEN-UNDECODED |  |
+| MAP_cache | decoded_map_cache | iotuserdata KV: MAP.0, MAP.1, … MAP.N (concat = JSON array of map objects) | UNCLASSIFIED |  |
 | MIHIS | lifetime_mowing_aggregates | {area, count, start, time} | WIRED |  |
 | MISTA | mission_status | {fin: int (centiares mowed), prg: int (basis points = round(fin*10000/total)), status: [[task_type, sub_state]], total: int (centiares planned)} | DECODED-UNWIRED |  |
-| MITRC | mission_track | (observed: r=-1 in all 3 cloud dumps so far; payload-on-success unknown) | APK-KNOWN |  |
+| MITRC | mission_track | (observed: r=-1 in all 3 cloud dumps and live probe 2026-06-09; payload-on-success unknown — idle-only; mid-run likely required) | APK-KNOWN |  |
+| MPOS | live_position | {x: int, y: int, yaw: int} — map-frame position; units/frame not yet cross-checked | SEEN-UNDECODED |  |
 | NET | wifi_info | {current: ssid, list: [{ip, rssi, ssid}, ...]} | WIRED |  |
-| OBS | obstacle_data | (observed: r=-3 in all 3 cloud dumps so far; payload-on-success unknown) | APK-KNOWN |  |
-| PIN | pin_status | {result, time} | APK-KNOWN |  |
-| PRE | preference_endpoint | (observed: r=-3 on individual fetch in all 3 dumps; SAME-NAMED key in cfg_keys IS readable via all-keys CFG) | APK-KNOWN |  |
-| PREI | preference_info | {type, ver: [[zone_id, ver], ...]} | APK-KNOWN |  |
-| REMOTE | remote_control_settings | {remote: {}} | APK-KNOWN |  |
+| OBS | obstacle_data | (observed: r=-3 in all 3 cloud dumps + live probe 2026-06-09; payload-on-success unknown — requires args) | APK-KNOWN |  |
+| PIN | pin_status | write: {type:'auth'|'update', value:<int>}; read (m:g): {result, time} | DECODED-UNWIRED |  |
+| PRE | preference_endpoint | (observed: r=-3 on individual fetch in all 3 cloud dumps + live probe 2026-06-09; SAME-NAMED key in cfg_keys IS readable via all-keys CFG) | APK-KNOWN |  |
+| PREI | preference_info | {type: int, ver: [[map_id, version], ...]} — per-map PRE version counters | SEEN-UNDECODED |  |
+| PREP | zone_preference_mode | {idx:<zone0based>, value:0|1} | WIRED |  |
+| REMOTE | sim_4g_status | {activeTime, cardId(ICCID), expiredTime, leftDays} | UNCLASSIFIED |  |
+| RGBPSTA | led_state | (observed: r=-3 bare GET; payload-on-success unknown — requires args or different call path) | UNCLASSIFIED |  |
 | RPET | rain_protection_end_time | {endTime: int} | APK-KNOWN |  |
+| SCHDDV3 | schedule_data_v3_write | {s:<offset>, l:<len>, d:"<base64 chunk>", v:<txn_ms>} | WIRED |  |
+| SCHDIV3 | schedule_index_v3_write | {i:<index>, l:<total_len>, v:<txn_ms>} | UNCLASSIFIED |  |
+| SCHDSV3 | schedule_slot_enable_v3 | {i:<slot 0|1>, v:<packed int>, s:[enabled, flag]} | UNCLASSIFIED |  |
+| SCHDTV3 | schedule_v3 | int (scalar — likely schedule version or active-plan count; semantics unknown) | SEEN-UNDECODED |  |
 | WINFO | app_weather_info | {m:'s', t:'WINFO', d:{appWeather}} | APK-KNOWN |  |
 
 ### AIOBS — `ai_obstacle_data`
@@ -2269,12 +2658,42 @@ when it flipped from r=-3/r=-1 to a successful payload between
 dump 2 and dump 3 — establishing that error responses are stateful
 or transient, not negative proof of firmware support. With only 3
 data points this row is kept at `decoded: hypothesized`.
+App-MITM 2026-06-09 confirms the app issues routed-get t=AIOBS;
+response shape is [UNKNOWN — to capture] — likely the photo index
+call (see tools/probes/read_key_probe.py).
+Live probe 2026-06-09 bare GET returned r=-3 (mower docked, idle) —
+bare GET requires args; the app likely sends additional arguments.
 
 **Open questions:**
 - Capture this endpoint during an AI-obstacle detection event (cloud-side trigger; s1p53 is the BLE-connection flag, NOT an obstacle signal).
 - Test whether more cloud dumps over time produce a successful response (cf. MISTA).
+- Does AIOBS response carry the photo index (photo_list)? App-MITM suggests this is the AI-obstacle photo-index call [UNKNOWN — to capture].
+- Bare GET returns r=-3 — capture the args the app sends with AIOBS to get a successful response.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX AIOBS`
+
+### AI_HUMAN — `ai_human_photo_consent`
+
+Per-device human-photo send consent, stored in the iotuserdata
+key-value store (NOT in CFG). Transport:
+  POST :13267/dreame-user-iot/iotuserdata/setDeviceData
+    {did, data:{"AI_HUMAN.0":"\"true\"|\"false\"", "AI_HUMAN.info":"<N>"}, sign, timestamp}
+  GET …/getDeviceData {keys:["AI_HUMAN.0"]} → {"AI_HUMAN.0":"\"true\""}
+[app-mitm:2026-06-09-settings-sweep]
+AI_HUMAN.0 = send-human-photos consent, encoded as a JSON-string bool
+("\"true\"" / "\"false\""). AI_HUMAN.info = counter/version int (6 and
+7 both seen); NOT a fixed version number. [app-mitm:2026-06-09-settings-sweep]
+Revoking consent cascades automatically: sets REC.report[1]
+(Capture Human Photos) → 0. [app-mitm:2026-06-09-settings-sweep]
+Human-photo capture requires ALL of: AOP=1 AND REC.report[1]=1 AND
+AI_HUMAN.0="true". [app-mitm:2026-06-09-settings-sweep]
+iotuserdata/{get,set}DeviceData is a general account-preference KV
+store keyed by did+sign; other keys include AUTO_TIMEZONE.0
+(app timezone auto-sync preference — NOT a mower CFG) and
+prop.s_auto_upgrade (firmware auto-update preference).
+[app-mitm:2026-06-09-settings-sweep]
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 
 ### ARM — `arm_alarm`
 
@@ -2372,6 +2791,8 @@ near_x:19, near_y:-3, near_yaw:1912, path_connect:0}.
 IoT cloud connection alive flag (presumed). Not wired. Semantic
 unconfirmed; status:True observed when integration is online.
 Sample: {status: true}.
+App-MITM 2026-06-09 confirms the app issues routed-get t=IOT;
+response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
 
 **Open questions:**
 - IOT.status — does it flip to false on cloud disconnect or always true while reachable?
@@ -2413,10 +2834,16 @@ r=-3. r=-3 is empirically NOT proof of feature absence — see
 MISTA which flipped from r=-3/r=-1 to a successful payload
 between dump 2 and dump 3. Downgraded to `decoded: hypothesized`
 pending further evidence.
+App-MITM 2026-06-09 confirms the app issues routed-get t=MAPI
+(map index); response shape is [UNKNOWN — to capture] —
+see tools/probes/read_key_probe.py.
+Live probe 2026-06-09 bare GET returned r=-3 (mower docked, idle) —
+endpoint requires a map_index or similar argument; the app sends args.
 
 **Open questions:**
 - Capture with explicit map_index argument once we identify the inbound parameter shape.
-- Test with values from cfg_individual.MAPL once that endpoint stabilises.
+- Test with values from cfg_individual.MAPL (map IDs 0, 1) to probe what MAPI returns per map.
+- Bare GET returns r=-3 — capture the args the app sends with MAPI to get a successful response.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX MAPI`
 
@@ -2433,12 +2860,47 @@ between maps when the active map changes — Map0's index-1 went 1→0
 while Map1 was added with index-1=1, suggesting an "is_active" flag.
 Indices 2–4 stayed unchanged (1, 1, 0) across both samples; their
 semantic is undecoded.
+App-MITM 2026-06-09 confirms the app issues routed-get t=MAPL (map
+list) [dreame-app-implementation-guide-2026-06-09.md].
+Live routed-get confirmed 2026-06-09: r=0, d=[[0,1,1,1,0],[1,0,1,1,0]]
+(2-map device idle at dock; map0 index-1=1=active, map1 index-1=0=inactive;
+indices 2–4 semantics still unknown).
 
 **Open questions:**
 - MAPL[i][2..4] semantics — observed [1, 1, 0] in both samples; needs map-edit captures (rename, set-mowing-direction, etc.) to discriminate.
 - Does MAPL[i][1] update on dock-side map switch, or only on the active mowing map?
+- Live probe 2026-06-09 d=[[0,1,1,1,0],[1,0,1,1,0]]: confirm map0=active(index-1=1), map1=inactive(index-1=0) interpretation by triggering an active-map switch.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX MAPL`
+
+### MAP_cache — `decoded_map_cache`
+
+App-side decoded map cache stored in the iotuserdata KV store. Transport:
+  GET :13267/dreame-user-iot/iotuserdata/getDeviceData
+    {keys:["MAP.0","MAP.1",…]} → concat values = JSON array of maps
+[app-mitm:2026-06-09-settings-sweep]
+Each map object (one per mapIndex, both maps present) contains all
+decoded zone/point data: mowingAreas (type:0), forbiddenAreas,
+paths (type:1), spotAreas (type:3, shapeType:7), cleanPoints (type:6,
+shapeType:5), cruisePoints (type:8, shapeType:5, +time/etime),
+obstacles, contours (type:7), notObsAreas (type:10=ignore-obstacle,
+shapeType:2, +angle). Per-element path:[{x,y}] in MM.
+Per-map: md5sum, totalArea, boundary:{x1,y1,x2,y2}, name, mapIndex,
+cut, merged, hasBack. [app-mitm:2026-06-09-settings-sweep]
+Element type enum confirmed: 0=mowing, 1=path, 3=spot, 6=cleanPoint,
+7=contour, 8=cruise/patrol, 10=ignore-obstacle. [app-mitm:2026-06-09-settings-sweep]
+Integration shortcut: read MAP.* to get the fully-decoded map without
+parsing the binary OSS blob (same per-map md5sum). Written by the app
+when viewing/editing the map — may be stale or absent without a prior
+app session. [app-mitm:2026-06-09-settings-sweep]
+A read-side populated-check is needed to confirm the cache is present
+when the app has not recently viewed the map. [UNKNOWN — to capture]
+
+**Open questions:**
+- Is MAP.* populated on a fresh mower that has never had the app open to the map view? Confirm presence/absence without the app.
+- MAP.info key: what fields does it carry (length, version, timestamp)?
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 
 ### MIHIS — `lifetime_mowing_aggregates`
 
@@ -2501,12 +2963,36 @@ all returned r=-1. r=-1 is empirically NOT proof of feature
 absence — sibling MISTA flipped from r=-1 to a successful
 payload between dump 2 and dump 3. Downgraded to
 `decoded: hypothesized` pending further evidence.
+App-MITM 2026-06-09 confirms the app issues routed-get t=MITRC
+with paged {idx, size} arguments [dreame-app-implementation-guide-2026-06-09.md];
+response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
+Live probe 2026-06-09 sent {idx:0, size:20} and received r=-1 (mower
+docked, idle) — consistent with all cloud dumps; r=-1=idle, mid-run probe
+required to confirm whether it returns data during an active mission.
 
 **Open questions:**
 - Capture during an active mowing session — MITRC is apk-named 'mission tracking', likely carries live trail.
 - Test whether more cloud dumps over time produce a successful response (cf. MISTA).
+- Paged {idx, size} args confirmed by app-MITM [dreame-app-implementation-guide-2026-06-09.md] — what is the page size and total page count for a typical session?
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX MITRC`
+
+### MPOS — `live_position`
+
+Live mower position read via routed-get t=MPOS. App-MITM 2026-06-09
+confirms the app issues action(siid:2,aiid:50) {m:'g', t:'MPOS'} to read
+the live mower position [dreame-app-implementation-guide-2026-06-09.md].
+Response shape CONFIRMED 2026-06-09: r=0, d={x:95, y:-4, yaw:0} — three
+integer fields. Shape-confirmed (x, y, yaw as ints); units/frame not yet
+cross-checked vs s1p4 live-position pushes.
+Possible use: live-position fallback when s1p4 MQTT push is unavailable
+[UNVERIFIED — not yet tested with MQTT disabled].
+
+**Open questions:**
+- Cross-check MPOS {x, y, yaw} units and frame against s1p4 live-position pushes — do they match directly or need coordinate transform?
+- Confirm MPOS is a viable live-position fallback when s1p4 MQTT is down — test with MQTT disabled [UNKNOWN — to capture].
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 
 ### NET — `wifi_info`
 
@@ -2514,6 +3000,9 @@ Currently-associated AP and per-AP last-seen RSSI. Wired in
 v1.0.0a77 — populates wifi_ssid / wifi_ip and seeds wifi_rssi_dbm
 at startup before s1p1 byte[17] live RSSI takes over.
 Sample: {current:"REDACTED-SSID", list:[{ip:"192.0.2.128", rssi:-66, ssid:"REDACTED-SSID"}]}.
+App-MITM 2026-06-09 confirms action m:g t='NET' → {current:<ssid>,
+list:[{ip, rssi(dBm), ssid}]}; rssi in dBm (e.g. -64 ≈ 70-80% signal).
+[app-mitm:2026-06-09-settings-sweep]
 
 **See also:** `custom_components/dreame_a2_mower/cloud_client.py`, `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX NET`
 
@@ -2524,22 +3013,32 @@ r=-3. r=-3 is empirically NOT proof of feature absence — see
 MISTA which flipped from r=-3/r=-1 to a successful payload
 between dump 2 and dump 3. Downgraded to `decoded: hypothesized`
 pending further evidence.
+App-MITM 2026-06-09 confirms the app issues routed-get t=OBS
+(obstacles); response shape is [UNKNOWN — to capture] —
+see tools/probes/read_key_probe.py.
+Live probe 2026-06-09 bare GET returned r=-3 (mower docked, idle) —
+endpoint requires args; the app likely sends additional arguments.
 
 **Open questions:**
 - Capture immediately after an AI-obstacle event (cloud-side; s1p53 is BLE-connection, NOT obstacle — find the real on-wire trigger).
 - Cross-reference with AIOBS — both apk-described as obstacle endpoints, semantics distinct.
+- Bare GET returns r=-3 — capture the args the app sends with OBS to get a successful response.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX OBS`
 
 ### PIN — `pin_status`
 
-Likely the lift-lockout PIN-state flow: result:0 = no PIN-required
-event pending, time:0 = no last-PIN-entry timestamp. Partial
-documentation in §3.4 byte[10] bit 1. Not wired.
-Sample: {result:0, time:0}.
+PIN / lift-lockout code. [app-mitm:2026-06-09-settings-sweep]
+Write: {type:"auth"|"update", value:<int>} where value is the PIN
+as a PLAINTEXT INTEGER (not hashed; protected by TLS only).
+type="auth" = verify/authenticate with the existing PIN;
+type="update" = set a new PIN value. (Actual PIN values redacted.)
+Read (m:g → t:PIN): {result, time} — result:0=no-PIN-required event
+pending; time=last lockout timestamp (0=none).
+Not wired in the integration. Sample read: {result:0, time:0}.
 
 **Open questions:**
-- PIN.result and PIN.time — exact semantics of the lift-lockout flow TBD.
+- PIN.result and PIN.time — exact semantics of the lift-lockout flow TBD (when does result become non-zero?).
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX PIN`
 
@@ -2547,8 +3046,9 @@ Sample: {result:0, time:0}.
 
 APK-documented endpoint. The individual `getCFG t:'PRE'` fetch
 returns r=-3 in all 3 cloud dumps so far, but the **all-keys**
-CFG fetch (`getCFG t:'CFG'`) DOES return a `PRE` key with the
-[zone_id, mode] 2-element list (see `cfg_keys.PRE`). So the
+CFG fetch (`getCFG t:'CFG'`) DOES return a `PRE` key. PRE is a
+19-element write array (shape corrected 2026-06-09 — see
+`cfg_keys.PRE`). [app-mitm:2026-06-09-settings-sweep] So the
 data exists on g2408 — only the individual-target fetch path
 doesn't work. This is a clear case where r=-3 isn't proof of
 feature absence; it just means "this endpoint name doesn't
@@ -2557,6 +3057,8 @@ be the same data via two different paths, or a different
 endpoint that happens to share a name. `decoded: hypothesized`
 because we haven't confirmed individual-fetch will never work;
 with only 3 dumps the sample is too small.
+Live probe 2026-06-09 bare GET confirmed r=-3 at idle — consistent
+with cloud dumps; individual-fetch form still not working.
 
 **Open questions:**
 - Reconcile with cfg_keys.PRE: same name, different access paths. Same data via different paths, or different endpoints with shared name?
@@ -2566,32 +3068,68 @@ with only 3 dumps the sample is too small.
 
 ### PREI — `preference_info`
 
-Preference info. type:0 observed. ver is a two-row version array —
-likely per-PRE-row config-version counter. ver:[[0,78],[1,3]] means
-zone 0 at version 78, zone 1 at version 3. Not wired.
-Sample: {type:0, ver:[[0,78],[1,3]]}.
+Per-map PRE (preference) version counters. type:0 observed; ver is a
+per-map version array — ver:[[map_id, version], ...]. Live sample
+2026-06-09: {type:0, ver:[[0,123],[1,3]]} — map0 at PRE version 123,
+map1 at version 3. Each increment presumably reflects a preference
+write on that map (zone settings, mowing mode, etc.).
+Not wired; the per-map version could seed a cache-invalidation check.
+App-MITM 2026-06-09 confirms the app issues routed-get t=PREI
+[dreame-app-implementation-guide-2026-06-09.md].
 
 **Open questions:**
-- PREI.type field — purpose unknown; observed always 0.
+- PREI.type field — purpose unknown; observed always 0. Does it ever take a non-zero value?
+- Confirm that ver[i][1] increments on each PRE write to map i — capture before/after a zone-settings change.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX PREI`
 
-### REMOTE — `remote_control_settings`
+### PREP — `zone_preference_mode`
 
-Remote-control settings GET. Apk-documented at L176199 as
-getRemote = {m:'g', t:'REMOTE'}. Stored in the app's settings object
-as remote:{} (L182984). The exact fields of the remote settings dict
-are unknown — likely includes default cutting height and camera state
-for joystick sessions.
-
-Paired with SET commands via o:15 (remote_setting opcode). The GET
-is used by the app to initialize the remote-control UI with persisted
-defaults. Not wired in the integration.
+Per-zone General↔Custom mode switch. [app-mitm:2026-06-09-settings-sweep]
+Write: action s2.a50 {m:'s', t:'PREP', d:{idx:<zone_0based>, value:0|1}}.
+value=0 = General Mode (zone uses global PRE settings);
+value=1 = Custom Mode (zone has its own PRE array, PRE[2]=zone_index).
+Response: {type:1}. idx is 0-based zone index.
+Entering Custom Mode first enables PREP, then PRE writes with PRE[2]=zone_index
+apply the per-zone settings. Exiting Custom Mode writes PREP{idx,value:0}.
+Per zone; not a global flag. [app-mitm:2026-06-09-settings-sweep]
 
 **Open questions:**
-- What fields does the remote settings dict contain? Height, camera, max-speed?
+- PREP.idx with multiple zones: is idx 0-based zone index or zone id from MAPL? With 1 zone observed, idx=0 is unambiguous; confirm with 2+ zones. [UNKNOWN — to capture]
 
-**See also:** `apk: ioBroker.dreame/apk.md §Remote Control getRemote L176199`
+**See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX PRE`
+
+### REMOTE — `sim_4g_status`
+
+4G SIM card status read. App-MITM 2026-06-09 confirmed via
+action(siid:2, aiid:50) {m:'g', t:'REMOTE'} → {activeTime, cardId(ICCID),
+expiredTime, leftDays}. [app-mitm:2026-06-09-settings-sweep]
+Surfaced in the app's Connections / Link Module page. cardId is the
+SIM ICCID — the same ICCID reported as card4G in the GPS getRecords
+endpoint, confirming they share the same 4G SIM. [app-mitm:2026-06-09-settings-sweep]
+leftDays seen as 894 while the app displayed 839 (different calculation
+method). [app-mitm:2026-06-09-settings-sweep]
+Wired in the integration: 4 diagnostic SIM sensors (cardId/activeTime/expiredTime/leftDays).
+[app-mitm:2026-06-09-settings-sweep]
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
+
+### RGBPSTA — `led_state`
+
+LED state read via routed-get t=RGBPSTA. App-MITM 2026-06-09 confirms
+the app issues action(siid:2,aiid:50) {m:'g', t:'RGBPSTA'} to read the
+LED/indicator-light state [dreame-app-implementation-guide-2026-06-09.md].
+Live probe 2026-06-09 bare GET (also probed with "id":-1) returned r=-3
+(mower docked, idle) — endpoint requires args or a different call pattern;
+the app likely sends additional arguments. Response shape still
+[UNKNOWN — to capture].
+
+**Open questions:**
+- Decode the RGBPSTA response shape; does it carry {r, g, b, brightness} or an enum mode?
+- Is RGBPSTA read-write (is there a corresponding SET path)?
+- Bare GET (and id:-1 variant) returns r=-3 — capture the args the app sends with RGBPSTA to get a successful response.
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 
 ### RPET — `rain_protection_end_time`
 
@@ -2603,6 +3141,88 @@ Sample: {endTime: 0}.
 - RPET.endTime — rain-protection-end unix timestamp or schedule repeat-end? Needs non-zero capture.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX RPET`
+
+### SCHDDV3 — `schedule_data_v3_write`
+
+Schedule data write — chunked base64 protobuf blob. Part of a 3-key
+write transaction (SCHDDV3 + SCHDIV3 + SCHDSV3) tied by shared v =
+millisecond timestamp txn-id. Transport: action(siid:2, aiid:50)
+{m:'s', t:'SCHDDV3', d:{s:<offset>, l:<len>, d:"<chunk>", v:<txn>}}.
+[app-mitm:2026-06-09-settings-sweep]
+Chunked by offset s; reassemble all chunks → JSON array
+[seasonIdx, enabled, "<name>", "<base64 blob>"]. The base64 blob is
+the protobuf that protocol/schedule_decode.py already decodes for the
+read path — the encode direction + this transport is what Phase E adds.
+[app-mitm:2026-06-09-settings-sweep]
+Example (Spring/Summer, Thu 12:04 edge entry): 54-byte blob with
+repeating edaa07*/edaa09* groups = per-entry records (day/time/task).
+Protobuf field layout: diff known-schedule edits to map fields —
+[UNKNOWN — to capture]. [app-mitm:2026-06-09-settings-sweep]
+See also: SCHDIV3 (length descriptor), SCHDSV3 (slot enable/summary).
+
+**Open questions:**
+- Protobuf field layout of the base64 blob: diff one-day, one-time, one-task edits to map each wire field to its semantic.
+
+**See also:** `custom_components/dreame_a2_mower/protocol/schedule_decode.py`, `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
+
+### SCHDIV3 — `schedule_index_v3_write`
+
+Schedule length/index descriptor write. Part of the 3-key write
+transaction with SCHDDV3 and SCHDSV3 (shared v = ms txn-id). Transport:
+action(siid:2, aiid:50) {m:'s', t:'SCHDIV3', d:{i, l:<total len>, v:<txn>}}.
+[app-mitm:2026-06-09-settings-sweep]
+l = total reassembled length of the SCHDDV3 payload in bytes. Sent
+alongside or after the SCHDDV3 chunks so the receiver knows when
+reassembly is complete. [app-mitm:2026-06-09-settings-sweep]
+i semantics [UNKNOWN — to capture]: likely the schedule slot index or
+chunk sequence number. [app-mitm:2026-06-09-settings-sweep]
+
+**Open questions:**
+- SCHDIV3.i semantics: slot index, chunk count, or sequence number?
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
+
+### SCHDSV3 — `schedule_slot_enable_v3`
+
+Per-seasonal-slot enable/summary write. Part of the 3-key write
+transaction with SCHDDV3 and SCHDIV3 (shared v = ms txn-id). Transport:
+action(siid:2, aiid:50) {m:'s', t:'SCHDSV3', d:{i, v, s:[enabled, flag]}}.
+[app-mitm:2026-06-09-settings-sweep]
+i = schedule slot: 0 = Spring/Summer, 1 = Autumn/Winter.
+s[0] = slot enabled (0=disabled, 1=enabled; confirmed by live toggle
+Spring/Summer disabled→enabled = s[0] 0→1). [app-mitm:2026-06-09-settings-sweep]
+s[1] = second flag, seen as 0; semantics [UNKNOWN — to capture].
+v = packed integer encoding schedule days/times. Seen values: 18696,
+32923, 65535 (0xFFFF). Bit layout [UNKNOWN — to capture]: needs
+per-day/per-time isolated edits to decode. [app-mitm:2026-06-09-settings-sweep]
+Also emitted standalone (without full SCHDDV3/SCHDIV3) when toggling
+slot enabled/disabled only. [app-mitm:2026-06-09-settings-sweep]
+
+**Open questions:**
+- SCHDSV3.v packed-int bit layout: which bits encode day-of-week and which encode time? Decode by editing one day then one time in isolation.
+- SCHDSV3.s[1] semantics: always 0? Or set in some schedule states?
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
+
+### SCHDTV3 — `schedule_v3`
+
+Schedule v3 endpoint. Live routed-get confirmed 2026-06-09: r=0, d=2
+(scalar integer). Semantics unknown — could be the schedule-config
+version counter, the number of active schedule entries, or a feature-
+flag. Full schedule structure is NOT returned by bare GET [UNKNOWN —
+the app may send args to retrieve the full list, or GET returns only
+a version/count scalar and the schedule list is pushed separately].
+App-MITM 2026-06-09 confirms the app issues action(siid:2,aiid:50)
+{m:'g', t:'SCHDTV3'} [app-mitm:2026-06-09-settings-sweep].
+The WRITE transport is a 3-key transaction using SCHDDV3/SCHDIV3/SCHDSV3
+(see those cfg_individual entries); this key is the read-side scalar only.
+[app-mitm:2026-06-09-settings-sweep]
+
+**Open questions:**
+- Decode SCHDTV3 scalar d=2 — is it the schedule-config version, the count of active entries, or a feature flag? Correlate with add/delete schedule operations.
+- Does the app pass args to SCHDTV3 GET to retrieve the full schedule list, or is the full list pushed separately?
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 
 ### WINFO — `app_weather_info`
 
@@ -4988,16 +5608,17 @@ photo hunts only checked the always-empty ai_obstacle[] and never found this
 field. Photo timestamps fall inside the auto-capture-ON point's in-place
 rotation window, so they double as the per-point auto-capture evidence.
 
-The photo BYTES are not yet retrievable: the filenames carry no path and are
-NOT relative to the summary object — both getDownloadUrl and
-getOss1dDownloadUrl return OSS NoSuchKey for the bare leaf, the did-prefixed
-leaf, the no-extension leaf, and the summary-naming-mirror leaf in the
-summary's own Aliyun directory (ruled out 2026-06-03). The leaf IS accepted
-by the separate 479D Xiaomi-FDS bucket (signed URL host
-awsde0.fds.api.xiaomi.com, key oss/479D/<uid>/<did>/<leaf>) but Object Not
-Found at the subpaths tried. No list endpoint exists (aiphoto/list,
-obstacle/photo/list, iotuserdata/aiObstacle/list all 404). Exact FDS subpath
-needs app-capture or APK analysis. See o107 + project_g2408_ai_photo_probe.
+As of 2026-06-03 the photo bytes were believed unreachable (479D/FDS bucket
+hypothesis). App-MITM capture 2026-06-09 resolved this: photos ARE in the
+dreame-eu OSS bucket, not 479D. The correct key layout is
+oss/media/000000/oss/<uid>/<did>/ali_dreame/<unix_ts>[_person].jpg, where
+the photo_list[] stems map 1:1 to these keys. See the 2026-06-09 partial
+verification below and dreame-app-implementation-guide-2026-06-09.md §4.
+
+**Open questions:**
+- transient-obstacle-photo-api: The transient session-obstacle photos (live-map clickable icons that die after the session) use a different, uncaptured API — no real mow ran. Capture during a real obstacle-hitting mow.
+- patrol-photo-bucket: Confirm patrol photos land in the same ali_dreame/<ts>.jpg album bucket as AI-obstacle photos.
+- aiobs-photo-index: The pre-signed photo-index call (returns the album URL set) was not on HTTPS; likely a sendCommand t=AIOBS read or MQTT event (see the AIOBS inventory entry). Not needed for Phase 1 (photo_list suffices).
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
