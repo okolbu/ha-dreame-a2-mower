@@ -37,9 +37,8 @@ patrol, else → obstacle. Two defects:
 `video`, `ai_human`, `ai_animal`, `ai_object`, `patrol`, `obstacle`, `manual`.
 
 (The user requested 6 filters: Obstacle, AI-Human, AI-Animal, AI-Object, Patrol,
-Video. `manual` is added because manual live-view snapshots are a real, distinct
-source — surfaced as a 7th filter; **open question for review: keep `manual`
-separate or fold it into `obstacle`/hide it.**)
+Video. `manual` is the 7th — manual live-view snapshots are a real, distinct
+source, **confirmed to be surfaced as its own filter** (2026-06-13).)
 
 ## The categorizer (pure function)
 
@@ -95,8 +94,8 @@ coarse value). Fully-correct categories land as photos re-sync.
   the rich value) and `detections` (for the later overlay). URLs unchanged.
 - `dreame-a2-photo-gallery-card.js`: replace the single All/per-type buttons with
   a filter row reading `item.category`: **All · AI-Human · AI-Animal · AI-Object ·
-  Obstacle · Patrol · Video** (+ Manual pending the open question). Counts per
-  filter shown on each button. Pure client-side filter over the manifest.
+  Obstacle · Patrol · Manual · Video**. Counts per filter shown on each button.
+  Pure client-side filter over the manifest.
 
 ## Out of scope (explicit follow-ups)
 
