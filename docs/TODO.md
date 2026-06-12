@@ -894,6 +894,56 @@ session-format brainstorm; memory `project_app_capture_phase1` /
 
 ---
 
+### Live video stream + snapshot/record — camera entity (Tencent XP2P)
+
+**Why:** The app shows a live camera feed whenever the mower is off the dock, with
+in-app photo/video capture buttons (captures land in the OSS gallery). The g2408 HAS
+a camera — `feature:"video_tx"`, vendor `tx` = Tencent IoT Video — confirming the
+earlier "no camera module on g2408" notes were stale (now retracted across
+`inventory.yaml` s4p22/s4p44/s4p59/s4p83 + the s2p55 IPC clarification). The full
+session-establishment chain is **wire-verified and captured**; the only uncaptured
+piece is the raw media payload, which is Tencent XP2P / TRTC P2P-over-UDP (off-relay
+by design) and needs the Tencent IoT-Video XP2P SDK to consume.
+
+**What's captured (control plane, all on `eu.iot.dreame.tech:13267`):**
+- Enable/disable: routed action `o=400 {on:1|0}` (auto-fires at patrol start;
+  `o=15 {c:0|1}` is the separate remote-control-mode camera toggle).
+- Cred chain on `dreame-third-video/tx/*`: `user/accesstoken` → `dev/isDevUser`
+  → `mgr/dev/getIdentity` (secretId/secretKey/deviceId/deviceName/productId)
+  → `dev/getP2PInfo` (XP2P connect string; SDK v2.4.49). Order: 1→2 at app start,
+  3→4 just before live view; accesstoken ≈ 7-day life, p2pInfo per-session.
+- Snapshot/record: client-side frame/clip grab → `iotoss/addOssNew` (signed PUT)
+  → PUT → `iotoss/ossUploaded`; 60 s record cap; retrievable via `userDidOssList`.
+- Two-way "Talk" audio and ambient audio ride entirely over the P2P stream — ZERO
+  control command on the wire.
+
+**Done when:** EITHER (a) a `camera` entity drives live view — run the `o=400` + cred
+chain, feed creds + p2pInfo into an XP2P/IoTVideo P2P client usable from Python/HA,
+expose still+stream, `o=400 {on:0}` + close on stop; OR (b) if no viable Python XP2P
+client exists, the live-preview half is explicitly deferred and only the pure-HTTP
+**snapshot/record + gallery playback** is built (fully reproducible without the SDK).
+Either way the decision + rationale is recorded.
+
+**Open questions / blockers:**
+- **XP2P SDK in Python is THE blocker** — Tencent's SDK is C/Java/iOS-first; live
+  preview is not implementable until a binding or P2P-handshake reimpl exists. The
+  HTTP capture/gallery features are not blocked by this.
+- Stream codec/container (H.264 vs H.265) — needed to wire an HA camera/stream.
+- `sign` algorithm for the video endpoints assumed identical to the integration's
+  existing Dreame request signer — confirm the `dreame-third-video/tx/*` endpoints
+  accept the same scheme. `addOssNew.pwd` purpose unconfirmed. [UNVERIFIED]
+
+**Status:** open (control-plane setup fully captured; live preview blocked-by-XP2P-SDK;
+HTTP snapshot/record/gallery feasible now). Roadmap row G ("Live camera") — attempt last.
+**Cross-refs:** `docs/research/live-video-stream-setup.md` (wire-verified handoff,
+authoritative); `inventory.yaml` § `api_endpoints` (`tencent_video`, `oss_manual_upload`,
+`oss_photo_list`, `oss_storage_quota`) + § `opcodes` (`o400`) + § s4p22/s4p44/s4p59/s4p83
+(camera-presence corrections); `OLD/from-mitm-claude/live-video.txt` (raw Mac-MITM notes
+this was folded from); `docs/research/app-integration-roadmap.md` row G; the Photo/video
+archive item above (shares the OSS gallery).
+
+---
+
 ### Extend the map-edit view to spots / maintenance points / patrol points (CRUD)
 
 **Why:** Folded in from `todo1.txt`. The interactive map-editor card shipped this

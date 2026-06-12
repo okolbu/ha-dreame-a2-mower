@@ -491,7 +491,15 @@ Human/Bird/Fire/Crying) — it accepts our token (HTTP 400 "Missing
 necessary request parameters", not 404/auth) but the g2408 device record
 has `videoStatus:null` + `featureCode:-1`, i.e. the mower is NOT enrolled
 as an IPC/camera device, so this is most likely the Dreame security-camera
-product line, not the mower; 7 param shapes all stayed at 400. Meanwhile
+product line, not the mower; 7 param shapes all stayed at 400.
+CLARIFICATION [app-mitm:2026-06-12-live-video]: "not IPC-enrolled" does NOT
+mean "no camera". The g2408 HAS a camera — it is enrolled under Tencent IoT
+Video (feature:"video_tx") and reached via the `dreame-third-video/tx/*`
+cred chain + XP2P P2P stream (see api_endpoints § tencent_video), a DIFFERENT
+path from the `/smart-app/ipc/*` security-camera surface that returns
+videoStatus:null here. The AI-obstacle-photo hunt below is unaffected by this
+correction — those photos still live on the OSS gallery (userDidOssList),
+reached separately from the live-video stream. Meanwhile
 the feature is ON at the cloud level — CFG.AOP=1 and REC[7] photo_consent=1
 across all dumps — and the user reports the photo set syncing to a 2nd app
 device, so photos DO exist cloud-side.
@@ -738,11 +746,20 @@ behaviour is governed by s2p1 and s2p2, but this property slot may co-exist.
 
 AI-based pet/obstacle detection mode. Upstream mower forks define AI_DETECTION
 at (4, 22) in DreameMowerPropertyMapping. Controls whether the camera-based AI
-detection is active during mowing. On g2408 no camera module has been confirmed;
-this slot may be a no-op or absent.
+detection is active during mowing.
+
+CORRECTION: the g2408 DOES have a camera (feature:"video_tx", Tencent IoT
+Video / XP2P — see api_endpoints § tencent_video). The earlier "no camera
+module has been confirmed on g2408" note here was stale and is retracted.
+[app-mitm:2026-06-12-live-video] What remains UNVERIFIED is whether THIS
+property slot (s4p22) is the control surface for camera AI detection on g2408:
+the camera is driven via the o=400 live-view toggle plus the
+dreame-third-video/tx credential chain, and AI-obstacle capture is gated by
+CFG.AOP (not by any observed s4p22 write). s4p22 has never been seen on the
+g2408 wire; it may be a no-op, a read-back, or absent. [UNVERIFIED]
 
 **Open questions:**
-- Is s4p22 present on g2408 firmware? g2408 has no confirmed camera module.
+- Is s4p22 the g2408's camera-AI control surface, or is AI capture wholly gated by CFG.AOP + o=400? s4p22 unseen on the wire.
 - Does s4p22 interact with s4p59 (PET_DETECTIVE)?
 
 **See also:** `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:688)`, `github.com/nicolasglg/dreame-mova-mower (types.py:741)`
@@ -791,11 +808,19 @@ writing s4p27. The property slot may still exist as a read-back surface.
 
 Cruise / patrol mode type. Upstream mower forks define CRUISE_TYPE at (4, 44).
 Controls whether the mower follows cruise points or a fixed patrol pattern.
-The g2408 mower does not expose cruise-point behaviour in current captures;
-this slot may be present but unused or not applicable to this model.
+
+CORRECTION: the g2408 DOES expose cruise/patrol behaviour — point patrol
+(o107) and edge patrol (o108) are live-confirmed, cruise points are parsed
+from the MAP blob's cruisePoints array (type=8), and a patrol auto-enables the
+camera (o=400) for auto-capture. So the earlier "does not expose cruise-point
+behaviour in current captures" note was stale. [app-mitm:2026-06-12-live-video]
+What remains UNVERIFIED is whether THIS property slot (s4p44) carries the
+patrol mode-type on g2408: patrol is driven via the s2.50 o107/o108 routed
+actions, not an observed s4p44 write; s4p44 has never been seen on the g2408
+wire. [UNVERIFIED]
 
 **Open questions:**
-- Is s4p44 present on g2408 firmware? Cruise functionality not seen in probe corpus.
+- Does s4p44 carry the patrol mode-type on g2408, or is patrol wholly driven by the o107/o108 routed actions? s4p44 unseen on the wire.
 - Does cruisePoints in the OSS map blob connect to s4p44?
 
 **See also:** `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:699)`, `github.com/nicolasglg/dreame-mova-mower (types.py:752)`
@@ -831,11 +856,20 @@ separate maps for different lawn areas. Status on g2408 is unknown.
 
 Pet-detection mode. Upstream mower forks define PET_DETECTIVE at (4, 59).
 Enables AI-based pet detection so the mower can avoid animals during mowing.
-Requires camera AI (s4p22). On g2408 no camera module is confirmed; this
-slot is likely absent or a no-op.
+Requires camera AI (s4p22).
+
+CORRECTION: the g2408 DOES have a camera (feature:"video_tx", Tencent XP2P —
+see api_endpoints § tencent_video), so the earlier "no camera module confirmed
+→ likely absent" reasoning here was stale and is retracted.
+[app-mitm:2026-06-12-live-video] The presence of a camera does NOT establish
+that pet-detection is a g2408 feature: s4p59 has never been seen on the g2408
+wire, the app exposes a Human-Presence detection surface (REC settings) but no
+observed "pet" toggle, and AI-obstacle classes captured so far are person /
+patrol / obstacle. Whether s4p59 exists / does anything on g2408 stays
+UNVERIFIED. [UNVERIFIED]
 
 **Open questions:**
-- Is s4p59 present on g2408 firmware? Likely absent — g2408 has no confirmed camera.
+- Does the g2408 firmware implement a pet-detection mode at all? Camera exists, but no 'pet' toggle observed (the app surfaces Human-Presence, not pet).
 - If present, does it interact with s4p22 (AI_DETECTION)?
 
 **See also:** `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:706)`, `github.com/nicolasglg/dreame-mova-mower (types.py:759)`
@@ -883,6 +917,13 @@ Device capability bitmask. Upstream mower forks define DEVICE_CAPABILITY at
 (4, 83). A bitmask advertising optional feature support (camera AI, multi-map,
 cruise, etc.). Useful for probing g2408 to understand which optional features
 the firmware exposes without needing to test each individually.
+
+NOTE: several capabilities this bitmask would advertise are now independently
+confirmed present on g2408 — the camera (feature:"video_tx", Tencent XP2P —
+see api_endpoints § tencent_video), multi-map, and patrol/cruise points
+(cruisePoints type=8; o107/o108 patrol live-confirmed). So a g2408 read of
+s4p83 should be non-trivial; the exact bit→feature layout is still
+[UNKNOWN — to capture] (probe with a direct GET). [app-mitm:2026-06-12-live-video]
 
 **Open questions:**
 - Is s4p83 present on g2408 firmware? Probe with direct GET — value would reveal camera/AI/cruise capability flags.

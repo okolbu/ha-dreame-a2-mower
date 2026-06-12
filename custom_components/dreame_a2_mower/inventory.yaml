@@ -1132,7 +1132,15 @@ properties:
       necessary request parameters", not 404/auth) but the g2408 device record
       has `videoStatus:null` + `featureCode:-1`, i.e. the mower is NOT enrolled
       as an IPC/camera device, so this is most likely the Dreame security-camera
-      product line, not the mower; 7 param shapes all stayed at 400. Meanwhile
+      product line, not the mower; 7 param shapes all stayed at 400.
+      CLARIFICATION [app-mitm:2026-06-12-live-video]: "not IPC-enrolled" does NOT
+      mean "no camera". The g2408 HAS a camera — it is enrolled under Tencent IoT
+      Video (feature:"video_tx") and reached via the `dreame-third-video/tx/*`
+      cred chain + XP2P P2P stream (see api_endpoints § tencent_video), a DIFFERENT
+      path from the `/smart-app/ipc/*` security-camera surface that returns
+      videoStatus:null here. The AI-obstacle-photo hunt below is unaffected by this
+      correction — those photos still live on the OSS gallery (userDidOssList),
+      reached separately from the live-video stream. Meanwhile
       the feature is ON at the cloud level — CFG.AOP=1 and REC[7] photo_consent=1
       across all dumps — and the user reports the photo set syncing to a 2nd app
       device, so photos DO exist cloud-side.
@@ -2389,8 +2397,17 @@ properties:
     semantic: |
       AI-based pet/obstacle detection mode. Upstream mower forks define AI_DETECTION
       at (4, 22) in DreameMowerPropertyMapping. Controls whether the camera-based AI
-      detection is active during mowing. On g2408 no camera module has been confirmed;
-      this slot may be a no-op or absent.
+      detection is active during mowing.
+
+      CORRECTION: the g2408 DOES have a camera (feature:"video_tx", Tencent IoT
+      Video / XP2P — see api_endpoints § tencent_video). The earlier "no camera
+      module has been confirmed on g2408" note here was stale and is retracted.
+      [app-mitm:2026-06-12-live-video] What remains UNVERIFIED is whether THIS
+      property slot (s4p22) is the control surface for camera AI detection on g2408:
+      the camera is driven via the o=400 live-view toggle plus the
+      dreame-third-video/tx credential chain, and AI-obstacle capture is gated by
+      CFG.AOP (not by any observed s4p22 write). s4p22 has never been seen on the
+      g2408 wire; it may be a no-op, a read-back, or absent. [UNVERIFIED]
     status:
       seen_on_wire: false
       decoded: hypothesized
@@ -2399,8 +2416,15 @@ properties:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:688)"
         - "github.com/nicolasglg/dreame-mova-mower (types.py:741)"
     open_questions:
-      - "Is s4p22 present on g2408 firmware? g2408 has no confirmed camera module."
+      - "Is s4p22 the g2408's camera-AI control surface, or is AI capture wholly gated by CFG.AOP + o=400? s4p22 unseen on the wire."
       - "Does s4p22 interact with s4p59 (PET_DETECTIVE)?"
+    verifications:
+      - date: "2026-06-12"
+        status: retracted
+        claim: "g2408 has a camera (feature:'video_tx', Tencent XP2P); the slot's prior 'no camera module confirmed' framing is withdrawn. Whether s4p22 itself controls it stays unverified."
+        retracts: "On g2408 no camera module has been confirmed; this slot may be a no-op or absent."
+        reason: "App-MITM (2026-06-09 settings sweep, re-confirmed 2026-06-12) captured the live-view credential chain on dreame-third-video/tx/* and the feature tag feature:'video_tx' — the camera is real. See docs/research/live-video-stream-setup.md and api_endpoints § tencent_video."
+        evidence: "app-mitm:2026-06-12-live-video"
 
   - id: "s4p23"
     siid: 4
@@ -2478,8 +2502,16 @@ properties:
     semantic: |
       Cruise / patrol mode type. Upstream mower forks define CRUISE_TYPE at (4, 44).
       Controls whether the mower follows cruise points or a fixed patrol pattern.
-      The g2408 mower does not expose cruise-point behaviour in current captures;
-      this slot may be present but unused or not applicable to this model.
+
+      CORRECTION: the g2408 DOES expose cruise/patrol behaviour — point patrol
+      (o107) and edge patrol (o108) are live-confirmed, cruise points are parsed
+      from the MAP blob's cruisePoints array (type=8), and a patrol auto-enables the
+      camera (o=400) for auto-capture. So the earlier "does not expose cruise-point
+      behaviour in current captures" note was stale. [app-mitm:2026-06-12-live-video]
+      What remains UNVERIFIED is whether THIS property slot (s4p44) carries the
+      patrol mode-type on g2408: patrol is driven via the s2.50 o107/o108 routed
+      actions, not an observed s4p44 write; s4p44 has never been seen on the g2408
+      wire. [UNVERIFIED]
     status:
       seen_on_wire: false
       decoded: hypothesized
@@ -2488,8 +2520,15 @@ properties:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:699)"
         - "github.com/nicolasglg/dreame-mova-mower (types.py:752)"
     open_questions:
-      - "Is s4p44 present on g2408 firmware? Cruise functionality not seen in probe corpus."
+      - "Does s4p44 carry the patrol mode-type on g2408, or is patrol wholly driven by the o107/o108 routed actions? s4p44 unseen on the wire."
       - "Does cruisePoints in the OSS map blob connect to s4p44?"
+    verifications:
+      - date: "2026-06-12"
+        status: retracted
+        claim: "Cruise/patrol behaviour IS exposed on g2408 (o107 point patrol, o108 edge patrol, cruisePoints type=8 in MAP); the 'not seen in probe corpus' framing is withdrawn. Whether s4p44 itself carries it stays unverified."
+        retracts: "The g2408 mower does not expose cruise-point behaviour in current captures; this slot may be present but unused or not applicable to this model."
+        reason: "Patrol-point surfacing shipped 2026-06-04 (o107/o108 live-confirmed, cruisePoints type=8); the live-video capture additionally confirms a patrol auto-enables the camera. The 'no cruise behaviour' premise is false."
+        evidence: "app-mitm:2026-06-12-live-video"
 
   - id: "s4p47"
     siid: 4
@@ -2545,8 +2584,17 @@ properties:
     semantic: |
       Pet-detection mode. Upstream mower forks define PET_DETECTIVE at (4, 59).
       Enables AI-based pet detection so the mower can avoid animals during mowing.
-      Requires camera AI (s4p22). On g2408 no camera module is confirmed; this
-      slot is likely absent or a no-op.
+      Requires camera AI (s4p22).
+
+      CORRECTION: the g2408 DOES have a camera (feature:"video_tx", Tencent XP2P —
+      see api_endpoints § tencent_video), so the earlier "no camera module confirmed
+      → likely absent" reasoning here was stale and is retracted.
+      [app-mitm:2026-06-12-live-video] The presence of a camera does NOT establish
+      that pet-detection is a g2408 feature: s4p59 has never been seen on the g2408
+      wire, the app exposes a Human-Presence detection surface (REC settings) but no
+      observed "pet" toggle, and AI-obstacle classes captured so far are person /
+      patrol / obstacle. Whether s4p59 exists / does anything on g2408 stays
+      UNVERIFIED. [UNVERIFIED]
     status:
       seen_on_wire: false
       decoded: hypothesized
@@ -2555,8 +2603,15 @@ properties:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:706)"
         - "github.com/nicolasglg/dreame-mova-mower (types.py:759)"
     open_questions:
-      - "Is s4p59 present on g2408 firmware? Likely absent — g2408 has no confirmed camera."
+      - "Does the g2408 firmware implement a pet-detection mode at all? Camera exists, but no 'pet' toggle observed (the app surfaces Human-Presence, not pet)."
       - "If present, does it interact with s4p22 (AI_DETECTION)?"
+    verifications:
+      - date: "2026-06-12"
+        status: retracted
+        claim: "g2408 has a camera (feature:'video_tx', Tencent XP2P); the 'no camera → likely absent' inference for this slot is withdrawn. Whether pet-detection is a g2408 feature stays unverified."
+        retracts: "Requires camera AI (s4p22). On g2408 no camera module is confirmed; this slot is likely absent or a no-op."
+        reason: "App-MITM (2026-06-09/2026-06-12) captured the Tencent live-view cred chain and feature:'video_tx'; the camera is real, so the absence argument premised on 'no camera' is invalid. See docs/research/live-video-stream-setup.md."
+        evidence: "app-mitm:2026-06-12-live-video"
 
   - id: "s1p5"
     siid: 1
@@ -2602,6 +2657,13 @@ properties:
       (4, 83). A bitmask advertising optional feature support (camera AI, multi-map,
       cruise, etc.). Useful for probing g2408 to understand which optional features
       the firmware exposes without needing to test each individually.
+
+      NOTE: several capabilities this bitmask would advertise are now independently
+      confirmed present on g2408 — the camera (feature:"video_tx", Tencent XP2P —
+      see api_endpoints § tencent_video), multi-map, and patrol/cruise points
+      (cruisePoints type=8; o107/o108 patrol live-confirmed). So a g2408 read of
+      s4p83 should be non-trivial; the exact bit→feature layout is still
+      [UNKNOWN — to capture] (probe with a direct GET). [app-mitm:2026-06-12-live-video]
     status:
       seen_on_wire: false
       decoded: hypothesized
@@ -11667,7 +11729,9 @@ api_endpoints:
       [app-mitm:2026-06-09-settings-sweep]
       Step 1: POST addOssNew {category:0, did, fileSize, filename:"<ts>.<ext>",
         model, source:2(=MANUAL), type:"jpg"|"mp4"|"thumb", uid, key}
-        → {ossId, url:<signed PUT URL>}
+        → {ossId, url:<signed PUT URL>, expiresTime, pwd:"<…>"}
+        (pwd purpose unconfirmed — likely an object access/integrity token; NOT
+         needed for the PUT, which the signed url already authorizes. [UNVERIFIED])
       Step 2: PUT file bytes to the signed url
       Step 3: POST ossUploaded {ossId, …same fields…, ext:"{\"duration\":N}"(video)}
       [app-mitm:2026-06-09-settings-sweep]
@@ -11742,13 +11806,23 @@ api_endpoints:
       [app-mitm:2026-06-09-settings-sweep]
       All endpoints on eu.iot.dreame.tech:13267/dreame-third-video/tx/:
         user/accesstoken → {token, userId, expireAt} (video service token)
-        dev/isDevUser   → {isDevUser} (ownership check)
-        mgr/dev/getIdentity → {secretId, secretKey, deviceId, deviceName}
-          (Tencent IoT device credentials — SECRET VALUES REDACTED)
+        dev/isDevUser   → {isDevUser} (ownership/eligibility gate)
+        mgr/dev/getIdentity → {secretId, secretKey, deviceId, deviceName, productId}
+          (Tencent IoT device credentials — secretId/secretKey REDACTED; the
+          non-secret identity captured: productId="B64XZHGZUT",
+          deviceName="I4rl99pelxmAV2zt", deviceId="B64XZHGZUT/I4rl99pelxmAV2zt" —
+          these init the XP2P SDK)
         dev/getP2PInfo  → {p2pInfo:"XP2P…%<sdkVer>"} (XP2P P2P connect string,
           Tencent IoT-Video SDK v2.4.49 seen)
-      [app-mitm:2026-06-09-settings-sweep]
+      [app-mitm:2026-06-12-live-video]
+      CALL ORDER (observed): 1→2 fire at app start; 3→4 fire immediately before
+      opening live view. TOKEN LIFETIMES: accesstoken (step 1) is reused in steps 2
+      and 4, expireAt ≈ 7 days; treat p2pInfo (step 4) as short-lived / per-session
+      and re-fetch getP2PInfo each session. [app-mitm:2026-06-12-live-video]
       Media hosts (port 443): iot.cloud.tencent.com, *.trtcube-license.cn (TRTC license).
+      A SECOND camera toggle exists: o=15 {c:0|1} enables/disables the camera during
+      remote-control / joystick mode (distinct from the o=400 live-view toggle).
+      [app-mitm:2026-06-12-live-video]
       Device feature tag: feature:"video_tx", vendor:"tx" (Tencent).
       Live-view enable: routed action o=400 {on:true} (fires before cred-fetch;
       also fires at patrol start for auto-capture). Stop: o=400 {on:false}.
@@ -11783,6 +11857,10 @@ api_endpoints:
       - date: "2026-06-12"
         status: verified
         claim: "Two-way audio ('Talk') and live ambient audio ride entirely over the XP2P P2P stream — pressing Talk emits ZERO control command on the HTTP/MQTT wire. Manual photo/video snapshots are client-side grabs from the same P2P stream uploaded via addOssNew. [app-mitm:2026-06-12-live-video]"
+        evidence: "app-mitm:2026-06-12-live-video"
+      - date: "2026-06-12"
+        status: verified
+        claim: "Captured Tencent identity is productId='B64XZHGZUT', deviceName='I4rl99pelxmAV2zt', deviceId='B64XZHGZUT/I4rl99pelxmAV2zt' (secretId/secretKey redacted). Call order: 1→2 at app start, 3→4 just before live view. accesstoken reused in steps 2+4, expireAt ≈ 7 d; p2pInfo is per-session (re-fetch getP2PInfo each session). o=15 {c:0|1} is a separate camera toggle for remote-control mode. Full setup chain consolidated in docs/research/live-video-stream-setup.md."
         evidence: "app-mitm:2026-06-12-live-video"
 
   - id: "push_prefs"
