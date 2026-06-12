@@ -14,10 +14,13 @@
 // Load as a Lovelace resource (type: module):
 //   url: /dreame_a2_mower/dreame-map-editor-card.js
 import {
+  pixelToMeters,
   metersToPixel,
   rectCorners,
   rotatePointsAroundCentroid,
   resizeUniform,
+  circleFromCenterEdge,
+  shapeToPoints,
 } from "./_dreame-map-edit-geom.js";
 
 // ----- read-only overlay rendering (Task 5) -------------------------------
@@ -150,12 +153,41 @@ class DreameMapEditorCard extends HTMLElement {
       this._editMapId = Number(sel.value);
     });
     bar.appendChild(sel);
-    // Create / Save / Delete actions are wired in Task 7. Buttons added there.
     this._buildActionButtons(bar);
   }
 
-  // Placeholder hook so Task 7 can attach action buttons without re-templating.
-  _buildActionButtons(/* bar */) { /* Task 7 */ }
+  // Create / Save / Delete actions (Task 7). One submit button (label flips
+  // Create<->Save depending on whether the draft is a new shape or an edit of
+  // an existing object) plus a Delete button for existing objects.
+  _buildActionButtons(bar) {
+    const submit = document.createElement("button");
+    submit.type = "button";
+    submit.id = "submitBtn";
+    submit.textContent = "Create";
+    submit.addEventListener("click", () => this._onSubmit());
+    bar.appendChild(submit);
+    const del = document.createElement("button");
+    del.type = "button";
+    del.id = "deleteBtn";
+    del.textContent = "Delete";
+    del.addEventListener("click", () => {
+      if (this._draft) this._onDeleteHandle();
+    });
+    bar.appendChild(del);
+  }
+
+  // Refresh the submit/delete button labels + enabled state from the draft.
+  _syncActionButtons() {
+    const submit = this.shadowRoot && this.shadowRoot.getElementById("submitBtn");
+    const del = this.shadowRoot && this.shadowRoot.getElementById("deleteBtn");
+    const editing = !!(this._draft && this._draft.objectId != null);
+    if (submit) {
+      submit.disabled = !this._draft;
+      // mow-shapes are create-only (no edit-in-place path).
+      submit.textContent = editing ? "Save" : "Create";
+    }
+    if (del) del.disabled = !editing;
+  }
 
   _syncMapIds(a) {
     const sel = this.shadowRoot.getElementById("mapSel");
@@ -210,7 +242,7 @@ class DreameMapEditorCard extends HTMLElement {
       } else if (pix.length === 1 && o.radius) {
         const c = pix[0];
         const rim = metersToPixel(o.points_m[0][0] + o.radius, o.points_m[0][1], this._proj);
-        const rpx = Math.hypot(rim[0] - c[0], rim[1] - c[1]);
+        const rpx = circleFromCenterEdge(c, rim).radius;
         parts.push(
           `<circle class="${cls}" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" ` +
           `r="${rpx.toFixed(1)}" data-id="${o.id}"/>`
@@ -265,7 +297,7 @@ class DreameMapEditorCard extends HTMLElement {
       // circle no-go: center + synthesized rim point
       const c = pix[0];
       const rim = metersToPixel(o.points_m[0][0] + o.radius, o.points_m[0][1], this._proj);
-      const rpx = Math.hypot(rim[0] - c[0], rim[1] - c[1]);
+      const rpx = circleFromCenterEdge(c, rim).radius;
       draft.geom = "circle";
       draft.shape = "circle";
       draft.pts = [c, [c[0] + rpx, c[1]]];
@@ -381,9 +413,10 @@ class DreameMapEditorCard extends HTMLElement {
       const opp = (idx + 2) % 4;
       d.pts = bboxAsTwo(rectCorners(corners[opp], pos));
     } else if (d.geom === "circle") {
-      // Drag the rim handle; keep center fixed, recompute the rim point.
+      // Drag the rim handle; keep center fixed, recompute the rim radius via the
+      // geom helper (no card-side distance math).
       d.pts[1] = pos;
-      d.radius = Math.hypot(pos[0] - d.pts[0][0], pos[1] - d.pts[0][1]);
+      d.radius = circleFromCenterEdge(d.pts[0], pos).radius;
     } else {
       // polygon / line-as-polygon -> uniform scale about centroid
       d.pts = resizeUniform(d.pts, idx, pos);
@@ -392,9 +425,93 @@ class DreameMapEditorCard extends HTMLElement {
 
   _onDeleteHandle() {
     // For a new (un-saved) draft, delete just clears it. For an existing object
-    // it deletes via service (wired in Task 7); until then, clear locally.
-    if (this._draft && this._draft.objectId != null && this._deleteExisting) {
+    // it deletes via the delete_map_object service (Task 7).
+    if (this._draft && this._draft.objectId != null) {
       this._deleteExisting(this._draft);
+      return;
+    }
+    this._draft = null;
+    this._renderObjects(this._objs || []);
+    this._renderDraft();
+  }
+
+  // ----- service dispatch (Task 7) ----------------------------------------
+  // Convert one pixel point -> meters (cloud edit frame). The geom helpers are
+  // frame-agnostic, so all wire-point math runs in the meter frame here.
+  _pxToM(p) { return pixelToMeters(p[0], p[1], this._proj); }
+
+  // Build the meter-frame `state` object that shapeToPoints consumes, keyed on
+  // the SAVE shape (d.shape), from the current pixel draft. NO math here beyond
+  // per-point px->m conversion and rectCorners structural plumbing.
+  _meterState(d) {
+    if (d.shape === "line") {
+      return { a: this._pxToM(d.pts[0]), b: this._pxToM(d.pts[1]) };
+    }
+    if (d.shape === "circle" && d.category === "nogo") {
+      return { center: this._pxToM(d.pts[0]), edge: this._pxToM(d.pts[1]) };
+    }
+    if (d.shape === "polygon") {
+      // A bbox-geom polygon (the no-go rectangle tool) expands to 4 corners;
+      // a true polygon draft passes its N corners straight through.
+      const ptsPx = d.geom === "bbox" ? rectCorners(d.pts[0], d.pts[1]) : d.pts;
+      return { points: ptsPx.map((p) => this._pxToM(p)) };
+    }
+    // mow shapes (square + curved) -> 2 opposite bbox corners
+    return { p0: this._pxToM(d.pts[0]), p1: this._pxToM(d.pts[1]) };
+  }
+
+  async _onSubmit() {
+    const d = this._draft;
+    if (!d || !this._hass) return;
+    const state = this._meterState(d);
+    const { points, radius } = shapeToPoints(d.category, d.shape, state);
+    const mapId = this._editMapId;
+    try {
+      if (d.category === "nogo") {
+        await this._hass.callService("dreame_a2_mower", "create_no_go_zone", {
+          map_id: mapId,
+          shape: d.shape, // "line" | "polygon" | "circle"
+          points,
+          radius,
+          object_id: d.objectId != null ? d.objectId : -1,
+        });
+      } else if (d.category === "ignore") {
+        await this._hass.callService("dreame_a2_mower", "create_ignore_obstacle", {
+          map_id: mapId,
+          points,
+          object_id: d.objectId != null ? d.objectId : -1,
+        });
+      } else if (d.category === "mow") {
+        // mow-shapes are create-only (not in editable_objects -> no edit path).
+        await this._hass.callService("dreame_a2_mower", "create_mow_shape", {
+          map_id: mapId,
+          shape: d.shape,
+          points,
+        });
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("dreame-map-editor: submit failed", err);
+      return;
+    }
+    // Clear selection; the next camera refresh re-publishes editable_objects.
+    this._draft = null;
+    this._renderObjects(this._objs || []);
+    this._renderDraft();
+  }
+
+  async _deleteExisting(d) {
+    if (!this._hass || d.objectId == null) return;
+    const category = d.category === "ignore" ? 4 : 0;
+    try {
+      await this._hass.callService("dreame_a2_mower", "delete_map_object", {
+        map_id: this._editMapId,
+        object_id: d.objectId,
+        category,
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error("dreame-map-editor: delete failed", err);
       return;
     }
     this._draft = null;
@@ -407,7 +524,7 @@ class DreameMapEditorCard extends HTMLElement {
     const g = this.shadowRoot.getElementById("draft");
     if (!g) return;
     const d = this._draft;
-    if (!d) { g.innerHTML = ""; return; }
+    if (!d) { g.innerHTML = ""; this._syncActionButtons(); return; }
     const parts = [];
     // Shape body.
     if (d.geom === "circle") {
@@ -470,6 +587,7 @@ class DreameMapEditorCard extends HTMLElement {
       `</g>`
     );
     g.innerHTML = parts.join("");
+    this._syncActionButtons();
   }
 
   _handle(x, y, role, idx) {
@@ -522,8 +640,19 @@ function bboxAsTwo(corners) {
 //    endpoint handles.
 //  - The rotate handle (top stalk) visually rotates the shape rigidly about its
 //    centroid; non-rect shapes scale uniformly (aspect preserved).
-//  - Dragging the body moves the whole shape; the X clears the draft.
-// No service writes yet — that is Task 7.
+//  - Dragging the body moves the whole shape; the X clears a new draft.
+//
+// ---- Task 7 manual-verification expectations ----
+//  - Draw a no-go (rect/circle/line/polygon) + Create -> the zone appears over
+//    the map after the next camera refresh (create_no_go_zone, object_id -1).
+//  - Select an existing no-go/ignore, resize/rotate/move it + Save -> it updates
+//    in place (same object_id, edit-in-place).
+//  - Draw an ignore polygon + Create -> appears (create_ignore_obstacle).
+//  - Draw a mow-shape + Create -> appears (create_mow_shape; create-only — the
+//    submit label never flips to "Save" for mow shapes because they are not in
+//    editable_objects, so there is no selectable existing mow object).
+//  - The X / Delete on a SELECTED existing object removes it (delete_map_object,
+//    category 0 nogo / 4 ignore). The map_id used is the toolbar selector value.
 
 if (!customElements.get("dreame-map-editor-card")) {
   customElements.define("dreame-map-editor-card", DreameMapEditorCard);
