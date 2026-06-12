@@ -55,8 +55,8 @@ const TOOLS = [
   { id: "nogo_rect", label: "No-go ▭", model: "corners", resize: "rect", save: { category: "nogo", shape: "polygon" } },
   { id: "nogo_circle", label: "No-go ◯", model: "circle", save: { category: "nogo", shape: "circle" } },
   { id: "nogo_line", label: "No-go ╱", model: "line", save: { category: "nogo", shape: "line" } },
-  { id: "nogo_poly", label: "No-go ⬠", model: "corners", resize: "vertex", save: { category: "nogo", shape: "polygon" } },
-  { id: "ignore_poly", label: "Ignore ⬠", model: "corners", resize: "vertex", save: { category: "ignore", shape: "polygon" } },
+  { id: "nogo_poly", label: "No-go ⬠", model: "corners", resize: "vertex", draw: true, save: { category: "nogo", shape: "polygon" } },
+  { id: "ignore_poly", label: "Ignore ⬠", model: "corners", resize: "vertex", draw: true, save: { category: "ignore", shape: "polygon" } },
   { id: "mow_square", label: "Mow ▢", model: "corners", resize: "rect", save: { category: "mow", shape: "square" } },
   { id: "mow_circle", label: "Mow ◯", model: "edge", save: { category: "mow", shape: "circle" } },
   { id: "mow_heart", label: "Mow ♥", model: "edge", save: { category: "mow", shape: "heart" } },
@@ -122,6 +122,7 @@ class DreameMapEditorCard extends HTMLElement {
       `.bar button.on{background:rgb(120,170,230);color:#fff}` +
       `.bar select{font:12px/1 system-ui,sans-serif;padding:3px 6px;border-radius:6px}` +
       `.bar .sp{flex:1}` +
+      `.bar #msg{font:12px/1 system-ui,sans-serif;color:#d32f2f;padding:0 4px}` +
       `.wrap{position:relative}` +
       `svg{width:100%;height:auto;display:block;touch-action:none}` +
       `.obj{cursor:pointer}` +
@@ -129,6 +130,10 @@ class DreameMapEditorCard extends HTMLElement {
       `.obj-ignore{stroke:${IGNORE_STROKE};fill:${IGNORE_FILL};stroke-width:2}` +
       `.draft{stroke:#1565c0;stroke-width:2;fill:rgba(21,101,192,0.15)}` +
       `.bbox{stroke:#1565c0;stroke-width:1;stroke-dasharray:4 3;fill:none;pointer-events:none}` +
+      `.drawline{stroke:#1565c0;stroke-width:2;fill:none;pointer-events:none}` +
+      `.closehint{stroke:#1565c0;stroke-width:1.5;stroke-dasharray:4 3;fill:none;pointer-events:none}` +
+      `.vtx{fill:#1565c0;stroke:#fff;stroke-width:1;pointer-events:none}` +
+      `.vtx0{fill:#ff9800;stroke:#fff;stroke-width:1.5;pointer-events:none}` +
       `.handle{fill:#fff;stroke:#1565c0;stroke-width:2;cursor:pointer}` +
       `.rot{fill:#1565c0;cursor:grab}` +
       `.del{fill:#d32f2f;cursor:pointer}` +
@@ -173,6 +178,9 @@ class DreameMapEditorCard extends HTMLElement {
       this._editMapId = Number(sel.value);
     });
     bar.appendChild(sel);
+    const msg = document.createElement("span");
+    msg.id = "msg";
+    bar.appendChild(msg);
     this._buildActionButtons(bar);
   }
 
@@ -194,19 +202,51 @@ class DreameMapEditorCard extends HTMLElement {
       if (this._draft) this._onDeleteHandle();
     });
     bar.appendChild(del);
+    // Draw-mode actions (polygon draw): shown only while drawing.
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.id = "closeBtn";
+    closeBtn.textContent = "Close";
+    closeBtn.addEventListener("click", () => this._onClosePolygon());
+    bar.appendChild(closeBtn);
+    const undoBtn = document.createElement("button");
+    undoBtn.type = "button";
+    undoBtn.id = "undoBtn";
+    undoBtn.textContent = "Undo point";
+    undoBtn.addEventListener("click", () => this._onUndoPoint());
+    bar.appendChild(undoBtn);
   }
 
   // Refresh the submit/delete button labels + enabled state from the draft.
   _syncActionButtons() {
     const submit = this.shadowRoot && this.shadowRoot.getElementById("submitBtn");
     const del = this.shadowRoot && this.shadowRoot.getElementById("deleteBtn");
+    const closeBtn = this.shadowRoot && this.shadowRoot.getElementById("closeBtn");
+    const undoBtn = this.shadowRoot && this.shadowRoot.getElementById("undoBtn");
+    const drawing = !!(this._draft && this._draft.drawing);
     const editing = !!(this._draft && this._draft.objectId != null);
     if (submit) {
+      // Stays visible while drawing (Create is gated in _onSubmit), so the user
+      // sees it but the click shows an inline message instead of submitting.
       submit.disabled = !this._draft;
       // mow-shapes are create-only (no edit-in-place path).
       submit.textContent = editing ? "Save" : "Create";
     }
-    if (del) del.disabled = !editing;
+    // Delete only applies to a closed/existing draft — hide it while drawing.
+    if (del) {
+      del.style.display = drawing ? "none" : "";
+      del.disabled = !editing;
+    }
+    // Close / Undo only exist while drawing a fresh polygon.
+    const pts = drawing ? (this._draft.pts || []) : [];
+    if (closeBtn) {
+      closeBtn.style.display = drawing ? "" : "none";
+      closeBtn.disabled = pts.length < 3;
+    }
+    if (undoBtn) {
+      undoBtn.style.display = drawing ? "" : "none";
+      undoBtn.disabled = pts.length < 1;
+    }
   }
 
   // Toggle the submit/delete buttons into a disabled "writing…" state while a
@@ -243,10 +283,17 @@ class DreameMapEditorCard extends HTMLElement {
   _selectTool(id) {
     this._tool = this._tool && this._tool.id === id ? null : TOOLS.find((t) => t.id === id);
     this._draft = null;
+    this._setMsg("");
     for (const b of this.shadowRoot.querySelectorAll(".bar button[data-tool]")) {
       b.classList.toggle("on", !!this._tool && b.dataset.tool === id);
     }
     this._renderDraft();
+  }
+
+  // Inline message area (#msg) — used to surface the draw-mode submit gate.
+  _setMsg(text) {
+    const m = this.shadowRoot && this.shadowRoot.getElementById("msg");
+    if (m) m.textContent = text || "";
   }
 
   // ----- existing-object overlays (unselected) ----------------------------
@@ -398,6 +445,14 @@ class DreameMapEditorCard extends HTMLElement {
 
   _onPointerDown(e) {
     const pos = this._svgPoint(e);
+    // Draw mode (polygon) — TOP priority: each click APPENDS a vertex. No drag,
+    // no handles (there are none while drawing), no overlay/tool logic.
+    if (this._draft && this._draft.drawing) {
+      this._draft.pts.push(pos);
+      this._setMsg("");
+      this._renderDraft();
+      return;
+    }
     const role = e.target && e.target.dataset ? e.target.dataset.role : null;
     // Handle controls on the active draft first.
     if (this._draft && role) {
@@ -428,8 +483,26 @@ class DreameMapEditorCard extends HTMLElement {
         return;
       }
     }
-    // A tool is armed -> drop a new shape centered at the click and start move.
+    // A tool is armed.
     if (this._tool) {
+      // Draw tools (polygon / ignore): the first click starts a freeform draw —
+      // seed a drawing draft with this point and wait for more clicks. No move.
+      if (this._tool.draw) {
+        this._draft = {
+          category: this._tool.save.category,
+          shape: this._tool.save.shape,
+          model: "corners",
+          resize: "vertex",
+          drawing: true,
+          kind: this._tool.save.category === "ignore" ? "ignore" : "nogo",
+          objectId: null,
+          pts: [pos],
+        };
+        this._setMsg("");
+        this._renderDraft();
+        return;
+      }
+      // Other tools: drop a new shape centered at the click and start move.
       this._draft = this._makeDraft(this._tool, pos);
       this._renderDraft();
       this._drag = { mode: "move", idx: -1, start: pos };
@@ -517,6 +590,34 @@ class DreameMapEditorCard extends HTMLElement {
     this._renderDraft();
   }
 
+  // Close the in-progress polygon: needs >=3 points. Flipping drawing=false
+  // turns it into a normal editable draft (handles/move/rotate appear). The
+  // only finish gesture — no click-first-vertex, no double-click.
+  _onClosePolygon() {
+    const d = this._draft;
+    if (!d || !d.drawing) return;
+    if ((d.pts || []).length < 3) {
+      this._setMsg("Place at least 3 points");
+      return;
+    }
+    d.drawing = false;
+    this._setMsg("");
+    this._renderDraft();
+  }
+
+  // Undo the last placed vertex while drawing. If that empties the draft, clear
+  // it (back to the armed-tool state) and clear the message.
+  _onUndoPoint() {
+    const d = this._draft;
+    if (!d || !d.drawing) return;
+    d.pts.pop();
+    if (d.pts.length === 0) {
+      this._draft = null;
+      this._setMsg("");
+    }
+    this._renderDraft();
+  }
+
   // ----- service dispatch (Task 7) ----------------------------------------
   // Convert one pixel point -> meters (cloud edit frame). The geom helpers are
   // frame-agnostic, so all wire-point math runs in the meter frame here.
@@ -540,6 +641,11 @@ class DreameMapEditorCard extends HTMLElement {
   async _onSubmit() {
     const d = this._draft;
     if (!d || !this._hass) return;
+    // Create/Save is blocked while drawing — the polygon isn't closed yet.
+    if (d.drawing) {
+      this._setMsg(d.pts.length < 3 ? "Place at least 3 points" : "Close the shape first");
+      return;
+    }
     const { points, radius } = this._wirePoints(d);
     const mapId = this._editMapId;
     this._setBusy(true);
@@ -585,6 +691,7 @@ class DreameMapEditorCard extends HTMLElement {
     }
     // Clear selection; the next camera refresh re-publishes editable_objects.
     this._draft = null;
+    this._setMsg("");
     this._renderObjects(this._objs || []);
     this._renderDraft();
   }
@@ -620,6 +727,34 @@ class DreameMapEditorCard extends HTMLElement {
     if (!g) return;
     const d = this._draft;
     if (!d) { g.innerHTML = ""; this._syncActionButtons(); return; }
+    // Draw mode (polygon): open polyline through the placed points + a dashed
+    // close-preview from last->first + a vertex dot per point (first one larger
+    // & distinct, the close-target hint). NO bbox / resize / rotate / delete.
+    if (d.drawing) {
+      const pts = d.pts || [];
+      const dparts = [];
+      if (pts.length >= 2) {
+        const poly = pts.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(" ");
+        dparts.push(`<polyline class="drawline" points="${poly}"/>`);
+        // Dashed close-preview edge (last -> first).
+        const a = pts[pts.length - 1];
+        const b = pts[0];
+        dparts.push(
+          `<line class="closehint" x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" ` +
+          `x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"/>`
+        );
+      }
+      pts.forEach((p, i) => {
+        const r = i === 0 ? HANDLE_R + 1 : HANDLE_R - 2;
+        const cls = i === 0 ? "vtx0" : "vtx";
+        dparts.push(
+          `<circle class="${cls}" cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${r}"/>`
+        );
+      });
+      g.innerHTML = dparts.join("");
+      this._syncActionButtons();
+      return;
+    }
     const parts = [];
     // Shape body + resize/endpoint handles, per manipulation model.
     if (d.model === "circle") {
