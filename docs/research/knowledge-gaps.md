@@ -181,6 +181,28 @@ o:204 (begin) → o:215/o:218/o:234 (add/delete/add-ignore) → o:201 (commit) �
 (teardown). Message-record reachability — resolved 2026-06-09: v1 endpoint confirmed
 (GET `/dreame-message-push/v1/message-record/list?version=v1`; v2 returns 0 records).
 
+**Map-edit — rename/delete shipped, remaining gaps** (wired v1.0.25a6, 2026-06-12;
+o=219 rename + o=218 delete via the o=204/o=201 transaction + o=200 select):
+- **delete-category (`type`) codes** — `[UNKNOWN — to capture]` only `type=0` (zone /
+  no-go) and `type=4` (ignore-obstacle) observed in the 2026-06-09 capture; any other
+  category values for o=218 are unconfirmed. Capture: delete each remaining object kind
+  (spot zone, patrol/cruise point, maintenance point) and diff the o=218 `type` field.
+- **deleting a MOWING zone** — `[UNKNOWN — to capture]` the captured o=218 deletes were
+  all exclusion objects (ids in the 100/300 object-id space, `type` 0/4), never a
+  mowing-zone `region` (1-62). Whether a mowing zone is deletable via o=218 (and with
+  which id/type) is unverified, so `deletable_objects` deliberately offers exclusions
+  only; mowing zones are rename-only. Capture: delete a lawn zone in the app and diff
+  the o=218 id/type vs the zone's region.
+- **rename-map + delete-whole-map wire** — `[UNKNOWN — to capture]` only zone-rename
+  (o=219) is captured; renaming an entire MAP and deleting a whole map are UNCAPTURED
+  (opcode + payload unknown). Capture: rename a map then delete a map in the app and
+  snoop s2a50.
+- **create (o=215 / o=234) + split/merge (o=220 / o=221)** — DEFERRED, not wired: create
+  needs an interactive draw card (point geometry), split/merge are destructive (clear
+  zone schedule + per-zone prefs). Payload shapes confirmed 2026-06-09 but no integration
+  surface yet; `[UNKNOWN — to capture]` whether the firmware echoes o:219/o:220/o:221 on
+  s2p50.
+
 **Batch device-data / map retvals:** MAPD, MAPI, MITRC, OBS (hypothesized);
 MAPL, MISTA (confirmed w/ open qs). Gap: per-field decode of the map-info and
 mission-track structures. Validate: fetch via probe + diff against a known map state.

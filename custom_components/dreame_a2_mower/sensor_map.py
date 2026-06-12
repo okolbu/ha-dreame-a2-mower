@@ -65,6 +65,40 @@ class DreameA2MapSegmentCountSensor(_DreameA2PerMapSensorBase):
         zones = getattr(m, "mowing_zones", ())
         return len(zones) if zones is not None else 0
 
+    @property
+    def extra_state_attributes(self):
+        """Map-edit targets for the rename_zone / delete_map_object services.
+
+        ``renamable_zones``: ``{region, name}`` per mowing zone (o=219).
+        ``deletable_objects``: ``{id, category, label}`` for each deletable
+        object (o=218) — no-go exclusion zones (category 0) and ignore-obstacle
+        zones (category 4). Exclusion zones without a cloud ``obj_id`` are
+        skipped (they can't be targeted).
+
+        Mowing zones are intentionally NOT offered as delete targets: the only
+        o=218 deletes seen in the app capture were exclusion objects (ids in
+        the 100/300 object-id space, never a mowing-zone region 1-62), so a
+        mowing-zone delete via o=218 is unverified. Mowing zones support rename
+        only. (knowledge-gaps: zone-delete wire to capture.)
+        """
+        m = self._map()
+        if m is None:
+            return {}
+        renamable = [
+            {"region": z.zone_id, "name": z.name}
+            for z in getattr(m, "mowing_zones", ())
+        ]
+        deletable = []
+        for z in getattr(m, "exclusion_zones", ()):
+            if z.obj_id is None:
+                continue
+            cat = 4 if z.subtype == "ignore" else 0
+            kind = "Ignore" if z.subtype == "ignore" else "No-go"
+            deletable.append(
+                {"id": z.obj_id, "category": cat, "label": f"{kind} #{z.obj_id}"}
+            )
+        return {"renamable_zones": renamable, "deletable_objects": deletable}
+
 
 class DreameA2MaintenancePointsSensor(_DreameA2PerMapSensorBase):
     """Per-map list of user-placed Maintenance Points.

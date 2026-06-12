@@ -4271,6 +4271,10 @@ opcodes:
         status: verified
         claim: "App sends o:204 as {m:'a', o:204} (no payload) to begin a map-edit sequence. [app-mitm:2026-06-09-settings-sweep]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-12"
+        status: verified
+        claim: "Map-edit runs as a routed-action transaction on siid:2/aiid:50 (s2a50): o=200{idx:N} selects (and makes active) the target map, then o=204(p:0) begins -> mutation opcode(s)(p:0) -> o=201(p:1) commits. Confirmed mutations: o=219{region,name} renames a zone; o=218{id,type} deletes a map object (type 0=zone/no-go, 4=ignore-obstacle observed). The integration's edit_map() helper runs this sequence and always sends the o=201 commit so the firmware never stays in edit mode. [app-mitm:2026-06-09-map-edit]"
+        evidence: "dreame-app-capture-2026-06-09/miio-cloud-13267-http.jsonl (m:a o:200/204/218/219/201 payloads observed in capture order)"
 
   - id: "o205"
     op: 205

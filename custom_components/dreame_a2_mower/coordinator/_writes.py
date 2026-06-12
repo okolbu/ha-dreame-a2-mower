@@ -683,3 +683,59 @@ class _WritesMixin:
             LOGGER.warning("write_map_general_ai_bit: PRE ok but SETTINGS failed (stale until reconcile)")
         return True
 
+    async def edit_map(
+        self, map_id: int, mutations: list[tuple[int, dict | None]]
+    ) -> bool:
+        """Run a map-edit transaction on `map_id`, then refresh state.
+
+        Sequence: o=200{idx:map_id} -> o=204(p:0) begin -> each mutation(p:0)
+        -> o=201(p:1) commit. The target map becomes (and stays) active. Each
+        leg is sent via routed_action; a None (transport-level failure) marks
+        overall failure but the commit is ALWAYS sent so the device never stays
+        in edit mode. Note: routed_action returns truthy on delivery even if the
+        device replies with a logical r!=0 (e.g. bad region/id), so a True return
+        means "delivered + committed", not "the firmware accepted the edit".
+        """
+        if not hasattr(self, "_cloud") or self._cloud is None:
+            LOGGER.warning("edit_map: cloud client not ready")
+            return False
+
+        async def _send(op, extra=None, *, p=0):
+            return await self.hass.async_add_executor_job(
+                lambda: self._cloud.routed_action(op, extra, p=p)
+            )
+
+        ok = True
+        async with self._chunked_write_lock:
+            if await _send(200, {"idx": int(map_id)}) is None:
+                ok = False
+            if await _send(204) is None:
+                ok = False
+            for op, payload in mutations:
+                if await _send(op, payload) is None:
+                    ok = False
+            if await _send(201, p=1) is None:
+                ok = False
+        LOGGER.info(
+            "[map-edit] map %d, %d mutation(s), ok=%s", map_id, len(mutations), ok
+        )
+        await self._refresh_cloud_state()
+        return ok
+
+    async def rename_zone(self, map_id: int, region: int, name: str) -> bool:
+        """Rename mowing zone `region` on `map_id` (o=219)."""
+        return await self.edit_map(
+            int(map_id), [(219, {"region": int(region), "name": str(name)})]
+        )
+
+    async def delete_map_object(
+        self, map_id: int, object_id: int, category: int
+    ) -> bool:
+        """Delete a map object by id+category on `map_id` (o=218).
+
+        category: 0 = zone/no-go, 4 = ignore-obstacle (confirmed values).
+        """
+        return await self.edit_map(
+            int(map_id), [(218, {"id": int(object_id), "type": int(category)})]
+        )
+

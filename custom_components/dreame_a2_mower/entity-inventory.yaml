@@ -525,13 +525,19 @@ entities:
       - date: "2026-05-31"
         status: presumed
         claim: "counts MapData.mowing_zones entries (cloud key mowingAreas); returns 0 when None"
+      - date: "2026-06-12"
+        status: verified
+        claim: "extra_state_attributes now also exposes renamable_zones [{region,name}] and deletable_objects [{id,category,label}] (mowing zone -> category 0; exclusion subtype None -> 0 no-go; subtype 'ignore' -> 4; id-less exclusions skipped). These feed the rename_zone (o=219) and delete_map_object (o=218) services, which run the o=204/o=201 edit transaction with o=200 map-select. [app-mitm:2026-06-09-map-edit]"
+        evidence: "dreame-app-capture-2026-06-09/miio-cloud-13267-http.jsonl (m:a o:200/204/218/219/201 payloads); code custom_components/dreame_a2_mower/sensor_map.py + coordinator/_writes.py edit_map/rename_zone/delete_map_object"
     references:
       wire_entry: "map_key_mowingAreas"
       code: "custom_components/dreame_a2_mower/sensor_map.py:54"
     notes: |
       State class MEASUREMENT. Zone/segment count from the mowingAreas
       cloud map key. Used by the dashboard to surface how many named zones
-      a map has.
+      a map has. extra_state_attributes also exposes renamable_zones and
+      deletable_objects target lists for the rename_zone / delete_map_object
+      services.
 
   - id: "sensor.dreame_a2_mower_map_N_maintenance_points"
     platform: sensor

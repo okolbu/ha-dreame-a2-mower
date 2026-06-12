@@ -343,7 +343,7 @@ class _RpcMixin:
         return None
 
     def routed_action(
-        self, op: int, extra: dict[str, Any] | None = None
+        self, op: int, extra: dict[str, Any] | None = None, *, p: int = 0
     ) -> dict[str, Any] | None:
         """Send a routed mow/utility action via siid=2 aiid=50.
 
@@ -367,7 +367,7 @@ class _RpcMixin:
         """
         from ..protocol.cfg_action import call_action_op  # type: ignore[import]
         self._last_send_error_code = None
-        result = call_action_op(self.action, op, extra)
+        result = call_action_op(self.action, op, extra, p=p)
         key = f"routed_action_op={op}"
         if result is not None:
             self.endpoint_log[key] = "accepted"
