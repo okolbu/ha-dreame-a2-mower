@@ -194,7 +194,9 @@ def set_pre(send_action, pre_array: list) -> Any:
     )
 
 
-def call_action_op(send_action, op: int, extra: dict | None = None) -> Any:
+def call_action_op(
+    send_action, op: int, extra: dict | None = None, *, p: int = 0
+) -> Any:
     """Invoke an action opcode (`{m:'a', p:0, o:OP, d:{...}}`).
 
     Per apk § "Actions": op 100=globalMower, 101=edgeMower,
@@ -210,7 +212,7 @@ def call_action_op(send_action, op: int, extra: dict | None = None) -> Any:
     (``{m,p,o,region:[1]}``) and the mower silently ignored the
     field, which is why zone/spot mow looked like a no-op.
     """
-    payload: dict = {"m": "a", "p": 0, "o": int(op)}
+    payload: dict = {"m": "a", "p": int(p), "o": int(op)}
     if extra:
         payload["d"] = extra
     return send_action(ROUTED_ACTION_SIID, ROUTED_ACTION_AIID, [payload])
