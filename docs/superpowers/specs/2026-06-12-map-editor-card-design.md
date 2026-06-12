@@ -74,8 +74,10 @@ in the **edit-frame meters** verified in Task 1. Source = the decoder's no-go
 (`forbiddenAreas`) + ignore-obstacle (`notObsAreas`) objects, which already carry
 `obj_id` (F-part-1). The decoder is augmented to also expose each exclusion
 object's corners in edit-frame meters (`points_m`) — derived from the raw cloud
-`path` (mm) + `angle` (the actual on-map corners = rotate(path, angle) / 1000;
-rotation sign locked by Task 1). `radius` defaults 0 (circles, if distinguishable,
+`path` (mm) + `angle` (the actual on-map corners = rotate(path, −angle) / 1000;
+rotation sign locked to −angle by Task 1 — see
+docs/research/wire-captures/map-edit-frame-verification-2026-06-12.md).
+`radius` defaults 0 (circles, if distinguishable,
 carry their radius; otherwise the card treats a 2-corner no-go as a rect).
 Mow-shapes are NOT decoded today, so they are NOT in `editable_objects` — existing
 mow-shapes can't be selected/edited this phase (creation still works); noted in

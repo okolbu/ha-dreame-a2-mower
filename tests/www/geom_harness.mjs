@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { pixelToMeters, rectCorners, rotatePointsAroundCentroid, circleFromCenterEdge, shapeToPoints, pointerAngleAboutCentroid }
+import { pixelToMeters, rectCorners, rotatePointsAroundCentroid, circleFromCenterEdge, shapeToPoints, pointerAngleAboutCentroid, resizeUniform }
   from "../../custom_components/dreame_a2_mower/www/_dreame-map-edit-geom.js";
 
 const proj = { bx2_mm: 10000, by2_mm: 6000, pixel_size_mm: 50, width_px: 400, height_px: 240 };
@@ -28,6 +28,16 @@ assert.ok(Math.abs(c.radius - 5) < 1e-9, "circle radius");
 // shapeToPoints: circle -> 1 point + radius; line -> 2; square -> 4
 assert.strictEqual(shapeToPoints("nogo", "circle", { center: [0, 0], edge: [3, 4] }).points.length, 1);
 assert.strictEqual(shapeToPoints("nogo", "line", { a: [0, 0], b: [1, 1] }).points.length, 2);
+// mow square -> 4 corners; curved mow shape -> 2-pt bbox
+assert.strictEqual(shapeToPoints("mow", "square", { p0: [0, 0], p1: [3, 3] }).points.length, 4);
+assert.strictEqual(shapeToPoints("mow", "heart", { p0: [0, 0], p1: [3, 3] }).points.length, 2);
+
+// resizeUniform: dragging a unit-square corner to double its centroid-distance
+// scales every corner 2x about the centroid (uniform, aspect preserved).
+const usq = [[-1, -1], [1, -1], [1, 1], [-1, 1]]; // centroid (0,0), corner dist sqrt2
+const grown = resizeUniform(usq, 2, [2, 2]); // corner 2 from (1,1) -> (2,2): 2x
+assert.ok(Math.abs(grown[2][0] - 2) < 1e-9 && Math.abs(grown[2][1] - 2) < 1e-9, "resizeUniform 2x corner");
+assert.ok(Math.abs(grown[0][0] - -2) < 1e-9 && Math.abs(grown[0][1] - -2) < 1e-9, "resizeUniform 2x opposite");
 
 // pointerAngleAboutCentroid: degrees about centroid; a 90deg pointer sweep
 // applied as a rotation delta turns a +x edge into a +y edge.

@@ -283,6 +283,12 @@ class DreameMapEditorCard extends HTMLElement {
   }
 
   // Build a draft from an existing editable_object (for select / edit-in-place).
+  // NOTE: decoded exclusions arrive as path polygons — `editable_objects`
+  // carries no shape/radius for them (always type 2, radius 0), so the shape is
+  // INFERRED from point count below. A no-go originally drawn as circle/line
+  // therefore edits back as a `polygon` (geometry-preserving — the corners are
+  // identical — but the shape label is lost). Re-typing on edit is expected,
+  // not a bug; surfacing the original shape needs the decoder to expose it.
   _draftFromObject(o) {
     const pix = (o.points_m || []).map((m) => metersToPixel(m[0], m[1], this._proj));
     const draft = {
