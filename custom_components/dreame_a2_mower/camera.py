@@ -33,6 +33,9 @@ from ._camera_views import (
     LidarPcdDownloadView,
     LidarSelectedPcdView,
     MapImageView,
+    PhotoFileView,
+    VideoFileView,
+    VideoThumbView,
     WorkLogImageView,
 )
 
@@ -52,6 +55,9 @@ async def async_setup_entry(
         hass.http.register_view(LidarSelectedPcdView())
         hass.http.register_view(MapImageView())
         hass.http.register_view(WorkLogImageView())
+        hass.http.register_view(PhotoFileView())
+        hass.http.register_view(VideoThumbView())
+        hass.http.register_view(VideoFileView())
         hass.data[f"{DOMAIN}_views_registered"] = True
 
     # The "active map" follower camera (existing behaviour).

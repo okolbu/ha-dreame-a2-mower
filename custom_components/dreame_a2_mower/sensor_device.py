@@ -1020,6 +1020,39 @@ class DreameA2PickedSessionSensor(
         return self.coordinator._picked_session_summary or {}
 
 
+class DreameA2PhotoGallerySensor(
+    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+):
+    """Exposes the OSS photo/video gallery manifest as state + attributes.
+
+    State = the total item count. Attributes carry the full newest-first
+    ``items`` list (photos + videos, each with a signed media URL) built by
+    ``_refresh_oss_gallery``. Consumed by the gallery dashboard card.
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Photo gallery"
+    _attr_icon = "mdi:image-multiple"
+    # The items list (one row per archived photo/video, with signed URLs) easily
+    # exceeds the recorder's per-attribute cap — keep the whole entity's
+    # attributes out of the recorder (mirrors DreameA2PickedSessionSensor). "*"
+    # is homeassistant.const MATCH_ALL (the recorder's exclude-all sentinel).
+    _unrecorded_attributes = frozenset({"*"})
+
+    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = mower_unique_id(coordinator, "photo_gallery")
+        self._attr_device_info = mower_device_info(coordinator)
+
+    @property
+    def native_value(self) -> int:
+        return len(self.coordinator._photo_gallery)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"items": self.coordinator._photo_gallery}
+
+
 class DreameA2Sensor(
     CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):

@@ -30,6 +30,7 @@ from .sensor_device import (
     DreameA2LocationSensor,
     DreameA2MqttConnectivitySensor,
     DreameA2OtaStatusSensor,
+    DreameA2PhotoGallerySensor,
     DreameA2PickedSessionSensor,
     DreameA2PositioningHealthSensor,
     DreameA2RainResumeSensor,
@@ -93,6 +94,7 @@ async def async_setup_entry(
             DreameA2ApiEndpointSensor(coordinator),
             DreameA2IntegrationVersionSensor(coordinator),
             DreameA2PickedSessionSensor(coordinator),
+            DreameA2PhotoGallerySensor(coordinator),
         ]
     )
     for map_id in sorted(coordinator.cloud_state.maps_by_id.keys()):

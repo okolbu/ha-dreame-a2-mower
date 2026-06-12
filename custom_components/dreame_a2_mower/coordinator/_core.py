@@ -248,6 +248,11 @@ class _CoreMixin:
         # DEFAULT_PHOTO_ARCHIVE_PER_CATEGORY images on disk.
         self._photo_archive.set_per_category_retention(DEFAULT_PHOTO_ARCHIVE_PER_CATEGORY)
 
+        # Gallery manifest (newest-first list of photo/video items with signed
+        # media URLs) — rebuilt by _refresh_oss_gallery and read by the
+        # sensor.dreame_a2_mower_photo_gallery / the gallery dashboard card.
+        self._photo_gallery: list[dict] = []
+
         # Video archive — persists patrol/AI-obstacle MP4 clips + thumbs.
         # Layout: <config>/dreame_a2_mower/videos/  (flat — not per-map).
         # Retention and byte cap mirror the photo archive pattern.
@@ -575,7 +580,10 @@ class _CoreMixin:
                     self.hass, _periodic_oss_gallery, timedelta(hours=1)
                 )
             )
-            await self._refresh_oss_gallery()
+            # Boot: full backfill (page to natural exhaustion — list_oss_media
+            # stops at the first short page). The hourly periodic call stays at
+            # the default, smaller cap.
+            await self._refresh_oss_gallery(max_pages=400)
 
             # Schedule DEV refresh every 6 hours; also fire one immediately
             # so the hardware serial / firmware version land at startup
