@@ -1,0 +1,358 @@
+// Dreame A2 Mower — Photo/Video Gallery Card.
+//
+// Thumbnail gallery of archived obstacle / patrol / person photos + videos,
+// with filter tabs and a click-to-enlarge lightbox. Reads the
+// `items` attribute of a sensor (default sensor.dreame_a2_mower_photo_gallery)
+// produced by the integration's OSS gallery manifest — each item is already a
+// signed URL, so the thumbnails/media go straight into <img>/<video> src with
+// no auth header needed.
+//
+// Usage (Lovelace YAML):
+//   - type: custom:dreame-a2-photo-gallery-card
+//     # entity: sensor.dreame_a2_mower_photo_gallery   (default)
+//
+// Item shapes (newest-first):
+//   photo: {type:"photo", id, ts, date, category:"obstacle"|"patrol"|"person",
+//           detection:{cls,conf}|null, url, thumb_url}
+//   video: {type:"video", id, ts, date, category:"video", duration:int(sec),
+//           url, thumb_url}
+
+const CATEGORY_LABELS = {
+  obstacle: "Obstacle",
+  patrol: "Patrol",
+  person: "Person",
+};
+
+class DreameA2PhotoGalleryCard extends HTMLElement {
+  setConfig(cfg) {
+    cfg = cfg || {};
+    this._cfg = { entity: cfg.entity || "sensor.dreame_a2_mower_photo_gallery" };
+    this._filter = "all";
+    this._itemsKey = null;
+    this._built = false;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (!this._built) this._build();
+    const items = this._items();
+    const key = items.length + ":" + (items[0] && items[0].id);
+    if (key !== this._itemsKey) {
+      this._itemsKey = key;
+      this._renderTabs();
+      this._renderGrid();
+    }
+  }
+
+  // --- data ---------------------------------------------------------------
+
+  _items() {
+    const st = this._hass && this._hass.states[this._cfg.entity];
+    const attr = st && st.attributes && st.attributes.items;
+    return Array.isArray(attr) ? attr : [];
+  }
+
+  _categories() {
+    // Distinct photo categories present, in a stable display order.
+    const order = ["obstacle", "patrol", "person"];
+    const present = new Set();
+    for (const it of this._items()) {
+      if (it.type === "photo" && it.category) present.add(it.category);
+    }
+    return order.filter((c) => present.has(c));
+  }
+
+  _hasVideos() {
+    return this._items().some((it) => it.type === "video");
+  }
+
+  _filtered() {
+    const f = this._filter;
+    return this._items().filter((it) => {
+      if (f === "all") return true;
+      if (f === "videos") return it.type === "video";
+      return it.type === "photo" && it.category === f;
+    });
+  }
+
+  // --- shadow DOM scaffold ------------------------------------------------
+
+  _build() {
+    this.attachShadow({ mode: "open" });
+    const style = document.createElement("style");
+    style.textContent = `
+      :host { display: block; }
+      ha-card { overflow: hidden; }
+      .tabs {
+        display: flex; flex-wrap: wrap; gap: 6px;
+        padding: 12px 16px 4px;
+        border-bottom: 1px solid var(--divider-color, #e0e0e0);
+      }
+      .tab {
+        appearance: none; border: none; cursor: pointer;
+        padding: 6px 14px; border-radius: 16px; font-size: 13px;
+        background: var(--secondary-background-color, #eee);
+        color: var(--primary-text-color, #212121);
+        line-height: 1.2;
+      }
+      .tab.active {
+        background: var(--primary-color, #03a9f4);
+        color: var(--text-primary-color, #fff);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+        gap: 8px; padding: 12px 16px 16px;
+      }
+      .cell {
+        position: relative; aspect-ratio: 1 / 1;
+        border-radius: 8px; overflow: hidden; cursor: pointer;
+        background: var(--secondary-background-color, #eee);
+      }
+      .cell img {
+        width: 100%; height: 100%; object-fit: cover; display: block;
+      }
+      .cell .cap {
+        position: absolute; left: 0; right: 0; bottom: 0;
+        padding: 4px 6px; font-size: 11px; line-height: 1.25;
+        color: #fff; background: rgba(0,0,0,0.55);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      }
+      .cell .play {
+        position: absolute; top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 40px; height: 40px; border-radius: 50%;
+        background: rgba(0,0,0,0.5); color: #fff;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 18px; pointer-events: none;
+      }
+      .empty {
+        padding: 40px 16px; text-align: center;
+        color: var(--secondary-text-color, #727272); font-size: 14px;
+      }
+      /* lightbox */
+      .lb {
+        position: fixed; inset: 0; z-index: 9999;
+        background: rgba(0,0,0,0.85);
+        display: flex; align-items: center; justify-content: center;
+        flex-direction: column;
+      }
+      .lb img, .lb video { max-width: 92%; max-height: 86%; display: block; }
+      .lb .lbcap {
+        margin-top: 12px; color: #eee; font-size: 13px;
+        max-width: 92%; text-align: center;
+      }
+      .lb .close {
+        position: absolute; top: 12px; right: 16px;
+        width: 40px; height: 40px; border-radius: 50%; border: none;
+        background: rgba(255,255,255,0.15); color: #fff;
+        font-size: 24px; line-height: 1; cursor: pointer;
+      }
+      .lb .close:hover { background: rgba(255,255,255,0.3); }
+    `;
+    const card = document.createElement("ha-card");
+    this._tabsEl = document.createElement("div");
+    this._tabsEl.className = "tabs";
+    this._gridEl = document.createElement("div");
+    this._gridEl.className = "grid";
+    card.appendChild(this._tabsEl);
+    card.appendChild(this._gridEl);
+    this.shadowRoot.appendChild(style);
+    this.shadowRoot.appendChild(card);
+    this._built = true;
+  }
+
+  // --- rendering ----------------------------------------------------------
+
+  _renderTabs() {
+    this._tabsEl.textContent = "";
+    const tabs = [{ id: "all", label: "All" }];
+    for (const c of this._categories()) {
+      tabs.push({ id: c, label: CATEGORY_LABELS[c] || this._titleCase(c) });
+    }
+    if (this._hasVideos()) tabs.push({ id: "videos", label: "Videos" });
+
+    // If the active filter no longer exists in the data, fall back to All.
+    if (!tabs.some((t) => t.id === this._filter)) this._filter = "all";
+
+    for (const t of tabs) {
+      const btn = document.createElement("button");
+      btn.className = "tab" + (t.id === this._filter ? " active" : "");
+      btn.textContent = t.label;
+      btn.addEventListener("click", () => {
+        if (this._filter === t.id) return;
+        this._filter = t.id;
+        this._renderTabs();
+        this._renderGrid();
+      });
+      this._tabsEl.appendChild(btn);
+    }
+  }
+
+  _renderGrid() {
+    this._gridEl.textContent = "";
+    const items = this._filtered();
+    if (items.length === 0) {
+      this._gridEl.style.display = "block";
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent =
+        this._filter === "videos"
+          ? "No videos yet."
+          : "No photos archived yet.";
+      this._gridEl.appendChild(empty);
+      return;
+    }
+    this._gridEl.style.display = "grid";
+    for (const item of items) {
+      this._gridEl.appendChild(this._cell(item));
+    }
+  }
+
+  _cell(item) {
+    const cell = document.createElement("div");
+    cell.className = "cell";
+
+    const img = document.createElement("img");
+    img.loading = "lazy";
+    if (item.thumb_url) img.setAttribute("src", item.thumb_url);
+    img.alt = item.category || item.type || "";
+    cell.appendChild(img);
+
+    if (item.type === "video") {
+      const play = document.createElement("div");
+      play.className = "play";
+      play.textContent = "▶"; // ▶
+      cell.appendChild(play);
+    }
+
+    const cap = document.createElement("div");
+    cap.className = "cap";
+    cap.textContent = this._captionText(item);
+    cell.appendChild(cap);
+
+    cell.addEventListener("click", () => this._openLightbox(item));
+    return cell;
+  }
+
+  // Build the short caption shown on a grid cell and in the lightbox.
+  _captionText(item) {
+    let txt = item.date || "";
+    if (item.type === "video") {
+      if (item.duration) txt += " · " + this._fmtDuration(item.duration);
+    } else if (item.detection && item.detection.cls != null) {
+      const conf = Math.round((item.detection.conf || 0) * 100);
+      txt += " · " + item.detection.cls + " " + conf + "%";
+    }
+    return txt;
+  }
+
+  _fmtDuration(sec) {
+    sec = Math.max(0, Math.round(Number(sec) || 0));
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return m + ":" + String(s).padStart(2, "0");
+  }
+
+  _titleCase(s) {
+    s = String(s);
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  // --- lightbox -----------------------------------------------------------
+
+  _openLightbox(item) {
+    this._closeLightbox(); // ensure only one
+
+    const lb = document.createElement("div");
+    lb.className = "lb";
+
+    let media;
+    if (item.type === "video") {
+      media = document.createElement("video");
+      media.setAttribute("controls", "");
+      media.setAttribute("autoplay", "");
+      media.setAttribute("playsinline", "");
+      if (item.url) media.setAttribute("src", item.url);
+    } else {
+      media = document.createElement("img");
+      if (item.url) media.setAttribute("src", item.url);
+      media.alt = item.category || "photo";
+    }
+    // Clicking the media itself must NOT close the lightbox.
+    media.addEventListener("click", (e) => e.stopPropagation());
+    lb.appendChild(media);
+
+    const cap = document.createElement("div");
+    cap.className = "lbcap";
+    cap.textContent = this._captionText(item);
+    cap.addEventListener("click", (e) => e.stopPropagation());
+    lb.appendChild(cap);
+
+    const close = document.createElement("button");
+    close.className = "close";
+    close.setAttribute("aria-label", "Close");
+    close.textContent = "×"; // ×
+    close.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this._closeLightbox();
+    });
+    lb.appendChild(close);
+
+    // Backdrop click (anywhere not caught by media/caption) closes.
+    lb.addEventListener("click", () => this._closeLightbox());
+
+    this._onKey = (e) => {
+      if (e.key === "Escape") this._closeLightbox();
+    };
+    document.addEventListener("keydown", this._onKey);
+
+    this._lb = lb;
+    this._lbVideo = item.type === "video" ? media : null;
+    this.shadowRoot.appendChild(lb);
+  }
+
+  _closeLightbox() {
+    if (this._onKey) {
+      document.removeEventListener("keydown", this._onKey);
+      this._onKey = null;
+    }
+    if (this._lbVideo) {
+      try {
+        this._lbVideo.pause();
+        this._lbVideo.removeAttribute("src");
+        this._lbVideo.load();
+      } catch (e) {
+        /* ignore */
+      }
+      this._lbVideo = null;
+    }
+    if (this._lb && this._lb.parentNode) {
+      this._lb.parentNode.removeChild(this._lb);
+    }
+    this._lb = null;
+  }
+
+  disconnectedCallback() {
+    this._closeLightbox();
+  }
+
+  getCardSize() {
+    return 8;
+  }
+
+  static getStubConfig() {
+    return { entity: "sensor.dreame_a2_mower_photo_gallery" };
+  }
+}
+
+if (!customElements.get("dreame-a2-photo-gallery-card")) {
+  customElements.define("dreame-a2-photo-gallery-card", DreameA2PhotoGalleryCard);
+  window.customCards = window.customCards || [];
+  window.customCards.push({
+    type: "dreame-a2-photo-gallery-card",
+    name: "Dreame Mower Photo Gallery",
+    description:
+      "Thumbnail gallery of archived obstacle/patrol/person photos + videos, click to enlarge.",
+  });
+}
