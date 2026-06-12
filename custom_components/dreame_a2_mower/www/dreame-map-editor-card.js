@@ -20,7 +20,6 @@ import {
   rectCorners,
   rotatePointsAroundCentroid,
   pointerAngleAboutCentroid,
-  resizeUniform,
   resizeRectCorner,
   orientedEdgeBox,
   resizeOrientedEdge,
@@ -56,8 +55,8 @@ const TOOLS = [
   { id: "nogo_rect", label: "No-go ▭", model: "corners", resize: "rect", save: { category: "nogo", shape: "polygon" } },
   { id: "nogo_circle", label: "No-go ◯", model: "circle", save: { category: "nogo", shape: "circle" } },
   { id: "nogo_line", label: "No-go ╱", model: "line", save: { category: "nogo", shape: "line" } },
-  { id: "nogo_poly", label: "No-go ⬠", model: "corners", resize: "uniform", save: { category: "nogo", shape: "polygon" } },
-  { id: "ignore_poly", label: "Ignore ⬠", model: "corners", resize: "uniform", save: { category: "ignore", shape: "polygon" } },
+  { id: "nogo_poly", label: "No-go ⬠", model: "corners", resize: "vertex", save: { category: "nogo", shape: "polygon" } },
+  { id: "ignore_poly", label: "Ignore ⬠", model: "corners", resize: "vertex", save: { category: "ignore", shape: "polygon" } },
   { id: "mow_square", label: "Mow ▢", model: "corners", resize: "rect", save: { category: "mow", shape: "square" } },
   { id: "mow_circle", label: "Mow ◯", model: "edge", save: { category: "mow", shape: "circle" } },
   { id: "mow_heart", label: "Mow ♥", model: "edge", save: { category: "mow", shape: "heart" } },
@@ -377,9 +376,9 @@ class DreameMapEditorCard extends HTMLElement {
       draft.model = "line";
       draft.shape = "line";
     } else {
-      // >=3 points: reshape vertices (uniform); rotate works.
+      // >=3 points: freeform polygon — drag each vertex; rotate works.
       draft.model = "corners";
-      draft.resize = "uniform";
+      draft.resize = "vertex";
       if (draft.category === "nogo") draft.shape = "polygon";
     }
     return draft;
@@ -499,8 +498,10 @@ class DreameMapEditorCard extends HTMLElement {
       // free-aspect 4-corner rectangle, anchored opposite, orientation preserved.
       d.pts = resizeRectCorner(d.pts, idx, pos);
     } else {
-      // corners + "uniform" (free polygon / ignore) -> scale about centroid.
-      d.pts = resizeUniform(d.pts, idx, pos);
+      // corners + "vertex" (free polygon / ignore) -> move just the dragged
+      // vertex, so the user can reshape it into any freeform polygon (this is
+      // what makes the polygon tool distinct from the rectangle tool).
+      d.pts[idx] = [pos[0], pos[1]];
     }
   }
 
