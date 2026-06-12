@@ -302,13 +302,16 @@ Validate: correlate event args with the session that fired them.
 - **Per-pathway selection sub-menu** — app shows a per-map pathway-ID selector when
   Pathway Obstacle Avoidance is enabled; write transport unknown `[UNKNOWN — to capture]`
   (deferred: needs pathways drawn first, then CFG-DIFF on the per-pathway list).
-- **Map-edit mowing-shape type ids 10/11** — RESOLVED for 12/14/15/16: the o:215 `type`
-  field's decorative shape map is now confirmed 9=square, 12=circle, 13=heart, 14=triangle,
-  15=teardrop, 16=mushroom, 17=cloud, 18=rainbow from the Shapes screen (IMG_4615.PNG) and
-  wired in `create_mow_shape`. Still `[UNKNOWN — to capture]`: type ids 10 and 11 — the
-  contiguous gap between square(9) and circle(12) has no shape in the Shapes screen, so 10/11
-  are unused on g2408 (or map to shapes not offered in this app build). Capture: if a future
-  app build adds a shape, read its `type` in the o:215 payload.
+- **Map-edit mowing-shape type ids** — WIRE-CONFIRMED only for 9=square, 13=heart, 17=cloud,
+  18=rainbow (these four `type` values appear in the o:215 capture payloads). `[UNVERIFIED]`
+  12=circle, 14=triangle, 15=teardrop, 16=mushroom — these are INFERRED from the Shapes-screen
+  (IMG_4615.PNG) left→right ordering filling the 9,12-18 sequence, NOT seen on the wire. They
+  are wired in `create_mow_shape` on that inference; if the firmware numbers them differently a
+  "triangle" call would silently draw a different shape (no malformed payload, just wrong shape).
+  Capture: draw each of circle/triangle/teardrop/mushroom in an app-MITM session and read its
+  `type` in the o:215 payload to confirm/correct the mapping. Also `[UNKNOWN — to capture]`:
+  type ids 10 and 11 — no shape occupies the gap between square(9) and circle(12) in this app
+  build, so they appear unused on g2408.
 - **Type-3 transient obstacle photo / map-icon link** — obstacle JPEG bytes are
   archived via `userDidOssList` (category=obstacle; confirmed 2026-06-09). The
   *icon-linkage* — i.e. which map waypoint/obstacle-icon in the live-session data

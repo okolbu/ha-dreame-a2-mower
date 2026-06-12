@@ -4377,7 +4377,7 @@ opcodes:
       last_seen: "2026-06-09"
       decoded: confirmed
     open_questions:
-      - "Shape type ids 12 (Circle), 14 (Triangle), 15 (Teardrop), 16 (Mushroom) are now confirmed from the Shapes screen (IMG_4615.PNG) — see the 2026-06-12 verification. Type ids 10 and 11 (the gap between square=9 and circle=12) are [UNKNOWN — to capture] — no shape occupies them in the current app's Shapes screen, so they appear unused on g2408. Capture if a future app build adds a shape there."
+      - "Shape type ids 9 (Square), 13 (Heart), 17 (Cloud), 18 (Rainbow) are WIRE-CONFIRMED (appear in o:215 capture payloads). Type ids 12 (Circle), 14 (Triangle), 15 (Teardrop), 16 (Mushroom) are [UNVERIFIED] — INFERRED from the Shapes-screen (IMG_4615.PNG) left→right ordering filling the 9,12-18 sequence, NOT seen on the wire. Capture: draw each in app-MITM and read its type in o:215 to confirm/correct. Type ids 10 and 11 (the gap between square=9 and circle=12) are [UNKNOWN — to capture] — no shape occupies them in this app's Shapes screen, so they appear unused on g2408."
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
@@ -4394,7 +4394,7 @@ opcodes:
         evidence: "app-mitm:2026-06-09-settings-sweep"
       - date: "2026-06-12"
         status: verified
-        claim: "Map create/split/merge wired via the o=204/o=201 edit transaction. o=215{id:-1,type,points,radius}: type 1=no-go line(2pt), 2=no-go polygon(Npt), 3=no-go circle(1pt+radius m); decorative mow-shapes 9=square(4pt),12=circle,13=heart,14=triangle,15=teardrop,16=mushroom,17=cloud,18=rainbow (2pt bbox). o=234{id:-1,type:0,points}=ignore-obstacle (no radius). o=220{id,line_start,line_end}=split zone (destructive). o=221{ids:[...]}=merge zones (destructive). Coords in metres. Decorative shape<->type map (12=circle,14=triangle,15=teardrop,16=mushroom) confirmed from the Shapes screen (IMG_4615.PNG), resolving the o215 open question. [app-mitm:2026-06-09-map-edit]"
+        claim: "Map create/split/merge wired via the o=204/o=201 edit transaction. o=215{id:-1,type,points,radius}: type 1=no-go line(2pt), 2=no-go polygon(Npt), 3=no-go circle(1pt+radius m); decorative mow-shapes (2pt bbox; square=4pt): 9=square,13=heart,17=cloud,18=rainbow WIRE-CONFIRMED in o:215 payloads; [UNVERIFIED] 12=circle,14=triangle,15=teardrop,16=mushroom INFERRED from Shapes-screen ordering (IMG_4615.PNG), not seen on wire — capture to confirm. o=234{id:-1,type:0,points}=ignore-obstacle (no radius). o=220{id,line_start,line_end}=split zone (destructive). o=221{ids:[...]}=merge zones (destructive). Coords in metres. [app-mitm:2026-06-09-map-edit]"
         evidence: "dreame-app-capture-2026-06-09/miio-cloud-13267-http.jsonl (o:215/234/220/221 payloads); shape names from IMG_4615.PNG (Shapes screen)"
 
   - id: "o218"

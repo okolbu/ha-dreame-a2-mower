@@ -9,6 +9,12 @@ from __future__ import annotations
 from typing import Any
 
 NOGO_TYPE = {"line": 1, "polygon": 2, "circle": 3}
+# Wire-confirmed type ids (seen in o:215 capture payloads): 9, 13, 17, 18.
+# circle/triangle/teardrop/mushroom (12/14/15/16) are [UNVERIFIED] — inferred
+# from the Shapes-screen (IMG_4615.PNG) left→right ordering filling the 9,12-18
+# sequence, not seen on the wire. If the firmware numbers them differently, the
+# corresponding service call draws the wrong shape (still a valid payload).
+# Capture each to confirm — see docs/research/knowledge-gaps.md.
 MOW_SHAPE_TYPE = {
     "square": 9, "circle": 12, "heart": 13, "triangle": 14,
     "teardrop": 15, "mushroom": 16, "cloud": 17, "rainbow": 18,
