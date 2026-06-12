@@ -20,8 +20,11 @@ import {
   rotatePointsAroundCentroid,
   pointerAngleAboutCentroid,
   resizeUniform,
+  resizeRectCorner,
+  orientedEdgeBox,
+  resizeOrientedEdge,
+  rotateEdgeAboutCenter,
   circleFromCenterEdge,
-  shapeToPoints,
 } from "./_dreame-map-edit-geom.js";
 
 // ----- read-only overlay rendering (Task 5) -------------------------------
@@ -40,26 +43,28 @@ const ROTATE_OFF = 36;    // rotate-handle offset above the bbox top (px)
 const DEL_OFF = 18;       // delete-X offset (px)
 const DEFAULT_PX = 60;    // default half-extent of a freshly dropped shape
 
-// Toolbar tool catalogue. `geom` selects the manipulation model:
-//   bbox    -> 2 opposite corners rendered as a 4-corner rect (rect resize)
-//   circle  -> center + edge point (single rim handle)
-//   line    -> 2 endpoints (2 endpoint handles)
-//   polygon -> N corners (uniform resize)
-// `save` is { category, shape } passed to shapeToPoints at save time (Task 7).
+// Toolbar tool catalogue. `model` selects the manipulation model (Task 1):
+//   corners -> shape stored as actual corner points; rotatePointsAroundCentroid.
+//              `resize` sub-mode: "rect" (free-aspect 4-corner) | "uniform" (N-corner scale).
+//   edge    -> curved mow shapes; stored as a 2-point edge [p0,p1]; rendered as
+//              orientedEdgeBox; resizeOrientedEdge (aspect-locked) + rotateEdgeAboutCenter.
+//   line    -> 2 endpoints (per-endpoint drag); rotate via rotatePointsAroundCentroid.
+//   circle  -> center + rim point (single rim handle); NO rotate (rotation-invariant).
+// `save` is { category, shape } sent to the create_* service at save time (Task 7).
 const TOOLS = [
-  { id: "nogo_rect", label: "No-go ▭", geom: "bbox", save: { category: "nogo", shape: "polygon" } },
-  { id: "nogo_circle", label: "No-go ◯", geom: "circle", save: { category: "nogo", shape: "circle" } },
-  { id: "nogo_line", label: "No-go ╱", geom: "line", save: { category: "nogo", shape: "line" } },
-  { id: "nogo_poly", label: "No-go ⬠", geom: "polygon", save: { category: "nogo", shape: "polygon" } },
-  { id: "ignore_poly", label: "Ignore ⬠", geom: "polygon", save: { category: "ignore", shape: "polygon" } },
-  { id: "mow_square", label: "Mow ▢", geom: "bbox", save: { category: "mow", shape: "square" } },
-  { id: "mow_circle", label: "Mow ◯", geom: "bbox", save: { category: "mow", shape: "circle" } },
-  { id: "mow_heart", label: "Mow ♥", geom: "bbox", save: { category: "mow", shape: "heart" } },
-  { id: "mow_triangle", label: "Mow △", geom: "bbox", save: { category: "mow", shape: "triangle" } },
-  { id: "mow_teardrop", label: "Mow Teardrop", geom: "bbox", save: { category: "mow", shape: "teardrop" } },
-  { id: "mow_mushroom", label: "Mow Mushroom", geom: "bbox", save: { category: "mow", shape: "mushroom" } },
-  { id: "mow_cloud", label: "Mow Cloud", geom: "bbox", save: { category: "mow", shape: "cloud" } },
-  { id: "mow_rainbow", label: "Mow Rainbow", geom: "bbox", save: { category: "mow", shape: "rainbow" } },
+  { id: "nogo_rect", label: "No-go ▭", model: "corners", resize: "rect", save: { category: "nogo", shape: "polygon" } },
+  { id: "nogo_circle", label: "No-go ◯", model: "circle", save: { category: "nogo", shape: "circle" } },
+  { id: "nogo_line", label: "No-go ╱", model: "line", save: { category: "nogo", shape: "line" } },
+  { id: "nogo_poly", label: "No-go ⬠", model: "corners", resize: "uniform", save: { category: "nogo", shape: "polygon" } },
+  { id: "ignore_poly", label: "Ignore ⬠", model: "corners", resize: "uniform", save: { category: "ignore", shape: "polygon" } },
+  { id: "mow_square", label: "Mow ▢", model: "corners", resize: "rect", save: { category: "mow", shape: "square" } },
+  { id: "mow_circle", label: "Mow ◯", model: "edge", save: { category: "mow", shape: "circle" } },
+  { id: "mow_heart", label: "Mow ♥", model: "edge", save: { category: "mow", shape: "heart" } },
+  { id: "mow_triangle", label: "Mow △", model: "edge", save: { category: "mow", shape: "triangle" } },
+  { id: "mow_teardrop", label: "Mow Teardrop", model: "edge", save: { category: "mow", shape: "teardrop" } },
+  { id: "mow_mushroom", label: "Mow Mushroom", model: "edge", save: { category: "mow", shape: "mushroom" } },
+  { id: "mow_cloud", label: "Mow Cloud", model: "edge", save: { category: "mow", shape: "cloud" } },
+  { id: "mow_rainbow", label: "Mow Rainbow", model: "edge", save: { category: "mow", shape: "rainbow" } },
 ];
 
 class DreameMapEditorCard extends HTMLElement {
@@ -190,6 +195,21 @@ class DreameMapEditorCard extends HTMLElement {
     if (del) del.disabled = !editing;
   }
 
+  // Toggle the submit/delete buttons into a disabled "writing…" state while a
+  // Create/Save/Delete service call is in flight; restore labels on completion
+  // (both success and the catch path) via _syncActionButtons.
+  _setBusy(busy) {
+    const submit = this.shadowRoot && this.shadowRoot.getElementById("submitBtn");
+    const del = this.shadowRoot && this.shadowRoot.getElementById("deleteBtn");
+    if (busy) {
+      if (submit) { submit.disabled = true; submit.textContent = "writing…"; }
+      if (del) { del.disabled = true; del.textContent = "writing…"; }
+    } else {
+      if (del) del.textContent = "Delete";
+      this._syncActionButtons();
+    }
+  }
+
   _syncMapIds(a) {
     const sel = this.shadowRoot.getElementById("mapSel");
     if (!sel) return;
@@ -230,23 +250,26 @@ class DreameMapEditorCard extends HTMLElement {
   _renderObjects(objs) {
     const g = this.shadowRoot.getElementById("objects");
     if (!g) return;
+    // Skip the selected object (drawn as the draft). No-go & ignore share an id
+    // space, so the skip test must match BOTH id AND kind (Task 9).
     const selId = this._draft && this._draft.objectId != null ? this._draft.objectId : null;
+    const selKind = this._draft ? this._draft.kind : null;
     const parts = [];
     for (const o of objs) {
-      if (o.id === selId) continue; // selected object is drawn as the draft
+      if (selId != null && o.id === selId && o.kind === selKind) continue;
       const pts = Array.isArray(o.points_m) ? o.points_m : [];
       const pix = pts.map((m) => metersToPixel(m[0], m[1], this._proj));
       const cls = o.kind === "ignore" ? "obj obj-ignore" : "obj obj-nogo";
       if (pix.length >= 2) {
         const d = pix.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(" ");
-        parts.push(`<polygon class="${cls}" points="${d}" data-id="${o.id}"/>`);
+        parts.push(`<polygon class="${cls}" points="${d}" data-id="${o.id}" data-kind="${o.kind}"/>`);
       } else if (pix.length === 1 && o.radius) {
         const c = pix[0];
         const rim = metersToPixel(o.points_m[0][0] + o.radius, o.points_m[0][1], this._proj);
         const rpx = circleFromCenterEdge(c, rim).radius;
         parts.push(
           `<circle class="${cls}" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" ` +
-          `r="${rpx.toFixed(1)}" data-id="${o.id}"/>`
+          `r="${rpx.toFixed(1)}" data-id="${o.id}" data-kind="${o.kind}"/>`
         );
       }
     }
@@ -262,22 +285,25 @@ class DreameMapEditorCard extends HTMLElement {
     const draft = {
       category: tool.save.category,
       shape: tool.save.shape,
-      geom: tool.geom,
+      model: tool.model,
+      resize: tool.resize || null,
+      kind: null,
       objectId: null,
       pts: [],
       radius: 0,
     };
-    if (tool.geom === "bbox") {
-      // store the 2 opposite bbox corners; rendered as a rect
-      draft.pts = [[cx - d, cy - d], [cx + d, cy + d]];
-    } else if (tool.geom === "circle") {
-      draft.pts = [[cx, cy], [cx + d, cy]]; // center, edge
-      draft.radius = d;
-    } else if (tool.geom === "line") {
-      draft.pts = [[cx - d, cy], [cx + d, cy]];
-    } else if (tool.geom === "polygon") {
-      // default = axis-aligned square polygon (4 corners) the user can reshape
+    if (tool.model === "corners") {
+      // rect/square (resize "rect") and free polygon/ignore (resize "uniform")
+      // both start as a 4-corner axis-aligned square the user reshapes.
       draft.pts = rectCorners([cx - d, cy - d], [cx + d, cy + d]);
+    } else if (tool.model === "edge") {
+      // a small axis-aligned edge => unrotated default oriented box.
+      draft.pts = [[cx - d, cy], [cx + d, cy]];
+    } else if (tool.model === "circle") {
+      draft.pts = [[cx, cy], [cx + d, cy]]; // center, rim
+      draft.radius = d;
+    } else if (tool.model === "line") {
+      draft.pts = [[cx - d, cy], [cx + d, cy]];
     }
     return draft;
   }
@@ -294,7 +320,9 @@ class DreameMapEditorCard extends HTMLElement {
     const draft = {
       category: o.kind === "ignore" ? "ignore" : "nogo",
       shape: o.kind === "ignore" ? "polygon" : null,
-      geom: null,
+      model: null,
+      resize: null,
+      kind: o.kind, // composite (id+kind) selection key (Task 9)
       objectId: o.id,
       category_code: o.kind === "ignore" ? 4 : 0,
       pts: pix,
@@ -305,15 +333,18 @@ class DreameMapEditorCard extends HTMLElement {
       const c = pix[0];
       const rim = metersToPixel(o.points_m[0][0] + o.radius, o.points_m[0][1], this._proj);
       const rpx = circleFromCenterEdge(c, rim).radius;
-      draft.geom = "circle";
+      draft.model = "circle";
       draft.shape = "circle";
       draft.pts = [c, [c[0] + rpx, c[1]]];
       draft.radius = rpx;
     } else if (pix.length === 2) {
-      draft.geom = "line";
+      // a genuine 2-point no-go is a wall/line: render + edit as a line.
+      draft.model = "line";
       draft.shape = "line";
     } else {
-      draft.geom = "polygon";
+      // >=3 points: reshape vertices (uniform); rotate works.
+      draft.model = "corners";
+      draft.resize = "uniform";
       if (draft.category === "nogo") draft.shape = "polygon";
     }
     return draft;
@@ -339,13 +370,17 @@ class DreameMapEditorCard extends HTMLElement {
       if (role === "del") { this._onDeleteHandle(); return; }
       e.target.setPointerCapture && e.target.setPointerCapture(e.pointerId);
       this._drag = { mode: role, idx: Number(e.target.dataset.idx), start: pos, refAngle: 0 };
-      if (role === "rotate") this._drag.refAngle = pointerAngleAboutCentroid(this._draft.pts, pos);
+      if (role === "rotate") this._drag.refAngle = this._rotateBasisAngle(this._draft, pos);
       return;
     }
-    // Click an existing overlay -> select it.
+    // Click an existing overlay -> select it. No-go & ignore share an id space,
+    // so match BOTH id AND kind (Task 9).
     const id = e.target && e.target.dataset ? e.target.dataset.id : null;
+    const kind = e.target && e.target.dataset ? e.target.dataset.kind : null;
     if (id != null && id !== "") {
-      const o = (this._objs || []).find((x) => String(x.id) === String(id));
+      const o = (this._objs || []).find(
+        (x) => String(x.id) === String(id) && (kind == null || x.kind === kind)
+      );
       if (o) {
         this._tool = null;
         for (const b of this.shadowRoot.querySelectorAll(".bar button[data-tool]")) {
@@ -384,8 +419,15 @@ class DreameMapEditorCard extends HTMLElement {
       this._draft.pts = this._draft.pts.map(([x, y]) => [x + dx, y + dy]);
       this._drag.start = pos;
     } else if (mode === "rotate") {
-      const ang = pointerAngleAboutCentroid(this._draft.pts, pos);
-      this._draft.pts = rotatePointsAroundCentroid(this._draft.pts, ang - this._drag.refAngle);
+      const d = this._draft;
+      const ang = this._rotateBasisAngle(d, pos);
+      const delta = ang - this._drag.refAngle;
+      if (d.model === "edge") {
+        d.pts = rotateEdgeAboutCenter(d.pts[0], d.pts[1], delta);
+      } else {
+        // corners / line: rigid rotation about the points' centroid.
+        d.pts = rotatePointsAroundCentroid(d.pts, delta);
+      }
       this._drag.refAngle = ang;
     } else if (mode === "resize") {
       this._applyResize(this._drag.idx, pos);
@@ -399,20 +441,28 @@ class DreameMapEditorCard extends HTMLElement {
     this._drag = null;
   }
 
+  // Compute the rotate-drag basis angle for a draft (consistent ref/move basis
+  // so the per-move delta is correct). Edge model rotates about the box centre,
+  // but the delta angle about the points' centroid is what drives the sweep.
+  _rotateBasisAngle(d, pos) {
+    return pointerAngleAboutCentroid(d.pts, pos);
+  }
+
   _applyResize(idx, pos) {
     const d = this._draft;
-    if (d.geom === "bbox") {
-      // Move the dragged corner; the diagonally-opposite corner is the anchor.
-      const corners = rectCorners(d.pts[0], d.pts[1]);
-      const opp = (idx + 2) % 4;
-      d.pts = bboxAsTwo(rectCorners(corners[opp], pos));
-    } else if (d.geom === "circle") {
+    if (d.model === "circle") {
       // Drag the rim handle; keep center fixed, recompute the rim radius via the
       // geom helper (no card-side distance math).
       d.pts[1] = pos;
       d.radius = circleFromCenterEdge(d.pts[0], pos).radius;
+    } else if (d.model === "edge") {
+      // aspect-locked scale of the oriented edge about the box centre.
+      d.pts = resizeOrientedEdge(d.pts[0], d.pts[1], idx, pos);
+    } else if (d.model === "corners" && d.resize === "rect") {
+      // free-aspect 4-corner rectangle, anchored opposite, orientation preserved.
+      d.pts = resizeRectCorner(d.pts, idx, pos);
     } else {
-      // polygon / line-as-polygon -> uniform scale about centroid
+      // corners + "uniform" (free polygon / ignore) -> scale about centroid.
       d.pts = resizeUniform(d.pts, idx, pos);
     }
   }
@@ -434,32 +484,27 @@ class DreameMapEditorCard extends HTMLElement {
   // frame-agnostic, so all wire-point math runs in the meter frame here.
   _pxToM(p) { return pixelToMeters(p[0], p[1], this._proj); }
 
-  // Build the meter-frame `state` object that shapeToPoints consumes, keyed on
-  // the SAVE shape (d.shape), from the current pixel draft. NO math here beyond
-  // per-point px->m conversion and rectCorners structural plumbing.
-  _meterState(d) {
-    if (d.shape === "line") {
-      return { a: this._pxToM(d.pts[0]), b: this._pxToM(d.pts[1]) };
+  // Build the wire { points, radius } (meter frame) directly from the draft's
+  // stored defining points. Rotation is carried BY the points themselves:
+  //   circle -> [center] + radius
+  //   corners (rect/poly), line, edge -> the stored points in meters
+  //     (square mow = 4 corners; curved mow = 2 edge points; rect/poly = N
+  //      corners; line = 2 endpoints).
+  _wirePoints(d) {
+    if (d.model === "circle") {
+      const center = this._pxToM(d.pts[0]);
+      const radius = circleFromCenterEdge(center, this._pxToM(d.pts[1])).radius;
+      return { points: [center], radius };
     }
-    if (d.shape === "circle" && d.category === "nogo") {
-      return { center: this._pxToM(d.pts[0]), edge: this._pxToM(d.pts[1]) };
-    }
-    if (d.shape === "polygon") {
-      // A bbox-geom polygon (the no-go rectangle tool) expands to 4 corners;
-      // a true polygon draft passes its N corners straight through.
-      const ptsPx = d.geom === "bbox" ? rectCorners(d.pts[0], d.pts[1]) : d.pts;
-      return { points: ptsPx.map((p) => this._pxToM(p)) };
-    }
-    // mow shapes (square + curved) -> 2 opposite bbox corners
-    return { p0: this._pxToM(d.pts[0]), p1: this._pxToM(d.pts[1]) };
+    return { points: d.pts.map((p) => this._pxToM(p)), radius: 0 };
   }
 
   async _onSubmit() {
     const d = this._draft;
     if (!d || !this._hass) return;
-    const state = this._meterState(d);
-    const { points, radius } = shapeToPoints(d.category, d.shape, state);
+    const { points, radius } = this._wirePoints(d);
     const mapId = this._editMapId;
+    this._setBusy(true);
     try {
       if (d.category === "nogo") {
         await this._hass.callService("dreame_a2_mower", "create_no_go_zone", {
@@ -486,8 +531,10 @@ class DreameMapEditorCard extends HTMLElement {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("dreame-map-editor: submit failed", err);
+      this._setBusy(false);
       return;
     }
+    this._setBusy(false);
     // Clear selection; the next camera refresh re-publishes editable_objects.
     this._draft = null;
     this._renderObjects(this._objs || []);
@@ -497,6 +544,7 @@ class DreameMapEditorCard extends HTMLElement {
   async _deleteExisting(d) {
     if (!this._hass || d.objectId == null) return;
     const category = d.category === "ignore" ? 4 : 0;
+    this._setBusy(true);
     try {
       await this._hass.callService("dreame_a2_mower", "delete_map_object", {
         map_id: this._editMapId,
@@ -506,8 +554,10 @@ class DreameMapEditorCard extends HTMLElement {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error("dreame-map-editor: delete failed", err);
+      this._setBusy(false);
       return;
     }
+    this._setBusy(false);
     this._draft = null;
     this._renderObjects(this._objs || []);
     this._renderDraft();
@@ -520,57 +570,66 @@ class DreameMapEditorCard extends HTMLElement {
     const d = this._draft;
     if (!d) { g.innerHTML = ""; this._syncActionButtons(); return; }
     const parts = [];
-    // Shape body.
-    if (d.geom === "circle") {
+    // Shape body + resize/endpoint handles, per manipulation model.
+    if (d.model === "circle") {
       const c = d.pts[0];
       parts.push(
         `<circle class="draft" cx="${c[0].toFixed(1)}" cy="${c[1].toFixed(1)}" ` +
         `r="${(d.radius || 0).toFixed(1)}"/>`
       );
-    } else if (d.geom === "line") {
+    } else if (d.model === "line") {
       const [a, b] = d.pts;
       parts.push(
         `<line class="draft" x1="${a[0].toFixed(1)}" y1="${a[1].toFixed(1)}" ` +
         `x2="${b[0].toFixed(1)}" y2="${b[1].toFixed(1)}"/>`
       );
+    } else if (d.model === "edge") {
+      // curved mow shape: WYSIWYG proxy is the oriented box.
+      const box = orientedEdgeBox(d.pts[0], d.pts[1]);
+      const dd = box.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(" ");
+      parts.push(`<polygon class="draft" points="${dd}"/>`);
     } else {
-      const poly = d.geom === "bbox" ? rectCorners(d.pts[0], d.pts[1]) : d.pts;
-      const dd = poly.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(" ");
+      // corners: draw the stored corners DIRECTLY (preserves rotation).
+      const dd = d.pts.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(" ");
       parts.push(`<polygon class="draft" points="${dd}"/>`);
     }
-    // Bounding box + handles.
+    // Bounding box (handle/rotate placement only).
     const bb = this._bboxOf(d);
     parts.push(
       `<rect class="bbox" x="${bb.x.toFixed(1)}" y="${bb.y.toFixed(1)}" ` +
       `width="${bb.w.toFixed(1)}" height="${bb.h.toFixed(1)}"/>`
     );
     // Resize / endpoint handles.
-    if (d.geom === "line") {
+    if (d.model === "line") {
       d.pts.forEach((p, i) =>
         parts.push(this._handle(p[0], p[1], "endpoint", i))
       );
-    } else if (d.geom === "circle") {
+    } else if (d.model === "circle") {
       parts.push(this._handle(d.pts[1][0], d.pts[1][1], "resize", 0));
-    } else if (d.geom === "bbox") {
-      rectCorners(d.pts[0], d.pts[1]).forEach((p, i) =>
+    } else if (d.model === "edge") {
+      orientedEdgeBox(d.pts[0], d.pts[1]).forEach((p, i) =>
         parts.push(this._handle(p[0], p[1], "resize", i))
       );
     } else {
+      // corners: a handle at each stored corner.
       d.pts.forEach((p, i) =>
         parts.push(this._handle(p[0], p[1], "resize", i))
       );
     }
-    // Rotate handle (above bbox top-center) + delete X (bbox top-right).
+    // Rotate handle (above bbox top-center) — SKIP for circle (rotation-invariant).
     const rcx = bb.x + bb.w / 2;
     const rcy = bb.y - ROTATE_OFF;
-    parts.push(
-      `<line class="bbox" x1="${rcx.toFixed(1)}" y1="${bb.y.toFixed(1)}" ` +
-      `x2="${rcx.toFixed(1)}" y2="${rcy.toFixed(1)}"/>`
-    );
-    parts.push(
-      `<circle class="rot" data-role="rotate" cx="${rcx.toFixed(1)}" ` +
-      `cy="${rcy.toFixed(1)}" r="${HANDLE_R}"/>`
-    );
+    if (d.model !== "circle") {
+      parts.push(
+        `<line class="bbox" x1="${rcx.toFixed(1)}" y1="${bb.y.toFixed(1)}" ` +
+        `x2="${rcx.toFixed(1)}" y2="${rcy.toFixed(1)}"/>`
+      );
+      parts.push(
+        `<circle class="rot" data-role="rotate" cx="${rcx.toFixed(1)}" ` +
+        `cy="${rcy.toFixed(1)}" r="${HANDLE_R}"/>`
+      );
+    }
+    // Delete X (bbox top-right).
     const dx = bb.x + bb.w + DEL_OFF;
     const dy = bb.y - DEL_OFF;
     parts.push(
@@ -594,13 +653,14 @@ class DreameMapEditorCard extends HTMLElement {
   // Pixel-space bbox of the current draft (for handle/rotate placement only).
   _bboxOf(d) {
     let pts = d.pts;
-    if (d.geom === "circle") {
+    if (d.model === "circle") {
       const [cx, cy] = d.pts[0];
       const r = d.radius || 0;
       pts = [[cx - r, cy - r], [cx + r, cy + r]];
-    } else if (d.geom === "bbox") {
-      pts = rectCorners(d.pts[0], d.pts[1]);
+    } else if (d.model === "edge") {
+      pts = orientedEdgeBox(d.pts[0], d.pts[1]);
     }
+    // corners / line: d.pts are the actual rendered corners/endpoints.
     let minx = Infinity;
     let miny = Infinity;
     let maxx = -Infinity;
@@ -616,13 +676,6 @@ class DreameMapEditorCard extends HTMLElement {
 
   getCardSize() { return 6; }
   static getStubConfig() { return { entity: "camera.dreame_a2_mower_map" }; }
-}
-
-// Two opposite rect corners <-> the 2-point bbox draft representation.
-// Reorders the 4 produced corners back to the [min,max]-ish pair the draft
-// stores (corner[0], corner[2] are the diagonal). Pure index plumbing — no math.
-function bboxAsTwo(corners) {
-  return [corners[0], corners[2]];
 }
 
 // ---- Task 6 manual-verification expectations ----
