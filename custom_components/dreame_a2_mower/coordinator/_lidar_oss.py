@@ -834,6 +834,15 @@ class _LidarOssMixin:
             data = await self.hass.async_add_executor_job(self._cloud.get_file, rec.get("filepath"))
             if not data:
                 continue
+            # Guard against corrupt/non-JPEG downloads (observed: OSS occasionally
+            # returns garbage bytes). Archiving them produces a broken thumbnail
+            # in the gallery; skip so the next sync can retry cleanly.
+            if data[:2] != b"\xff\xd8":
+                LOGGER.warning(
+                    "[PHOTOS] skipping non-JPEG download for %s (%d bytes, magic=%s)",
+                    name, len(data), data[:4].hex(),
+                )
+                continue
             is_person = name.lower().endswith("_person.jpg")
             meta = photo_meta.parse_jpeg_com(data)
             if is_person:
@@ -892,7 +901,10 @@ class _LidarOssMixin:
         so ``use_content_user=True`` signs with HA's content user (the same path
         camera ``entity_picture`` uses) and validates for all frontend sessions.
         """
-        from homeassistant.components.http import async_sign_path
+        # async_sign_path lives in http.auth and is NOT re-exported at the
+        # http package level (importing from `homeassistant.components.http`
+        # raises ImportError on 2026.6).
+        from homeassistant.components.http.auth import async_sign_path
         return async_sign_path(
             self.hass, path, timedelta(days=7), use_content_user=True
         )
@@ -945,3 +957,12 @@ class _LidarOssMixin:
             self._photo_gallery = items
         except Exception as ex:  # noqa: BLE001 — manifest never breaks the sync
             LOGGER.warning("[PHOTOS] gallery manifest build failed: %s", ex)
+        # The OSS sync runs outside the coordinator's push cycle (and the quota
+        # push above fires BEFORE this rebuild), so notify entities explicitly
+        # or the gallery sensor never reflects the freshly-built manifest.
+        update = getattr(self, "async_update_listeners", None)
+        if callable(update):
+            update()
+        LOGGER.debug(
+            "[PHOTOS] manifest rebuilt: %d items", len(self._photo_gallery),
+        )
