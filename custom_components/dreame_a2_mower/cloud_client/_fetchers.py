@@ -901,6 +901,40 @@ class _FetchersMixin:
             "left_days": d.get("leftDays"),
         }
 
+    def fetch_mpos(self) -> dict:
+        """Live mower position via routed-get m:g t:MPOS (DIAGNOSTIC, RAW).
+
+        Returns one of:
+          {"result": "ok", "x": int, "y": int, "yaw": int}  — r:0 with data
+          {"result": "idle"}   — r:-1/-3 (mower idle / no data, like MISTA)
+          {"result": "error"}  — transport failure or malformed payload
+
+        [tools/probes/read_key_probe.py@2026-06-09] observed r:0
+        d={"x":95,"y":-4,"yaw":0} at dock-idle. The values are RAW cloud frame —
+        units/frame UNVERIFIED; never transform or treat as the integration's
+        position. Never raises.
+        """
+        try:
+            resp = self.action(
+                siid=2, aiid=50,
+                parameters=[{"m": "g", "t": "MPOS", "d": None}],
+            )
+        except Exception as ex:  # noqa: BLE001 — diagnostic read never breaks callers
+            _LOGGER.warning("fetch_mpos: %s", ex)
+            return {"result": "error"}
+        if not isinstance(resp, dict):
+            return {"result": "error"}
+        out = resp.get("out") or []
+        if not out or not isinstance(out[0], dict):
+            return {"result": "error"}
+        env = out[0]
+        if env.get("r") != 0:
+            return {"result": "idle"}
+        d = env.get("d")
+        if not isinstance(d, dict) or not all(k in d for k in ("x", "y", "yaw")):
+            return {"result": "error"}
+        return {"result": "ok", "x": d["x"], "y": d["y"], "yaw": d["yaw"]}
+
     def fetch_message_record(self) -> dict | None:
         """System + service messages via /dreame-message-push/v1/message-record/list.
 
