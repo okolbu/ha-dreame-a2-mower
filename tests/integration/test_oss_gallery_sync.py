@@ -66,8 +66,10 @@ def _coord_real_archives(tmp_path, photos, videos, quota):
     async def _exec(fn, *a):
         return fn(*a)
 
-    http = SimpleNamespace(async_sign_path=lambda path, *a, **k: path + "?authSig=fake")
-    c.hass = SimpleNamespace(async_add_executor_job=AsyncMock(side_effect=_exec), http=http)
+    c.hass = SimpleNamespace(async_add_executor_job=AsyncMock(side_effect=_exec))
+    # Stub the media-path signer (real impl calls homeassistant.components.http
+    # async_sign_path, which isn't available in the stubbed test env).
+    c._sign_media_path = lambda path: path + "?authSig=fake"
     c.async_set_updated_data = lambda s: setattr(c, "data", s)
     return c
 

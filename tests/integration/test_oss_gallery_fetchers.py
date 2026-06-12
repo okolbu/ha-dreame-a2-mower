@@ -10,8 +10,23 @@ def _client(json_body):
     c.get_api_url = lambda: "https://eu.iot.dreame.tech"
     c._ensure_strings = lambda: None
     c.strings = ["" for _ in range(60)]
-    c.did = 123
+    c._did = 123
     return c
+
+
+def test_list_oss_media_sends_real_did():
+    """Regression: list_oss_media must read self._did (the real client attr),
+    NOT self.did — DreameA2CloudClient has no `did` attribute, so self.did
+    raised AttributeError at runtime (caught -> None -> silent no-op sync)."""
+    c = _client({"data": {"records": []}})
+    c.list_oss_media("jpg")
+    assert c._session.post.call_args.kwargs["json"]["did"] == "123"
+
+
+def test_fetch_oss_quota_sends_real_did():
+    c = _client({"data": {}})
+    c.fetch_oss_quota()
+    assert c._session.post.call_args.kwargs["json"]["did"] == "123"
 
 
 def test_list_oss_media_jpg_records():

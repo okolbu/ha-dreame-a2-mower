@@ -879,15 +879,34 @@ class _LidarOssMixin:
         # --- gallery manifest (newest-first, signed media URLs) ---
         self._rebuild_photo_gallery()
 
+    def _sign_media_path(self, path: str) -> str:
+        """Sign a local media API path so an ``<img>``/``<video>`` tag can load
+        it without an auth header.
+
+        ``PhotoFileView`` / ``VideoFileView`` / ``VideoThumbView`` are
+        ``requires_auth = True`` (the JPEGs contain people), so the gallery card
+        needs a signed URL. ``async_sign_path`` is a MODULE-LEVEL function taking
+        ``hass`` first (NOT a method on ``hass.http`` — that attribute does not
+        exist and raised AttributeError, leaving the manifest empty). The
+        manifest is built in a background task with no request/websocket context,
+        so ``use_content_user=True`` signs with HA's content user (the same path
+        camera ``entity_picture`` uses) and validates for all frontend sessions.
+        """
+        from homeassistant.components.http import async_sign_path
+        return async_sign_path(
+            self.hass, path, timedelta(days=7), use_content_user=True
+        )
+
     def _rebuild_photo_gallery(self) -> None:
         """Rebuild ``self._photo_gallery`` from the photo + video archives.
 
         Each item is a self-describing dict the gallery card consumes — see the
         manifest shape in docs/superpowers/specs/2026-06-12-photo-gallery.md.
-        URLs are signed via ``hass.http.async_sign_path`` (a @callback, safe to
-        call from async) with a 7-day window; the manifest is rebuilt hourly so
-        the signatures are always fresh. Wrapped in try/except so a signing or
-        index-IO hiccup never breaks the OSS sync.
+        URLs are signed via ``_sign_media_path`` (the module-level
+        ``homeassistant.components.http.async_sign_path``, content-user signed)
+        with a 7-day window; the manifest is rebuilt hourly so the signatures are
+        always fresh. Wrapped in try/except so a signing or index-IO hiccup never
+        breaks the OSS sync.
         """
         from datetime import datetime
 
@@ -897,13 +916,10 @@ class _LidarOssMixin:
             except (OverflowError, OSError, ValueError):
                 return ""
 
-        def _sign(path: str) -> str:
-            return self.hass.http.async_sign_path(path, timedelta(days=7))
-
         try:
             items: list[dict[str, Any]] = []
             for p in self._photo_archive.list_photos():
-                url = _sign("/api/dreame_a2_mower/photo/" + p.filename)
+                url = self._sign_media_path("/api/dreame_a2_mower/photo/" + p.filename)
                 items.append({
                     "type": "photo",
                     "id": p.filename,
@@ -922,8 +938,8 @@ class _LidarOssMixin:
                     "date": _date(v.unix_ts),
                     "category": "video",
                     "duration": int(v.duration),
-                    "url": _sign("/api/dreame_a2_mower/video/" + v.video_id),
-                    "thumb_url": _sign("/api/dreame_a2_mower/video_thumb/" + v.video_id),
+                    "url": self._sign_media_path("/api/dreame_a2_mower/video/" + v.video_id),
+                    "thumb_url": self._sign_media_path("/api/dreame_a2_mower/video_thumb/" + v.video_id),
                 })
             items.sort(key=lambda it: it["ts"], reverse=True)
             self._photo_gallery = items

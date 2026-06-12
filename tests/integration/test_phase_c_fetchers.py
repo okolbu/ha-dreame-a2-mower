@@ -12,8 +12,16 @@ def _client_with_session(json_body):
     c.get_api_url = lambda: "https://eu.iot.dreame.tech"
     c._ensure_strings = lambda: None
     c.strings = ["" for _ in range(60)]
-    c.did = 123
+    c._did = 123
     return c
+
+
+def test_fetch_gps_sends_real_did():
+    """Regression: fetch_gps must read self._did, not self.did (AttributeError
+    at runtime -> GPS device_tracker never updated)."""
+    c = _client_with_session({"success": True, "locationRecords": {"records": []}})
+    c.fetch_gps()
+    assert c._session.post.call_args.kwargs["json"]["did"] == "123"
 
 
 def test_fetch_gps_takes_newest_record():

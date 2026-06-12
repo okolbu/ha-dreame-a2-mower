@@ -845,7 +845,7 @@ class _FetchersMixin:
             resp = self._session.post(
                 url,
                 headers=headers,
-                json={"did": str(self.did)},
+                json={"did": str(self._did)},
                 timeout=10,
             )
             if resp.status_code != 200:
@@ -1018,7 +1018,7 @@ class _FetchersMixin:
             try:
                 url = f"{self.get_api_url()}/dreame-user-iot/iotoss/userDidOssList?current={page}&size={size}"
                 resp = self._session.post(url, headers=headers,
-                                          json={"did": str(self.did), "type": media_type}, timeout=10)
+                                          json={"did": str(self._did), "type": media_type}, timeout=10)
                 if resp.status_code != 200:
                     return out or None
                 body = resp.json()
@@ -1057,7 +1057,7 @@ class _FetchersMixin:
         try:
             url = f"{self.get_api_url()}/dreame-user-iot/iotoss/checkDevOssStorage"
             resp = self._session.post(url, headers=headers,
-                                      json={"did": str(self.did)}, timeout=10)
+                                      json={"did": str(self._did)}, timeout=10)
             if resp.status_code != 200:
                 return None
             data = (resp.json() or {}).get("data") or {}
