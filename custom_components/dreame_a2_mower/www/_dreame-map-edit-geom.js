@@ -75,6 +75,24 @@ export function rotatePointsAroundCentroid(points, deg) {
   });
 }
 
+// Angle (DEGREES) of `pos` about the centroid of `points`. Drives a rotate
+// drag: the card feeds the per-move delta (this angle minus the previous one)
+// straight into rotatePointsAroundCentroid, so the centroid + atan2 convention
+// stay in this tested module rather than the card. 0 deg = +x axis.
+export function pointerAngleAboutCentroid(points, pos) {
+  const n = points.length;
+  if (n === 0) return 0;
+  let cx = 0;
+  let cy = 0;
+  for (const [x, y] of points) {
+    cx += x;
+    cy += y;
+  }
+  cx /= n;
+  cy /= n;
+  return (Math.atan2(pos[1] - cy, pos[0] - cx) * 180) / Math.PI;
+}
+
 // Uniformly scale `corners` (keep aspect ratio) when corner `handleIdx` is
 // dragged to `newPos`. The scaling is anchored at the centroid; the scale
 // factor is the ratio of the new handle distance to the old handle distance

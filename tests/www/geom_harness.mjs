@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { pixelToMeters, rectCorners, rotatePointsAroundCentroid, circleFromCenterEdge, shapeToPoints }
+import { pixelToMeters, rectCorners, rotatePointsAroundCentroid, circleFromCenterEdge, shapeToPoints, pointerAngleAboutCentroid }
   from "../../custom_components/dreame_a2_mower/www/_dreame-map-edit-geom.js";
 
 const proj = { bx2_mm: 10000, by2_mm: 6000, pixel_size_mm: 50, width_px: 400, height_px: 240 };
@@ -28,5 +28,15 @@ assert.ok(Math.abs(c.radius - 5) < 1e-9, "circle radius");
 // shapeToPoints: circle -> 1 point + radius; line -> 2; square -> 4
 assert.strictEqual(shapeToPoints("nogo", "circle", { center: [0, 0], edge: [3, 4] }).points.length, 1);
 assert.strictEqual(shapeToPoints("nogo", "line", { a: [0, 0], b: [1, 1] }).points.length, 2);
+
+// pointerAngleAboutCentroid: degrees about centroid; a 90deg pointer sweep
+// applied as a rotation delta turns a +x edge into a +y edge.
+const sq2 = [[-1, -1], [1, -1], [1, 1], [-1, 1]]; // centroid (0,0)
+assert.ok(Math.abs(pointerAngleAboutCentroid(sq2, [1, 0]) - 0) < 1e-9, "angle 0 on +x");
+assert.ok(Math.abs(pointerAngleAboutCentroid(sq2, [0, 1]) - 90) < 1e-9, "angle 90 on +y");
+const a0 = pointerAngleAboutCentroid(sq2, [2, 0]);
+const a1 = pointerAngleAboutCentroid(sq2, [0, 2]);
+const swept = rotatePointsAroundCentroid(sq2, a1 - a0);
+assert.ok(Math.abs(swept[0][0] - 1) < 1e-9 && Math.abs(swept[0][1] - -1) < 1e-9, "90deg sweep rotates corner");
 
 console.log("OK");

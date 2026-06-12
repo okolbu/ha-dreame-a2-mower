@@ -18,6 +18,7 @@ import {
   metersToPixel,
   rectCorners,
   rotatePointsAroundCentroid,
+  pointerAngleAboutCentroid,
   resizeUniform,
   circleFromCenterEdge,
   shapeToPoints,
@@ -332,7 +333,7 @@ class DreameMapEditorCard extends HTMLElement {
       if (role === "del") { this._onDeleteHandle(); return; }
       e.target.setPointerCapture && e.target.setPointerCapture(e.pointerId);
       this._drag = { mode: role, idx: Number(e.target.dataset.idx), start: pos, refAngle: 0 };
-      if (role === "rotate") this._drag.refAngle = this._angleFromCentroid(pos);
+      if (role === "rotate") this._drag.refAngle = pointerAngleAboutCentroid(this._draft.pts, pos);
       return;
     }
     // Click an existing overlay -> select it.
@@ -377,9 +378,8 @@ class DreameMapEditorCard extends HTMLElement {
       this._draft.pts = this._draft.pts.map(([x, y]) => [x + dx, y + dy]);
       this._drag.start = pos;
     } else if (mode === "rotate") {
-      const ang = this._angleFromCentroid(pos);
-      const ddeg = ((ang - this._drag.refAngle) * 180) / Math.PI;
-      this._draft.pts = rotatePointsAroundCentroid(this._draft.pts, ddeg);
+      const ang = pointerAngleAboutCentroid(this._draft.pts, pos);
+      this._draft.pts = rotatePointsAroundCentroid(this._draft.pts, ang - this._drag.refAngle);
       this._drag.refAngle = ang;
     } else if (mode === "resize") {
       this._applyResize(this._drag.idx, pos);
@@ -391,18 +391,6 @@ class DreameMapEditorCard extends HTMLElement {
 
   _onPointerUp() {
     this._drag = null;
-  }
-
-  // Angle (radians) of a point about the current draft's centroid — used only
-  // to drive rotatePointsAroundCentroid; no geometry result derived here.
-  _angleFromCentroid(pos) {
-    const pts = this._draft.pts;
-    let cx = 0;
-    let cy = 0;
-    for (const [x, y] of pts) { cx += x; cy += y; }
-    cx /= pts.length;
-    cy /= pts.length;
-    return Math.atan2(pos[1] - cy, pos[0] - cx);
   }
 
   _applyResize(idx, pos) {
