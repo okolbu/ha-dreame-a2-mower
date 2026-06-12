@@ -160,6 +160,105 @@ class LidarSelectedPcdView(HomeAssistantView):
         )
 
 
+def _gallery_coordinator(request: web.Request):
+    """Per-request coordinator lookup from ``hass.data[DOMAIN]`` (first entry).
+
+    Mirrors ``MapImageView`` — config-entry reloads are picked up without
+    re-registering the view. Returns ``None`` when no coordinator is loaded.
+    """
+    entries = request.app["hass"].data.get(DOMAIN) or {}
+    for cand in entries.values():
+        return cand
+    return None
+
+
+class PhotoFileView(HomeAssistantView):
+    """Serve an archived album-photo JPEG by its index filename.
+
+    GET ``/api/dreame_a2_mower/photo/{name}`` (auth required). Path-traversal
+    guard: only a ``name`` PRESENT in ``photo_archive.list_photos()`` is served;
+    anything else returns 404 — the view never opens an arbitrary path.
+    """
+
+    url = "/api/dreame_a2_mower/photo/{name}"
+    name = "api:dreame_a2_mower:photo"
+    requires_auth = True
+
+    async def get(self, request: web.Request, name: str) -> web.Response:
+        hass = request.app["hass"]
+        coord = _gallery_coordinator(request)
+        if coord is None:
+            return web.Response(status=404, text="No mower coordinator")
+        archive = coord.photo_archive
+        photos = await hass.async_add_executor_job(archive.list_photos)
+        if not any(p.filename == name for p in photos):
+            return web.Response(status=404, text="Unknown photo")
+        data = await hass.async_add_executor_job(archive.read_bytes, name)
+        if not data:
+            return web.Response(status=404, text="Photo file missing")
+        return web.Response(
+            body=data,
+            content_type="image/jpeg",
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+
+
+class VideoThumbView(HomeAssistantView):
+    """Serve the thumb JPG of an archived video clip by its video id.
+
+    GET ``/api/dreame_a2_mower/video_thumb/{vid}`` (auth required). Path-traversal
+    guard: ``read_thumb`` returns ``None`` for any id not in the index, so an
+    unknown id yields 404 — the view never opens an arbitrary path.
+    """
+
+    url = "/api/dreame_a2_mower/video_thumb/{vid}"
+    name = "api:dreame_a2_mower:video_thumb"
+    requires_auth = True
+
+    async def get(self, request: web.Request, vid: str) -> web.Response:
+        hass = request.app["hass"]
+        coord = _gallery_coordinator(request)
+        if coord is None:
+            return web.Response(status=404, text="No mower coordinator")
+        archive = coord.video_archive
+        data = await hass.async_add_executor_job(archive.read_thumb, vid)
+        if not data:
+            return web.Response(status=404, text="Unknown video thumb")
+        return web.Response(
+            body=data,
+            content_type="image/jpeg",
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+
+
+class VideoFileView(HomeAssistantView):
+    """Serve the MP4 of an archived video clip by its video id.
+
+    GET ``/api/dreame_a2_mower/video/{vid}`` (auth required). Path-traversal
+    guard: ``read_mp4`` returns ``None`` for any id not in the index, so an
+    unknown id yields 404 — the view never opens an arbitrary path.
+    """
+
+    url = "/api/dreame_a2_mower/video/{vid}"
+    name = "api:dreame_a2_mower:video"
+    requires_auth = True
+
+    async def get(self, request: web.Request, vid: str) -> web.Response:
+        hass = request.app["hass"]
+        coord = _gallery_coordinator(request)
+        if coord is None:
+            return web.Response(status=404, text="No mower coordinator")
+        archive = coord.video_archive
+        data = await hass.async_add_executor_job(archive.read_mp4, vid)
+        if not data:
+            return web.Response(status=404, text="Unknown video")
+        return web.Response(
+            body=data,
+            content_type="video/mp4",
+            headers={"Cache-Control": "private, max-age=3600"},
+        )
+
+
 class LidarPcdDownloadView(HomeAssistantView):
     """HTTP endpoint that serves the most recent archived ``.pcd`` blob for a map.
 

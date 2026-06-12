@@ -135,6 +135,44 @@ class VideoArchive:
             return None
         return max(self._index, key=lambda v: v.unix_ts)
 
+    def list_videos(self) -> list[ArchivedVideo]:
+        """Return all archived videos newest-first."""
+        self.load_index()
+        return sorted(self._index, key=lambda v: v.unix_ts, reverse=True)
+
+    def get(self, video_id: str) -> ArchivedVideo | None:
+        """Return the index entry for *video_id*, or ``None`` if not present."""
+        self.load_index()
+        return next((v for v in self._index if v.video_id == video_id), None)
+
+    def read_thumb(self, video_id: str) -> bytes | None:
+        """Read the thumb JPG bytes for *video_id* IF it is in the index.
+
+        Returns ``None`` when the id is unknown (path-traversal guard) or on
+        an I/O error — never opens an arbitrary path.
+        """
+        entry = self.get(video_id)
+        if entry is None:
+            return None
+        try:
+            return (self._root / entry.thumb_filename).read_bytes()
+        except OSError:
+            return None
+
+    def read_mp4(self, video_id: str) -> bytes | None:
+        """Read the MP4 bytes for *video_id* IF it is in the index.
+
+        Returns ``None`` when the id is unknown (path-traversal guard) or on
+        an I/O error — never opens an arbitrary path.
+        """
+        entry = self.get(video_id)
+        if entry is None:
+            return None
+        try:
+            return (self._root / entry.mp4_filename).read_bytes()
+        except OSError:
+            return None
+
     def set_retention(self, keep: int) -> None:
         """Update the count cap and prune immediately if needed."""
         self._retention = int(keep) if keep else 0

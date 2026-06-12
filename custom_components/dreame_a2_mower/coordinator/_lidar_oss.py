@@ -795,10 +795,16 @@ class _LidarOssMixin:
             )
         )
 
-    async def _refresh_oss_gallery(self) -> None:
+    async def _refresh_oss_gallery(self, max_pages: int = 20) -> None:
         """Canonical OSS media sync: archive new photos (categorized via COM
         metadata) + videos, and update quota. Runs hourly + at startup (the
-        per-session photo_list fetch remains the immediate session-end path)."""
+        per-session photo_list fetch remains the immediate session-end path).
+
+        ``max_pages`` caps how deep ``list_oss_media`` pages into the cloud's
+        media history. The hourly call uses the default (recent items, cheap);
+        the boot call passes a large value (full backfill) — ``list_oss_media``
+        stops at the first short page, so the cap is just a ceiling.
+        """
         if not hasattr(self, "_cloud") or self._cloud is None:
             return
         from ..protocol import photo_meta
@@ -818,7 +824,9 @@ class _LidarOssMixin:
             return base.rsplit("/", 1)[-1] if base else ""
 
         # --- photos ---
-        photos = await self.hass.async_add_executor_job(self._cloud.list_oss_media, "jpg")
+        photos = await self.hass.async_add_executor_job(
+            lambda: self._cloud.list_oss_media("jpg", max_pages=max_pages)
+        )
         for rec in (photos or []):
             name = _leaf(rec.get("filepath"))
             if not name or self._photo_archive.has_name(name):
@@ -840,7 +848,9 @@ class _LidarOssMixin:
                 self._photo_archive.archive(name=n, unix_ts=t, data=d, is_person=ip, category=c, detection=det))
 
         # --- videos ---
-        videos = await self.hass.async_add_executor_job(self._cloud.list_oss_media, "thumb")
+        videos = await self.hass.async_add_executor_job(
+            lambda: self._cloud.list_oss_media("thumb", max_pages=max_pages)
+        )
         for rec in (videos or []):
             vid = str(rec.get("id") or rec.get("key") or "")
             if not vid or self._video_archive.has(vid):
@@ -865,3 +875,57 @@ class _LidarOssMixin:
                                       oss_storage_total=quota.get("total"))
             if new != self.data:
                 self.async_set_updated_data(new)
+
+        # --- gallery manifest (newest-first, signed media URLs) ---
+        self._rebuild_photo_gallery()
+
+    def _rebuild_photo_gallery(self) -> None:
+        """Rebuild ``self._photo_gallery`` from the photo + video archives.
+
+        Each item is a self-describing dict the gallery card consumes — see the
+        manifest shape in docs/superpowers/specs/2026-06-12-photo-gallery.md.
+        URLs are signed via ``hass.http.async_sign_path`` (a @callback, safe to
+        call from async) with a 7-day window; the manifest is rebuilt hourly so
+        the signatures are always fresh. Wrapped in try/except so a signing or
+        index-IO hiccup never breaks the OSS sync.
+        """
+        from datetime import datetime
+
+        def _date(ts: int) -> str:
+            try:
+                return datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d %H:%M")
+            except (OverflowError, OSError, ValueError):
+                return ""
+
+        def _sign(path: str) -> str:
+            return self.hass.http.async_sign_path(path, timedelta(days=7))
+
+        try:
+            items: list[dict[str, Any]] = []
+            for p in self._photo_archive.list_photos():
+                url = _sign("/api/dreame_a2_mower/photo/" + p.filename)
+                items.append({
+                    "type": "photo",
+                    "id": p.filename,
+                    "ts": int(p.unix_ts),
+                    "date": _date(p.unix_ts),
+                    "category": p.category,
+                    "detection": p.detection,
+                    "url": url,
+                    "thumb_url": url,
+                })
+            for v in self._video_archive.list_videos():
+                items.append({
+                    "type": "video",
+                    "id": v.video_id,
+                    "ts": int(v.unix_ts),
+                    "date": _date(v.unix_ts),
+                    "category": "video",
+                    "duration": int(v.duration),
+                    "url": _sign("/api/dreame_a2_mower/video/" + v.video_id),
+                    "thumb_url": _sign("/api/dreame_a2_mower/video_thumb/" + v.video_id),
+                })
+            items.sort(key=lambda it: it["ts"], reverse=True)
+            self._photo_gallery = items
+        except Exception as ex:  # noqa: BLE001 — manifest never breaks the sync
+            LOGGER.warning("[PHOTOS] gallery manifest build failed: %s", ex)

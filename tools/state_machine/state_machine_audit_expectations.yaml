@@ -688,6 +688,12 @@ sensor.latest_video:
   reboot: unavailable_ok
   note: "Duration (s) of the most-recently-archived video clip; None at cold-start until first OSS media sync."
 
+sensor.photo_gallery:
+  holder: other
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "Count of items in coordinator._photo_gallery (the OSS gallery manifest); attributes carry the full signed-URL items list. None at cold-start until first OSS media sync."
+
 # ---------------------------------------------------------------------------
 # select
 # ---------------------------------------------------------------------------

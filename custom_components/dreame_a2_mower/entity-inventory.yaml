@@ -1781,6 +1781,25 @@ entities:
         claim: "DreameA2DiagnosticSensor descriptor key=photos_obstacle; value_fn=lambda coord: coord._photo_archive.count_by_category('obstacle'); entity_category=DIAGNOSTIC; state_class=MEASUREMENT"
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
+  - id: "sensor.dreame_a2_mower_photo_gallery"
+    platform: sensor
+    class: "DreameA2PhotoGallerySensor"
+    class_file: "custom_components/dreame_a2_mower/sensor_device.py"
+    device: mower
+    source:
+      wire: "OSS userDidOssList (Phase D PhotoArchive + VideoArchive) — derived manifest, no new wire fact"
+      state_path: "len(coordinator._photo_gallery)"
+    write_path: "read-only (rebuilt by _refresh_oss_gallery)"
+    attributes:
+      items: "list[dict] newest-first; each row {type, id, ts, date, category, detection|duration, url, thumb_url}; url/thumb_url are signed /api/dreame_a2_mower/{photo,video,video_thumb}/<id> paths (hass.http.async_sign_path, 7-day). _unrecorded_attributes={'*'} (large list, kept out of recorder)."
+    status:
+      seen_working: false
+      last_verified: "2026-06-12"
+    verifications:
+      - date: "2026-06-12"
+        status: presumed
+        claim: "DreameA2PhotoGallerySensor (custom CoordinatorEntity); native_value=len(coordinator._photo_gallery); extra_state_attributes={'items': coordinator._photo_gallery}; _unrecorded_attributes=frozenset({'*'}); enabled by default. Manifest built by coordinator._rebuild_photo_gallery from photo_archive.list_photos() + video_archive.list_videos(), signed via hass.http.async_sign_path; derived from the already-archived OSS gallery (no new wire fact)."
+
   - id: "sensor.dreame_a2_mower_photos_patrol"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
