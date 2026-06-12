@@ -45,6 +45,11 @@ SERVICE_START_POINT_PATROL = "start_point_patrol"
 SERVICE_START_EDGE_PATROL = "start_edge_patrol"
 SERVICE_RENAME_ZONE = "rename_zone"
 SERVICE_DELETE_MAP_OBJECT = "delete_map_object"
+SERVICE_CREATE_NO_GO_ZONE = "create_no_go_zone"
+SERVICE_CREATE_IGNORE_OBSTACLE = "create_ignore_obstacle"
+SERVICE_CREATE_MOW_SHAPE = "create_mow_shape"
+SERVICE_SPLIT_ZONE = "split_zone"
+SERVICE_MERGE_ZONES = "merge_zones"
 
 
 # Schemas
@@ -126,6 +131,44 @@ SCHEMA_DELETE_MAP_OBJECT = vol.Schema({
     vol.Required("map_id"): vol.Coerce(int),
     vol.Required("object_id"): vol.Coerce(int),
     vol.Required("category"): vol.Coerce(int),
+})
+
+# Map create/split/merge schemas. Per the plan's implementer note, the
+# points/line_start/line_end/zones schemas stay PERMISSIVE (accept a list);
+# the real coercion/validation happens in the coordinator wrapper's
+# as_pairs/validators, so a bad point raises ValueError in the wrapper, which
+# the handler catches + logs (cv.string is broken in the vanilla test stub).
+SCHEMA_CREATE_NO_GO_ZONE = vol.Schema({
+    vol.Required("map_id"): vol.Coerce(int),
+    vol.Required("shape"): vol.In(["line", "polygon", "circle"]),
+    vol.Required("points"): list,
+    vol.Optional("radius", default=0.0): vol.Coerce(float),
+})
+
+SCHEMA_CREATE_IGNORE_OBSTACLE = vol.Schema({
+    vol.Required("map_id"): vol.Coerce(int),
+    vol.Required("points"): list,
+})
+
+SCHEMA_CREATE_MOW_SHAPE = vol.Schema({
+    vol.Required("map_id"): vol.Coerce(int),
+    vol.Required("shape"): vol.In([
+        "square", "circle", "heart", "triangle",
+        "teardrop", "mushroom", "cloud", "rainbow",
+    ]),
+    vol.Required("points"): list,
+})
+
+SCHEMA_SPLIT_ZONE = vol.Schema({
+    vol.Required("map_id"): vol.Coerce(int),
+    vol.Required("zone"): vol.Coerce(int),
+    vol.Required("line_start"): list,
+    vol.Required("line_end"): list,
+})
+
+SCHEMA_MERGE_ZONES = vol.Schema({
+    vol.Required("map_id"): vol.Coerce(int),
+    vol.Required("zones"): list,
 })
 
 
@@ -727,6 +770,71 @@ async def _handle_delete_map_object(call: ServiceCall) -> None:
     )
 
 
+async def _handle_create_no_go_zone(call: ServiceCall) -> None:
+    """Create a no-go area / virtual wall on a map (o=215). Coords = edit-frame metres."""
+    coordinator = _coordinator_from_call(call.hass, call)
+    if coordinator is None:
+        return
+    try:
+        await coordinator.create_no_go(
+            int(call.data["map_id"]), call.data["shape"],
+            call.data["points"], float(call.data.get("radius", 0.0)),
+        )
+    except ValueError as err:
+        LOGGER.warning("create_no_go_zone: %s", err)
+
+
+async def _handle_create_ignore_obstacle(call: ServiceCall) -> None:
+    """Create an ignore-obstacle area on a map (o=234, polygon >=3 pt)."""
+    coordinator = _coordinator_from_call(call.hass, call)
+    if coordinator is None:
+        return
+    try:
+        await coordinator.create_ignore_obstacle(
+            int(call.data["map_id"]), call.data["points"]
+        )
+    except ValueError as err:
+        LOGGER.warning("create_ignore_obstacle: %s", err)
+
+
+async def _handle_create_mow_shape(call: ServiceCall) -> None:
+    """Create a decorative mow-shape on a map (o=215 type 9/12-18)."""
+    coordinator = _coordinator_from_call(call.hass, call)
+    if coordinator is None:
+        return
+    try:
+        await coordinator.create_mow_shape(
+            int(call.data["map_id"]), call.data["shape"], call.data["points"]
+        )
+    except ValueError as err:
+        LOGGER.warning("create_mow_shape: %s", err)
+
+
+async def _handle_split_zone(call: ServiceCall) -> None:
+    """Split a zone by a line (o=220). DESTRUCTIVE: clears that zone's schedule/prefs."""
+    coordinator = _coordinator_from_call(call.hass, call)
+    if coordinator is None:
+        return
+    try:
+        await coordinator.split_zone(
+            int(call.data["map_id"]), int(call.data["zone"]),
+            call.data["line_start"], call.data["line_end"],
+        )
+    except ValueError as err:
+        LOGGER.warning("split_zone: %s", err)
+
+
+async def _handle_merge_zones(call: ServiceCall) -> None:
+    """Merge zones by id list (o=221). DESTRUCTIVE: resets merged prefs."""
+    coordinator = _coordinator_from_call(call.hass, call)
+    if coordinator is None:
+        return
+    try:
+        await coordinator.merge_zones(int(call.data["map_id"]), call.data["zones"])
+    except ValueError as err:
+        LOGGER.warning("merge_zones: %s", err)
+
+
 async def async_register_services(hass: HomeAssistant) -> None:
     """Register all the integration's service handlers."""
     hass.services.async_register(DOMAIN, SERVICE_SET_ACTIVE_SELECTION,
@@ -782,6 +890,16 @@ async def async_register_services(hass: HomeAssistant) -> None:
                                   _handle_rename_zone, schema=SCHEMA_RENAME_ZONE)
     hass.services.async_register(DOMAIN, SERVICE_DELETE_MAP_OBJECT,
                                   _handle_delete_map_object, schema=SCHEMA_DELETE_MAP_OBJECT)
+    hass.services.async_register(DOMAIN, SERVICE_CREATE_NO_GO_ZONE,
+                                  _handle_create_no_go_zone, schema=SCHEMA_CREATE_NO_GO_ZONE)
+    hass.services.async_register(DOMAIN, SERVICE_CREATE_IGNORE_OBSTACLE,
+                                  _handle_create_ignore_obstacle, schema=SCHEMA_CREATE_IGNORE_OBSTACLE)
+    hass.services.async_register(DOMAIN, SERVICE_CREATE_MOW_SHAPE,
+                                  _handle_create_mow_shape, schema=SCHEMA_CREATE_MOW_SHAPE)
+    hass.services.async_register(DOMAIN, SERVICE_SPLIT_ZONE,
+                                  _handle_split_zone, schema=SCHEMA_SPLIT_ZONE)
+    hass.services.async_register(DOMAIN, SERVICE_MERGE_ZONES,
+                                  _handle_merge_zones, schema=SCHEMA_MERGE_ZONES)
 
 
 def async_unregister_services(hass: HomeAssistant) -> None:
@@ -794,5 +912,7 @@ def async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_SET_LANGUAGE, SERVICE_MOVE_LIDAR_SCAN,
         SERVICE_START_POINT_PATROL, SERVICE_START_EDGE_PATROL,
         SERVICE_RENAME_ZONE, SERVICE_DELETE_MAP_OBJECT,
+        SERVICE_CREATE_NO_GO_ZONE, SERVICE_CREATE_IGNORE_OBSTACLE,
+        SERVICE_CREATE_MOW_SHAPE, SERVICE_SPLIT_ZONE, SERVICE_MERGE_ZONES,
     ):
         hass.services.async_remove(DOMAIN, svc)
