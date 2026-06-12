@@ -853,6 +853,109 @@ memory `project_g2408_op10_3dmap_negative`;
 
 ---
 
+### Photo/video archive — dashboard surfacing, the 3 photo sets, overlays, session-linking, boot backfill
+
+**Why:** Folded in from `todo1.txt`. The OSS photo/video archive BACKEND shipped
+(album-photos feature + person/patrol/obstacle categorisation, 1 h
+`_refresh_oss_gallery` sync, quota/count sensors — see memory
+`project_app_capture_phase1`). The open work is surfacing + completeness across the
+**three distinct photo sets** the device produces:
+  1. **Patrol photos** — long-term; shown in the app's archive (photo + video tabs).
+  2. **AI Obstacle photos** — long-term; shown in the SAME app archive alongside
+     patrol, with a class+confidence overlay.
+  3. **Normal obstacle photos** — captured every time the mower works around an
+     obstacle DURING a session. In the app these are ONLY reachable by tapping an
+     obstacle icon in the LIVE session view; once the session ends the icons are no
+     longer clickable, so there's no access. They are almost certainly still stored
+     cloud-side and must be captured + retained too (this 3rd set may not yet be
+     covered by the shipped categoriser).
+**Open sub-items (todo1.txt 1-4):**
+  - **Dashboard surfacing** of all three sets — a gallery view, ideally mirroring
+    the app's photo/video tabs + per-type filtering.
+  - **Link photo sets to sessions** — both the long-term patrol/AI sets and the
+    ephemeral per-session obstacle shots. [BRAINSTORM] (see Patrol-Logs T4 +
+    the session-format brainstorm for the patrol half.)
+  - **Boot backfill** — post-fetch ALL upstream-available photos/videos for this HA
+    instance, at least once at boot, so a fresh install on a device that already has
+    historical cloud photos/videos catches up (the 1 h sync only goes forward).
+  - **Photo overlays** — render date + (for AI obstacles) the class + confidence%
+    ("human 80%") burned onto the photo OR as a caption/subtitle.
+**Done when:** each sub-item is implemented or explicitly deferred with a reason;
+all three sets are captured (incl. the ephemeral live-session obstacle shots),
+surfaced on the dashboard with overlays, linked to sessions, and a boot backfill
+exists.
+**Status:** open (backend shipped; surfacing + the 3rd set + backfill + overlays +
+session-linking remain).
+**Cross-refs:** the (resolved) "Probe for the AI-photo / obstacle-photo cloud
+endpoint" item above; "Patrol Logs" T4 (Auto-Capture photo retrieval) + the
+session-format brainstorm; memory `project_app_capture_phase1` /
+`project_g2408_ai_photo_probe`; `archive/videos.py`, `_refresh_oss_gallery`,
+`protocol/photo_meta`; `docs/research/g2408-app-capture-playbook-2026-06-09.md`.
+
+---
+
+### Extend the map-edit view to spots / maintenance points / patrol points (CRUD)
+
+**Why:** Folded in from `todo1.txt`. The interactive map-editor card shipped this
+session (Phase F2b — no-go / ignore-obstacle / mow-shape create + edit-in-place +
+delete; the old "Phase 2: MAP write" research item above is now RESOLVED). The
+MITM-emulator docs `dreame-app-mapedit-rotate-edit-2026-06-12.md` +
+`dreame-app-WRITE-implementation-guide-2026-06-09.md` carry wire-validated CRUD for
+**spots, maintenance points, and ignore-obstacle zones** (ignore-obstacle is already
+wired in the editor), with **patrol points** to be added soon. In the Dreame app
+each of these has its OWN separate map editor; for HA it makes more sense to make
+them all editable in ONE map-edit view.
+**Done when:** the map-editor view supports create/edit/move/delete for spots,
+maintenance points, and patrol points (alongside the existing no-go / ignore /
+mow-shapes), per the wire-validated opcodes in those docs; live-confirmed on the
+device.
+**Status:** open (depends on capturing the opcodes into inventory — see below).
+**Cross-refs:** `/data/claude/homeassistant/dreame-app-mapedit-rotate-edit-2026-06-12.md`,
+`dreame-app-WRITE-implementation-guide-2026-06-09.md`; the shipped F2b editor
+(`www/dreame-map-editor-card.js`, `coordinator/_writes.py:edit_map`); `inventory.yaml`
+`o215`/`o218`/`o234` + the map-edit transaction entries; the (resolved) "Phase 2:
+MAP write" item above; memory `project_app_findings_phase0_shipped`.
+
+---
+
+### Capture all `dreame*.md` MITM findings into inventory.yaml (treat as wire-validated)
+
+**Why:** Folded in from `todo1.txt`. The app↔mower MITM-emulator capture docs in
+`/data/claude/homeassistant/dreame*.md` (settings sweep, schedule write, map-edit
+rotate/edit, obstacle photos, the WRITE-implementation guide, etc.) are
+write-validated by the MITM rig, but not all of their findings have been promoted
+into `inventory.yaml` / `entity-inventory.yaml` — leaving some in prose only, which
+is exactly the drift the fact-discipline rule guards against. Per CLAUDE.md,
+app-MITM counts as wire-verification across the board.
+**Done when:** every wire/protocol fact in the `dreame*.md` set has a corresponding
+`inventory.yaml` (or `entity-inventory.yaml`) record with `status: verified` + an
+`[app-mitm:<date>-<topic>]` evidence tag; the docs are reduced to pointers/context.
+**Status:** open (housekeeping; partially done — schedule / map-edit / settings /
+album-photo findings are largely recorded).
+**Cross-refs:** `/data/claude/homeassistant/dreame*.md`; `inventory.yaml`;
+`entity-inventory.yaml`; CLAUDE.md § Fact discipline (app-MITM = wire-verified).
+
+---
+
+### Move completed plans/specs out of the tree into OLD/
+
+**Why:** Folded in from `todo1.txt`. Per CLAUDE.md § Documentation canonicity,
+shipped specs/plans become historical the moment the work lands and must move to
+`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/` (same relative path) so a
+future session's grep/Explore doesn't retrieve them as current truth. This session
+shipped several map-editor specs/plans (`docs/superpowers/specs/2026-06-12-*`,
+`docs/plans/2026-06-12-*`, `docs/superpowers/specs/2026-06-12-polygon-draw.md`) plus
+earlier ones; target state is **zero `docs/superpowers/` in-tree**.
+**Done when:** all completed specs/plans/handoffs are moved under
+`OLD/ha-dreame-a2-mower-docs/...`; in-tree `docs/superpowers/` is empty (or holds
+only genuinely-active plans); code/doc cross-refs still resolve via the mirrored OLD
+path.
+**Status:** open (housekeeping).
+**Cross-refs:** CLAUDE.md § Documentation canonicity & lifecycle;
+`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/`.
+
+---
+
 ## In-progress
 
 _(none currently)_
