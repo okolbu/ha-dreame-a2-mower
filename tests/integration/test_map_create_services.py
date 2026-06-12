@@ -17,7 +17,7 @@ async def test_create_no_go_zone_service(monkeypatch):
         "map_id": 0, "shape": "polygon", "points": [[1, 2], [3, 4], [5, 6]], "radius": 0,
     })
     await services._handle_create_no_go_zone(call)
-    coord.create_no_go.assert_awaited_once_with(0, "polygon", [[1, 2], [3, 4], [5, 6]], 0.0)
+    coord.create_no_go.assert_awaited_once_with(0, "polygon", [[1, 2], [3, 4], [5, 6]], 0.0, object_id=-1)
 
 
 @pytest.mark.asyncio
@@ -25,7 +25,7 @@ async def test_create_ignore_obstacle_service(monkeypatch):
     coord = _patch_coord(monkeypatch, create_ignore_obstacle=AsyncMock(return_value=True))
     call = SimpleNamespace(hass=SimpleNamespace(), data={"map_id": 0, "points": [[1, 2], [3, 4], [5, 6]]})
     await services._handle_create_ignore_obstacle(call)
-    coord.create_ignore_obstacle.assert_awaited_once_with(0, [[1, 2], [3, 4], [5, 6]])
+    coord.create_ignore_obstacle.assert_awaited_once_with(0, [[1, 2], [3, 4], [5, 6]], object_id=-1)
 
 
 @pytest.mark.asyncio
@@ -33,7 +33,7 @@ async def test_create_mow_shape_service(monkeypatch):
     coord = _patch_coord(monkeypatch, create_mow_shape=AsyncMock(return_value=True))
     call = SimpleNamespace(hass=SimpleNamespace(), data={"map_id": 0, "shape": "heart", "points": [[0, 0], [1, 1]]})
     await services._handle_create_mow_shape(call)
-    coord.create_mow_shape.assert_awaited_once_with(0, "heart", [[0, 0], [1, 1]])
+    coord.create_mow_shape.assert_awaited_once_with(0, "heart", [[0, 0], [1, 1]], object_id=-1)
 
 
 @pytest.mark.asyncio

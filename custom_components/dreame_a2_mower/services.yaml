@@ -402,6 +402,16 @@ create_no_go_zone:
           max: 50
           step: 0.1
           mode: box
+    object_id:
+      name: Object ID
+      description: -1 to create new; an existing object id to edit it in place.
+      required: false
+      example: -1
+      selector:
+        number:
+          min: -1
+          max: 1000000
+          mode: box
 
 create_ignore_obstacle:
   name: Create ignore-obstacle area
@@ -426,6 +436,16 @@ create_ignore_obstacle:
       example: "[[-2.49, -5.97], [-8.71, -5.97], [-8.71, -0.18]]"
       selector:
         object: {}
+    object_id:
+      name: Object ID
+      description: -1 to create new; an existing object id to edit it in place.
+      required: false
+      example: -1
+      selector:
+        number:
+          min: -1
+          max: 1000000
+          mode: box
 
 create_mow_shape:
   name: Create mow-shape
@@ -465,6 +485,16 @@ create_mow_shape:
       example: "[[0.57, -8.39], [-7.97, 0.15]]"
       selector:
         object: {}
+    object_id:
+      name: Object ID
+      description: -1 to create new; an existing object id to edit it in place.
+      required: false
+      example: -1
+      selector:
+        number:
+          min: -1
+          max: 1000000
+          mode: box
 
 split_zone:
   name: Split zone (DESTRUCTIVE)

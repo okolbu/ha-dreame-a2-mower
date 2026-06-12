@@ -102,6 +102,36 @@ class DreameA2MapCamera(
         v = hashlib.sha1(png).hexdigest()[:12]
         return f"/api/dreame_a2_mower/map.png?v={v}"
 
+    @staticmethod
+    def _editable_objects_from_map(map_data: Any) -> list[dict]:
+        """Surface the active map's exclusion objects as edit-frame descriptors.
+
+        One dict per :class:`ExclusionZone` that carries a cloud ``obj_id``
+        (id-less archive-rebuilt zones are skipped — they can't be targeted by
+        an edit op). Each descriptor pairs the wire op/type with the
+        meter-frame polygon (``points_m``) the map-editor card's ``projectPoint``
+        consumes directly:
+
+        - no-go / forbidden (``subtype is None``) -> op 215, type 2
+        - designated-ignore (``subtype == "ignore"``) -> op 234, type 0
+        """
+        out: list[dict] = []
+        for z in getattr(map_data, "exclusion_zones", ()):
+            if z.obj_id is None:
+                continue
+            is_ignore = z.subtype == "ignore"
+            out.append(
+                {
+                    "id": z.obj_id,
+                    "op": 234 if is_ignore else 215,
+                    "type": 0 if is_ignore else 2,
+                    "kind": "ignore" if is_ignore else "nogo",
+                    "points_m": [list(p) for p in z.points_m],
+                    "radius": 0.0,
+                }
+            )
+        return out
+
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         """Surface the served base PNG's hash, the map projection params
@@ -146,6 +176,8 @@ class DreameA2MapCamera(
                 ]
             except (TypeError, ValueError, AttributeError):
                 pass
+            # Edit-frame exclusion descriptors for the map-editor card.
+            attrs["editable_objects"] = self._editable_objects_from_map(md)
         attrs["point_seq"] = self.coordinator._live_point_seq
         attrs["latest_point"] = self.coordinator._latest_point
         attrs["track_snapshot"] = self.coordinator._track_snapshot

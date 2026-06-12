@@ -107,6 +107,12 @@ class ExclusionZone:
     points: tuple[tuple[float, float], ...]
     subtype: str | None = None
     obj_id: int | None = None
+    # Edit-frame polygon corners in METERS (un-reflected cloud frame:
+    # rotate(path, -angle)/1000). These feed the map-editor card's
+    # projectPoint directly; the `points` above are renderer-only (they
+    # also carry the midline reflection). See
+    # docs/research/wire-captures/map-edit-frame-verification-2026-06-12.md.
+    points_m: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -297,18 +303,20 @@ class MapData:
 def _collect_exclusion_entries(
     entries_wrapper: Any,
     subtype: str | None,
-) -> list[tuple[int | None, list[dict], str | None]]:
+) -> list[tuple[int | None, list[dict], str | None, tuple[tuple[float, float], ...]]]:
     """Parse one exclusion-zone wrapper dict into rotated-path entries.
 
-    Returns a list of ``(obj_id, rotated_path, subtype)`` triples, where each
-    ``rotated_path`` is the output of :func:`_rotate_path_around_centroid`
-    (a list of ``{x, y}`` dicts).  ``obj_id`` is the cloud object id from
-    ``entry[0]`` (same convention spots/zones use), or ``None`` for the
-    id-less dict form.  The cloud's angle convention is mirror-flipped vs
-    the app's rendering; angles are negated before rotating (see §4.1 of
-    cloud-map-geometry.md).
+    Returns a list of ``(obj_id, rotated_path, subtype, points_m)`` 4-tuples,
+    where each ``rotated_path`` is the output of
+    :func:`_rotate_path_around_centroid` (a list of ``{x, y}`` dicts) and
+    ``points_m`` is that same un-reflected path converted to METERS
+    (``(x/1000, y/1000)`` per corner) for the edit frame the map-editor card
+    consumes.  ``obj_id`` is the cloud object id from ``entry[0]`` (same
+    convention spots/zones use), or ``None`` for the id-less dict form.  The
+    cloud's angle convention is mirror-flipped vs the app's rendering; angles
+    are negated before rotating (see §4.1 of cloud-map-geometry.md).
     """
-    result: list[tuple[int | None, list[dict], str | None]] = []
+    result: list[tuple[int | None, list[dict], str | None, tuple[tuple[float, float], ...]]] = []
     entries = entries_wrapper.get("value", []) if isinstance(entries_wrapper, dict) else []
     for entry in entries:
         obj_id: int | None = None
@@ -330,7 +338,10 @@ def _collect_exclusion_entries(
         raw_angle = zdata.get("angle")
         rot_angle = -raw_angle if raw_angle is not None else None
         rotated = _rotate_path_around_centroid(path, rot_angle)
-        result.append((obj_id, rotated, subtype))
+        points_m = tuple(
+            (float(pt["x"]) / 1000.0, float(pt["y"]) / 1000.0) for pt in rotated
+        )
+        result.append((obj_id, rotated, subtype, points_m))
     return result
 
 
@@ -685,7 +696,9 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
     ignore_raw = cloud_response.get("notObsAreas", {})
     spot_raw = cloud_response.get("spotAreas", {})
 
-    rotated_exclusions: list[tuple[int | None, list[dict], str | None]] = [
+    rotated_exclusions: list[
+        tuple[int | None, list[dict], str | None, tuple[tuple[float, float], ...]]
+    ] = [
         *_collect_exclusion_entries(forbidden_raw, None),     # red
         *_collect_exclusion_entries(ignore_raw, "ignore"),    # green
     ]
@@ -700,7 +713,7 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
     by1_exp = by1
     bx2_exp = bx2
     by2_exp = by2
-    for (_oid, rp, _sub) in rotated_exclusions:
+    for (_oid, rp, _sub, _pm) in rotated_exclusions:
         for pt in rp:
             x, y = float(pt["x"]), float(pt["y"])
             bx1_exp = min(bx1_exp, x)
@@ -727,14 +740,16 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
     # Exclusion zones — apply midline reflection for renderer coords.
     # -----------------------------------------------------------------------
     excl_out: list[ExclusionZone] = []
-    for (obj_id, rp, subtype) in rotated_exclusions:
+    for (obj_id, rp, subtype, points_m) in rotated_exclusions:
         pts = tuple(
             (float(x_reflect - pt["x"]), float(y_reflect - pt["y"]))
             for pt in rp
         )
         if pts:
             excl_out.append(
-                ExclusionZone(points=pts, subtype=subtype, obj_id=obj_id)
+                ExclusionZone(
+                    points=pts, subtype=subtype, obj_id=obj_id, points_m=points_m
+                )
             )
 
     spot_out: list[SpotZone] = []
