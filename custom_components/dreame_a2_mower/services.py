@@ -43,6 +43,8 @@ SERVICE_SET_LANGUAGE = "set_language"
 SERVICE_MOVE_LIDAR_SCAN = "move_lidar_scan"
 SERVICE_START_POINT_PATROL = "start_point_patrol"
 SERVICE_START_EDGE_PATROL = "start_edge_patrol"
+SERVICE_RENAME_ZONE = "rename_zone"
+SERVICE_DELETE_MAP_OBJECT = "delete_map_object"
 
 
 # Schemas
@@ -111,6 +113,19 @@ SCHEMA_SET_SCHEDULE_PLANS = vol.Schema({
         vol.Optional("zone_id"): vol.Any(None, vol.Coerce(int)),
         vol.Optional("extra_bytes_hex"): str,
     })]),
+})
+
+
+SCHEMA_RENAME_ZONE = vol.Schema({
+    vol.Required("map_id"): vol.Coerce(int),
+    vol.Required("zone"): vol.Coerce(int),
+    vol.Required("name"): vol.Coerce(str),
+})
+
+SCHEMA_DELETE_MAP_OBJECT = vol.Schema({
+    vol.Required("map_id"): vol.Coerce(int),
+    vol.Required("object_id"): vol.Coerce(int),
+    vol.Required("category"): vol.Coerce(int),
 })
 
 
@@ -690,6 +705,28 @@ async def _async_move_lidar_scan(call: ServiceCall) -> None:
     await coordinator.async_request_refresh()
 
 
+async def _handle_rename_zone(call: ServiceCall) -> None:
+    """Rename a mowing zone on a map (o=219)."""
+    coordinator = _coordinator_from_call(call.hass, call)
+    if coordinator is None:
+        return
+    await coordinator.rename_zone(
+        int(call.data["map_id"]), int(call.data["zone"]), str(call.data["name"])
+    )
+
+
+async def _handle_delete_map_object(call: ServiceCall) -> None:
+    """Delete a map object by id+category (o=218; 0=zone/no-go, 4=ignore)."""
+    coordinator = _coordinator_from_call(call.hass, call)
+    if coordinator is None:
+        return
+    await coordinator.delete_map_object(
+        int(call.data["map_id"]),
+        int(call.data["object_id"]),
+        int(call.data["category"]),
+    )
+
+
 async def async_register_services(hass: HomeAssistant) -> None:
     """Register all the integration's service handlers."""
     hass.services.async_register(DOMAIN, SERVICE_SET_ACTIVE_SELECTION,
@@ -741,6 +778,10 @@ async def async_register_services(hass: HomeAssistant) -> None:
                                   _handle_start_point_patrol, schema=SCHEMA_START_POINT_PATROL)
     hass.services.async_register(DOMAIN, SERVICE_START_EDGE_PATROL,
                                   _handle_start_edge_patrol, schema=SCHEMA_START_EDGE_PATROL)
+    hass.services.async_register(DOMAIN, SERVICE_RENAME_ZONE,
+                                  _handle_rename_zone, schema=SCHEMA_RENAME_ZONE)
+    hass.services.async_register(DOMAIN, SERVICE_DELETE_MAP_OBJECT,
+                                  _handle_delete_map_object, schema=SCHEMA_DELETE_MAP_OBJECT)
 
 
 def async_unregister_services(hass: HomeAssistant) -> None:
@@ -752,5 +793,6 @@ def async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_REFRESH_CLOUD_STATE, SERVICE_SHOW_PHOTO_PRIVACY_POLICY,
         SERVICE_SET_LANGUAGE, SERVICE_MOVE_LIDAR_SCAN,
         SERVICE_START_POINT_PATROL, SERVICE_START_EDGE_PATROL,
+        SERVICE_RENAME_ZONE, SERVICE_DELETE_MAP_OBJECT,
     ):
         hass.services.async_remove(DOMAIN, svc)

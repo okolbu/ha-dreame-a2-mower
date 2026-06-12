@@ -287,3 +287,75 @@ start_edge_patrol:
       selector:
         object:
 
+rename_zone:
+  name: Rename mowing zone
+  description: >
+    Rename a mowing zone on a map (o=219). Editing a non-active map makes it
+    the active map. Zone numbers come from the map sensor's renamable_zones
+    attribute.
+  fields:
+    map_id:
+      name: Map ID
+      description: 0-based map index.
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+          mode: box
+    zone:
+      name: Zone number
+      description: The zone/region number to rename (see the map sensor's renamable_zones).
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 1
+          max: 62
+          mode: box
+    name:
+      name: New name
+      description: The new zone name.
+      required: true
+      example: Front lawn
+      selector:
+        text:
+
+delete_map_object:
+  name: Delete map object
+  description: >
+    Delete a mowing zone, no-go area, or ignore-obstacle area by id+category
+    (o=218; see the map sensor's deletable_objects). Editing a non-active map
+    makes it the active map.
+  fields:
+    map_id:
+      name: Map ID
+      description: 0-based map index.
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+          mode: box
+    object_id:
+      name: Object ID
+      description: Cloud object id from the map sensor's deletable_objects.
+      required: true
+      example: 101
+      selector:
+        number:
+          min: 0
+          mode: box
+    category:
+      name: Category
+      description: 0 = zone/no-go, 4 = ignore-obstacle.
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+          mode: box
+
