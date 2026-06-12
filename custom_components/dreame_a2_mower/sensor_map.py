@@ -71,9 +71,15 @@ class DreameA2MapSegmentCountSensor(_DreameA2PerMapSensorBase):
 
         ``renamable_zones``: ``{region, name}`` per mowing zone (o=219).
         ``deletable_objects``: ``{id, category, label}`` for each deletable
-        object (o=218) — mowing zones (category 0), no-go exclusion zones
-        (category 0) and ignore-obstacle zones (category 4). Exclusion zones
-        without a cloud ``obj_id`` are skipped (they can't be targeted).
+        object (o=218) — no-go exclusion zones (category 0) and ignore-obstacle
+        zones (category 4). Exclusion zones without a cloud ``obj_id`` are
+        skipped (they can't be targeted).
+
+        Mowing zones are intentionally NOT offered as delete targets: the only
+        o=218 deletes seen in the app capture were exclusion objects (ids in
+        the 100/300 object-id space, never a mowing-zone region 1-62), so a
+        mowing-zone delete via o=218 is unverified. Mowing zones support rename
+        only. (knowledge-gaps: zone-delete wire to capture.)
         """
         m = self._map()
         if m is None:
@@ -82,10 +88,7 @@ class DreameA2MapSegmentCountSensor(_DreameA2PerMapSensorBase):
             {"region": z.zone_id, "name": z.name}
             for z in getattr(m, "mowing_zones", ())
         ]
-        deletable = [
-            {"id": z.zone_id, "category": 0, "label": z.name or f"Zone {z.zone_id}"}
-            for z in getattr(m, "mowing_zones", ())
-        ]
+        deletable = []
         for z in getattr(m, "exclusion_zones", ()):
             if z.obj_id is None:
                 continue

@@ -690,8 +690,11 @@ class _WritesMixin:
 
         Sequence: o=200{idx:map_id} -> o=204(p:0) begin -> each mutation(p:0)
         -> o=201(p:1) commit. The target map becomes (and stays) active. Each
-        leg is sent via routed_action; a None result marks overall failure but
-        the commit is ALWAYS sent so the device never stays in edit mode.
+        leg is sent via routed_action; a None (transport-level failure) marks
+        overall failure but the commit is ALWAYS sent so the device never stays
+        in edit mode. Note: routed_action returns truthy on delivery even if the
+        device replies with a logical r!=0 (e.g. bad region/id), so a True return
+        means "delivered + committed", not "the firmware accepted the edit".
         """
         if not hasattr(self, "_cloud") or self._cloud is None:
             LOGGER.warning("edit_map: cloud client not ready")

@@ -19,6 +19,13 @@ def test_exclusion_entries_missing_id_is_none():
     assert out[0][0] is None and out[0][2] == "ignore"
 
 
+def test_exclusion_entries_negative_id_sentinel_is_none():
+    # id:-1 is the create-payload sentinel; must not surface as a real target.
+    wrapper = {"value": [[-1, {"path": [{"x": 0, "y": 0}, {"x": 1, "y": 0}]}]]}
+    out = _collect_exclusion_entries(wrapper, None)
+    assert out[0][0] is None
+
+
 def test_exclusion_zone_has_obj_id_default_none():
     z = ExclusionZone(points=((0.0, 0.0),))
     assert z.obj_id is None

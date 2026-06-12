@@ -187,6 +187,12 @@ o=219 rename + o=218 delete via the o=204/o=201 transaction + o=200 select):
   no-go) and `type=4` (ignore-obstacle) observed in the 2026-06-09 capture; any other
   category values for o=218 are unconfirmed. Capture: delete each remaining object kind
   (spot zone, patrol/cruise point, maintenance point) and diff the o=218 `type` field.
+- **deleting a MOWING zone** — `[UNKNOWN — to capture]` the captured o=218 deletes were
+  all exclusion objects (ids in the 100/300 object-id space, `type` 0/4), never a
+  mowing-zone `region` (1-62). Whether a mowing zone is deletable via o=218 (and with
+  which id/type) is unverified, so `deletable_objects` deliberately offers exclusions
+  only; mowing zones are rename-only. Capture: delete a lawn zone in the app and diff
+  the o=218 id/type vs the zone's region.
 - **rename-map + delete-whole-map wire** — `[UNKNOWN — to capture]` only zone-rename
   (o=219) is captured; renaming an entire MAP and deleting a whole map are UNCAPTURED
   (opcode + payload unknown). Capture: rename a map then delete a map in the app and

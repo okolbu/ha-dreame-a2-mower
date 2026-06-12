@@ -314,7 +314,9 @@ def _collect_exclusion_entries(
         obj_id: int | None = None
         if isinstance(entry, list) and len(entry) >= 2:
             try:
-                obj_id = int(entry[0])
+                # -1 is the create-payload sentinel (server assigns the real
+                # id); never surface it as a deletable target.
+                obj_id = v if (v := int(entry[0])) >= 0 else None
             except (TypeError, ValueError):
                 obj_id = None
             zdata = entry[1]

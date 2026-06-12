@@ -24,13 +24,15 @@ def test_segment_sensor_exposes_rename_and_delete_targets():
     )
     s = DreameA2MapSegmentCountSensor(_coord_with_map(m), map_id=0)
     attrs = s.extra_state_attributes
+    # Mowing zones are rename-only (delete via o=218 is unverified for zones).
     assert {"region": 1, "name": "Zone1"} in attrs["renamable_zones"]
     cats = {(o["id"], o["category"]) for o in attrs["deletable_objects"]}
-    assert (1, 0) in cats          # mowing zone, category 0
+    assert (1, 0) not in cats      # mowing zone NOT a delete target
     assert (101, 0) in cats        # no-go
     assert (102, 4) in cats        # ignore-obstacle
     assert all(o["id"] is not None for o in attrs["deletable_objects"])
-    assert 3 == len(attrs["deletable_objects"])  # the id-less exclusion is skipped
+    # only the two id-bearing exclusions; id-less + mowing zones excluded
+    assert 2 == len(attrs["deletable_objects"])
 
 
 def test_segment_sensor_attrs_empty_when_map_absent():
