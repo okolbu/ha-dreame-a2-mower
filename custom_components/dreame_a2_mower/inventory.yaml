@@ -4377,7 +4377,7 @@ opcodes:
       last_seen: "2026-06-09"
       decoded: confirmed
     open_questions:
-      - "Shape type ids 12 (Circle), 14 (Triangle), 15 (Droplet), 16 (Mushroom) are [UNKNOWN — to capture] — inferred from the confirmed run with types 9/13/17/18, but their numeric IDs are not yet verified. Capture via app-mitm with those preset shapes selected."
+      - "Shape type ids 9 (Square), 13 (Heart), 17 (Cloud), 18 (Rainbow) are WIRE-CONFIRMED (appear in o:215 capture payloads). Type ids 12 (Circle), 14 (Triangle), 15 (Teardrop), 16 (Mushroom) are [UNVERIFIED] — INFERRED from the Shapes-screen (IMG_4615.PNG) left→right ordering filling the 9,12-18 sequence, NOT seen on the wire. Capture: draw each in app-MITM and read its type in o:215 to confirm/correct. Type ids 10 and 11 (the gap between square=9 and circle=12) are [UNKNOWN — to capture] — no shape occupies them in this app's Shapes screen, so they appear unused on g2408."
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
@@ -4392,6 +4392,10 @@ opcodes:
         status: verified
         claim: "App sends o:215 as {m:'a', o:215, d:{id,type,points,radius}} to add a no-go zone. type: 1=line/2=poly/3=circle; preset shapes: 9=Square/13=Heart/17=Cloud/18=Rainbow. [app-mitm:2026-06-09-settings-sweep]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-12"
+        status: verified
+        claim: "Map create/split/merge wired via the o=204/o=201 edit transaction. o=215{id:-1,type,points,radius}: type 1=no-go line(2pt), 2=no-go polygon(Npt), 3=no-go circle(1pt+radius m); decorative mow-shapes (2pt bbox; square=4pt): 9=square,13=heart,17=cloud,18=rainbow WIRE-CONFIRMED in o:215 payloads; [UNVERIFIED] 12=circle,14=triangle,15=teardrop,16=mushroom INFERRED from Shapes-screen ordering (IMG_4615.PNG), not seen on wire — capture to confirm. o=234{id:-1,type:0,points}=ignore-obstacle (no radius). o=220{id,line_start,line_end}=split zone (destructive). o=221{ids:[...]}=merge zones (destructive). Coords in metres. [app-mitm:2026-06-09-map-edit]"
+        evidence: "dreame-app-capture-2026-06-09/miio-cloud-13267-http.jsonl (o:215/234/220/221 payloads); shape names from IMG_4615.PNG (Shapes screen)"
 
   - id: "o218"
     op: 218

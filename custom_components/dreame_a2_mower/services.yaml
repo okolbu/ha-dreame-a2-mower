@@ -359,3 +359,173 @@ delete_map_object:
           max: 10
           mode: box
 
+create_no_go_zone:
+  name: Create no-go zone
+  description: >
+    Create a no-go area / virtual wall on a map (o=215). points are [x, y]
+    pairs in map edit-frame metres. Editing a non-active map makes it active.
+  fields:
+    map_id:
+      name: Map ID
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+          mode: box
+    shape:
+      name: Shape
+      required: true
+      example: polygon
+      selector:
+        select:
+          options:
+            - line
+            - polygon
+            - circle
+    points:
+      name: Points
+      description: List of [x, y] metre pairs. line=2, polygon>=3, circle=1 (centre).
+      required: true
+      example: "[[9.65, -0.13], [4.12, -0.13], [4.12, 5.01]]"
+      selector:
+        object: {}
+    radius:
+      name: Radius (m)
+      description: Circle radius in metres (circle shape only).
+      required: false
+      example: 1.5
+      selector:
+        number:
+          min: 0
+          max: 50
+          step: 0.1
+          mode: box
+
+create_ignore_obstacle:
+  name: Create ignore-obstacle area
+  description: >
+    Create an ignore-obstacle area on a map (o=234, polygon with >=3 points,
+    no radius). points are [x, y] pairs in map edit-frame metres. Editing a
+    non-active map makes it active.
+  fields:
+    map_id:
+      name: Map ID
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+          mode: box
+    points:
+      name: Points
+      description: List of [x, y] metre pairs (polygon, >=3 points).
+      required: true
+      example: "[[-2.49, -5.97], [-8.71, -5.97], [-8.71, -0.18]]"
+      selector:
+        object: {}
+
+create_mow_shape:
+  name: Create mow-shape
+  description: >
+    Create a decorative mow-shape on a map (o=215). points are [x, y] pairs in
+    map edit-frame metres (square=4 points, other shapes=2-point bbox). Editing
+    a non-active map makes it active.
+  fields:
+    map_id:
+      name: Map ID
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+          mode: box
+    shape:
+      name: Shape
+      required: true
+      example: heart
+      selector:
+        select:
+          options:
+            - square
+            - circle
+            - heart
+            - triangle
+            - teardrop
+            - mushroom
+            - cloud
+            - rainbow
+    points:
+      name: Points
+      description: List of [x, y] metre pairs. square=4 points, others=2-point bbox.
+      required: true
+      example: "[[0.57, -8.39], [-7.97, 0.15]]"
+      selector:
+        object: {}
+
+split_zone:
+  name: Split zone (DESTRUCTIVE)
+  description: >
+    DESTRUCTIVE. Split a mowing zone by a line (o=220); clears that zone's
+    schedule/prefs. line_start/line_end are [x, y] pairs in map edit-frame
+    metres. Editing a non-active map makes it active.
+  fields:
+    map_id:
+      name: Map ID
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+          mode: box
+    zone:
+      name: Zone ID
+      description: Cloud zone id to split.
+      required: true
+      example: 1
+      selector:
+        number:
+          min: 0
+          mode: box
+    line_start:
+      name: Line start
+      description: "[x, y] metre pair where the split line starts."
+      required: true
+      example: "[-0.19, -11.41]"
+      selector:
+        object: {}
+    line_end:
+      name: Line end
+      description: "[x, y] metre pair where the split line ends."
+      required: true
+      example: "[-5.21, -6.22]"
+      selector:
+        object: {}
+
+merge_zones:
+  name: Merge zones (DESTRUCTIVE)
+  description: >
+    DESTRUCTIVE. Merge two or more mowing zones by id list (o=221); resets the
+    merged zones' prefs. Editing a non-active map makes it active.
+  fields:
+    map_id:
+      name: Map ID
+      required: true
+      example: 0
+      selector:
+        number:
+          min: 0
+          max: 10
+          mode: box
+    zones:
+      name: Zone IDs
+      description: List of >=2 cloud zone ids to merge.
+      required: true
+      example: "[2, 1]"
+      selector:
+        object: {}
+
