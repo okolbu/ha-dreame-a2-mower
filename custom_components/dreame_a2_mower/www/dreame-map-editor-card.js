@@ -72,6 +72,14 @@ class DreameMapEditorCard extends HTMLElement {
     if (!cfg || !cfg.entity) throw new Error("entity is required");
     this._cfg = cfg;
     this._objKey = null; // identity of the last-rendered editable_objects set
+    // Optimistic edit state (HA's cloud-sourced editable_objects lags the
+    // device by minutes after an edit, so without this a Save/Delete snaps the
+    // overlay back to the stale pre-edit shape). `_overrides` maps
+    // `${kind}:${id}` -> {points_m,radius} (edited) or null (deleted);
+    // `_provisional` holds just-created shapes that have no real id yet. Both
+    // are cleared whenever genuinely-new server data arrives (_syncObjects).
+    this._overrides = {};
+    this._provisional = [];
     this._tool = null;    // selected toolbar tool (TOOLS entry) or null
     this._draft = null;   // in-edit shape (see _makeDraft) or null
     this._drag = null;    // active pointer drag descriptor or null
@@ -244,7 +252,27 @@ class DreameMapEditorCard extends HTMLElement {
     );
     if (key === this._objKey) return;
     this._objKey = key;
+    // Genuinely-new server data is authoritative — drop optimistic state.
+    this._overrides = {};
+    this._provisional = [];
     this._renderObjects(objs);
+  }
+
+  // Merge server objects with optimistic overrides + provisional creates.
+  _effectiveObjects(objs) {
+    const eff = [];
+    for (const o of objs) {
+      const k = `${o.kind}:${o.id}`;
+      if (Object.prototype.hasOwnProperty.call(this._overrides, k)) {
+        const ov = this._overrides[k];
+        if (ov === null) continue; // optimistically deleted
+        eff.push({ id: o.id, kind: o.kind, points_m: ov.points_m, radius: ov.radius || 0 });
+      } else {
+        eff.push({ id: o.id, kind: o.kind, points_m: o.points_m, radius: o.radius });
+      }
+    }
+    for (const p of this._provisional || []) eff.push(p); // created (no id)
+    return eff;
   }
 
   _renderObjects(objs) {
@@ -255,7 +283,7 @@ class DreameMapEditorCard extends HTMLElement {
     const selId = this._draft && this._draft.objectId != null ? this._draft.objectId : null;
     const selKind = this._draft ? this._draft.kind : null;
     const parts = [];
-    for (const o of objs) {
+    for (const o of this._effectiveObjects(objs)) {
       if (selId != null && o.id === selId && o.kind === selKind) continue;
       const pts = Array.isArray(o.points_m) ? o.points_m : [];
       const pix = pts.map((m) => metersToPixel(m[0], m[1], this._proj));
@@ -378,7 +406,9 @@ class DreameMapEditorCard extends HTMLElement {
     const id = e.target && e.target.dataset ? e.target.dataset.id : null;
     const kind = e.target && e.target.dataset ? e.target.dataset.kind : null;
     if (id != null && id !== "") {
-      const o = (this._objs || []).find(
+      // Search the EFFECTIVE objects so re-selecting a just-edited shape picks
+      // up the optimistic geometry, not HA's stale pre-edit data.
+      const o = this._effectiveObjects(this._objs || []).find(
         (x) => String(x.id) === String(id) && (kind == null || x.kind === kind)
       );
       if (o) {
@@ -535,6 +565,16 @@ class DreameMapEditorCard extends HTMLElement {
       return;
     }
     this._setBusy(false);
+    // Optimistically reflect the edit so the overlay does NOT snap back to HA's
+    // stale pre-edit data (which can lag the device by minutes).
+    const kind = d.category === "ignore" ? "ignore" : "nogo";
+    if (d.objectId != null) {
+      this._overrides[`${kind}:${d.objectId}`] = { points_m: points, radius };
+    } else if (d.category !== "mow") {
+      // new nogo/ignore -> provisional overlay (mow shapes aren't decoded into
+      // editable_objects, so there's nothing to reconcile — skip them).
+      this._provisional.push({ id: null, kind, points_m: points, radius });
+    }
     // Clear selection; the next camera refresh re-publishes editable_objects.
     this._draft = null;
     this._renderObjects(this._objs || []);
@@ -558,6 +598,9 @@ class DreameMapEditorCard extends HTMLElement {
       return;
     }
     this._setBusy(false);
+    // Optimistically hide the deleted object until HA's lagging data catches up.
+    const kind = d.category === "ignore" ? "ignore" : "nogo";
+    this._overrides[`${kind}:${d.objectId}`] = null;
     this._draft = null;
     this._renderObjects(this._objs || []);
     this._renderDraft();
