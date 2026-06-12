@@ -86,7 +86,6 @@ def apply_mpos_result(state, res: dict, now_unix: int):
     On "idle"/"error": keep the prior x/y/yaw + timestamp (no false "freshen"),
     only update mpos_last_result. RAW values — no transform.
     """
-    import dataclasses
     if res.get("result") == "ok":
         return dataclasses.replace(
             state,

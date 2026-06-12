@@ -1799,6 +1799,23 @@ entities:
         claim: "DreameA2DiagnosticSensor descriptor key=photos_patrol; value_fn=lambda coord: coord._photo_archive.count_by_category('patrol'); entity_category=DIAGNOSTIC; state_class=MEASUREMENT"
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
+  - id: "sensor.dreame_a2_mower_mpos"
+    platform: sensor
+    class: "DreameA2DiagnosticSensor"
+    class_file: "custom_components/dreame_a2_mower/sensor_device.py:834"
+    device: parent
+    source:
+      wire: "routed-get m:g t:MPOS (see inventory.yaml § MPOS, status partial) — RAW {x,y,yaw}; frame/units UNVERIFIED, NOT the integration's position"
+      state_path: "coordinator.data.mpos_x / mpos_y / mpos_yaw (populated on-demand by _refresh_mpos)"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-12"
+    verifications:
+      - date: "2026-06-12"
+        status: presumed
+        claim: "DreameA2DiagnosticSensor descriptor key=mpos; value_fn=_mpos_value (coord) -> 'x, y, yaw' string; extra_state_attributes_fn=_mpos_attrs exposes raw x/y/yaw/last_updated/last_result + honesty note; entity_category=DIAGNOSTIC; entity_registry_enabled_default=False. RAW cloud values, untransformed — surfaced for physical-match characterization; MPOS frame/units [UNVERIFIED]."
+
   - id: "sensor.dreame_a2_mower_photos_person"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
