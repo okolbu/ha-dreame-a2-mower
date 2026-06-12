@@ -146,6 +146,39 @@ def _freshness_attrs(coord) -> dict[str, int]:
     return {f"{name}_age_s": now - ts for name, ts in snap.items()}
 
 
+def _mpos_value(coord) -> str | None:
+    """Format the raw MPOS x/y/yaw triple as a string, or None if any field is absent."""
+    s = coord.data
+    if s.mpos_x is None or s.mpos_y is None or s.mpos_yaw is None:
+        return None
+    return f"{s.mpos_x}, {s.mpos_y}, {s.mpos_yaw}"
+
+
+def _mpos_attrs(coord) -> dict:
+    """Extra attributes for the MPOS diagnostic sensor.
+
+    Returns raw x/y/yaw, ISO timestamp of the last successful refresh,
+    the last result string, and a honesty note that these are
+    untransformed cloud values — NOT the integration's position.
+    """
+    s = coord.data
+    last_updated = (
+        datetime.fromtimestamp(s.mpos_updated_unix, tz=UTC).isoformat()
+        if s.mpos_updated_unix else None
+    )
+    return {
+        "x": s.mpos_x,
+        "y": s.mpos_y,
+        "yaw": s.mpos_yaw,
+        "last_updated": last_updated,
+        "last_result": s.mpos_last_result,
+        "note": (
+            "Raw cloud MPOS reading, untransformed — NOT the integration's "
+            "position. Frame/units unverified. Press 'Refresh MPOS' to update."
+        ),
+    }
+
+
 def _mqtt_age_value(coord) -> int | None:
     """Seconds since the last MQTT heartbeat from the device, or None if
     none has arrived yet. Reads the canonical `snapshot.last_heartbeat_unix`
@@ -791,6 +824,20 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         value_fn=lambda coord: (
             getattr(getattr(coord, "_cloud", None), "mac_address", None)
         ),
+    ),
+
+    # ------ MPOS: raw cloud position reading ------
+    # Raw x/y/yaw from the cloud MPOS endpoint, populated by _refresh_mpos.
+    # Frame/units are UNVERIFIED — do NOT treat these as the integration's
+    # position. Disabled by default; surface for developers / diagnostics.
+    DreameA2DiagnosticSensorEntityDescription(
+        key="mpos",
+        name="MPOS",
+        icon="mdi:crosshairs-gps",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        value_fn=_mpos_value,
+        extra_state_attributes_fn=_mpos_attrs,
     ),
 
     # ------ Phase D: per-type photo + video count sensors ------

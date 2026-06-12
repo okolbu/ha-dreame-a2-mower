@@ -51,6 +51,7 @@ async def async_setup_entry(
         DreameA2Generate3DMapButton(coordinator),
         DreameA2FinalizeSessionButton(coordinator),
         DreameA2RefreshCloudStateButton(coordinator),
+        DreameA2RefreshMposButton(coordinator),
         DreameA2RefreshAllWifiButton(coordinator),
     ]
     for map_id in sorted(coordinator.cloud_state.maps_by_id.keys()):
@@ -310,6 +311,32 @@ class DreameA2RefreshCloudStateButton(
     async def async_press(self) -> None:
         LOGGER.info("button.refresh_cloud_state: pressed; refreshing all cloud state")
         await self.coordinator._refresh_cloud_state()
+
+
+class DreameA2RefreshMposButton(
+    CoordinatorEntity[DreameA2MowerCoordinator], ButtonEntity
+):
+    """On-demand fetch of the RAW MPOS diagnostic reading.
+
+    MPOS ({x,y,yaw}) is the cloud's routed-get position. Values are surfaced
+    raw (untransformed) on sensor.dreame_a2_mower_mpos for physical-match
+    characterization; this button refreshes them. Diagnostic category.
+    [docs/superpowers/specs/2026-06-12-mpos-diagnostic-design.md]
+    """
+
+    _attr_has_entity_name = True
+    _attr_name = "Refresh MPOS"
+    _attr_icon = "mdi:crosshairs-gps"
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+
+    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = mower_unique_id(coordinator, "refresh_mpos")
+        self._attr_device_info = mower_device_info(coordinator)
+
+    async def async_press(self) -> None:
+        LOGGER.info("button.refresh_mpos: pressed; refreshing MPOS diagnostic")
+        await self.coordinator._refresh_mpos()
 
 
 class DreameA2RefreshAllWifiButton(

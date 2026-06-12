@@ -661,3 +661,12 @@ class MowerState:
     # visibility. Persistence: user preference, restored via the number
     # entity's RestoreNumber behaviour.
     trail_render_width: int = 24
+
+    # MPOS diagnostic (routed-get m:g t:MPOS). RAW cloud values, untransformed —
+    # NOT the integration's position. Surfaced for physical-match characterization.
+    # [docs/superpowers/specs/2026-06-12-mpos-diagnostic-design.md]
+    mpos_x: int | None = None
+    mpos_y: int | None = None
+    mpos_yaw: int | None = None
+    mpos_updated_unix: int | None = None
+    mpos_last_result: str | None = None
