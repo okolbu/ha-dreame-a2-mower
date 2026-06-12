@@ -739,37 +739,44 @@ class _WritesMixin:
             int(map_id), [(218, {"id": int(object_id), "type": int(category)})]
         )
 
-    async def create_no_go(self, map_id, shape, points, radius=0.0) -> bool:
+    async def create_no_go(self, map_id, shape, points, radius=0.0, object_id=-1) -> bool:
         """Create a no-go area (o=215): shape line(2pt)/polygon(>=3pt)/circle(1pt+radius>0).
 
         points are [x, y] meter pairs in the map edit-frame.
+        object_id: -1 creates a new object; an existing id edits it in place.
         """
         from ..protocol import map_edit_shapes as _mes
         t = _mes.nogo_type(shape)
         pts = _mes.as_pairs(points)
         _mes.validate_nogo(shape, pts, radius=float(radius))
         return await self.edit_map(int(map_id), [(215, {
-            "id": -1, "type": t, "points": pts, "radius": float(radius),
+            "id": int(object_id), "type": t, "points": pts, "radius": float(radius),
         })])
 
-    async def create_ignore_obstacle(self, map_id, points) -> bool:
-        """Create an ignore-obstacle area (o=234, polygon >=3 pt, no radius)."""
+    async def create_ignore_obstacle(self, map_id, points, object_id=-1) -> bool:
+        """Create an ignore-obstacle area (o=234, polygon >=3 pt, no radius).
+
+        object_id: -1 creates a new object; an existing id edits it in place.
+        """
         from ..protocol import map_edit_shapes as _mes
         pts = _mes.as_pairs(points)
         if len(pts) < 3:
             raise ValueError(f"ignore-obstacle needs >=3 points, got {len(pts)}")
         return await self.edit_map(int(map_id), [(234, {
-            "id": -1, "type": 0, "points": pts,
+            "id": int(object_id), "type": 0, "points": pts,
         })])
 
-    async def create_mow_shape(self, map_id, shape, points) -> bool:
-        """Create a decorative mow-shape (o=215 type 9/12-18). square=4pt, others=2pt bbox."""
+    async def create_mow_shape(self, map_id, shape, points, object_id=-1) -> bool:
+        """Create a decorative mow-shape (o=215 type 9/12-18). square=4pt, others=2pt bbox.
+
+        object_id: -1 creates a new object; an existing id edits it in place.
+        """
         from ..protocol import map_edit_shapes as _mes
         t = _mes.mow_shape_type(shape)
         pts = _mes.as_pairs(points)
         _mes.validate_mow_shape(shape, pts)
         return await self.edit_map(int(map_id), [(215, {
-            "id": -1, "type": t, "points": pts, "radius": 0,
+            "id": int(object_id), "type": t, "points": pts, "radius": 0,
         })])
 
     async def split_zone(self, map_id, zone_id, line_start, line_end) -> bool:

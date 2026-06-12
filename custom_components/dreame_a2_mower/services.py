@@ -143,11 +143,13 @@ SCHEMA_CREATE_NO_GO_ZONE = vol.Schema({
     vol.Required("shape"): vol.In(["line", "polygon", "circle"]),
     vol.Required("points"): list,
     vol.Optional("radius", default=0.0): vol.Coerce(float),
+    vol.Optional("object_id", default=-1): vol.Coerce(int),
 })
 
 SCHEMA_CREATE_IGNORE_OBSTACLE = vol.Schema({
     vol.Required("map_id"): vol.Coerce(int),
     vol.Required("points"): list,
+    vol.Optional("object_id", default=-1): vol.Coerce(int),
 })
 
 SCHEMA_CREATE_MOW_SHAPE = vol.Schema({
@@ -157,6 +159,7 @@ SCHEMA_CREATE_MOW_SHAPE = vol.Schema({
         "teardrop", "mushroom", "cloud", "rainbow",
     ]),
     vol.Required("points"): list,
+    vol.Optional("object_id", default=-1): vol.Coerce(int),
 })
 
 SCHEMA_SPLIT_ZONE = vol.Schema({
@@ -779,6 +782,7 @@ async def _handle_create_no_go_zone(call: ServiceCall) -> None:
         await coordinator.create_no_go(
             int(call.data["map_id"]), call.data["shape"],
             call.data["points"], float(call.data.get("radius", 0.0)),
+            object_id=int(call.data.get("object_id", -1)),
         )
     except ValueError as err:
         LOGGER.warning("create_no_go_zone: %s", err)
@@ -791,7 +795,8 @@ async def _handle_create_ignore_obstacle(call: ServiceCall) -> None:
         return
     try:
         await coordinator.create_ignore_obstacle(
-            int(call.data["map_id"]), call.data["points"]
+            int(call.data["map_id"]), call.data["points"],
+            object_id=int(call.data.get("object_id", -1)),
         )
     except ValueError as err:
         LOGGER.warning("create_ignore_obstacle: %s", err)
@@ -804,7 +809,8 @@ async def _handle_create_mow_shape(call: ServiceCall) -> None:
         return
     try:
         await coordinator.create_mow_shape(
-            int(call.data["map_id"]), call.data["shape"], call.data["points"]
+            int(call.data["map_id"]), call.data["shape"], call.data["points"],
+            object_id=int(call.data.get("object_id", -1)),
         )
     except ValueError as err:
         LOGGER.warning("create_mow_shape: %s", err)
