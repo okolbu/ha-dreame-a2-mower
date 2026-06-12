@@ -9,6 +9,7 @@ import base64
 import dataclasses
 import json
 import math
+import time
 from datetime import timedelta
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -265,6 +266,20 @@ class _RefreshersMixin:
             sim_expired_time=r.get("expired_time"), sim_left_days=r.get("left_days"))
         if new != self.data:
             self.async_set_updated_data(new)
+
+    async def _refresh_mpos(self) -> None:
+        """On-demand MPOS diagnostic fetch (button-triggered; not scheduled).
+
+        Surfaces the RAW routed-get position for physical-match characterization.
+        Never drives MowerState.position_* — diagnostic only.
+        """
+        if not hasattr(self, "_cloud"):
+            return
+        res = await self.hass.async_add_executor_job(self._cloud.fetch_mpos)
+        new = apply_mpos_result(self.data, res, int(time.time()))
+        if new != self.data:
+            self.async_set_updated_data(new)
+        LOGGER.info("mpos refresh: result=%s", (res or {}).get("result"))
 
     async def _refresh_messages(self) -> None:
         """Account message-list unread counts via message-record/list v1."""
