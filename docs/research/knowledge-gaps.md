@@ -201,18 +201,28 @@ o=219 rename + o=218 delete via the o=204/o=201 transaction + o=200 select):
   as coordinate-driven services create_no_go_zone / create_ignore_obstacle /
   create_mow_shape / split_zone / merge_zones via the o=204/o=201 edit transaction; split/
   merge flagged destructive (clear zone schedule + per-zone prefs). Coords pass as map
-  edit-frame metres. Still open below: the interactive draw card (F2b) and the
-  edit-frame↔render-frame coordinate verification. Also still `[UNKNOWN — to capture]`:
-  whether the firmware echoes o:219/o:220/o:221 on s2p50.
+  edit-frame metres. Still `[UNKNOWN — to capture]`: whether the firmware echoes
+  o:219/o:220/o:221 on s2p50.
 - **F2b interactive draw card + edit-frame↔render-frame coordinate verification** —
-  `[UNKNOWN — to capture]` The create/split/merge services accept raw [x,y] metre points,
-  but no UI exists to pick them on the rendered map, and the coordinate convention between
-  the two frames is unverified: does an o=215 metre point land where the renderer's
-  `projectPoint` expects, or is the edit frame reflected/rotated/offset vs the render frame?
-  This MUST be verified before an interactive draw card ships (a wrong convention would place
-  a no-go zone in the wrong spot). Capture: emit one o=215 point at a known map location via
-  the service, then read where it renders vs where it was drawn in the app; diff the two
-  frames' axes/origin/orientation.
+  **RESOLVED 2026-06-12.** Frame verified: the o=215 edit-frame metres ARE the
+  `projectPoint` render frame (cloud-mm ÷ 1000) — no reflection/rotation/offset, inverse
+  recovers the wire metres exactly (`map-edit-frame-verification-2026-06-12.md`). Interactive
+  map-editor card shipped with create / edit-in-place / rotate / move / delete. Edit-in-place
+  + rotate were confirmed to reuse o=215 with `id:<real>` as the only discriminator and
+  rotate/resize baked into `points` (no angle field) — `dreame-app-mapedit-rotate-edit-2026-06-12.md`.
+- **rotate + edit-in-place wire** — **RESOLVED 2026-06-12** (`[app-mitm:2026-06-12-mapedit-rotate-edit]`).
+  o=215 edit-existing = same opcode as create, `id:<real>` replaces in place; rotate/resize are
+  sent as already-transformed corner `points` (no angle field). STILL OPEN: o=234 (ignore-obstacle)
+  edit-in-place is taken BY ANALOGY with o=215 — capture an o=234 with a real id to confirm.
+- **curved mow-shape rotation point representation** — `[UNKNOWN — to capture]` The rotate
+  capture covered the 2-pt-bbox / polygon-corner shapes (square, no-go poly, curved-shape bbox).
+  How a CURVED preset shape (heart/cloud/rainbow/teardrop) encodes rotation in its 2-pt bbox —
+  whether a rotated curved shape rides solely on the bbox corners or needs an extra orientation
+  term — is not isolated. Capture: rotate a curved mow-shape in app-MITM and diff its o:215 points.
+- **decode mow-shapes from the map blob** — `[UNKNOWN — to capture]` Placed decorative
+  mow-shapes are NOT decoded out of the cloud map blob (only no-go/ignore/zone objects are), so
+  the card cannot SELECT an existing mow-shape to edit/rotate/delete it (create-only). Capture/decode:
+  find where placed mow-shapes live in the map structure so they surface as editable objects.
 
 **Batch device-data / map retvals:** MAPD, MAPI, MITRC, OBS (hypothesized);
 MAPL, MISTA (confirmed w/ open qs). Gap: per-field decode of the map-info and
@@ -302,14 +312,15 @@ Validate: correlate event args with the session that fired them.
 - **Per-pathway selection sub-menu** — app shows a per-map pathway-ID selector when
   Pathway Obstacle Avoidance is enabled; write transport unknown `[UNKNOWN — to capture]`
   (deferred: needs pathways drawn first, then CFG-DIFF on the per-pathway list).
-- **Map-edit mowing-shape type ids** — WIRE-CONFIRMED only for 9=square, 13=heart, 17=cloud,
-  18=rainbow (these four `type` values appear in the o:215 capture payloads). `[UNVERIFIED]`
-  12=circle, 14=triangle, 15=teardrop, 16=mushroom — these are INFERRED from the Shapes-screen
-  (IMG_4615.PNG) left→right ordering filling the 9,12-18 sequence, NOT seen on the wire. They
-  are wired in `create_mow_shape` on that inference; if the firmware numbers them differently a
-  "triangle" call would silently draw a different shape (no malformed payload, just wrong shape).
-  Capture: draw each of circle/triangle/teardrop/mushroom in an app-MITM session and read its
-  `type` in the o:215 payload to confirm/correct the mapping. Also `[UNKNOWN — to capture]`:
+- **Map-edit mowing-shape type ids** — WIRE-CONFIRMED for 9=square, 13=heart, 15=teardrop,
+  17=cloud, 18=rainbow (these `type` values appear in o:215 capture payloads; 15 confirmed
+  2026-06-12 `[app-mitm:2026-06-12-mapedit-rotate-edit]`). `[UNVERIFIED]` 12=circle, 14=triangle,
+  16=mushroom — these are INFERRED from the Shapes-screen (IMG_4615.PNG) left→right ordering
+  filling the 9,12-18 sequence, NOT seen on the wire. They are wired in `create_mow_shape` on that
+  inference; if the firmware numbers them differently a "triangle" call would silently draw a
+  different shape (no malformed payload, just wrong shape). Capture: draw each of
+  circle/triangle/mushroom in an app-MITM session and read its `type` in the o:215 payload to
+  confirm/correct the mapping. Also `[UNKNOWN — to capture]`:
   type ids 10 and 11 — no shape occupies the gap between square(9) and circle(12) in this app
   build, so they appear unused on g2408.
 - **Type-3 transient obstacle photo / map-icon link** — obstacle JPEG bytes are
