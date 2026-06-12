@@ -54,3 +54,6 @@ docs/research/inventory/generated/coverage-report.md
 
 # NFS leftover files (created when a process holds a deleted file)
 .nfs*
+
+# Git worktrees created by the using-git-worktrees workflow (never commit)
+.claude/worktrees/
