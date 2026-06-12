@@ -78,6 +78,23 @@ if TYPE_CHECKING:
     pass  # cross-mixin type imports added as needed
 
 
+def apply_mpos_result(state, res: dict, now_unix: int):
+    """Merge a fetch_mpos() result into MowerState (pure, no side effects).
+
+    On "ok": set mpos_x/y/yaw + mpos_updated_unix=now + mpos_last_result="ok".
+    On "idle"/"error": keep the prior x/y/yaw + timestamp (no false "freshen"),
+    only update mpos_last_result. RAW values — no transform.
+    """
+    import dataclasses
+    if res.get("result") == "ok":
+        return dataclasses.replace(
+            state,
+            mpos_x=res.get("x"), mpos_y=res.get("y"), mpos_yaw=res.get("yaw"),
+            mpos_updated_unix=now_unix, mpos_last_result="ok",
+        )
+    return dataclasses.replace(state, mpos_last_result=res.get("result") or "error")
+
+
 class _RefreshersMixin:
     """Methods extracted from coordinator.py — see spec for groupings."""
 
