@@ -197,11 +197,22 @@ o=219 rename + o=218 delete via the o=204/o=201 transaction + o=200 select):
   (o=219) is captured; renaming an entire MAP and deleting a whole map are UNCAPTURED
   (opcode + payload unknown). Capture: rename a map then delete a map in the app and
   snoop s2a50.
-- **create (o=215 / o=234) + split/merge (o=220 / o=221)** — DEFERRED, not wired: create
-  needs an interactive draw card (point geometry), split/merge are destructive (clear
-  zone schedule + per-zone prefs). Payload shapes confirmed 2026-06-09 but no integration
-  surface yet; `[UNKNOWN — to capture]` whether the firmware echoes o:219/o:220/o:221 on
-  s2p50.
+- **create (o=215 / o=234) + split/merge (o=220 / o=221)** — WIRED (v1.0.25a7, 2026-06-12)
+  as coordinate-driven services create_no_go_zone / create_ignore_obstacle /
+  create_mow_shape / split_zone / merge_zones via the o=204/o=201 edit transaction; split/
+  merge flagged destructive (clear zone schedule + per-zone prefs). Coords pass as map
+  edit-frame metres. Still open below: the interactive draw card (F2b) and the
+  edit-frame↔render-frame coordinate verification. Also still `[UNKNOWN — to capture]`:
+  whether the firmware echoes o:219/o:220/o:221 on s2p50.
+- **F2b interactive draw card + edit-frame↔render-frame coordinate verification** —
+  `[UNKNOWN — to capture]` The create/split/merge services accept raw [x,y] metre points,
+  but no UI exists to pick them on the rendered map, and the coordinate convention between
+  the two frames is unverified: does an o=215 metre point land where the renderer's
+  `projectPoint` expects, or is the edit frame reflected/rotated/offset vs the render frame?
+  This MUST be verified before an interactive draw card ships (a wrong convention would place
+  a no-go zone in the wrong spot). Capture: emit one o=215 point at a known map location via
+  the service, then read where it renders vs where it was drawn in the app; diff the two
+  frames' axes/origin/orientation.
 
 **Batch device-data / map retvals:** MAPD, MAPI, MITRC, OBS (hypothesized);
 MAPL, MISTA (confirmed w/ open qs). Gap: per-field decode of the map-info and
@@ -291,10 +302,13 @@ Validate: correlate event args with the session that fired them.
 - **Per-pathway selection sub-menu** — app shows a per-map pathway-ID selector when
   Pathway Obstacle Avoidance is enabled; write transport unknown `[UNKNOWN — to capture]`
   (deferred: needs pathways drawn first, then CFG-DIFF on the per-pathway list).
-- **Map-edit mowing-shape type ids 12/14/15/16** — o:215 `type` field confirmed for
-  9=Square/13=Heart/17=Cloud/18=Rainbow; Circle(12)/Triangle(14)/Droplet(15)/
-  Mushroom(16) are inferred from APK labels, not captured `[UNKNOWN — to capture]`.
-  Capture: draw each shape in app-MITM session, read `type` in the o:215 payload.
+- **Map-edit mowing-shape type ids 10/11** — RESOLVED for 12/14/15/16: the o:215 `type`
+  field's decorative shape map is now confirmed 9=square, 12=circle, 13=heart, 14=triangle,
+  15=teardrop, 16=mushroom, 17=cloud, 18=rainbow from the Shapes screen (IMG_4615.PNG) and
+  wired in `create_mow_shape`. Still `[UNKNOWN — to capture]`: type ids 10 and 11 — the
+  contiguous gap between square(9) and circle(12) has no shape in the Shapes screen, so 10/11
+  are unused on g2408 (or map to shapes not offered in this app build). Capture: if a future
+  app build adds a shape, read its `type` in the o:215 payload.
 - **Type-3 transient obstacle photo / map-icon link** — obstacle JPEG bytes are
   archived via `userDidOssList` (category=obstacle; confirmed 2026-06-09). The
   *icon-linkage* — i.e. which map waypoint/obstacle-icon in the live-session data
