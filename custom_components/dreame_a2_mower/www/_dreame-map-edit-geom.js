@@ -116,6 +116,96 @@ export function resizeUniform(corners, handleIdx, newPos) {
   return corners.map(([x, y]) => [cx + (x - cx) * s, cy + (y - cy) * s]);
 }
 
+// ----- corner-rectangle free resize (rect / square mow) -------------------
+// Resize a (possibly rotated) 4-corner rectangle by dragging corner `handleIdx`
+// to `newPos`, keeping the diagonally-opposite corner anchored and preserving
+// the rectangle's orientation + right angles (free aspect — width and height
+// change independently, along the rect's OWN local axes). Returns 4 new corners
+// in the same winding as the input.
+export function resizeRectCorner(corners, handleIdx, newPos) {
+  const anchorIdx = (handleIdx + 2) % 4;
+  const a1Idx = (anchorIdx + 1) % 4; // neighbour of anchor (also adj to dragged)
+  const a2Idx = (anchorIdx + 3) % 4;
+  const anchor = corners[anchorIdx];
+  let u = [corners[a1Idx][0] - anchor[0], corners[a1Idx][1] - anchor[1]];
+  let v = [corners[a2Idx][0] - anchor[0], corners[a2Idx][1] - anchor[1]];
+  const ul = Math.hypot(u[0], u[1]) || 1;
+  const vl = Math.hypot(v[0], v[1]) || 1;
+  u = [u[0] / ul, u[1] / ul];
+  v = [v[0] / vl, v[1] / vl];
+  const rel = [newPos[0] - anchor[0], newPos[1] - anchor[1]];
+  const d1 = rel[0] * u[0] + rel[1] * u[1]; // projection onto local axis 1
+  const d2 = rel[0] * v[0] + rel[1] * v[1];
+  const out = new Array(4);
+  out[anchorIdx] = [anchor[0], anchor[1]];
+  out[a1Idx] = [anchor[0] + u[0] * d1, anchor[1] + u[1] * d1];
+  out[a2Idx] = [anchor[0] + v[0] * d2, anchor[1] + v[1] * d2];
+  out[handleIdx] = [anchor[0] + u[0] * d1 + v[0] * d2, anchor[1] + u[1] * d1 + v[1] * d2];
+  return out;
+}
+
+// ----- oriented-edge model (curved mow-shapes) ----------------------------
+// Curved mow-shapes are a 2-point WIRE form `[p0, p1]` where the segment is ONE
+// EDGE of the shape's oriented bounding box: the edge direction is the box
+// orientation (axis-aligned edge => unrotated; off-axis edge => rotated), and
+// the box is square (perpendicular extent = edge length). The 2 points carry
+// BOTH size and rotation — there is no separate angle field. (Wire-confirmed by
+// the app: rotated curved shapes have non-axis-aligned 2-point values.)
+
+// Left-perpendicular of the edge vector, SAME length as the edge (=> square box).
+function _edgePerp(p0, p1) {
+  return [-(p1[1] - p0[1]), p1[0] - p0[0]];
+}
+
+// 4 corners of the oriented box whose bottom edge is p0->p1, extending
+// perpendicular-left by |p0->p1|. Order: [p0, p1, p1+n, p0+n].
+export function orientedEdgeBox(p0, p1) {
+  const n = _edgePerp(p0, p1);
+  return [
+    [p0[0], p0[1]],
+    [p1[0], p1[1]],
+    [p1[0] + n[0], p1[1] + n[1]],
+    [p0[0] + n[0], p0[1] + n[1]],
+  ];
+}
+
+// Centre of the oriented edge box = midpoint(p0,p1) + n/2.
+export function edgeBoxCenter(p0, p1) {
+  const n = _edgePerp(p0, p1);
+  return [(p0[0] + p1[0]) / 2 + n[0] / 2, (p0[1] + p1[1]) / 2 + n[1] / 2];
+}
+
+// Uniformly scale the edge about the box centre by the ratio of the dragged
+// corner's new vs old distance from the centre (handleIdx indexes the 4
+// orientedEdgeBox corners). Preserves orientation + square aspect. -> [p0, p1].
+export function resizeOrientedEdge(p0, p1, handleIdx, newPos) {
+  const c = edgeBoxCenter(p0, p1);
+  const box = orientedEdgeBox(p0, p1);
+  const h = box[handleIdx];
+  const oldR = Math.hypot(h[0] - c[0], h[1] - c[1]);
+  if (oldR === 0) return [[p0[0], p0[1]], [p1[0], p1[1]]];
+  const newR = Math.hypot(newPos[0] - c[0], newPos[1] - c[1]);
+  const s = newR / oldR;
+  return [
+    [c[0] + (p0[0] - c[0]) * s, c[1] + (p0[1] - c[1]) * s],
+    [c[0] + (p1[0] - c[0]) * s, c[1] + (p1[1] - c[1]) * s],
+  ];
+}
+
+// Rotate the edge (both points) about the box centre by `deg`. -> [p0, p1].
+export function rotateEdgeAboutCenter(p0, p1, deg) {
+  const c = edgeBoxCenter(p0, p1);
+  const rad = (deg * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const rot = ([x, y]) => {
+    const dx = x - c[0];
+    const dy = y - c[1];
+    return [c[0] + dx * cos - dy * sin, c[1] + dx * sin + dy * cos];
+  };
+  return [rot(p0), rot(p1)];
+}
+
 // Center + a point on the rim -> { center, radius }. radius = |edge - center|.
 export function circleFromCenterEdge(center, edge) {
   const radius = Math.hypot(edge[0] - center[0], edge[1] - center[1]);
