@@ -133,6 +133,13 @@ _tab_header_photo_privacy: &tab_header_photo_privacy
 
     ## 🔒 Photo Privacy &nbsp;<span style="font-size:0.75em;color:var(--secondary-text-color)">review and delete AI-obstacle photos</span>
 
+_tab_header_photos: &tab_header_photos
+  type: markdown
+  content: |
+    <hr style="border:0;border-top:3px solid var(--primary-color);margin:12px 0 0 0;"/>
+
+    ## 🖼️ Photos &nbsp;<span style="font-size:0.75em;color:var(--secondary-text-color)">archived obstacle / patrol / person photos + videos — tap a thumbnail to enlarge</span>
+
 title: Dreame A2 Mower
 
 # Custom cards used by this dashboard — register these as Lovelace
@@ -1695,6 +1702,39 @@ views:
                   bundle (state, novel-log, recent sessions). Call from Developer
                   Tools → Services, or attach to an automation. File is written
                   under the config dir.
+
+  - title: Photos
+    path: photos
+    type: panel
+    icon: mdi:image-multiple
+    cards:
+      - type: vertical-stack
+        cards:
+          - *tab_header_photos
+
+          # Counts + OSS storage at a glance.
+          - type: glance
+            show_name: true
+            show_state: true
+            columns: 5
+            entities:
+              - entity: sensor.dreame_a2_mower_photos_obstacle
+                name: Obstacle
+              - entity: sensor.dreame_a2_mower_photos_patrol
+                name: Patrol
+              - entity: sensor.dreame_a2_mower_photos_person
+                name: Person
+              - entity: sensor.dreame_a2_mower_videos
+                name: Videos
+              - entity: sensor.dreame_a2_mower_oss_storage_pct
+                name: Storage %
+
+          # Thumbnail gallery (bundled card). REQUIRES the Lovelace resource
+          # (type: module): /dreame_a2_mower/dreame-a2-photo-gallery-card.js
+          # Reads sensor.dreame_a2_mower_photo_gallery's `items` attribute
+          # (signed media URLs); tap a thumbnail to open the large pop-out.
+          - type: custom:dreame-a2-photo-gallery-card
+            entity: sensor.dreame_a2_mower_photo_gallery
 
   - title: Photo Privacy
     path: privacy
