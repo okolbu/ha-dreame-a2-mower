@@ -940,7 +940,7 @@ class _LidarOssMixin:
                     "ts": int(p.unix_ts),
                     "date": _date(p.unix_ts),
                     "category": p.category,
-                    "detection": p.detection,
+                    "detections": p.detections or [],
                     "url": url,
                     "thumb_url": url,
                 })

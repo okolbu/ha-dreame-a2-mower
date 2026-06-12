@@ -99,8 +99,9 @@ async def test_gallery_manifest_shape_and_sort(tmp_path):
         assert isinstance(it["ts"], int)
         assert it["date"]  # non-empty YYYY-MM-DD HH:MM
 
-    assert photo["category"] == "person"
-    assert "detection" in photo
+    assert photo["category"] == "ai_human"  # _person.jpg -> ai_human under the 7-category scheme
+    assert "detections" in photo  # full detection list present on photo items
+    assert isinstance(photo["detections"], list)
     assert photo["url"] == photo["thumb_url"]
     assert photo["url"].startswith("/api/dreame_a2_mower/photo/")
 
