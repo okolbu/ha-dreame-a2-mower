@@ -89,7 +89,7 @@ def test_quota_pct_none_when_total_zero():
 def _make_coord(*, obstacle=3, patrol=1, person=2, videos=4):
     return SimpleNamespace(
         _photo_archive=SimpleNamespace(
-            count_by_category=lambda c: {"obstacle": obstacle, "patrol": patrol, "person": person}[c]
+            count_by_category=lambda c: {"obstacle": obstacle, "patrol": patrol, "ai_human": person}[c]
         ),
         _video_archive=SimpleNamespace(count=videos),
     )
@@ -117,6 +117,20 @@ def test_photos_patrol_count():
 def test_photos_person_count():
     coord = _make_coord(person=9)
     assert _find("photos_person").value_fn(coord) == 9
+
+
+def test_person_count_uses_ai_human_category():
+    # The human-count sensor must query the 7-category "ai_human" label,
+    # not the retired coarse "person" category.
+    queried: list[str] = []
+    coord = SimpleNamespace(
+        _photo_archive=SimpleNamespace(
+            count_by_category=lambda c: (queried.append(c) or {"ai_human": 2}.get(c, 0))
+        ),
+        _video_archive=SimpleNamespace(count=0),
+    )
+    assert _find("photos_person").value_fn(coord) == 2
+    assert queried == ["ai_human"]
 
 
 def test_videos_count():
