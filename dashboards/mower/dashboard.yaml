@@ -1718,15 +1718,15 @@ views:
             show_state: true
             columns: 5
             entities:
-              - entity: sensor.dreame_a2_mower_photos_obstacle
+              - entity: sensor.dreame_a2_mower_obstacle_photos
                 name: Obstacle
-              - entity: sensor.dreame_a2_mower_photos_patrol
+              - entity: sensor.dreame_a2_mower_patrol_photos
                 name: Patrol
-              - entity: sensor.dreame_a2_mower_photos_person
+              - entity: sensor.dreame_a2_mower_person_photos
                 name: Person
               - entity: sensor.dreame_a2_mower_videos
                 name: Videos
-              - entity: sensor.dreame_a2_mower_oss_storage_pct
+              - entity: sensor.dreame_a2_mower_oss_storage_used_percent
                 name: Storage %
 
           # Thumbnail gallery (bundled card). REQUIRES the Lovelace resource

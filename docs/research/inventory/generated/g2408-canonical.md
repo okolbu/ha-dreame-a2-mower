@@ -1976,7 +1976,7 @@ Sequence: o:204 (begin) → o:214 {id} → o:201 (commit). NOTE: this spot
 map ELEMENT (o:214) is distinct from the spot RUN action (o:103), which
 only starts a mow at an already-existing spot.
 
-**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: dreame-app-mapedit-rotate-edit-2026-06-12.md § Spots`
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: /data/claude/homeassistant/OLD/from-mitm-claude/dreame-app-mapedit-rotate-edit-2026-06-12.md § Spots`
 
 ### o215 — `add_no_go_zone`
 
@@ -2080,7 +2080,7 @@ from the maintenance point — which uses its own opcode o:224. Only a
 move/edit (id:<real>) was observed; create (id:-1) and delete are
 [UNKNOWN — to capture]. Do not conflate with o:224 (maintenance point).
 
-**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points`
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: /data/claude/homeassistant/OLD/from-mitm-claude/dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points`
 
 ### o224 — `edit_maintenance_point`
 
@@ -2102,7 +2102,7 @@ enum), NOT o:224.
 
 Sequence: o:204 (begin) → o:224 {id} → o:201 (commit).
 
-**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points`
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: /data/claude/homeassistant/OLD/from-mitm-claude/dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points`
 
 ### o234 — `add_ignore_obstacle_zone`
 

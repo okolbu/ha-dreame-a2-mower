@@ -551,7 +551,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     ),
     DreameA2SensorEntityDescription(
         key="oss_storage_pct",
-        name="OSS storage used %",
+        name="OSS storage used percent",
         icon="mdi:cloud-percent",
         native_unit_of_measurement=PERCENTAGE,
         state_class=SensorStateClass.MEASUREMENT,

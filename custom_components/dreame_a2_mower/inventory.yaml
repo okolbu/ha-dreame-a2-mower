@@ -4372,7 +4372,7 @@ opcodes:
       decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
-      apk: "dreame-app-mapedit-rotate-edit-2026-06-12.md § Spots"
+      apk: "/data/claude/homeassistant/OLD/from-mitm-claude/dreame-app-mapedit-rotate-edit-2026-06-12.md § Spots"
     verifications:
       - date: "2026-06-12"
         status: verified
@@ -4436,7 +4436,7 @@ opcodes:
       - date: "2026-06-12"
         status: verified
         claim: "o:215 EDIT-IN-PLACE & ROTATE are the SAME opcode as create — the `id` field is the only discriminator: id:-1 = create new (device assigns a real id on commit, e.g. shape→302, no-go→101); id:<real> = replace that object in place (edit existing). Editing a shape and editing a no-go are the identical call (only type/points differ). ROTATE and RESIZE have NO dedicated opcode and NO angle field — both are baked entirely into `points`: a rotated shape is sent as already-rotated corner coords (verified: a ~26.6° 3.0m×3.0m square sent as points:[[-4.71,-9.87],[-6.05,-7.19],[-3.37,-5.85],[-2.03,-8.53]] — every edge 3.00m). Mow-shape type 15 (Teardrop) now WIRE-SEEN (edit of curved shape: o:215{id:302,type:15,radius:0,points:[[3.21,8.9],[-6.25,5.68]]}) — upgrades the earlier [UNVERIFIED] inference; 12/14/16 remain inferred/UNVERIFIED. [app-mitm:2026-06-12-mapedit-rotate-edit]"
-        evidence: "dreame-app-mapedit-rotate-edit-2026-06-12.md (rotate + edit-in-place decoded payloads)"
+        evidence: "/data/claude/homeassistant/OLD/from-mitm-claude/dreame-app-mapedit-rotate-edit-2026-06-12.md (rotate + edit-in-place decoded payloads)"
       - date: "2026-06-12"
         status: verified
         claim: "o:215 CREATE (id:-1) and EDIT-IN-PLACE (id:<real>) confirmed working END-TO-END on the live g2408 from OUR integration's edit_map transaction (o:200 select→o:204 begin→o:215→o:201 commit), not just app-MITM: a 4-corner no-go created via create_no_go_zone(object_id=-1) round-tripped back from the cloud as 4 corners (device PRESERVES point counts — a 2-point no-go is genuinely a wall/line, NOT a reduced rect); and a no-go SQUARE rotated + saved via create_no_go_zone(object_id=<real>) appears at the rotated angle in the Dreame app's live device map (matches the integration). PROPAGATION CAVEAT: the device applies edits promptly but the CLOUD map blob HA reads lags by minutes and unreliably (a create surfaced in editable_objects after ~minutes; a delete had NOT surfaced after several minutes + a config-entry reload) — HA's camera/editable_objects is NOT a reliable immediate witness of map edits; the app is."
@@ -4585,7 +4585,7 @@ opcodes:
       decoded: partial
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
-      apk: "dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points"
+      apk: "/data/claude/homeassistant/OLD/from-mitm-claude/dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points"
     verifications:
       - date: "2026-06-12"
         status: partial
@@ -4622,7 +4622,7 @@ opcodes:
       decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
-      apk: "dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points"
+      apk: "/data/claude/homeassistant/OLD/from-mitm-claude/dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points"
     verifications:
       - date: "2026-06-12"
         status: verified

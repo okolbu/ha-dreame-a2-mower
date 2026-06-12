@@ -1743,7 +1743,7 @@ entities:
         claim: "DreameA2Sensor descriptor key=oss_storage_total; value_fn=lambda s: round(s.oss_storage_total / 1048576) if s.oss_storage_total is not None else None; native_unit_of_measurement=MB; entity_category=DIAGNOSTIC"
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
-  - id: "sensor.dreame_a2_mower_oss_storage_pct"
+  - id: "sensor.dreame_a2_mower_oss_storage_used_percent"
     platform: sensor
     class: "DreameA2Sensor"
     class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
@@ -1753,17 +1753,21 @@ entities:
       state_path: "MowerState.oss_storage_used + MowerState.oss_storage_total (derived)"
     write_path: read-only
     status:
-      seen_working: false
-      last_verified: "2026-06-10"
+      seen_working: true
+      last_verified: "2026-06-12"
     verifications:
       - date: "2026-06-10"
         status: verified
         claim: "DreameA2Sensor descriptor key=oss_storage_pct; value_fn derives used/total*100; native_unit_of_measurement=%; entity_category=DIAGNOSTIC; returns None until both quota fields populated"
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-12"
+        status: verified
+        claim: "Entity_id is name-derived, NOT key-derived. Original name 'OSS storage used %' slugified to 'oss_storage_used', COLLIDING with the oss_storage_used sensor, so HA registered it as '...oss_storage_used_2'. Fixed: renamed descriptor name to 'OSS storage used percent' (key/unique_id unchanged = oss_storage_pct) → entity_id sensor.dreame_a2_mower_oss_storage_used_percent. Live entity renamed via registry API to match; state=unknown until cloud quota block arrives."
+        evidence: "live registry rename 2026-06-12 + sensor_device.py:553"
 
   # Phase D: photo + video archive count/latest sensors (coordinator archives)
 
-  - id: "sensor.dreame_a2_mower_photos_obstacle"
+  - id: "sensor.dreame_a2_mower_obstacle_photos"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
     class_file: "custom_components/dreame_a2_mower/sensor_device.py:1007"
@@ -1773,13 +1777,17 @@ entities:
       state_path: "coordinator._photo_archive.count_by_category('obstacle')"
     write_path: read-only
     status:
-      seen_working: false
-      last_verified: "2026-06-10"
+      seen_working: true
+      last_verified: "2026-06-12"
     verifications:
       - date: "2026-06-10"
         status: verified
         claim: "DreameA2DiagnosticSensor descriptor key=photos_obstacle; value_fn=lambda coord: coord._photo_archive.count_by_category('obstacle'); entity_category=DIAGNOSTIC; state_class=MEASUREMENT"
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-12"
+        status: verified
+        claim: "Entity_id is NAME-derived (has_entity_name), NOT key-derived: name 'Obstacle photos' → sensor.dreame_a2_mower_obstacle_photos (the descriptor key photos_obstacle only drives unique_id). Earlier inventory/dashboard used the key slug 'photos_obstacle' which never existed → 'entity not found'. Live state=6 confirmed; id corrected here + in dashboard."
+        evidence: "live registry GET /api/states 2026-06-12 (state=6)"
 
   - id: "sensor.dreame_a2_mower_photo_gallery"
     platform: sensor
@@ -1800,7 +1808,7 @@ entities:
         status: presumed
         claim: "DreameA2PhotoGallerySensor (custom CoordinatorEntity); native_value=len(coordinator._photo_gallery); extra_state_attributes={'items': coordinator._photo_gallery}; _unrecorded_attributes=frozenset({'*'}); enabled by default. Manifest built by coordinator._rebuild_photo_gallery from photo_archive.list_photos() + video_archive.list_videos(), signed via hass.http.async_sign_path; derived from the already-archived OSS gallery (no new wire fact)."
 
-  - id: "sensor.dreame_a2_mower_photos_patrol"
+  - id: "sensor.dreame_a2_mower_patrol_photos"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
     class_file: "custom_components/dreame_a2_mower/sensor_device.py:1007"
@@ -1810,13 +1818,17 @@ entities:
       state_path: "coordinator._photo_archive.count_by_category('patrol')"
     write_path: read-only
     status:
-      seen_working: false
-      last_verified: "2026-06-10"
+      seen_working: true
+      last_verified: "2026-06-12"
     verifications:
       - date: "2026-06-10"
         status: verified
         claim: "DreameA2DiagnosticSensor descriptor key=photos_patrol; value_fn=lambda coord: coord._photo_archive.count_by_category('patrol'); entity_category=DIAGNOSTIC; state_class=MEASUREMENT"
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-12"
+        status: verified
+        claim: "Entity_id NAME-derived: name 'Patrol photos' → sensor.dreame_a2_mower_patrol_photos (key photos_patrol drives unique_id only). Corrected from the non-existent key slug 'photos_patrol'; live state confirmed."
+        evidence: "live registry GET /api/states 2026-06-12"
 
   - id: "sensor.dreame_a2_mower_mpos"
     platform: sensor
@@ -1835,7 +1847,7 @@ entities:
         status: presumed
         claim: "DreameA2DiagnosticSensor descriptor key=mpos; value_fn=_mpos_value (coord) -> 'x, y, yaw' string; extra_state_attributes_fn=_mpos_attrs exposes raw x/y/yaw/last_updated/last_result + honesty note; entity_category=DIAGNOSTIC; entity_registry_enabled_default=False. RAW cloud values, untransformed — surfaced for physical-match characterization; MPOS frame/units [UNVERIFIED]."
 
-  - id: "sensor.dreame_a2_mower_photos_person"
+  - id: "sensor.dreame_a2_mower_person_photos"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
     class_file: "custom_components/dreame_a2_mower/sensor_device.py:1007"
@@ -1845,13 +1857,17 @@ entities:
       state_path: "coordinator._photo_archive.count_by_category('person')"
     write_path: read-only
     status:
-      seen_working: false
-      last_verified: "2026-06-10"
+      seen_working: true
+      last_verified: "2026-06-12"
     verifications:
       - date: "2026-06-10"
         status: verified
         claim: "DreameA2DiagnosticSensor descriptor key=photos_person; value_fn=lambda coord: coord._photo_archive.count_by_category('person'); entity_category=DIAGNOSTIC; state_class=MEASUREMENT; person-detection discriminator is _person.jpg suffix [UNVERIFIED — observed in app, not confirmed from live g2408 payload]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-12"
+        status: verified
+        claim: "Entity_id NAME-derived: name 'Person photos' → sensor.dreame_a2_mower_person_photos (key photos_person drives unique_id only). Corrected from the non-existent key slug 'photos_person'; live state confirmed."
+        evidence: "live registry GET /api/states 2026-06-12"
 
   - id: "sensor.dreame_a2_mower_videos"
     platform: sensor
