@@ -186,6 +186,11 @@ def _raise_for_edit_ok(ok: bool, action_label: str) -> None:
     the delivered-vs-rejected distinction the WriteResult carries, so a ``False``
     surfaces as a plain "rejected" validation error: the user should fix the
     request (bad geometry / id / region), not blindly retry.
+
+    TODO: having ``edit_map`` return a ``WriteResult`` (instead of collapsing to
+    a bool) would let map-edit distinguish not-delivered (retryable — mower
+    asleep/unreachable) from rejected (permanent — bad request), the same way
+    ``raise_for_write_result`` does for the action path. Out of 1.2 scope.
     """
     if not ok:
         raise ServiceValidationError(

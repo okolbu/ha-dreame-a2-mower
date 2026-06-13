@@ -33,6 +33,7 @@ from ._devices import mower_device_info, mower_unique_id
 from .const import DOMAIN, LOGGER, WORK_LOG_PLACEHOLDER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
+from .coordinator._write_errors import raise_for_write_result
 from .mower.state import ActionMode, MowerState
 from ._select_base import DreameA2SettingsSelectDescription
 from .protocol import cfg_payloads as _cfgp
@@ -924,7 +925,7 @@ class DreameA2ActiveMapSelect(
         # the committed value.
         from .mower.actions import MowerAction
         try:
-            await self.coordinator.dispatch_action(
+            result = await self.coordinator.dispatch_action(
                 MowerAction.SET_ACTIVE_MAP, {"map_id": target_map_id}
             )
         except Exception as ex:
@@ -934,6 +935,15 @@ class DreameA2ActiveMapSelect(
             self._optimistic_target_map_id = None
             self.async_write_ha_state()
             return
+
+        # Honest device verdict: a not-accepted changeMap (rejected or never
+        # delivered) must surface an error instead of leaving the optimistic
+        # flag stuck on a value the firmware never committed (Task B). Revert
+        # the optimistic UI first, then raise (entity context).
+        if not result.accepted:
+            self._optimistic_target_map_id = None
+            self.async_write_ha_state()
+            raise_for_write_result(result, "Set active map", context="entity")
 
         # Schedule a fallback clear of the optimistic flag after 10s.
         # If MAPL confirms within that window, the listener-triggered

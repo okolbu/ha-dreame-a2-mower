@@ -22,6 +22,8 @@ Two distinctions matter:
 """
 from __future__ import annotations
 
+from typing import Literal
+
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 
 from ..cloud_client import WriteResult
@@ -40,7 +42,7 @@ def raise_for_write_result(
     result: WriteResult,
     action_label: str,
     *,
-    context: str = "service",
+    context: Literal["service", "entity"] = "service",
 ) -> None:
     """Raise the appropriate HA exception when ``result`` is not accepted.
 
@@ -61,9 +63,12 @@ def raise_for_write_result(
 
     if not result.delivered:
         # Transport / asleep — retryable. Same class for service and entity.
+        # Only append the code when we actually read one (not_delivered()
+        # leaves code=None, which would otherwise render "(code None)").
+        code_suffix = f" (code {result.code})" if result.code is not None else ""
         raise HomeAssistantError(
             f"{action_label}: not delivered — the mower may be "
-            f"asleep/unreachable (code {result.code}). Try again."
+            f"asleep/unreachable{code_suffix}. Try again."
         )
 
     # delivered and not accepted — the device actively rejected it.

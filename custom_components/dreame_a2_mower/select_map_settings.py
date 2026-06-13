@@ -34,6 +34,7 @@ from ._settings_writes import (
 from .const import LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
+from .coordinator._write_errors import raise_for_write_result
 from ._select_base import _DreameA2DynamicTargetSelect
 
 
@@ -369,20 +370,32 @@ class DreameA2MowingModeSelect(
             )
             return
         kind, target_id = action
+        # These start_mowing_* calls are REAL device action-path writes, so
+        # surface a not-accepted device verdict instead of swallowing it
+        # (Task B). entity context → HomeAssistantError. (The settings-write
+        # surface — switch/number set_cfg/set_pre — is a separate deferred
+        # follow-up, not the action path 1.2 targets.)
         if kind == "all_areas":
-            await self.coordinator.start_mowing_all_areas(map_id=self._map_id)
+            result = await self.coordinator.start_mowing_all_areas(map_id=self._map_id)
+            label = "Start all-areas mow"
         elif kind == "edge":
-            await self.coordinator.start_mowing_edge(map_id=self._map_id)
+            result = await self.coordinator.start_mowing_edge(map_id=self._map_id)
+            label = "Start edge mow"
         elif kind == "zone":
-            await self.coordinator.start_mowing_zone(
+            result = await self.coordinator.start_mowing_zone(
                 map_id=self._map_id, zone_id=target_id
             )
+            label = "Start zone mow"
         elif kind == "spot":
-            await self.coordinator.start_mowing_spot(
+            result = await self.coordinator.start_mowing_spot(
                 map_id=self._map_id, spot_id=target_id
             )
+            label = "Start spot mow"
+        else:  # pragma: no cover - guarded by _option_to_action above
+            return
         self._attr_current_option = option
         self.async_write_ha_state()
+        raise_for_write_result(result, label, context="entity")
 
 
 # ---------------------------------------------------------------------------

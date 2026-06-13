@@ -165,3 +165,44 @@ def test_active_map_select_allows_change_when_charging(coordinator_with_two_maps
 
     coord.dispatch_action.assert_called_once()
     coord.hass.services.async_call.assert_not_called()
+
+
+def test_active_map_select_raises_on_rejected_dispatch(coordinator_with_two_maps):
+    """A delivered-but-rejected changeMap reverts the optimistic flag and raises."""
+    import pytest
+    from homeassistant.exceptions import HomeAssistantError
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.state import State
+
+    sel, coord = _make_select_with_state(coordinator_with_two_maps, State.STANDBY)
+    sel.async_write_ha_state = MagicMock()
+    coord.dispatch_action = AsyncMock(
+        return_value=WriteResult(delivered=True, accepted=False, code=-3, msg="nope")
+    )
+
+    import custom_components.dreame_a2_mower.select as _select_mod
+    _select_mod.async_call_later = MagicMock()
+
+    with pytest.raises(HomeAssistantError):
+        asyncio.run(sel.async_select_option("Back"))
+
+    coord.dispatch_action.assert_called_once()
+    # Optimistic flag reverted before the raise.
+    assert sel._optimistic_target_map_id is None
+
+
+def test_active_map_select_does_not_raise_on_accepted(coordinator_with_two_maps):
+    """An accepted changeMap dispatch must not raise."""
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.state import State
+
+    sel, coord = _make_select_with_state(coordinator_with_two_maps, State.STANDBY)
+    sel.async_write_ha_state = MagicMock()
+    coord.dispatch_action = AsyncMock(return_value=WriteResult.local_ok())
+
+    import custom_components.dreame_a2_mower.select as _select_mod
+    _select_mod.async_call_later = MagicMock()
+
+    # No exception expected.
+    asyncio.run(sel.async_select_option("Back"))
+    coord.dispatch_action.assert_called_once()

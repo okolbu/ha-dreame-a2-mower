@@ -72,6 +72,50 @@ def test_select_spot_dispatches_with_id():
     coord.start_mowing_spot.assert_awaited_once_with(map_id=0, spot_id=5)
 
 
+def test_select_does_not_raise_on_accepted():
+    """Happy path: an accepted WriteResult must not raise."""
+    from custom_components.dreame_a2_mower.select import DreameA2MowingModeSelect
+    coord = _make_coord_with_map()
+    coord.start_mowing_all_areas = AsyncMock(return_value=WriteResult.local_ok())
+    sel = DreameA2MowingModeSelect(coord, map_id=0)
+    sel.async_write_ha_state = MagicMock()
+    # No exception expected.
+    asyncio.run(sel.async_select_option("All areas"))
+
+
+def test_select_raises_on_rejected_result():
+    """A delivered-but-rejected start surfaces a HomeAssistantError (entity ctx)."""
+    import pytest
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.dreame_a2_mower.select import DreameA2MowingModeSelect
+    coord = _make_coord_with_map()
+    coord.start_mowing_zone = AsyncMock(
+        return_value=WriteResult(delivered=True, accepted=False, code=-3, msg="nope")
+    )
+    sel = DreameA2MowingModeSelect(coord, map_id=0)
+    sel.async_write_ha_state = MagicMock()
+    with pytest.raises(HomeAssistantError):
+        asyncio.run(sel.async_select_option("Zone: Lawn B"))
+    coord.start_mowing_zone.assert_awaited_once_with(map_id=0, zone_id=2)
+
+
+def test_select_raises_on_not_delivered_result():
+    """A not-delivered start (mower asleep) also raises (retryable message)."""
+    import pytest
+    from homeassistant.exceptions import HomeAssistantError
+
+    from custom_components.dreame_a2_mower.select import DreameA2MowingModeSelect
+    coord = _make_coord_with_map()
+    coord.start_mowing_edge = AsyncMock(
+        return_value=WriteResult.not_delivered("asleep")
+    )
+    sel = DreameA2MowingModeSelect(coord, map_id=0)
+    sel.async_write_ha_state = MagicMock()
+    with pytest.raises(HomeAssistantError):
+        asyncio.run(sel.async_select_option("Edge"))
+
+
 def test_start_mowing_switches_active_map_first():
     """All four wrappers route through _ensure_active_map(map_id)."""
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
