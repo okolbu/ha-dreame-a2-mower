@@ -1,6 +1,6 @@
 // Dreame A2 Mower — Photo/Video Gallery Card.
 //
-// Thumbnail gallery of archived obstacle / patrol / person photos + videos,
+// Thumbnail gallery of archived AI-detection / patrol / obstacle photos + videos,
 // with filter tabs and a click-to-enlarge lightbox. Reads the
 // `items` attribute of a sensor (default sensor.dreame_a2_mower_photo_gallery)
 // produced by the integration's OSS gallery manifest — each item is already a
@@ -12,15 +12,19 @@
 //     # entity: sensor.dreame_a2_mower_photo_gallery   (default)
 //
 // Item shapes (newest-first):
-//   photo: {type:"photo", id, ts, date, category:"obstacle"|"patrol"|"person",
-//           detection:{cls,conf}|null, url, thumb_url}
+//   photo: {type:"photo", id, ts, date,
+//           category:"ai_human"|"ai_animal"|"ai_object"|"obstacle"|"patrol"|"manual",
+//           detections:[{cls,conf,...}, ...], url, thumb_url}
 //   video: {type:"video", id, ts, date, category:"video", duration:int(sec),
 //           url, thumb_url}
 
 const CATEGORY_LABELS = {
+  ai_human: "AI · Human",
+  ai_animal: "AI · Animal",
+  ai_object: "AI · Object",
   obstacle: "Obstacle",
   patrol: "Patrol",
-  person: "Person",
+  manual: "Manual",
 };
 
 class DreameA2PhotoGalleryCard extends HTMLElement {
@@ -54,7 +58,7 @@ class DreameA2PhotoGalleryCard extends HTMLElement {
 
   _categories() {
     // Distinct photo categories present, in a stable display order.
-    const order = ["obstacle", "patrol", "person"];
+    const order = ["ai_human", "ai_animal", "ai_object", "obstacle", "patrol", "manual"];
     const present = new Set();
     for (const it of this._items()) {
       if (it.type === "photo" && it.category) present.add(it.category);
@@ -240,9 +244,12 @@ class DreameA2PhotoGalleryCard extends HTMLElement {
     let txt = item.date || "";
     if (item.type === "video") {
       if (item.duration) txt += " · " + this._fmtDuration(item.duration);
-    } else if (item.detection && item.detection.cls != null) {
-      const conf = Math.round((item.detection.conf || 0) * 100);
-      txt += " · " + item.detection.cls + " " + conf + "%";
+    } else if (Array.isArray(item.detections) && item.detections.length) {
+      const d = item.detections[0];
+      if (d && d.cls != null) {
+        const conf = Math.round((d.conf || 0) * 100);
+        txt += " · " + d.cls + " " + conf + "%";
+      }
     }
     return txt;
   }
@@ -353,6 +360,6 @@ if (!customElements.get("dreame-a2-photo-gallery-card")) {
     type: "dreame-a2-photo-gallery-card",
     name: "Dreame Mower Photo Gallery",
     description:
-      "Thumbnail gallery of archived obstacle/patrol/person photos + videos, click to enlarge.",
+      "Thumbnail gallery of archived AI-detection / patrol / obstacle photos + videos, click to enlarge.",
   });
 }

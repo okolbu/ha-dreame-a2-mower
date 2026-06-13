@@ -866,7 +866,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         icon="mdi:camera-account",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda coord: coord._photo_archive.count_by_category("person"),
+        value_fn=lambda coord: coord._photo_archive.count_by_category("ai_human"),
     ),
     DreameA2DiagnosticSensorEntityDescription(
         key="videos",

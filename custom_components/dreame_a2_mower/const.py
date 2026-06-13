@@ -144,9 +144,10 @@ DEFAULT_PHOTO_ARCHIVE_KEEP: Final = 200
 DEFAULT_PHOTO_ARCHIVE_MAX_MB: Final = 50
 DEFAULT_VIDEO_ARCHIVE_KEEP: Final = 10
 DEFAULT_VIDEO_ARCHIVE_MAX_MB: Final = 100
-# Per-category count cap for the photo archive (obstacle / person / patrol).
-# 50 per category (× 3 = 150 total max per-cat) keeps storage bounded while
-# retaining a reasonable history for each detection type.
+# Per-category count cap for the photo archive (the 7-category photo_category.py
+# scheme: video / ai_human / ai_animal / ai_object / patrol / obstacle / manual).
+# 50 per category keeps storage bounded while retaining a reasonable history for
+# each detection type.
 DEFAULT_PHOTO_ARCHIVE_PER_CATEGORY: Final = 50
 DEFAULT_SESSION_ARCHIVE_KEEP: Final = 50
 # Per-map keep-newest-N for the WiFi heatmap archive. WiFi JSONs are tiny

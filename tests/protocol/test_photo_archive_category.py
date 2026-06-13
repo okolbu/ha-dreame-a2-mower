@@ -7,20 +7,22 @@ from custom_components.dreame_a2_mower.archive.photos import PhotoArchive, Archi
 def test_archived_photo_category_detection_roundtrip():
     p = ArchivedPhoto(
         filename="f", name="n", unix_ts=1, size_bytes=2, md5="m",
-        is_person=False, category="patrol", detection={"cls": "person", "conf": 0.8},
+        is_person=False, category="patrol", detections=[{"cls": "person", "conf": 0.8}],
     )
     d = p.to_dict()
-    assert d["category"] == "patrol" and d["detection"]["cls"] == "person"
+    assert d["category"] == "patrol" and d["detections"][0]["cls"] == "person"
     r = ArchivedPhoto.from_dict(d)
-    assert r.category == "patrol" and r.detection["cls"] == "person"
+    assert r.category == "patrol" and r.detections[0]["cls"] == "person"
 
 
 def test_from_dict_legacy_defaults():
-    # legacy entry (pre-Phase-D) has no category/detection
+    # legacy entry (pre-Phase-D) has no category/detections; under the
+    # 7-category scheme is_person migrates to "ai_human" and the absent
+    # detection becomes an empty list.
     person = ArchivedPhoto.from_dict(
         {"filename": "f", "name": "n", "unix_ts": 1, "size_bytes": 2, "md5": "m", "is_person": True}
     )
-    assert person.category == "person" and person.detection is None
+    assert person.category == "ai_human" and person.detections == []
     obst = ArchivedPhoto.from_dict(
         {"filename": "g", "name": "n2", "unix_ts": 1, "size_bytes": 2, "md5": "m2", "is_person": False}
     )

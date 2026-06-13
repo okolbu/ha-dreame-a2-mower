@@ -390,4 +390,18 @@ Referenced as shorthands above:
 3. **s2p2 codes 20/33** — need a repro within cloud retention for the text.
 4. **s1p4 `[10-21]` motion vectors** — high-value for richer telemetry; XTAB-able now.
 5. **CFG BP** — one app-side pathway creation + CFG-DIFF closes it (`PATH` confirmed 2026-06-09; `BP` semantics still open).
+6. **Photo AI-class vocabulary + obstacle-vs-manual discriminator** `[UNKNOWN — to capture]` —
+   the gallery categorizer (`protocol/photo_category.py`) is wired but two parts are
+   provisional, because the only detections in the 2026-06-09 capture corpus are
+   `person`. (a) `ANIMAL_CLASSES` is a best-guess label set; any unknown COM `cls`
+   currently falls through to `ai_object` (raw label preserved, no silent loss), so the
+   human/animal/object split is unconfirmed for non-person detections. (b) The
+   obstacle (COM `o` in mow modes 100-103 + empty detections) vs manual (no COM)
+   discriminator may overlap if normal-obstacle photos turn out to carry no COM.
+   **Capture:** during a real mow that produces an animal/object AI detection AND a
+   navigated physical obstacle, log each new photo's COM `o`/`cls` (via
+   `parse_jpeg_com`) alongside its userDidOssList record; confirm the animal/object
+   `cls` vocabulary and whether obstacle photos have a COM at all. The userDidOssList
+   server `category` is always 0, so it gives no help here — the COM is the only
+   source (`inventory.yaml § oss_photo_list` verification 2026-06-13).
 </content>

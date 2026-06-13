@@ -35,7 +35,7 @@ class ArchivedPhoto:
     md5: str
     is_person: bool
     category: str = "obstacle"
-    detection: dict | None = None
+    detections: list[dict] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -46,14 +46,21 @@ class ArchivedPhoto:
             "md5": self.md5,
             "is_person": self.is_person,
             "category": self.category,
-            "detection": self.detection,
+            "detections": self.detections,
         }
 
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "ArchivedPhoto":
         is_person = bool(d.get("is_person", False))
+        # Migrate legacy single `detection` -> `detections` list.
+        dets = d.get("detections")
+        if dets is None:
+            single = d.get("detection")
+            dets = [single] if isinstance(single, dict) else []
         raw_cat = d.get("category")
-        category = raw_cat if raw_cat else ("person" if is_person else "obstacle")
+        category = raw_cat if raw_cat else ("ai_human" if is_person else "obstacle")
+        if category == "person":  # legacy coarse label
+            category = "ai_human"
         return cls(
             filename=str(d.get("filename", "")),
             name=str(d.get("name", "")),
@@ -62,7 +69,7 @@ class ArchivedPhoto:
             md5=str(d.get("md5", "")),
             is_person=is_person,
             category=category,
-            detection=d.get("detection") or None,
+            detections=dets,
         )
 
 
@@ -191,7 +198,7 @@ class PhotoArchive:
         data: bytes,
         is_person: bool,
         category: str = "obstacle",
-        detection: dict | None = None,
+        detections: list[dict] | None = None,
     ) -> ArchivedPhoto | None:
         """Persist one JPEG. Idempotent by md5. Returns the archive record on
         first insert, ``None`` when the md5 already exists or the payload is
@@ -220,7 +227,7 @@ class PhotoArchive:
             md5=md5,
             is_person=bool(is_person),
             category=str(category) if category else "obstacle",
-            detection=detection,
+            detections=detections,
         )
         self._index.append(photo)
         self._save_index()

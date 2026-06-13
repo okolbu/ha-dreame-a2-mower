@@ -9,6 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 from custom_components.dreame_a2_mower import _camera_photos as cp
+from custom_components.dreame_a2_mower._camera_photos import _photo_detection_attrs
+from custom_components.dreame_a2_mower.archive.photos import ArchivedPhoto
 
 
 def test_latest_video_thumb_camera_returns_thumb_bytes(tmp_path):
@@ -52,7 +54,7 @@ def test_latest_video_thumb_camera_available_true_when_video_exists(tmp_path):
 def test_album_camera_exposes_detection_attributes():
     photo = SimpleNamespace(
         category="patrol",
-        detection={"cls": "person", "conf": 0.81},
+        detections=[{"cls": "person", "conf": 0.81}],
         filename="f",
         name="n",
         unix_ts=1,
@@ -79,7 +81,7 @@ def test_album_camera_no_photo_returns_empty_attrs():
 def test_album_camera_no_detection_skips_detection_keys():
     photo = SimpleNamespace(
         category="obstacle",
-        detection=None,
+        detections=[],
         filename="f",
         name="n",
         unix_ts=1,
@@ -98,7 +100,7 @@ def test_album_camera_no_detection_skips_detection_keys():
 def test_person_camera_exposes_detection_attributes():
     photo = SimpleNamespace(
         category="person",
-        detection={"cls": "guard", "conf": 0.95},
+        detections=[{"cls": "guard", "conf": 0.95}],
         filename="f",
         name="n",
         unix_ts=1,
@@ -112,3 +114,23 @@ def test_person_camera_exposes_detection_attributes():
     assert attrs.get("category") == "person"
     assert attrs.get("detection_class") == "guard"
     assert abs(attrs.get("detection_confidence") - 0.95) < 1e-6
+
+
+def test_detection_attrs_real_archived_photo_surfaces_primary():
+    # Build a REAL ArchivedPhoto (not a SimpleNamespace) to defeat
+    # mock-masking: the helper must read the renamed `detections` list and
+    # surface the highest-confidence detection as the primary one.
+    photo = ArchivedPhoto(
+        filename="2026-06-13_1_abcd1234.jpg",
+        name="1_obstacle.jpg",
+        unix_ts=1,
+        size_bytes=10,
+        md5="abcd1234",
+        is_person=False,
+        category="ai_animal",
+        detections=[{"cls": "cat", "conf": 0.4}, {"cls": "dog", "conf": 0.9}],
+    )
+    attrs = _photo_detection_attrs(photo)
+    assert attrs.get("category") == "ai_animal"
+    assert attrs.get("detection_class") == "dog"
+    assert abs(attrs.get("detection_confidence") - 0.9) < 1e-6

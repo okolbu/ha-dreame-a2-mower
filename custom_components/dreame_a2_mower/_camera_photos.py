@@ -21,6 +21,7 @@ from ._devices import mower_device_info, mower_unique_id
 from .archive.photos import ArchivedPhoto
 from .archive.videos import ArchivedVideo
 from .coordinator import DreameA2MowerCoordinator
+from .protocol.photo_category import primary_detection
 
 
 class _BasePhotoCamera(CoordinatorEntity[DreameA2MowerCoordinator], Camera):
@@ -83,7 +84,7 @@ def _photo_detection_attrs(entry: ArchivedPhoto | None) -> dict[str, Any]:
     if entry is None:
         return {}
     attrs: dict[str, Any] = {"category": entry.category}
-    det = entry.detection or {}
+    det = primary_detection(getattr(entry, "detections", None)) or {}
     cls_val = det.get("cls")
     conf_val = det.get("conf")
     if cls_val is not None:
