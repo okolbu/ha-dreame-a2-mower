@@ -30,6 +30,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._availability import _FreshnessAvailableMixin
 from ._devices import (
     map_device_info,
     map_unique_id,
@@ -211,7 +212,10 @@ async def async_setup_entry(
 # ---------------------------------------------------------------------------
 
 class DreameA2Number(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], NumberEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    NumberEntity,
 ):
     """A coordinator-backed number entity.
 
@@ -220,6 +224,8 @@ class DreameA2Number(
     """
 
     _attr_has_entity_name = True
+    # All NUMBERS rows are CFG-fed (VOL / BAT / REC) — cloud-sourced.
+    _availability_source = "cloud"
     entity_description: DreameA2NumberEntityDescription
 
     def __init__(
@@ -301,7 +307,10 @@ class DreameA2Number(
 # ---------------------------------------------------------------------------
 
 class _PerMapSettingsNumberBase(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], NumberEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    NumberEntity,
 ):
     """Base for per-map SETTINGS-driven number entities.
 
@@ -321,6 +330,8 @@ class _PerMapSettingsNumberBase(
 
     _attr_has_entity_name = True
     _attr_should_poll = False
+    # Per-map values read from cloud_state.settings (SETTINGS / PRE) — cloud.
+    _availability_source = "cloud"
 
     def __init__(
         self, coordinator: DreameA2MowerCoordinator, *, map_id: int

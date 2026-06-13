@@ -21,6 +21,7 @@ from homeassistant.components.sensor import (
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._availability import _FreshnessAvailableMixin
 from ._devices import map_device_info, map_unique_id, mower_device_info, mower_unique_id
 from .const import NON_MOW_SESSION_TYPES
 from .coordinator import DreameA2MowerCoordinator
@@ -42,6 +43,9 @@ class DreameA2SensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[MowerState], Any]
     extra_attributes_fn: Callable[[MowerState], dict[str, Any]] | None = None
+    #: per-row availability source ("mqtt" | "cloud" | None) — read by the
+    #: DreameA2Sensor bridge property to gate freshness per row.
+    availability_source: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -56,6 +60,9 @@ class DreameA2DiagnosticSensorEntityDescription(SensorEntityDescription):
 
     value_fn: Callable[[Any], Any]
     extra_state_attributes_fn: Callable[[Any], dict[str, Any]] | None = None
+    #: per-row availability source ("mqtt" | "cloud" | None) — read by the
+    #: DreameA2DiagnosticSensor bridge property to gate freshness per row.
+    availability_source: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -63,13 +70,17 @@ class DreameA2DiagnosticSensorEntityDescription(SensorEntityDescription):
 # ---------------------------------------------------------------------------
 
 class _SnapshotEnumSensorBase(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """Common base for ENUM sensors that read an enum field from the snapshot."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
     _attr_device_class = SensorDeviceClass.ENUM
+    # All snapshot-enum sensors read state-machine fields fed by the MQTT
+    # heartbeat/telemetry push. (Subclasses that are NOT mqtt — e.g. the
+    # MQTT-connectivity link reporter — override this back to None.)
+    _availability_source = "mqtt"
     _SNAPSHOT_FIELD: str = "override-me"
     _KEY: str = "override-me"
 
@@ -90,12 +101,15 @@ class _SnapshotEnumSensorBase(
 # ---------------------------------------------------------------------------
 
 class _DreameA2PerMapSensorBase(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """Base for per-map sensors. Subclasses set _KEY and override _compute_value."""
 
     _attr_has_entity_name = True
     _attr_should_poll = False
+    # Per-map metadata comes from the cloud MAP fetch. (The PRE-shadow
+    # subclass overrides this back to "mqtt" — see below.)
+    _availability_source = "cloud"
     _KEY: str = "override-me"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator, map_id: int) -> None:
@@ -128,6 +142,9 @@ class _DreameA2PerMapPreShadowBase(_DreameA2PerMapSensorBase):
     """Base for per-map sensors that read from the state-machine PRE shadow."""
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
+    # PRE-shadow values arrive on the s6.2 MQTT push (tagged with the active
+    # map_id), not the cloud MAP fetch — override the per-map cloud default.
+    _availability_source = "mqtt"
 
     def _shadow_entry(self) -> dict | None:
         sm = getattr(self.coordinator, "state_machine", None)
@@ -172,6 +189,11 @@ class _DreameA2PerMapSessionSensorBase(_DreameA2PerMapSensorBase):
     legacy/unknown `map_id == -1` entries are naturally excluded by
     the `== self._map_id` filter (never matches a real map_id).
     """
+
+    # Session aggregates read the LOCAL on-disk session archive, not a live
+    # link — they must NOT go unavailable on cloud/MQTT staleness. Override
+    # the per-map cloud default inherited from _DreameA2PerMapSensorBase.
+    _availability_source = None
 
     def _sessions_for_map(self):
         archive = getattr(self.coordinator, "session_archive", None)

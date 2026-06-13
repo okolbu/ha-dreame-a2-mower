@@ -23,6 +23,7 @@ from homeassistant.const import PERCENTAGE
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._availability import _FreshnessAvailableMixin
 from ._devices import mower_device_info, mower_unique_id
 from .coordinator import DreameA2MowerCoordinator
 from .mower.error_codes import describe_error
@@ -226,6 +227,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="Charging status",
         device_class=SensorDeviceClass.ENUM,
         options=[c.name.lower() for c in ChargingStatus],
+        availability_source="mqtt",
         value_fn=lambda s: (s.charging_status.name.lower() if s.charging_status is not None else None),
     ),
 
@@ -236,6 +238,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         native_unit_of_measurement="m²",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
+        availability_source="mqtt",
         value_fn=lambda s: s.area_mowed_m2 if s.area_mowed_m2 is not None else 0,
     ),
     DreameA2SensorEntityDescription(
@@ -244,6 +247,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         native_unit_of_measurement="m",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
+        availability_source="mqtt",
         value_fn=lambda s: s.session_distance_m if s.session_distance_m is not None else 0,
     ),
     # mowing_phase / task_state_code / slam_task_label have been migrated
@@ -256,6 +260,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         key="error_code",
         name="Error code",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="mqtt",
         value_fn=lambda s: s.error_code,
     ),
     # Lawn / environment:
@@ -270,6 +275,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         native_unit_of_measurement="m²",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
+        availability_source="cloud",
         value_fn=lambda s: (
             s.target_area_m2 if s.target_area_m2 is not None else s.total_lawn_area_m2
         ),
@@ -279,6 +285,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="WiFi SSID",
         icon="mdi:wifi",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="mqtt",
         value_fn=lambda s: s.wifi_ssid,
     ),
     DreameA2SensorEntityDescription(
@@ -286,6 +293,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="WiFi IP",
         icon="mdi:ip-network",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="mqtt",
         value_fn=lambda s: s.wifi_ip,
     ),
     # CFG.DOCK position fields. yaw user-confirmed to match compass
@@ -297,6 +305,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         native_unit_of_measurement="mm",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda s: s.dock_x_mm,
     ),
     DreameA2SensorEntityDescription(
@@ -305,6 +314,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         native_unit_of_measurement="mm",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda s: s.dock_y_mm,
     ),
     DreameA2SensorEntityDescription(
@@ -312,6 +322,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="Dock yaw",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         # User-confirmed 2026-05-04: matches compass bearing for the
         # X-axis direction of the dock frame. Unit unclear (may be
         # degrees, may be deci-degrees — `near_yaw: 1912` is suspicious
@@ -327,6 +338,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=0,
+        availability_source="cloud",
         value_fn=lambda s: s.blades_life_pct,
     ),
     DreameA2SensorEntityDescription(
@@ -336,6 +348,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=0,
+        availability_source="cloud",
         value_fn=lambda s: s.cleaning_brush_life_pct,
     ),
     DreameA2SensorEntityDescription(
@@ -345,6 +358,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=0,
+        availability_source="cloud",
         value_fn=lambda s: s.robot_maintenance_life_pct,
     ),
     DreameA2SensorEntityDescription(
@@ -353,6 +367,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         native_unit_of_measurement="min",
         state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda s: s.total_mowing_time_min,
     ),
     DreameA2SensorEntityDescription(
@@ -362,6 +377,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=1,
+        availability_source="cloud",
         value_fn=lambda s: s.total_mowed_area_m2,
     ),
     DreameA2SensorEntityDescription(
@@ -374,6 +390,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         native_unit_of_measurement="x",
         state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda s: s.mowing_count,
     ),
     DreameA2SensorEntityDescription(
@@ -393,18 +410,21 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         key="last_settings_change_unix",
         name="Last settings change",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda s: s.last_settings_change_unix,
     ),
     DreameA2SensorEntityDescription(
         key="language_text_idx",
         name="Language text index",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda s: s.language_text_idx,
     ),
     DreameA2SensorEntityDescription(
         key="language_voice_idx",
         name="Language voice index",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda s: s.language_voice_idx,
     ),
 
@@ -414,6 +434,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="s5.104 raw",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        availability_source="mqtt",
         value_fn=lambda s: s.s5p104_raw,
     ),
     DreameA2SensorEntityDescription(
@@ -421,6 +442,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="s5.105 raw",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        availability_source="mqtt",
         value_fn=lambda s: s.s5p105_raw,
     ),
     DreameA2SensorEntityDescription(
@@ -428,6 +450,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="s5.106 raw",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        availability_source="mqtt",
         value_fn=lambda s: s.s5p106_raw,
     ),
     DreameA2SensorEntityDescription(
@@ -435,6 +458,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="s5.107 raw",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        availability_source="mqtt",
         value_fn=lambda s: s.s5p107_raw,
     ),
     DreameA2SensorEntityDescription(
@@ -442,6 +466,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="s6.1 raw",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        availability_source="mqtt",
         value_fn=lambda s: s.s6p1_raw,
     ),
 
@@ -507,6 +532,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="Human presence push interval",
         native_unit_of_measurement="min",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda s: s.human_presence_alert_push_interval_min,
     ),
 
@@ -522,6 +548,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         translation_key="charging_status_code_raw",
         name="Charging status code (raw)",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="mqtt",
         value_fn=lambda s: s.charging_status.value if s.charging_status is not None else None,
     ),
     # ------ Phase D: OSS storage quota sensors ------
@@ -534,6 +561,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         native_unit_of_measurement="MB",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda s: (
             round(s.oss_storage_used / 1048576) if s.oss_storage_used is not None else None
         ),
@@ -545,6 +573,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         native_unit_of_measurement="MB",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda s: (
             round(s.oss_storage_total / 1048576) if s.oss_storage_total is not None else None
         ),
@@ -557,6 +586,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         suggested_display_precision=0,
+        availability_source="cloud",
         value_fn=lambda s: (
             round(s.oss_storage_used / s.oss_storage_total * 100)
             if s.oss_storage_used is not None and s.oss_storage_total
@@ -578,6 +608,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         icon="mdi:sim-alert",
         native_unit_of_measurement="d",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda s: s.sim_left_days,
     ),
     DreameA2SensorEntityDescription(
@@ -599,6 +630,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="Unread messages",
         icon="mdi:email-alert",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda s: s.service_messages_unread,
         extra_attributes_fn=lambda s: {
             "system_messages_unread": s.system_messages_unread,
@@ -623,6 +655,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
+        availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().battery_percent,
     ),
     # Error — reads the state machine's LATCHED fault (snapshot.errors), not
@@ -632,6 +665,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
     DreameA2DiagnosticSensorEntityDescription(
         key="error_description",
         name="Error",
+        availability_source="mqtt",
         value_fn=lambda coord: _active_fault_text(coord.state_machine.snapshot()),
     ),
     # WiFi RSSI — reads the persisted snapshot value so it survives HA
@@ -646,6 +680,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         native_unit_of_measurement="dBm",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().wifi_rssi_dbm,
     ),
     # Position quartet — read from the persisted snapshot so values survive
@@ -659,6 +694,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         native_unit_of_measurement="m",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
+        availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().position_x_m,
     ),
     DreameA2DiagnosticSensorEntityDescription(
@@ -667,6 +703,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         native_unit_of_measurement="m",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
+        availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().position_y_m,
     ),
     DreameA2DiagnosticSensorEntityDescription(
@@ -675,6 +712,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         native_unit_of_measurement="m",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
+        availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().position_north_m,
     ),
     DreameA2DiagnosticSensorEntityDescription(
@@ -683,6 +721,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         native_unit_of_measurement="m",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
+        availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().position_east_m,
     ),
     # mowing_phase / task_state_code / slam_task_label — snapshot-backed so
@@ -694,6 +733,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         name="Mowing phase",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().mowing_phase,
     ),
     DreameA2DiagnosticSensorEntityDescription(
@@ -701,12 +741,14 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         translation_key="task_state_code",
         name="Task state (raw)",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().task_state_code,
     ),
     DreameA2DiagnosticSensorEntityDescription(
         key="slam_task_label",
         name="SLAM task",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().slam_task_label,
     ),
     DreameA2DiagnosticSensorEntityDescription(
@@ -715,6 +757,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         icon="mdi:eye-question",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=True,
+        availability_source="mqtt",
         value_fn=lambda coord: (
             coord.novel_registry.snapshot().count
             if coord.novel_registry.snapshot().count is not None
@@ -789,6 +832,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         icon="mdi:download-circle-outline",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        availability_source="cloud",
         # CFG.DEV.ota — int, semantic UNCONFIRMED. NOT the Auto-update
         # Firmware app toggle (those values don't match). Likely "OTA
         # capability" or "OTA update available". Surfaced raw so future
@@ -836,6 +880,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         icon="mdi:crosshairs-gps",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        availability_source="cloud",
         value_fn=_mpos_value,
         extra_state_attributes_fn=_mpos_attrs,
     ),
@@ -905,6 +950,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         icon="mdi:weather-partly-cloudy",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        availability_source="cloud",
         # CFG.WRF int {0, 1} → "on" / "off" string. Returns None when not
         # yet received from the cloud (before first 2-min refresh).
         value_fn=lambda coord: (
@@ -919,6 +965,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         icon="mdi:earth-clock",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        availability_source="cloud",
         # CFG.TIME — IANA timezone name, e.g. "Europe/Oslo". Returns None
         # until the first cloud refresh delivers the CFG payload.
         value_fn=lambda coord: getattr(coord.data, "timezone", None),
@@ -930,6 +977,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
+        availability_source="cloud",
         # CFG.VER — monotonic int counter incremented on every CFG write.
         # Distinct from sensor.firmware_version (which tracks the OTA firmware
         # version from device.info.version, not this CFG-write counter).
@@ -982,6 +1030,10 @@ class DreameA2MqttConnectivitySensor(_SnapshotEnumSensorBase):
     _SNAPSHOT_FIELD = "mqtt_connectivity"
     _KEY = "mqtt_connectivity"
     _attr_options = ["online", "stale"]
+    # Self-referential link reporter: it REPORTS MQTT freshness, so it must
+    # never be gated on it (else it'd vanish exactly when it's useful).
+    # Override the _SnapshotEnumSensorBase mqtt default back to None.
+    _availability_source = None
 
 
 class DreameA2PickedSessionSensor(
@@ -1054,7 +1106,7 @@ class DreameA2PhotoGallerySensor(
 
 
 class DreameA2Sensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """A coordinator-backed sensor entity."""
 
@@ -1072,6 +1124,13 @@ class DreameA2Sensor(
         self._attr_device_info = mower_device_info(coordinator)
 
     @property
+    def _availability_source(self) -> str | None:
+        # Bridge the per-row descriptor field to the mixin (shadows the
+        # mixin's class attr via MRO). Rows with availability_source=None
+        # are not freshness-gated.
+        return self.entity_description.availability_source
+
+    @property
     def native_value(self) -> Any:
         return self.entity_description.value_fn(self.coordinator.data)
 
@@ -1085,7 +1144,7 @@ class DreameA2Sensor(
 
 
 class DreameA2DiagnosticSensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """A coordinator-backed diagnostic sensor.
 
@@ -1110,6 +1169,13 @@ class DreameA2DiagnosticSensor(
         self._attr_device_info = mower_device_info(coordinator)
 
     @property
+    def _availability_source(self) -> str | None:
+        # Bridge the per-row descriptor field to the mixin (shadows the
+        # mixin's class attr via MRO). Rows with availability_source=None
+        # are not freshness-gated.
+        return self.entity_description.availability_source
+
+    @property
     def native_value(self) -> Any:
         return self.entity_description.value_fn(self.coordinator)
 
@@ -1128,7 +1194,7 @@ class DreameA2DiagnosticSensor(
 
 
 class DreameA2OtaStatusSensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """Cloud-reported OTA upgrade status."""
 
@@ -1136,6 +1202,7 @@ class DreameA2OtaStatusSensor(
     _attr_translation_key = "ota_status"
     _attr_name = "OTA status"
     _attr_should_poll = False
+    _availability_source = "cloud"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         super().__init__(coordinator)
@@ -1158,7 +1225,7 @@ class DreameA2OtaStatusSensor(
 
 
 class DreameA2ScheduleCountSensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """Number of cloud-side schedule slots."""
 
@@ -1166,6 +1233,7 @@ class DreameA2ScheduleCountSensor(
     _attr_translation_key = "schedule_count"
     _attr_name = "Schedule count"
     _attr_should_poll = False
+    _availability_source = "cloud"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         super().__init__(coordinator)
@@ -1343,7 +1411,7 @@ class DreameA2WifiHeatmapAgeSensor(
 
 
 class DreameA2LastNotificationSensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """Most recent app-style notification synthesized from s2p2 transitions.
 
@@ -1357,6 +1425,7 @@ class DreameA2LastNotificationSensor(
     _attr_icon = "mdi:bell-outline"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_should_poll = False
+    _availability_source = "mqtt"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         super().__init__(coordinator)

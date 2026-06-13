@@ -28,6 +28,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._availability import _FreshnessAvailableMixin
 from ._devices import mower_device_info, mower_unique_id
 from .const import DOMAIN, LOGGER, WORK_LOG_PLACEHOLDER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
@@ -441,7 +442,10 @@ SETTING_SELECTS: tuple[DreameA2SettingsSelectDescription, ...] = (
 # ---------------------------------------------------------------------------
 
 class DreameA2SettingSelect(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SelectEntity,
 ):
     """A coordinator-backed select entity for enum-style CFG settings.
 
@@ -456,6 +460,8 @@ class DreameA2SettingSelect(
     """
 
     _attr_has_entity_name = True
+    # All SETTING_SELECTS rows are CFG-fed (PROT / WRP / LANG) — cloud.
+    _availability_source = "cloud"
     entity_description: DreameA2SettingsSelectDescription
 
     def __init__(
@@ -761,7 +767,10 @@ class DreameA2LidarArchiveSelect(
 
 
 class DreameA2ActiveMapSelect(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SelectEntity,
 ):
     """Active-map selector. Writable via s2.50 op:200 changeMap.
 
@@ -779,6 +788,8 @@ class DreameA2ActiveMapSelect(
     _attr_translation_key = "active_map"
     _attr_name = "Active map"
     _attr_icon = "mdi:map-marker-radius"
+    # MAPL-derived active map comes from the cloud full-state poll.
+    _availability_source = "cloud"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         super().__init__(coordinator)

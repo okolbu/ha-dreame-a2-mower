@@ -18,6 +18,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._availability import _FreshnessAvailableMixin
 from ._devices import map_device_info, map_unique_id, mower_device_info, mower_unique_id
 from .const import LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
@@ -589,11 +590,15 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
 # ---------------------------------------------------------------------------
 
 class DreameA2EdgeMowingAutoSwitch(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SwitchEntity,
 ):
     """Edge mowing auto — per-map SETTINGS switch."""
 
     _attr_has_entity_name = True
+    _availability_source = "cloud"
     _attr_translation_key = "settings_edge_mowing_auto"
     _attr_should_poll = False
 
@@ -645,11 +650,15 @@ class DreameA2EdgeMowingAutoSwitch(
 
 
 class DreameA2EdgeMowingSafeSwitch(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SwitchEntity,
 ):
     """Edge mowing safe — per-map SETTINGS switch."""
 
     _attr_has_entity_name = True
+    _availability_source = "cloud"
     _attr_translation_key = "settings_edge_mowing_safe"
     _attr_should_poll = False
 
@@ -699,11 +708,15 @@ class DreameA2EdgeMowingSafeSwitch(
 
 
 class DreameA2EdgeMowingObstacleAvoidanceSwitch(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SwitchEntity,
 ):
     """Edge mowing obstacle avoidance — per-map SETTINGS switch."""
 
     _attr_has_entity_name = True
+    _availability_source = "cloud"
     _attr_translation_key = "settings_edge_mowing_obstacle_avoidance"
     _attr_should_poll = False
 
@@ -753,11 +766,15 @@ class DreameA2EdgeMowingObstacleAvoidanceSwitch(
 
 
 class DreameA2ObstacleAvoidanceEnabledSwitch(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SwitchEntity,
 ):
     """Obstacle avoidance enabled — per-map SETTINGS switch."""
 
     _attr_has_entity_name = True
+    _availability_source = "cloud"
     _attr_translation_key = "settings_obstacle_avoidance_enabled"
     _attr_should_poll = False
 
@@ -807,11 +824,15 @@ class DreameA2ObstacleAvoidanceEnabledSwitch(
 
 
 class DreameA2AiHumanDetectionSwitch(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SwitchEntity,
 ):
     """AI human detection — reads from cloud_state.ai_human_enabled."""
 
     _attr_has_entity_name = True
+    _availability_source = "cloud"
     _attr_translation_key = "cloud_state_ai_human_enabled"
     _attr_name = "Capture Photos AI Obstacles"
     _attr_should_poll = False

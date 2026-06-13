@@ -18,6 +18,7 @@ from collections.abc import Callable
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._availability import _FreshnessAvailableMixin
 from ._devices import map_device_info, mower_device_info, mower_unique_id
 from .const import LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
@@ -55,7 +56,10 @@ class DreameA2SwitchEntityDescription(SwitchEntityDescription):
 # ---------------------------------------------------------------------------
 
 class DreameA2Switch(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SwitchEntity,
 ):
     """A coordinator-backed switch entity.
 
@@ -64,6 +68,8 @@ class DreameA2Switch(
     """
 
     _attr_has_entity_name = True
+    # All SWITCHES rows are CFG-fed — cloud-sourced.
+    _availability_source = "cloud"
     entity_description: DreameA2SwitchEntityDescription
 
     def __init__(
@@ -167,7 +173,10 @@ _AI_OBJECTS_BIT = 1 << 2
 
 
 class _AiRecognitionBitSwitch(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SwitchEntity,
 ):
     """Common base for the 3 AI obstacle recognition bit switches.
 
@@ -180,6 +189,8 @@ class _AiRecognitionBitSwitch(
     _HONESTY_LEAF: str = ""
     _attr_has_entity_name = True
     _attr_should_poll = False
+    # Reads cloud_state.settings (SETTINGS.obstacleAvoidanceAi) — cloud.
+    _availability_source = "cloud"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
         super().__init__(coordinator)

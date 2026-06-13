@@ -15,6 +15,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._availability import _FreshnessAvailableMixin
 from ._devices import mower_device_info, mower_unique_id
 from .const import DOMAIN
 from .coordinator import DreameA2MowerCoordinator
@@ -37,6 +38,9 @@ class DreameA2BinarySensorEntityDescription(BinarySensorEntityDescription):
     """
 
     value_fn: Callable[[DreameA2MowerCoordinator], bool | None]
+    #: per-row availability source ("mqtt" | "cloud" | None) — read by the
+    #: DreameA2BinarySensor bridge property to gate freshness per row.
+    availability_source: str | None = None
 
 
 def _cloud_connected_value(coord) -> bool | None:
@@ -64,6 +68,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="bluetooth_connected",
         name="App Bluetooth",
         device_class=BinarySensorDeviceClass.CONNECTIVITY,
+        availability_source="mqtt",
         value_fn=lambda coord: bool(coord.data.bluetooth_connected),
     ),
     DreameA2BinarySensorEntityDescription(
@@ -82,6 +87,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="positioning_failed",
         name="Positioning failed",
         device_class=BinarySensorDeviceClass.PROBLEM,
+        availability_source="mqtt",
         # Reads the state machine's DISAMBIGUATED stuck state, NOT raw
         # error_code==71. s2p2=71 alone is "standby outside station too long →
         # auto-return" (verified 2026-05-30) and resolves to LOCALIZED; only
@@ -97,6 +103,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="failed_to_return_to_station",
         name="Failed to return to station",
         device_class=BinarySensorDeviceClass.PROBLEM,
+        availability_source="mqtt",
         # s2p2 = 31. Two paths in: 33→31 (positioning / task-start
         # failure) and 48→31 direct (edge-mow auto-dock planner couldn't
         # route home from a stuck pose). Both surface the Dreame app's
@@ -111,6 +118,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         name="Battery temperature low",
         device_class=BinarySensorDeviceClass.PROBLEM,
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="mqtt",
         value_fn=lambda coord: bool(coord.data.battery_temp_low),
     ),
     DreameA2BinarySensorEntityDescription(
@@ -118,6 +126,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="mowing_session_active",
         name="Mowing session active",
         device_class=BinarySensorDeviceClass.RUNNING,
+        availability_source="mqtt",
         # SM-12: reads from state_machine snapshot. MowSession.IN_SESSION
         # is only set during a real mow (all-area / zone / spot / edge).
         # Cruise-to-point leaves mow_session=BETWEEN_SESSIONS, so this
@@ -135,6 +144,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="drop_tilt",
         name="Robot tilted",
         device_class=BinarySensorDeviceClass.PROBLEM,
+        availability_source="mqtt",
         value_fn=lambda coord: bool(coord.data.drop_tilt),
     ),
     DreameA2BinarySensorEntityDescription(
@@ -142,6 +152,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="bumper",
         name="Bumper error",
         device_class=BinarySensorDeviceClass.PROBLEM,
+        availability_source="mqtt",
         value_fn=lambda coord: bool(coord.data.bumper),
     ),
     DreameA2BinarySensorEntityDescription(
@@ -149,6 +160,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="lift",
         name="Robot lifted",
         device_class=BinarySensorDeviceClass.PROBLEM,
+        availability_source="mqtt",
         value_fn=lambda coord: bool(coord.data.lift),
     ),
     DreameA2BinarySensorEntityDescription(
@@ -156,6 +168,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="emergency_stop",
         name="Emergency stop activated",
         device_class=BinarySensorDeviceClass.PROBLEM,
+        availability_source="mqtt",
         value_fn=lambda coord: bool(coord.data.emergency_stop),
     ),
     DreameA2BinarySensorEntityDescription(
@@ -171,6 +184,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="safety_alert_active",
         name="Safety alert active",
         device_class=BinarySensorDeviceClass.PROBLEM,
+        availability_source="mqtt",
         value_fn=lambda coord: bool(coord.data.safety_alert_active),
     ),
     DreameA2BinarySensorEntityDescription(
@@ -178,6 +192,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="top_cover_open",
         name="Top cover open",
         device_class=BinarySensorDeviceClass.OPENING,
+        availability_source="mqtt",
         # apk fault index `73 = TOP_COVER_OPEN`. Confirmed 2026-04-30
         # 19:39:35 — fired exactly when the user opened the top cover to
         # type the security PIN after an emergency-stop trip.
@@ -187,6 +202,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         key="mower_in_dock",
         translation_key="mower_in_dock",
         name="Mower in dock",
+        availability_source="mqtt",
         # Location.AT_DOCK is derived solely from s2p1 ∈ {6,13,15,16}
         # (charging / charged / charge-paused / temp-hold — all on-the-contacts
         # states). Leaving the dock cluster drives ON_LAWN. Cloud DOCK
@@ -202,6 +218,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="dock_in_lawn_region",
         name="Dock inside lawn region",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         # CFG.DOCK.in_region — flips depending on whether the dock was
         # placed inside or outside the mowable lawn polygon.
         value_fn=lambda coord: coord.data.dock_in_lawn_region,
@@ -212,6 +229,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         name="Wheel bind detected",
         device_class=BinarySensorDeviceClass.PROBLEM,
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="mqtt",
         # Cross-frame s1.4 diagnostic: position held within 50 mm
         # while area_mowed advanced > 0.05 m². Reproduced 2026-05-05
         # during integration-launched edge runs that hit FTRTS — the
@@ -237,6 +255,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="photo_consent",
         name="AI photo capture consent",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda coord: coord.data.photo_consent,
     ),
     # ───── Human Presence sub-page diagnostics (REC[2..6]) ─────
@@ -248,6 +267,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="human_presence_scenario_standby",
         name="Human presence scenario: standby",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda coord: coord.data.human_presence_scenario_standby,
     ),
     DreameA2BinarySensorEntityDescription(
@@ -255,6 +275,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="human_presence_scenario_mowing",
         name="Human presence scenario: mowing",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda coord: coord.data.human_presence_scenario_mowing,
     ),
     DreameA2BinarySensorEntityDescription(
@@ -262,6 +283,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="human_presence_scenario_recharge",
         name="Human presence scenario: recharge",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda coord: coord.data.human_presence_scenario_recharge,
     ),
     DreameA2BinarySensorEntityDescription(
@@ -269,6 +291,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="human_presence_scenario_patrol",
         name="Human presence scenario: patrol",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda coord: coord.data.human_presence_scenario_patrol,
     ),
     DreameA2BinarySensorEntityDescription(
@@ -276,6 +299,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         translation_key="human_presence_alert_voice",
         name="Human presence voice + push alert",
         entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
         value_fn=lambda coord: coord.data.human_presence_alert_voice,
     ),
     # 2026-05-26: replaces the polled MowerState.cloud_connected.
@@ -302,7 +326,7 @@ async def async_setup_entry(
 
 
 class DreameA2BinarySensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], BinarySensorEntity
+    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], BinarySensorEntity
 ):
     _attr_has_entity_name = True
     entity_description: DreameA2BinarySensorEntityDescription
@@ -316,6 +340,13 @@ class DreameA2BinarySensor(
         self.entity_description = description
         self._attr_unique_id = mower_unique_id(coordinator, description.key)
         self._attr_device_info = mower_device_info(coordinator)
+
+    @property
+    def _availability_source(self) -> str | None:
+        # Bridge the per-row descriptor field to the mixin (shadows the
+        # mixin's class attr via MRO). Rows with availability_source=None
+        # are not freshness-gated.
+        return self.entity_description.availability_source
 
     @property
     def is_on(self) -> bool | None:

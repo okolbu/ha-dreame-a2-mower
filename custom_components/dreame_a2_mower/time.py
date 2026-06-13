@@ -25,6 +25,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._availability import _FreshnessAvailableMixin
 from ._devices import mower_device_info, mower_unique_id
 from .const import DOMAIN, LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
@@ -145,7 +146,12 @@ TIMES: tuple[DreameA2TimeEntityDescription, ...] = (
 # ---------------------------------------------------------------------------
 
 
-class DreameA2Time(_ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], TimeEntity):
+class DreameA2Time(
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    TimeEntity,
+):
     """Read-only time entity backed by MowerState int-minutes field.
 
     Backs DND / charging / low-speed-at-night CFG time fields (NOT the mow
@@ -154,6 +160,8 @@ class DreameA2Time(_ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordina
     """
 
     _attr_has_entity_name = True
+    # All TIMES rows are CFG-fed (DND / LOW / BAT) — cloud-sourced.
+    _availability_source = "cloud"
     entity_description: DreameA2TimeEntityDescription
 
     def __init__(

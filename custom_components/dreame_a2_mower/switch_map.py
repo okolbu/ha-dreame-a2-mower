@@ -15,6 +15,7 @@ from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._availability import _FreshnessAvailableMixin
 from ._devices import map_device_info, map_unique_id
 from .const import LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
@@ -22,7 +23,10 @@ from .coordinator import DreameA2MowerCoordinator
 
 
 class DreameA2MapEdgemasterSwitch(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SwitchEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SwitchEntity,
 ):
     """Per-map EdgeMaster — PRE-only write (DEVICE_WRITABLE).
 
@@ -39,6 +43,8 @@ class DreameA2MapEdgemasterSwitch(
     """
 
     _attr_has_entity_name = True
+    # Reads the s6.2 PRE shadow (MQTT push), not the cloud SETTINGS fetch.
+    _availability_source = "mqtt"
     _attr_translation_key = "settings_edgemaster"
     _attr_should_poll = False
     _attr_icon = "mdi:mower"

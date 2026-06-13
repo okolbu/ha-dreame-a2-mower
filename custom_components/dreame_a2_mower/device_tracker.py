@@ -8,6 +8,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._availability import _FreshnessAvailableMixin
 from ._devices import mower_device_info, mower_unique_id
 from .const import DOMAIN
 from .coordinator import DreameA2MowerCoordinator
@@ -23,7 +24,10 @@ async def async_setup_entry(
 
 
 class DreameA2MowerGpsTracker(
-    CoordinatorEntity[DreameA2MowerCoordinator], TrackerEntity, RestoreEntity
+    _FreshnessAvailableMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    TrackerEntity,
+    RestoreEntity,
 ):
     """Maps MowerState.position_lat/lon to HA's device_tracker.
 
@@ -47,6 +51,11 @@ class DreameA2MowerGpsTracker(
     _attr_name = "Location"
     _attr_icon = "mdi:robot-mower"
     _attr_source_type = SourceType.GPS
+    # Documentation only: the GPS fix comes from the cloud location/getRecords
+    # poll. The bare ``available`` override below is the ACTUAL freshness gate
+    # (Pattern C — the mixin is bypassed because the override returns a bare
+    # bool, not super().available).
+    _availability_source = "cloud"
     # Disabled by default — absolute WGS84 fix via getRecords is
     # functional but the dock-origin GPS coordinate still needs
     # app-side configuration. Users can enable once confirmed.
@@ -87,10 +96,18 @@ class DreameA2MowerGpsTracker(
 
     @property
     def available(self) -> bool:
-        # Available iff we have coords (live or restored). NOT gated
-        # on coordinator.last_update_success — getRecords has its own
-        # success path independent of the bulk refresh.
-        return self.latitude is not None and self.longitude is not None
+        # Available iff we have coords (live or restored) AND the cloud GPS
+        # poll is fresh. NOT gated on coordinator.last_update_success —
+        # getRecords has its own success path independent of the bulk refresh,
+        # but it IS gated on cloud freshness so a sustained cloud outage marks
+        # the tracker unavailable instead of pinning the last fix forever.
+        # Pattern C: this bare override bypasses _FreshnessAvailableMixin, so
+        # the freshness check is AND-ed in here directly.
+        return (
+            self.latitude is not None
+            and self.longitude is not None
+            and self.coordinator.cloud_is_fresh
+        )
 
     @property
     def extra_state_attributes(self) -> dict:

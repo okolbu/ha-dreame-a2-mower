@@ -17,6 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._availability import _FreshnessAvailableMixin
 from ._devices import mower_device_info, mower_unique_id
 from .const import DOMAIN, LOGGER
 from .coordinator import DreameA2MowerCoordinator
@@ -83,7 +84,7 @@ async def async_setup_entry(
 
 
 class DreameA2LawnMower(
-    CoordinatorEntity[DreameA2MowerCoordinator], LawnMowerEntity
+    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], LawnMowerEntity
 ):
     """The Dreame A2 mower as an HA lawn_mower entity.
 
@@ -93,6 +94,7 @@ class DreameA2LawnMower(
     """
 
     _attr_has_entity_name = True
+    _availability_source = "mqtt"
     _attr_name = None  # use device name
     _attr_supported_features = (
         LawnMowerEntityFeature.START_MOWING

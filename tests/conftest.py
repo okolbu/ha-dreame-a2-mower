@@ -102,6 +102,14 @@ def _make_ha_stub() -> None:
     class _CoordinatorEntityStub:  # noqa: D101
         """Minimal stub — supports CoordinatorEntity[T] subscript and init."""
 
+        # Real CoordinatorEntity.available reflects
+        # coordinator.last_update_success (True for a healthy push-based
+        # coordinator). The stub mirrors that as a constant True so that
+        # entity ``available`` overrides ending in ``super().available``
+        # (and the Phase-1.1 _FreshnessAvailableMixin) resolve in tests
+        # exactly as they do in production.
+        available = True
+
         def __class_getitem__(cls, item):  # type: ignore[override]
             return cls
 
@@ -289,6 +297,20 @@ def _make_ha_stub() -> None:
     btn_mod = types.ModuleType("homeassistant.components.button")
     btn_mod.ButtonEntity = object  # type: ignore[attr-defined]
     sys.modules["homeassistant.components.button"] = btn_mod
+
+    # homeassistant.components.device_tracker — used by device_tracker.py entity
+    dt_mod = types.ModuleType("homeassistant.components.device_tracker")
+
+    class _SourceType:  # noqa: D101
+        GPS = "gps"
+
+    class _TrackerEntity:  # noqa: D101
+        """Minimal stub — a distinct class (not bare object) so subclasses
+        that also inherit RestoreEntity get a consistent MRO."""
+
+    dt_mod.SourceType = _SourceType  # type: ignore[attr-defined]
+    dt_mod.TrackerEntity = _TrackerEntity  # type: ignore[attr-defined]
+    sys.modules["homeassistant.components.device_tracker"] = dt_mod
 
     # homeassistant.components.calendar — used by calendar.py entity
     cal_mod = types.ModuleType("homeassistant.components.calendar")

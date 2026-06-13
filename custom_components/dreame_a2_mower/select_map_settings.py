@@ -25,6 +25,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
+from ._availability import _FreshnessAvailableMixin
 from ._devices import map_device_info, map_unique_id
 from ._settings_writes import (
     pre_settings_optimistic_write,
@@ -393,13 +394,17 @@ class DreameA2MowingModeSelect(
 
 
 class DreameA2PerMapMowingDirectionSelect(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SelectEntity,
 ):
     """Per-map mowing direction (degrees)."""
 
     _OPTIONS = ("0°", "90°", "180°", "270°")
 
     _attr_has_entity_name = True
+    _availability_source = "cloud"
     _attr_translation_key = "settings_mowing_direction"
     _attr_options: ClassVar[list[str]] = list(_OPTIONS)
     _attr_should_poll = False
@@ -458,7 +463,10 @@ class DreameA2PerMapMowingDirectionSelect(
 
 
 class DreameA2PerMapMowingDirectionModeSelect(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SelectEntity,
 ):
     """Per-map mowing pattern — Crisscross / Customize / Chequerboard.
 
@@ -470,6 +478,7 @@ class DreameA2PerMapMowingDirectionModeSelect(
     _OPTIONS = ("Crisscross", "Customize", "Chequerboard")
 
     _attr_has_entity_name = True
+    _availability_source = "cloud"
     _attr_translation_key = "mowing_pattern"
     _attr_options: ClassVar[list[str]] = list(_OPTIONS)
     _attr_should_poll = False
@@ -528,7 +537,10 @@ class DreameA2PerMapMowingDirectionModeSelect(
 
 
 class DreameA2MapMowingEfficiencySelect(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SelectEntity,
 ):
     """Per-map mowing efficiency — read-only.
 
@@ -551,6 +563,8 @@ class DreameA2MapMowingEfficiencySelect(
     _OPTIONS = ("Standard", "Efficient")
 
     _attr_has_entity_name = True
+    # Reads the s6.2 PRE shadow (MQTT push), not the cloud SETTINGS fetch.
+    _availability_source = "mqtt"
     _attr_options: ClassVar[list[str]] = list(_OPTIONS)
     _attr_should_poll = False
     _attr_icon = "mdi:speedometer"
@@ -623,13 +637,17 @@ class DreameA2MapMowingEfficiencySelect(
 
 
 class DreameA2PerMapEdgeMowingWalkModeSelect(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SelectEntity,
 ):
     """Per-map edge mowing walk mode."""
 
     _OPTIONS = ("walk_0", "walk_1")
 
     _attr_has_entity_name = True
+    _availability_source = "cloud"
     _attr_translation_key = "settings_edge_mowing_walk_mode"
     _attr_options: ClassVar[list[str]] = list(_OPTIONS)
     _attr_should_poll = False

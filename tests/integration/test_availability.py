@@ -200,3 +200,216 @@ def test_base_unavailable_overrides_source_fresh():
     e = _Ent()
     e.coordinator = _FreshSrc(mqtt=True, cloud=True)
     assert e.available is False
+
+
+# ===========================================================================
+# Entity-level tagging tests (Phase 1.1 application).
+#
+# These construct REAL entity classes against a coordinator whose freshness
+# flags we toggle, and assert each entity goes unavailable when ITS source
+# is stale. The base CoordinatorEntity.available check reads
+# coordinator.last_update_success — a MagicMock coordinator returns a truthy
+# value there by default, so the freshness gate is the deciding factor.
+# ===========================================================================
+
+from unittest.mock import MagicMock  # noqa: E402
+
+from custom_components.dreame_a2_mower.cloud_state import (  # noqa: E402
+    CloudState,
+    ScheduleData,
+    SettingsRoot,
+)
+from custom_components.dreame_a2_mower.mower.state import MowerState  # noqa: E402
+from custom_components.dreame_a2_mower.mower.state_machine import (  # noqa: E402
+    MowerStateMachine,
+)
+
+
+def _entity_coord(*, mqtt: bool = True, cloud: bool = True):
+    """A MagicMock coordinator with explicit freshness flags.
+
+    ``last_update_success`` stays a truthy MagicMock so the HA base
+    ``available`` passes; only the per-source freshness flag decides.
+    """
+    coord = MagicMock()
+    coord.mqtt_is_fresh = mqtt
+    coord.cloud_is_fresh = cloud
+    coord.entry.entry_id = "fake"
+    return coord
+
+
+# --- Group 1: an mqtt entity (DreameA2LawnMower) --------------------------
+
+def test_mqtt_entity_lawn_mower_unavailable_when_mqtt_stale():
+    from custom_components.dreame_a2_mower.lawn_mower import DreameA2LawnMower
+
+    coord = _entity_coord(mqtt=True, cloud=True)
+    coord.state_machine = MowerStateMachine()
+    ent = DreameA2LawnMower(coord)
+    assert ent._availability_source == "mqtt"
+    assert ent.available is True
+
+    coord.mqtt_is_fresh = False
+    assert ent.available is False
+    # A pure cloud outage must NOT take an mqtt entity down.
+    coord.mqtt_is_fresh = True
+    coord.cloud_is_fresh = False
+    assert ent.available is True
+
+
+# --- Group 2: a cloud entity (per-map settings number) --------------------
+
+def _coord_with_settings(map_id=0, value=5, *, mqtt=True, cloud=True):
+    coord = _entity_coord(mqtt=mqtt, cloud=cloud)
+    coord.cloud_state = CloudState(
+        cfg={},
+        maps_by_id={map_id: MagicMock(name="map")},
+        mow_paths_by_map_id={},
+        settings=SettingsRoot(
+            raw=[], by_map_id_canonical={map_id: {"mowingHeight": value}}
+        ),
+        schedule=ScheduleData(version=0, slots=()),
+        ai_human_enabled=None,
+        forbidden_node_types_by_map={},
+        ota_status=None,
+        task_id=0,
+        props={},
+        mapl=None,
+        mihis={},
+        fetched_at_unix=0,
+    )
+    return coord
+
+
+def test_cloud_entity_per_map_number_unavailable_when_cloud_stale():
+    from custom_components.dreame_a2_mower.number import (
+        DreameA2PerMapMowingHeightNumber,
+    )
+
+    coord = _coord_with_settings(value=5, mqtt=True, cloud=True)
+    ent = DreameA2PerMapMowingHeightNumber(coord, map_id=0)
+    assert ent._availability_source == "cloud"
+    # Value present + cloud fresh → available.
+    assert ent.native_value == 5.0
+    assert ent.available is True
+
+    coord.cloud_is_fresh = False
+    assert ent.available is False
+    # An mqtt outage must NOT take a cloud entity down.
+    coord.cloud_is_fresh = True
+    coord.mqtt_is_fresh = False
+    assert ent.available is True
+
+
+# --- Group 3: a none entity (refresh button — no mixin, untouched) --------
+
+def test_none_entity_button_unaffected_by_freshness():
+    from custom_components.dreame_a2_mower.button import (
+        DreameA2RefreshCloudStateButton,
+    )
+
+    coord = _entity_coord(mqtt=False, cloud=False)
+    ent = DreameA2RefreshCloudStateButton(coord)
+    # No freshness gating — the button never goes unavailable on link loss.
+    assert not isinstance(ent, _FreshnessAvailableMixin)
+    assert ent.available is True
+
+
+def test_none_sourced_sensor_row_unaffected_by_freshness():
+    """A DreameA2Sensor on a None-source descriptor row is NOT gated."""
+    from custom_components.dreame_a2_mower.sensor_device import (
+        SENSORS,
+        DreameA2Sensor,
+    )
+
+    none_desc = next(d for d in SENSORS if d.key == "first_mowing_date")
+    assert none_desc.availability_source is None
+    coord = _entity_coord(mqtt=False, cloud=False)
+    coord.data = MowerState()
+    ent = DreameA2Sensor(coord, none_desc)
+    assert ent._availability_source is None
+    assert ent.available is True
+
+
+# --- Group 4: DreameA2MowerGpsTracker (Pattern C bare-override edit) -------
+
+def test_gps_tracker_unavailable_when_cloud_stale_even_with_coords():
+    from custom_components.dreame_a2_mower.device_tracker import (
+        DreameA2MowerGpsTracker,
+    )
+
+    coord = _entity_coord(mqtt=True, cloud=True)
+    coord.data = MowerState(position_lat=59.9, position_lon=10.7)
+    ent = DreameA2MowerGpsTracker(coord)
+    # Coords present + cloud fresh → available.
+    assert ent.latitude == 59.9 and ent.longitude == 10.7
+    assert ent.available is True
+
+    # Pattern C: the bare override ANDs in cloud_is_fresh directly, so a
+    # cloud outage marks it unavailable EVEN THOUGH lat/lon are present.
+    coord.cloud_is_fresh = False
+    assert ent.available is False
+
+    # No coords → unavailable regardless of freshness.
+    coord.cloud_is_fresh = True
+    coord.data = MowerState()
+    ent2 = DreameA2MowerGpsTracker(coord)
+    assert ent2.available is False
+
+
+# --- Group 5: descriptor path — mqtt-row vs cloud-row vs none-row ---------
+
+def _diag_coord(*, mqtt=True, cloud=True):
+    coord = _entity_coord(mqtt=mqtt, cloud=cloud)
+    coord.state_machine = MowerStateMachine()
+    coord.data = MowerState()
+    return coord
+
+
+def test_diagnostic_sensor_rows_behave_per_availability_source():
+    """A mqtt-row, a cloud-row, and a none-row of the SAME generic class
+    (DreameA2DiagnosticSensor) gate differently — proving the descriptor
+    bridge property resolves the per-row source via MRO."""
+    from custom_components.dreame_a2_mower.sensor_device import (
+        DIAGNOSTIC_SENSORS,
+        DreameA2DiagnosticSensor,
+    )
+
+    mqtt_desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "battery_level")
+    cloud_desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "cfg_version")
+    none_desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "hardware_serial")
+
+    assert mqtt_desc.availability_source == "mqtt"
+    assert cloud_desc.availability_source == "cloud"
+    assert none_desc.availability_source is None
+
+    # MQTT row: down on mqtt-stale, up on cloud-stale.
+    coord = _diag_coord(mqtt=False, cloud=True)
+    assert DreameA2DiagnosticSensor(coord, mqtt_desc).available is False
+    coord = _diag_coord(mqtt=True, cloud=False)
+    assert DreameA2DiagnosticSensor(coord, mqtt_desc).available is True
+
+    # Cloud row: down on cloud-stale, up on mqtt-stale.
+    coord = _diag_coord(mqtt=True, cloud=False)
+    assert DreameA2DiagnosticSensor(coord, cloud_desc).available is False
+    coord = _diag_coord(mqtt=False, cloud=True)
+    assert DreameA2DiagnosticSensor(coord, cloud_desc).available is True
+
+    # None row: unaffected by either.
+    coord = _diag_coord(mqtt=False, cloud=False)
+    assert DreameA2DiagnosticSensor(coord, none_desc).available is True
+
+
+def test_mqtt_connectivity_sensor_overrides_base_to_none():
+    """The MQTT-connectivity link reporter subclasses _SnapshotEnumSensorBase
+    (mqtt) but must stay visible — its source is overridden back to None."""
+    from custom_components.dreame_a2_mower.sensor_device import (
+        DreameA2MqttConnectivitySensor,
+    )
+
+    coord = _entity_coord(mqtt=False, cloud=False)
+    coord.state_machine = MowerStateMachine()
+    ent = DreameA2MqttConnectivitySensor(coord)
+    assert ent._availability_source is None
+    # Even with mqtt stale, the reporter itself stays available.
+    assert ent.available is True
