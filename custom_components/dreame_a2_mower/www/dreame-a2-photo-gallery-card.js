@@ -360,6 +360,6 @@ if (!customElements.get("dreame-a2-photo-gallery-card")) {
     type: "dreame-a2-photo-gallery-card",
     name: "Dreame Mower Photo Gallery",
     description:
-      "Thumbnail gallery of archived obstacle/patrol/person photos + videos, click to enlarge.",
+      "Thumbnail gallery of archived AI-detection / patrol / obstacle photos + videos, click to enlarge.",
   });
 }

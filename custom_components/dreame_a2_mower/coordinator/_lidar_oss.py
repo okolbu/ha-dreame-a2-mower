@@ -125,8 +125,7 @@ def fetch_photos_from_summary(cloud, archive, raw_dict, *, sign) -> int:
         body = cloud.get_file(url)
         if not body:
             continue
-        from ..protocol.photo_meta import parse_jpeg_com
-        meta = parse_jpeg_com(body)
+        meta = photo_meta.parse_jpeg_com(body)
         category = categorize(name=name, record={"type": "jpg"}, com=meta)
         detections = (meta or {}).get("detections") or []
         entry = archive.archive(
