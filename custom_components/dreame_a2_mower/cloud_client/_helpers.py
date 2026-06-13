@@ -4,11 +4,52 @@ from __future__ import annotations
 import logging
 import random
 import time
+from dataclasses import dataclass
 from typing import Callable, TypeVar
 
 _LOGGER = logging.getLogger("custom_components.dreame_a2_mower.cloud_client")
 
 T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class WriteResult:
+    """Honest outcome of a device-ACTION write (routed_action / dispatch_action).
+
+    The cloud relay's top-level HTTP ``code`` is always 0 on a reachable cloud
+    even when the *device* rejects the action — the real verdict is in
+    ``out[0].r``. This envelope carries both the transport-delivery fact and the
+    device-acceptance fact so callers can distinguish "the mower never heard it"
+    (retryable / asleep) from "the mower heard it and said no" (permanent).
+
+    Fields:
+      - ``delivered`` — the cloud relay returned a payload (not None / not 80001).
+      - ``accepted``  — delivered AND ``out[0].r == 0`` (device actually did it).
+      - ``code``      — ``out[0].r`` when delivered; else the transport error code
+                        (80001 / ``_last_send_error_code`` / None).
+      - ``msg``       — ``out[0].msg``/``e`` when delivered+rejected; a transport
+                        note otherwise.
+    """
+
+    delivered: bool
+    accepted: bool
+    code: int | None
+    msg: str = ""
+
+    @property
+    def ok(self) -> bool:
+        """Convenience for callers that only care about success."""
+        return self.accepted
+
+    def __bool__(self) -> bool:
+        """Truthiness == accepted.
+
+        Load-bearing: legacy callers wrote ``if result:`` / ``bool(leg)`` against
+        the raw device dict (truthy on mere delivery). Tying ``__bool__`` to
+        ``accepted`` keeps ``edit_map``'s ``ok = ok and bool(leg_result)``
+        correct after the swap — a delivered-but-rejected leg now reads falsy.
+        """
+        return self.accepted
 
 
 def _http_retry(

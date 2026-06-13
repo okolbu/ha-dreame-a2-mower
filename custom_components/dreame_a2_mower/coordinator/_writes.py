@@ -22,7 +22,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from ..archive.lidar import LidarArchive
 from ..archive.session import ArchivedSession, SessionArchive
 from ..wifi_archive_store import WifiArchiveEntry, WifiArchiveStore
-from ..cloud_client import DreameA2CloudClient
+from ..cloud_client import DreameA2CloudClient, WriteResult
 from ..const import (
     CONF_COUNTRY,
     CONF_LIDAR_ARCHIVE_KEEP,
@@ -401,7 +401,7 @@ class _WritesMixin:
 
     async def dispatch_action(
         self, action: MowerAction, parameters: dict[str, Any] | None = None
-    ) -> None:
+    ) -> WriteResult:
         """Dispatch a typed mower action.
 
         Looks up the action in ACTION_TABLE. local_only actions are handled
@@ -415,15 +415,22 @@ class _WritesMixin:
         For actions that have only ``siid``/``aiid`` (no opcode), falls back
         to a direct ``cloud_client.action(siid, aiid)`` call.
 
-        Errors and timeouts are logged but not raised — the integration
-        keeps going. F4+ surfaces persistent failures via diagnostic
-        sensors.
+        Returns a :class:`WriteResult` carrying the honest device verdict for
+        the cloud path, or a synthetic one for the local-only / cfg-toggle /
+        not-ready / unknown-action / error branches. **Non-raising** — errors
+        and timeouts are logged and folded into a not-accepted WriteResult so
+        the integration keeps going and existing callers (which ignore the
+        return value in Task A) are unaffected. Surfacing rejections to the
+        user is Task B's job.
         """
         parameters = parameters or {}
         entry = ACTION_TABLE.get(action)
         if entry is None:
             LOGGER.warning("dispatch_action: unknown action %r", action)
-            return
+            return WriteResult(
+                delivered=False, accepted=False, code=None,
+                msg=f"unknown action {action!r}",
+            )
 
         if entry.get("local_only"):
             # FINALIZE_SESSION — integration-internal action; routes to the
@@ -441,7 +448,8 @@ class _WritesMixin:
                 LOGGER.info(
                     "dispatch_action: local-only %s — no implementation yet", action.name
                 )
-            return
+            # Local-only actions have no device round-trip; they always "succeed".
+            return WriteResult(delivered=True, accepted=True, code=0)
 
         # cfg_toggle_field path — reads the named MowerState field, computes
         # the toggled (boolean NOT) value, and calls write_setting.
@@ -455,23 +463,31 @@ class _WritesMixin:
                     "dispatch_action %s: cfg_toggle_field set but cfg_key missing — skipped",
                     action.name,
                 )
-                return
+                return WriteResult(
+                    delivered=False, accepted=False, code=None,
+                    msg="cfg_toggle_field set but cfg_key missing",
+                )
             current = getattr(self.data, cfg_toggle_field, None)
             toggled = not bool(current)
             LOGGER.info(
                 "dispatch_action: %s toggle %s=%r → %r via write_setting(%r)",
                 action.name, cfg_toggle_field, current, toggled, cfg_key,
             )
-            await self.write_setting(
+            ok = await self.write_setting(
                 cfg_key,
                 int(toggled),  # CLS wire value is int {0, 1}
                 field_updates={cfg_toggle_field: toggled},
             )
-            return
+            # write_setting returns an honest accept bool; wrap it.
+            return WriteResult(
+                delivered=True, accepted=bool(ok), code=0 if ok else -3,
+            )
 
         if not hasattr(self, "_cloud") or self._cloud is None:
             LOGGER.warning("dispatch_action: cloud client not ready; %s deferred", action.name)
-            return
+            return WriteResult(
+                delivered=False, accepted=False, code=None, msg="cloud not ready",
+            )
 
         routed_o = entry.get("routed_o")
         payload_fn = entry.get("payload_fn")
@@ -502,7 +518,10 @@ class _WritesMixin:
             extra = payload_fn(parameters) if payload_fn else None
         except ValueError as ex:
             LOGGER.warning("dispatch_action %s: payload error: %s", action.name, ex)
-            return
+            return WriteResult(
+                delivered=False, accepted=False, code=None,
+                msg=f"payload error: {ex}",
+            )
 
         LOGGER.info(
             "dispatch_action: %s via routed op=%s extra=%s",
@@ -512,32 +531,48 @@ class _WritesMixin:
         try:
             if routed_o is not None:
                 # Action opcode path — works on g2408 (cfg_action.call_action_op).
-                await self.hass.async_add_executor_job(
+                # routed_action already returns an honest WriteResult; propagate.
+                return await self.hass.async_add_executor_job(
                     self._cloud.routed_action, routed_o, extra
                 )
-            else:
-                # Direct siid/aiid path — returns 80001 on g2408 for most actions,
-                # but included for completeness (PAUSE/DOCK/STOP/etc. may succeed
-                # via this path on some firmware or cloud configurations).
-                siid = entry.get("siid")
-                aiid = entry.get("aiid")
-                if siid is None or aiid is None:
-                    LOGGER.warning(
-                        "dispatch_action: %s has no routed_o and no siid/aiid — skipped",
-                        action.name,
-                    )
-                    return
-                await self.hass.async_add_executor_job(
-                    self._cloud.action, siid, aiid
+            # Direct siid/aiid path — returns 80001 on g2408 for most actions,
+            # but included for completeness (PAUSE/DOCK/STOP/etc. may succeed
+            # via this path on some firmware or cloud configurations).
+            siid = entry.get("siid")
+            aiid = entry.get("aiid")
+            if siid is None or aiid is None:
+                LOGGER.warning(
+                    "dispatch_action: %s has no routed_o and no siid/aiid — skipped",
+                    action.name,
                 )
+                return WriteResult(
+                    delivered=False, accepted=False, code=None,
+                    msg="no routed_o and no siid/aiid",
+                )
+            # The direct action() returns the raw device dict or None — wrap it
+            # into a WriteResult. We can't read out[0].r here (action() doesn't
+            # carry the routed envelope), so a non-None result is treated as
+            # delivered+accepted (mirrors routed_action's no-`out` branch).
+            result = await self.hass.async_add_executor_job(
+                self._cloud.action, siid, aiid
+            )
+            if result is None:
+                return WriteResult(
+                    delivered=False, accepted=False, code=None,
+                    msg="direct action not delivered",
+                )
+            return WriteResult(delivered=True, accepted=True, code=None)
         except Exception as ex:
             LOGGER.warning("dispatch_action %s failed: %s", action.name, ex)
+            return WriteResult(
+                delivered=False, accepted=False, code=None, msg=str(ex),
+            )
 
     # ------------------------------------------------------------------
     # Unified mowing-mode wrappers (used by DreameA2MowingModeSelect)
     # ------------------------------------------------------------------
 
-    async def _ensure_active_map(self, map_id: int) -> None:
+    async def _ensure_active_map(self, map_id: int) -> WriteResult:
         """Switch to map_id via SET_ACTIVE_MAP (op=200) if it isn't already active.
 
         No-op when the requested map is already active or when
@@ -545,12 +580,15 @@ class _WritesMixin:
         set it, so we fall through and let the firmware pick).  Logs a
         warning and continues on failure so the subsequent mow command
         still fires against whatever map is currently active.
+
+        Returns the SET_ACTIVE_MAP dispatch result so a failed switch is
+        visible to the caller; the no-op cases return an accepted result.
         """
         current = self._active_map_id
         if current is None or current == map_id:
-            return
+            return WriteResult(delivered=True, accepted=True, code=0)
         try:
-            await self.dispatch_action(
+            return await self.dispatch_action(
                 MowerAction.SET_ACTIVE_MAP, {"map_id": map_id}
             )
         except Exception as ex:
@@ -561,66 +599,70 @@ class _WritesMixin:
                 ex,
                 current,
             )
+            return WriteResult(
+                delivered=False, accepted=False, code=None, msg=str(ex),
+            )
 
-    async def start_mowing_all_areas(self, *, map_id: int) -> None:
+    async def start_mowing_all_areas(self, *, map_id: int) -> WriteResult:
         """Start all-areas mow on the given map (op=100).
 
         Switches the active map first if needed.  The all-areas TASK
         envelope doesn't carry a map_id itself; op=200 SET_ACTIVE_MAP
         must be sent first when the requested map isn't already active.
+        Returns the START dispatch's result.
         """
         await self._ensure_active_map(map_id)
-        await self.dispatch_action(MowerAction.START_MOWING, {})
+        return await self.dispatch_action(MowerAction.START_MOWING, {})
 
-    async def start_mowing_edge(self, *, map_id: int) -> None:
+    async def start_mowing_edge(self, *, map_id: int) -> WriteResult:
         """Start edge mow on the given map (op=101)."""
         await self._ensure_active_map(map_id)
-        await self.dispatch_action(MowerAction.START_EDGE_MOW, {})
+        return await self.dispatch_action(MowerAction.START_EDGE_MOW, {})
 
-    async def start_mowing_zone(self, *, map_id: int, zone_id: int) -> None:
+    async def start_mowing_zone(self, *, map_id: int, zone_id: int) -> WriteResult:
         """Start zone mow for a specific zone on the given map (op=102)."""
         await self._ensure_active_map(map_id)
-        await self.dispatch_action(
+        return await self.dispatch_action(
             MowerAction.START_ZONE_MOW, {"zones": [zone_id]}
         )
 
-    async def start_mowing_spot(self, *, map_id: int, spot_id: int) -> None:
+    async def start_mowing_spot(self, *, map_id: int, spot_id: int) -> WriteResult:
         """Start spot mow for a specific spot on the given map (op=103)."""
         await self._ensure_active_map(map_id)
-        await self.dispatch_action(
+        return await self.dispatch_action(
             MowerAction.START_SPOT_MOW, {"spots": [spot_id]}
         )
 
-    async def start_go_to_point(self, *, map_id: int, point_id: int) -> None:
+    async def start_go_to_point(self, *, map_id: int, point_id: int) -> WriteResult:
         """Send the mower to a maintenance/clean point on the given map (op=109).
 
         Confirmed 2026-05-31: ``routed_action(109, {"point":[id]})``. ``point_id``
         is a per-map cleanPoint id, so the map must be active first.
         """
         await self._ensure_active_map(map_id)
-        await self.dispatch_action(
+        return await self.dispatch_action(
             MowerAction.GO_TO_POINT, {"point_id": point_id}
         )
 
-    async def start_point_patrol(self, *, map_id: int, point_ids: list[int]) -> None:
+    async def start_point_patrol(self, *, map_id: int, point_ids: list[int]) -> WriteResult:
         """Launch a POINT patrol (op=107) over the given cruise points on map_id.
 
         point_ids are per-map cruisePoint ids, so the map must be active first.
         SEND shape is [UNVERIFIED] — see actions._point_patrol_payload / o107.
         """
         await self._ensure_active_map(map_id)
-        await self.dispatch_action(
+        return await self.dispatch_action(
             MowerAction.START_POINT_PATROL, {"point_ids": [int(i) for i in point_ids]}
         )
 
-    async def start_edge_patrol(self, *, map_id: int, contour_ids: list[list[int]]) -> None:
+    async def start_edge_patrol(self, *, map_id: int, contour_ids: list[list[int]]) -> WriteResult:
         """Launch an EDGE patrol (op=108) over the given contour pairs on map_id.
 
         contour_ids are [m, c] pairs (outer perimeters). SEND shape is
         [UNVERIFIED] — see actions._edge_patrol_payload / o108.
         """
         await self._ensure_active_map(map_id)
-        await self.dispatch_action(
+        return await self.dispatch_action(
             MowerAction.START_EDGE_PATROL, {"contour_ids": [list(c) for c in contour_ids]}
         )
 
@@ -690,11 +732,15 @@ class _WritesMixin:
 
         Sequence: o=200{idx:map_id} -> o=204(p:0) begin -> each mutation(p:0)
         -> o=201(p:1) commit. The target map becomes (and stays) active. Each
-        leg is sent via routed_action; a None (transport-level failure) marks
-        overall failure but the commit is ALWAYS sent so the device never stays
-        in edit mode. Note: routed_action returns truthy on delivery even if the
-        device replies with a logical r!=0 (e.g. bad region/id), so a True return
-        means "delivered + committed", not "the firmware accepted the edit".
+        leg is sent via routed_action; the commit (o=201) is ALWAYS sent so the
+        device never stays in edit mode even if an earlier leg failed.
+
+        Returns True only when EVERY leg was *accepted* by the device. Each
+        ``routed_action`` now returns a :class:`WriteResult` whose ``__bool__``
+        is its ``accepted`` flag, so ``ok = ok and bool(leg)`` means "every leg
+        accepted" — a delivered-but-rejected leg (e.g. bad region/id, r!=0) now
+        correctly drives the return to False, where the old code only caught
+        transport-level (None) failures.
         """
         if not hasattr(self, "_cloud") or self._cloud is None:
             LOGGER.warning("edit_map: cloud client not ready")
@@ -707,15 +753,12 @@ class _WritesMixin:
 
         ok = True
         async with self._chunked_write_lock:
-            if await _send(200, {"idx": int(map_id)}) is None:
-                ok = False
-            if await _send(204) is None:
-                ok = False
+            ok = bool(await _send(200, {"idx": int(map_id)})) and ok
+            ok = bool(await _send(204)) and ok
             for op, payload in mutations:
-                if await _send(op, payload) is None:
-                    ok = False
-            if await _send(201, p=1) is None:
-                ok = False
+                ok = bool(await _send(op, payload)) and ok
+            # Commit is always sent (even on prior failure) to exit edit mode.
+            ok = bool(await _send(201, p=1)) and ok
         LOGGER.info(
             "[map-edit] map %d, %d mutation(s), ok=%s", map_id, len(mutations), ok
         )

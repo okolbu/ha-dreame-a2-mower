@@ -28,7 +28,7 @@ from threading import Thread
 import requests
 
 from ..const import DREAME_STRINGS as _DREAME_STRINGS_B64
-from ._helpers import _random_agent_id
+from ._helpers import _random_agent_id, WriteResult
 from ._auth import _AuthMixin
 from ._discovery import _DiscoveryMixin
 from ._rpc import _RpcMixin

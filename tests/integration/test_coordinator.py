@@ -1325,6 +1325,74 @@ def test_dispatch_action_finalize_session_no_active_session_noop_cleanly():
 
 
 # ---------------------------------------------------------------------------
+# Task A — dispatch_action returns an honest WriteResult (no surfacing yet)
+# ---------------------------------------------------------------------------
+
+
+def test_dispatch_action_local_only_returns_accepted_writeresult():
+    """FINALIZE_SESSION (local-only) returns an accepted WriteResult."""
+    import asyncio
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.actions import MowerAction
+
+    coord = _make_coordinator_for_finalize_tests()
+    coord.session_archive.count = 0
+    result = asyncio.run(coord.dispatch_action(MowerAction.FINALIZE_SESSION, {}))
+    assert isinstance(result, WriteResult)
+    assert result.accepted is True
+
+
+def test_dispatch_action_unknown_returns_not_delivered():
+    """An action not in ACTION_TABLE → not-delivered, not-accepted WriteResult."""
+    import asyncio
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+
+    coord = _make_coordinator_for_finalize_tests()
+
+    class _Bogus:
+        name = "BOGUS"
+
+    result = asyncio.run(coord.dispatch_action(_Bogus()))
+    assert isinstance(result, WriteResult)
+    assert result.delivered is False
+    assert result.accepted is False
+
+
+def test_dispatch_action_propagates_routed_writeresult():
+    """A cloud-path action propagates routed_action's WriteResult verbatim —
+    a device rejection (accepted=False) flows through to the caller."""
+    import asyncio
+    from unittest.mock import MagicMock
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.actions import MowerAction
+
+    coord = _make_coordinator_for_finalize_tests()
+    coord.data = MowerState()
+    coord._active_map_id = 0
+    rejected = WriteResult(delivered=True, accepted=False, code=-3, msg="no")
+    coord._cloud.routed_action = MagicMock(return_value=rejected)
+
+    result = asyncio.run(coord.dispatch_action(MowerAction.START_MOWING, {}))
+    assert result is rejected
+    assert result.accepted is False
+
+
+def test_dispatch_action_cloud_not_ready_returns_not_delivered():
+    """No cloud client → not-delivered WriteResult, non-raising."""
+    import asyncio
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.actions import MowerAction
+
+    coord = _make_coordinator_for_finalize_tests()
+    coord.data = MowerState()
+    coord._cloud = None
+    result = asyncio.run(coord.dispatch_action(MowerAction.START_MOWING, {}))
+    assert isinstance(result, WriteResult)
+    assert result.delivered is False
+    assert result.accepted is False
+
+
+# ---------------------------------------------------------------------------
 # _periodic_session_retry dispatch tests
 # ---------------------------------------------------------------------------
 
@@ -2507,7 +2575,7 @@ def test_data_freshness_sensor_returns_none_when_no_tracked_fields():
 
 
 def test_cloud_routed_action_records_accepted():
-    """A successful routed_action records 'accepted' for that op."""
+    """A device-accepted routed_action (out[0].r==0) records 'accepted'."""
     from custom_components.dreame_a2_mower.cloud_client import DreameA2CloudClient
     from unittest.mock import patch
 
@@ -2517,11 +2585,34 @@ def test_cloud_routed_action_records_accepted():
     client._did = "did1"
     client._last_send_error_code = None
 
-    # Simulate self.action returning a non-None result (success).
-    with patch.object(client, "action", return_value={"ok": True}):
-        client.routed_action(op=100)
+    # Realistic wire shape: cloud HTTP code 0, device verdict out[0].r == 0.
+    with patch.object(client, "action", return_value={"code": 0, "out": [{"r": 0}]}):
+        result = client.routed_action(op=100)
 
+    assert result.accepted is True
+    assert result.delivered is True
     assert client.endpoint_log["routed_action_op=100"] == "accepted"
+
+
+def test_cloud_routed_action_records_device_rejected():
+    """A delivered-but-rejected routed_action (out[0].r != 0) records
+    'device_rejected' — the cloud HTTP code is 0 but the device said no."""
+    from custom_components.dreame_a2_mower.cloud_client import DreameA2CloudClient
+    from unittest.mock import patch
+
+    client = DreameA2CloudClient.__new__(DreameA2CloudClient)
+    client.endpoint_log = {}
+    client._did = "did1"
+    client._last_send_error_code = None
+
+    rejected = {"code": 0, "out": [{"r": -3, "msg": "not supported"}]}
+    with patch.object(client, "action", return_value=rejected):
+        result = client.routed_action(op=100)
+
+    assert result.delivered is True
+    assert result.accepted is False
+    assert result.code == -3
+    assert client.endpoint_log["routed_action_op=100"] == "device_rejected"
 
 
 def test_cloud_routed_action_records_80001():

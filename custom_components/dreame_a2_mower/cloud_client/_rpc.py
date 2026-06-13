@@ -10,7 +10,7 @@ from typing import Any
 
 import requests
 
-from ._helpers import _LOGGER, _http_retry
+from ._helpers import _LOGGER, _http_retry, WriteResult
 
 
 class _RpcMixin:
@@ -344,7 +344,7 @@ class _RpcMixin:
 
     def routed_action(
         self, op: int, extra: dict[str, Any] | None = None, *, p: int = 0
-    ) -> dict[str, Any] | None:
+    ) -> WriteResult:
         """Send a routed mow/utility action via siid=2 aiid=50.
 
         On g2408 this is the only cloud-RPC path that works for action
@@ -362,6 +362,21 @@ class _RpcMixin:
         ``{"region": [zone_id]}`` for zone-mow, or ``{"region_id": [1, 2]}``
         for multi-zone.
 
+        Returns a :class:`WriteResult` carrying the honest device verdict —
+        the cloud's top-level HTTP code is always 0 on a reachable cloud even
+        when the device rejected the action, so we parse ``out[0].r`` (mirroring
+        ``set_cfg``). The four outcomes:
+
+        - ``out[0].r == 0`` → delivered + accepted.
+        - ``out[0].r != 0`` → delivered but rejected (code=r, msg from msg/e).
+        - result is None    → not delivered (80001 / transport); code =
+          ``_last_send_error_code``.
+        - result present but ``out`` missing/malformed → delivered + accepted,
+          ``code=None``. **We do NOT fabricate a rejection here.** This DIFFERS
+          from ``set_cfg`` (which treats a malformed envelope as failure): for an
+          *action*, a normal-looking envelope with no reject signal to read must
+          not block the user — there's no evidence the device said no.
+
         Source: protocol/cfg_action.py ``call_action_op``; legacy
         dreame/device.py ``_ALT_ACTION_SIID_MAP`` and ``call_action``.
         """
@@ -369,10 +384,33 @@ class _RpcMixin:
         self._last_send_error_code = None
         result = call_action_op(self.action, op, extra, p=p)
         key = f"routed_action_op={op}"
-        if result is not None:
+
+        if result is None:
+            # Not delivered — 80001 (asleep / unreachable, retryable) or another
+            # transport error. _last_send_error_code disambiguates.
+            code = self._last_send_error_code
+            if code == 80001:
+                self.endpoint_log[key] = "rejected_80001"
+                msg = "not delivered (80001 — mower asleep/unreachable)"
+            else:
+                self.endpoint_log[key] = "error"
+                msg = "not delivered (transport)"
+            return WriteResult(delivered=False, accepted=False, code=code, msg=msg)
+
+        # Delivered — read the device's own verdict from out[0].r.
+        outs = result.get("out") if isinstance(result, dict) else None
+        if not outs or not isinstance(outs[0], dict) or "r" not in outs[0]:
+            # Delivered, but no reject signal to read. Do NOT fabricate a
+            # rejection (differs from set_cfg) — the user's command went out and
+            # the device gave no "no". Treat as accepted with an unknown code.
             self.endpoint_log[key] = "accepted"
-        elif self._last_send_error_code == 80001:
-            self.endpoint_log[key] = "rejected_80001"
-        else:
-            self.endpoint_log[key] = "error"
-        return result
+            return WriteResult(delivered=True, accepted=True, code=None)
+
+        r = outs[0].get("r")
+        if r == 0:
+            self.endpoint_log[key] = "accepted"
+            return WriteResult(delivered=True, accepted=True, code=0)
+
+        msg = outs[0].get("msg") or outs[0].get("e") or ""
+        self.endpoint_log[key] = "device_rejected"
+        return WriteResult(delivered=True, accepted=False, code=r, msg=msg)
