@@ -96,6 +96,11 @@ if TYPE_CHECKING:
 class _CoreMixin:
     """Methods extracted from coordinator.py — see spec for groupings."""
 
+    # Consecutive full-state cloud-poll failures before cloud-sourced entities
+    # go unavailable (Phase 1.1). 2 cycles ≈ 4-6 min — long enough to ride out a
+    # transient blip, short enough to surface a real cloud outage promptly.
+    _CLOUD_UNAVAIL_THRESHOLD = 2
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -373,6 +378,15 @@ class _CoreMixin:
         # Records the last unix timestamp each MowerState field changed.
         self.freshness = FreshnessTracker()
 
+        # Cloud-poll availability gate (Phase 1.1). Counts CONSECUTIVE
+        # full-state poll (`_refresh_cloud_state`) failures; cloud-sourced
+        # entities go unavailable once it reaches _CLOUD_UNAVAIL_THRESHOLD.
+        # Reset to 0 on the first success. Kept separate from
+        # DataUpdateCoordinator.last_update_success on purpose: frequent MQTT
+        # pushes call async_set_updated_data (→ last_update_success=True), which
+        # would otherwise mask a cloud-read outage while the device link is up.
+        self._consecutive_cloud_failures = 0
+
         # Multi-dimensional state machine — canonical source of behavioural
         # state (activity, location, session). Entities read from
         # state_machine.snapshot().
@@ -450,6 +464,44 @@ class _CoreMixin:
         if resume_at is None:
             return True
         return time.time() < resume_at
+
+    # ------------------------------------------------------------------
+    # Per-source availability signals (Phase 1.1)
+    # ------------------------------------------------------------------
+    @property
+    def cloud_is_fresh(self) -> bool:
+        """False once the full-state cloud poll has failed enough consecutive
+        times that cloud-sourced entities should report unavailable."""
+        # getattr default: __new__-built test fixtures may skip __init__.
+        return (
+            getattr(self, "_consecutive_cloud_failures", 0)
+            < self._CLOUD_UNAVAIL_THRESHOLD
+        )
+
+    @property
+    def mqtt_is_fresh(self) -> bool:
+        """True while the device MQTT link is live — a heartbeat has been seen
+        and it isn't stale (state machine flips connectivity to STALE after
+        HB_STALENESS_S=90s without a heartbeat)."""
+        from ..mower.state_snapshot import Connectivity
+
+        sm = getattr(self, "state_machine", None)
+        if sm is None:
+            return False
+        snap = sm.snapshot()
+        if snap.last_heartbeat_unix is None:
+            return False
+        return snap.mqtt_connectivity == Connectivity.ONLINE
+
+    def _note_cloud_fetch(self, *, ok: bool) -> None:
+        """Record the outcome of a full-state cloud poll for the availability
+        gate. Success resets the streak; failure increments it."""
+        if ok:
+            self._consecutive_cloud_failures = 0
+        else:
+            self._consecutive_cloud_failures = (
+                getattr(self, "_consecutive_cloud_failures", 0) + 1
+            )
 
     async def _async_update_data(self) -> MowerState:
         """First-refresh path — auth, device discovery, MQTT subscribe.

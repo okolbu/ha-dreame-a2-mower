@@ -104,10 +104,13 @@ class _CloudStateMixin:
             )
         except Exception as ex:
             LOGGER.warning("[cloud] _refresh_cloud_state raised: %s", ex)
+            self._note_cloud_fetch(ok=False)
             return
         if new_state is None:
             LOGGER.debug("[cloud] _refresh_cloud_state: fetch returned None")
+            self._note_cloud_fetch(ok=False)
             return
+        self._note_cloud_fetch(ok=True)
         self.cloud_state = new_state
         # Active-map detection from the unified fetch (replaces the former
         # _refresh_cfg trailing MAPL poll). Ordered before the MowerState
