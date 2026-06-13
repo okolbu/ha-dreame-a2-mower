@@ -77,6 +77,19 @@ if TYPE_CHECKING:
     from ..map_render import BackgroundMode
 
 
+# Backstop cap on the published live-stream snapshot mirror. The camera re-emits
+# the WHOLE _track_snapshot in extra_state_attributes on every ~1Hz push, so an
+# unbounded list makes per-push WebSocket cost grow with the session length —
+# O(n^2) bytes over a full mow. Capping to the most-recent N rows makes per-push
+# cost O(N) constant. Trade-off: a browser that JOINS mid-session seeds from this
+# snapshot and so sees only the capped tail; that is fine for the LIVE map (recent
+# path + current position is the point). The FULL trail is still complete two
+# places this cap does not touch: client-side (continuously-connected browsers
+# accumulate every latest_point delta into this._trail) and in the archive /
+# work-log render (the session source-of-truth is LiveMapState.track, uncapped).
+_LIVE_TRACK_SNAPSHOT_MAX = 1000
+
+
 class _RenderingMixin:
     """Methods extracted from coordinator.py — see spec for groupings."""
 
@@ -246,6 +259,11 @@ class _RenderingMixin:
         self._latest_point = pt
         if self._track_snapshot is not None:
             self._track_snapshot.append(pt)
+            # Bound the catch-up mirror to the most-recent N rows. Keep it a plain
+            # list (not a deque): existing tests assert exact list-literal equality.
+            # We append exactly one per push, so a single del trims us back to N.
+            if len(self._track_snapshot) > _LIVE_TRACK_SNAPSHOT_MAX:
+                del self._track_snapshot[0]
         LOGGER.debug(
             "[MAP] publish: seq=%d pt=(%.2f,%.2f) hdg=%s",
             self._live_point_seq, x_m, y_m,
