@@ -1853,12 +1853,12 @@ entities:
     class_file: "custom_components/dreame_a2_mower/sensor_device.py:1007"
     device: parent
     source:
-      wire: "OSS userDidOssList (Phase D PhotoArchive; category=person; identified by _person.jpg suffix)"
-      state_path: "coordinator._photo_archive.count_by_category('person')"
+      wire: "OSS userDidOssList (Phase D PhotoArchive; category=ai_human under the 7-category scheme; identified by COM person/human detection or _person.jpg suffix)"
+      state_path: "coordinator._photo_archive.count_by_category('ai_human')"
     write_path: read-only
     status:
       seen_working: true
-      last_verified: "2026-06-12"
+      last_verified: "2026-06-13"
     verifications:
       - date: "2026-06-10"
         status: verified
@@ -1868,6 +1868,10 @@ entities:
         status: verified
         claim: "Entity_id NAME-derived: name 'Person photos' → sensor.dreame_a2_mower_person_photos (key photos_person drives unique_id only). Corrected from the non-existent key slug 'photos_person'; live state confirmed."
         evidence: "live registry GET /api/states 2026-06-12"
+      - date: "2026-06-13"
+        status: verified
+        claim: "value_fn now counts category 'ai_human' (was 'person') — the human bucket of the new 7-category photo_category.py scheme. The coarse 'person' category is retired; ArchivedPhoto.from_dict migrates legacy 'person' rows to 'ai_human'. Pinned by tests/integration/test_oss_sensors.py::test_person_count_uses_ai_human_category."
+        evidence: "custom_components/dreame_a2_mower/sensor_device.py photos_person descriptor (count_by_category('ai_human'))"
 
   - id: "sensor.dreame_a2_mower_videos"
     platform: sensor

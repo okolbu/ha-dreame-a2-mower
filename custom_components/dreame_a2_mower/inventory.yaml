@@ -11690,6 +11690,13 @@ api_endpoints:
         status: verified
         claim: "NOW WIRED + SURFACED: canonical gallery sync via _refresh_oss → PhotoArchive (categorized by JPEG COM metadata; obstacle/patrol/person) + VideoArchive (duration from ext.duration). Surfaced as sensors photos_obstacle/patrol/person + videos + latest_video + camera latest_video_thumb. Per-session photo_list (ai_obstacle) is subordinate; canonical source is now userDidOssList archive."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-13"
+        status: verified
+        claim: "The userDidOssList server `category` field is integer 0 on EVERY photo record (no server-side categorization), and the list records carry NO `source` field. Across the 2026-06-09 capture's userDidOssList responses, 729/729 records read category:0. So the only server-provided type signals are `type` (jpg vs thumb) and `videoPath` (video); everything finer (human/animal/object/patrol/obstacle/manual) MUST be derived client-side from the JPEG COM (o opcode + d detections) + the _person filename suffix, not from this field."
+        evidence: "app-mitm:2026-06-09-settings-sweep (miio-cloud-13267-http.jsonl userDidOssList responses; re-examined 2026-06-13)"
+      - date: "2026-06-13"
+        status: presumed
+        claim: "Client categorizer protocol/photo_category.py replaces the old 3-way (obstacle/patrol/person) with a 7-category scheme — video, ai_human, ai_animal, ai_object, patrol, obstacle, manual — and ArchivedPhoto now stores the full COM `detections` LIST (was a single detection). The ANIMAL_CLASSES vocab and the obstacle (mow-mode COM, empty detections) vs manual (no COM) split are PROVISIONAL [UNVERIFIED] until a live session produces an animal/object detection and a navigated-obstacle photo — tracked in docs/research/knowledge-gaps.md. Unknown detection `cls` falls through to ai_object with its raw label preserved (no silent loss)."
 
   - id: "oss_storage_quota"
     name: "iotoss_checkDevOssStorage"
