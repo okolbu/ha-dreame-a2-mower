@@ -194,102 +194,127 @@ class _MqttHandlersMixin:
                     _sm_piid = int(p["piid"])
                     _sm_value = p.get("value")
                     if (_sm_siid, _sm_piid) == (1, 1):
-                        # s1p1 heartbeat — decode and route to handle_heartbeat.
+                        # s1p1 heartbeat — PURE decode on the paho thread; the
+                        # state_machine.handle_heartbeat mutation + the live_map
+                        # wifi-sample append both move onto the event loop (P1.3).
+                        _hb = None
                         try:
                             _blob = _coerce_blob(_sm_value, "s1.1")
                             if _blob is not None:
                                 _hb = _heartbeat.decode_s1p1(_blob)
-                                self.state_machine.handle_heartbeat(
-                                    hb=_hb, now_unix=_now_unix
-                                )
-                                # WiFi fingerprint capture (v1.0.10a6+):
-                                # pair the heartbeat's wifi_rssi_dbm with
-                                # the most recent live position so the
-                                # heatmap→map_id matcher has per-session
-                                # (x_m, y_m, rssi_dbm, ts) tuples to score
-                                # against incoming heatmaps. Gate on
-                                # is_active() so we don't pollute the
-                                # next session with idle-time samples.
+                        except Exception:
+                            LOGGER.exception("decode_s1p1 failed")
+
+                        if _hb is not None:
+                            def _apply_heartbeat(_hb=_hb, _now_unix=_now_unix) -> None:
                                 try:
-                                    _rssi = getattr(_hb, "wifi_rssi_dbm", None)
-                                    _px = self.data.position_x_m
-                                    _py = self.data.position_y_m
-                                    if (
-                                        _rssi is not None
-                                        and _px is not None
-                                        and _py is not None
-                                        and self.live_map.is_active()
-                                    ):
-                                        if self.live_map.append_wifi_sample(
-                                            _px, _py, _rssi, _now_unix
+                                    self.state_machine.handle_heartbeat(
+                                        hb=_hb, now_unix=_now_unix
+                                    )
+                                    # WiFi fingerprint capture (v1.0.10a6+):
+                                    # pair the heartbeat's wifi_rssi_dbm with
+                                    # the most recent live position so the
+                                    # heatmap→map_id matcher has per-session
+                                    # (x_m, y_m, rssi_dbm, ts) tuples to score
+                                    # against incoming heatmaps. Gate on
+                                    # is_active() so we don't pollute the
+                                    # next session with idle-time samples.
+                                    try:
+                                        _rssi = getattr(_hb, "wifi_rssi_dbm", None)
+                                        _px = self.data.position_x_m
+                                        _py = self.data.position_y_m
+                                        if (
+                                            _rssi is not None
+                                            and _px is not None
+                                            and _py is not None
+                                            and self.live_map.is_active()
                                         ):
-                                            self._live_map_dirty = True
+                                            if self.live_map.append_wifi_sample(
+                                                _px, _py, _rssi, _now_unix
+                                            ):
+                                                self._live_map_dirty = True
+                                    except Exception:
+                                        LOGGER.exception("append_wifi_sample failed")
                                 except Exception:
-                                    LOGGER.exception("append_wifi_sample failed")
-                        except Exception:
-                            LOGGER.exception("state_machine.handle_heartbeat failed")
+                                    LOGGER.exception(
+                                        "state_machine.handle_heartbeat failed"
+                                    )
+
+                            self.hass.loop.call_soon_threadsafe(_apply_heartbeat)
                     else:
-                        # Capture the state-machine activity before/after the
-                        # property is applied so ANY activity transition can
-                        # trigger a base re-render below. This is the single
-                        # general render trigger (rehaul): it subsumes the old
-                        # s2p1→REPOSITIONING-specific trigger. The background
-                        # mode is a pure function of the snapshot, so the
-                        # stripes→green flip lands within one tick of the state
-                        # machine entering an active activity — ~41s before the
-                        # first s1p4 MOVE, fixing the stripe-lag bug.
-                        try:
-                            _prev_activity = (
-                                self.state_machine.snapshot().current_activity
-                            )
-                        except Exception:
-                            _prev_activity = None
-                        try:
-                            _prev_errors = (
-                                self.state_machine.snapshot().errors
-                            )
-                        except Exception:
-                            _prev_errors = frozenset()
-                        try:
-                            self.state_machine.handle_mqtt_property(
-                                siid=_sm_siid,
-                                piid=_sm_piid,
-                                value=_sm_value,
-                                now_unix=_now_unix,
-                            )
-                        except Exception:
-                            LOGGER.exception("state_machine.handle_mqtt_property failed")
-                        try:
-                            _new_activity = (
-                                self.state_machine.snapshot().current_activity
-                            )
-                        except Exception:
-                            _new_activity = None
-                        try:
-                            _new_errors = (
-                                self.state_machine.snapshot().errors
-                            )
-                        except Exception:
-                            _new_errors = frozenset()
-                        if _new_errors != _prev_errors:
-                            self._fire_fault_delta(
-                                _prev_errors, _new_errors, now_unix=_now_unix
-                            )
-                        if _new_activity != _prev_activity:
-                            LOGGER.debug(
-                                "[MAP] activity transition %s → %s — render_base",
-                                _prev_activity, _new_activity,
-                            )
-                            self._schedule_render_base()
-                        if (_sm_siid, _sm_piid) == (2, 50):
-                            # Latch the op UNGATED — a patrol/mow commanded from
-                            # the dock echoes its op ~40s before begin_session
-                            # exists to hold it. _handle_task_op_echo persists it
-                            # and (if a session is already active) sets
-                            # last_task_op immediately.
-                            self.hass.loop.call_soon_threadsafe(
-                                lambda v=_sm_value: self._handle_task_op_echo(v)
-                            )
+                        # The whole prev→mutate→new→fire→render→task-op sequence
+                        # MUST move onto the loop AS ONE UNIT (P1.3 TRAP #2) — it
+                        # mutates state_machine and reads its snapshot deltas, so
+                        # it can never straddle the hop. Scheduled AFTER
+                        # handle_property_push's own hop, so FIFO preserves the
+                        # per-property application order across the message loop.
+                        def _apply_dispatch(
+                            _sm_siid=_sm_siid,
+                            _sm_piid=_sm_piid,
+                            _sm_value=_sm_value,
+                            _now_unix=_now_unix,
+                        ) -> None:
+                            # Capture the state-machine activity before/after the
+                            # property is applied so ANY activity transition can
+                            # trigger a base re-render below. This is the single
+                            # general render trigger (rehaul): it subsumes the old
+                            # s2p1→REPOSITIONING-specific trigger. The background
+                            # mode is a pure function of the snapshot, so the
+                            # stripes→green flip lands within one tick of the state
+                            # machine entering an active activity — ~41s before the
+                            # first s1p4 MOVE, fixing the stripe-lag bug.
+                            try:
+                                _prev_activity = (
+                                    self.state_machine.snapshot().current_activity
+                                )
+                            except Exception:
+                                _prev_activity = None
+                            try:
+                                _prev_errors = (
+                                    self.state_machine.snapshot().errors
+                                )
+                            except Exception:
+                                _prev_errors = frozenset()
+                            try:
+                                self.state_machine.handle_mqtt_property(
+                                    siid=_sm_siid,
+                                    piid=_sm_piid,
+                                    value=_sm_value,
+                                    now_unix=_now_unix,
+                                )
+                            except Exception:
+                                LOGGER.exception("state_machine.handle_mqtt_property failed")
+                            try:
+                                _new_activity = (
+                                    self.state_machine.snapshot().current_activity
+                                )
+                            except Exception:
+                                _new_activity = None
+                            try:
+                                _new_errors = (
+                                    self.state_machine.snapshot().errors
+                                )
+                            except Exception:
+                                _new_errors = frozenset()
+                            if _new_errors != _prev_errors:
+                                self._fire_fault_delta(
+                                    _prev_errors, _new_errors, now_unix=_now_unix
+                                )
+                            if _new_activity != _prev_activity:
+                                LOGGER.debug(
+                                    "[MAP] activity transition %s → %s — render_base",
+                                    _prev_activity, _new_activity,
+                                )
+                                self._schedule_render_base()
+                            if (_sm_siid, _sm_piid) == (2, 50):
+                                # Latch the op UNGATED — a patrol/mow commanded from
+                                # the dock echoes its op ~40s before begin_session
+                                # exists to hold it. _handle_task_op_echo persists it
+                                # and (if a session is already active) sets
+                                # last_task_op immediately. Already on the loop here.
+                                self._handle_task_op_echo(_sm_value)
+
+                        self.hass.loop.call_soon_threadsafe(_apply_dispatch)
         elif method == "event_occured":
             # F5.6.1: capture OSS object name from siid=4 eiid=1
             params = payload.get("params") or {}
@@ -917,131 +942,148 @@ class _MqttHandlersMixin:
                     lambda: self.hass.async_create_task(self._refresh_mapl())
                 )
             return  # echo of our own command; nothing to record
-        if key in _BLOB_SLOTS:
-            pass  # handled by dedicated blob applier; suppress novelty
-        elif key in PROPERTY_MAPPING:
-            if self.novel_registry.record_value(siid, piid, value, now):
-                # First-time value for an already-mapped slot is informational
-                # (e.g. s1p53 bluetooth_connected toggling True for the first time
-                # after install); the slot is recognised so there is nothing
-                # for the user to action. Keep [NOVEL/property] at WARN since
-                # that one signals a protocol gap.
-                LOGGER.info(
-                    "%s siid=%s piid=%s value=%r — first-time value for known slot",
-                    LOG_NOVEL_VALUE, siid, piid, value,
-                )
-        elif key in _INVENTORY.apk_known_never_seen:
-            # The slot is in the inventory as APK-KNOWN but seen_on_wire:false.
-            # Now that we've observed it, prompt the contributor to upgrade the
-            # inventory row to seen_on_wire:true. Logged at INFO since the slot
-            # is "known" in the data sense — the contributor action is to
-            # update the row, not to file a new protocol gap.
-            if self.novel_registry.saw_property(siid, piid):
-                LOGGER.info(
-                    "[PROTOCOL_NOVEL/apk-confirmed] siid=%s piid=%s value=%r "
-                    "— APK-known slot now observed on wire; consider upgrading "
-                    "inventory row to seen_on_wire:true",
-                    siid, piid, value,
-                )
-        else:
-            if self.novel_registry.record_property(siid, piid, now):
-                LOGGER.warning(
-                    "%s siid=%s piid=%s value=%r — unmapped slot, please file a protocol gap",
-                    LOG_NOVEL_PROPERTY, siid, piid, value,
-                )
 
-        # Catalog-miss check runs regardless of whether the slot is mapped or
-        # apk-known: any property with a value_catalog in the inventory should
-        # have its observed values cross-checked. Misses log at WARNING since
-        # they likely indicate a protocol gap (firmware emitting a value the
-        # catalog hasn't enumerated yet).
-        catalog = _INVENTORY.value_catalogs.get(key)
-        if catalog is not None and value not in catalog:
-            if self.novel_registry.record_value(siid, piid, value, now):
-                LOGGER.warning(
-                    "[NOVEL/value/catalog-miss] siid=%s piid=%s value=%r "
-                    "— not in catalog %r; please file a protocol gap",
-                    siid, piid, value, sorted(catalog.keys()),
-                )
+        def _record_novel() -> None:
+            # Thread-safety (P1.3): novelty recording MUTATES novel_registry, so
+            # it must run on the event loop, NOT on paho's bg thread. It also
+            # must run on EVERY push — including the unchanged-state early-return
+            # case below — because unmapped/no-op slots (the common case) produce
+            # new_state == self.data, and dropping their novelty here would
+            # silently lose first-observation tracking. Hence it is the FIRST
+            # thing the deferred hop does, before the equality short-circuit.
+            if key in _BLOB_SLOTS:
+                pass  # handled by dedicated blob applier; suppress novelty
+            elif key in PROPERTY_MAPPING:
+                if self.novel_registry.record_value(siid, piid, value, now):
+                    # First-time value for an already-mapped slot is informational
+                    # (e.g. s1p53 bluetooth_connected toggling True for the first time
+                    # after install); the slot is recognised so there is nothing
+                    # for the user to action. Keep [NOVEL/property] at WARN since
+                    # that one signals a protocol gap.
+                    LOGGER.info(
+                        "%s siid=%s piid=%s value=%r — first-time value for known slot",
+                        LOG_NOVEL_VALUE, siid, piid, value,
+                    )
+            elif key in _INVENTORY.apk_known_never_seen:
+                # The slot is in the inventory as APK-KNOWN but seen_on_wire:false.
+                # Now that we've observed it, prompt the contributor to upgrade the
+                # inventory row to seen_on_wire:true. Logged at INFO since the slot
+                # is "known" in the data sense — the contributor action is to
+                # update the row, not to file a new protocol gap.
+                if self.novel_registry.saw_property(siid, piid):
+                    LOGGER.info(
+                        "[PROTOCOL_NOVEL/apk-confirmed] siid=%s piid=%s value=%r "
+                        "— APK-known slot now observed on wire; consider upgrading "
+                        "inventory row to seen_on_wire:true",
+                        siid, piid, value,
+                    )
+            else:
+                if self.novel_registry.record_property(siid, piid, now):
+                    LOGGER.warning(
+                        "%s siid=%s piid=%s value=%r — unmapped slot, please file a protocol gap",
+                        LOG_NOVEL_PROPERTY, siid, piid, value,
+                    )
 
+            # Catalog-miss check runs regardless of whether the slot is mapped or
+            # apk-known: any property with a value_catalog in the inventory should
+            # have its observed values cross-checked. Misses log at WARNING since
+            # they likely indicate a protocol gap (firmware emitting a value the
+            # catalog hasn't enumerated yet).
+            catalog = _INVENTORY.value_catalogs.get(key)
+            if catalog is not None and value not in catalog:
+                if self.novel_registry.record_value(siid, piid, value, now):
+                    LOGGER.warning(
+                        "[NOVEL/value/catalog-miss] siid=%s piid=%s value=%r "
+                        "— not in catalog %r; please file a protocol gap",
+                        siid, piid, value, sorted(catalog.keys()),
+                    )
+
+        # PURE decode on the paho thread — apply_property_to_state has no side
+        # effects (returns a NEW MowerState without writing self.data). The
+        # equality result decides whether the deferred hop broadcasts, but the
+        # check itself (and the broadcast) happen on the loop inside _apply.
         new_state = apply_property_to_state(self.data, siid, piid, value)
-        if new_state == self.data:
-            return
 
-        # SM-mutator (R6): persist position across reboot. s1p4 is the only
-        # slot that writes position_x_m/position_y_m on MowerState; route
-        # those writes through the state machine so the StateSnapshot
-        # cold-boot restore picks up the last-known pose.
-        # Position-fix P3: project dock-frame (x_m, y_m) into compass-frame
-        # (north_m, east_m) using the user-set station_bearing_deg option.
-        # When the option is unset, _project_north_east returns (None, None)
-        # and handle_position no-ops those fields, leaving the N/E sensors
-        # Unknown.
-        if (int(siid), int(piid)) == (1, 4):
-            sm = getattr(self, "state_machine", None)
-            if sm is not None and new_state.position_x_m is not None:
-                x_m = new_state.position_x_m
-                y_m = new_state.position_y_m
-                north_m, east_m = _project_north_east(
-                    x_m, y_m, self.station_bearing_deg,
-                )
-                try:
-                    _prev_errors = sm.snapshot().errors
-                except Exception:
-                    _prev_errors = frozenset()
-                try:
-                    sm.handle_position(
-                        x_m=x_m,
-                        y_m=y_m,
-                        north_m=north_m,
-                        east_m=east_m,
-                        heading_deg=new_state.position_heading_deg,
-                        now_unix=now,
+        def _apply_sm_mutations() -> None:
+            # Thread-safety (P1.3): every state_machine mutation below moves onto
+            # the event loop. The paho thread only decoded new_state (pure); these
+            # SM writes — and the snapshot.errors delta read + _fire_fault_delta —
+            # run here as one unit so they never race the loop's 10s tick.
+            #
+            # SM-mutator (R6): persist position across reboot. s1p4 is the only
+            # slot that writes position_x_m/position_y_m on MowerState; route
+            # those writes through the state machine so the StateSnapshot
+            # cold-boot restore picks up the last-known pose.
+            # Position-fix P3: project dock-frame (x_m, y_m) into compass-frame
+            # (north_m, east_m) using the user-set station_bearing_deg option.
+            # When the option is unset, _project_north_east returns (None, None)
+            # and handle_position no-ops those fields, leaving the N/E sensors
+            # Unknown.
+            if (int(siid), int(piid)) == (1, 4):
+                sm = getattr(self, "state_machine", None)
+                if sm is not None and new_state.position_x_m is not None:
+                    x_m = new_state.position_x_m
+                    y_m = new_state.position_y_m
+                    north_m, east_m = _project_north_east(
+                        x_m, y_m, self.station_bearing_deg,
                     )
-                except Exception:
-                    LOGGER.exception("state_machine.handle_position failed")
-                try:
-                    _new_errors = sm.snapshot().errors
-                except Exception:
-                    _new_errors = frozenset()
-                if _new_errors != _prev_errors:
-                    self._fire_fault_delta(_prev_errors, _new_errors, now_unix=now)
+                    try:
+                        _prev_errors = sm.snapshot().errors
+                    except Exception:
+                        _prev_errors = frozenset()
+                    try:
+                        sm.handle_position(
+                            x_m=x_m,
+                            y_m=y_m,
+                            north_m=north_m,
+                            east_m=east_m,
+                            heading_deg=new_state.position_heading_deg,
+                            now_unix=now,
+                        )
+                    except Exception:
+                        LOGGER.exception("state_machine.handle_position failed")
+                    try:
+                        _new_errors = sm.snapshot().errors
+                    except Exception:
+                        _new_errors = frozenset()
+                    if _new_errors != _prev_errors:
+                        self._fire_fault_delta(_prev_errors, _new_errors, now_unix=now)
 
-        # Persist mowing_phase / task_state_code / slam_task_label in the
-        # snapshot so they survive HA restart (per user feedback: showing
-        # last-known is more useful than Unknown). Read whichever fields
-        # this slot's apply_property_to_state may have updated.
-        if (int(siid), int(piid)) in {(1, 4), (2, 56), (2, 65)}:
-            sm = getattr(self, "state_machine", None)
-            if sm is not None:
-                try:
-                    sm.handle_misc_persisted(
-                        mowing_phase=new_state.mowing_phase,
-                        task_state_code=new_state.task_state_code,
-                        slam_task_label=new_state.slam_task_label,
-                        now_unix=now,
-                    )
-                except Exception:
-                    LOGGER.exception("state_machine.handle_misc_persisted failed")
+            # Persist mowing_phase / task_state_code / slam_task_label in the
+            # snapshot so they survive HA restart (per user feedback: showing
+            # last-known is more useful than Unknown). Read whichever fields
+            # this slot's apply_property_to_state may have updated.
+            if (int(siid), int(piid)) in {(1, 4), (2, 56), (2, 65)}:
+                sm = getattr(self, "state_machine", None)
+                if sm is not None:
+                    try:
+                        sm.handle_misc_persisted(
+                            mowing_phase=new_state.mowing_phase,
+                            task_state_code=new_state.task_state_code,
+                            slam_task_label=new_state.slam_task_label,
+                            now_unix=now,
+                        )
+                    except Exception:
+                        LOGGER.exception("state_machine.handle_misc_persisted failed")
 
-        # Per-map shadow update: s6.2 carries the active map's full PRE
-        # profile at the moment of save in the Dreame app. Tag with
-        # current active map_id (from MAPL poll cache). See
-        # `docs/research/g2408-protocol.md` § s6.2 for the per-map model.
-        if (int(siid), int(piid)) == (6, 2):
-            sm = getattr(self, "state_machine", None)
-            active_map = getattr(self, "_active_map_id", None)
-            if sm is not None and active_map is not None:
-                try:
-                    sm.handle_pre_shadow_update(
-                        map_id=int(active_map),
-                        mowing_height_mm=new_state.pre_mowing_height_mm,
-                        mowing_efficiency=new_state.pre_mowing_efficiency,
-                        edgemaster=new_state.pre_edgemaster,
-                        now_unix=now,
-                    )
-                except Exception:
-                    LOGGER.exception("state_machine.handle_pre_shadow_update failed")
+            # Per-map shadow update: s6.2 carries the active map's full PRE
+            # profile at the moment of save in the Dreame app. Tag with
+            # current active map_id (from MAPL poll cache). See
+            # `docs/research/g2408-protocol.md` § s6.2 for the per-map model.
+            if (int(siid), int(piid)) == (6, 2):
+                sm = getattr(self, "state_machine", None)
+                active_map = getattr(self, "_active_map_id", None)
+                if sm is not None and active_map is not None:
+                    try:
+                        sm.handle_pre_shadow_update(
+                            map_id=int(active_map),
+                            mowing_height_mm=new_state.pre_mowing_height_mm,
+                            mowing_efficiency=new_state.pre_mowing_efficiency,
+                            edgemaster=new_state.pre_edgemaster,
+                            now_unix=now,
+                        )
+                    except Exception:
+                        LOGGER.exception("state_machine.handle_pre_shadow_update failed")
 
         def _apply() -> None:
             # _on_state_update mutates live_map (legs, started_unix, etc.) and
@@ -1164,7 +1206,22 @@ class _MqttHandlersMixin:
             # stream (see _publish_live_point), so the return-to-dock drive
             # advances the icon without a PIL re-render.
 
-        self.hass.loop.call_soon_threadsafe(_apply)
+        def _deferred() -> None:
+            # Single loop hop (P1.3): runs ALL mutations for this push, in the
+            # same order as the old paho-thread code, on the event loop.
+            #   1. novel recording (must run on EVERY push, even no-op-state)
+            #   2. unchanged-state short-circuit (no broadcast) — but novelty
+            #      above already happened, fixing TRAP #1
+            #   3. state-machine mutations (position / misc / pre-shadow)
+            #   4. the _apply body (_on_state_update + broadcast + render)
+            _record_novel()
+            if new_state == self.data:
+                return
+            _apply_sm_mutations()
+            _apply()
+
+        # Zero-arg closure so the run-inline test mock `lambda fn: fn()` works.
+        self.hass.loop.call_soon_threadsafe(_deferred)
 
     # -----------------------------------------------------------------------
     # Settings write surface (F4.5.1)
