@@ -427,10 +427,7 @@ class _WritesMixin:
         entry = ACTION_TABLE.get(action)
         if entry is None:
             LOGGER.warning("dispatch_action: unknown action %r", action)
-            return WriteResult(
-                delivered=False, accepted=False, code=None,
-                msg=f"unknown action {action!r}",
-            )
+            return WriteResult.not_delivered(f"unknown action {action!r}")
 
         if entry.get("local_only"):
             # FINALIZE_SESSION — integration-internal action; routes to the
@@ -449,7 +446,7 @@ class _WritesMixin:
                     "dispatch_action: local-only %s — no implementation yet", action.name
                 )
             # Local-only actions have no device round-trip; they always "succeed".
-            return WriteResult(delivered=True, accepted=True, code=0)
+            return WriteResult.local_ok()
 
         # cfg_toggle_field path — reads the named MowerState field, computes
         # the toggled (boolean NOT) value, and calls write_setting.
@@ -463,9 +460,8 @@ class _WritesMixin:
                     "dispatch_action %s: cfg_toggle_field set but cfg_key missing — skipped",
                     action.name,
                 )
-                return WriteResult(
-                    delivered=False, accepted=False, code=None,
-                    msg="cfg_toggle_field set but cfg_key missing",
+                return WriteResult.not_delivered(
+                    "cfg_toggle_field set but cfg_key missing"
                 )
             current = getattr(self.data, cfg_toggle_field, None)
             toggled = not bool(current)
@@ -478,16 +474,19 @@ class _WritesMixin:
                 int(toggled),  # CLS wire value is int {0, 1}
                 field_updates={cfg_toggle_field: toggled},
             )
-            # write_setting returns an honest accept bool; wrap it.
+            # write_setting returns only a bool — it never surfaces a device
+            # `-3`, so a rejection carries code=None like every other synthetic
+            # not-accepted result (NOT a fabricated wire code).
+            if ok:
+                return WriteResult.local_ok()
             return WriteResult(
-                delivered=True, accepted=bool(ok), code=0 if ok else -3,
+                delivered=True, accepted=False, code=None,
+                msg="setting write rejected",
             )
 
         if not hasattr(self, "_cloud") or self._cloud is None:
             LOGGER.warning("dispatch_action: cloud client not ready; %s deferred", action.name)
-            return WriteResult(
-                delivered=False, accepted=False, code=None, msg="cloud not ready",
-            )
+            return WriteResult.not_delivered("cloud not ready")
 
         routed_o = entry.get("routed_o")
         payload_fn = entry.get("payload_fn")
@@ -518,10 +517,7 @@ class _WritesMixin:
             extra = payload_fn(parameters) if payload_fn else None
         except ValueError as ex:
             LOGGER.warning("dispatch_action %s: payload error: %s", action.name, ex)
-            return WriteResult(
-                delivered=False, accepted=False, code=None,
-                msg=f"payload error: {ex}",
-            )
+            return WriteResult.not_delivered(f"payload error: {ex}")
 
         LOGGER.info(
             "dispatch_action: %s via routed op=%s extra=%s",
@@ -545,10 +541,7 @@ class _WritesMixin:
                     "dispatch_action: %s has no routed_o and no siid/aiid — skipped",
                     action.name,
                 )
-                return WriteResult(
-                    delivered=False, accepted=False, code=None,
-                    msg="no routed_o and no siid/aiid",
-                )
+                return WriteResult.not_delivered("no routed_o and no siid/aiid")
             # The direct action() returns the raw device dict or None — wrap it
             # into a WriteResult. We can't read out[0].r here (action() doesn't
             # carry the routed envelope), so a non-None result is treated as
@@ -557,16 +550,11 @@ class _WritesMixin:
                 self._cloud.action, siid, aiid
             )
             if result is None:
-                return WriteResult(
-                    delivered=False, accepted=False, code=None,
-                    msg="direct action not delivered",
-                )
+                return WriteResult.not_delivered("direct action not delivered")
             return WriteResult(delivered=True, accepted=True, code=None)
         except Exception as ex:
             LOGGER.warning("dispatch_action %s failed: %s", action.name, ex)
-            return WriteResult(
-                delivered=False, accepted=False, code=None, msg=str(ex),
-            )
+            return WriteResult.not_delivered(str(ex))
 
     # ------------------------------------------------------------------
     # Unified mowing-mode wrappers (used by DreameA2MowingModeSelect)
@@ -586,7 +574,7 @@ class _WritesMixin:
         """
         current = self._active_map_id
         if current is None or current == map_id:
-            return WriteResult(delivered=True, accepted=True, code=0)
+            return WriteResult.local_ok()
         try:
             return await self.dispatch_action(
                 MowerAction.SET_ACTIVE_MAP, {"map_id": map_id}
@@ -599,9 +587,7 @@ class _WritesMixin:
                 ex,
                 current,
             )
-            return WriteResult(
-                delivered=False, accepted=False, code=None, msg=str(ex),
-            )
+            return WriteResult.not_delivered(str(ex))
 
     async def start_mowing_all_areas(self, *, map_id: int) -> WriteResult:
         """Start all-areas mow on the given map (op=100).

@@ -60,6 +60,28 @@ def test_write_result_is_frozen():
         r.accepted = False  # type: ignore[misc]
 
 
+def test_write_result_local_ok_factory():
+    """local_ok() == accepted no-round-trip result (delivered+accepted, code 0)."""
+    r = WriteResult.local_ok()
+    assert r.delivered is True
+    assert r.accepted is True
+    assert r.code == 0
+    assert r.msg == ""
+    assert bool(r) is True
+
+
+def test_write_result_not_delivered_factory():
+    """not_delivered() == delivered False / accepted False / code None, carries msg."""
+    r = WriteResult.not_delivered("cloud not ready")
+    assert r.delivered is False
+    assert r.accepted is False
+    assert r.code is None
+    assert r.msg == "cloud not ready"
+    assert bool(r) is False
+    # Default msg is empty.
+    assert WriteResult.not_delivered().msg == ""
+
+
 # --- routed_action parse ladder -------------------------------------------
 
 

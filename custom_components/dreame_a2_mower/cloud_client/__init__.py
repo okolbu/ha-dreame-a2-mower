@@ -99,7 +99,7 @@ class DreameA2CloudClient(_AuthMixin, _DiscoveryMixin, _RpcMixin, _OssMixin, _Ba
         self._strings: list | None = None
         self.endpoint_log: dict[str, str] = {}
         """F6.8.1 endpoint accept/reject log. Key e.g. ``"routed_action_op=100"``,
-        value ``"accepted" | "rejected_80001" | "error"``."""
+        value ``"accepted" | "rejected_80001" | "error" | "device_rejected"``."""
         self._last_send_error_code: int | None = None
         """F6.8.1 transport-layer last error code. Updated by ``send`` so callers
         that get None back can disambiguate 80001 from other failures."""

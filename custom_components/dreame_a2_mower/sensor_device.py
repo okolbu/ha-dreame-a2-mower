@@ -121,11 +121,12 @@ def _api_endpoints_value(coord) -> int:
 def _api_endpoints_attrs(coord) -> dict[str, list[str]]:
     cloud = getattr(coord, "_cloud", None)
     if cloud is None:
-        return {"accepted": [], "rejected_80001": [], "error": []}
+        return {"accepted": [], "rejected_80001": [], "device_rejected": [], "error": []}
     log = cloud.endpoint_log
     return {
         "accepted": sorted(k for k, v in log.items() if v == "accepted"),
         "rejected_80001": sorted(k for k, v in log.items() if v == "rejected_80001"),
+        "device_rejected": sorted(k for k, v in log.items() if v == "device_rejected"),
         "error": sorted(k for k, v in log.items() if v == "error"),
     }
 

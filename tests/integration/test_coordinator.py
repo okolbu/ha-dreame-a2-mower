@@ -1390,6 +1390,143 @@ def test_dispatch_action_cloud_not_ready_returns_not_delivered():
     assert isinstance(result, WriteResult)
     assert result.delivered is False
     assert result.accepted is False
+    assert result.code is None
+
+
+def test_dispatch_action_cfg_toggle_accepted_returns_accepted_writeresult():
+    """cfg_toggle_field path (LOCK_BOT_TOGGLE → CLS): write_setting True bool
+    → accepted WriteResult with code 0."""
+    import asyncio
+    from unittest.mock import AsyncMock
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.actions import MowerAction
+
+    coord = _make_coordinator_for_finalize_tests()
+    coord.data = MowerState(child_lock_enabled=False)
+    # Stub write_setting so we exercise dispatch_action's wrapping, not the
+    # CFG transport (covered elsewhere).
+    coord.write_setting = AsyncMock(return_value=True)
+
+    result = asyncio.run(coord.dispatch_action(MowerAction.LOCK_BOT_TOGGLE, {}))
+    assert isinstance(result, WriteResult)
+    assert result.delivered is True
+    assert result.accepted is True
+    assert result.code == 0
+    # CLS wire value is the toggled int (was False → 1).
+    coord.write_setting.assert_awaited_once()
+    args, kwargs = coord.write_setting.await_args
+    assert args[0] == "CLS"
+    assert args[1] == 1
+
+
+def test_dispatch_action_cfg_toggle_rejected_returns_not_accepted_code_none():
+    """cfg_toggle_field path: write_setting False bool → not-accepted
+    WriteResult with code=None (write_setting never returns a device -3, so
+    we must NOT fabricate one)."""
+    import asyncio
+    from unittest.mock import AsyncMock
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.actions import MowerAction
+
+    coord = _make_coordinator_for_finalize_tests()
+    coord.data = MowerState(child_lock_enabled=True)
+    coord.write_setting = AsyncMock(return_value=False)
+
+    result = asyncio.run(coord.dispatch_action(MowerAction.LOCK_BOT_TOGGLE, {}))
+    assert isinstance(result, WriteResult)
+    assert result.delivered is True
+    assert result.accepted is False
+    assert result.code is None
+
+
+def test_dispatch_action_direct_siid_aiid_delivered_when_action_returns():
+    """An action with no routed_o falls back to direct action(siid, aiid);
+    a non-None device result → delivered + accepted, code=None."""
+    import asyncio
+    from unittest.mock import MagicMock
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.actions import MowerAction
+
+    coord = _make_coordinator_for_finalize_tests()
+    coord.data = MowerState()
+    # REQUEST_WIFI_MAP is siid=6/aiid=4 with no routed_o.
+    coord._cloud.action = MagicMock(return_value={"code": 0})
+
+    result = asyncio.run(coord.dispatch_action(MowerAction.REQUEST_WIFI_MAP, {}))
+    assert isinstance(result, WriteResult)
+    assert result.delivered is True
+    assert result.accepted is True
+    assert result.code is None
+    coord._cloud.action.assert_called_once_with(6, 4)
+
+
+def test_dispatch_action_direct_siid_aiid_not_delivered_when_action_none():
+    """Direct siid/aiid path: action() returns None → not-delivered."""
+    import asyncio
+    from unittest.mock import MagicMock
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.actions import MowerAction
+
+    coord = _make_coordinator_for_finalize_tests()
+    coord.data = MowerState()
+    coord._cloud.action = MagicMock(return_value=None)
+
+    result = asyncio.run(coord.dispatch_action(MowerAction.REQUEST_WIFI_MAP, {}))
+    assert isinstance(result, WriteResult)
+    assert result.delivered is False
+    assert result.accepted is False
+    assert result.code is None
+
+
+def test_dispatch_action_payload_error_returns_not_delivered():
+    """A payload_fn that raises ValueError → not-delivered WriteResult,
+    non-raising, code=None, and no cloud call is made."""
+    import asyncio
+    from unittest.mock import MagicMock
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.actions import MowerAction
+
+    coord = _make_coordinator_for_finalize_tests()
+    coord.data = MowerState()
+    coord._active_map_id = 0
+    coord._cloud.routed_action = MagicMock()
+    # START_ZONE_MOW's payload_fn requires a "zones" list; omitting it raises
+    # ValueError inside dispatch_action's payload-build step.
+    result = asyncio.run(coord.dispatch_action(MowerAction.START_ZONE_MOW, {}))
+    assert isinstance(result, WriteResult)
+    assert result.delivered is False
+    assert result.accepted is False
+    assert result.code is None
+    assert "payload error" in result.msg
+    coord._cloud.routed_action.assert_not_called()
+
+
+def test_dispatch_action_cfg_toggle_missing_cfg_key_returns_not_delivered():
+    """cfg_toggle_field set but cfg_key missing in the entry → not-delivered
+    WriteResult, code=None, and write_setting is never called."""
+    import asyncio
+    from unittest.mock import AsyncMock, patch
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.actions import (
+        ACTION_TABLE,
+        MowerAction,
+    )
+
+    coord = _make_coordinator_for_finalize_tests()
+    coord.data = MowerState()
+    coord.write_setting = AsyncMock(return_value=True)
+
+    # Patch the entry to drop cfg_key while keeping cfg_toggle_field.
+    broken_entry = {"cfg_toggle_field": "child_lock_enabled"}  # no cfg_key
+    with patch.dict(ACTION_TABLE, {MowerAction.LOCK_BOT_TOGGLE: broken_entry}):
+        result = asyncio.run(
+            coord.dispatch_action(MowerAction.LOCK_BOT_TOGGLE, {})
+        )
+    assert isinstance(result, WriteResult)
+    assert result.delivered is False
+    assert result.accepted is False
+    assert result.code is None
+    coord.write_setting.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -2687,8 +2824,30 @@ def test_api_endpoints_supported_sensor_attrs_buckets_by_outcome():
     assert attrs == {
         "accepted": ["routed_action_op=100"],
         "rejected_80001": ["routed_action_op=999"],
+        "device_rejected": [],
         "error": ["routed_action_op=42"],
     }
+
+
+def test_api_endpoints_supported_sensor_attrs_surfaces_device_rejected():
+    """A 'device_rejected' endpoint_log entry must appear in the sensor's
+    attributes — without its own bucket a device rejection is invisible
+    (counted as neither accepted nor failed)."""
+    from custom_components.dreame_a2_mower.sensor import DIAGNOSTIC_SENSORS
+
+    cloud_like = type("Cloud", (), {"endpoint_log": {
+        "routed_action_op=100": "accepted",
+        "routed_action_op=102": "device_rejected",
+        "routed_action_op=999": "rejected_80001",
+    }})()
+    coord_like = type("C", (), {"_cloud": cloud_like})()
+
+    desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "api_endpoints_supported")
+    attrs = desc.extra_state_attributes_fn(coord_like)
+    assert attrs["device_rejected"] == ["routed_action_op=102"]
+    # And it is NOT mislabelled into accepted / error buckets.
+    assert attrs["accepted"] == ["routed_action_op=100"]
+    assert "routed_action_op=102" not in attrs["error"]
 
 
 def test_api_endpoints_supported_sensor_handles_no_cloud_yet():
@@ -2701,7 +2860,7 @@ def test_api_endpoints_supported_sensor_handles_no_cloud_yet():
     desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "api_endpoints_supported")
     assert desc.value_fn(coord_like) == 0
     assert desc.extra_state_attributes_fn(coord_like) == {
-        "accepted": [], "rejected_80001": [], "error": [],
+        "accepted": [], "rejected_80001": [], "device_rejected": [], "error": [],
     }
 
 

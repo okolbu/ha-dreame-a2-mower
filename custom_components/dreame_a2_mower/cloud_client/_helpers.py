@@ -51,6 +51,25 @@ class WriteResult:
         """
         return self.accepted
 
+    @classmethod
+    def local_ok(cls) -> "WriteResult":
+        """Synthetic accepted result for a write with no device round-trip.
+
+        Used for local-only actions and the no-op map-switch branch — there's
+        nothing to ask the device, so the write trivially succeeds
+        (delivered + accepted, code 0).
+        """
+        return cls(delivered=True, accepted=True, code=0)
+
+    @classmethod
+    def not_delivered(cls, msg: str = "") -> "WriteResult":
+        """Synthetic not-delivered result (the mower never heard the command).
+
+        ``code`` is left ``None`` because no transport/device code was read —
+        consistent with every other synthetic not-accepted result.
+        """
+        return cls(delivered=False, accepted=False, code=None, msg=msg)
+
 
 def _http_retry(
     action: Callable[[], T],
