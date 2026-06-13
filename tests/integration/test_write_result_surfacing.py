@@ -8,7 +8,6 @@ Covers the plan's §1.2-B acceptance criterion:
     (entity context) on a not-accepted result.
   - An accepted result does NOT raise (happy path).
 """
-import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -90,8 +89,10 @@ async def test_lawn_mower_start_rejected_raises_home_assistant_error():
     lm = _lawn_mower(
         WriteResult(delivered=True, accepted=False, code=-3, msg="nope")
     )
-    with pytest.raises(HomeAssistantError):
+    with pytest.raises(HomeAssistantError) as exc:
         await lm.async_start_mowing()
+    # Entity context must NOT raise the service-only ServiceValidationError.
+    assert not isinstance(exc.value, ServiceValidationError)
 
 
 @pytest.mark.asyncio
@@ -128,8 +129,10 @@ async def test_start_button_rejected_raises_home_assistant_error():
     b = _start_button(
         WriteResult(delivered=True, accepted=False, code=-3, msg="nope")
     )
-    with pytest.raises(HomeAssistantError):
+    with pytest.raises(HomeAssistantError) as exc:
         await b.async_press()
+    # Entity context must NOT raise the service-only ServiceValidationError.
+    assert not isinstance(exc.value, ServiceValidationError)
 
 
 @pytest.mark.asyncio
