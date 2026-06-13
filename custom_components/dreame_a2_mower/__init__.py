@@ -211,6 +211,13 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         mqtt = getattr(coordinator, "_mqtt", None)
         if mqtt is not None:
             await hass.async_add_executor_job(mqtt.disconnect)
+        # P1.5: also tear down the cloud client — its async API worker thread +
+        # requests.Session previously leaked on every reload (disconnect() was
+        # never called). disconnect() joins the worker (blocks), so run it in
+        # the executor like the mqtt teardown above.
+        cloud = getattr(coordinator, "_cloud", None)
+        if cloud is not None:
+            await hass.async_add_executor_job(cloud.disconnect)
         handler = getattr(coordinator, "_novel_log_handler", None)
         if handler is not None:
             logging.getLogger("custom_components.dreame_a2_mower").removeHandler(handler)

@@ -35,6 +35,16 @@ from ._rpc import _RpcMixin
 from ._oss import _OssMixin
 from ._batch import _BatchMixin
 from ._fetchers import _FetchersMixin
+from ._helpers import _LOGGER
+
+# P1.5 lifecycle: how long disconnect() waits for the async API worker to drain
+# after the stop sentinel. The common case is an IDLE worker blocked on
+# queue.get() → the sentinel returns it instantly → the join is immediate. This
+# timeout only matters if the worker is mid-HTTP-request (request() can run up
+# to ~15s × retries); we cap the unload wait at 5s and let the (per-instance,
+# daemon) worker finish its in-flight request on its own — it can never touch a
+# new instance's queue.
+_API_TASK_JOIN_TIMEOUT_S = 5.0
 
 # ---------------------------------------------------------------------------
 # Main class
@@ -233,10 +243,24 @@ class DreameA2CloudClient(_AuthMixin, _DiscoveryMixin, _RpcMixin, _OssMixin, _Ba
     # ------------------------------------------------------------------
 
     def disconnect(self) -> None:
-        """Close the HTTP session and stop the async API thread."""
+        """Close the HTTP session and stop+JOIN the async API worker thread.
+
+        P1.5 lifecycle fix: previously this enqueued the stop sentinel but
+        nulled ``_thread`` without ever joining, so the daemon worker (and its
+        ``requests.Session``) leaked on every config-entry reload. Now we JOIN
+        after the sentinel and null ``_thread`` AFTER the join.
+        """
         self._session.close()
         self._connected = False
         self._logged_in = False
-        if self._thread:
-            self._queue.put([])
+        t = self._thread
+        if t is not None:
+            self._queue.put([])  # stop sentinel; worker honors len(item) == 0
+            t.join(timeout=_API_TASK_JOIN_TIMEOUT_S)
+            if t.is_alive():
+                _LOGGER.debug(
+                    "cloud API worker still draining an in-flight request after "
+                    "%.0fs; it is a per-instance daemon and will exit on its own",
+                    _API_TASK_JOIN_TIMEOUT_S,
+                )
         self._thread = None

@@ -71,6 +71,11 @@ class DreameA2MqttClient:
 
     def __init__(self) -> None:
         self._client: Any = None  # paho.mqtt.client.Client, imported lazily
+        # P1.5 lifecycle: set True by disconnect(), reset False by connect().
+        # Checked at the very top of _on_message (runs on the paho net thread)
+        # so an in-flight callback bails immediately during teardown instead of
+        # writing into a coordinator being torn down (use-after-teardown race).
+        self._stopping: bool = False
         self._callback: Callable[[str, dict], None] | None = None
         self._connected_callback: Callable[[], None] | None = None
         self._auth_error_callback: Callable[[], None] | None = None
@@ -169,6 +174,9 @@ class DreameA2MqttClient:
 
         self._username = username
         self._password = password
+        # P1.5: re-arm the teardown guard so a reconnect after a prior
+        # disconnect() (or a re-created client on HA reload) dispatches normally.
+        self._stopping = False
 
         if self._client is None:
             _LOGGER.info("Connecting to MQTT broker %s:%s", host, port)
@@ -245,13 +253,26 @@ class DreameA2MqttClient:
     def disconnect(self) -> None:
         """Stop the paho loop and disconnect cleanly.
 
+        Teardown order (P1.5 lifecycle fix):
+          1. Set ``_stopping = True`` so any in-flight ``_on_message`` running
+             on the paho net thread bails at its top guard.
+          2. Null paho's ``on_message`` so paho dispatches nothing further.
+          3. ``disconnect()`` then ``loop_stop()`` — on the pinned paho >= 2.0
+             ``loop_stop()`` JOINS the network thread internally, so we must NOT
+             reach into the private ``client._thread`` to join it ourselves.
+
+        The ``_stopping`` flag + the ``on_message = None`` BEFORE ``loop_stop()``
+        together close the in-flight-callback use-after-teardown race.
+
         Source: legacy ``dreame/protocol.py``
         ``DreameMowerDreameHomeCloudProtocol.disconnect()`` paho block.
         """
+        self._stopping = True
         if self._client is not None:
             _LOGGER.info("MQTT disconnecting")
-            self._client.loop_stop()
+            self._client.on_message = None
             self._client.disconnect()
+            self._client.loop_stop()  # joins the paho net thread on paho >= 2.0
             self._client = None
         self._connected = False
         self._connecting = False
@@ -357,6 +378,14 @@ class DreameA2MqttClient:
         Source: legacy ``dreame/protocol.py``
         ``DreameMowerDreameHomeCloudProtocol._on_client_message()``.
         """
+        # P1.5 lifecycle: bail immediately if teardown has begun. This runs on
+        # the paho net thread; without this guard an in-flight message during
+        # disconnect() would still write the archive and dispatch into a
+        # coordinator being torn down. Checked BEFORE archive-write and the
+        # first-topics diagnostic capture.
+        if self._stopping:
+            return
+
         topic: str = getattr(message, "topic", "?")
 
         # Capture first 5 topics for diagnostics. Cheap; bounded.
