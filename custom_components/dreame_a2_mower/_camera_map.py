@@ -49,7 +49,8 @@ class DreameA2MapCamera(
     # NOTE: nav_paths_pt_count_by_map and settings_dual_level_diagnostic are
     # diagnostic-only attrs that are also large; calibration_points is the
     # legacy name kept here so it stays excluded if ever re-added.
-    # (Hard cap on track_snapshot length is deferred — see Task 9 spec.)
+    # track_snapshot length is bounded by _LIVE_TRACK_SNAPSHOT_MAX in
+    # coordinator/_rendering.py (P1.4 backstop cap).
     _unrecorded_attributes = frozenset({
         "track_snapshot", "latest_point", "point_seq", "last_known_point",
         "settings_dual_level_diagnostic", "nav_paths_pt_count_by_map",
