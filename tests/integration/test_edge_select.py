@@ -16,6 +16,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from custom_components.dreame_a2_mower.cloud_client import WriteResult
 from custom_components.dreame_a2_mower.mower.state import ActionMode, MowerState
 from custom_components.dreame_a2_mower.select import DreameA2EdgeSelect
 
@@ -236,6 +237,7 @@ def test_button_dispatches_explicit_edge_pick():
     async def _cap(action, params):
         captured["action"] = action
         captured["params"] = params
+        return WriteResult.local_ok()
 
     coord.dispatch_action.side_effect = _cap
 
@@ -271,6 +273,7 @@ def test_button_empty_selection_falls_through_to_dispatcher_default():
     async def _cap(action, params):
         captured["action"] = action
         captured["params"] = params
+        return WriteResult.local_ok()
 
     coord.dispatch_action.side_effect = _cap
 

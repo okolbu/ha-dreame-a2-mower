@@ -2,6 +2,8 @@
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
+from custom_components.dreame_a2_mower.cloud_client import WriteResult
+
 
 def _make_coord_with_map():
     coord = MagicMock()
@@ -33,7 +35,7 @@ def test_mowing_mode_options_listing():
 def test_select_all_areas_dispatches():
     from custom_components.dreame_a2_mower.select import DreameA2MowingModeSelect
     coord = _make_coord_with_map()
-    coord.start_mowing_all_areas = AsyncMock()
+    coord.start_mowing_all_areas = AsyncMock(return_value=WriteResult.local_ok())
     sel = DreameA2MowingModeSelect(coord, map_id=0)
     sel.async_write_ha_state = MagicMock()
     asyncio.run(sel.async_select_option("All areas"))
@@ -43,7 +45,7 @@ def test_select_all_areas_dispatches():
 def test_select_edge_dispatches():
     from custom_components.dreame_a2_mower.select import DreameA2MowingModeSelect
     coord = _make_coord_with_map()
-    coord.start_mowing_edge = AsyncMock()
+    coord.start_mowing_edge = AsyncMock(return_value=WriteResult.local_ok())
     sel = DreameA2MowingModeSelect(coord, map_id=0)
     sel.async_write_ha_state = MagicMock()
     asyncio.run(sel.async_select_option("Edge"))
@@ -53,7 +55,7 @@ def test_select_edge_dispatches():
 def test_select_zone_dispatches_with_id():
     from custom_components.dreame_a2_mower.select import DreameA2MowingModeSelect
     coord = _make_coord_with_map()
-    coord.start_mowing_zone = AsyncMock()
+    coord.start_mowing_zone = AsyncMock(return_value=WriteResult.local_ok())
     sel = DreameA2MowingModeSelect(coord, map_id=0)
     sel.async_write_ha_state = MagicMock()
     asyncio.run(sel.async_select_option("Zone: Lawn B"))
@@ -63,7 +65,7 @@ def test_select_zone_dispatches_with_id():
 def test_select_spot_dispatches_with_id():
     from custom_components.dreame_a2_mower.select import DreameA2MowingModeSelect
     coord = _make_coord_with_map()
-    coord.start_mowing_spot = AsyncMock()
+    coord.start_mowing_spot = AsyncMock(return_value=WriteResult.local_ok())
     sel = DreameA2MowingModeSelect(coord, map_id=0)
     sel.async_write_ha_state = MagicMock()
     asyncio.run(sel.async_select_option("Spot: Spot near tree"))
@@ -75,8 +77,8 @@ def test_start_mowing_switches_active_map_first():
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
 
     coord = DreameA2MowerCoordinator.__new__(DreameA2MowerCoordinator)
-    coord._ensure_active_map = AsyncMock()
-    coord.dispatch_action = AsyncMock()
+    coord._ensure_active_map = AsyncMock(return_value=WriteResult.local_ok())
+    coord.dispatch_action = AsyncMock(return_value=WriteResult.local_ok())
 
     async def run():
         await coord.start_mowing_all_areas(map_id=2)

@@ -501,6 +501,19 @@ def _make_ha_stub() -> None:
     # homeassistant.exceptions
     exc_mod = types.ModuleType("homeassistant.exceptions")
     exc_mod.ConfigEntryNotReady = Exception  # type: ignore[attr-defined]
+
+    class _HomeAssistantError(Exception):
+        """Stub mirroring homeassistant.exceptions.HomeAssistantError."""
+
+    class _ServiceValidationError(_HomeAssistantError):
+        """Stub mirroring homeassistant.exceptions.ServiceValidationError.
+
+        In real HA, ServiceValidationError subclasses HomeAssistantError; keep
+        that relationship so `except HomeAssistantError` catches both.
+        """
+
+    exc_mod.HomeAssistantError = _HomeAssistantError  # type: ignore[attr-defined]
+    exc_mod.ServiceValidationError = _ServiceValidationError  # type: ignore[attr-defined]
     sys.modules["homeassistant.exceptions"] = exc_mod
 
 

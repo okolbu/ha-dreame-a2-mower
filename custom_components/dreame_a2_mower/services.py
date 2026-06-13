@@ -16,10 +16,12 @@ from typing import Any
 
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall
+from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from .const import DOMAIN, LOGGER
 from .coordinator import DreameA2MowerCoordinator
+from .coordinator._write_errors import raise_for_write_result
 from .mower.state import ActionMode
 
 # Service names — keep in sync with services.yaml
@@ -175,6 +177,23 @@ SCHEMA_MERGE_ZONES = vol.Schema({
 })
 
 
+def _raise_for_edit_ok(ok: bool, action_label: str) -> None:
+    """Raise a ServiceValidationError when a map-edit / bool write was not accepted.
+
+    ``edit_map`` (and the rename/delete/create/split/merge wrappers that delegate
+    to it) collapse a multi-leg transaction to a single ``ok`` bool — ``ok`` is
+    True only when EVERY leg was *accepted* by the device. That aggregate loses
+    the delivered-vs-rejected distinction the WriteResult carries, so a ``False``
+    surfaces as a plain "rejected" validation error: the user should fix the
+    request (bad geometry / id / region), not blindly retry.
+    """
+    if not ok:
+        raise ServiceValidationError(
+            f"{action_label}: the device did not accept the map edit "
+            "(check the map_id / ids / geometry, then try again)"
+        )
+
+
 def _coordinator_from_call(hass: HomeAssistant, call: ServiceCall) -> DreameA2MowerCoordinator | None:
     """Resolve the (only) coordinator instance.
 
@@ -218,7 +237,8 @@ async def _handle_mow_zone(call: ServiceCall) -> None:
     coordinator.async_set_updated_data(new_state)
     # Dispatch the actual start. Imported here to avoid circular imports.
     from .mower.actions import MowerAction
-    await coordinator.dispatch_action(MowerAction.START_ZONE_MOW, {"zones": list(zone_ids)})
+    result = await coordinator.dispatch_action(MowerAction.START_ZONE_MOW, {"zones": list(zone_ids)})
+    raise_for_write_result(result, "Mow zone")
 
 
 async def _handle_mow_edge(call: ServiceCall) -> None:
@@ -227,9 +247,10 @@ async def _handle_mow_edge(call: ServiceCall) -> None:
         return
     contour_ids = call.data.get("contour_ids") or []
     from .mower.actions import MowerAction
-    await coordinator.dispatch_action(
+    result = await coordinator.dispatch_action(
         MowerAction.START_EDGE_MOW, {"contour_ids": contour_ids}
     )
+    raise_for_write_result(result, "Mow edge")
 
 
 async def _handle_mow_spot(call: ServiceCall) -> None:
@@ -247,9 +268,10 @@ async def _handle_mow_spot(call: ServiceCall) -> None:
     )
     coordinator.async_set_updated_data(new_state)
     from .mower.actions import MowerAction
-    await coordinator.dispatch_action(
+    result = await coordinator.dispatch_action(
         MowerAction.START_SPOT_MOW, {"spots": list(spot_ids)}
     )
+    raise_for_write_result(result, "Mow spot")
 
 
 async def _handle_start_point_patrol(call: ServiceCall) -> None:
@@ -260,7 +282,8 @@ async def _handle_start_point_patrol(call: ServiceCall) -> None:
     if map_id is None:
         map_id = getattr(coordinator, "_active_map_id", None) or 0
     point_ids = list(int(p) for p in call.data["point_ids"])
-    await coordinator.start_point_patrol(map_id=int(map_id), point_ids=point_ids)
+    result = await coordinator.start_point_patrol(map_id=int(map_id), point_ids=point_ids)
+    raise_for_write_result(result, "Start point patrol")
 
 
 async def _handle_start_edge_patrol(call: ServiceCall) -> None:
@@ -271,7 +294,8 @@ async def _handle_start_edge_patrol(call: ServiceCall) -> None:
     if map_id is None:
         map_id = getattr(coordinator, "_active_map_id", None) or 0
     contour_ids = [list(c) for c in call.data["contour_ids"]]
-    await coordinator.start_edge_patrol(map_id=int(map_id), contour_ids=contour_ids)
+    result = await coordinator.start_edge_patrol(map_id=int(map_id), contour_ids=contour_ids)
+    raise_for_write_result(result, "Start edge patrol")
 
 
 async def _handle_simple_action(action_name: str):
@@ -283,7 +307,10 @@ async def _handle_simple_action(action_name: str):
         coordinator = _coordinator_from_call(call.hass, call)
         if coordinator is None:
             return
-        await coordinator.dispatch_action(target, {})
+        result = await coordinator.dispatch_action(target, {})
+        # FINALIZE_SESSION is local-only (always accepted) so it never raises;
+        # the others surface a device rejection / undelivered command.
+        raise_for_write_result(result, target.name.replace("_", " ").title())
 
     return handler
 
@@ -359,6 +386,10 @@ async def _handle_set_schedule_plans(call: ServiceCall) -> None:
         "set_schedule_plans: slot %d, %d plan(s), accepted=%s",
         target_slot_id, len(new_plans), ok,
     )
+    if not ok:
+        raise ServiceValidationError(
+            f"Set schedule plans: device rejected the write for slot {target_slot_id}"
+        )
 
 
 async def _handle_show_lidar_fullscreen(call: ServiceCall) -> None:
@@ -649,16 +680,25 @@ async def _handle_set_language(call: ServiceCall) -> None:
         LOGGER.warning("set_language: at least one of `text` / `voice` is required")
         return
     cloud = coordinator._cloud
+    failures: list[str] = []
     if text is not None:
         ok = await call.hass.async_add_executor_job(
             cloud.set_cfg, "LANG", {"type": "text", "value": int(text)}
         )
         LOGGER.info("set_language: text=%s accepted=%s", text, ok)
+        if not ok:
+            failures.append(f"text={text}")
     if voice is not None:
         ok = await call.hass.async_add_executor_job(
             cloud.set_cfg, "LANG", {"type": "voice", "value": int(voice)}
         )
         LOGGER.info("set_language: voice=%s accepted=%s", voice, ok)
+        if not ok:
+            failures.append(f"voice={voice}")
+    if failures:
+        raise ServiceValidationError(
+            f"Set language: device rejected the write ({', '.join(failures)})"
+        )
     # Force a CFG refresh so MowerState catches up (the s2p51 push may
     # also fire on the device side, but the explicit refresh closes the
     # loop deterministically).
@@ -716,8 +756,6 @@ async def _handle_refresh_cloud_state(call: ServiceCall) -> None:
 
 async def _async_move_lidar_scan(call: ServiceCall) -> None:
     """Move a LiDAR PCD between two maps' archives."""
-    from homeassistant.exceptions import ServiceValidationError
-
     hass = call.hass
     from_map_id = int(call.data["from_map_id"])
     filename = str(call.data["filename"])
@@ -756,9 +794,10 @@ async def _handle_rename_zone(call: ServiceCall) -> None:
     coordinator = _coordinator_from_call(call.hass, call)
     if coordinator is None:
         return
-    await coordinator.rename_zone(
+    ok = await coordinator.rename_zone(
         int(call.data["map_id"]), int(call.data["zone"]), str(call.data["name"])
     )
+    _raise_for_edit_ok(ok, "Rename zone")
 
 
 async def _handle_delete_map_object(call: ServiceCall) -> None:
@@ -766,11 +805,12 @@ async def _handle_delete_map_object(call: ServiceCall) -> None:
     coordinator = _coordinator_from_call(call.hass, call)
     if coordinator is None:
         return
-    await coordinator.delete_map_object(
+    ok = await coordinator.delete_map_object(
         int(call.data["map_id"]),
         int(call.data["object_id"]),
         int(call.data["category"]),
     )
+    _raise_for_edit_ok(ok, "Delete map object")
 
 
 async def _handle_create_no_go_zone(call: ServiceCall) -> None:
@@ -779,13 +819,15 @@ async def _handle_create_no_go_zone(call: ServiceCall) -> None:
     if coordinator is None:
         return
     try:
-        await coordinator.create_no_go(
+        ok = await coordinator.create_no_go(
             int(call.data["map_id"]), call.data["shape"],
             call.data["points"], float(call.data.get("radius", 0.0)),
             object_id=int(call.data.get("object_id", -1)),
         )
     except ValueError as err:
         LOGGER.warning("create_no_go_zone: %s", err)
+        return
+    _raise_for_edit_ok(ok, "Create no-go zone")
 
 
 async def _handle_create_ignore_obstacle(call: ServiceCall) -> None:
@@ -794,12 +836,14 @@ async def _handle_create_ignore_obstacle(call: ServiceCall) -> None:
     if coordinator is None:
         return
     try:
-        await coordinator.create_ignore_obstacle(
+        ok = await coordinator.create_ignore_obstacle(
             int(call.data["map_id"]), call.data["points"],
             object_id=int(call.data.get("object_id", -1)),
         )
     except ValueError as err:
         LOGGER.warning("create_ignore_obstacle: %s", err)
+        return
+    _raise_for_edit_ok(ok, "Create ignore obstacle")
 
 
 async def _handle_create_mow_shape(call: ServiceCall) -> None:
@@ -808,12 +852,14 @@ async def _handle_create_mow_shape(call: ServiceCall) -> None:
     if coordinator is None:
         return
     try:
-        await coordinator.create_mow_shape(
+        ok = await coordinator.create_mow_shape(
             int(call.data["map_id"]), call.data["shape"], call.data["points"],
             object_id=int(call.data.get("object_id", -1)),
         )
     except ValueError as err:
         LOGGER.warning("create_mow_shape: %s", err)
+        return
+    _raise_for_edit_ok(ok, "Create mow shape")
 
 
 async def _handle_split_zone(call: ServiceCall) -> None:
@@ -822,12 +868,14 @@ async def _handle_split_zone(call: ServiceCall) -> None:
     if coordinator is None:
         return
     try:
-        await coordinator.split_zone(
+        ok = await coordinator.split_zone(
             int(call.data["map_id"]), int(call.data["zone"]),
             call.data["line_start"], call.data["line_end"],
         )
     except ValueError as err:
         LOGGER.warning("split_zone: %s", err)
+        return
+    _raise_for_edit_ok(ok, "Split zone")
 
 
 async def _handle_merge_zones(call: ServiceCall) -> None:
@@ -836,9 +884,11 @@ async def _handle_merge_zones(call: ServiceCall) -> None:
     if coordinator is None:
         return
     try:
-        await coordinator.merge_zones(int(call.data["map_id"]), call.data["zones"])
+        ok = await coordinator.merge_zones(int(call.data["map_id"]), call.data["zones"])
     except ValueError as err:
         LOGGER.warning("merge_zones: %s", err)
+        return
+    _raise_for_edit_ok(ok, "Merge zones")
 
 
 async def async_register_services(hass: HomeAssistant) -> None:

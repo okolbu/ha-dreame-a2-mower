@@ -28,6 +28,7 @@ from ._devices import (
 from .const import DOMAIN, LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
+from .coordinator._write_errors import raise_for_write_result
 from .mower.actions import MowerAction
 from .mower.state_snapshot import CurrentActivity
 
@@ -85,7 +86,8 @@ class _DreameA2ActionButton(
 
     async def async_press(self) -> None:
         LOGGER.info("button.%s: pressed; dispatching %s", self._attr_unique_id, self._action.name)
-        await self.coordinator.dispatch_action(self._action, self._params or {})
+        result = await self.coordinator.dispatch_action(self._action, self._params or {})
+        raise_for_write_result(result, self._attr_name or self._action.name, context="entity")
 
 
 class DreameA2StartMowingButton(_DreameA2ActionButton):
@@ -129,7 +131,8 @@ class DreameA2StartMowingButton(_DreameA2ActionButton):
             LOGGER.warning("button.start_mowing: unknown action_mode %r", mode)
             return
         LOGGER.info("button.start_mowing: dispatching %s with %s", action.name, params)
-        await self.coordinator.dispatch_action(action, params)
+        result = await self.coordinator.dispatch_action(action, params)
+        raise_for_write_result(result, "Start mowing", context="entity")
 
 
 class DreameA2PauseMowingButton(_DreameA2ActionButton):
@@ -412,6 +415,7 @@ class DreameA2HeadToPointButton(
                 self._attr_unique_id,
             )
             return
-        await self.coordinator.start_go_to_point(
+        result = await self.coordinator.start_go_to_point(
             map_id=self._map_id, point_id=int(sel[1])
         )
+        raise_for_write_result(result, "Head to point", context="entity")

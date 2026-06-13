@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
+from custom_components.dreame_a2_mower.cloud_client import WriteResult
 from custom_components.dreame_a2_mower.const import DOMAIN
 
 
@@ -81,7 +82,7 @@ def _make_select_with_state(coordinator_with_two_maps, state_value):
 
     coord.hass = MagicMock()
     coord.hass.services.async_call = AsyncMock()
-    coord.dispatch_action = AsyncMock()
+    coord.dispatch_action = AsyncMock(return_value=WriteResult.local_ok())
 
     sel = DreameA2ActiveMapSelect.__new__(DreameA2ActiveMapSelect)
     sel.coordinator = coord

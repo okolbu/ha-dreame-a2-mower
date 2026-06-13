@@ -21,6 +21,7 @@ from ._availability import _FreshnessAvailableMixin
 from ._devices import mower_device_info, mower_unique_id
 from .const import DOMAIN, LOGGER
 from .coordinator import DreameA2MowerCoordinator
+from .coordinator._write_errors import raise_for_write_result
 from .mower.actions import MowerAction
 from .mower.state import ActionMode
 
@@ -122,36 +123,42 @@ class DreameA2LawnMower(
         state = self.coordinator.data
         mode = state.action_mode
         if mode == ActionMode.ALL_AREAS:
-            await self.coordinator.dispatch_action(MowerAction.START_MOWING, {})
+            result = await self.coordinator.dispatch_action(MowerAction.START_MOWING, {})
+            raise_for_write_result(result, "Start mowing", context="entity")
             return
         if mode == ActionMode.EDGE:
-            await self.coordinator.dispatch_action(MowerAction.START_EDGE_MOW, {})
+            result = await self.coordinator.dispatch_action(MowerAction.START_EDGE_MOW, {})
+            raise_for_write_result(result, "Start mowing (edge)", context="entity")
             return
         if mode == ActionMode.ZONE:
             zones = state.active_selection_zones
             if not zones:
                 LOGGER.warning("start_mowing: zone mode but no zones selected; no-op")
                 return
-            await self.coordinator.dispatch_action(
+            result = await self.coordinator.dispatch_action(
                 MowerAction.START_ZONE_MOW, {"zones": list(zones)}
             )
+            raise_for_write_result(result, "Start mowing (zone)", context="entity")
             return
         if mode == ActionMode.SPOT:
             spots = state.active_selection_spots
             if not spots:
                 LOGGER.warning("start_mowing: spot mode but no spots selected; no-op")
                 return
-            await self.coordinator.dispatch_action(
+            result = await self.coordinator.dispatch_action(
                 MowerAction.START_SPOT_MOW, {"spots": list(spots)}
             )
+            raise_for_write_result(result, "Start mowing (spot)", context="entity")
             return
         LOGGER.warning("start_mowing: unknown action_mode %r", mode)
 
     async def async_pause(self) -> None:
-        await self.coordinator.dispatch_action(MowerAction.PAUSE, {})
+        result = await self.coordinator.dispatch_action(MowerAction.PAUSE, {})
+        raise_for_write_result(result, "Pause", context="entity")
 
     async def async_dock(self) -> None:
-        await self.coordinator.dispatch_action(MowerAction.DOCK, {})
+        result = await self.coordinator.dispatch_action(MowerAction.DOCK, {})
+        raise_for_write_result(result, "Dock", context="entity")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:

@@ -9,14 +9,18 @@ from __future__ import annotations
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 
+from custom_components.dreame_a2_mower.cloud_client import WriteResult
 from custom_components.dreame_a2_mower.const import DOMAIN
 
 
 def _make_hass_with_coordinator():
     """Return a minimal hass stub with a coordinator wired into hass.data."""
     coord = MagicMock()
-    coord.start_point_patrol = AsyncMock()
-    coord.start_edge_patrol = AsyncMock()
+    # Explicit accepted results — the service handlers now feed the coordinator
+    # method's WriteResult to raise_for_write_result, so a bare AsyncMock's
+    # truthy MagicMock .accepted would only pass by accident.
+    coord.start_point_patrol = AsyncMock(return_value=WriteResult.local_ok())
+    coord.start_edge_patrol = AsyncMock(return_value=WriteResult.local_ok())
 
     # _coordinator_from_call does:
     #   coordinators = hass.data.get(DOMAIN, {})

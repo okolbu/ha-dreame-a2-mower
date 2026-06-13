@@ -37,17 +37,19 @@ def test_mower_state_active_selection_point_defaults_none():
 
 async def test_start_go_to_point_switches_map_then_dispatches():
     from unittest.mock import AsyncMock
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
     from custom_components.dreame_a2_mower.coordinator._writes import _WritesMixin
     from custom_components.dreame_a2_mower.mower.actions import MowerAction
 
     class _Stub(_WritesMixin):
         def __init__(self):
-            self._ensure_active_map = AsyncMock()
-            self.dispatch_action = AsyncMock()
+            self._ensure_active_map = AsyncMock(return_value=WriteResult.local_ok())
+            self.dispatch_action = AsyncMock(return_value=WriteResult.local_ok())
 
     c = _Stub()
-    await c.start_go_to_point(map_id=2, point_id=7)
+    result = await c.start_go_to_point(map_id=2, point_id=7)
     c._ensure_active_map.assert_awaited_once_with(2)
     c.dispatch_action.assert_awaited_once_with(
         MowerAction.GO_TO_POINT, {"point_id": 7}
     )
+    assert result.accepted
