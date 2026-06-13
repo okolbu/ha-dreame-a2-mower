@@ -12,34 +12,21 @@ faithful source without import-time side effects.
 from __future__ import annotations
 
 import ast
+import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+# The per-platform entity-source file list lives in ONE canonical place
+# (the move-lockstep target) so a file rename/move during the refactor is a
+# single-file edit.  See tools/entity_source_inventory.py.
+from tools.entity_source_inventory import ENTITY_SOURCE_FILES, PLATFORMS  # noqa: E402
 
 CCDIR = (
     Path(__file__).resolve().parent.parent.parent
     / "custom_components"
     / "dreame_a2_mower"
 )
-
-PLATFORMS: tuple[str, ...] = (
-    "binary_sensor",
-    "sensor",
-    "switch",
-    "select",
-    "number",
-    "time",
-)
-
-# Sibling helper modules that carry entity classes / description tables for a
-# platform but are NOT named after the HA platform domain (so HA won't try to
-# load them directly).  Keyed by platform name; values are module filenames
-# relative to CCDIR.  Populated incrementally as B3a refactors split each
-# platform file.
-PLATFORM_SIBLINGS: dict[str, tuple[str, ...]] = {
-    "switch": ("switch_global.py", "switch_map.py", "_switch_base.py"),
-    "select": ("select_global.py", "select_map_settings.py", "_select_base.py"),
-    "sensor": ("sensor_device.py", "sensor_map.py", "sensor_session.py", "_sensor_base.py"),
-}
 
 
 # Improvement C (F10 2026-05-14): broaden the entity-description suffix
@@ -144,20 +131,18 @@ def _scan_module_for_description_entities(
 def discover_entities() -> list[EntityDescriptor]:
     """Discover all EntityDescription instances across platform modules.
 
-    Also scans sibling helper modules listed in PLATFORM_SIBLINGS (e.g.
-    switch_global.py, switch_map.py) that carry entity classes / description
-    tables but are not named after the HA platform domain.
+    The per-platform source-file list (primary ``{platform}.py`` loader plus
+    any helper/sibling modules that carry entity classes or description
+    tables) is the canonical ``ENTITY_SOURCE_FILES`` inventory in
+    ``tools/entity_source_inventory.py`` — the single place to update when a
+    refactor moves those files.
     """
     out: list[EntityDescriptor] = []
     for platform in PLATFORMS:
-        # Primary platform file
-        path = CCDIR / f"{platform}.py"
-        out.extend(_scan_module_for_description_entities(platform, path))
-        # Sibling helper modules (B3a splits)
-        for sibling_name in PLATFORM_SIBLINGS.get(platform, ()):
-            sibling_path = CCDIR / sibling_name
-            if sibling_path.exists():
-                out.extend(_scan_module_for_description_entities(platform, sibling_path))
+        for fname in ENTITY_SOURCE_FILES[platform]:
+            path = CCDIR / fname
+            if path.exists():
+                out.extend(_scan_module_for_description_entities(platform, path))
     return out
 
 
