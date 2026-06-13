@@ -943,6 +943,10 @@ class _MqttHandlersMixin:
                 )
             return  # echo of our own command; nothing to record
 
+        # Run order is assembled in _deferred() at the bottom of this method:
+        # _record_novel -> (early-return on unchanged state) -> _apply_sm_mutations
+        # -> _apply. The three nested defs below are declared here but sequenced
+        # there.
         def _record_novel() -> None:
             # Thread-safety (P1.3): novelty recording MUTATES novel_registry, so
             # it must run on the event loop, NOT on paho's bg thread. It also

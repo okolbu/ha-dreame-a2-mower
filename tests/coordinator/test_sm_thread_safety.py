@@ -207,12 +207,27 @@ def test_trap1_s2p1_records_nothing_changes_but_sm_unaffected_by_hpp():
 
 
 def test_dispatcher_s1p1_heartbeat_deferred():
-    """s1p1 heartbeat must not call state_machine.handle_heartbeat on the paho
-    thread; the SM last_heartbeat_unix updates only when the hop runs."""
+    """s1p1 heartbeat must not call state_machine.handle_heartbeat OR append a
+    wifi sample on the paho thread; both update only when the hop runs.
+
+    The wifi-buffer purity assertion is regression safety for the one live_map
+    mutation that moved into _apply_heartbeat (P1.3): the append must NOT run on
+    paho's thread. We arm the append gate (active live_map + a known position +
+    the frame's always-present wifi_rssi_dbm) so the sample genuinely *would*
+    land, then pin that it lands only after the hop.
+    """
     captured: list = []
     coord = _make_coord(capture=captured)
 
+    # Arm the wifi-sample gate in _apply_heartbeat: needs an active live_map
+    # and a non-None position; the decoded heartbeat always carries an rssi.
+    coord.live_map.begin_session(started_unix=1000)
+    coord.data.position_x_m = 1.0
+    coord.data.position_y_m = 2.0
+    assert coord.live_map.wifi_samples == []
+
     before = coord.state_machine.snapshot().last_heartbeat_unix
+    wifi_before = len(coord.live_map.wifi_samples)
 
     # A valid 20-byte s1p1 heartbeat frame: 0xCE delimiters at [0] and [19].
     frame = bytearray(20)
@@ -229,6 +244,10 @@ def test_dispatcher_s1p1_heartbeat_deferred():
     assert coord.state_machine.snapshot().last_heartbeat_unix == before, (
         "handle_heartbeat ran on the calling (paho) thread"
     )
+    # Paho thread: wifi-sample buffer UNCHANGED (append did not run here).
+    assert len(coord.live_map.wifi_samples) == wifi_before, (
+        "append_wifi_sample ran on the calling (paho) thread"
+    )
     assert len(captured) >= 1
 
     for cb in captured:
@@ -237,6 +256,10 @@ def test_dispatcher_s1p1_heartbeat_deferred():
     # Loop: heartbeat applied (last_heartbeat_unix now set).
     assert coord.state_machine.snapshot().last_heartbeat_unix is not None
     assert coord.state_machine.snapshot().last_heartbeat_unix != before
+    # Loop: the wifi sample DID land once the hop ran.
+    assert len(coord.live_map.wifi_samples) == wifi_before + 1, (
+        "wifi sample did not land on the event loop"
+    )
 
 
 def test_dispatcher_s2p2_handle_mqtt_property_deferred():
