@@ -204,10 +204,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     LOGGER.info("Unloading %s integration", DOMAIN)
     coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
     if coordinator is not None:
-        # Disconnect MQTT client first so paho thread + TCP socket are
-        # released before platform unload tears down entities the
-        # callback path writes into. disconnect() is sync — run in
-        # executor to keep async_unload_entry non-blocking.
+        # Tear down both transports (MQTT + cloud) before platform unload, so
+        # neither the paho callback path nor the cloud API worker writes into
+        # entities being removed. Order between the two doesn't matter; both
+        # must precede platform unload. disconnect() is sync (and joins a
+        # thread) — run in the executor to keep async_unload_entry non-blocking.
         mqtt = getattr(coordinator, "_mqtt", None)
         if mqtt is not None:
             await hass.async_add_executor_job(mqtt.disconnect)
