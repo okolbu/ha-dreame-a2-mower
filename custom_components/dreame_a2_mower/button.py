@@ -219,8 +219,10 @@ class DreameA2LockBotButton(_DreameA2ActionButton):
     Where CHILD_LOCK (the toggle in switch.child_lock) flips the CFG.CLS
     flag, this is the discrete "lockBot" action documented in apk
     §"Actions" (op=12) and used by ioBroker.dreame v0.3.7 as a separate
-    button. The exact runtime semantics on g2408 are unverified — added
-    for live testing once the mower is docked.
+    button. CONFIRMED accepted-but-no-effect on g2408: the firmware accepts
+    op=12 (cloud r=0) but it has no observable runtime effect (lock_robot-op12
+    incident; retry n=2 clean). Control-mode ``_N`` (READ_ONLY_NOOP) — honestly
+    padlocked as a no-op. Same class as generate_3dmap op=10.
     """
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
@@ -239,8 +241,9 @@ class DreameA2Generate3DMapButton(_DreameA2ActionButton):
     produced and on-demand 3D-map generation is ruled out (the render is
     firmware-gated on internal map-change conditions; the Dreame app has no
     "generate map" trigger either). Same class as lock_robot op=12. The button
-    therefore stays control-mode ``_U`` (device_write_unproven): it sends a
-    real, accepted command that has no observable effect on this firmware.
+    is therefore control-mode ``_N`` (READ_ONLY_NOOP): it sends a real,
+    accepted command that has a CONFIRMED no observable effect on this firmware
+    — honestly padlocked as a no-op.
     See inventory.yaml op=10 "upload_map/generate_3dmap" verifications.
     """
 

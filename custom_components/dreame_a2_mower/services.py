@@ -31,7 +31,7 @@ SERVICE_MOW_EDGE = "mow_edge"
 SERVICE_MOW_SPOT = "mow_spot"
 SERVICE_RECHARGE = "recharge"
 SERVICE_FIND_BOT = "find_bot"
-SERVICE_LOCK_BOT = "lock_bot"
+SERVICE_SET_CHILD_LOCK = "set_child_lock"
 SERVICE_SUPPRESS_FAULT = "suppress_fault"
 SERVICE_FINALIZE_SESSION = "finalize_session"
 SERVICE_REPLAY_SESSION = "replay_session"
@@ -41,7 +41,6 @@ SERVICE_DISCOVER_CLOUD_API = "discover_cloud_api"
 SERVICE_SET_SCHEDULE_PLANS = "set_schedule_plans"
 SERVICE_REFRESH_CLOUD_STATE = "refresh_cloud_state"
 SERVICE_SHOW_PHOTO_PRIVACY_POLICY = "show_photo_privacy_policy"
-SERVICE_SET_LANGUAGE = "set_language"
 SERVICE_MOVE_LIDAR_SCAN = "move_lidar_scan"
 SERVICE_START_POINT_PATROL = "start_point_patrol"
 SERVICE_START_EDGE_PATROL = "start_edge_patrol"
@@ -653,63 +652,6 @@ async def _async_handle_discover_cloud_api(call: ServiceCall) -> None:
     )
 
 
-async def _handle_set_language(call: ServiceCall) -> None:
-    """Set the mower's language indices via CFG.LANG.
-
-    Wire format (verified live 2026-05-09 via the named-key probe on
-    g2408 fw 4.3.6_0550): the routed-action `s2.50 m='s' t='LANG'`
-    accepts a tagged-union dict ``{type: 'text'|'voice', value: <int>}``.
-    Each call sets one index. To set both, this service emits two
-    sequential writes.
-
-    Source: ioBroker.dreame v0.3.7 apk.md catalog
-    (`LANG | setTextLang/setVoiceLang | {type, value}`).
-
-    The index → language-name mapping is firmware-locale-specific and
-    not yet enumerated for g2408. See `docs/TODO.md` "Language index
-    enumeration" for the work to discover the full mapping and ship a
-    proper writable select.
-
-    Service data:
-      text  (int, optional): new value for CFG.LANG[0] (text language)
-      voice (int, optional): new value for CFG.LANG[1] (voice language)
-    At least one must be provided.
-    """
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None or not hasattr(coordinator, "_cloud") or coordinator._cloud is None:
-        LOGGER.warning("set_language: no coordinator/cloud client ready")
-        return
-    text = call.data.get("text")
-    voice = call.data.get("voice")
-    if text is None and voice is None:
-        LOGGER.warning("set_language: at least one of `text` / `voice` is required")
-        return
-    cloud = coordinator._cloud
-    failures: list[str] = []
-    if text is not None:
-        ok = await call.hass.async_add_executor_job(
-            cloud.set_cfg, "LANG", {"type": "text", "value": int(text)}
-        )
-        LOGGER.info("set_language: text=%s accepted=%s", text, ok)
-        if not ok:
-            failures.append(f"text={text}")
-    if voice is not None:
-        ok = await call.hass.async_add_executor_job(
-            cloud.set_cfg, "LANG", {"type": "voice", "value": int(voice)}
-        )
-        LOGGER.info("set_language: voice=%s accepted=%s", voice, ok)
-        if not ok:
-            failures.append(f"voice={voice}")
-    if failures:
-        raise ServiceValidationError(
-            f"Set language: device rejected the write ({', '.join(failures)})"
-        )
-    # Force a CFG refresh so MowerState catches up (the s2p51 push may
-    # also fire on the device side, but the explicit refresh closes the
-    # loop deterministically).
-    await coordinator._refresh_cloud_state()
-
-
 async def _handle_show_photo_privacy_policy(call: ServiceCall) -> None:
     """Surface the verbatim Dreame "AI Obstacle Recognition Privacy Policy"
     text as an HA persistent_notification.
@@ -910,7 +852,7 @@ async def async_register_services(hass: HomeAssistant) -> None:
                                   await _handle_simple_action("RECHARGE"), schema=SCHEMA_EMPTY)
     hass.services.async_register(DOMAIN, SERVICE_FIND_BOT,
                                   await _handle_simple_action("FIND_BOT"), schema=SCHEMA_EMPTY)
-    hass.services.async_register(DOMAIN, SERVICE_LOCK_BOT,
+    hass.services.async_register(DOMAIN, SERVICE_SET_CHILD_LOCK,
                                   await _handle_simple_action("LOCK_BOT_TOGGLE"), schema=SCHEMA_EMPTY)
     hass.services.async_register(DOMAIN, SERVICE_SUPPRESS_FAULT,
                                   await _handle_simple_action("SUPPRESS_FAULT"), schema=SCHEMA_EMPTY)
@@ -930,14 +872,6 @@ async def async_register_services(hass: HomeAssistant) -> None:
                                   _handle_refresh_cloud_state, schema=SCHEMA_EMPTY)
     hass.services.async_register(DOMAIN, SERVICE_SHOW_PHOTO_PRIVACY_POLICY,
                                   _handle_show_photo_privacy_policy, schema=SCHEMA_EMPTY)
-    hass.services.async_register(
-        DOMAIN, SERVICE_SET_LANGUAGE,
-        _handle_set_language,
-        schema=vol.Schema({
-            vol.Optional("text"): vol.Coerce(int),
-            vol.Optional("voice"): vol.Coerce(int),
-        }),
-    )
     hass.services.async_register(
         DOMAIN, SERVICE_MOVE_LIDAR_SCAN,
         _async_move_lidar_scan,
@@ -966,11 +900,11 @@ async def async_register_services(hass: HomeAssistant) -> None:
 def async_unregister_services(hass: HomeAssistant) -> None:
     for svc in (
         SERVICE_SET_ACTIVE_SELECTION, SERVICE_MOW_ZONE, SERVICE_MOW_EDGE, SERVICE_MOW_SPOT,
-        SERVICE_RECHARGE, SERVICE_FIND_BOT, SERVICE_LOCK_BOT, SERVICE_SUPPRESS_FAULT,
+        SERVICE_RECHARGE, SERVICE_FIND_BOT, SERVICE_SET_CHILD_LOCK, SERVICE_SUPPRESS_FAULT,
         SERVICE_FINALIZE_SESSION, SERVICE_REPLAY_SESSION, SERVICE_SET_SCHEDULE_PLANS,
         SERVICE_SHOW_LIDAR_FULLSCREEN, SERVICE_DUMP_MAP_DIAGNOSTICS, SERVICE_DISCOVER_CLOUD_API,
         SERVICE_REFRESH_CLOUD_STATE, SERVICE_SHOW_PHOTO_PRIVACY_POLICY,
-        SERVICE_SET_LANGUAGE, SERVICE_MOVE_LIDAR_SCAN,
+        SERVICE_MOVE_LIDAR_SCAN,
         SERVICE_START_POINT_PATROL, SERVICE_START_EDGE_PATROL,
         SERVICE_RENAME_ZONE, SERVICE_DELETE_MAP_OBJECT,
         SERVICE_CREATE_NO_GO_ZONE, SERVICE_CREATE_IGNORE_OBSTACLE,

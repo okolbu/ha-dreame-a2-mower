@@ -103,8 +103,8 @@ def _prot_path_field_updates(
 # The TEXT-language list is a SEPARATE picker in the app and may have a
 # different order — TBD pending user enumeration. Until we have it
 # confirmed, the text-language select shows "Index N" placeholders rather
-# than language names. Users can still set arbitrary text indices via the
-# `dreame_a2_mower.set_language` service.
+# than language names. The writable `lcd_language` / `voice_language`
+# split selects are the control surface for changing the indices.
 # ---------------------------------------------------------------------------
 VOICE_LANGUAGE_NAMES: tuple[str, ...] = (
     "English",          # 0

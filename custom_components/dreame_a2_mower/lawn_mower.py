@@ -20,6 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from ._availability import _FreshnessAvailableMixin
 from ._devices import mower_device_info, mower_unique_id
 from .const import DOMAIN, LOGGER
+from .control_honesty import ControlMode, _ControlHonestyMixin
 from .coordinator import DreameA2MowerCoordinator
 from .coordinator._write_errors import raise_for_write_result
 from .mower.actions import MowerAction
@@ -85,18 +86,27 @@ async def async_setup_entry(
 
 
 class DreameA2LawnMower(
-    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], LawnMowerEntity
+    _ControlHonestyMixin,
+    _FreshnessAvailableMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    LawnMowerEntity,
 ):
     """The Dreame A2 mower as an HA lawn_mower entity.
 
     Behavioural state (activity, location, session) is read from the
     state machine snapshot (coordinator.state_machine.snapshot()).
     State persistence is handled by the state machine itself (SM-9).
+
+    The primary control surface is DEVICE_WRITABLE (`_W` in
+    control_honesty.CONTROL_MODES): start/pause/dock route to confirmed
+    cloud RPCs. The _ControlHonestyMixin gives it the uniform
+    control_mode / read_only / provisional attrs (no padlock for `_W`).
     """
 
     _attr_has_entity_name = True
     _availability_source = "mqtt"
     _attr_name = None  # use device name
+    _control_mode = ControlMode.DEVICE_WRITABLE
     _attr_supported_features = (
         LawnMowerEntityFeature.START_MOWING
         | LawnMowerEntityFeature.PAUSE
@@ -162,8 +172,13 @@ class DreameA2LawnMower(
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        """Surface cloud-state diagnostics: task_id (cloud-side action target)."""
+        """Surface cloud-state diagnostics + the control-honesty verdict.
+
+        Merges the _ControlHonestyMixin attrs (control_mode / read_only /
+        provisional) with the cloud-side task_id.
+        """
+        attrs: dict[str, Any] = dict(super().extra_state_attributes)
         cs = getattr(self.coordinator, "cloud_state", None)
-        if cs is None:
-            return {}
-        return {"task_id": cs.task_id}
+        if cs is not None:
+            attrs["task_id"] = cs.task_id
+        return attrs

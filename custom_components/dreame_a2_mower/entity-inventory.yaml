@@ -3848,7 +3848,7 @@ entities:
 
   - id: "button.dreame_a2_mower_lock_bot"
     platform: button
-    control_mode: device_write_unproven
+    control_mode: read_only_noop
     class: "DreameA2LockBotButton"
     class_file: "custom_components/dreame_a2_mower/button.py:189"
     device: parent
@@ -3864,6 +3864,10 @@ entities:
         status: presumed
         claim: "Ported from code 2026-05-31: async_press dispatches MowerAction.LOCK_BOT (siid=2, aiid=50, routed_o=12). DIAGNOSTIC entity_category. Semantics on g2408 not fully confirmed; op=12 is accepted-but-no-effect per live incident. Read from button.py:189-204; not re-confirmed live."
         evidence: "button.py:199 (_attr_entity_category = EntityCategory.DIAGNOSTIC); button.py:203 (_action = MowerAction.LOCK_BOT); mower/actions.py:237 (LOCK_BOT: siid=2, aiid=50, routed_o=12)"
+      - date: "2026-06-14"
+        status: verified
+        claim: "Reclassed control_mode device_write_unproven -> read_only_noop (Phase 2.1c): op=12 is accepted-but-no-effect on g2408 (lock_robot-op12 incident, retry n=2 clean). The button is now honestly padlocked as a no-op (read_only=True, provisional=False)."
+        evidence: "memory:lock_robot_op12_incident; control_honesty.py button.dreame_a2_mower_lock_bot = _N"
     references:
       wire_entry: "o12"
       code: "custom_components/dreame_a2_mower/button.py:189"
@@ -3877,7 +3881,7 @@ entities:
 
   - id: "button.dreame_a2_mower_generate_3dmap"
     platform: button
-    control_mode: device_write_unproven
+    control_mode: read_only_noop
     class: "DreameA2Generate3DMapButton"
     class_file: "custom_components/dreame_a2_mower/button.py:206"
     device: parent
@@ -3893,6 +3897,10 @@ entities:
         status: presumed
         claim: "Ported from code 2026-05-31: async_press dispatches MowerAction.GENERATE_3D_MAP (siid=2, aiid=50, routed_o=10, d={idx:0}). DIAGNOSTIC entity_category. Long-running on mower side; progress on s2p54 ('3dmap-progress'). Untested on g2408. Read from button.py:206-220."
         evidence: "button.py:214 (_attr_entity_category = EntityCategory.DIAGNOSTIC); button.py:219 (_action = MowerAction.GENERATE_3D_MAP); mower/actions.py:243-245 (GENERATE_3D_MAP: siid=2, aiid=50, routed_o=10, payload_fn=_generate_3d_map_payload)"
+      - date: "2026-06-14"
+        status: verified
+        claim: "Reclassed control_mode device_write_unproven -> read_only_noop (Phase 2.1c): op=10 live-tested docked-idle 2026-06-08 is accepted (cloud r=0) but produces no 3dmap OSS object — accepted-but-no-effect. The button is now honestly padlocked as a no-op (read_only=True, provisional=False)."
+        evidence: "button.py DreameA2Generate3DMapButton docstring (live-tested 2026-06-08); control_honesty.py button.dreame_a2_mower_generate_3dmap = _N"
     references:
       wire_entry: "o10"
       code: "custom_components/dreame_a2_mower/button.py:206"
