@@ -208,6 +208,28 @@ if [[ "$DIFF_LINES" != "1" ]]; then
     exit 1
 fi
 
+# Sync the bundled cards' CARD_VERSION banner to the new version. The cards
+# cache hard in the browser, so the `console.info` banner is how the user
+# confirms which card actually loaded after an update — it's only useful if
+# it matches the shipped release. Targeted regex on the one `const
+# CARD_VERSION = "..."` line per card; harmless if a card lacks it.
+WWW_CARDS_DIR="custom_components/dreame_a2_mower/www"
+if compgen -G "$WWW_CARDS_DIR"/*.js >/dev/null; then
+    for js in "$WWW_CARDS_DIR"/*.js; do
+        grep -q 'const CARD_VERSION = "' "$js" || continue
+        "$PYTHON" - "$js" "$NEW" <<'PY'
+import re, sys
+path, new = sys.argv[1], sys.argv[2]
+with open(path) as f: text = f.read()
+out = re.sub(r'(const CARD_VERSION = ")[^"]*(")', r'\g<1>' + new + r'\g<2>', text, count=1)
+if out != text:
+    with open(path, "w") as f: f.write(out)
+PY
+        git add "$js"
+    done
+    echo "synced CARD_VERSION → $NEW in bundled cards"
+fi
+
 # Resolve release notes
 if [[ -n "${NOTES_FILE:-}" ]]; then
     NOTES="$(cat "$NOTES_FILE")"
