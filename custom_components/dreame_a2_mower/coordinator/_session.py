@@ -685,6 +685,47 @@ class _SessionMixin:
 
         LOGGER.warning("[F5.6.1] _dispatch_finalize_action: unhandled action=%s", action)
 
+    async def _merge_recorder_into_payload(
+        self, payload: dict[str, Any], *, label: str
+    ) -> None:
+        """Recorder-merge safety net (2026-05-16 spec) — shared by both
+        terminal archive writers (_do_oss_fetch and _run_finalize_incomplete).
+
+        Fills gaps in the battery/wifi/state/charging/error sample arrays from
+        HA's recorder history for the session's ``[start, end]`` window.
+        Idempotent; any failure leaves the in_progress samples untouched.
+
+        ``label`` only varies the INFO log line so the two callers stay
+        distinguishable in the log; behaviour is otherwise identical.
+        """
+        try:
+            from ._recorder_merge import merge_recorder_samples
+
+            _start_ts = int(payload.get("start") or 0)
+            _end_ts = int(payload.get("end") or 0)
+            if _start_ts > 0 and _end_ts > _start_ts:
+                _counts = await merge_recorder_samples(
+                    self.hass, payload, _start_ts, _end_ts,
+                )
+                LOGGER.info(
+                    "[recorder_merge] %s: "
+                    "battery=%d, wifi=%d, state=%d, charging=%d, error=%d "
+                    "samples merged from recorder for session [%d, %d]",
+                    label,
+                    _counts["battery_recorder_count"],
+                    _counts["wifi_recorder_count"],
+                    _counts["state_recorder_count"],
+                    _counts["charging_recorder_count"],
+                    _counts["error_recorder_count"],
+                    _start_ts, _end_ts,
+                )
+        except Exception:
+            LOGGER.exception(
+                "[recorder_merge] %s: merge failed; "
+                "using in_progress samples only",
+                label,
+            )
+
     async def _run_finalize_incomplete(self, now_unix: int) -> None:
         """Archive whatever the live_map has as an "(incomplete)" session.
 
@@ -763,31 +804,9 @@ class _SessionMixin:
         # Recorder-merge safety net (2026-05-16 spec) — same layer
         # _do_oss_fetch uses, applied to the FINALIZE_INCOMPLETE
         # payload before it gets archived.
-        try:
-            from ._recorder_merge import merge_recorder_samples
-
-            _start_ts = int(incomplete_payload.get("start") or 0)
-            _end_ts = int(incomplete_payload.get("end") or 0)
-            if _start_ts > 0 and _end_ts > _start_ts:
-                _counts = await merge_recorder_samples(
-                    self.hass, incomplete_payload, _start_ts, _end_ts,
-                )
-                LOGGER.info(
-                    "[recorder_merge] FINALIZE_INCOMPLETE: "
-                    "battery=%d, wifi=%d, state=%d, charging=%d, error=%d "
-                    "samples merged from recorder for session [%d, %d]",
-                    _counts["battery_recorder_count"],
-                    _counts["wifi_recorder_count"],
-                    _counts["state_recorder_count"],
-                    _counts["charging_recorder_count"],
-                    _counts["error_recorder_count"],
-                    _start_ts, _end_ts,
-                )
-        except Exception:
-            LOGGER.exception(
-                "[recorder_merge] FINALIZE_INCOMPLETE: merge failed; "
-                "using in_progress samples only"
-            )
+        await self._merge_recorder_into_payload(
+            incomplete_payload, label="FINALIZE_INCOMPLETE",
+        )
 
         # Apply smoothing-only classify so incomplete-session archives get role
         # refinement (cloud_track=[] → smoothing still runs on track points).
