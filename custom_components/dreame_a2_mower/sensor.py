@@ -19,7 +19,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import DreameA2MowerCoordinator
-from .sensor_device import (
+from .entities.sensor.device import (
     DIAGNOSTIC_SENSORS,
     SENSORS,
     DreameA2ApiEndpointSensor,
@@ -46,7 +46,7 @@ from .sensor_device import (
     _mpos_value,
     _mqtt_age_value,
 )
-from .sensor_map import (
+from .entities.sensor.map import (
     DreameA2ExclusionZonesSensor,
     DreameA2IgnoreObstacleZonesSensor,
     DreameA2MaintenancePointsSensor,
@@ -59,7 +59,7 @@ from .sensor_map import (
     DreameA2PatrolPointsSensor,
     DreameA2SpotsCountSensor,
 )
-from .sensor_session import (
+from .entities.sensor.session import (
     DreameA2MapSessionAreaTotalSensor,
     DreameA2MapSessionCountSensor,
     DreameA2MapSessionTimeTotalSensor,

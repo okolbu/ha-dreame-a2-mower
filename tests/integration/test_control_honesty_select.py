@@ -91,7 +91,7 @@ def test_per_map_mowing_direction_select_option_calls_pre_settings_write():
     ent.async_write_ha_state = MagicMock()
 
     with patch(
-        "custom_components.dreame_a2_mower.select_map_settings.pre_settings_optimistic_write",
+        "custom_components.dreame_a2_mower.entities.select.map_settings.pre_settings_optimistic_write",
         new_callable=AsyncMock,
     ) as mock_opt_write:
         asyncio.run(ent.async_select_option("90°"))

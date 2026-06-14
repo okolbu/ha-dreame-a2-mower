@@ -43,7 +43,7 @@ from .const import DOMAIN
 from .coordinator import DreameA2MowerCoordinator
 
 # Global (device-level) entities and table
-from .select_global import (
+from .entities.select.global_ import (
     DreameA2ActionModeSelect,
     DreameA2SettingSelect,
     DreameA2WorkLogSelect,
@@ -54,7 +54,7 @@ from .select_global import (
 )
 
 # Per-map entities
-from .select_map_settings import (
+from .entities.select.map_settings import (
     DreameA2ZoneSelect,
     DreameA2SpotSelect,
     DreameA2EdgeSelect,
@@ -71,7 +71,7 @@ from .select_map_settings import (
 # Tests import these helpers directly from the select module
 # (see tests/integration/test_entity_builders.py).
 # ---------------------------------------------------------------------------
-from .select_global import (
+from .entities.select.global_ import (
     _PRE_PAD_DEFAULTS,
     _build_pre_efficiency,
     _build_wrp_resume_hours,

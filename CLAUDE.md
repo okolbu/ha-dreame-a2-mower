@@ -442,6 +442,47 @@ carries `_rssi_to_rgb` explicitly (underscore name `import *` won't carry,
 imported by `test_wifi_gradient_contract`) alongside `CELL_PX` + `render_wifi_map_png`.
 New code imports from `wifi.<module>` directly.
 
+### entities/ package (sensor / switch / select)
+
+The sensor / switch / select entity-class layer is a **package** (`entities/`,
+Phase 3c, 2026-06-14) with per-platform subdirs:
+
+| Module | From |
+|---|---|
+| `entities/sensor/{device,map,session,base}.py` | `sensor_device`, `sensor_map`, `sensor_session`, `_sensor_base` |
+| `entities/switch/{global_,map,base}.py` | `switch_global`, `switch_map`, `_switch_base` |
+| `entities/select/{global_,map_settings,base}.py` | `select_global`, `select_map_settings`, `_select_base` |
+
+(`global_` avoids the `global` keyword.) The thin HA platform loaders
+(`sensor.py`, `switch.py`, `select.py`) STAY at the package root — they're loaded
+by HA by name — and import the classes/description tables from `entities/…`. The
+intra-subpackage base import is a sibling (`from .base import …`); everything
+else reaches the root package with three dots (`from ...const import …`,
+`from ...wifi.archive_store import …`).
+
+The FAT single-platform files (`number.py`, `binary_sensor.py`, `button.py`,
+`time.py`, `device_tracker.py`, `lawn_mower.py`, `calendar.py`, `event.py`) ARE
+the platform entry — they stay at root (out of scope; moving inline classes out
+is more churn than value).
+
+The old flat root paths (`sensor_device.py`, `sensor_map.py`, … `_select_base.py`)
+are 1-line re-export **shims** (`from .entities.sensor.device import *`)
+preserving the ~30 deep test importers + the entry-file imports. Keep the shims.
+`sensor_device.py` carries `_active_fault_text` / `_mpos_value` / `_mpos_attrs`
+explicitly (underscore names `import *` won't carry, imported by
+`test_error_sensor_value` / `test_mpos_sensor`). New code imports from
+`entities.<platform>.<module>` directly.
+
+**Two CI lockstep targets** track these source paths and must be updated on any
+further move:
+- `tools/inventory/entity_inventory_audit.py` discovers entity classes by walking
+  the package with `CC.rglob("*.py")` (recurses subpackages — was a root-only
+  `glob` before Phase 3c). The coverage gate goes stale if a class can't be found.
+- `tools/entity_source_inventory.py` `ENTITY_SOURCE_FILES` lists the entity
+  source files by relative path for the state-machine audit walker
+  (`state_machine_audit_discover.py` resolves them as `CCDIR / fname`). Update the
+  paths here when an entity source file moves.
+
 ---
 
 ## Protocol decoder naming (convention)

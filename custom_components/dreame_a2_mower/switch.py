@@ -45,8 +45,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .coordinator import DreameA2MowerCoordinator
-from ._switch_base import DreameA2Switch
-from .switch_global import (
+from .entities.switch.base import DreameA2Switch
+from .entities.switch.global_ import (
     SWITCHES,
     DreameA2EdgeMowingAutoSwitch,
     DreameA2EdgeMowingSafeSwitch,
@@ -71,7 +71,7 @@ from .switch_global import (
     _build_voice_special,
     _build_voice_work,
 )
-from .switch_map import DreameA2MapEdgemasterSwitch
+from .entities.switch.map import DreameA2MapEdgemasterSwitch
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,332 @@
+"""Per-map metadata sensor entity classes for the Dreame A2 Mower.
+
+This module is a helper — NOT a HA platform — so HA will not attempt to
+load it directly.  It is imported by sensor.py.
+
+Contains: DreameA2MapNameSensor, DreameA2MapAreaSensor,
+DreameA2MapSegmentCountSensor, DreameA2MaintenancePointsSensor,
+DreameA2PatrolPointsSensor, DreameA2PatrolEdgesSensor,
+DreameA2ExclusionZonesSensor, DreameA2IgnoreObstacleZonesSensor,
+DreameA2SpotsCountSensor, DreameA2MapPreMowingHeightSensor,
+DreameA2MapPreEdgemasterSensor.
+"""
+from __future__ import annotations
+
+from homeassistant.components.sensor import SensorStateClass
+
+from .base import (
+    _DreameA2PerMapPreShadowBase,
+    _DreameA2PerMapSensorBase,
+)
+
+
+class DreameA2MapNameSensor(_DreameA2PerMapSensorBase):
+    """Sensor reporting the map name."""
+
+    _attr_name = "Name"
+    _attr_translation_key = "map_name"
+    _attr_icon = "mdi:label-outline"
+    _KEY = "name"
+
+    def _compute_value(self, m):
+        # Cloud frequently returns empty `name` — the Dreame app shows a
+        # "Map N" default in that case. Mirror it so the dashboard isn't
+        # blank. map_id is 0-based on the wire; humans count from 1.
+        name = getattr(m, "name", None)
+        if name:
+            return name
+        return f"Map {self._map_id + 1}"
+
+
+class DreameA2MapAreaSensor(_DreameA2PerMapSensorBase):
+    """Sensor reporting the total map area in m²."""
+
+    _attr_name = "Area"
+    _attr_translation_key = "map_area"
+    _attr_icon = "mdi:vector-square"
+    _attr_native_unit_of_measurement = "m²"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _KEY = "area"
+
+    def _compute_value(self, m):
+        return getattr(m, "total_area_m2", None)
+
+
+class DreameA2MapSegmentCountSensor(_DreameA2PerMapSensorBase):
+    """Sensor reporting the number of mowing segments on the map."""
+
+    _attr_name = "Segments"
+    _attr_translation_key = "map_segments"
+    _attr_icon = "mdi:vector-polyline"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _KEY = "segments"
+
+    def _compute_value(self, m):
+        zones = getattr(m, "mowing_zones", ())
+        return len(zones) if zones is not None else 0
+
+    @property
+    def extra_state_attributes(self):
+        """Map-edit targets for the rename_zone / delete_map_object services.
+
+        ``renamable_zones``: ``{region, name}`` per mowing zone (o=219).
+        ``deletable_objects``: ``{id, category, label}`` for each deletable
+        object (o=218) — no-go exclusion zones (category 0) and ignore-obstacle
+        zones (category 4). Exclusion zones without a cloud ``obj_id`` are
+        skipped (they can't be targeted).
+
+        Mowing zones are intentionally NOT offered as delete targets: the only
+        o=218 deletes seen in the app capture were exclusion objects (ids in
+        the 100/300 object-id space, never a mowing-zone region 1-62), so a
+        mowing-zone delete via o=218 is unverified. Mowing zones support rename
+        only. (knowledge-gaps: zone-delete wire to capture.)
+        """
+        m = self._map()
+        if m is None:
+            return {}
+        renamable = [
+            {"region": z.zone_id, "name": z.name}
+            for z in getattr(m, "mowing_zones", ())
+        ]
+        deletable = []
+        for z in getattr(m, "exclusion_zones", ()):
+            if z.obj_id is None:
+                continue
+            cat = 4 if z.subtype == "ignore" else 0
+            kind = "Ignore" if z.subtype == "ignore" else "No-go"
+            deletable.append(
+                {"id": z.obj_id, "category": cat, "label": f"{kind} #{z.obj_id}"}
+            )
+        return {"renamable_zones": renamable, "deletable_objects": deletable}
+
+
+class DreameA2MaintenancePointsSensor(_DreameA2PerMapSensorBase):
+    """Per-map list of user-placed Maintenance Points.
+
+    State is the count; `extra_state_attributes['points']` lists each
+    point as ``{id, x_mm, y_mm}``. Decoded from MAP key ``cleanPoints``
+    (see inventory.yaml ``map_key_cleanPoints``). Read-only; placement
+    happens in the Dreame app.
+    """
+
+    _attr_name = "Maintenance points"
+    _attr_translation_key = "maintenance_points"
+    _attr_icon = "mdi:map-marker-radius"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _KEY = "maintenance_points"
+
+    def _compute_value(self, m):
+        pts = getattr(m, "maintenance_points", None) or ()
+        return len(pts)
+
+    @property
+    def extra_state_attributes(self):
+        m = self._map()
+        if m is None:
+            return {"points": []}
+        pts = getattr(m, "maintenance_points", None) or ()
+        return {
+            "points": [
+                {
+                    "id": getattr(p, "point_id", None),
+                    "x_mm": getattr(p, "x_mm", None),
+                    "y_mm": getattr(p, "y_mm", None),
+                }
+                for p in pts
+            ]
+        }
+
+
+class DreameA2PatrolPointsSensor(_DreameA2PerMapSensorBase):
+    """Per-map list of patrol (cruise) points.
+
+    State = count; ``extra_state_attributes['items']`` is the generic
+    multi-select shape consumed by dreame-multi-select-card. Decoded from
+    MAP key ``cruisePoints`` (type=8). Read-only; placement is app-only.
+    cycles/auto_capture are null — not readable from any known surface yet.
+    """
+
+    _attr_name = "Patrol points"
+    _attr_icon = "mdi:map-marker-path"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _KEY = "patrol_points"
+
+    def _compute_value(self, m):
+        return len(getattr(m, "patrol_points", None) or ())
+
+    @property
+    def extra_state_attributes(self):
+        m = self._map()
+        pts = (getattr(m, "patrol_points", None) or ()) if m is not None else ()
+        return {
+            "items": [
+                {
+                    "id": p.point_id,
+                    "label": f"Patrol point {p.point_id}",
+                    "x_mm": p.x_mm,
+                    "y_mm": p.y_mm,
+                    "cycles": None,
+                    "auto_capture": None,
+                }
+                for p in pts
+            ]
+        }
+
+
+class DreameA2PatrolEdgesSensor(_DreameA2PerMapSensorBase):
+    """Per-map list of edge-patrol targets (outer-perimeter contours).
+
+    State = count; ``extra_state_attributes['items']`` is the generic
+    multi-select shape; each item's ``id`` is the ``[m, c]`` contour pair the
+    op=108 payload needs. Only outer perimeters (c == 0) are offered, matching
+    the app's per-zone edge selection.
+    """
+
+    _attr_name = "Patrol edges"
+    _attr_icon = "mdi:vector-square"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _KEY = "patrol_edges"
+
+    def _outer(self, m):
+        cids = getattr(m, "available_contour_ids", None) or ()
+        return [cid for cid in cids if len(cid) == 2 and cid[1] == 0]
+
+    def _compute_value(self, m):
+        return len(self._outer(m))
+
+    @property
+    def extra_state_attributes(self):
+        m = self._map()
+        outer = self._outer(m) if m is not None else []
+        return {"items": [{"id": [cid[0], cid[1]], "label": f"Edge {cid[0]}"} for cid in outer]}
+
+
+class DreameA2ExclusionZonesSensor(_DreameA2PerMapSensorBase):
+    """Per-map count of exclusion (red / no-go) zones.
+
+    Decoded from MAP key `forbiddenAreas`. Stored on the unified
+    `MapData.exclusion_zones` tuple with `subtype is None`.
+    """
+
+    _attr_name = "Exclusion zones"
+    _attr_translation_key = "exclusion_zones"
+    _attr_icon = "mdi:vector-rectangle"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _KEY = "exclusion_zones"
+
+    def _compute_value(self, m):
+        zones = getattr(m, "exclusion_zones", None) or ()
+        return sum(1 for z in zones if getattr(z, "subtype", None) is None)
+
+
+class DreameA2IgnoreObstacleZonesSensor(_DreameA2PerMapSensorBase):
+    """Per-map count of Designated Ignore Obstacle (green) zones.
+
+    Decoded from MAP key `notObsAreas`. Stored on the unified
+    `MapData.exclusion_zones` tuple with `subtype == "ignore"`.
+    """
+
+    _attr_name = "Ignore-obstacle zones"
+    _attr_translation_key = "ignore_obstacle_zones"
+    _attr_icon = "mdi:vector-square"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _KEY = "ignore_obstacle_zones"
+
+    def _compute_value(self, m):
+        zones = getattr(m, "exclusion_zones", None) or ()
+        return sum(1 for z in zones if getattr(z, "subtype", None) == "ignore")
+
+
+class DreameA2SpotsCountSensor(_DreameA2PerMapSensorBase):
+    """Per-map count of user-defined Spot mow zones.
+
+    Spots are individually addressable mow targets (cloud key
+    ``spotAreas``); the s2.50 op=103 spot-mow task expects one or more
+    spot_id integers in ``d.area``. Stored on `MapData.spot_zones` as a
+    tuple of `SpotZone` entries (see map_decoder.py). Read-only —
+    spot placement happens in the Dreame app.
+    """
+
+    _attr_name = "Spots"
+    _attr_translation_key = "map_spots"
+    _attr_icon = "mdi:map-marker-multiple"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _KEY = "spots"
+
+    def _compute_value(self, m):
+        spots = getattr(m, "spot_zones", None) or ()
+        return len(spots)
+
+
+# ---------------------------------------------------------------------------
+# Per-map s6.2 PRE-family shadow sensors (height / edgemaster).
+# ---------------------------------------------------------------------------
+# The Dreame app stores these fields per-map app-side; the device
+# protocol only exposes the ACTIVE map's last-pushed values via s6.2.
+# We learn the per-map values over time by tagging each s6.2 push with
+# the currently-active map_id (see coordinator.handle_property_push +
+# state_machine.handle_pre_shadow_update). Entities below read from
+# `coordinator.state_machine.snapshot().pre_shadow_by_map_id` and
+# return None until the user has saved settings on that map at least
+# once in the Dreame app.
+#
+# All are EntityCategory.DIAGNOSTIC — read-only observables with
+# no write path (the device protocol doesn't accept per-map values on
+# g2408 firmware). For the writable counterpart of mowing_height, see
+# the per-map `number.<map>_settings_mowing_height` entity from
+# v1.0.10a7. See docs/research/g2408-protocol.md § s6.2.
+
+class DreameA2MapPreMowingHeightSensor(_DreameA2PerMapPreShadowBase):
+    """Per-map shadow of last-saved mowing height (cm).
+
+    Populated from s6.2 pushes tagged with the active map_id. Unknown
+    until the user saves settings on this map in the Dreame app.
+    """
+
+    _attr_name = "PRE mowing height"
+    _attr_translation_key = "map_pre_mowing_height_cm"
+    _attr_icon = "mdi:ruler"
+    _attr_native_unit_of_measurement = "cm"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 1
+    _KEY = "pre_mowing_height_cm"
+
+    def _compute_shadow_value(self, entry):
+        # Wire value is millimetres (5 mm steps per inventory.yaml id=s6p2).
+        # Use float division so half-cm app saves (e.g. 45 mm → 4.5 cm)
+        # survive — earlier `int(mm) // 10` floor-divided and silently
+        # truncated 4.5 cm to 4 cm. User confirmed 2026-05-17 that the
+        # wire push was correctly 45 mm but the sensor showed 4.
+        mm = entry.get("mowing_height_mm")
+        if mm is None:
+            return None
+        try:
+            return int(mm) / 10
+        except (TypeError, ValueError):
+            return None
+
+
+# DreameA2MapPreMowingEfficiencySensor removed 2026-05-15 — superseded
+# by ``select.dreame_a2_mower_map_N_mowing_efficiency`` (see
+# ``DreameA2MapMowingEfficiencySelect`` in select.py). Both surfaced
+# the same PRE-shadow value, but the new select is a proper enum
+# entity rather than a string sensor.
+
+
+class DreameA2MapPreEdgemasterSensor(_DreameA2PerMapPreShadowBase):
+    """Per-map shadow of last-saved EdgeMaster setting.
+
+    Populated from s6.2 pushes tagged with the active map_id. Unknown
+    until the user saves settings on this map in the Dreame app.
+    """
+
+    _attr_name = "PRE EdgeMaster"
+    _attr_translation_key = "map_pre_edgemaster"
+    _attr_icon = "mdi:vector-square-edit"
+    _KEY = "pre_edgemaster"
+
+    def _compute_shadow_value(self, entry):
+        value = entry.get("edgemaster")
+        if value is None:
+            return None
+        return "On" if bool(value) else "Off"
