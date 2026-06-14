@@ -427,6 +427,21 @@ imports (`test_card_contract`, `test_editable_objects_attr`, `test_oss_camera`,
 `_photo_detection_attrs` explicitly (an underscore name `import *` won't carry,
 imported by `test_oss_camera`). New code imports from `camera.<module>` directly.
 
+### wifi/ package
+
+The WiFi-heatmap support layer is a **package** (`wifi/`, Phase 3c, 2026-06-14):
+`wifi/archive_store.py` (disk-backed archive `WifiArchiveStore` / `WifiArchiveEntry`),
+`wifi/match.py` (heatmap→session fingerprint matcher), `wifi/map_render.py`
+(heatmap→PNG renderer). These are NOT entity classes — no HA platform / audit /
+inventory interaction.
+
+The old root paths (`wifi_archive_store.py`, `wifi_match.py`, `wifi_map_render.py`)
+are 1-line re-export **shims** preserving the ~10 coordinator importers + the
+test suite + the card-contract importer. Keep the shims. `wifi_map_render.py`
+carries `_rssi_to_rgb` explicitly (underscore name `import *` won't carry,
+imported by `test_wifi_gradient_contract`) alongside `CELL_PX` + `render_wifi_map_png`.
+New code imports from `wifi.<module>` directly.
+
 ---
 
 ## Protocol decoder naming (convention)
