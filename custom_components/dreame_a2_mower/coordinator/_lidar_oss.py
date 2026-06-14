@@ -711,27 +711,7 @@ class _LidarOssMixin:
         # picker keeps synthesizing a phantom "in progress" entry from disk
         # alongside the freshly-archived row (same bug v1.0.0a25 fixed for
         # the manual Finalize path; v1.0.0a42 closes the auto-finalize hole).
-        try:
-            await self.hass.async_add_executor_job(
-                self.session_archive.delete_in_progress
-            )
-        except Exception as ex:
-            LOGGER.warning(
-                "[F5.6.1] _do_oss_fetch: delete_in_progress raised: %s", ex
-            )
-        # The session is fully archived (mow/patrol cloud-finalized path).
-        # Clear the pending task op + sidecar so a finished session's op
-        # cannot seed a later one (no-window safety valve).
-        self._clear_pending_op()
-        self._fire_mowing_ended(
-            now_unix=now_unix,
-            area_mowed_m2=summary.area_mowed_m2,
-            duration_min=summary.duration_min,
-            completed=True,
-        )
-        self.live_map.end_session()
-        new_count = self.session_archive.count
-
+        #
         # P3 render-styling: infer dominant mow-stripe direction and record
         # it per-map. Only for ALL_AREAS / ZONE (edge/spot have no stripes).
         # summary.track_segments is in metres; infer_mow_direction expects mm.
@@ -753,31 +733,32 @@ class _LidarOssMixin:
                     angle, self._active_map_id, self.data.action_mode,
                 )
 
-        self.async_set_updated_data(
-            dataclasses.replace(
-                self.data,
-                pending_session_object_name=None,
-                pending_session_first_event_unix=None,
-                pending_session_last_attempt_unix=None,
-                pending_session_attempt_count=None,
-                latest_session_unix_ts=summary.end_ts,
-                latest_session_area_m2=summary.area_mowed_m2,
-                latest_session_duration_min=summary.duration_min,
+        # Shared post-archive teardown (delete_in_progress, clear pending op,
+        # fire mowing-ended, end live_map, publish MowerState). The cloud path
+        # additionally sets latest_session_* / total_lawn_area_m2 / the
+        # mow-direction map via extra_updates.
+        await self._post_archive_reset(
+            now_unix=now_unix,
+            area_mowed_m2=summary.area_mowed_m2,
+            duration_min=summary.duration_min,
+            completed=True,
+            delete_log_tag="_do_oss_fetch",
+            extra_updates={
+                "latest_session_unix_ts": summary.end_ts,
+                "latest_session_area_m2": summary.area_mowed_m2,
+                "latest_session_duration_min": summary.duration_min,
                 # v1.0.0a22: pull total lawn area from the session
                 # summary's `map_area` field. s2.66 (the MQTT push that
                 # also carries this value) fires rarely on g2408, so
                 # session-summary is the more reliable source of truth.
                 # Only update when the summary has a non-zero map_area
                 # (some incomplete entries set it to 0).
-                total_lawn_area_m2=(
+                "total_lawn_area_m2": (
                     float(summary.map_area_m2)
                     if summary.map_area_m2 else self.data.total_lawn_area_m2
                 ),
-                archived_session_count=new_count,
-                session_started_unix=None,
-                session_track_segments=(),
-                last_all_area_mow_direction_deg=new_direction_map,
-            )
+                "last_all_area_mow_direction_deg": new_direction_map,
+            },
         )
 
     async def _refresh_oss_gallery(self, max_pages: int = 20) -> None:

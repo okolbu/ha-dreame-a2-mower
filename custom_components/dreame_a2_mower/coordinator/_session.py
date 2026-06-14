@@ -726,6 +726,73 @@ class _SessionMixin:
                 label,
             )
 
+    async def _post_archive_reset(
+        self,
+        *,
+        now_unix: int,
+        area_mowed_m2: float | None,
+        duration_min: int | None,
+        completed: bool,
+        extra_updates: dict | None = None,
+        delete_log_tag: str = "_do_finalize_incomplete",
+    ) -> None:
+        """Shared post-archive teardown for both terminal writers.
+
+        Runs the sequence both writers run after a successful archive:
+          1. delete_in_progress (executor, try/except-logged) — removes the
+             synthesized in-progress entry so the picker doesn't show a phantom
+             "in progress" row alongside the archived entry.
+          2. _clear_pending_op() — drop the pending op latches + sidecar.
+          3. _fire_mowing_ended(...) — emit the lifecycle event.
+          4. live_map.end_session().
+          5. async_set_updated_data(replace(... pending_* cleared, count, ...)).
+
+        ``archived_session_count`` is read AFTER delete_in_progress (the archive
+        write has already happened in the caller), matching prior behaviour.
+
+        ``extra_updates`` carries the cloud path's extra MowerState fields
+        (latest_session_*, total_lawn_area_m2, last_all_area_mow_direction_deg);
+        the caller computes them and passes the dict. The local path passes None.
+
+        ``delete_log_tag`` only varies the delete_in_progress warning prefix so
+        the two callers stay distinguishable in the log.
+        """
+        # Without this, the synthesized in-progress entry keeps
+        # reappearing in the picker after every finalize, leaving the
+        # archived entry _and_ a phantom "in progress" row side-by-side.
+        try:
+            await self.hass.async_add_executor_job(
+                self.session_archive.delete_in_progress
+            )
+        except Exception as ex:
+            LOGGER.warning(
+                "[F5.6.1] %s: delete_in_progress raised: %s", delete_log_tag, ex
+            )
+
+        self._clear_pending_op()
+
+        self._fire_mowing_ended(
+            now_unix=now_unix,
+            area_mowed_m2=area_mowed_m2,
+            duration_min=duration_min,
+            completed=completed,
+        )
+        self.live_map.end_session()
+        new_count = self.session_archive.count
+        self.async_set_updated_data(
+            dataclasses.replace(
+                self.data,
+                pending_session_object_name=None,
+                pending_session_first_event_unix=None,
+                pending_session_last_attempt_unix=None,
+                pending_session_attempt_count=None,
+                archived_session_count=new_count,
+                session_started_unix=None,
+                session_track_segments=(),
+                **(extra_updates or {}),
+            )
+        )
+
     async def _run_finalize_incomplete(self, now_unix: int) -> None:
         """Archive whatever the live_map has as an "(incomplete)" session.
 
@@ -843,20 +910,10 @@ class _SessionMixin:
         except Exception as ex:
             LOGGER.warning("[F5.6.1] _do_finalize_incomplete: archive raised: %s", ex)
 
-        # Without this, the synthesized in-progress entry keeps
-        # reappearing in the picker after every finalize, leaving the
-        # archived entry _and_ a phantom "in progress" row side-by-side.
-        try:
-            await self.hass.async_add_executor_job(
-                self.session_archive.delete_in_progress
-            )
-        except Exception as ex:
-            LOGGER.warning("[F5.6.1] _do_finalize_incomplete: delete_in_progress raised: %s", ex)
-
-        self._clear_pending_op()
-
-        # Clear pending state, end live_map session.
-        self._fire_mowing_ended(
+        # Clear pending state, delete the in-progress entry, fire the
+        # mowing-ended event, and end the live_map session. Shared with the
+        # cloud path via _post_archive_reset (local path = no extra updates).
+        await self._post_archive_reset(
             now_unix=now_unix,
             area_mowed_m2=area,
             duration_min=(
@@ -865,20 +922,6 @@ class _SessionMixin:
                 else None
             ),
             completed=False,
-        )
-        self.live_map.end_session()
-        new_count = self.session_archive.count
-        self.async_set_updated_data(
-            dataclasses.replace(
-                self.data,
-                pending_session_object_name=None,
-                pending_session_first_event_unix=None,
-                pending_session_last_attempt_unix=None,
-                pending_session_attempt_count=None,
-                archived_session_count=new_count,
-                session_started_unix=None,
-                session_track_segments=(),
-            )
         )
 
     def _load_pending_op_from_sidecar(self) -> None:
