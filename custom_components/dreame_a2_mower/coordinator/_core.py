@@ -175,14 +175,19 @@ class _CoreMixin:
         # _seed_session_type_from_pending can stamp live_map.saw_patrol_start at
         # begin (the op-echo path covers edge patrols, which DO emit op=108).
         self._pending_saw_patrol_start: bool = False
-        # Synchronous latch to prevent double-finalize when s2p2=75 AND the
-        # task_state 0→2 edge arrive within ~1 s and both schedule
-        # _finalize_non_mow_immediate as concurrent async tasks. Both can pass
-        # the live_map.is_active() guard before either reaches end_session()
-        # (the first yields at an `await` inside _run_finalize_incomplete). The
-        # latch is set SYNCHRONOUSLY before the first await and cleared in a
-        # `finally`, so the second caller bails immediately.
-        self._non_mow_finalize_in_progress: bool = False
+        # Single finalize latch (P3e.4). Serializes ALL finalize entries
+        # (gate path, new-command boundary, non-mow immediate, manual button)
+        # and de-dupes by the session's start_ts. Both terminal archive writers
+        # (_do_oss_fetch, _run_finalize_incomplete) run their body inside
+        # _finalize_with_latch, which acquires _finalize_lock, no-ops if the
+        # session's start_ts was already finalized (== _finalizing_start_ts),
+        # records it, runs the body, and releases in a finally. This subsumes
+        # the old ad-hoc _non_mow_finalize_in_progress bool and closes the
+        # s2p2=75-vs-task_state-edge double-fire race more robustly (it covers
+        # cross-path concurrency, not just the two non-mow triggers). The
+        # archive-level (md5, start_ts) dedup stays as the backstop.
+        self._finalize_lock: asyncio.Lock = asyncio.Lock()
+        self._finalizing_start_ts: int | None = None
         # Stores the most-recent fired notification for sensor.last_notification.
         # Shape: {"event_type": str, "text": str, "code": int, "fired_at": int}
         self._last_notification: dict | None = None

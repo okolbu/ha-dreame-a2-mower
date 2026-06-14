@@ -52,6 +52,7 @@ def _build_rain_coord():
     DreameA2MowerCoordinator property MRO (rain_delay_active lives in
     _CoreMixin which the coordinator inherits).
     """
+    import asyncio
     import tempfile
     from unittest.mock import MagicMock
 
@@ -68,7 +69,9 @@ def _build_rain_coord():
     c._rain_delay_started_at = None          # default: no rain in progress
     c._lifecycle_event = None
     c._notification_event = None
-    c._non_mow_finalize_in_progress = False  # race latch (owned by _CoreMixin.__init__)
+    # Single finalize latch (P3e.4, owned by _CoreMixin.__init__).
+    c._finalize_lock = asyncio.Lock()
+    c._finalizing_start_ts = None
 
     # Bind the session-mixin methods needed for _finalize_non_mow_immediate.
     c._finalize_non_mow_immediate = _SessionMixin._finalize_non_mow_immediate.__get__(c)

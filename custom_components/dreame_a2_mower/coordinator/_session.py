@@ -516,10 +516,14 @@ class _SessionMixin:
         Hard guards (checked synchronously before the first await):
           - live_map must be active (no double-finalize).
           - session must be non-cloud-finalized (mow/patrol path NEVER uses this).
-          - _non_mow_finalize_in_progress latch must be False (race guard: both
-            s2p2=75 and the 0→2 edge can arrive within ~1 s; without this latch
-            both tasks can pass the is_active() guard before either reaches
-            end_session(), causing a double-archive).
+          - rain_delay_active must be False (pause-at-dock for rain is not a
+            session end).
+
+        The s2p2=75-vs-task_state-edge double-fire race (both can pass the
+        is_active() guard before either reaches end_session()) is now closed by
+        the single finalize latch inside _run_finalize_incomplete
+        (_finalize_with_latch), which de-dupes concurrent finalizes of the same
+        session — no per-method bool latch needed.
         """
         if not self.live_map.is_active():
             LOGGER.debug(
@@ -532,13 +536,6 @@ class _SessionMixin:
                 "[F5.6.1] _finalize_non_mow_immediate(trigger=%s): session is cloud-finalized "
                 "(mow/patrol) — refusing to finalize non-mow path; this is a bug if called "
                 "for a real mow",
-                trigger,
-            )
-            return
-        if self._non_mow_finalize_in_progress:
-            LOGGER.debug(
-                "[F5.6.1] _finalize_non_mow_immediate(trigger=%s): finalize already in progress "
-                "(concurrent trigger) — skip",
                 trigger,
             )
             return
@@ -557,19 +554,16 @@ class _SessionMixin:
                 trigger,
             )
             return
-        # Set latch SYNCHRONOUSLY before the first await so a concurrent caller
-        # that entered between the guards above bails at the latch check.
-        self._non_mow_finalize_in_progress = True
-        try:
-            LOGGER.debug(
-                "[F5.6.1] _finalize_non_mow_immediate: trigger=%s — finalizing non-mow session "
-                "immediately (no dock-wait); live_map.total_points=%d",
-                trigger,
-                self.live_map.total_points(),
-            )
-            await self._run_finalize_incomplete(now_unix)
-        finally:
-            self._non_mow_finalize_in_progress = False
+        LOGGER.debug(
+            "[F5.6.1] _finalize_non_mow_immediate: trigger=%s — finalizing non-mow session "
+            "immediately (no dock-wait); live_map.total_points=%d",
+            trigger,
+            self.live_map.total_points(),
+        )
+        # The double-fire race is closed by the finalize latch inside
+        # _run_finalize_incomplete (_finalize_with_latch) — a concurrent second
+        # trigger for the same session no-ops there.
+        await self._run_finalize_incomplete(now_unix)
 
     def _provisional_session_type(self) -> str:
         """Provisional finalize-time session type, computed from the SAME
@@ -714,6 +708,48 @@ class _SessionMixin:
 
         LOGGER.warning("[F5.6.1] _dispatch_finalize_action: unhandled action=%s", action)
 
+    async def _finalize_with_latch(self, body, *, label: str) -> None:
+        """Serialize + de-dupe a terminal archive write (P3e.4).
+
+        Both terminal writers (_do_oss_fetch, _run_finalize_incomplete) run
+        their body through here. The latch:
+          1. captures the live session's start_ts SYNCHRONOUSLY (before any
+             await) so a concurrent second entry snapshots the same key while
+             the session is still active;
+          2. acquires _finalize_lock (serializes all finalize entries);
+          3. no-ops if that start_ts was already FINALIZED to completion
+             (== _finalizing_start_ts, which _post_archive_reset stamps on a
+             successful archive+end_session) — the concurrent-double-fire case;
+          4. otherwise runs ``body`` and releases in a finally.
+
+        Crucially _finalizing_start_ts is set on COMPLETION, not at entry, so a
+        legitimate SEQUENTIAL retry of a still-pending OSS fetch (the
+        AWAIT_OSS_FETCH retry loop, which early-returns without completing while
+        the cloud summary is not yet available) is NOT de-duped — only a second
+        entry that races a finalize that actually completed is.
+
+        The disk-fallback manual case (no live session → started_unix is None)
+        is never de-duped here (no key to match); the archive-level
+        (md5, start_ts) dedup remains the backstop for it. ``label`` only tags
+        the no-op debug log.
+        """
+        # Capture BEFORE the first await: both concurrent entries snapshot the
+        # same start_ts while the session is still active, before either body
+        # runs end_session().
+        intended_start = self.live_map.started_unix
+        async with self._finalize_lock:
+            if (
+                intended_start is not None
+                and intended_start == self._finalizing_start_ts
+            ):
+                LOGGER.debug(
+                    "[F5.6.1] _finalize_with_latch(%s): session start_ts=%s "
+                    "already finalized — no-op (concurrent trigger)",
+                    label, intended_start,
+                )
+                return
+            await body()
+
     async def _merge_recorder_into_payload(
         self, payload: dict[str, Any], *, label: str
     ) -> None:
@@ -806,6 +842,12 @@ class _SessionMixin:
             duration_min=duration_min,
             completed=completed,
         )
+        # Stamp the finalize latch's completion key (P3e.4) BEFORE end_session()
+        # clears started_unix. A concurrent second finalize of this same session
+        # — which snapshotted the same start_ts before either body ran — then
+        # no-ops at the latch's pre-check instead of double-archiving.
+        if self.live_map.started_unix is not None:
+            self._finalizing_start_ts = self.live_map.started_unix
         self.live_map.end_session()
         new_count = self.session_archive.count
         self.async_set_updated_data(
@@ -831,13 +873,25 @@ class _SessionMixin:
         The archived entry has md5="(incomplete)" so callers can distinguish it
         from a cloud-fetched session.
 
-        Called from two paths:
+        Called from several paths:
           - ``_dispatch_finalize_action(FinalizeAction.FINALIZE_INCOMPLETE)``
             (periodic retry gate, F5.6.1)
+          - ``_route_finalize`` local arm (gate + new-command boundary)
+          - ``_finalize_non_mow_immediate`` (s2p2=75 / task_state edge)
           - ``dispatch_action(MowerAction.FINALIZE_SESSION, ...)``
             (manual escape hatch, F5.10.1)
-        """
 
+        The actual work runs inside _finalize_with_latch so concurrent entries
+        for the same session de-dupe (single finalize latch, P3e.4).
+        """
+        await self._finalize_with_latch(
+            lambda: self._do_run_finalize_incomplete(now_unix),
+            label="FINALIZE_INCOMPLETE",
+        )
+
+    async def _do_run_finalize_incomplete(self, now_unix: int) -> None:
+        """Body of _run_finalize_incomplete — see that method. Always invoked
+        through _finalize_with_latch (never call directly)."""
         LOGGER.info(
             "[F5.6.1] _do_finalize_incomplete: giving up on cloud summary; "
             "archiving incomplete session (started_unix=%s, points=%d)",

@@ -527,6 +527,18 @@ class _LidarOssMixin:
             )
 
     async def _do_oss_fetch(self, now_unix: int) -> None:
+        """Download + archive the cloud-summary JSON for the pending session.
+
+        The actual work runs inside _finalize_with_latch so concurrent entries
+        for the same session de-dupe (single finalize latch, P3e.4). See
+        _do_oss_fetch_body for the step-by-step flow.
+        """
+        await self._finalize_with_latch(
+            lambda: self._do_oss_fetch_body(now_unix),
+            label="OSS-fetch",
+        )
+
+    async def _do_oss_fetch_body(self, now_unix: int) -> None:
         """Attempt to download and archive the cloud-summary JSON.
 
         1. call ``cloud_client.get_interim_file_url(object_name)`` to get a
@@ -540,6 +552,7 @@ class _LidarOssMixin:
         6. On failure: increment ``pending_session_attempt_count``.
 
         All blocking I/O goes through hass.async_add_executor_job per spec §3.
+        Always invoked through _finalize_with_latch (never call directly).
         """
         object_name = self.data.pending_session_object_name
         if not object_name:

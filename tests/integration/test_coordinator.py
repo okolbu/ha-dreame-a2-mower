@@ -584,6 +584,10 @@ def _make_coordinator_for_session_tests():
     # F13: s2p2 notification synthesizer state.
     coord._prev_error_code = None
     coord._last_notification = None
+    # Single finalize latch (P3e.4) — owned by _CoreMixin.__init__; seed it
+    # here since the fixture builds via __new__.
+    coord._finalize_lock = asyncio.Lock()
+    coord._finalizing_start_ts = None
     return coord
 
 
@@ -959,6 +963,11 @@ def _make_coordinator_for_finalize_tests(
     coord._wait_for_dock_return = _instant_wait
     coord._pending_finalize_done = None
     coord._pending_finalize_done_reason = None
+
+    # Single finalize latch (P3e.4) — owned by _CoreMixin.__init__; seed it
+    # here since the fixture builds via __new__.
+    coord._finalize_lock = asyncio.Lock()
+    coord._finalizing_start_ts = None
 
     return coord
 

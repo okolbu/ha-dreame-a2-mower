@@ -50,7 +50,9 @@ def _make_coord_for_dock_test(
     coord._prev_error_code = None
     coord._prev_charging_status = None
     coord._rain_delay_started_at = None
-    coord._non_mow_finalize_in_progress = False
+    import asyncio as _asyncio
+    coord._finalize_lock = _asyncio.Lock()  # finalize latch (P3e.4)
+    coord._finalizing_start_ts = None
     coord._pending_finalize_done = None
 
     # --- live_map ---

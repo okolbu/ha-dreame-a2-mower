@@ -62,6 +62,9 @@ def _build_coord(tmp_path):
     c.state_machine = None
     c._pending_finalize_done = None
     c._pending_finalize_done_reason = None
+    # Single finalize latch (P3e.4) — owned by _CoreMixin.__init__.
+    c._finalize_lock = asyncio.Lock()
+    c._finalizing_start_ts = None
 
     # A cloud client that, if EVER touched, makes the test loud: a non-mow
     # finalize must NOT go through the cloud-OSS path.
