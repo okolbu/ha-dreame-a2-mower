@@ -23,6 +23,21 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
+### Sweep probe logs 2026-06-13 21:44 → now for novel slots/values (app "Bumper error" 21:45)
+
+**Why:** A "Bumper error" appeared in the Dreame **app** logs ~2026-06-13 21:45 — likely a
+new fault not yet reflected in the wire inventory. Same pattern that just surfaced s2p57
+(first wire capture caught via the corpus). Worth a focused sweep of the capture window for
+other firsts while it's fresh.
+**Done when:** every novel `(siid, piid)` slot AND novel value in `probe/logs/probe_log_*.jsonl`
+from 2026-06-13 21:44 through the latest capture is enumerated; the bumper-error event is
+located on the wire (`error_code` s2p2 / s1p1 bumper bit / a new slot) and, if new, recorded in
+`inventory.yaml` with evidence (+ `error_codes.py` only if the `state_codes` row reaches
+confirmed/partial, per the confidence gate).
+**Status:** open
+**Cross-refs:** inventory `s2p57` (recorded 2026-06-14), `binary_sensor.bumper`,
+`mower/error_codes.py` + inventory `state_codes`, `tools/probes/`, `docs/research/knowledge-gaps.md`.
+
 ### Control honesty — residual follow-ups (core shipped 2026-06-04)
 
 **Core DONE** — the audit + `control_mode` classification + padlock/snap-back read-only
