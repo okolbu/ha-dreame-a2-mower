@@ -18,6 +18,7 @@ from homeassistant.data_entry_flow import FlowResult
 
 from .const import (
     CONF_COUNTRY,
+    CONF_DEBUG_SERVICES,
     CONF_LIDAR_ARCHIVE_KEEP,
     CONF_LIDAR_ARCHIVE_MAX_MB,
     CONF_PASSWORD,
@@ -26,6 +27,7 @@ from .const import (
     CONF_USERNAME,
     CONF_WIFI_ARCHIVE_KEEP,
     DEFAULT_COUNTRY,
+    DEFAULT_DEBUG_SERVICES,
     DEFAULT_LIDAR_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_MAX_MB,
     DEFAULT_NAME,
@@ -141,6 +143,14 @@ class DreameA2MowerOptionsFlow(config_entries.OptionsFlow):
                     CONF_STATION_BEARING_DEG,
                     default=opts.get(CONF_STATION_BEARING_DEG, 0),
                 ): vol.All(vol.Coerce(int), vol.Range(min=0, max=359)),
+                # P2 2.5: expose the two developer-only diagnostic services
+                # (dump_map_diagnostics + discover_cloud_api). OFF by default —
+                # when off they are not registered in the service registry.
+                # Toggling this + reloading the entry adds/removes them.
+                vol.Optional(
+                    CONF_DEBUG_SERVICES,
+                    default=opts.get(CONF_DEBUG_SERVICES, DEFAULT_DEBUG_SERVICES),
+                ): bool,
             }
         )
 

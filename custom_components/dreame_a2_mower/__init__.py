@@ -27,7 +27,11 @@ from .const import (
     PLATFORMS,
 )
 from .observability import NovelLogBuffer
-from .services import async_register_services, async_unregister_services
+from .services import (
+    async_reconcile_debug_services,
+    async_register_services,
+    async_unregister_services,
+)
 
 # Module-level sentinel so static path registration happens only once per HA
 # process (survives integration reloads).
@@ -191,10 +195,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
 
-    # Register integration-wide services. Idempotent — async_register_services
-    # checks if services are already registered and no-ops if so.
+    # Register integration-wide services. Idempotent — guarded on a sentinel
+    # service so the bulk registration runs once per HA process. The two
+    # debug-only services are gated on this entry's debug_services option, and
+    # that gate is reconciled on every setup/reload (see
+    # async_reconcile_debug_services) so toggling the option + reloading takes
+    # effect without a full HA restart.
     if not hass.services.has_service(DOMAIN, "mow_zone"):
-        await async_register_services(hass)
+        await async_register_services(hass, entry)
+    else:
+        async_reconcile_debug_services(hass, entry)
 
     return True
 

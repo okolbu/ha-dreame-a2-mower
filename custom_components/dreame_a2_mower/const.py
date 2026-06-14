@@ -117,6 +117,15 @@ CONF_VIDEO_ARCHIVE_MAX_MB: Final = "video_archive_max_mb"
 CONF_SESSION_ARCHIVE_KEEP: Final = "session_archive_keep"
 CONF_WIFI_ARCHIVE_KEEP: Final = "wifi_archive_keep"
 
+# Debug-services gate (P2 sub-task 2.5). When False (the default), the two
+# developer-only diagnostic services — dump_map_diagnostics + discover_cloud_api
+# — are NOT registered, so they don't appear in the HA service registry. Flip
+# the "Enable debug services" toggle in the integration's options to expose
+# them (e.g. for a one-off cloud-API dump). They still ship in services.yaml so
+# their descriptions are available when enabled.
+CONF_DEBUG_SERVICES: Final = "debug_services"
+DEFAULT_DEBUG_SERVICES: Final = False
+
 # Bearing (degrees clockwise from north) of the dock's local X axis.
 # Used to project dock-frame (x_m, y_m) telemetry into global compass-frame
 # (north_m, east_m) for position_north_m / position_east_m sensors.

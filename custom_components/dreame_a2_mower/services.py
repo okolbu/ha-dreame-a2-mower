@@ -10,16 +10,17 @@ unregistered in async_unload_entry.
 from __future__ import annotations
 
 import dataclasses
+import functools
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Awaitable, Callable
 
 import voluptuous as vol
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
-from .const import DOMAIN, LOGGER
+from .const import CONF_DEBUG_SERVICES, DEFAULT_DEBUG_SERVICES, DOMAIN, LOGGER
 from .coordinator import DreameA2MowerCoordinator
 from .coordinator._write_errors import raise_for_write_result
 from .mower.state import ActionMode
@@ -212,11 +213,56 @@ def _coordinator_from_call(hass: HomeAssistant, call: ServiceCall) -> DreameA2Mo
     return next(iter(coordinators.values()))
 
 
-async def _handle_set_active_selection(call: ServiceCall) -> None:
-    """Update coordinator.data.active_selection_zones / _spots."""
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
+def service_handler(
+    body: Callable[[DreameA2MowerCoordinator, ServiceCall], Awaitable[None]],
+) -> Callable[[ServiceCall], Awaitable[None]]:
+    """Wrap a service body so the 22x coordinator preamble lives in ONE place.
+
+    The wrapped ``body`` is written as ``async def _x(coordinator, call)``: the
+    decorator resolves the (single) coordinator from the call and short-circuits
+    — exactly as the old ``coordinator = _coordinator_from_call(...); if
+    coordinator is None: return`` boilerplate did — before invoking the body
+    with the resolved coordinator.
+
+    ``_coordinator_from_call`` is looked up through the module global at call
+    time (not captured at decoration time), so tests that monkeypatch
+    ``services._coordinator_from_call`` keep working.
+    """
+
+    @functools.wraps(body)
+    async def handler(call: ServiceCall) -> None:
+        coordinator = _coordinator_from_call(call.hass, call)
+        if coordinator is None:
+            return
+        await body(coordinator, call)
+
+    return handler
+
+
+async def _run_map_edit(
+    coro: Awaitable[bool], label: str, log_key: str,
+) -> None:
+    """Run a map-edit coroutine with the 5x identical try/except/raise shape.
+
+    The map-edit wrappers (``create_no_go`` / ``create_ignore_obstacle`` /
+    ``create_mow_shape`` / ``split_zone`` / ``merge_zones``) raise ``ValueError``
+    on a bad geometry/argument — we log+swallow that (the user fixes the
+    request, no traceback needed) — and otherwise return a single ``ok`` bool
+    that ``_raise_for_edit_ok`` turns into a ServiceValidationError on rejection.
+    """
+    try:
+        ok = await coro
+    except ValueError as err:
+        LOGGER.warning("%s: %s", log_key, err)
         return
+    _raise_for_edit_ok(ok, label)
+
+
+@service_handler
+async def _handle_set_active_selection(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
+    """Update coordinator.data.active_selection_zones / _spots."""
     zones = tuple(call.data.get("zones", []))
     spots = tuple(call.data.get("spots", []))
     new_state = dataclasses.replace(
@@ -227,11 +273,11 @@ async def _handle_set_active_selection(call: ServiceCall) -> None:
     coordinator.async_set_updated_data(new_state)
 
 
-async def _handle_mow_zone(call: ServiceCall) -> None:
+@service_handler
+async def _handle_mow_zone(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """Set zone selection then dispatch start_mowing in zone mode."""
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
     zone_ids = tuple(call.data["zone_ids"])
     new_state = dataclasses.replace(
         coordinator.data,
@@ -245,10 +291,10 @@ async def _handle_mow_zone(call: ServiceCall) -> None:
     raise_for_write_result(result, "Mow zone")
 
 
-async def _handle_mow_edge(call: ServiceCall) -> None:
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
+@service_handler
+async def _handle_mow_edge(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     contour_ids = call.data.get("contour_ids") or []
     from .mower.actions import MowerAction
     result = await coordinator.dispatch_action(
@@ -257,10 +303,10 @@ async def _handle_mow_edge(call: ServiceCall) -> None:
     raise_for_write_result(result, "Mow edge")
 
 
-async def _handle_mow_spot(call: ServiceCall) -> None:
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
+@service_handler
+async def _handle_mow_spot(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     spot_ids = tuple(int(s) for s in call.data["spot_ids"])
     if not spot_ids:
         LOGGER.warning("mow_spot: spot_ids list is empty; ignoring")
@@ -278,10 +324,10 @@ async def _handle_mow_spot(call: ServiceCall) -> None:
     raise_for_write_result(result, "Mow spot")
 
 
-async def _handle_start_point_patrol(call: ServiceCall) -> None:
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
+@service_handler
+async def _handle_start_point_patrol(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     map_id = call.data.get("map_id")
     if map_id is None:
         map_id = getattr(coordinator, "_active_map_id", None) or 0
@@ -290,10 +336,10 @@ async def _handle_start_point_patrol(call: ServiceCall) -> None:
     raise_for_write_result(result, "Start point patrol")
 
 
-async def _handle_start_edge_patrol(call: ServiceCall) -> None:
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
+@service_handler
+async def _handle_start_edge_patrol(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     map_id = call.data.get("map_id")
     if map_id is None:
         map_id = getattr(coordinator, "_active_map_id", None) or 0
@@ -307,10 +353,8 @@ async def _handle_simple_action(action_name: str):
     from .mower.actions import MowerAction
     target = MowerAction[action_name]
 
-    async def handler(call: ServiceCall) -> None:
-        coordinator = _coordinator_from_call(call.hass, call)
-        if coordinator is None:
-            return
+    @service_handler
+    async def handler(coordinator: DreameA2MowerCoordinator, call: ServiceCall) -> None:
         result = await coordinator.dispatch_action(target, {})
         # FINALIZE_SESSION is local-only (always accepted) so it never raises;
         # the others surface a device rejection / undelivered command.
@@ -320,16 +364,19 @@ async def _handle_simple_action(action_name: str):
 
 
 
-async def _handle_replay_session(call: ServiceCall) -> None:
+@service_handler
+async def _handle_replay_session(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """Look up an archived session by md5 and render it into _work_log_png."""
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
     md5 = call.data["session_md5"].strip()
     await coordinator.replay_session(md5)
 
 
-async def _handle_set_schedule_plans(call: ServiceCall) -> None:
+@service_handler
+async def _handle_set_schedule_plans(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """Replace one slot's full plan list, leave other slots untouched.
 
     Card-side flow: card holds the working set locally as the user edits;
@@ -339,9 +386,6 @@ async def _handle_set_schedule_plans(call: ServiceCall) -> None:
     """
     from .cloud_state import SchedulePlan, ScheduleSlot
 
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
     cs = getattr(coordinator, "cloud_state", None)
     if cs is None:
         LOGGER.warning("set_schedule_plans: cloud_state not yet populated")
@@ -404,14 +448,16 @@ async def _handle_show_lidar_fullscreen(call: ServiceCall) -> None:
     call.hass.bus.async_fire("dreame_a2_mower_lidar_fullscreen", {})
 
 
-async def _handle_dump_map_diagnostics(call: ServiceCall) -> None:
+@service_handler
+async def _handle_dump_map_diagnostics(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """One-off diagnostic: dump raw cloud map-batch responses to the
     HA log so we can see what data the cloud is actually returning.
     Triggered by `service: dreame_a2_mower.dump_map_diagnostics`.
     """
     hass = call.hass
-    coordinator = _coordinator_from_call(hass, call)
-    if coordinator is None or not hasattr(coordinator, "_cloud") or coordinator._cloud is None:
+    if not hasattr(coordinator, "_cloud") or coordinator._cloud is None:
         LOGGER.warning("dump_map_diagnostics: no coordinator/cloud client ready")
         return
     cloud = coordinator._cloud
@@ -568,7 +614,10 @@ def _summarise_family(
     return out
 
 
-async def _async_handle_discover_cloud_api(call: ServiceCall) -> None:
+@service_handler
+async def _async_handle_discover_cloud_api(
+    coord: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """Recursively dump the device's cloud API surface to
     <config>/dreame_a2_mower/api_discovery.json. Triggered via the
     service `dreame_a2_mower.discover_cloud_api`. No parameters.
@@ -583,8 +632,7 @@ async def _async_handle_discover_cloud_api(call: ServiceCall) -> None:
     import os
 
     hass = call.hass
-    coord = _coordinator_from_call(hass, call)
-    if coord is None or not hasattr(coord, "_cloud") or coord._cloud is None:
+    if not hasattr(coord, "_cloud") or coord._cloud is None:
         LOGGER.warning("discover_cloud_api: no coordinator/cloud client ready")
         return
     cloud = coord._cloud
@@ -686,7 +734,10 @@ async def _handle_show_photo_privacy_policy(call: ServiceCall) -> None:
     )
 
 
-async def _handle_refresh_cloud_state(call: ServiceCall) -> None:
+@service_handler
+async def _handle_refresh_cloud_state(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """Force an on-demand re-fetch of all cloud-derived state.
 
     Same code path as the periodic 2-min poll and the s6p2 tripwire,
@@ -694,9 +745,6 @@ async def _handle_refresh_cloud_state(call: ServiceCall) -> None:
     you want HA's view of CFG / SETTINGS / SCHEDULE / MAP / etc. to
     catch up without waiting.
     """
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
     LOGGER.info("service.refresh_cloud_state: forcing cloud refresh")
     await coordinator._refresh_cloud_state()
 
@@ -736,22 +784,22 @@ async def _async_move_lidar_scan(call: ServiceCall) -> None:
     await coordinator.async_request_refresh()
 
 
-async def _handle_rename_zone(call: ServiceCall) -> None:
+@service_handler
+async def _handle_rename_zone(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """Rename a mowing zone on a map (o=219)."""
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
     ok = await coordinator.rename_zone(
         int(call.data["map_id"]), int(call.data["zone"]), str(call.data["name"])
     )
     _raise_for_edit_ok(ok, "Rename zone")
 
 
-async def _handle_delete_map_object(call: ServiceCall) -> None:
+@service_handler
+async def _handle_delete_map_object(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """Delete a map object by id+category (o=218; 0=zone/no-go, 4=ignore)."""
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
     ok = await coordinator.delete_map_object(
         int(call.data["map_id"]),
         int(call.data["object_id"]),
@@ -760,86 +808,101 @@ async def _handle_delete_map_object(call: ServiceCall) -> None:
     _raise_for_edit_ok(ok, "Delete map object")
 
 
-async def _handle_create_no_go_zone(call: ServiceCall) -> None:
+@service_handler
+async def _handle_create_no_go_zone(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """Create a no-go area / virtual wall on a map (o=215). Coords = edit-frame metres."""
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
-    try:
-        ok = await coordinator.create_no_go(
+    await _run_map_edit(
+        coordinator.create_no_go(
             int(call.data["map_id"]), call.data["shape"],
             call.data["points"], float(call.data.get("radius", 0.0)),
             object_id=int(call.data.get("object_id", -1)),
-        )
-    except ValueError as err:
-        LOGGER.warning("create_no_go_zone: %s", err)
-        return
-    _raise_for_edit_ok(ok, "Create no-go zone")
+        ),
+        "Create no-go zone", "create_no_go_zone",
+    )
 
 
-async def _handle_create_ignore_obstacle(call: ServiceCall) -> None:
+@service_handler
+async def _handle_create_ignore_obstacle(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """Create an ignore-obstacle area on a map (o=234, polygon >=3 pt)."""
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
-    try:
-        ok = await coordinator.create_ignore_obstacle(
+    await _run_map_edit(
+        coordinator.create_ignore_obstacle(
             int(call.data["map_id"]), call.data["points"],
             object_id=int(call.data.get("object_id", -1)),
-        )
-    except ValueError as err:
-        LOGGER.warning("create_ignore_obstacle: %s", err)
-        return
-    _raise_for_edit_ok(ok, "Create ignore obstacle")
+        ),
+        "Create ignore obstacle", "create_ignore_obstacle",
+    )
 
 
-async def _handle_create_mow_shape(call: ServiceCall) -> None:
+@service_handler
+async def _handle_create_mow_shape(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """Create a decorative mow-shape on a map (o=215 type 9/12-18)."""
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
-    try:
-        ok = await coordinator.create_mow_shape(
+    await _run_map_edit(
+        coordinator.create_mow_shape(
             int(call.data["map_id"]), call.data["shape"], call.data["points"],
             object_id=int(call.data.get("object_id", -1)),
-        )
-    except ValueError as err:
-        LOGGER.warning("create_mow_shape: %s", err)
-        return
-    _raise_for_edit_ok(ok, "Create mow shape")
+        ),
+        "Create mow shape", "create_mow_shape",
+    )
 
 
-async def _handle_split_zone(call: ServiceCall) -> None:
+@service_handler
+async def _handle_split_zone(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """Split a zone by a line (o=220). DESTRUCTIVE: clears that zone's schedule/prefs."""
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
-    try:
-        ok = await coordinator.split_zone(
+    await _run_map_edit(
+        coordinator.split_zone(
             int(call.data["map_id"]), int(call.data["zone"]),
             call.data["line_start"], call.data["line_end"],
-        )
-    except ValueError as err:
-        LOGGER.warning("split_zone: %s", err)
-        return
-    _raise_for_edit_ok(ok, "Split zone")
+        ),
+        "Split zone", "split_zone",
+    )
 
 
-async def _handle_merge_zones(call: ServiceCall) -> None:
+@service_handler
+async def _handle_merge_zones(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
     """Merge zones by id list (o=221). DESTRUCTIVE: resets merged prefs."""
-    coordinator = _coordinator_from_call(call.hass, call)
-    if coordinator is None:
-        return
-    try:
-        ok = await coordinator.merge_zones(int(call.data["map_id"]), call.data["zones"])
-    except ValueError as err:
-        LOGGER.warning("merge_zones: %s", err)
-        return
-    _raise_for_edit_ok(ok, "Merge zones")
+    await _run_map_edit(
+        coordinator.merge_zones(int(call.data["map_id"]), call.data["zones"]),
+        "Merge zones", "merge_zones",
+    )
 
 
-async def async_register_services(hass: HomeAssistant) -> None:
-    """Register all the integration's service handlers."""
+# The two developer-only diagnostic services. Gated OFF by default behind the
+# CONF_DEBUG_SERVICES config-entry option (see _debug_services_enabled): when
+# the gate is off they are NEVER registered, so they don't appear in the HA
+# service registry. They still ship in services.yaml so their descriptions are
+# available when the option is enabled.
+_DEBUG_SERVICES = (SERVICE_DUMP_MAP_DIAGNOSTICS, SERVICE_DISCOVER_CLOUD_API)
+
+
+def _debug_services_enabled(entry: Any | None) -> bool:
+    """Whether the debug-only services should be registered.
+
+    Reads the ``debug_services`` config-entry option (default False). When no
+    entry is supplied (e.g. legacy callers / tests that register without an
+    entry), debug services stay OFF — the safe default.
+    """
+    if entry is None:
+        return DEFAULT_DEBUG_SERVICES
+    return bool(entry.options.get(CONF_DEBUG_SERVICES, DEFAULT_DEBUG_SERVICES))
+
+
+async def async_register_services(hass: HomeAssistant, entry: Any | None = None) -> None:
+    """Register all the integration's service handlers.
+
+    ``entry`` (the config entry) is optional; when supplied it gates the two
+    debug-only services behind its ``debug_services`` option. When omitted the
+    debug services are not registered.
+    """
     hass.services.async_register(DOMAIN, SERVICE_SET_ACTIVE_SELECTION,
                                   _handle_set_active_selection, schema=SCHEMA_SET_SELECTION)
     hass.services.async_register(DOMAIN, SERVICE_MOW_ZONE,
@@ -864,10 +927,12 @@ async def async_register_services(hass: HomeAssistant) -> None:
                                   _handle_set_schedule_plans, schema=SCHEMA_SET_SCHEDULE_PLANS)
     hass.services.async_register(DOMAIN, SERVICE_SHOW_LIDAR_FULLSCREEN,
                                   _handle_show_lidar_fullscreen, schema=SCHEMA_EMPTY)
-    hass.services.async_register(DOMAIN, SERVICE_DUMP_MAP_DIAGNOSTICS,
-                                  _handle_dump_map_diagnostics, schema=SCHEMA_EMPTY)
-    hass.services.async_register(DOMAIN, SERVICE_DISCOVER_CLOUD_API,
-                                  _async_handle_discover_cloud_api, schema=SCHEMA_EMPTY)
+    # Debug-only services: registered ONLY when the debug_services option is on.
+    if _debug_services_enabled(entry):
+        hass.services.async_register(DOMAIN, SERVICE_DUMP_MAP_DIAGNOSTICS,
+                                      _handle_dump_map_diagnostics, schema=SCHEMA_EMPTY)
+        hass.services.async_register(DOMAIN, SERVICE_DISCOVER_CLOUD_API,
+                                      _async_handle_discover_cloud_api, schema=SCHEMA_EMPTY)
     hass.services.async_register(DOMAIN, SERVICE_REFRESH_CLOUD_STATE,
                                   _handle_refresh_cloud_state, schema=SCHEMA_EMPTY)
     hass.services.async_register(DOMAIN, SERVICE_SHOW_PHOTO_PRIVACY_POLICY,
@@ -897,7 +962,30 @@ async def async_register_services(hass: HomeAssistant) -> None:
                                   _handle_merge_zones, schema=SCHEMA_MERGE_ZONES)
 
 
+def async_reconcile_debug_services(hass: HomeAssistant, entry: Any | None = None) -> None:
+    """Add/remove the debug-only services to match the current option state.
+
+    Called on each setup/reload when the bulk services are already registered
+    (process-wide), so flipping the ``debug_services`` option + reloading the
+    entry adds or removes those two services without a full HA restart.
+    """
+    enabled = _debug_services_enabled(entry)
+    if enabled:
+        if not hass.services.has_service(DOMAIN, SERVICE_DUMP_MAP_DIAGNOSTICS):
+            hass.services.async_register(DOMAIN, SERVICE_DUMP_MAP_DIAGNOSTICS,
+                                          _handle_dump_map_diagnostics, schema=SCHEMA_EMPTY)
+        if not hass.services.has_service(DOMAIN, SERVICE_DISCOVER_CLOUD_API):
+            hass.services.async_register(DOMAIN, SERVICE_DISCOVER_CLOUD_API,
+                                          _async_handle_discover_cloud_api, schema=SCHEMA_EMPTY)
+    else:
+        for svc in _DEBUG_SERVICES:
+            hass.services.async_remove(DOMAIN, svc)
+
+
 def async_unregister_services(hass: HomeAssistant) -> None:
+    # The two debug services (_DEBUG_SERVICES) are included unconditionally:
+    # hass.services.async_remove is a no-op when the service isn't registered,
+    # so this correctly handles the gated-OFF case where they were never added.
     for svc in (
         SERVICE_SET_ACTIVE_SELECTION, SERVICE_MOW_ZONE, SERVICE_MOW_EDGE, SERVICE_MOW_SPOT,
         SERVICE_RECHARGE, SERVICE_FIND_BOT, SERVICE_SET_CHILD_LOCK, SERVICE_SUPPRESS_FAULT,

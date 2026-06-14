@@ -25,14 +25,16 @@
           "lidar_archive_max_mb": "LiDAR archive size cap (MB, per map)",
           "session_archive_keep": "Session archive entries to keep",
           "wifi_archive_keep": "WiFi heatmaps to keep per map",
-          "station_bearing_deg": "Dock compass bearing (degrees)"
+          "station_bearing_deg": "Dock compass bearing (degrees)",
+          "debug_services": "Enable debug services"
         },
         "data_description": {
           "lidar_archive_keep": "Most-recent LiDAR scans retained per map before older ones are pruned.",
           "lidar_archive_max_mb": "Hard cap on per-map LiDAR archive size; older scans are pruned first.",
           "session_archive_keep": "Most-recent finalized mowing sessions retained on disk.",
           "wifi_archive_keep": "Most-recent WiFi heatmaps retained per map before older ones are pruned.",
-          "station_bearing_deg": "Compass bearing (0-359, clockwise from north) of the dock's local X axis. Used to compute the position_north_m / position_east_m sensors. Leave at 0 if you don't use those sensors. CFG.DOCK.yaw is unreliable on this firmware, so set this manually."
+          "station_bearing_deg": "Compass bearing (0-359, clockwise from north) of the dock's local X axis. Used to compute the position_north_m / position_east_m sensors. Leave at 0 if you don't use those sensors. CFG.DOCK.yaw is unreliable on this firmware, so set this manually.",
+          "debug_services": "Registers the developer-only dump_map_diagnostics and discover_cloud_api services. Off by default; reload the integration after changing."
         }
       }
     }
