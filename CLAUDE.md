@@ -311,12 +311,13 @@ were removed in the 2026-05-25 refresher consolidation
 | `_refresh_dev` | 6 h | DEV is not part of the full-state fetch. |
 | `_poll_slow_properties` | 1 h | s6.3 + s1.5 serial-while-unknown; feeds the state machine. |
 
-> **Note:** `_refresh_locn` is **retained but unscheduled** (kept for a future
-> dock-location entity that will surface the dock's absolute WGS84 fix).
-> It no longer writes `position_lat`/`position_lon` — that is now `_refresh_gps`.
+> **Note:** the LOCN routed-action refresher was removed (it was unscheduled
+> dead code). `position_lat`/`position_lon` are written solely by `_refresh_gps`.
+> The low-level `cloud_client.fetch_locn` fetcher is kept (unscheduled) for a
+> future dock-location entity.
 
-`CloudState` does **not** carry `locn`/`dock` — those flow straight to
-`MowerState` via their 60 s timers. The CFG→MowerState port lives in the pure
+`CloudState` does **not** carry `dock` — it flows straight to
+`MowerState` via its 60 s timer. The CFG→MowerState port lives in the pure
 `coordinator/_property_apply.py:cfg_to_state_updates` helper, which never nulls
 a field for an absent CFG key and never emits `pre_mowing_height_mm` /
 `pre_edgemaster` (those are owned by the s6.2 push, `property_mapping.py`).

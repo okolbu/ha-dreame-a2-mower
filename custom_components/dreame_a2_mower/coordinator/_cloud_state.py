@@ -86,10 +86,10 @@ class _CloudStateMixin:
         `_apply_cloud_state_to_mower_state` ports MIHIS, per-map SETTINGS and
         CFG (via `cfg_to_state_updates`) onto MowerState.
 
-        Timers that intentionally remain separate: `_refresh_locn` /
-        `_refresh_dock` (60 s fast cadence; dock also feeds the state machine),
-        `_refresh_net` (1 h), `_refresh_dev` (6 h). LOCN/DOCK are NOT fetched
-        here — those timers own them. (`_poll_slow_properties` was removed
+        Timers that intentionally remain separate: `_refresh_dock`
+        (60 s fast cadence; dock also feeds the state machine),
+        `_refresh_net` (1 h), `_refresh_dev` (6 h). DOCK is NOT fetched
+        here — that timer owns it. (`_poll_slow_properties` was removed
         2026-05-26; see _refreshers.py.)
 
         On success: self.cloud_state is replaced atomically. Entities and

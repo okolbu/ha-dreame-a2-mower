@@ -586,8 +586,8 @@ class _CoreMixin:
 
             # Schedule GPS refresh every 60 seconds via getRecords; also fire
             # one immediately so position_lat/lon are populated at startup.
-            # Supersedes the LOCN routed-action path (which is retained as a
-            # method but no longer scheduled — see _refresh_locn in _refreshers.py).
+            # This is the sole mower-position source (the legacy LOCN
+            # routed-action path was retired).
             async def _periodic_gps(_now: Any) -> None:
                 await self._refresh_gps()
 

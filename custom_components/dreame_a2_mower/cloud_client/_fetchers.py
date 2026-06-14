@@ -505,8 +505,8 @@ class _FetchersMixin:
                     props[k] = v
 
         # Fast-cadence probes (each a separate cloud call).
-        # LOCN and DOCK are owned by the 60-second _refresh_locn/_refresh_dock
-        # timers; do NOT probe them here to avoid double-fetching.
+        # DOCK is owned by the 60-second _refresh_dock timer; do NOT probe
+        # it here to avoid double-fetching.
         # Errors here don't fail the whole fetch — fields just stay None/empty.
         try:
             mapl = self.fetch_mapl()

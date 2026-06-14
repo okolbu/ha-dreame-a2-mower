@@ -70,7 +70,7 @@ class DreameA2MowerGpsTracker(
 
     async def async_added_to_hass(self) -> None:
         """Pull last-known lat/lon out of the recorder so the marker
-        survives HA restarts and LOCN-polling failures."""
+        survives HA restarts."""
         await super().async_added_to_hass()
         last = await self.async_get_last_state()
         if last is None or not last.attributes:

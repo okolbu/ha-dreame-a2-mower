@@ -116,27 +116,6 @@ class _RefreshersMixin:
             # fetch_mapl can return a bare list per Task 7 implementation.
             self._apply_mapl(mapl_resp)
 
-    async def _refresh_locn(self) -> None:
-        """Fetch LOCN and update MowerState.position_lat/lon."""
-        if not hasattr(self, "_cloud"):
-            return
-        locn = await self.hass.async_add_executor_job(self._cloud.fetch_locn)
-        if locn is None:
-            return
-        pos = locn.get("pos") if isinstance(locn, dict) else None
-        if not isinstance(pos, list) or len(pos) != 2:
-            return
-        lon, lat = pos
-        if lon == -1 and lat == -1:
-            # Sentinel — dock origin not configured. Leave fields as None.
-            new_state = dataclasses.replace(self.data, position_lat=None, position_lon=None)
-        else:
-            new_state = dataclasses.replace(
-                self.data, position_lat=float(lat), position_lon=float(lon)
-            )
-        if new_state != self.data:
-            self.async_set_updated_data(new_state)
-
     async def _refresh_dock(self) -> None:
         """Fetch CFG.DOCK → populate dock-position fields on MowerState.
 

@@ -2,8 +2,8 @@
 
 Replaces the scattered `_cached_*` attributes on the coordinator.
 Populated by `_refresh_cloud_state()` (every 2 min) plus the MAPL
-probe. LOCN/DOCK are NOT stored here — they go directly to MowerState
-via their own 60 s timers (`_refresh_locn` / `_refresh_dock`).
+probe. DOCK is NOT stored here — it goes directly to MowerState
+via its own 60 s timer (`_refresh_dock`).
 
 All sub-dataclasses are frozen + slots for O(1) attribute access
 and immutability semantics. Mutation goes through coordinator
