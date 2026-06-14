@@ -1664,8 +1664,10 @@ internal conditions (enough map change / completed mow) — there is no
 user-facing trigger in the Dreame app either (no "generate map" button, just
 a 3D-view page). The "generate-3dmap" decision branch (new object ⇒ generate)
 is DISPROVEN for on-demand use; the apk name (uploadMap vs generate-3dmap)
-stays ambiguous, but on-demand generate-3dmap is ruled out. Button correctly
-stays _U (device_write_unproven).
+stays ambiguous, but on-demand generate-3dmap is ruled out. The button was
+reclassed _U → _N (read_only_noop) in Phase 2.1 (2026-06-14) now that the
+accepted-but-no-effect behaviour is confirmed — see entity-inventory
+button.generate_3dmap.
 
 **Open questions:**
 - apk NAME of op=10 (uploadMap vs generate-3dmap) stays ambiguous, but on-demand 3D-map GENERATION via op=10 is DISPROVEN (live 2026-06-08: accepted r=0, no new 3dmap object). What ACTUALLY triggers a 3dmap render on g2408 (the 2 existing maps are 2026-04-20 + 2026-05-10) is still unknown — likely an internal 'enough map change' / post-mow firmware condition, not a callable action. The real upload flow is the s2p54-progress(0→100) → s99p20(object-name at ~61%) → s2p54=100 sequence (see s2p54 entry); it has fired 0 times in the current 19-day capture (last snapshot 05-10).
