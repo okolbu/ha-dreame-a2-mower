@@ -494,10 +494,11 @@ class _SessionMixin:
         """
         if not self.live_map.is_active():
             return
-        if self._provisional_session_is_cloud_finalized() and self.data.pending_session_object_name:
-            await self._do_oss_fetch(now_unix)
-        else:
-            await self._run_finalize_incomplete(now_unix)
+        # Same cloud-vs-local routing as the gate path, but with NO dock-wait:
+        # the mower did not dock, a new command superseded the prior run.
+        await self._route_finalize(
+            now_unix, dock_wait=False, trigger="new-command-boundary",
+        )
 
     async def _finalize_non_mow_immediate(self, now_unix: int, trigger: str) -> None:
         """Finalize a non-mow (non-cloud-finalized) session immediately on arrival.
@@ -608,6 +609,44 @@ class _SessionMixin:
 
         return self._provisional_session_type() in CLOUD_FINALIZED_SESSION_TYPES
 
+    async def _route_finalize(
+        self, now_unix: int, *, dock_wait: bool, trigger: str
+    ) -> None:
+        """Single cloud-vs-local finalize routing decision.
+
+        - Cloud-finalized (mow/patrol) AND an OSS object key is present:
+          optionally wait for the dock-return drive to finish capturing
+          (``dock_wait``), then fetch + archive the cloud summary via
+          ``_do_oss_fetch``.
+        - Otherwise (non-cloud-finalized, or cloud-finalized with no OSS key):
+          finalize locally with whatever live_map has — never dock-waits.
+
+        ``trigger`` only labels the log lines so the entry point that routed
+        here stays visible in the log. The routing predicate is byte-equivalent
+        to the inlined callers it replaces.
+        """
+        if (
+            self._provisional_session_is_cloud_finalized()
+            and self.data.pending_session_object_name
+        ):
+            if dock_wait:
+                LOGGER.info(
+                    "[F5.6.1] session-done received (%s) — "
+                    "entering pending-finalize wait (≤10 min)",
+                    trigger,
+                )
+                reason = await self._wait_for_dock_return(timeout_s=600)
+                LOGGER.info("[F5.6.1] pending-finalize wait ended: reason=%s", reason)
+            await self._do_oss_fetch(now_unix)
+            return
+        LOGGER.info(
+            "[F5.6.1] session-done (%s) but provisional type is "
+            "NON-CLOUD-FINALIZED (or no OSS key) — finalizing locally "
+            "immediately (no dock-wait)",
+            trigger,
+        )
+        await self._run_finalize_incomplete(now_unix)
+
     async def _dispatch_finalize_action(
         self, action: FinalizeAction, now_unix: int
     ) -> None:
@@ -636,29 +675,19 @@ class _SessionMixin:
             return
 
         if action in (FinalizeAction.AWAIT_OSS_FETCH, FinalizeAction.FINALIZE_COMPLETE):
-            # (a) LOCAL FINALIZE FOR NON-CLOUD-FINALIZED. The cloud OSS summary
+            # (a) Route through the shared decision helper. The cloud OSS summary
             # only arrives for a mow OR a patrol; a maintenance run / manual
             # drive produces no summary, so awaiting one would hang the finalize
-            # (live_map stays active and the NEXT run merges into it). Classify
-            # provisionally from the SAME inputs the injector uses; if it does
-            # NOT produce a cloud summary, finalize locally. The cloud path below
-            # (mow + patrol) is unchanged.
-            if not self._provisional_session_is_cloud_finalized():
-                LOGGER.info(
-                    "[F5.6.1] session-done (action=%s) but provisional type is "
-                    "NON-CLOUD-FINALIZED — finalizing locally immediately (no dock-wait)",
-                    action.name,
-                )
-                await self._run_finalize_incomplete(now_unix)
-                return
-            LOGGER.info(
-                "[F5.6.1] session-done received (action=%s) — "
-                "entering pending-finalize wait (≤10 min)",
-                action.name,
+            # (live_map stays active and the NEXT run merges into it). For these
+            # two actions the finalize gate only returns them when an OSS object
+            # key is present (decide(): AWAIT_OSS_FETCH/FINALIZE_COMPLETE both
+            # require pending_session_object_name), so the routing predicate
+            # `cloud-finalized AND object_name` reduces to the old
+            # `cloud-finalized` check — byte-equivalent. Cloud-finalized →
+            # dock-wait then OSS fetch; otherwise finalize locally immediately.
+            await self._route_finalize(
+                now_unix, dock_wait=True, trigger=f"action={action.name}",
             )
-            reason = await self._wait_for_dock_return(timeout_s=600)
-            LOGGER.info("[F5.6.1] pending-finalize wait ended: reason=%s", reason)
-            await self._do_oss_fetch(now_unix)
             return
 
         if action == FinalizeAction.FINALIZE_INCOMPLETE:
