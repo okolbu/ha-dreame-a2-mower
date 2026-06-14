@@ -11,6 +11,7 @@ import json
 import math
 from datetime import timedelta
 from pathlib import Path
+from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -685,6 +686,10 @@ class _SessionMixin:
             return
 
         if action == FinalizeAction.FINALIZE_INCOMPLETE:
+            # NOT routed through _route_finalize: both arms here finalize
+            # locally (_run_finalize_incomplete) regardless of cloud-finalized
+            # type — only the dock-wait differs — so _route_finalize's
+            # cloud→_do_oss_fetch predicate doesn't apply.
             # (b) Non-cloud-finalized sessions (maintenance/manual runs) never
             # produce an OSS summary and don't have a return-drive to capture, so
             # skip the dock-wait exactly as the AWAIT_OSS_FETCH branch above does.
@@ -708,7 +713,9 @@ class _SessionMixin:
 
         LOGGER.warning("[F5.6.1] _dispatch_finalize_action: unhandled action=%s", action)
 
-    async def _finalize_with_latch(self, body, *, label: str) -> None:
+    async def _finalize_with_latch(
+        self, body: Callable[[], Awaitable[None]], *, label: str
+    ) -> None:
         """Serialize + de-dupe a terminal archive write (P3e.4).
 
         Both terminal writers (_do_oss_fetch, _run_finalize_incomplete) run

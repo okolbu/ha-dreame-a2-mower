@@ -187,6 +187,10 @@ class _CoreMixin:
         # cross-path concurrency, not just the two non-mow triggers). The
         # archive-level (md5, start_ts) dedup stays as the backstop.
         self._finalize_lock: asyncio.Lock = asyncio.Lock()
+        # Single sentinel (the last-finalized start_ts), NOT a set: two real
+        # sessions cannot begin in the same wall-clock second, and this is
+        # in-memory so it can't survive a reboot to collide with a restored
+        # session — so a same-second start_ts reuse false-no-op is unreachable.
         self._finalizing_start_ts: int | None = None
         # Stores the most-recent fired notification for sensor.last_notification.
         # Shape: {"event_type": str, "text": str, "code": int, "fired_at": int}
