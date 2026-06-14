@@ -17,7 +17,12 @@ from homeassistant.components.select import SelectEntity, SelectEntityDescriptio
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from ._devices import map_device_info, map_unique_id
+from ._devices import (
+    map_device_info,
+    map_unique_id,
+    mower_device_info,
+    mower_unique_id,
+)
 from .const import LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
@@ -55,6 +60,52 @@ class DreameA2SettingsSelectDescription(SelectEntityDescription):
     build_value_fn: Callable[[MowerState, str], Any] | None = None
     field_updates_fn: Callable[[MowerState, str], dict[str, Any]] | None = None
     build_from_cfg_fn: Callable[[Any, str], Any] | None = None
+
+
+# ---------------------------------------------------------------------------
+# Abstract base for the cross-map archive pickers (Work Log / LiDAR / WiFi)
+# ---------------------------------------------------------------------------
+
+class _DreameA2ArchivePickerSelect(
+    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
+):
+    """Shared base for the device-level archive picker selects.
+
+    ``DreameA2WorkLogSelect`` / ``DreameA2LidarArchiveSelect`` /
+    ``DreameA2WifiArchiveSelect`` all share the same parent-device wiring
+    (``mower_unique_id`` / ``mower_device_info`` / read-only ``_L``
+    control_mode keyed by the picker key) and the same placeholder-backed
+    ``options`` / ``current_option`` scaffolding. Only the option-rebuild and
+    select-handling differ, which subclasses provide.
+
+    Each subclass sets:
+      ``_KEY``          — unique_id suffix AND the control-mode lookup key.
+      ``_placeholder``  — the "(no X)" sentinel option.
+
+    unique_ids and control_modes are byte-identical to the pre-consolidation
+    standalone classes (each previously inlined the same three ``__init__``
+    lines plus identical ``options`` / ``current_option`` properties).
+    """
+
+    _attr_has_entity_name = True
+    _KEY: str = "override-me"
+    _placeholder: str = "(none)"
+
+    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = mower_unique_id(coordinator, self._KEY)
+        self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="select", key=self._KEY)
+        self._attr_options: list[str] = [self._placeholder]
+        self._attr_current_option: str | None = self._placeholder
+
+    @property
+    def options(self) -> list[str]:
+        return self._attr_options
+
+    @property
+    def current_option(self) -> str | None:
+        return self._attr_current_option
 
 
 # ---------------------------------------------------------------------------

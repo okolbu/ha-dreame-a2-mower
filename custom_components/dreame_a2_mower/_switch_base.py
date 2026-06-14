@@ -19,11 +19,12 @@ from homeassistant.components.switch import SwitchEntity, SwitchEntityDescriptio
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._availability import _FreshnessAvailableMixin
-from ._devices import map_device_info, mower_device_info, mower_unique_id
+from ._devices import map_device_info, map_unique_id, mower_device_info, mower_unique_id
 from .const import LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .mower.state import MowerState
+from ._settings_writes import pre_settings_optimistic_write
 
 
 # ---------------------------------------------------------------------------
@@ -269,3 +270,143 @@ class _AiRecognitionBitSwitch(
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         await self._toggle(False)
+
+
+# ---------------------------------------------------------------------------
+# Per-map SETTINGS switches (Task 8) — shared base + descriptor table
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, kw_only=True)
+class _PerMapSettingsSwitchSpec:
+    """Static descriptor for a per-map SETTINGS switch.
+
+    All four per-map SETTINGS switches share identical structure; they differ
+    only in these fields:
+
+    ``key``            — unique_id suffix + translation_key + MowerState
+                         settings_field (all three are the same string, e.g.
+                         ``settings_edge_mowing_auto``).
+    ``name``           — entity-name only (device name is prepended by HA).
+    ``settings_field`` — the cloud SETTINGS canonical key (e.g.
+                         ``edgeMowingAuto``).
+    ``pre_index``      — the PRE-array index the write patches.
+    ``honesty_leaf``   — the control-mode leaf passed to ``resolve_control_mode``
+                         (``map_N_<leaf>``).
+    """
+
+    key: str
+    name: str
+    settings_field: str
+    pre_index: int
+    honesty_leaf: str
+
+
+# Order preserved from the original switch_global.py definitions so entity
+# discovery order (and any registry ordering side effects) is unchanged.
+PER_MAP_SETTINGS_SWITCHES: tuple[_PerMapSettingsSwitchSpec, ...] = (
+    _PerMapSettingsSwitchSpec(
+        key="settings_edge_mowing_auto",
+        name="Automatic Edge Mowing",
+        settings_field="edgeMowingAuto",
+        pre_index=7,
+        honesty_leaf="automatic_edge_mowing",
+    ),
+    _PerMapSettingsSwitchSpec(
+        key="settings_edge_mowing_safe",
+        name="Safe Edge Mowing",
+        settings_field="edgeMowingSafe",
+        pre_index=16,
+        honesty_leaf="safe_edge_mowing",
+    ),
+    _PerMapSettingsSwitchSpec(
+        key="settings_edge_mowing_obstacle_avoidance",
+        name="Obstacle Avoidance on Edges",
+        settings_field="edgeMowingObstacleAvoidance",
+        pre_index=9,
+        honesty_leaf="obstacle_avoidance_on_edges",
+    ),
+    _PerMapSettingsSwitchSpec(
+        key="settings_obstacle_avoidance_enabled",
+        name="LiDAR Obstacle Recognition",
+        settings_field="obstacleAvoidanceEnabled",
+        pre_index=12,
+        honesty_leaf="lidar_obstacle_recognition",
+    ),
+)
+
+
+class _PerMapSettingsSwitchBase(
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SwitchEntity,
+):
+    """Shared base for the per-map SETTINGS switches.
+
+    Each concrete subclass binds a ``_SPEC`` (a ``_PerMapSettingsSwitchSpec``)
+    and is instantiated per map_id. Reads from
+    ``cloud_state.settings.by_map_id_canonical[map_id][settings_field]``;
+    writes via ``pre_settings_optimistic_write`` (dual PRE + SETTINGS write).
+
+    The ``_SPEC.key`` doubles as the unique_id suffix, the translation_key, and
+    the MowerState ``state_field`` — all three were already equal in the
+    original per-switch classes, so collapsing them here keeps every
+    unique_id / entity_id / control_mode byte-identical.
+    """
+
+    _SPEC: _PerMapSettingsSwitchSpec
+
+    _attr_has_entity_name = True
+    _availability_source = "cloud"
+    _attr_should_poll = False
+
+    def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
+        super().__init__(coordinator)
+        spec = self._SPEC
+        self._map_id = map_id
+        self._attr_translation_key = spec.key
+        self._attr_unique_id = map_unique_id(coordinator, map_id, spec.key)
+        # has_entity_name=True; device_name is prepended automatically.
+        self._attr_name = spec.name
+        self._attr_device_info = map_device_info(
+            coordinator, map_id,
+            name=getattr(coordinator.cloud_state.maps_by_id.get(map_id), "name", None),
+        )
+        self._control_mode = resolve_control_mode(
+            platform="switch", key=f"map_N_{spec.honesty_leaf}"
+        )
+
+    @property
+    def is_on(self) -> bool | None:
+        cs = getattr(self.coordinator, "cloud_state", None)
+        if cs is None:
+            return None
+        raw = cs.settings.by_map_id_canonical.get(self._map_id, {}).get(
+            self._SPEC.settings_field
+        )
+        return None if raw is None else bool(raw)
+
+    @property
+    def available(self) -> bool:
+        # See DreameA2Switch.available — return False on None to collapse
+        # HA's two-button assumed-state widget into a single greyed-out toggle.
+        if self.is_on is None:
+            return False
+        return super().available
+
+    async def _write(self, new_value: bool) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
+        spec = self._SPEC
+        await pre_settings_optimistic_write(
+            self, state_field=spec.key, new_value=new_value,
+            map_id=self._map_id, pre_index=spec.pre_index,
+            pre_value=int(new_value),
+            settings_field=spec.settings_field, settings_value=int(new_value),
+        )
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._write(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._write(False)

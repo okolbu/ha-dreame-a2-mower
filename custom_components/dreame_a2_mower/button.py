@@ -20,6 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._devices import (
+    _MowerScopedEntity,
     map_device_info,
     map_unique_id,
     mower_device_info,
@@ -255,7 +256,7 @@ class DreameA2Generate3DMapButton(_DreameA2ActionButton):
 
 
 class DreameA2FinalizeSessionButton(
-    CoordinatorEntity[DreameA2MowerCoordinator], ButtonEntity
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], ButtonEntity
 ):
     """Manual escape-hatch: force-finalize the current (or stuck) mowing session.
 
@@ -272,11 +273,7 @@ class DreameA2FinalizeSessionButton(
     _attr_has_entity_name = True
     _attr_name = "Finalize session"
     _attr_icon = "mdi:flag-checkered"
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "finalize_session")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "finalize_session"
 
     async def async_press(self) -> None:
         """Handle button press — run the finalize-incomplete path."""
@@ -287,7 +284,7 @@ class DreameA2FinalizeSessionButton(
 
 
 class DreameA2RefreshCloudStateButton(
-    CoordinatorEntity[DreameA2MowerCoordinator], ButtonEntity
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], ButtonEntity
 ):
     """Force an on-demand re-fetch of all cloud-derived state.
 
@@ -308,11 +305,7 @@ class DreameA2RefreshCloudStateButton(
     _attr_name = "Refresh from cloud"
     _attr_icon = "mdi:cloud-refresh"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "refresh_cloud_state")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "refresh_cloud_state"
 
     async def async_press(self) -> None:
         LOGGER.info("button.refresh_cloud_state: pressed; refreshing all cloud state")
@@ -320,7 +313,7 @@ class DreameA2RefreshCloudStateButton(
 
 
 class DreameA2RefreshMposButton(
-    CoordinatorEntity[DreameA2MowerCoordinator], ButtonEntity
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], ButtonEntity
 ):
     """On-demand fetch of the RAW MPOS diagnostic reading.
 
@@ -334,11 +327,7 @@ class DreameA2RefreshMposButton(
     _attr_name = "Refresh MPOS"
     _attr_icon = "mdi:crosshairs-gps"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "refresh_mpos")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "refresh_mpos"
 
     async def async_press(self) -> None:
         LOGGER.info("button.refresh_mpos: pressed; refreshing MPOS diagnostic")
@@ -346,7 +335,7 @@ class DreameA2RefreshMposButton(
 
 
 class DreameA2RefreshAllWifiButton(
-    CoordinatorEntity[DreameA2MowerCoordinator], ButtonEntity
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], ButtonEntity
 ):
     """Refresh the WiFi heatmap archive from cloud.
 
@@ -361,11 +350,7 @@ class DreameA2RefreshAllWifiButton(
     _attr_icon = "mdi:wifi-refresh"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "refresh_wifi_heatmaps"
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "refresh_wifi_heatmaps")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "refresh_wifi_heatmaps"
 
     async def async_press(self) -> None:
         LOGGER.info(

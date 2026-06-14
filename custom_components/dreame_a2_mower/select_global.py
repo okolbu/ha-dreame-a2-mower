@@ -35,7 +35,10 @@ from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .coordinator._write_errors import raise_for_write_result
 from .mower.state import ActionMode, MowerState
-from ._select_base import DreameA2SettingsSelectDescription
+from ._select_base import (
+    DreameA2SettingsSelectDescription,
+    _DreameA2ArchivePickerSelect,
+)
 from .protocol import cfg_payloads as _cfgp
 
 
@@ -553,9 +556,7 @@ class DreameA2SettingSelect(
 # ---------------------------------------------------------------------------
 
 
-class DreameA2WorkLogSelect(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
-):
+class DreameA2WorkLogSelect(_DreameA2ArchivePickerSelect):
     """Dropdown of archived sessions; picking one fires `render_work_log_session`.
 
     Options are human-readable labels:
@@ -572,20 +573,15 @@ class DreameA2WorkLogSelect(
     Main view shows the live mow; Work Logs is for finalised sessions only.
     """
 
-    _attr_has_entity_name = True
     _attr_name = "Work Log"
     _attr_icon = "mdi:history"
+    _KEY = "work_log"
     _placeholder: str = WORK_LOG_PLACEHOLDER
     _max_options: int = 50
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "work_log")
-        self._attr_device_info = mower_device_info(coordinator)
-        self._control_mode = resolve_control_mode(platform="select", key="work_log")
         self._label_to_filename: dict[str, str] = {}
-        self._attr_options: list[str] = [self._placeholder]
-        self._attr_current_option = self._placeholder
 
     def _build_options_from_sessions(self, sessions: list) -> tuple[list[str], dict[str, str]]:
         """Pure formatter — no I/O.
@@ -631,11 +627,9 @@ class DreameA2WorkLogSelect(
         self.hass.async_create_task(self._async_refresh_options())
 
     @property
-    def options(self) -> list[str]:
-        return self._attr_options
-
-    @property
     def current_option(self) -> str | None:
+        # Override the base: fall back to the placeholder when nothing is
+        # selected so HA never shows an empty current_option.
         return self._attr_current_option or self._placeholder
 
     async def async_select_option(self, option: str) -> None:
@@ -674,9 +668,7 @@ class DreameA2WorkLogSelect(
 # ---------------------------------------------------------------------------
 
 
-class DreameA2LidarArchiveSelect(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
-):
+class DreameA2LidarArchiveSelect(_DreameA2ArchivePickerSelect):
     """Cross-map LiDAR archive picker.
 
     Options listing every archived LiDAR scan across maps, sorted
@@ -687,19 +679,11 @@ class DreameA2LidarArchiveSelect(
     options may be sparse at boot if the executor job hasn't run yet.
     """
 
-    _attr_has_entity_name = True
     _attr_name = "LiDAR archive"
     _attr_icon = "mdi:radar"
     _attr_translation_key = "lidar_archive"
+    _KEY = "lidar_archive"
     _placeholder: str = "(no scans)"
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "lidar_archive")
-        self._attr_device_info = mower_device_info(coordinator)
-        self._control_mode = resolve_control_mode(platform="select", key="lidar_archive")
-        self._attr_current_option: str | None = self._placeholder
-        self._attr_options: list[str] = [self._placeholder]
 
     @staticmethod
     def _format_option(map_id: int, entry: Any) -> str:
@@ -737,14 +721,6 @@ class DreameA2LidarArchiveSelect(
     def _handle_coordinator_update(self) -> None:  # type: ignore[override]
         super()._handle_coordinator_update()
         self._rebuild_options()
-
-    @property
-    def options(self) -> list[str]:
-        return self._attr_options
-
-    @property
-    def current_option(self) -> str | None:
-        return self._attr_current_option
 
     async def async_select_option(self, option: str) -> None:
         if option == self._placeholder:
@@ -1064,9 +1040,7 @@ class DreameA2ActionModeSelect(
 # ---------------------------------------------------------------------------
 
 
-class DreameA2WifiArchiveSelect(
-    _ControlHonestyMixin, CoordinatorEntity[DreameA2MowerCoordinator], SelectEntity
-):
+class DreameA2WifiArchiveSelect(_DreameA2ArchivePickerSelect):
     """Cross-map WiFi heatmap archive picker.
 
     Lists every wifimap object found in the cloud, sorted newest-first,
@@ -1078,19 +1052,14 @@ class DreameA2WifiArchiveSelect(
     button-triggered refresh may have pulled a new object from cloud).
     """
 
-    _attr_has_entity_name = True
     _attr_name = "WiFi archive"
     _attr_icon = "mdi:wifi-marker"
     _attr_translation_key = "wifi_archive"
+    _KEY = "wifi_archive"
     _placeholder: str = "(no WiFi maps)"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "wifi_archive")
-        self._attr_device_info = mower_device_info(coordinator)
-        self._control_mode = resolve_control_mode(platform="select", key="wifi_archive")
-        self._attr_current_option: str | None = self._placeholder
-        self._attr_options: list[str] = [self._placeholder]
         # Cache of label → entry for reverse-lookup in async_select_option.
         self._label_to_entry: dict[str, "WifiArchiveEntry"] = {}
 
@@ -1162,14 +1131,6 @@ class DreameA2WifiArchiveSelect(
     def _handle_coordinator_update(self) -> None:  # type: ignore[override]
         super()._handle_coordinator_update()
         self._rebuild_options()
-
-    @property
-    def options(self) -> list[str]:
-        return self._attr_options
-
-    @property
-    def current_option(self) -> str | None:
-        return self._attr_current_option
 
     async def async_select_option(self, option: str) -> None:
         if option == self._placeholder:

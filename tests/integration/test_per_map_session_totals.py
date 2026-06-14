@@ -119,6 +119,30 @@ def test_non_mow_sessions_excluded_from_mowing_aggregates():
     assert DreameA2MapSessionAreaTotalSensor(coord, map_id=0).native_value == 310.0
 
 
+def test_per_map_session_totals_use_measurement_state_class():
+    """The three session-total sensors must report MEASUREMENT (P2.4(d)).
+
+    They were TOTAL_INCREASING, but the per-map totals are recomputed from the
+    full archive on every read and can DECREASE when old sessions age out /
+    archives are pruned — TOTAL_INCREASING confuses HA's long-term statistics
+    (which assume a monotonic counter). MEASUREMENT is the honest class for a
+    value that goes up and down.
+    """
+    from homeassistant.components.sensor import SensorStateClass
+    from custom_components.dreame_a2_mower.sensor import (
+        DreameA2MapSessionAreaTotalSensor,
+        DreameA2MapSessionCountSensor,
+        DreameA2MapSessionTimeTotalSensor,
+    )
+    coord = _make_coord_with_sessions()
+    for cls in (
+        DreameA2MapSessionAreaTotalSensor,
+        DreameA2MapSessionTimeTotalSensor,
+        DreameA2MapSessionCountSensor,
+    ):
+        assert cls(coord, map_id=0)._attr_state_class is SensorStateClass.MEASUREMENT
+
+
 def test_per_map_session_sensors_unique_ids_differ():
     """Confirm each sensor class produces a distinct unique_id per map."""
     from custom_components.dreame_a2_mower.sensor import (

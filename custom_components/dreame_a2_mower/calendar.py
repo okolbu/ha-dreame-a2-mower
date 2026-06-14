@@ -7,7 +7,6 @@ views via the built-in calendar card.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING
 
 from homeassistant.components.calendar import CalendarEntity, CalendarEvent
 from homeassistant.config_entries import ConfigEntry
@@ -15,11 +14,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from ._devices import mower_device_info, mower_unique_id
+from ._devices import _MowerScopedEntity
 from .const import DOMAIN
-
-if TYPE_CHECKING:
-    from .coordinator import DreameA2MowerCoordinator
+from .coordinator import DreameA2MowerCoordinator
 
 
 async def async_setup_entry(
@@ -32,7 +29,7 @@ async def async_setup_entry(
 
 
 class DreameA2SessionCalendar(
-    CoordinatorEntity["DreameA2MowerCoordinator"], CalendarEntity
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], CalendarEntity
 ):
     """Read-only calendar of archived mow sessions."""
 
@@ -40,11 +37,7 @@ class DreameA2SessionCalendar(
     _attr_name = "Sessions"
     _attr_translation_key = "session_calendar"
     _attr_icon = "mdi:calendar-clock"
-
-    def __init__(self, coordinator: "DreameA2MowerCoordinator") -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "session_calendar")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "session_calendar"
 
     @property
     def event(self) -> CalendarEvent | None:

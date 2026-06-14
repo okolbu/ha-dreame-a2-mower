@@ -23,7 +23,7 @@ class DreameA2MapSessionAreaTotalSensor(_DreameA2PerMapSessionSensorBase):
     _attr_translation_key = "map_session_area_total"
     _attr_icon = "mdi:vector-square"
     _attr_native_unit_of_measurement = "m²"
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _KEY = "session_area_total"
 
     def _compute_value(self, m):
@@ -43,7 +43,7 @@ class DreameA2MapSessionTimeTotalSensor(_DreameA2PerMapSessionSensorBase):
     _attr_translation_key = "map_session_time_total"
     _attr_icon = "mdi:clock-outline"
     _attr_native_unit_of_measurement = "min"
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _KEY = "session_time_total"
 
     def _compute_value(self, m):
@@ -56,7 +56,7 @@ class DreameA2MapSessionCountSensor(_DreameA2PerMapSessionSensorBase):
     _attr_name = "Mowing sessions"
     _attr_translation_key = "map_session_count"
     _attr_icon = "mdi:counter"
-    _attr_state_class = SensorStateClass.TOTAL_INCREASING
+    _attr_state_class = SensorStateClass.MEASUREMENT
     _KEY = "session_count"
 
     def _compute_value(self, m):

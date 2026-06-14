@@ -19,7 +19,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._availability import _FreshnessAvailableMixin
-from ._devices import map_device_info, map_unique_id, mower_device_info, mower_unique_id
+from ._devices import map_unique_id, mower_device_info, mower_unique_id
 from .const import LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
@@ -27,13 +27,11 @@ from .mower.state import MowerState
 from ._switch_base import (
     DreameA2SwitchEntityDescription,
     _AiRecognitionBitSwitch,
+    _PerMapSettingsSwitchBase,
+    PER_MAP_SETTINGS_SWITCHES,
     _AI_HUMANS_BIT,
     _AI_ANIMALS_BIT,
     _AI_OBJECTS_BIT,
-)
-from ._settings_writes import (
-    settings_optimistic_write as _settings_switch_optimistic_write,
-    pre_settings_optimistic_write,
 )
 from .protocol import cfg_payloads as _cfgp
 
@@ -589,238 +587,40 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
 # SETTINGS-driven switch entities (Task 8)
 # ---------------------------------------------------------------------------
 
-class DreameA2EdgeMowingAutoSwitch(
-    _FreshnessAvailableMixin,
-    _ControlHonestyMixin,
-    CoordinatorEntity[DreameA2MowerCoordinator],
-    SwitchEntity,
-):
+# ---------------------------------------------------------------------------
+# Per-map SETTINGS switches — thin subclasses over _PerMapSettingsSwitchBase.
+#
+# All shared logic (is_on / available / async_turn_on|off / __init__ wiring)
+# lives in the base; each subclass only binds its _SPEC row from
+# PER_MAP_SETTINGS_SWITCHES. unique_ids, entity_ids, names, and control_modes
+# are byte-identical to the pre-consolidation per-switch classes.
+# ---------------------------------------------------------------------------
+
+_PER_MAP_SETTINGS_SPECS = {s.key: s for s in PER_MAP_SETTINGS_SWITCHES}
+
+
+class DreameA2EdgeMowingAutoSwitch(_PerMapSettingsSwitchBase):
     """Edge mowing auto — per-map SETTINGS switch."""
 
-    _attr_has_entity_name = True
-    _availability_source = "cloud"
-    _attr_translation_key = "settings_edge_mowing_auto"
-    _attr_should_poll = False
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
-        super().__init__(coordinator)
-        self._map_id = map_id
-        self._attr_unique_id = map_unique_id(coordinator, map_id, "settings_edge_mowing_auto")
-        # has_entity_name=True; device_name is prepended automatically.
-        self._attr_name = "Automatic Edge Mowing"
-        self._attr_device_info = map_device_info(
-            coordinator, map_id,
-            name=getattr(coordinator.cloud_state.maps_by_id.get(map_id), "name", None),
-        )
-        self._control_mode = resolve_control_mode(platform="switch", key="map_N_automatic_edge_mowing")
-
-    @property
-    def is_on(self) -> bool | None:
-        cs = getattr(self.coordinator, "cloud_state", None)
-        if cs is None:
-            return None
-        raw = cs.settings.by_map_id_canonical.get(self._map_id, {}).get("edgeMowingAuto")
-        return None if raw is None else bool(raw)
-
-    @property
-    def available(self) -> bool:
-        # See DreameA2Switch.available — return False on None to collapse
-        # HA's two-button assumed-state widget into a single greyed-out toggle.
-        if self.is_on is None:
-            return False
-        return super().available
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        if self.read_only:
-            return await self._reject_readonly_write()
-        await pre_settings_optimistic_write(
-            self, state_field="settings_edge_mowing_auto", new_value=True,
-            map_id=self._map_id, pre_index=7, pre_value=1,
-            settings_field="edgeMowingAuto", settings_value=1,
-        )
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        if self.read_only:
-            return await self._reject_readonly_write()
-        await pre_settings_optimistic_write(
-            self, state_field="settings_edge_mowing_auto", new_value=False,
-            map_id=self._map_id, pre_index=7, pre_value=0,
-            settings_field="edgeMowingAuto", settings_value=0,
-        )
+    _SPEC = _PER_MAP_SETTINGS_SPECS["settings_edge_mowing_auto"]
 
 
-class DreameA2EdgeMowingSafeSwitch(
-    _FreshnessAvailableMixin,
-    _ControlHonestyMixin,
-    CoordinatorEntity[DreameA2MowerCoordinator],
-    SwitchEntity,
-):
+class DreameA2EdgeMowingSafeSwitch(_PerMapSettingsSwitchBase):
     """Edge mowing safe — per-map SETTINGS switch."""
 
-    _attr_has_entity_name = True
-    _availability_source = "cloud"
-    _attr_translation_key = "settings_edge_mowing_safe"
-    _attr_should_poll = False
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
-        super().__init__(coordinator)
-        self._map_id = map_id
-        self._attr_unique_id = map_unique_id(coordinator, map_id, "settings_edge_mowing_safe")
-        # has_entity_name=True; device_name is prepended automatically.
-        self._attr_name = "Safe Edge Mowing"
-        self._attr_device_info = map_device_info(
-            coordinator, map_id,
-            name=getattr(coordinator.cloud_state.maps_by_id.get(map_id), "name", None),
-        )
-        self._control_mode = resolve_control_mode(platform="switch", key="map_N_safe_edge_mowing")
-
-    @property
-    def is_on(self) -> bool | None:
-        cs = getattr(self.coordinator, "cloud_state", None)
-        if cs is None:
-            return None
-        raw = cs.settings.by_map_id_canonical.get(self._map_id, {}).get("edgeMowingSafe")
-        return None if raw is None else bool(raw)
-
-    @property
-    def available(self) -> bool:
-        if self.is_on is None:
-            return False
-        return super().available
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        if self.read_only:
-            return await self._reject_readonly_write()
-        await pre_settings_optimistic_write(
-            self, state_field="settings_edge_mowing_safe", new_value=True,
-            map_id=self._map_id, pre_index=16, pre_value=1,
-            settings_field="edgeMowingSafe", settings_value=1,
-        )
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        if self.read_only:
-            return await self._reject_readonly_write()
-        await pre_settings_optimistic_write(
-            self, state_field="settings_edge_mowing_safe", new_value=False,
-            map_id=self._map_id, pre_index=16, pre_value=0,
-            settings_field="edgeMowingSafe", settings_value=0,
-        )
+    _SPEC = _PER_MAP_SETTINGS_SPECS["settings_edge_mowing_safe"]
 
 
-class DreameA2EdgeMowingObstacleAvoidanceSwitch(
-    _FreshnessAvailableMixin,
-    _ControlHonestyMixin,
-    CoordinatorEntity[DreameA2MowerCoordinator],
-    SwitchEntity,
-):
+class DreameA2EdgeMowingObstacleAvoidanceSwitch(_PerMapSettingsSwitchBase):
     """Edge mowing obstacle avoidance — per-map SETTINGS switch."""
 
-    _attr_has_entity_name = True
-    _availability_source = "cloud"
-    _attr_translation_key = "settings_edge_mowing_obstacle_avoidance"
-    _attr_should_poll = False
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
-        super().__init__(coordinator)
-        self._map_id = map_id
-        self._attr_unique_id = map_unique_id(coordinator, map_id, "settings_edge_mowing_obstacle_avoidance")
-        # has_entity_name=True; device_name is prepended automatically.
-        self._attr_name = "Obstacle Avoidance on Edges"
-        self._attr_device_info = map_device_info(
-            coordinator, map_id,
-            name=getattr(coordinator.cloud_state.maps_by_id.get(map_id), "name", None),
-        )
-        self._control_mode = resolve_control_mode(platform="switch", key="map_N_obstacle_avoidance_on_edges")
-
-    @property
-    def is_on(self) -> bool | None:
-        cs = getattr(self.coordinator, "cloud_state", None)
-        if cs is None:
-            return None
-        raw = cs.settings.by_map_id_canonical.get(self._map_id, {}).get("edgeMowingObstacleAvoidance")
-        return None if raw is None else bool(raw)
-
-    @property
-    def available(self) -> bool:
-        if self.is_on is None:
-            return False
-        return super().available
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        if self.read_only:
-            return await self._reject_readonly_write()
-        await pre_settings_optimistic_write(
-            self, state_field="settings_edge_mowing_obstacle_avoidance", new_value=True,
-            map_id=self._map_id, pre_index=9, pre_value=1,
-            settings_field="edgeMowingObstacleAvoidance", settings_value=1,
-        )
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        if self.read_only:
-            return await self._reject_readonly_write()
-        await pre_settings_optimistic_write(
-            self, state_field="settings_edge_mowing_obstacle_avoidance", new_value=False,
-            map_id=self._map_id, pre_index=9, pre_value=0,
-            settings_field="edgeMowingObstacleAvoidance", settings_value=0,
-        )
+    _SPEC = _PER_MAP_SETTINGS_SPECS["settings_edge_mowing_obstacle_avoidance"]
 
 
-class DreameA2ObstacleAvoidanceEnabledSwitch(
-    _FreshnessAvailableMixin,
-    _ControlHonestyMixin,
-    CoordinatorEntity[DreameA2MowerCoordinator],
-    SwitchEntity,
-):
+class DreameA2ObstacleAvoidanceEnabledSwitch(_PerMapSettingsSwitchBase):
     """Obstacle avoidance enabled — per-map SETTINGS switch."""
 
-    _attr_has_entity_name = True
-    _availability_source = "cloud"
-    _attr_translation_key = "settings_obstacle_avoidance_enabled"
-    _attr_should_poll = False
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
-        super().__init__(coordinator)
-        self._map_id = map_id
-        self._attr_unique_id = map_unique_id(coordinator, map_id, "settings_obstacle_avoidance_enabled")
-        # has_entity_name=True; device_name is prepended automatically.
-        self._attr_name = "LiDAR Obstacle Recognition"
-        self._attr_device_info = map_device_info(
-            coordinator, map_id,
-            name=getattr(coordinator.cloud_state.maps_by_id.get(map_id), "name", None),
-        )
-        self._control_mode = resolve_control_mode(platform="switch", key="map_N_lidar_obstacle_recognition")
-
-    @property
-    def is_on(self) -> bool | None:
-        cs = getattr(self.coordinator, "cloud_state", None)
-        if cs is None:
-            return None
-        raw = cs.settings.by_map_id_canonical.get(self._map_id, {}).get("obstacleAvoidanceEnabled")
-        return None if raw is None else bool(raw)
-
-    @property
-    def available(self) -> bool:
-        if self.is_on is None:
-            return False
-        return super().available
-
-    async def async_turn_on(self, **kwargs: Any) -> None:
-        if self.read_only:
-            return await self._reject_readonly_write()
-        await pre_settings_optimistic_write(
-            self, state_field="settings_obstacle_avoidance_enabled", new_value=True,
-            map_id=self._map_id, pre_index=12, pre_value=1,
-            settings_field="obstacleAvoidanceEnabled", settings_value=1,
-        )
-
-    async def async_turn_off(self, **kwargs: Any) -> None:
-        if self.read_only:
-            return await self._reject_readonly_write()
-        await pre_settings_optimistic_write(
-            self, state_field="settings_obstacle_avoidance_enabled", new_value=False,
-            map_id=self._map_id, pre_index=12, pre_value=0,
-            settings_field="obstacleAvoidanceEnabled", settings_value=0,
-        )
+    _SPEC = _PER_MAP_SETTINGS_SPECS["settings_obstacle_avoidance_enabled"]
 
 
 class DreameA2AiHumanDetectionSwitch(

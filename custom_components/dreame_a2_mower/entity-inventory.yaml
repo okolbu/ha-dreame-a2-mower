@@ -738,11 +738,15 @@ entities:
         status: verified
         claim: "now aggregates over _mow_sessions_for_map() — excludes non-mow types (patrol/maintenance_run/manual_drive); legacy None session_type counts as mow"
         evidence: "tests/integration/test_per_map_session_totals.py::test_non_mow_sessions_excluded_from_mowing_aggregates"
+      - date: "2026-06-14"
+        status: verified
+        claim: "state_class changed TOTAL_INCREASING → MEASUREMENT — the total is recomputed from the archive on every read and can decrease when sessions age out, so the monotonic-counter class was wrong for HA long-term statistics"
+        evidence: "tests/integration/test_per_map_session_totals.py::test_per_map_session_totals_use_measurement_state_class"
     references:
       wire_entry: "archive_track"
       code: "custom_components/dreame_a2_mower/sensor_session.py:16"
     notes: |
-      State class TOTAL_INCREASING, unit m². Reads coordinator.session_archive._index
+      State class MEASUREMENT, unit m². Reads coordinator.session_archive._index
       directly (preloaded at boot, safe on the event loop) rather than the
       executor-only list_sessions(). The map_id == -1 legacy entries are
       naturally excluded by the equality filter. Non-mow move types are excluded
@@ -768,11 +772,15 @@ entities:
         status: verified
         claim: "now aggregates over _mow_sessions_for_map() — non-mow runs (patrol/maintenance_run/manual_drive) no longer inflate Total mowing time; legacy None counts as mow"
         evidence: "tests/integration/test_per_map_session_totals.py::test_non_mow_sessions_excluded_from_mowing_aggregates"
+      - date: "2026-06-14"
+        status: verified
+        claim: "state_class changed TOTAL_INCREASING → MEASUREMENT — recomputed-from-archive total can decrease, so the monotonic-counter class was wrong"
+        evidence: "tests/integration/test_per_map_session_totals.py::test_per_map_session_totals_use_measurement_state_class"
     references:
       wire_entry: "archive_track"
       code: "custom_components/dreame_a2_mower/sensor_session.py:36"
     notes: |
-      State class TOTAL_INCREASING, unit min. Same _index read pattern as
+      State class MEASUREMENT, unit min. Same _index read pattern as
       session_area_total — safe on the event loop, excludes map_id == -1 and
       non-mow move types (via _mow_sessions_for_map()).
 
@@ -796,14 +804,17 @@ entities:
         status: verified
         claim: "now counts _mow_sessions_for_map() only — 'Mowing sessions' excludes patrol/maintenance_run/manual_drive; legacy None counts as mow"
         evidence: "tests/integration/test_per_map_session_totals.py::test_non_mow_sessions_excluded_from_mowing_aggregates"
+      - date: "2026-06-14"
+        status: verified
+        claim: "state_class changed TOTAL_INCREASING → MEASUREMENT — the count is recomputed from the archive each read and can decrease (pruned/aged-out sessions), so MEASUREMENT is the honest class"
+        evidence: "tests/integration/test_per_map_session_totals.py::test_per_map_session_totals_use_measurement_state_class"
     references:
       wire_entry: "archive_track"
       code: "custom_components/dreame_a2_mower/sensor_session.py:53"
     notes: |
-      State class TOTAL_INCREASING. Counts completed MOWING sessions archived
+      State class MEASUREMENT. Counts completed MOWING sessions archived
       for this map (non-mow move types excluded via _mow_sessions_for_map()).
-      Grows only when the session_archive receives a new finalized mow for this
-      map_id.
+      Recomputed from the session_archive on every read for this map_id.
 
   # ------------------------------------------------------------------
   # Cloud-SETTINGS-backed per-map switches (write-back cloud-cache-only)

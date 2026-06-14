@@ -74,6 +74,31 @@ def mower_device_info(coord: DreameA2MowerCoordinator) -> DeviceInfo:
     return DeviceInfo(**info)
 
 
+class _MowerScopedEntity:
+    """Mixin for parent-device ("class-B") entities whose ``__init__`` does the
+    repeated 3-line mower-scoped wiring:
+
+        super().__init__(coordinator)
+        self._attr_unique_id = mower_unique_id(coordinator, "<key>")
+        self._attr_device_info = mower_device_info(coordinator)
+
+    Subclasses set the class attribute ``_MOWER_KEY`` to the entity key (the
+    unique_id suffix). The mixin must precede ``CoordinatorEntity`` in the base
+    list so its ``__init__`` runs and forwards ``coordinator`` to the chain.
+
+    It is a PURE wiring mixin: it sets no availability source and overrides no
+    other behaviour, so concrete classes keep their own ``_availability_source``
+    / ``_attr_*`` declarations (including P1.1 staleness tags) untouched.
+    """
+
+    _MOWER_KEY: str = "override-me"
+
+    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = mower_unique_id(coordinator, self._MOWER_KEY)
+        self._attr_device_info = mower_device_info(coordinator)
+
+
 def map_device_info(
     coord: DreameA2MowerCoordinator,
     map_id: int,

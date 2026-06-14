@@ -24,7 +24,7 @@ from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._availability import _FreshnessAvailableMixin
-from ._devices import mower_device_info, mower_unique_id
+from ._devices import _MowerScopedEntity, mower_device_info, mower_unique_id
 from .coordinator import DreameA2MowerCoordinator
 from .mower.error_codes import describe_error
 from .mower.state import ChargingStatus, MowerState
@@ -1038,7 +1038,7 @@ class DreameA2MqttConnectivitySensor(_SnapshotEnumSensorBase):
 
 
 class DreameA2PickedSessionSensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """Exposes the picker-selected session as state + attributes.
 
@@ -1050,6 +1050,7 @@ class DreameA2PickedSessionSensor(
     _attr_has_entity_name = True
     _attr_name = "Picked session"
     _attr_icon = "mdi:history"
+    _MOWER_KEY = "picked_session"
     # The summary dict (track/legs/segments) routinely exceeds the recorder's
     # 16 KB per-attribute cap, which logs a WARNING and refuses to store it.
     # These attributes are point-in-time UI payloads, not history — exclude the
@@ -1057,11 +1058,6 @@ class DreameA2PickedSessionSensor(
     # MATCH_ALL (the recorder's "exclude every attribute" sentinel); the literal
     # avoids importing a symbol the stubbed-HA test venv doesn't provide.
     _unrecorded_attributes = frozenset({"*"})
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "picked_session")
-        self._attr_device_info = mower_device_info(coordinator)
 
     @property
     def native_value(self) -> str | None:
@@ -1074,7 +1070,7 @@ class DreameA2PickedSessionSensor(
 
 
 class DreameA2PhotoGallerySensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """Exposes the OSS photo/video gallery manifest as state + attributes.
 
@@ -1086,16 +1082,12 @@ class DreameA2PhotoGallerySensor(
     _attr_has_entity_name = True
     _attr_name = "Photo gallery"
     _attr_icon = "mdi:image-multiple"
+    _MOWER_KEY = "photo_gallery"
     # The items list (one row per archived photo/video, with signed URLs) easily
     # exceeds the recorder's per-attribute cap — keep the whole entity's
     # attributes out of the recorder (mirrors DreameA2PickedSessionSensor). "*"
     # is homeassistant.const MATCH_ALL (the recorder's exclude-all sentinel).
     _unrecorded_attributes = frozenset({"*"})
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "photo_gallery")
-        self._attr_device_info = mower_device_info(coordinator)
 
     @property
     def native_value(self) -> int:
@@ -1195,7 +1187,10 @@ class DreameA2DiagnosticSensor(
 
 
 class DreameA2OtaStatusSensor(
-    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _MowerScopedEntity,
+    _FreshnessAvailableMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SensorEntity,
 ):
     """Cloud-reported OTA upgrade status."""
 
@@ -1204,11 +1199,7 @@ class DreameA2OtaStatusSensor(
     _attr_name = "OTA status"
     _attr_should_poll = False
     _availability_source = "cloud"
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "ota_status")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "ota_status"
 
     @property
     def native_value(self) -> str | int | None:
@@ -1226,7 +1217,10 @@ class DreameA2OtaStatusSensor(
 
 
 class DreameA2ScheduleCountSensor(
-    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _MowerScopedEntity,
+    _FreshnessAvailableMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SensorEntity,
 ):
     """Number of cloud-side schedule slots."""
 
@@ -1235,11 +1229,7 @@ class DreameA2ScheduleCountSensor(
     _attr_name = "Schedule count"
     _attr_should_poll = False
     _availability_source = "cloud"
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "schedule_count")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "schedule_count"
 
     @property
     def native_value(self) -> int | None:
@@ -1275,7 +1265,7 @@ class DreameA2ScheduleCountSensor(
 
 
 class DreameA2WifiRefreshStatusSensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """Timestamp of the last WiFi archive refresh attempt.
 
@@ -1294,11 +1284,7 @@ class DreameA2WifiRefreshStatusSensor(
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_should_poll = False
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "wifi_refresh_status")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "wifi_refresh_status"
 
     @property
     def native_value(self) -> datetime | None:
@@ -1316,7 +1302,7 @@ class DreameA2WifiRefreshStatusSensor(
 
 
 class DreameA2RainResumeSensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """When the mower will retry mowing after a rain-protection delay.
 
@@ -1332,11 +1318,7 @@ class DreameA2RainResumeSensor(
     _attr_icon = "mdi:weather-rainy"
     _attr_device_class = SensorDeviceClass.TIMESTAMP
     _attr_should_poll = False
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "rain_resume_at")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "rain_resume_at"
 
     @property
     def native_value(self) -> datetime | None:
@@ -1347,7 +1329,7 @@ class DreameA2RainResumeSensor(
 
 
 class DreameA2WifiHeatmapAgeSensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """Age (in seconds) of the newest archived WiFi heatmap (v1.0.10a6+).
 
@@ -1371,11 +1353,7 @@ class DreameA2WifiHeatmapAgeSensor(
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_should_poll = False
     _attr_entity_registry_enabled_default = False
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "wifi_heatmap_age")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "wifi_heatmap_age"
 
     def _newest_unix_ts(self) -> int | None:
         idx = getattr(self.coordinator, "_wifi_archive_index", None) or []
@@ -1412,7 +1390,10 @@ class DreameA2WifiHeatmapAgeSensor(
 
 
 class DreameA2LastNotificationSensor(
-    _FreshnessAvailableMixin, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _MowerScopedEntity,
+    _FreshnessAvailableMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SensorEntity,
 ):
     """Most recent app-style notification synthesized from s2p2 transitions.
 
@@ -1427,11 +1408,7 @@ class DreameA2LastNotificationSensor(
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_should_poll = False
     _availability_source = "mqtt"
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "last_notification")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "last_notification"
 
     @property
     def native_value(self) -> str | None:
@@ -1453,9 +1430,14 @@ class DreameA2LastNotificationSensor(
 
 
 class DreameA2ApiEndpointSensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
-    """Cloud API endpoint host:port the integration is talking to."""
+    """Cloud API endpoint host:port the integration is talking to.
+
+    Config/probe-derived (host comes from the cloud client, not a live link),
+    so it is intentionally NOT freshness-gated — no ``_availability_source``,
+    no ``_FreshnessAvailableMixin``. Confirmed un-gated (P2.4).
+    """
 
     _attr_has_entity_name = True
     _attr_should_poll = False
@@ -1463,11 +1445,7 @@ class DreameA2ApiEndpointSensor(
     _attr_translation_key = "api_endpoint"
     _attr_icon = "mdi:server-network"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "api_endpoint")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "api_endpoint"
 
     @property
     def native_value(self):
@@ -1479,7 +1457,7 @@ class DreameA2ApiEndpointSensor(
 
 
 class DreameA2IntegrationVersionSensor(
-    CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):
     """Currently-running integration version, sourced from manifest.json."""
 
@@ -1489,11 +1467,7 @@ class DreameA2IntegrationVersionSensor(
     _attr_translation_key = "integration_version"
     _attr_icon = "mdi:package-variant"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "integration_version")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "integration_version"
 
     @property
     def native_value(self):

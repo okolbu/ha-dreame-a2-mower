@@ -18,7 +18,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._availability import _FreshnessAvailableMixin
-from ._devices import mower_device_info, mower_unique_id
+from ._devices import _MowerScopedEntity
 from .const import DOMAIN, LOGGER
 from .control_honesty import ControlMode, _ControlHonestyMixin
 from .coordinator import DreameA2MowerCoordinator
@@ -88,6 +88,7 @@ async def async_setup_entry(
 class DreameA2LawnMower(
     _ControlHonestyMixin,
     _FreshnessAvailableMixin,
+    _MowerScopedEntity,
     CoordinatorEntity[DreameA2MowerCoordinator],
     LawnMowerEntity,
 ):
@@ -112,11 +113,7 @@ class DreameA2LawnMower(
         | LawnMowerEntityFeature.PAUSE
         | LawnMowerEntityFeature.DOCK
     )
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator)
-        self._attr_unique_id = mower_unique_id(coordinator, "lawn_mower")
-        self._attr_device_info = mower_device_info(coordinator)
+    _MOWER_KEY = "lawn_mower"
 
     @property
     def activity(self) -> LawnMowerActivity | None:
