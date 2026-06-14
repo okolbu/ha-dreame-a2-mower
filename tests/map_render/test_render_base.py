@@ -28,10 +28,12 @@ def _png_size(b: bytes) -> tuple[int, int]:
 def _map_with_exclusion() -> MapData:
     """10m × 10m map with one mowing zone and one no-go exclusion polygon.
 
-    The exclusion ``points`` are already in renderer coords (the renderer
-    divides by ``pixel_size_mm`` and offsets by bx1/by1), so a 2m×2m square
-    near the centre lands solidly inside the lawn and paints red exclusion
-    fill onto the dark-green base.
+    The exclusion ``points`` are post-rotation cloud-frame mm (P3a transform-move:
+    the renderer reflects them through the bx/by midlines, then divides by
+    ``pixel_size_mm``). With ``cloud_*_reflect`` = 10000 the 3000–5000mm square
+    renders reflected at 5000–7000mm — still solidly inside the lawn — and paints
+    red exclusion fill onto the dark-green base. (This test asserts only that red
+    fill is present, not its position.)
     """
     return MapData(
         md5="test-clean-bg",
