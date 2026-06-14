@@ -23,6 +23,109 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
+### Split residual `MowerState` into per-domain dataclasses (Refactor Phase 3d, step 2 — deferred)
+
+**Why:** `MowerState` (`mower/state.py`) is a single flat `@dataclass(slots=True)`
+of ~154 fields. The refactor design (`spec.md §4 Phase 3d`) proposed (step 1)
+deduping the StateSnapshot↔MowerState overlap, then (step 2) splitting the
+residual into per-domain dataclasses — `Settings` (~70 CFG fields), `Telemetry`,
+`SessionRefs`, `Consumables`, `Diagnostics` — behind re-export shims.
+**Both steps are deferred** as of 2026-06-14. Step 1 (the dedup) turned out NOT
+to be a safe "delete dead duplicated fields behind shims" change — see the
+sibling TODO "State-container dedup (Phase 3d step 1) is a data-flow
+rearchitecture, not a shim-able dedup" — it is entangled with 3e + the
+single-ingestion-funnel and was sequenced after 3e. Step 2 (this split) was
+deferred by the user as the right *long-term* goal but a big lift now. The
+motivation is **readability** and a **closer structural match to the upstream
+cloud/CFG keys and values** (one dataclass per upstream concern makes the
+field→wire-source mapping legible instead of a 154-field flat bag).
+
+**Pros (from the Phase-3d scoping pass, agent `ace9efd0`):**
+  - Readability: 140 flat fields → 5 named domains; the field→upstream-source
+    mapping becomes self-documenting (esp. the ~70 `Settings`/CFG fields).
+  - Better alignment with upstream keys/values — the stated reason to do it.
+  - Each domain dataclass can carry its own provenance/freshness if ever needed.
+
+**Cons / cost (why it was deferred, not dropped):**
+  - High churn: ~172 `coordinator.data.<field>` access sites + ~84 test files
+    import `MowerState` directly. A split needs either accessor shims
+    (`state.settings.x` AND a back-compat `state.x` property) or a sweeping
+    rename across all sites.
+  - `dataclasses.replace(self.data, …)` is used pervasively as the single write
+    funnel; nested dataclasses make `replace` two-level (replace the inner, then
+    replace the outer) at every write site — a real ergonomic regression unless
+    wrapped.
+  - On-disk/serialization touch: `settings_snapshot` (`coordinator/_snapshot.py`)
+    reads ~30 fields by string name; the archive/restore paths and
+    `test_card_contract` construct `MowerState()` directly.
+  - Contradicts `feedback_no_migration_overengineering` *for the mechanical
+    benefit alone* — so only worth it for the readability/upstream-match payoff,
+    which is the explicit goal here (do it as a readability investment, not a
+    correctness fix).
+
+**Suggested approach when picked up:** keep the flat `MowerState` name as the
+public type; introduce the 5 domain dataclasses as *nested* fields OR as mixin
+groupings, and provide `@property` pass-throughs for the highest-traffic fields
+so the 172 access sites don't all churn at once. Drive it from
+`entity-inventory.yaml` / the CFG key map so the domain assignment matches the
+upstream source. Land it as its own gated branch with the public-API +
+card-contract tests as the regression net.
+
+**Done when:** `MowerState`'s fields are grouped into named per-domain
+containers with each field's upstream source legible; all `coordinator.data`
+readers + the 84 test imports resolve (via shims or a clean rename); full suite
+green; no behavior change (dedup already shipped).
+**Status:** deferred (long-term readability goal; user-confirmed 2026-06-14).
+**Cross-refs:** `/data/claude/homeassistant/refactor-2026-06-13/spec.md` §4
+Phase 3d; `mower/state.py`; `feedback_no_migration_overengineering` (the cost
+caveat); the Phase-3d dedup spec/commit (step 1).
+
+### State-container dedup (Phase 3d step 1) is a data-flow rearchitecture, not a shim-able dedup
+
+**Why:** The refactor plan (`spec.md §4 Phase 3d`) framed the StateSnapshot↔MowerState
+overlap as "≥6 *dead* duplicated fields removable behind re-export shims once
+entities read the snapshot." A ground-truth trace 2026-06-14 (scoping agent
+`ace9efd0` + direct verification) **falsified that premise**: none of the
+overlapping fields are dead. They are a deliberate **staging layer** —
+`MowerState` is the decode/stage target written by the *pure*
+`coordinator/_property_apply.py:apply_property_to_state`, and `StateSnapshot`
+(owned by `MowerStateMachine`, persisted, restart-survivable) is the
+entity-read source-of-truth. Each overlapping field still has live *internal*
+(non-entity) readers:
+  - `battery_level` — `coordinator/_mqtt_handlers.py:490/544/697` (live-map
+    `charge_at_start`, low-battery ≤20 logic, charging inference).
+  - `wifi_rssi_dbm` — *written* by `coordinator/_refreshers.py:208` (CFG.NET
+    fallback) + gated at `:207`; the snapshot only updates from the heartbeat,
+    so dropping the MowerState copy loses the CFG.NET fallback path.
+  - `position_*` (5), `mowing_phase`, `task_state_code`, `slam_task_label` —
+    **round-trip staging**: `apply_property_to_state` writes them into MowerState,
+    then `coordinator/_mqtt_handlers.py:1028/1064` reads `new_state.*` back to feed
+    the SM (`handle_position`/`handle_misc_persisted`). They MUST exist on
+    MowerState for the pure applier (which has no SM access) to write them.
+  - `task_state_code` finalize gate (`coordinator/_session.py:420`) relies on
+    `self.data.task_state_code is None` meaning "no fresh MQTT push since boot."
+    The restored snapshot carries the *persisted* value, so redirecting that
+    reader to the snapshot would **regress the 2026-05-15 rain-reboot phantom-session
+    fix**.
+  - `error_code` — load-bearing: the raw `sensor.error_code`, two binary sensors
+    (`==31`/`==73`), and the fault-delta emitter (`_mqtt_handlers.py:716`).
+
+So a real dedup means **rerouting the pure-applier→SM ingestion seam** so decoded
+values reach the SM without staging in MowerState, moving the internal consumers to
+the snapshot, and solving the finalize "fresh-since-boot" signal another way — i.e.
+the spec §5 *single-ingestion-funnel* (`apply_update(source, fields)`), entangled
+with Phase 3e. **Sequenced after 3e** (which persists `area_mowed_m2` and reworks
+the finalize gate, untangling `task_state_code`).
+**Done when:** the StateSnapshot↔MowerState overlap is genuinely single-sourced
+(decoded values funnel straight to the SM; internal consumers read the snapshot;
+finalize uses an explicit fresh-since-boot latch, not the MowerState default-None
+signal); full suite green; render + finalize live-validated on a revived mower.
+**Status:** deferred (sequenced after Phase 3e; premise corrected 2026-06-14).
+**Cross-refs:** `/data/claude/homeassistant/refactor-2026-06-13/spec.md` §4 Phase 3d
++ §5 single-ingestion-funnel; `mower/state.py`, `mower/state_snapshot.py`,
+`mower/state_machine.py`, `coordinator/_property_apply.py`, `coordinator/_mqtt_handlers.py`;
+the per-domain-split TODO below (Phase 3d step 2).
+
 ### Base-map render drops line no-go zones + novelty (decorative) shapes
 
 **Why:** On the current integration's live base map, two object kinds present in the
