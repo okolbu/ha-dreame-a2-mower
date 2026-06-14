@@ -100,3 +100,11 @@ if (!customElements.get("dreame-multi-select-card")) {
     description: "Pick items from a sensor's `items` attribute and call a service with the ids.",
   });
 }
+
+// Card version banner — lets the user confirm which build loaded in the
+// browser console (the cards "cache hard"; a stale cache shows the old version).
+const CARD_VERSION = "1.0.26a9";
+console.info(
+  `%c dreame-multi-select-card v${CARD_VERSION} `,
+  "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"
+);

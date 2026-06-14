@@ -1089,3 +1089,11 @@ window.customCards.push({
   name: "Dreame A2 LiDAR Card",
   description: "Interactive WebGL 3D view of the mower's LiDAR point-cloud scan.",
 });
+
+// Card version banner — lets the user confirm which build loaded in the
+// browser console (the cards "cache hard"; a stale cache shows the old version).
+const CARD_VERSION = "1.0.26a9";
+console.info(
+  `%c dreame-a2-lidar-card v${CARD_VERSION} `,
+  "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"
+);

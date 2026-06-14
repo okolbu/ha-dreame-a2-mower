@@ -48,8 +48,8 @@ def render_base(
     EDGE   -> light lawn + dotted boundary.
     SPOT   -> light lawn + dotted spot rectangles.
     """
-    from .._render_direction import next_direction
-    from .._render_stripes import compute_stripe_overlay
+    from .direction import next_direction
+    from .stripes import compute_stripe_overlay
     from .background import BackgroundMode
 
     if background_mode == BackgroundMode.STRIPES and state is not None:
@@ -154,7 +154,7 @@ def _render_pre_start_edge(map_data: MapData, *, palette: dict | None) -> bytes:
     render_base_map's internal FLIP_TOP_BOTTOM) to keep orientation consistent
     with the base map.
     """
-    from .._render_dotted import draw_dotted_polygon
+    from .dotted import draw_dotted_polygon
 
     base_png = render_base_map(map_data, palette=palette, lawn_mode="light")
     image = Image.open(io.BytesIO(base_png)).convert("RGBA")
@@ -184,7 +184,7 @@ def _render_pre_start_spot(map_data: MapData, *, palette: dict | None) -> bytes:
     decoder, so we use ``_renderer_to_px`` (not ``_cloud_to_px``) to map them
     to pixel space.
     """
-    from .._render_dotted import draw_dotted_polygon
+    from .dotted import draw_dotted_polygon
 
     base_png = render_base_map(map_data, palette=palette, lawn_mode="light")
     image = Image.open(io.BytesIO(base_png)).convert("RGBA")

@@ -157,6 +157,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # render time). Users register the cards they want as Lovelace
         # resources manually (type: module — see README). The shared core
         # is pulled in via the cards' ES `import` and needs no resource entry.
+        #
+        # SKIP — no ?v=<manifest_version> URL cache-bust (P3a): the integration
+        # does NOT own the Lovelace resource URL. The user registers each card
+        # as a resource manually (auto-registration was deliberately removed,
+        # see the NOTE above), so we cannot append a version query string to a
+        # URL we don't control. Instead each bundled card logs a CARD_VERSION
+        # banner to the browser console on load (mirrors
+        # dreame-a2-schedule-card.js), giving the user a manual way to confirm
+        # which build is live when the browser serves a hard-cached card.
         _static_registered = True
 
     # F7.7.1: apply runtime archive-cap changes without reloading the entry.

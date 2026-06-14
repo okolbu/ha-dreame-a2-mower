@@ -71,19 +71,13 @@ class DreameMowerReplayCard extends HTMLElement {
       </div>`;
   }
 
-  _projectPoint(x_m, y_m, proj) {
-    // Single projection implementation lives in _dreame-map-core.js
-    // (projectPoint). This thin wrapper keeps the existing call sites
-    // (_buildLegPathD) unchanged. Both take METRES and multiply by 1000
-    // internally, so the call contract is identical to the old body.
-    return projectPoint(x_m, y_m, proj);
-  }
-
   _buildLegPathD(leg, proj) {
     if (!leg || leg.length === 0) return "";
     const parts = [];
     for (let i = 0; i < leg.length; i++) {
-      const [px, py] = this._projectPoint(leg[i][0], leg[i][1], proj);
+      // projectPoint (from _dreame-map-core.js) takes METRES and multiplies
+      // by 1000 internally — same contract the map card uses directly.
+      const [px, py] = projectPoint(leg[i][0], leg[i][1], proj);
       parts.push(`${i === 0 ? "M" : "L"} ${px.toFixed(2)} ${py.toFixed(2)}`);
     }
     return parts.join(" ");
@@ -627,3 +621,11 @@ class DreameMowerReplayCard extends HTMLElement {
 }
 
 customElements.define("dreame-mower-replay-card", DreameMowerReplayCard);
+
+// Card version banner — lets the user confirm which build loaded in the
+// browser console (the cards "cache hard"; a stale cache shows the old version).
+const CARD_VERSION = "1.0.26a9";
+console.info(
+  `%c dreame-mower-replay-card v${CARD_VERSION} `,
+  "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"
+);

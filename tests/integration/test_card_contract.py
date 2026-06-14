@@ -87,9 +87,27 @@ def test_camera_map_card_consumed_keys_present():
     for key in (
         "map_projection", "point_seq", "latest_point", "track_snapshot",
         "last_known_point", "background_mode", "available_map_ids",
-        "editable_objects",
+        "editable_objects", "schema_version",
     ):
         assert key in attrs, f"camera map dropped card-consumed attr {key!r}"
+
+
+def test_camera_map_schema_version_pinned():
+    """The camera 'map' attribute contract carries an integer schema_version.
+
+    Bumping the SHAPE of any card-consumed attr (map_projection,
+    latest_point/track_snapshot layout, editable_objects element keys) must be
+    accompanied by a bump of MAP_ATTR_SCHEMA_VERSION so a card can detect a
+    backend it doesn't understand. This pins the current value.
+    """
+    from custom_components.dreame_a2_mower._camera_map import (
+        MAP_ATTR_SCHEMA_VERSION,
+    )
+
+    attrs = _make_map_camera().extra_state_attributes
+    assert attrs["schema_version"] == MAP_ATTR_SCHEMA_VERSION
+    assert isinstance(attrs["schema_version"], int)
+    assert MAP_ATTR_SCHEMA_VERSION == 1
 
 
 def test_camera_map_projection_exact_shape():

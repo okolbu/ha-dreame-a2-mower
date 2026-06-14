@@ -1,12 +1,12 @@
 // Dreame A2 Mower — shared client-side map core
 //
-// Pure projection / icon-rotation math used by the live-map card and (pending
-// Task 10) the replay card. This file is an ES module (`export function`), so
-// it can only be loaded with type="module"; a plain <script src> would throw a
-// SyntaxError. It is ALSO attached to window.DreameMapCore so other ES module
-// cards that load it as a side-effect import can reach the same functions
-// without a named import. (The replay card still has its own duplicate
-// _projectPoint as of this commit; Task 10 wires it to import from here.)
+// Pure projection / icon-rotation math used by both the live-map card and the
+// replay card. This file is an ES module (`export function`), so it can only be
+// loaded with type="module"; a plain <script src> would throw a SyntaxError. It
+// is ALSO attached to window.DreameMapCore so other ES module cards that load it
+// as a side-effect import can reach the same functions without a named import.
+// Both cards now import `projectPoint` directly from here — there is no longer a
+// duplicate projection implementation anywhere.
 //
 // THE ICON-ROTATION CONVENTION IS CORPUS-VALIDATED.
 // The byte-heading rotation formula below is character-equivalent to the
@@ -19,14 +19,18 @@
 //
 // Geometry: the served base PNG is FLIP_TOP_BOTTOM'd. projectPoint maps
 // cloud-mm -> screen-px so that cloud +X -> screen LEFT and cloud +Y ->
-// screen DOWN, matching the replay card's _projectPoint exactly. The byte
-// heading H (deg, 0 = cloud +X axis) is the cloud-frame travel direction;
+// screen DOWN. Both the live-map and replay cards call this single function.
+// The byte heading H (deg, 0 = cloud +X axis) is the cloud-frame travel
+// direction;
 // for an up-pointing icon the CW-positive SVG rotation that aims it along
 // travel is A = (270 - H) mod 360.
 
 // Project a point given in METRES (cloud frame) to screen pixels.
 // proj = { bx2_mm, by2_mm, pixel_size_mm, height_px }
-// Matches dreame-mower-replay-card.js:_projectPoint exactly.
+// The SOLE projection implementation — both bundled cards import it.
+// The Python server render uses the matching formula (map_render._geometry
+// _cloud_to_px + the height_px flip); tests/www/test_projection_parity.py
+// pins JS↔Python agreement within 1e-6 px.
 export function projectPoint(x_m, y_m, proj) {
   const px = (proj.bx2_mm - x_m * 1000) / proj.pixel_size_mm;
   const py =

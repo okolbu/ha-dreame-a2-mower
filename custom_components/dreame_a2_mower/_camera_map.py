@@ -11,6 +11,13 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from ._devices import map_device_info, map_unique_id, mower_device_info, mower_unique_id
 from .coordinator import DreameA2MowerCoordinator
 
+# Version of the camera "map" attribute contract the bundled cards consume
+# (map_projection / latest_point / track_snapshot / editable_objects shapes).
+# Bump this integer whenever that attribute SHAPE changes so a card can detect
+# a backend it doesn't understand instead of mis-rendering silently. The card
+# contract is pinned in tests/integration/test_card_contract.py.
+MAP_ATTR_SCHEMA_VERSION = 1
+
 
 def _last_known_point(snapshot: Any) -> list[Any] | None:
     """``[x_m, y_m, None]`` of the mower's last persisted telemetry position,
@@ -140,7 +147,7 @@ class DreameA2MapCamera(
         card uses for its map underlay), and the live position stream the
         bundled map card uses to draw the trail + mower icon client-side.
         """
-        attrs: dict[str, Any] = {}
+        attrs: dict[str, Any] = {"schema_version": MAP_ATTR_SCHEMA_VERSION}
         png = self.coordinator._base_png
         if png:
             attrs["image_version"] = hashlib.sha1(png).hexdigest()[:12]

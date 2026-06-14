@@ -1021,6 +1021,33 @@ path.
 
 ---
 
+### Phase 3a DEFERRED — move the render transform out of `map_decoder` + unify zone types
+
+**Why:** The P3a frame-untangle (2026-06-14) shipped only the SAFE, render-output-
+preserving subset (folded `_render_*` into `map_render/`, added the Python↔JS
+projection-parity test, JS cleanup, card version banners + camera `schema_version`).
+Two genuinely render-output-CHANGING pieces were explicitly DEFERRED because the
+mower is dead and the plan's Checkpoint-3a requires a **live HA map-render visual
+confirmation** (there is no golden-image test, so a compositing/orientation
+regression wouldn't be caught automatically):
+  1. Move rotation + midline-reflection OUT of `map_decoder.py` into a `map_render`
+     presentation step — make `ExclusionZone.points` / `SpotZone.points` / `dock_xy`
+     raw-cloud-mm, relocate the transform, and handle the bbox-expansion-depends-on-
+     post-rotation-corners coupling at `map_decoder.py:716-729`.
+  2. Unify `ExclusionZone` / `SpotZone` / `MowingZone` into one Zone type (only clean
+     AFTER step 1 makes them all raw-frame).
+**Done when:** with a live mower, the transform is relocated and a live HA map render
+is visually confirmed unchanged (lawn/zones/dock/obstacles land identically); the new
+`tests/www/test_projection_parity.py` still passes (it is the regression gate for the
+transform-move); zone types are unified with all existing render/decoder tests green.
+**Status:** blocked-by-dead-mower (needs revival + live map-render visual check).
+**Cross-refs:** `refactor-2026-06-13/p3a-frame-spec.md` § "Explicitly DEFERRED";
+`custom_components/dreame_a2_mower/map_decoder.py:716-729`;
+`custom_components/dreame_a2_mower/map_render/_geometry.py` (`_cloud_to_px` /
+`_renderer_to_px`); `tests/www/test_projection_parity.py`.
+
+---
+
 ## In-progress
 
 _(none currently)_
