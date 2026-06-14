@@ -69,7 +69,7 @@ def _class_graph() -> tuple[dict[str, list[str]], dict[str, str]]:
     """Parse every .py in the package. Returns (name->base names, name->loc)."""
     bases: dict[str, list[str]] = {}
     loc: dict[str, str] = {}
-    for path in CC.glob("*.py"):
+    for path in CC.rglob("*.py"):
         try:
             tree = ast.parse(path.read_text())
         except SyntaxError:

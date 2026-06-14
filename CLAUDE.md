@@ -408,14 +408,24 @@ platform is a thin entry file with domain-grouped siblings.
   from the coordinator's published position stream.
 - Do NOT reintroduce a single `map_render.py`. The package is the contract.
 
-### camera platform
+### camera package
 
-`camera.py` is a thin platform entry (`async_setup_entry` + the four
-`hass.http.register_view` calls). Entity classes live in domain-grouped
-siblings — `_camera_map.py`, `_camera_lidar.py`, `_camera_wifi.py` — and the
-four `HomeAssistantView` HTTP endpoints in `_camera_views.py` (B3a flat-sibling
-pattern). The platform file imports them all, which keeps
-`from …camera import X` working for tests.
+The camera entity layer is a **package** (`camera/`, Phase 3c, 2026-06-14). The
+package `__init__.py` *is* the thin HA platform entry (`async_setup_entry` + the
+seven `hass.http.register_view` calls) — HA imports
+`custom_components.dreame_a2_mower.camera` by name, so a sibling `camera.py`
+module cannot coexist with the package; the entry lives in `camera/__init__.py`.
+Entity classes live in domain-grouped modules — `camera/map.py`,
+`camera/lidar.py`, `camera/wifi.py`, `camera/photos.py` — and the
+`HomeAssistantView` HTTP endpoints in `camera/views.py`.
+
+The old flat root paths (`_camera_map.py`, `_camera_lidar.py`, `_camera_wifi.py`,
+`_camera_photos.py`, `_camera_views.py`) are now 1-line re-export **shims**
+(`from .camera.map import *` + explicit `__all__`) preserving the deep test
+imports (`test_card_contract`, `test_editable_objects_attr`, `test_oss_camera`,
+`test_photo_camera`). Keep the shims. `_camera_photos.py` carries
+`_photo_detection_attrs` explicitly (an underscore name `import *` won't carry,
+imported by `test_oss_camera`). New code imports from `camera.<module>` directly.
 
 ---
 

@@ -1,5 +1,15 @@
 """Camera platform entry-point — registers the HTTP views and instantiates
-all camera entities. The entity classes live in the `_camera_*` siblings."""
+all camera entities.
+
+Phase 3c (2026-06-14) packaged the camera entity layer under ``camera/``. The
+package ``__init__`` *is* the HA platform loader (HA imports
+``custom_components.dreame_a2_mower.camera`` by name and calls
+``async_setup_entry``) — a sibling ``camera.py`` module cannot coexist with this
+package, so the thin entry lives here. The entity classes live in the
+domain-grouped siblings ``map`` / ``lidar`` / ``wifi`` / ``photos`` and the HTTP
+views in ``views``. The old root ``_camera_*.py`` paths remain as 1-line
+re-export shims so deep test imports resolve unchanged.
+"""
 from __future__ import annotations
 
 from homeassistant.components.camera import Camera
@@ -7,29 +17,29 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN
-from .coordinator import DreameA2MowerCoordinator
+from ..const import DOMAIN
+from ..coordinator import DreameA2MowerCoordinator
 
-from ._camera_map import (
+from .map import (
     DreameA2MapCamera,
     DreameA2PerMapCamera,
     DreameA2WorkLogCamera,
 )
-from ._camera_lidar import (
+from .lidar import (
     DreameA2LidarTopDownCamera,
     DreameA2LidarTopDownFullCamera,
     DreameA2LidarSelectedCamera,
 )
-from ._camera_wifi import (
+from .wifi import (
     DreameA2WifiSelectedCamera,
     DreameA2WifiPerMapCamera,
 )
-from ._camera_photos import (
+from .photos import (
     DreameA2AlbumPhotoCamera,
     DreameA2PersonPhotoCamera,
     DreameA2LatestVideoThumbCamera,
 )
-from ._camera_views import (
+from .views import (
     LidarPcdDownloadView,
     LidarSelectedPcdView,
     MapImageView,
