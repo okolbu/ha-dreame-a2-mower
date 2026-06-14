@@ -161,6 +161,18 @@ This reflection applies to **charger_position**, **every no-go area corner**,
 and will apply to any future raw-cloud-coord overlay (live mower position,
 maintenance-point marker, etc.).
 
+> **Where the reflection runs (P3a transform-move, 2026-06-14).** The decoder
+> (`protocol/map_decoder.py`) stores `ExclusionZone.points`, `SpotZone.points`,
+> and `dock_xy` in **post-rotation cloud-frame mm** — the per-zone centroid
+> rotation (§4) is still applied at decode (its rotated corners drive the bbox
+> expansion), but the midline reflection above is NOT baked into the dataclass.
+> The `map_render` presentation step `_geometry._zone_point_to_px` applies the
+> reflection (`x_reflect - x`, `y_reflect - y`) and the pixel-grid divide at
+> render time. So the decoder carries one cloud frame; only WHERE the
+> reflection runs moved (the arithmetic is identical → pixel-identical output).
+> `ExclusionZone.points_m` is the same post-rotation frame in metres (×1000,
+> un-reflected) for the map-editor card.
+
 ---
 
 ## 4. Forbidden-zone rotation

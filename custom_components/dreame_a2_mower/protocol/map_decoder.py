@@ -85,14 +85,15 @@ GRID_SIZE_MM: int = 50
 
 @dataclass(frozen=True, slots=True)
 class ExclusionZone:
-    """A single exclusion / forbidden area polygon in *renderer* coords.
+    """A single exclusion / forbidden area polygon in *post-rotation cloud* mm.
 
-    ``points`` contains the polygon corners after:
-      1. Rotating around the polygon centroid by ``-angle`` (angle negated
-         to match app rendering handedness).
-      2. Reflecting through the bbox midlines so the renderer's
-         ``Point.to_img`` places each corner over the same pixel the mask
-         formula uses.
+    ``points`` contains the polygon corners after rotating around the polygon
+    centroid by ``-angle`` (angle negated to match app rendering handedness),
+    in cloud-frame millimetres.  This is the SAME frame ``points_m`` is in
+    (×1000).  The midline reflection that aligns these to the flipped pixel
+    frame is applied at RENDER time by the ``map_render`` presentation step
+    (``_zone_point_to_px``), not baked in here — so the decoder carries one
+    cloud frame.  (P3a transform-move, 2026-06-14.)
 
     ``subtype`` is one of:
 
@@ -109,8 +110,8 @@ class ExclusionZone:
     obj_id: int | None = None
     # Edit-frame polygon corners in METERS (un-reflected cloud frame:
     # rotate(path, -angle)/1000). These feed the map-editor card's
-    # projectPoint directly; the `points` above are renderer-only (they
-    # also carry the midline reflection). See
+    # projectPoint directly. Post P3a transform-move ``points`` (above) is
+    # in the SAME frame ×1000 — render applies the reflection. See
     # docs/research/wire-captures/map-edit-frame-verification-2026-06-12.md.
     points_m: tuple[tuple[float, float], ...] = ()
 
@@ -137,8 +138,8 @@ class MowingZone:
 class SpotZone:
     """A single spot-mowing area with cloud id+name.
 
-    ``points`` is in *renderer* coords (post-rotation, post-reflection)
-    so the renderer can paint it identically to ExclusionZone. The
+    ``points`` is in post-rotation cloud-frame mm (same frame as
+    ExclusionZone.points; render applies the midline reflection). The
     ``spot_id`` is the integer key from the cloud's ``spotAreas[entry][0]``
     and is what the s2.50 op=103 spot-mow task expects in
     ``d.area: [spot_id, ...]``.
@@ -206,8 +207,9 @@ class MapData:
     which is volatile).  Used for deduplication: if ``md5`` matches the
     previously decoded map the coordinator can skip a re-render.
 
-    ``dock_xy`` — charger position in *renderer* coordinates (midline-
-    reflected, with ``CHARGER_OFFSET_MM`` applied along the +X axis).
+    ``dock_xy`` — charger position in post-rotation cloud-frame mm
+    (``CHARGER_OFFSET_MM`` along the +X axis; ``(800, 0)``).  Render applies
+    the midline reflection (same as exclusion/spot points).
     ``None`` when the boundary is zero-sized (empty/error response).
 
     ``boundary_polygon`` — axis-aligned bounding box of the lawn
@@ -216,8 +218,9 @@ class MapData:
     informational; the renderer sizes its canvas from ``width_px`` /
     ``height_px``.
 
-    ``exclusion_zones`` — polygons in renderer coords (post-rotation,
-    post-reflection); ready for ``Area``-style overlay painting.
+    ``exclusion_zones`` — polygons in post-rotation cloud-frame mm; the
+    renderer applies the midline reflection (presentation step) before
+    painting.
 
     ``mowing_zones`` — raw cloud-frame polygons; the renderer's pixel
     mask logic applies its own ``(bx2-x)/grid`` flip when painting.
@@ -276,7 +279,7 @@ class MapData:
     available_contour_ids: tuple[tuple[int, int], ...]
     maintenance_points: tuple[MaintenancePoint, ...]
 
-    # --- charger (renderer coords, post-reflection + offset) ---
+    # --- charger (post-rotation cloud-frame mm, +X offset; render reflects) ---
     dock_xy: tuple[float, float] | None
 
     # --- metadata ---
@@ -737,12 +740,16 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
     y_reflect = by1_exp + by2_exp
 
     # -----------------------------------------------------------------------
-    # Exclusion zones — apply midline reflection for renderer coords.
+    # Exclusion zones — store the post-rotation cloud-frame mm corners.
+    # The midline reflection that aligns these to the flipped pixel frame is
+    # applied at RENDER time (map_render presentation step), not here, so the
+    # decoder dataclasses carry one cloud frame (the same frame ``points_m``
+    # is in, ×1000). See cloud-map-geometry.md §3.3 + the P3a transform-move.
     # -----------------------------------------------------------------------
     excl_out: list[ExclusionZone] = []
     for (obj_id, rp, subtype, points_m) in rotated_exclusions:
         pts = tuple(
-            (float(x_reflect - pt["x"]), float(y_reflect - pt["y"]))
+            (float(pt["x"]), float(pt["y"]))
             for pt in rp
         )
         if pts:
@@ -755,7 +762,7 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
     spot_out: list[SpotZone] = []
     for (spot_id, name, rp, area_m2) in rotated_spots:
         pts = tuple(
-            (float(x_reflect - pt["x"]), float(y_reflect - pt["y"]))
+            (float(pt["x"]), float(pt["y"]))
             for pt in rp
         )
         if pts:
@@ -796,15 +803,16 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
     nav_paths_out = _parse_nav_paths(cloud_response)
 
     # -----------------------------------------------------------------------
-    # Charger position — cloud (0, 0) + CHARGER_OFFSET_MM along +X,
-    # then reflected through midlines for renderer coords.
-    # See §5 of cloud-map-geometry.md.
+    # Charger position — cloud (0, 0) + CHARGER_OFFSET_MM along +X, in
+    # post-rotation cloud-frame mm. The midline reflection that aligns it to
+    # the flipped pixel frame is applied at RENDER time (presentation step),
+    # matching exclusion/spot points. See §5 of cloud-map-geometry.md.
     # -----------------------------------------------------------------------
     dock_xy: tuple[float, float] | None
     if bx2_exp != bx1_exp or by2_exp != by1_exp:
         dock_xy = (
-            float(x_reflect - CHARGER_OFFSET_MM),
-            float(y_reflect),
+            float(CHARGER_OFFSET_MM),
+            0.0,
         )
     else:
         dock_xy = None
@@ -891,10 +899,10 @@ def apply_session_geometry(
     The lawn boundary box is stable for a given map, so the canvas
     (bx1..by2, width/height, pixel grid) and therefore trail alignment are
     unchanged — only the user-editable no-go zones / spot areas differ between
-    session time and now. We reuse ``map_data``'s stable midline reflections
-    and apply the SAME cloud→renderer transform ``parse_cloud_map`` uses for
-    exclusion/spot points (``x_reflect - x``), so no coordinate math is
-    re-derived.
+    session time and now. We store the points in the SAME post-rotation
+    cloud-frame mm ``parse_cloud_map`` now uses for exclusion/spot points
+    (just metres ×1000); the renderer's ``map_render`` presentation step
+    applies the midline reflection, so no coordinate math is re-derived here.
 
     ``exclusion_polys_m`` / ``spot_polys_m`` are polygons in charger-relative
     METRES (the frame SessionSummary.exclusions[].points /
@@ -903,20 +911,17 @@ def apply_session_geometry(
     """
     import dataclasses
 
-    xr = map_data.cloud_x_reflect
-    yr = map_data.cloud_y_reflect
-
-    def _reflect(poly: Sequence[tuple[float, float]]) -> tuple[tuple[float, float], ...]:
-        # metres → cloud-frame mm (×1000), then midline-reflect to renderer coords.
-        return tuple((xr - x * 1000.0, yr - y * 1000.0) for (x, y) in poly)
+    def _to_cloud_mm(poly: Sequence[tuple[float, float]]) -> tuple[tuple[float, float], ...]:
+        # metres → post-rotation cloud-frame mm (×1000). Render reflects.
+        return tuple((x * 1000.0, y * 1000.0) for (x, y) in poly)
 
     excl = tuple(
-        ExclusionZone(points=_reflect(p), subtype=None)
+        ExclusionZone(points=_to_cloud_mm(p), subtype=None)
         for p in exclusion_polys_m
         if len(p) >= 3
     )
     spots = tuple(
-        SpotZone(spot_id=i, name=None, points=_reflect(p), area_m2=0.0)
+        SpotZone(spot_id=i, name=None, points=_to_cloud_mm(p), area_m2=0.0)
         for i, p in enumerate(spot_polys_m)
         if len(p) >= 3
     )

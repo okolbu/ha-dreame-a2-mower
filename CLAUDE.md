@@ -376,7 +376,7 @@ platform is a thin entry file with domain-grouped siblings.
 | File | Concern |
 |---|---|
 | `__init__.py` | Re-export shim — the public surface only |
-| `_geometry.py` | Coord transforms (`_cloud_to_px`, `_renderer_to_px`), `extract_projection`, palette + shared consts (`_DEFAULT_PALETTE`, `_DOCK_RADIUS_PX`, `_OBSTACLE_FILL`, `_OBSTACLE_OUTLINE`) |
+| `_geometry.py` | Coord transforms (`_cloud_to_px`, `_renderer_to_px`, `_reflect_to_renderer`, `_zone_point_to_px`), `extract_projection`, palette + shared consts (`_DEFAULT_PALETTE`, `_DOCK_RADIUS_PX`, `_OBSTACLE_FILL`, `_OBSTACLE_OUTLINE`) |
 | `base_map.py` | `render_base_map` (+ `_composite_polygon`) + mower-icon (`_mower_icon`, `_MOWER_ICON_*`) |
 | `main_view.py` | `render_base` + pre-start previews (`_render_pre_start_*`, `STRIPE_WIDTH_MM`) |
 | `work_log.py` | `render_work_log` (archived-session render) + `_render_archived_trail` + `_TRAIL_LINE_WIDTH` |
@@ -407,6 +407,21 @@ platform is a thin entry file with domain-grouped siblings.
   no longer renders a trail server-side — the map card draws it client-side
   from the coordinator's published position stream.
 - Do NOT reintroduce a single `map_render.py`. The package is the contract.
+
+### Decode→render zone frame contract (P3a transform-move, 2026-06-14)
+
+`parse_cloud_map` stores `ExclusionZone.points` / `SpotZone.points` / `dock_xy`
+in **post-rotation cloud-frame mm** (the per-zone centroid rotation IS applied at
+decode — its rotated corners drive the bbox/`cloud_*_reflect` derivation — but
+the midline reflection is NOT baked into the dataclass). `base_map.py` /
+`main_view.py` apply the reflection + pixel-grid divide via
+`_geometry._zone_point_to_px` at render time. This is the same frame
+`ExclusionZone.points_m` is in (×1000, un-reflected) — the map-editor card
+contract (`editable_objects`) reads `points_m` and is unchanged. `apply_session_geometry`
+also stores raw cloud-frame mm (metres ×1000, no reflection). Output is
+pixel-identical to the pre-move decode-time reflection — the golden gate
+(`tests/integration/test_map_render_golden.py`) pins it. Don't re-bake the
+reflection into the decoder.
 
 ### camera package
 

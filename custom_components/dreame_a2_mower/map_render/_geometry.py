@@ -154,6 +154,47 @@ def _renderer_to_px(
     )
 
 
+def _reflect_to_renderer(
+    cloud_x: float,
+    cloud_y: float,
+    cloud_x_reflect: float,
+    cloud_y_reflect: float,
+) -> tuple[float, float]:
+    """Apply the midline reflection ``(x_reflect - x, y_reflect - y)``.
+
+    This is the **presentation-step** half of the decode→render transform
+    move (P3a, 2026-06-14).  The decoder now carries exclusion / spot zone
+    points and ``dock_xy`` in **post-rotation cloud-frame mm** (the same
+    frame ``points_m`` lives in, ×1000); the renderer applies this midline
+    reflection to land them in renderer-frame mm before
+    :func:`_renderer_to_px`.  Previously the decoder pre-applied this
+    reflection — moving it here keeps the decoder dataclasses in one cloud
+    frame while reproducing the exact same pixels (same arithmetic,
+    relocated).  See ``docs/research/cloud-map-geometry.md`` §3.3.
+    """
+    return (cloud_x_reflect - cloud_x, cloud_y_reflect - cloud_y)
+
+
+def _zone_point_to_px(
+    cloud_x: float,
+    cloud_y: float,
+    map_data: MapData,
+) -> tuple[float, float]:
+    """Project a post-rotation cloud-mm zone/dock point to renderer pixels.
+
+    Reflects through the bbox midlines (``cloud_x_reflect``/
+    ``cloud_y_reflect``) then divides by the grid via :func:`_renderer_to_px`
+    — the exact transform the decoder used to bake into ``ExclusionZone.points``
+    / ``SpotZone.points`` / ``dock_xy`` before the P3a presentation-step move.
+    """
+    rx, ry = _reflect_to_renderer(
+        cloud_x, cloud_y, map_data.cloud_x_reflect, map_data.cloud_y_reflect
+    )
+    return _renderer_to_px(
+        rx, ry, map_data.bx1, map_data.by1, map_data.pixel_size_mm
+    )
+
+
 def extract_projection(map_data: MapData | None) -> dict | None:
     """Expose the projection params the card needs to project metres to pixels.
 

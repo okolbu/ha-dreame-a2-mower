@@ -320,12 +320,30 @@ class TestParseCloudMap:
         assert len(result.dock_xy) == 2
 
     def test_dock_xy_charger_offset_applied(self):
-        """dock_xy[0] == cloud_x_reflect - CHARGER_OFFSET_MM (800 mm)."""
+        """dock_xy is post-rotation cloud-frame mm == (CHARGER_OFFSET_MM, 0).
+
+        P3a transform-move (2026-06-14): the decoder now stores dock_xy in the
+        SAME raw post-rotation cloud frame as exclusion/spot points; the render
+        presentation step applies the midline reflection (which lands it at
+        ``cloud_x_reflect - CHARGER_OFFSET_MM, cloud_y_reflect`` in renderer
+        mm). Pre-move this test pinned the reflected (renderer-frame) value.
+        """
         from custom_components.dreame_a2_mower.map_decoder import CHARGER_OFFSET_MM
+        from custom_components.dreame_a2_mower.map_render._geometry import (
+            _reflect_to_renderer,
+        )
         result = parse_cloud_map(_MINIMAL_MAP)
         assert result.dock_xy is not None
-        assert result.dock_xy[0] == pytest.approx(result.cloud_x_reflect - CHARGER_OFFSET_MM)
-        assert result.dock_xy[1] == pytest.approx(result.cloud_y_reflect)
+        # Decoder output: raw cloud-frame mm.
+        assert result.dock_xy[0] == pytest.approx(float(CHARGER_OFFSET_MM))
+        assert result.dock_xy[1] == pytest.approx(0.0)
+        # Render presentation step reproduces the pre-move renderer-frame value.
+        rx, ry = _reflect_to_renderer(
+            result.dock_xy[0], result.dock_xy[1],
+            result.cloud_x_reflect, result.cloud_y_reflect,
+        )
+        assert rx == pytest.approx(result.cloud_x_reflect - CHARGER_OFFSET_MM)
+        assert ry == pytest.approx(result.cloud_y_reflect)
 
     def test_cloud_reflect_values(self):
         """cloud_x_reflect / cloud_y_reflect equal bx1+bx2 and by1+by2."""

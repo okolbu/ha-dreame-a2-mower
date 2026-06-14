@@ -1,8 +1,14 @@
 """Tests for apply_session_geometry — session-time no-go/spot override.
 
-Verifies the reflection matches parse_cloud_map's exclusion convention
-(x_reflect - x_mm) and that the canvas/projection is untouched (so trail
-alignment is preserved).
+Verifies the points land in the same post-rotation cloud-frame mm
+``parse_cloud_map`` now uses for exclusion/spot points (metres ×1000, NO
+reflection — the render presentation step applies the midline reflection),
+and that the canvas/projection is untouched (so trail alignment is preserved).
+
+P3a transform-move (2026-06-14): pre-move these stored the midline-reflected
+renderer-frame value (``x_reflect - x_mm``); the reflection now happens at
+render time, so the stored points are raw cloud-frame mm. End-to-end render
+is unchanged.
 """
 from __future__ import annotations
 
@@ -23,18 +29,17 @@ def _base_map():
     return md
 
 
-def test_exclusion_reflected_into_renderer_coords():
+def test_exclusion_in_cloud_frame_mm():
     base = _base_map()
-    xr, yr = base.cloud_x_reflect, base.cloud_y_reflect
     # exclusion polygon in METRES (charger-relative, trail frame)
     excl = [[(1.0, 2.0), (1.5, 2.0), (1.5, 2.5), (1.0, 2.5)]]
     out = apply_session_geometry(base, exclusion_polys_m=excl, spot_polys_m=[])
     assert len(out.exclusion_zones) == 1
     pts = out.exclusion_zones[0].points
-    # metres → mm (×1000), then midline reflect (x_reflect - x_mm)
-    assert pts[0] == (xr - 1000.0, yr - 2000.0)
-    assert pts[1] == (xr - 1500.0, yr - 2000.0)
-    assert pts[2] == (xr - 1500.0, yr - 2500.0)
+    # metres → post-rotation cloud-frame mm (×1000); render reflects.
+    assert pts[0] == (1000.0, 2000.0)
+    assert pts[1] == (1500.0, 2000.0)
+    assert pts[2] == (1500.0, 2500.0)
 
 
 def test_canvas_and_projection_unchanged():
@@ -50,7 +55,7 @@ def test_canvas_and_projection_unchanged():
     assert out.width_px == base.width_px and out.height_px == base.height_px
 
 
-def test_degenerate_dropped_and_spots_reflected():
+def test_degenerate_dropped_and_spots_in_cloud_frame_mm():
     base = _base_map()
     out = apply_session_geometry(
         base,
@@ -59,9 +64,8 @@ def test_degenerate_dropped_and_spots_reflected():
     )
     assert out.exclusion_zones == ()
     assert len(out.spot_zones) == 1
-    assert out.spot_zones[0].points[0] == (
-        base.cloud_x_reflect - 3000.0, base.cloud_y_reflect - 3000.0,
-    )
+    # metres → post-rotation cloud-frame mm (×1000); render reflects.
+    assert out.spot_zones[0].points[0] == (3000.0, 3000.0)
 
 
 def test_empty_inputs_clear_zones():

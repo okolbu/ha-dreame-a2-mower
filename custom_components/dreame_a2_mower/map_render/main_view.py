@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 from PIL import Image, ImageDraw
 
 from .._png import encode_png
-from ._geometry import _DEFAULT_PALETTE, _cloud_to_px, _renderer_to_px
+from ._geometry import _DEFAULT_PALETTE, _cloud_to_px, _zone_point_to_px
 from .base_map import render_base_map
 
 if TYPE_CHECKING:
@@ -180,9 +180,9 @@ def _render_pre_start_spot(map_data: MapData, *, palette: dict | None) -> bytes:
     Idle preview for SPOT mode: shows each selectable spot zone as a filled
     dotted rectangle so the user can confirm which spots will be mowed.
 
-    Spot zones are stored in *renderer* coords (post-midline-reflection) by the
-    decoder, so we use ``_renderer_to_px`` (not ``_cloud_to_px``) to map them
-    to pixel space.
+    Spot zones are stored in post-rotation cloud-frame mm by the decoder; the
+    ``_zone_point_to_px`` presentation step applies the midline reflection +
+    pixel-grid divide (P3a transform-move).
     """
     from .dotted import draw_dotted_polygon
 
@@ -194,7 +194,7 @@ def _render_pre_start_spot(map_data: MapData, *, palette: dict | None) -> bytes:
         if len(sz.points) < 3:
             continue
         pts_px = [
-            _renderer_to_px(x, y, map_data.bx1, map_data.by1, map_data.pixel_size_mm)
+            _zone_point_to_px(x, y, map_data)
             for x, y in sz.points
         ]
         # Interior fill: darker green for "this spot is eligible to mow".

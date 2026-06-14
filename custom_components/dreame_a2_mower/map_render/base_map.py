@@ -18,7 +18,7 @@ from ._geometry import (
     _OBSTACLE_FILL,
     _OBSTACLE_OUTLINE,
     _cloud_to_px,
-    _renderer_to_px,
+    _zone_point_to_px,
 )
 
 if TYPE_CHECKING:
@@ -257,17 +257,16 @@ def render_base_map(
         )
 
     # -----------------------------------------------------------------------
-    # 3. Exclusion zones — already in renderer pixel coords (post-reflection).
-    #    Divide by pixel_size_mm to get pixel offsets.
+    # 3. Exclusion zones — points are post-rotation cloud-frame mm; the
+    #    presentation step (_zone_point_to_px) applies the midline reflection
+    #    + pixel-grid divide (P3a transform-move).
     # -----------------------------------------------------------------------
-    bx1 = map_data.bx1
-    by1 = map_data.by1
     for ez in map_data.exclusion_zones:
         if len(ez.points) < 3:
             continue
         ez_px = [
-            _renderer_to_px(rx, ry, bx1, by1, grid)
-            for (rx, ry) in ez.points
+            _zone_point_to_px(cx, cy, map_data)
+            for (cx, cy) in ez.points
         ]
         flat = [coord for pt in ez_px for coord in pt]
         if ez.subtype == "ignore":
@@ -291,8 +290,8 @@ def render_base_map(
         if len(sz.points) < 3:
             continue
         sz_px = [
-            _renderer_to_px(rx, ry, bx1, by1, grid)
-            for (rx, ry) in sz.points
+            _zone_point_to_px(cx, cy, map_data)
+            for (cx, cy) in sz.points
         ]
         flat = [coord for pt in sz_px for coord in pt]
         _composite_polygon(flat, p["spot_fill"], p["spot_outline"], 1)
@@ -424,13 +423,12 @@ def render_base_map(
 
     # -----------------------------------------------------------------------
     # 4. Dock / charger icon — filled circle at dock_xy.
-    #    dock_xy is in renderer-frame mm (post-reflection + CHARGER_OFFSET_MM);
-    #    divide by pixel_size_mm for pixel coords.
+    #    dock_xy is post-rotation cloud-frame mm (CHARGER_OFFSET_MM along +X);
+    #    the presentation step applies the reflection + pixel-grid divide.
     # -----------------------------------------------------------------------
     if map_data.dock_xy is not None:
-        dx, dy = _renderer_to_px(
-            map_data.dock_xy[0], map_data.dock_xy[1],
-            map_data.bx1, map_data.by1, grid,
+        dx, dy = _zone_point_to_px(
+            map_data.dock_xy[0], map_data.dock_xy[1], map_data,
         )
         r = _DOCK_RADIUS_PX
         draw.ellipse(
