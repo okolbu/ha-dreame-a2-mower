@@ -23,6 +23,32 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
+### Base-map render drops line no-go zones + novelty (decorative) shapes
+
+**Why:** On the current integration's live base map, two object kinds present in the
+cloud map data are NOT visible. They have DIFFERENT root causes (found while building
+the Phase-3a golden test):
+  1. **No-go zones of `type` LINE** (2-point exclusions, e.g. map1 ids 103
+     `[[1.59,-7.19],[-4.4,-7.19]]` and 301) — a **render-layer** bug:
+     `render_base_map` has a `len(points) < 3` polygon guard that skips 2-point
+     exclusions, so they draw zero pixels (confirmed by ablation: removing the line
+     exclusion leaves the render pixel-identical).
+  2. **Novelty / decorative mow-shapes** (`create_mow_shape` types 9/12-18) — a
+     **decoder** gap: `parse_cloud_map` discards `shapeType`, so these never reach
+     `render_base_map` as a distinct drawable (they only exist edit-frame, in
+     `editable_objects`). Fixing needs decode-side work to surface them as
+     renderable objects, not just a render tweak.
+User-reported 2026-06-14. SEPARATE from the Phase-3a transform-move (which is
+output-preserving and must NOT fix them — the 3a golden pins the current buggy
+render exactly). Fix AFTER 3a lands, updating the golden to expect the corrected render.
+**Done when:** line-type no-go exclusions render as a visible line/forbidden marker
+on the base map; novelty mow-shapes either decode→render or are explicitly decided
+out-of-scope with a reason; the golden-image test pins the corrected output.
+**Status:** open (deferred until after Phase-3a transform-move)
+**Cross-refs:** `map_render/base_map.py` (exclusion/obstacle draw), `protocol/map_decoder.py`
+(ExclusionZone subtype/line handling, `create_mow_shape` types), `camera/map.py`
+`editable_objects`, the Phase-3a golden test.
+
 ### Sweep probe logs 2026-06-13 21:44 → now for novel slots/values (app "Bumper error" 21:45)
 
 **Why:** A "Bumper error" appeared in the Dreame **app** logs ~2026-06-13 21:45 — likely a
