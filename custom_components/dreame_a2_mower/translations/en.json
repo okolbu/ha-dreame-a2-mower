@@ -135,22 +135,102 @@
       }
     },
     "binary_sensor": {
-      "bluetooth_connected": { "state": { "off": "Disconnected", "on": "Connected" } },
-      "battery_temp_low": { "state": { "off": "No", "on": "Yes" } },
-      "mowing_session_active": { "state": { "off": "No", "on": "Yes" } },
-      "drop_tilt": { "state": { "off": "No", "on": "Yes" } },
-      "bumper": { "state": { "off": "No", "on": "Yes" } },
-      "lift": { "state": { "off": "No", "on": "Yes" } },
-      "emergency_stop": { "state": { "off": "No", "on": "Yes" } },
-      "safety_alert_active": { "state": { "off": "No", "on": "Yes" } },
-      "top_cover_open": { "state": { "off": "No", "on": "Yes" } },
-      "mower_in_dock": { "state": { "off": "No", "on": "Yes" } },
-      "dock_in_lawn_region": { "state": { "off": "No", "on": "Yes" } },
-      "wheel_bind_active": { "state": { "off": "No", "on": "Yes" } },
-      "failed_to_return_to_station": { "state": { "off": "No", "on": "Yes" } },
-      "positioning_failed": { "state": { "off": "No", "on": "Yes" } },
-      "rain_protection_active": { "state": { "off": "No", "on": "Yes" } },
-      "photo_consent": { "state": { "off": "Declined", "on": "Accepted" } }
+      "bluetooth_connected": {
+        "state": {
+          "off": "Disconnected",
+          "on": "Connected"
+        }
+      },
+      "battery_temp_low": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "mowing_session_active": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "drop_tilt": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "bumper": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "lift": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "emergency_stop": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "safety_alert_active": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "top_cover_open": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "mower_in_dock": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "dock_in_lawn_region": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "wheel_bind_active": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "failed_to_return_to_station": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "positioning_failed": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "rain_protection_active": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
+      },
+      "photo_consent": {
+        "state": {
+          "off": "Declined",
+          "on": "Accepted"
+        }
+      }
     },
     "sensor": {
       "novel_observations": {
@@ -236,6 +316,38 @@
           "stale": "Stale"
         }
       }
+    }
+  },
+  "device_automation": {
+    "trigger_type": {
+      "mowing_started": "Mowing started",
+      "mowing_paused": "Mowing paused",
+      "mowing_resumed": "Mowing resumed",
+      "mowing_ended": "Mowing ended",
+      "dock_arrived": "Arrived at dock",
+      "dock_departed": "Left the dock",
+      "charging_started": "Charging started",
+      "charging_complete": "Charging complete",
+      "rain_delay_started": "Rain delay started",
+      "fault_detected": "Fault detected",
+      "fault_cleared": "Fault cleared",
+      "human_detected": "Person detected",
+      "robot_trapped": "Mower trapped",
+      "emergency_stop": "Emergency stop activated",
+      "blades_worn": "Blades worn",
+      "left_wheel_error": "Left wheel error",
+      "right_wheel_error": "Right wheel error",
+      "hanging": "Mower hanging / lifted",
+      "positioning_failed_stuck": "Positioning failed (stuck)",
+      "positioning_failed_transient": "Positioning failed (transient)",
+      "failed_to_start_task": "Failed to start task",
+      "battery_temp_low_charging_paused": "Charging paused (battery too cold)",
+      "low_battery_return": "Returning to dock (low battery)",
+      "rain_protection": "Rain protection triggered",
+      "standby_outside_station_too_long": "Standing by outside dock too long",
+      "top_cover_open": "Top cover open",
+      "arrived_at_maintenance_point": "Arrived at maintenance point",
+      "cannot_reach_maintenance_point": "Cannot reach maintenance point"
     }
   }
 }

@@ -16,6 +16,30 @@ event_type (e.g. `mowing_started`) and the event payload is exposed as
 additional attributes accessible via `trigger.to_state.attributes.<key>`.
 HA's Logbook automatically records each firing.
 
+## Automating on mower events — use device triggers
+
+The **canonical** way to react to a mower event is a **device trigger**.
+In the automation editor pick *Add Trigger → Device → Dreame A2 Mower*,
+then choose a trigger like *Mowing started*, *Person detected*, or
+*Emergency stop activated* — no YAML, no event-entity templating. Device
+triggers are keyed to your specific mower, so multiple mowers don't
+cross-fire.
+
+The integration exposes all 11 lifecycle moments plus the high-value,
+actionable notifications (faults, `human_detected`, `robot_trapped`,
+`emergency_stop`, `blades_worn`, wheel errors, positioning/maintenance
+issues, rain protection, …). The few pure-status notifications that just
+mirror a lifecycle event or a sensor reading are intentionally not listed
+as device triggers (they remain available as raw event triggers and in the
+Logbook). See `device_trigger.py`'s module docstring for the exact exposed
+set and the omit rationale.
+
+A device trigger fires on the same payload as the underlying event entity,
+so `trigger.to_state.attributes.<key>` (and the recipes below) work
+unchanged — the device trigger is just the friendlier front door to the
+same `dreame_a2_mower_event` bus event. The state-change and raw event
+approaches below are still valid for power users.
+
 ## Lifecycle event reference
 
 ### `mowing_started`
