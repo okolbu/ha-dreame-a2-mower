@@ -24,7 +24,7 @@
 | s2p54 | lidar_upload_progress | int 0..100 | WIRED | % (×1.0) |
 | s2p55 | ai_obstacle_report | list | WIRED |  |
 | s2p56 | task_state | {status: list of [task_type, ...] tuples} | WIRED |  |
-| s2p57 | robot_shutdown_trigger | dict (shutdown signal) | APK-KNOWN |  |
+| s2p57 | robot_shutdown_trigger | scalar int — observed value 1 [probe_log_20260612_174439.jsonl@2026-06-14T04:42:16]; NOT the apk-hypothesized dict | SEEN-UNDECODED |  |
 | s2p58 | self_check_result | dict {d: {mode, id, result}} | APK-KNOWN |  |
 | s2p61 | map_update_trigger | dict (map update signal) | APK-KNOWN |  |
 | s2p62 | task_progress_flag | int | SEEN-UNDECODED |  |
@@ -602,12 +602,17 @@ Described in apk as "Robot Shutdown" — fires during OTA reboot or device
 power-down cycles. Consumer is expected to wait 5 s then treat the device
 as offline.
 
-Never observed in g2408 probe corpus (no OTA event or power-down was
-captured during the probe period). Expect to see this during the next
-firmware update, immediately before the mower goes offline.
+First captured on the g2408 wire 2026-06-14: a single standalone
+properties_changed push carrying the bare scalar `value: 1` (the only
+param in the message) [probe_log_20260612_174439.jsonl@2026-06-14T04:42:16].
+The observed payload is a bare int, NOT the previously-hypothesized
+`dict (shutdown signal)`. Whether this fire corresponds to an OTA reboot
+vs a manual power-down is not yet evidenced (no correlated OTA/offline
+marker captured alongside it).
 
 **Open questions:**
-- Capture s2p57 push during the next firmware update to confirm payload shape and timing.
+- Confirm the trigger cause: is the value=1 fire an OTA reboot, a manual power-down, or both? Capture a correlated offline/OTA marker alongside the next s2p57.
+- Are there other s2p57 values (e.g. distinguishing reboot vs shutdown), or is it always 1?
 - Is this a command echo or a push the device sends spontaneously?
 
 **See also:** `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:57`

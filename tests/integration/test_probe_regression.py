@@ -62,6 +62,10 @@ _PROBE_KNOWN_UNDECODED: set[tuple[int, int]] = {
     (2, 53),
     (2, 54),
     (2, 55),
+    # (2, 57) robot_shutdown_trigger — first captured on the wire 2026-06-14 as a
+    # standalone push value=1 (see inventory.yaml s2p57). Undecoded semantics
+    # (OTA-reboot vs power-down trigger unconfirmed); parked here pending RE.
+    (2, 57),
     (2, 62),
     # s5 protocol-debug slots — observed values; ongoing RE.
     # 5p104, 5p105, 5p106, 5p107 mapped as raw int diagnostic sensors

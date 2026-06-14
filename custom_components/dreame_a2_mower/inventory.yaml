@@ -1435,7 +1435,7 @@ properties:
     piid: 57
     name: "robot_shutdown_trigger"
     category: "trigger"
-    payload_shape: "dict (shutdown signal)"
+    payload_shape: "scalar int — observed value 1 [probe_log_20260612_174439.jsonl@2026-06-14T04:42:16]; NOT the apk-hypothesized dict"
     semantic: |
       Robot shutdown trigger. Apk subscribes at L181482-181512 and dispatches
       a 5-second-delay sequence culminating in a firmware shutdown or reboot.
@@ -1443,16 +1443,32 @@ properties:
       power-down cycles. Consumer is expected to wait 5 s then treat the device
       as offline.
 
-      Never observed in g2408 probe corpus (no OTA event or power-down was
-      captured during the probe period). Expect to see this during the next
-      firmware update, immediately before the mower goes offline.
+      First captured on the g2408 wire 2026-06-14: a single standalone
+      properties_changed push carrying the bare scalar `value: 1` (the only
+      param in the message) [probe_log_20260612_174439.jsonl@2026-06-14T04:42:16].
+      The observed payload is a bare int, NOT the previously-hypothesized
+      `dict (shutdown signal)`. Whether this fire corresponds to an OTA reboot
+      vs a manual power-down is not yet evidenced (no correlated OTA/offline
+      marker captured alongside it).
     status:
-      seen_on_wire: false
-      decoded: hypothesized
+      seen_on_wire: true
+      decoded: partial
+      last_seen: "2026-06-14"
     references:
       apk: "ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:57"
+    verifications:
+      - date: "2026-06-14"
+        status: partial
+        claim: "s2p57 fires on the g2408 wire as a standalone properties_changed push with bare scalar value=1 (single occurrence captured)"
+        evidence: "probe_log_20260612_174439.jsonl@2026-06-14T04:42:16"
+      - date: "2026-06-14"
+        status: retracted
+        claim: "payload is a bare scalar int (value=1), not a dict"
+        retracts: "dict (shutdown signal)"
+        reason: "first wire capture shows a bare int value=1, not a dict — payload_shape corrected"
     open_questions:
-      - "Capture s2p57 push during the next firmware update to confirm payload shape and timing."
+      - "Confirm the trigger cause: is the value=1 fire an OTA reboot, a manual power-down, or both? Capture a correlated offline/OTA marker alongside the next s2p57."
+      - "Are there other s2p57 values (e.g. distinguishing reboot vs shutdown), or is it always 1?"
       - "Is this a command echo or a push the device sends spontaneously?"
 
   - id: "s2p58"
