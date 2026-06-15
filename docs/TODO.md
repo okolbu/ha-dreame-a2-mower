@@ -152,12 +152,26 @@ journal for the shipped detail. What ACTUALLY remains open:
 2. **MISTA area fallback sensor — deferred (conditional).** Needs a dedicated cloud-fetch of the
    MISTA `cfg_individual` endpoint (not currently polled) and is mid-run-only (r=-1/-3 when idle,
    per `project_g2408_mista_decoded`). Build only if the s1p4 MQTT area stream proves unreliable.
-3. **Patrol per-point cycles + auto-capture — find the cloud source.** The app shows per-point
-   cycle count (×1/×2/×3) + an auto-capture camera toggle, synced across app instances →
-   cloud-persisted, but NOT in MAP `cruisePoints` (only id/path/time/etime), the patrol summary
-   `param:{}` (empty), or `/status/`. The sensor `items` reserve `cycles:null` /
-   `auto_capture:null` for when a source is found. Needs an app-backend / batch-key sweep (likely
-   MITM-gated — see `reference_app_api_probe`).
+3. **Patrol per-point cycles + auto-capture — surface effective values (no cloud read-source
+   exists).** Reframed 2026-06-15 after an inventory audit: the gap is much narrower than
+   "find the cloud source." Almost everything is already known — point id/coords/type/dwell
+   (`cruisePoints` type=8: `{id,type:8,shapeType:5,path,time:60,etime:60}`, cloud-relayed), the
+   auto-capture *mechanism* (`o=400 {on:1}` fires at patrol start, `[app-mitm:2026-06-09]`), the
+   *photos* (`summary_photo_list` = 3 photos/point + `summary_photo_captured`), and the *effective*
+   per-point cycle count + auto-capture are **reconstructable from telemetry** (cycles = count of
+   in-place ~360° rotations in decoded s1p4 pose/heading; auto-capture = whether `photo_list`
+   timestamps fall in the point's rotation window — both demonstrated on the 2026-06-03 2-cyc/ON
+   vs 1-cyc/OFF run). The ONLY thing missing is the **authored per-point setting values** (the
+   app's "Patrol Cycles 1/2/3" + per-point "Auto-Capture on/off" toggles) as a *directly-readable
+   config*: inventory confirms they are command-only and NOT on any reachable surface (not in
+   `cruisePoints`, s2p56, `/status/`, the o107 SEND payload, and the summary `param:{}` is empty).
+   So there is no undiscovered cloud read-source to hunt.
+   **Done when** ONE of: (a) surface the *effective* cycles + auto-capture read-only, derived from
+   telemetry (rotation count + photo-window), on the patrol-points sensor; OR (b) MITM the
+   app→cloud patrol-write to read the *authored* toggle values exactly. The sensor `items` keep
+   `cycles:null` / `auto_capture:null` until (a) or (b) lands.
+   **Cross-refs:** inventory `o107` / `o400` / `summary_cruise_points` / `summary_photo_list`
+   verifications (2026-06-03/04/09); `reference_app_api_probe` (for path (b)).
 4. **Patrol render/timing polish** (render-side, minor; overlaps "Patrol Logs" + "Surface
    dock-departure repositioning UX"):
    - replay doesn't VISUALISE the on-the-spot 360° spins — the local track DOES capture them
