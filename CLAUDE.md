@@ -578,7 +578,7 @@ incident). The fix is *location*, not editing stale docs to agree.
    generated `g2408-canonical.md`, `docs/research/knowledge-gaps.md`.
 2. **Current reference** (in-tree) — docs that describe the *current* state and
    are maintained: the slim `g2408-protocol.md`, `capture-procedures`,
-   `cloud-map-geometry`, `cloud-write-reference`, `entity-validation-matrix`,
+   `cloud-map-geometry`, `cloud-write-reference`,
    `TODO.md` (the single open-work list — fold standalone `*-todo` research docs
    into it, don't keep parallel ones), `data-policy` / `events` / `lidar` /
    `multi-map` / `observability`, and this file.
