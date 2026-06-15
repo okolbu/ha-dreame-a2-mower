@@ -52,7 +52,8 @@ real-3d (spec §5 single-ingestion-funnel) rather than done alone.
 **Status:** deferred (over-engineering for the payoff; user-confirmed 2026-06-15).
 **Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/refactor-2026-06-13/spec.md` §4 Phase 3f;
 `coordinator/_core.py` `_CoreMixin.__init__`; `feedback_no_migration_overengineering`;
-the Phase-3d dedup TODO above (the real state-restructure home).
+the Phase-3d dedup (step 1), now resolved/closed — see DONE.md "State-container dedup
+(Phase 3d step 1)".
 
 ### Split residual `MowerState` into per-domain dataclasses (Refactor Phase 3d, step 2 — deferred)
 
@@ -111,259 +112,62 @@ green; no behavior change (dedup already shipped).
 Phase 3d; `mower/state.py`; `feedback_no_migration_overengineering` (the cost
 caveat); the Phase-3d dedup spec/commit (step 1).
 
-### State-container dedup (Phase 3d step 1) is a data-flow rearchitecture, not a shim-able dedup
+### Locate the 2026-06-13 app "Bumper error" on the wire
 
-**Why:** The refactor plan (`spec.md §4 Phase 3d`) framed the StateSnapshot↔MowerState
-overlap as "≥6 *dead* duplicated fields removable behind re-export shims once
-entities read the snapshot." A ground-truth trace 2026-06-14 (scoping agent
-`ace9efd0` + direct verification) **falsified that premise**: none of the
-overlapping fields are dead. They are a deliberate **staging layer** —
-`MowerState` is the decode/stage target written by the *pure*
-`coordinator/_property_apply.py:apply_property_to_state`, and `StateSnapshot`
-(owned by `MowerStateMachine`, persisted, restart-survivable) is the
-entity-read source-of-truth. Each overlapping field still has live *internal*
-(non-entity) readers:
-  - `battery_level` — `coordinator/_mqtt_handlers.py:490/544/697` (live-map
-    `charge_at_start`, low-battery ≤20 logic, charging inference).
-  - `wifi_rssi_dbm` — *written* by `coordinator/_refreshers.py:208` (CFG.NET
-    fallback) + gated at `:207`; the snapshot only updates from the heartbeat,
-    so dropping the MowerState copy loses the CFG.NET fallback path.
-  - `position_*` (5), `mowing_phase`, `task_state_code`, `slam_task_label` —
-    **round-trip staging**: `apply_property_to_state` writes them into MowerState,
-    then `coordinator/_mqtt_handlers.py:1028/1064` reads `new_state.*` back to feed
-    the SM (`handle_position`/`handle_misc_persisted`). They MUST exist on
-    MowerState for the pure applier (which has no SM access) to write them.
-  - `task_state_code` finalize gate (`coordinator/_session.py:420`) relies on
-    `self.data.task_state_code is None` meaning "no fresh MQTT push since boot."
-    The restored snapshot carries the *persisted* value, so redirecting that
-    reader to the snapshot would **regress the 2026-05-15 rain-reboot phantom-session
-    fix**.
-  - `error_code` — load-bearing: the raw `sensor.error_code`, two binary sensors
-    (`==31`/`==73`), and the fault-delta emitter (`_mqtt_handlers.py:716`).
-
-So a real dedup means **rerouting the pure-applier→SM ingestion seam** so decoded
-values reach the SM without staging in MowerState, moving the internal consumers to
-the snapshot, and solving the finalize "fresh-since-boot" signal another way — i.e.
-the spec §5 *single-ingestion-funnel* (`apply_update(source, fields)`), entangled
-with Phase 3e. **Sequenced after 3e** (which persists `area_mowed_m2` and reworks
-the finalize gate, untangling `task_state_code`).
-**RESOLVED 2026-06-15 — the funnel is NOT worth building (CLOSED).** A third
-independent design pass (agent `aff0b2c8`, post-3e) confirmed the overlap is a
-**decode-staging artifact, not two-homes-for-one-fact**: the entity layer already
-reads battery/wifi/position/error/phase/task exclusively from `snapshot()`, so the
-only remaining `self.data.*` reads are coordinator-internal session-lifecycle /
-live-map / refresher logic that legitimately wants the per-push decoded value. The
-full `apply_update` funnel (rewriting the pure-applier signature + every refresher)
-is over-engineering for a single-user repo. Decisions taken:
-  - The "fresh-since-boot" finalize signal is **already** an explicit latch
-    (`_real_task_state_observed`, `coordinator/_core.py:135` + `_mqtt_handlers.py:448`)
-    sitting beside the `data.task_state_code is None` check — no snapshot redirect
-    needed, no rain-reboot risk. Documented; do not reintroduce a snapshot `is None` read.
-  - `error_code` is NOT truly duplicated (raw-last-code vs the snapshot's latched
-    fault `errors` set) — keep on MowerState.
-  - `battery_level` / `wifi_rssi_dbm` / `position_x/y/heading` / `mowing_phase` /
-    `slam_task_label` / `task_state_code` — KEEP on MowerState (staging target;
-    load-bearing internal readers).
-  - **Done:** dropped `position_north_m` / `position_east_m` from MowerState (commit
-    `2e41212`) — the only genuinely-dead fields (no writer, no MowerState reader;
-    they live solely on `StateSnapshot`). The render-fallback dead path
-    (`_rendering.py`) was left in place (harmless; removing it needs an active-mow
-    live check the idle mower can't provide). The `make_bare_coordinator()` test
-    helper remains an optional future nicety (no consumer now that no further field
-    moves are planned).
-**Status:** RESOLVED/CLOSED 2026-06-15 — funnel rejected as over-engineering; dead
-fields dropped; staging layer kept by design.
-**Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/refactor-2026-06-13/spec.md` §4 Phase 3d
-+ §5 single-ingestion-funnel; `mower/state.py`, `mower/state_snapshot.py`,
-`mower/state_machine.py`, `coordinator/_property_apply.py`, `coordinator/_mqtt_handlers.py`;
-the per-domain-split TODO below (Phase 3d step 2).
-
-### Base-map render drops line no-go zones + novelty (decorative) shapes
-
-**Why:** On the current integration's live base map, two object kinds present in the
-cloud map data are NOT visible. They have DIFFERENT root causes (found while building
-the Phase-3a golden test):
-  1. **No-go zones of `type` LINE** (2-point exclusions, e.g. map1 ids 103
-     `[[1.59,-7.19],[-4.4,-7.19]]` and 301) — a **render-layer** bug:
-     `render_base_map` has a `len(points) < 3` polygon guard that skips 2-point
-     exclusions, so they draw zero pixels (confirmed by ablation: removing the line
-     exclusion leaves the render pixel-identical).
-  2. **Novelty / decorative mow-shapes** (`create_mow_shape` types 9/12-18) — a
-     **decoder** gap: `parse_cloud_map` discards `shapeType`, so these never reach
-     `render_base_map` as a distinct drawable (they only exist edit-frame, in
-     `editable_objects`). Fixing needs decode-side work to surface them as
-     renderable objects, not just a render tweak.
-User-reported 2026-06-14. SEPARATE from the Phase-3a transform-move (which is
-output-preserving and must NOT fix them — the 3a golden pins the current buggy
-render exactly). Fix AFTER 3a lands, updating the golden to expect the corrected render.
-**RESOLVED 2026-06-15 (commit `e0cfcba`).** Root cause unified via live `fetch_map`:
-the decoder ignored `shapeType` and inferred shape from point-count, so BOTH a real
-2-point LINE (id 103, shapeType 1) AND a heart-shaped no-go (id 301, **shapeType 13** —
-the user's "phantom 2nd line" WAS the heart, stored as 2 bbox corners + angle 90.29)
-got mis-decoded as 2-point "lines" and then skipped by the `len<3` render guard. Fix:
-`ExclusionZone` carries `shape_type` + `angle`; `_collect_exclusion_entries` reads
-`shapeType` and leaves decorative paths un-rotated (bbox corners); `render_base_map`
-branches by shape — line→thick line, decorative→stamp a silhouette mask scaled to the
-bbox + rotated by `-angle`, polygon→fill. The 8 decorative masks (square 9, circle 12,
-heart 13, triangle 14, teardrop 15, mushroom 16, cloud 17, rainbow 18) were extracted
-from the app palette `[screenshot:OLD/IMG_4615.PNG]` into `map_render/_shape_masks.py`.
-`editable_objects` now carries `shape_type`/`kind` (no longer calls the heart a "line").
-Golden fixture's fabricated shapeTypes corrected + a heart case added; read-side
-shapeType enum recorded in `inventory.yaml`. **ALL RESOLVED:** (a) orientation `-angle` + size `_DECORATIVE_SHAPE_SCALE=0.62` (heart
-~half the no-go line) user-confirmed live (v1.0.27a5). (b) map-editor card RESOLVED
-v1.0.27a6 (`a0f85e3`): it drew the heart as a 2-point "phantom no-go line". Now the editor
-base render keeps decorative shapes (`coordinator/_rendering.py` filters to
-`DECORATIVE_SHAPE_TYPES`) so the heart shows in the editor bg identically to the live map,
-and the card (`www/dreame-map-editor-card.js`) draws decorative shapes (`shape_type>=9`)
-as a faint dashed select/delete hit-area, not a line (create+delete, no reshape).
-**Status:** RESOLVED 2026-06-15 (render + decode shipped; orientation + editor-card
-drawing are minor open follow-ups above).
-**Cross-refs:** `protocol/map_decoder.py` (`_collect_exclusion_entries`, `ExclusionZone`),
-`map_render/base_map.py` (`_stamp_decorative_shape`), `map_render/_shape_masks.py`,
-`camera/map.py` `editable_objects`, `tests/map_render/test_decorative_shapes.py`, the golden.
-
-### Sweep probe logs 2026-06-13 21:44 → now for novel slots/values (app "Bumper error" 21:45)
-
-**Why:** A "Bumper error" appeared in the Dreame **app** logs ~2026-06-13 21:45 — likely a
-new fault not yet reflected in the wire inventory. Same pattern that just surfaced s2p57
-(first wire capture caught via the corpus). Worth a focused sweep of the capture window for
-other firsts while it's fresh.
-**Done when:** every novel `(siid, piid)` slot AND novel value in `probe/logs/probe_log_*.jsonl`
-from 2026-06-13 21:44 through the latest capture is enumerated; the bumper-error event is
-located on the wire (`error_code` s2p2 / s1p1 bumper bit / a new slot) and, if new, recorded in
-`inventory.yaml` with evidence (+ `error_codes.py` only if the `state_codes` row reaches
-confirmed/partial, per the confidence gate).
-**Progress (2026-06-15, from `todo5.txt`):** the three user-flagged firsts from this window
-are now understood + recorded — they form one coherent incident: the mower got **stuck on the
-lawn** unable to reach the dock, so `s2p1=4` (auto/hold pause) fired 21:45:19, hit its ~1-hour
-timeout → `s2p2=72` "returning after pause timeout" fired 22:45:18 (the exact-1h timing now
-behaviourally corroborates code 72), the return failed, and at 5% battery the firmware
-self-shut-down → `s2p57=1` on 2026-06-14. All recorded in `inventory.yaml` (§ s2p1 / s2p2 /
-s2p57); `State` enum gained `PAUSED_HOLD=4`; `observed_values[72]` bumped unknown→partial. The
-**bumper-error** part of this sweep is still **open** — not yet located on the wire (s2p2 / s1p1
-bumper bit / new slot).
-**Status:** open (bumper-error only; s2p1=4 / s2p2=72 / s2p57 resolved)
-**Cross-refs:** inventory `s2p57` / `s2p1` / `s2p2` (recorded 2026-06-15), `binary_sensor.bumper`,
-`mower/error_codes.py` + inventory `state_codes`, `tools/probes/`, `docs/research/knowledge-gaps.md`.
+**Why:** A "Bumper error" appeared in the Dreame **app** logs ~2026-06-13 21:45. The
+novel-code sweep of that window (s2p1=4 / s2p2=72 / s2p57) is resolved and the
+firmware-shutdown incident decoded (see DONE.md), but the bumper-error itself was never
+independently located on the wire. It coincides in time with the stuck-on-lawn pause
+sequence, so it may ride an already-known slot (e.g. s2p2=2 "Robot trapped" or an s1p1
+bumper bit) rather than a new one.
+**Done when:** the 2026-06-13 21:45 bumper condition is found on the wire (an s2p2 code, an
+s1p1 bit, or a new slot) in `probe/logs/probe_log_*.jsonl`, OR ruled out as app-only; recorded
+in `inventory.yaml` with evidence (+ `error_codes.py` only if the row reaches confirmed/partial,
+per the confidence gate).
+**Status:** open (low priority — single past event)
+**Cross-refs:** `binary_sensor.bumper`, `inventory.yaml § s2p2` (code 2 "Robot trapped") + `s1p1`;
+`tools/probes/`, `docs/research/knowledge-gaps.md`; the resolved sweep in DONE.md.
 
 ### Control honesty — residual follow-ups (core shipped 2026-06-04)
 
-**Core DONE** — the audit + `control_mode` classification + padlock/snap-back read-only
-representation shipped in v1.0.22a4. See `DONE.md` "Make controllable entities honest"
-and `docs/research/control-honesty-audit-2026-06-03.md`. What remains:
+**Core DONE** (v1.0.22a4) and MOST follow-ups SHIPPED across v1.0.22a4–v1.0.23a6: the
+provisional `device_write_unproven` flag; `o10` name + `actions.py` line-ref fixes;
+`WRF`/`TIME`/`VER` diagnostic sensors; patrol trigger surfacing + correct typing + the
+striped-background fix; the MQTT off-loop-render crash (`call_soon_threadsafe`); three
+log-health sweeps; and the `_render_base` "never awaited" RuntimeWarning (confirmed a
+side-effect of the fixed a3 raise — gone, no code change). See `DONE.md` "Make controllable
+entities honest", `docs/research/control-honesty-audit-2026-06-03.md`, and the research
+journal for the shipped detail. What ACTUALLY remains open:
 
-1. ~~**Mark provisional `device_write_unproven` controls.**~~ **DONE (2026-06-04).**
-   `_ControlHonestyMixin` gained a `provisional` flag (= `device_write_unproven`) exposed via
-   the `provisional` + `control_mode` extra-state-attributes; `_DreameA2ActionButton` (pause/
-   stop/recharge/lock_bot/generate_3dmap) now carries it, and `select.active_map` inherits it
-   from the mixin. Lightweight by design — operable, no padlock/snap-back, just a queryable
-   attribute (dashboards can template a badge on `provisional`). They still need adding to the
-   Phase-3 app-RPC capture list (folded into #2's bucket-B probes).
-2. **Live re-probes to finalize uncertain classifications** (device-blocked):
-   - **WRP, LANG (lcd/voice), AI_HUMAN** — held at `read_only_pending` due to the same-day
-     (2026-05-09) contradiction: `cfg-write-regression` ("no setter, r=-3") vs the
-     `_build_wrp`/`_build_text_language` docstrings ("verified live"). Re-probe via the
-     current `set_cfg` (parses `out[0].r`): r=0+behaviour ⇒ flip to `device_writable`; r=-3
-     ⇒ `read_only_confirmed` and retract the docstring claim. One line in `CONTROL_MODES` +
-     the matching inventory row per flip (the sync test enforces both).
-   - **Bucket B actions:** s5a2/3/4 (may 80001), op=200, op=10, op=12 — confirm they land.
+1. **Live re-probes to finalize uncertain classifications** (device-blocked):
+   - **WRP, LANG (lcd/voice), AI_HUMAN** — held at `read_only_pending` due to the 2026-05-09
+     contradiction (`cfg-write-regression` "no setter, r=-3" vs the `_build_wrp` /
+     `_build_text_language` "verified live" docstrings). Re-probe via `set_cfg` (parses
+     `out[0].r`): r=0+behaviour ⇒ flip `device_writable`; r=-3 ⇒ `read_only_confirmed` +
+     retract the docstring claim. One line in `CONTROL_MODES` + the matching inventory row per
+     flip (the sync test enforces both).
+   - **Bucket B actions:** s5a2/3/4 (may 80001), op=200, op=10, op=12 — confirm they land
+     (also clears the provisional flag on the shipped action buttons).
    Probe tooling: `tools/probes/probe_pre_write.py`.
-3. ~~**Inventory accuracy:** `o10` name drift + stale `actions.py` line numbers.~~
-   **DONE (2026-06-04).** o10 corrected (it DOES fire op=10 via GENERATE_3D_MAP; the
-   apk-uploadMap vs integration-generate_3dmap name conflict is now a flagged open question +
-   capture step); 17 stale `actions.py:NNN` refs refreshed to current `ACTION_TABLE` lines.
-4. **Coverage gaps (separate features the audit surfaced):**
-   - ~~phantom-sensor prose for `WRF`/`TIME`/`VER`~~ **DONE (2026-06-04).** Built as
-     disabled-by-default DIAGNOSTIC sensors (`sensor.dreame_a2_mower_weather_forecast_reference`
-     / `_timezone` / `_cfg_version`): CFG→MowerState port in
-     `cfg_to_state_updates`, descriptors in `sensor_device.py`, inventory rows + the prose
-     corrected with retraction records. The claims are now true.
-   - **`MISTA` area fallback sensor — deferred (not blocked, but non-trivial).** Needs a
-     dedicated cloud-fetch of the MISTA `cfg_individual` endpoint (not currently polled) and
-     is **mid-run-only** (returns r=-1/-3 when idle, per `project_g2408_mista_decoded`), so it
-     would be unavailable except while mowing — a niche MQTT-down fallback. Build only if the
-     s1p4 MQTT area stream proves unreliable.
-   - ~~Patrol trigger~~ **SHIPPED (2026-06-04, feat/patrol-point-surfacing).** Point
-     patrol (o107) + edge patrol (o108) triggers, cruise points parsed from MAP
-     `cruisePoints` (type=8) + rendered as green-P markers + surfaced as
-     `sensor.…_patrol_points`/`_patrol_edges` (generic `items` attr) + a generic
-     `dreame-multi-select-card` + `start_point_patrol`/`start_edge_patrol` services.
-     **Both o107 (point) and o108 (edge) SEND shapes are now VERIFIED LIVE (2026-06-04 —
-     real patrols fired from the card moved the mower in both modes).** Zone/spot
-     multi-select can now reuse the same sensor+service+card pattern.
-   - **[FIXED — live-confirmed 2026-06-04, v1.0.23a1] Patrol mis-typed `maintenance_run`
-     ("To Point") + lost return leg.** Root cause: a point patrol's only reliable type
-     signal is `s2p2=51`, which arrives AT session start (before `begin_session`) and was
-     dropped by `_capture_telemetry_sample`'s `is_active()` guard; the `s2p50` op echo is
-     NOT reliably delivered to the integration (v1.0.22a9 latched it in vain). Fix: latch
-     `s2p2=51` ungated into `_pending_saw_patrol_start`, durable `live_map.saw_patrol_start`
-     seeded at `begin_session`, OR'd into `classify`. Live trace confirmed: typed `patrol`,
-     real cloud md5, full out-and-back track. Correct typing ALSO fixed the early-finalize
-     (return leg now captured) and the OSS-fetch expiry (clean cloud-finalize path) — both
-     were downstream symptoms. See inventory `o107` verifications (2026-06-04).
-   - **[FIXED — striped background during patrol]** Resolved across two fixes: (a) v1.0.23a3
-     thread-safety (the s2p50-triggered render was raising off-loop and aborting); (b)
-     v1.0.23a4 `background_mode_for` — `PATROL_POINT`/`PATROL_EDGE` were missing from
-     `_ACTIVE_ACTIVITIES`, so the base flipped to idle stripes once a patrol settled into
-     those activities. Both live-confirmed 2026-06-04.
-   - **[TODO minor] `RuntimeWarning: coroutine '_RenderingMixin._render_base' was never
-     awaited`** — `sensor_device.py:611` is only the GC site (a novel_observations attr
-     read); the real un-awaited call is an entity-write handler calling `render_fn()` without
-     await (candidates `number.py:678`, `select_global.py:989/1020`). Fold into the log-health
-     sweep.
-   - **[TODO] Patrol replay doesn't VISUALISE the on-the-spot 360° spins** (render-side, not
-     capture). CORRECTED 2026-06-04: `cloud_track` is EMPTY for patrols, so the replay already
-     uses the LOCAL track — which DOES capture the spins (archive `2026-06-04_1780607797`: 5
-     consecutive points at `(x,y)≈(-4.2,-1.66)` with headings `255°→8°→112°→217°→321°`). They
-     render as a stationary dot because the trail is `(x,y)` line segments. Fix is render-side:
-     show heading/rotation at fixed-position points in the replay, NOT the dedup/capture path.
-   - **[TODO] Patrol trail starts ~48s late (no dock→first-point leg).** The mower undocks and
-     reorients for ~48s emitting NO `s1p4`, so the local track's first point is +48s into the
-     session, near the dock but not AT it (archive `1780607797`: first pt `(-0.81,-0.15)@+48s`).
-     The outbound MOVEs are all captured; what's missing is the leg FROM the dock. Fix idea:
-     seed the trail with the dock position at session start so the first segment connects
-     dock→first-real-point.
-   - **[TODO minor] Live-map background stays green ~50-90s after the mower physically docks.**
-     It follows the session state, which stays active through the dock-return + OSS-fetch
-     finalize window (archive `1780607797`: archived 23:17:58, striped 23:18:06). Could flip to
-     the idle preview as soon as the mower is docked+charging, before the archive finalize.
-   - **[DONE — v1.0.23a4] `[F5-DIAG]` confirmation logs removed** after the thread-safety fix
-     was live-confirmed (`seed at begin: last_op=107`). All temporary patrol diagnostics gone.
-   - **[DONE — v1.0.23a5] Log-health sweep.** Audited `system_log/list` (WS) and fixed every
-     real dreame WARNING: (B1) blocking `read_text(manifest.json)` on the loop → read once at
-     import; (B2) deprecated `TrackerEntity` import → new path; (B3) `picked_session` attrs
-     >16KB recorder reject → `_unrecorded_attributes = {"*"}`; (B4) `get_interim_file_url("")`
-     → 40020 → empty-object_name guard; (C1) `80001` device-offline + `routed-action error`
-     NoneType spam → DEBUG; (D) 15 operational `[F5]`/`[novel]` flow/success logs → DEBUG
-     (caught-exception `[F5]` logs kept at WARNING).
-   - **[DONE — v1.0.23a6] Log-health tail + NOVEL-probe audit.** (1) `_render_base "never
-     awaited"` RuntimeWarning was a *side-effect* of the a3 thread-safety raise (orphaned
-     coroutine) — already gone, verified in the live log, no code change. (2) Stale
-     CloudState-migration notice → DEBUG. (3) `s2p2=54` false-novel notif: gated the "novel
-     source" WARNING on `value not in S2P2_EVENT_TYPES` (a known code's first-cloud-text-this-
-     session → DEBUG). NOVEL audit (per the caution that old NOVEL lines may already be
-     addressed): `s2p1 state=4` + `s4 eiid1 piids 10/12` were ALREADY documented after their
-     first-sighting (historical artifacts, no action); `s2p2=20`/`72` and the `s2p51
-     {type:0|1}` shape were genuinely undocumented → recorded in `inventory.yaml` (s2p2
-     "Observed but UNDECODED" + s2p51 open_question, kept OUT of error_codes.py per the
-     confidence gate). Decoding them needs a labelled live capture.
-   - **[FIXED — v1.0.23a3] MQTT callback aborted by off-loop `async_create_task` (HA 2026.6).**
-     The activity-transition render trigger called `hass.async_create_task(self._render_base())`
-     directly on paho's MQTT thread; HA 2026.6 RAISES on off-loop `async_create_task`, which
-     aborted the whole MQTT message callback — taking out the render (striped background) AND
-     the s2p50 op-echo latch that runs right after it (so `last_task_op` stayed None; the
-     s2p2=51 latch saved the type). Fix: `_RenderingMixin._schedule_render_base()` hops to the
-     loop via `call_soon_threadsafe` before `async_create_task`; all 4 `_render_base` triggers
-     in `_mqtt_handlers.py` route through it. Live trace 2026-06-04: echo arrived
-     (`[F5-RAW]` s2p50 o:107) but `_handle_task_op_echo` never ran due to the raise.
-   - **Patrol per-point cycles + auto-capture — find the cloud source (no good candidate
-     yet).** The app shows per-point cycle count (×1/×2/×3) and an auto-capture camera
-     toggle, and they sync across app instances → cloud-persisted somewhere — but NOT in
-     the MAP `cruisePoints` blob (only id/path/time/etime), NOT in the patrol summary
-     `param:{}` (empty), NOT on `/status/`. The sensor `items` reserve `cycles:null` /
-     `auto_capture:null` for when a source is found (surface read-only first, then writable
-     when a write endpoint is found). No promising endpoint identified yet — needs an
-     app-backend / batch-key sweep (likely MITM-gated, see `reference_app_api_probe`).
+2. **MISTA area fallback sensor — deferred (conditional).** Needs a dedicated cloud-fetch of the
+   MISTA `cfg_individual` endpoint (not currently polled) and is mid-run-only (r=-1/-3 when idle,
+   per `project_g2408_mista_decoded`). Build only if the s1p4 MQTT area stream proves unreliable.
+3. **Patrol per-point cycles + auto-capture — find the cloud source.** The app shows per-point
+   cycle count (×1/×2/×3) + an auto-capture camera toggle, synced across app instances →
+   cloud-persisted, but NOT in MAP `cruisePoints` (only id/path/time/etime), the patrol summary
+   `param:{}` (empty), or `/status/`. The sensor `items` reserve `cycles:null` /
+   `auto_capture:null` for when a source is found. Needs an app-backend / batch-key sweep (likely
+   MITM-gated — see `reference_app_api_probe`).
+4. **Patrol render/timing polish** (render-side, minor; overlaps "Patrol Logs" + "Surface
+   dock-departure repositioning UX"):
+   - replay doesn't VISUALISE the on-the-spot 360° spins — the local track DOES capture them
+     (consecutive points at the same (x,y) with rotating heading) but they draw as a stationary
+     dot; show heading/rotation at fixed points.
+   - trail starts ~48s late (no dock→first-point leg; the mower reorients ~48s emitting no s1p4) —
+     seed the trail with the dock position at session start.
+   - live-map background stays green ~50-90s after the mower docks (follows session state through
+     the dock-return + OSS-fetch finalize window) — could flip to the idle preview as soon as
+     docked+charging.
 
 **Cross-refs:** `control_honesty.py` (`CONTROL_MODES` single SoT); `entity-inventory.yaml`
 (`control_mode` per row); `docs/research/wire-captures/{settings-surface-cloud-only,
@@ -533,29 +337,6 @@ known, or we conclude the endpoint isn't reachable with current auth.
 **Status:** open (low priority)
 **Cross-refs:** `docs/research/app-api-surface-2026-05-25.md` § device-messages/v2; `probe_a2_endpoints.py`.
 
-### Phase 2: MAP write — programmatic boundary/zone editing
-
-**Why:** With chunked-batch writes confirmed working (Phase 1 done in
-v1.0.2a1), the MAP surface is the next big capability. Drawing
-boundaries and editing mowing/exclusion zones from HA without walking
-the mower would be a major UX win.
-**Done when:** A safe MAP write surface exists with auto-backup of the
-current MAP blob before any write, restore-from-backup mechanism, and
-a Lovelace card for boundary editing.
-**What we tried (archived detail):** `probe_add_maintenance_point.py`
-(2026-05-13) sent the `siid=2 aiid=50` TASK envelope for o:204→o:234→o:201
-with 4 payload shapes — all HTTP 400 at `/device/sendCommand` (the cloud
-doesn't route map-edit opcodes from us via this transport). Leading hypothesis:
-the app POSTs geometry to a separate `/map`/`/region` HTTP endpoint and the
-cloud emits the MQTT echoes server-side → needs an HTTPS MITM of a real
-map-edit to find it. Fallback: `setDeviceData` MAP-blob write (risky; needs a
-re-encode parity test first).
-**Status:** open
-**Cross-refs:** spec
-`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-05-08-cloud-write-integration-design.md`
-"Phase 2"; `docs/research/cloud-write-reference.md`; archived research
-`OLD/ha-dreame-a2-mower-docs/research/map-edit-write-todo.md`.
-
 ### OTA_INFO field semantics
 
 **Why:** v1.0.0a100 surfaces `cloud_state.ota_status` as
@@ -714,36 +495,6 @@ contributor diagnostics aren't lost.
 **Status:** open
 **Cross-refs:** `coordinator/_property_apply.py` (`handle_property_push` novelty dispatch);
 `observability/registry.py`
-
----
-
-### GPS world-coordinate read path — find the surface the Dreame app uses
-
-**Why:** `device_tracker.dreame_a2_mower_location` is plumbed to the cloud `routed-action g.LOCN → {pos: [lon, lat]}` path, but on g2408 LOCN returns the `[-1, -1]` sentinel even with `switch.anti_theft_realtime_location` (CFG.ATA[2]) ON. The Dreame app's **Real-Time Location** sub-page nevertheless shows the mower at its correct world coordinates, so the app reads GPS from a different cloud / MQTT surface that the integration has not yet identified. The legacy fork hit the same wall (`coordinator.py:287-294`).
-
-**Confirmed it's NOT**:
-- `routed-action g.LOCN` (returns sentinel)
-- LIDAR / odometry (those are mower-frame, not world-frame)
-- a "dock GPS origin anchor" — user 2026-05-09 confirmed the mower has its own GNSS hardware
-- the apk geofence subsystem (apk.md line 242 confirms it's for phone-GPS smart-lock auto-unlock, not the mower)
-
-**Suspected candidates**:
-- A different cloud routed-action key (`GPSPOS`, `GEOLOC`, etc.) we haven't probed
-- An MQTT push: a `s2p51` message type beyond what we currently dispatch, or a broader robot-pose extension on `s1p4`
-- A separate cloud HTTP endpoint outside the routed-action / chunked-batch surfaces
-- ioBroker's apk catalog mentions `LOCN setLocation {pos}` for setting the GPS — the read counterpart on a healthy device may not be `getCFG` but rather a different envelope
-
-**Done when:**
-1. An HTTPS sniff of the Dreame app on the Real-Time Location page identifies the actual surface (request body + response shape).
-2. `cloud_client` adds a fetch path (likely a new method, parallel to `fetch_locn`).
-3. `_refresh_locn` is repointed (or a new `_refresh_gps_world` runs alongside).
-4. `device_tracker.location` populates with valid lat/lon while ATA[2] is on; the dashboard's GPS map card renders.
-5. Validation matrix row flips from ✗ live (KNOWN GAP) to ✓ end-to-end.
-
-**Workaround for users right now**: open the Dreame app's Real-Time Location sub-page directly. The HA dashboard hides the map card while ATA[2] is off and falls back to a "toggle on to enable" notice — the same notice now mentions this gap so the user knows the integration's path isn't the same as the app's.
-
-**Status:** open (Phase 3 — needs HTTPS capture). Recipe candidate to bundle with the broader Phase 3 sniff session (Phase 3 also covers SETTINGS / AI_HUMAN.0 / SCHEDULE writes).
-**Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/entity-validation-matrix.md` device_tracker row (retired doc); `cloud_client.fetch_locn`; `coordinator._refresh_locn`; `OLD/alternatives_archive_2026-05-05/ha-dreame-a2-mower-legacy/custom_components/dreame_a2_mower/coordinator.py:287-294` (legacy reaching the same conclusion); archived negative-results detail `OLD/ha-dreame-a2-mower-docs/research/gps-tracking-todo.md`.
 
 ---
 
@@ -954,45 +705,18 @@ atomic-calendar-revive dep. (~half-day; the work_log label match is pinned by
 
 ---
 
-### Live dense 3D/LiDAR map surface — the app shows it, we only ingest snapshots
+### Which stored dense LiDAR map does the Dreame app display?
 
-**Why:** 2026-06-08 the user removed a map exclusion zone; the mower began
-re-mapping the newly-opened area. BOTH app instances (action phone + cloud-only
-iPad) immediately showed a DENSER 3D LiDAR point cloud including the new area —
-i.e. it's cloud-resident and live. But our integration only ever sees the
-**infrequent `.0550.bin` 3D snapshots** (the `s2.50 m='g' t='OBJ' d={type:'3dmap'}`
-list, last objects 2026-04-20 + 2026-05-10) — the live dense map never appears
-there. This area was skipped historically because we assumed the OBJ list was
-the whole story.
-
-**What's been ruled out (live probes 2026-06-08):**
-- op=10 generate_3dmap — accepted (r=0) but no effect; does NOT trigger a render (see inventory op=10).
-- OBJ-list `m='g' t='OBJ'` with 11 type values — only `3dmap` + `wifimap` return objects; `map`/`olmap`/`lidar`/`live`/`current`/`pointcloud`/`model`/`2dmap`/`mapbin` all r=0 but empty.
-- Direct `siid:6` MIoT property read (`get_properties` p1–p4) → `null` (g2408 rejects direct reads; siid:6 is repurposed for SETTINGS/s6p2 on the mower, NOT the vacuum's MAP service).
-- Direct property-SET of `siid:99 piid:20` (s99p20) → `80001` (both `{"frame_type":"I"}` and int values, 2026-06-08). s99p20 is a device→cloud OUTPUT (announces a finished `.0550.bin`), not a settable trigger — you can't "set s99p20" to make a map, and the s6p2 analogy doesn't hold (s6p2 is also a device→cloud push; settings change via the s2.50 routed CFG write, then the device echoes s6p2). The trigger must be an ACTION (cf. vacuum REQUEST_MAP siid:6 aiid:1), not a property write.
-- The s2p54→s99.20 snapshot-upload flow has fired 0× in the 19-day capture (last snapshot 05-10), so no new 3dmap snapshot exists yet.
-
-**The lead (from `OLD/`):** the **dreame-vacuum** integration has the full
-live-map architecture the mower lineage descends from — a siid:6 MAP service
-(`MAP_DATA` p1, `FRAME_INFO` p2, `OBJECT_NAME` p3, `MAP_EXTEND_DATA` p4,
-`RECOVERY_MAP_LIST` p9) with a **`REQUEST_MAP` action (siid:6 aiid:1)** that
-sends `{"frame_type":"I"}` (full I-frame keyframe request) and `UPDATE_MAP_DATA`
-(aiid:2), fetched via `get_interim_file_url(obj_name)` and **polled every 120 s**
-for the live map (`alternatives/dreame-vacuum/.../dreame/{device.py:request_map,map.py,types.py}`).
-The g2408 moved its LiDAR-object push to s99.20 and repurposed siid:6, so the
-exact aiid/piid differ — but the **REQUEST_MAP I-frame → OBJECT_NAME →
-interim-URL** pattern is what to look for.
-**Done when:** the cloud surface the app uses for the live dense 3D map is
-identified and (if reachable) wired so the HA LiDAR camera tracks the live map,
-not just the periodic snapshot.
-**Method:** app-RPC capture (Phase 3) — sniff the action phone while opening the
-3D-view, watch for an I-frame/request-map call + the object name it then fetches.
-Blind-probing mower siid:6 actions is discouraged (cross-mower-type actions
-misfire — cf. the siid:2 aiid:3 = return-to-dock incident).
-**Status:** open (research — needs app-RPC capture).
-**Cross-refs:** inventory.yaml op=10 "upload_map/generate_3dmap" + s2p54 entries;
-memory `project_g2408_op10_3dmap_negative`;
-`OLD/alternatives_archive_2026-05-05/alternatives/dreame-vacuum/custom_components/dreame_vacuum/dreame/` (device.py `request_map`, types.py siid:6 MAP service); the Phase 3 app-RPC capture section below.
+**Why:** Split off from the resolved "Live dense 3D/LiDAR map surface" item (see DONE.md): we
+already have the dense LiDAR point clouds (the `.0550.bin` 3dmap snapshots). Open question: when
+several snapshots exist the app shows one specific dense map and it's unclear how it chooses.
+Working hypothesis: the snapshot with the most points that isn't too old. Cosmetic — affects which
+map the HA LiDAR camera should prefer, not availability.
+**Done when:** the app's dense-map selection rule is identified, OR a sensible heuristic (e.g.
+newest-with-most-points) is chosen for the HA LiDAR camera and documented.
+**Status:** open (low priority)
+**Cross-refs:** `coordinator/_lidar_oss.py`; `inventory.yaml` `s2.50 OBJ 3dmap`; DONE.md "Live dense
+3D/LiDAR map surface".
 
 ---
 
@@ -1084,30 +808,6 @@ authoritative); `inventory.yaml` § `api_endpoints` (`tencent_video`, `oss_manua
 (camera-presence corrections); `OLD/from-mitm-claude/live-video.txt` (raw Mac-MITM notes
 this was folded from); `docs/research/app-integration-roadmap.md` row G; the Photo/video
 archive item above (shares the OSS gallery).
-
----
-
-### Extend the map-edit view to spots / maintenance points / patrol points (CRUD)
-
-**Why:** Folded in from `todo1.txt`. The interactive map-editor card shipped this
-session (Phase F2b — no-go / ignore-obstacle / mow-shape create + edit-in-place +
-delete; the old "Phase 2: MAP write" research item above is now RESOLVED). The
-MITM-emulator docs `dreame-app-mapedit-rotate-edit-2026-06-12.md` +
-`dreame-app-WRITE-implementation-guide-2026-06-09.md` carry wire-validated CRUD for
-**spots, maintenance points, and ignore-obstacle zones** (ignore-obstacle is already
-wired in the editor), with **patrol points** to be added soon. In the Dreame app
-each of these has its OWN separate map editor; for HA it makes more sense to make
-them all editable in ONE map-edit view.
-**Done when:** the map-editor view supports create/edit/move/delete for spots,
-maintenance points, and patrol points (alongside the existing no-go / ignore /
-mow-shapes), per the wire-validated opcodes in those docs; live-confirmed on the
-device.
-**Status:** open (depends on capturing the opcodes into inventory — see below).
-**Cross-refs:** `/data/claude/homeassistant/dreame-app-mapedit-rotate-edit-2026-06-12.md`,
-`dreame-app-WRITE-implementation-guide-2026-06-09.md`; the shipped F2b editor
-(`www/dreame-map-editor-card.js`, `coordinator/_writes.py:edit_map`); `inventory.yaml`
-`o215`/`o218`/`o234` + the map-edit transaction entries; the (resolved) "Phase 2:
-MAP write" item above; memory `project_app_findings_phase0_shipped`.
 
 ---
 
