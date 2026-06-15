@@ -30,9 +30,11 @@ from __future__ import annotations
 
 import asyncio
 import collections
+import dataclasses
 from typing import Any
 
-from ..const import LOGGER
+from ..const import CONF_MESSAGES_KEEP, DEFAULT_MESSAGES_KEEP, LOGGER
+from ..protocol import message_record
 from ._property_apply import S2P2_EVENT_TYPES, S2P2_UNKNOWN_EVENT_TYPE
 
 # Tunables. The cloud push lands a few seconds after the MQTT s2p2 event,
@@ -106,6 +108,28 @@ class _NotificationsMixin:
         while len(d) > _SEEN_IDS_CAP:
             d.popitem(last=False)
 
+    def _apply_device_messages(self, records: list | None) -> None:
+        """Reactively refresh ``MowerState.device_messages`` from a freshly
+        fetched device-messages/v2 page (called by the s2p2 resolver) so the
+        list sensor reflects a new notification immediately, instead of waiting
+        for the hourly ``_refresh_messages``. Device-only: service/shared have
+        no MQTT trigger and stay interval-refreshed. No-op on an empty page (a
+        true empty is reconciled by the hourly refresh, not the reactive path)."""
+        if not records:
+            return
+        entry = getattr(self, "entry", None)
+        cap = int(
+            entry.options.get(CONF_MESSAGES_KEEP, DEFAULT_MESSAGES_KEEP)
+            if entry is not None
+            else DEFAULT_MESSAGES_KEEP
+        )
+        new_list = [
+            m.as_dict() for m in message_record.normalize_device(records)[:cap]
+        ]
+        new = dataclasses.replace(self.data, device_messages=new_list)
+        if new != self.data:
+            self.async_set_updated_data(new)
+
     async def _resolve_s2p2_notification(
         self, *, siid: int, piid: int, value: int, now_unix: int,
     ) -> None:
@@ -140,6 +164,11 @@ class _NotificationsMixin:
                 siid, piid, value,
             )
             return
+
+        # Reactively refresh the device-messages list sensor from this freshly
+        # fetched page so the Info-tab Device card updates immediately, instead
+        # of lagging up to an hour for the next _refresh_messages cycle.
+        self._apply_device_messages(records)
 
         # Find the FIRST unseen record whose source matches.
         target_key = (siid, piid, value)

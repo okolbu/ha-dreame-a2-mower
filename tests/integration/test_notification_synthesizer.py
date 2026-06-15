@@ -76,6 +76,12 @@ def _make_coord(
         return fn(*args, **kw)
 
     coord.hass.async_add_executor_job = _aexec
+    # Reactive device-messages list-refresh (2026-06-15) reads coord.data +
+    # coord.entry.options and writes via async_set_updated_data.
+    from custom_components.dreame_a2_mower.mower.state import MowerState
+    coord.data = MowerState()
+    coord.entry = type("E", (), {"options": {}})()
+    coord.async_set_updated_data = MagicMock()
     return coord
 
 
@@ -125,6 +131,38 @@ async def test_resolver_fires_when_cloud_record_matches():
     # Cache + seen are updated.
     assert coord._notif_text_cache[(2, 2, 48)] == "Mowing task complete."
     assert "abc" in coord._notif_seen_ids
+
+
+async def test_resolver_reactively_refreshes_device_messages_list():
+    """The s2p2 resolver also refreshes MowerState.device_messages from the page
+    it fetched, so the Info-tab Device card updates immediately (not just hourly)."""
+    from custom_components.dreame_a2_mower.mower.state import MowerState
+
+    recs = [
+        _record(2, 2, 48, msg_id="m1", text="Mowing task complete.",
+                send_time="2026-06-15 12:00:00"),
+        _record(2, 2, 0, msg_id="m2", text="Bumper error. Tap to view the solution",
+                send_time="2026-06-15 12:05:00"),
+    ]
+    coord = _make_coord(records=recs)
+    coord._fire_notification = MagicMock()
+    coord.data = MowerState()
+
+    def _set(new):
+        coord.data = new
+
+    coord.async_set_updated_data = _set
+
+    await coord._resolve_s2p2_notification(
+        siid=2, piid=2, value=48, now_unix=1_748_000_000,
+    )
+
+    dm = coord.data.device_messages
+    assert len(dm) == 2
+    # Newest-first by sendTime (12:05 > 12:00).
+    assert dm[0]["title"].startswith("Bumper error")
+    assert dm[1]["title"] == "Mowing task complete."
+    assert {"id", "title", "date", "unread"} <= set(dm[0])
 
 
 async def test_resolver_skips_when_no_matching_source():
