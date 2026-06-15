@@ -196,13 +196,29 @@ the Phase-3a golden test):
 User-reported 2026-06-14. SEPARATE from the Phase-3a transform-move (which is
 output-preserving and must NOT fix them — the 3a golden pins the current buggy
 render exactly). Fix AFTER 3a lands, updating the golden to expect the corrected render.
-**Done when:** line-type no-go exclusions render as a visible line/forbidden marker
-on the base map; novelty mow-shapes either decode→render or are explicitly decided
-out-of-scope with a reason; the golden-image test pins the corrected output.
-**Status:** open (deferred until after Phase-3a transform-move)
-**Cross-refs:** `map_render/base_map.py` (exclusion/obstacle draw), `protocol/map_decoder.py`
-(ExclusionZone subtype/line handling, `create_mow_shape` types), `camera/map.py`
-`editable_objects`, the Phase-3a golden test.
+**RESOLVED 2026-06-15 (commit `e0cfcba`).** Root cause unified via live `fetch_map`:
+the decoder ignored `shapeType` and inferred shape from point-count, so BOTH a real
+2-point LINE (id 103, shapeType 1) AND a heart-shaped no-go (id 301, **shapeType 13** —
+the user's "phantom 2nd line" WAS the heart, stored as 2 bbox corners + angle 90.29)
+got mis-decoded as 2-point "lines" and then skipped by the `len<3` render guard. Fix:
+`ExclusionZone` carries `shape_type` + `angle`; `_collect_exclusion_entries` reads
+`shapeType` and leaves decorative paths un-rotated (bbox corners); `render_base_map`
+branches by shape — line→thick line, decorative→stamp a silhouette mask scaled to the
+bbox + rotated by `-angle`, polygon→fill. The 8 decorative masks (square 9, circle 12,
+heart 13, triangle 14, teardrop 15, mushroom 16, cloud 17, rainbow 18) were extracted
+from the app palette `[screenshot:OLD/IMG_4615.PNG]` into `map_render/_shape_masks.py`.
+`editable_objects` now carries `shape_type`/`kind` (no longer calls the heart a "line").
+Golden fixture's fabricated shapeTypes corrected + a heart case added; read-side
+shapeType enum recorded in `inventory.yaml`. **OPEN follow-ups:** (a) heart ORIENTATION
+uses the `-angle` convention (one line, `base_map.py:340`) — verify against the app and
+flip if rotated wrong [user to confirm on the live map]; (b) the JS map-editor card
+still draws decorative shapes as their bbox/points (drawing real shapes there is a
+separate future card task).
+**Status:** RESOLVED 2026-06-15 (render + decode shipped; orientation + editor-card
+drawing are minor open follow-ups above).
+**Cross-refs:** `protocol/map_decoder.py` (`_collect_exclusion_entries`, `ExclusionZone`),
+`map_render/base_map.py` (`_stamp_decorative_shape`), `map_render/_shape_masks.py`,
+`camera/map.py` `editable_objects`, `tests/map_render/test_decorative_shapes.py`, the golden.
 
 ### Sweep probe logs 2026-06-13 21:44 → now for novel slots/values (app "Bumper error" 21:45)
 
