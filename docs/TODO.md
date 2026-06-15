@@ -112,22 +112,6 @@ green; no behavior change (dedup already shipped).
 Phase 3d; `mower/state.py`; `feedback_no_migration_overengineering` (the cost
 caveat); the Phase-3d dedup spec/commit (step 1).
 
-### Locate the 2026-06-13 app "Bumper error" on the wire
-
-**Why:** A "Bumper error" appeared in the Dreame **app** logs ~2026-06-13 21:45. The
-novel-code sweep of that window (s2p1=4 / s2p2=72 / s2p57) is resolved and the
-firmware-shutdown incident decoded (see DONE.md), but the bumper-error itself was never
-independently located on the wire. It coincides in time with the stuck-on-lawn pause
-sequence, so it may ride an already-known slot (e.g. s2p2=2 "Robot trapped" or an s1p1
-bumper bit) rather than a new one.
-**Done when:** the 2026-06-13 21:45 bumper condition is found on the wire (an s2p2 code, an
-s1p1 bit, or a new slot) in `probe/logs/probe_log_*.jsonl`, OR ruled out as app-only; recorded
-in `inventory.yaml` with evidence (+ `error_codes.py` only if the row reaches confirmed/partial,
-per the confidence gate).
-**Status:** open (low priority — single past event)
-**Cross-refs:** `binary_sensor.bumper`, `inventory.yaml § s2p2` (code 2 "Robot trapped") + `s1p1`;
-`tools/probes/`, `docs/research/knowledge-gaps.md`; the resolved sweep in DONE.md.
-
 ### Control honesty — residual follow-ups (core shipped 2026-06-04)
 
 **Core DONE** (v1.0.22a4) and MOST follow-ups SHIPPED across v1.0.22a4–v1.0.23a6: the

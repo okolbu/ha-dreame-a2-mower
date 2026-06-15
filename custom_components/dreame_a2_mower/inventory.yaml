@@ -8996,6 +8996,10 @@ state_codes:
       last_seen: "2026-04-30"
       decoded: partial
     verifications:
+      - date: "2026-06-15"
+        status: partial
+        claim: "Re-confirmed via a NEW surface: the device-messages/v2 cloud stream carried 'Bumper error. Tap to view the solution' (2026-06-15, surfaced by sensor.dreame_a2_mower_device_messages), consistent with the 2026-04-30 s1p1-bumper-bit / s2p2=0 mapping. Closes the (mis-premised) 'Locate the 2026-06-13 Bumper error on the wire' TODO — the bumper event was already located. The raw device-message source:{siid,piid,value} was not separately pulled this pass. The strict-bumper-vs-generic-clear ambiguity below still stands."
+        evidence: "live HA device_messages sensor 2026-06-15 (MCP): 'Bumper error' records present"
       - date: "2026-06-01"
         status: partial
         claim: "s2p2=0 is event-shaped (6 corpus transitions-to-0); the 2026-04-30 19:37:13 test ties it to the bumper bit (s2p2 transitioned 1→0 as HB bumper bit SET). NOT the resting idle baseline."
