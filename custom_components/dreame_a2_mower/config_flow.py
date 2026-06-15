@@ -21,6 +21,7 @@ from .const import (
     CONF_DEBUG_SERVICES,
     CONF_LIDAR_ARCHIVE_KEEP,
     CONF_LIDAR_ARCHIVE_MAX_MB,
+    CONF_MESSAGES_KEEP,
     CONF_PASSWORD,
     CONF_SESSION_ARCHIVE_KEEP,
     CONF_STATION_BEARING_DEG,
@@ -30,6 +31,7 @@ from .const import (
     DEFAULT_DEBUG_SERVICES,
     DEFAULT_LIDAR_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_MAX_MB,
+    DEFAULT_MESSAGES_KEEP,
     DEFAULT_NAME,
     DEFAULT_SESSION_ARCHIVE_KEEP,
     DEFAULT_WIFI_ARCHIVE_KEEP,
@@ -134,6 +136,15 @@ class DreameA2MowerOptionsFlow(config_entries.OptionsFlow):
                         CONF_WIFI_ARCHIVE_KEEP, DEFAULT_WIFI_ARCHIVE_KEEP
                     ),
                 ): vol.All(int, vol.Range(min=1, max=200)),
+                # Message center retention: keep newest-N per list
+                # (device / service / sharing). Records are tiny; default
+                # generous. Applied identically to all three lists.
+                vol.Optional(
+                    CONF_MESSAGES_KEEP,
+                    default=opts.get(
+                        CONF_MESSAGES_KEEP, DEFAULT_MESSAGES_KEEP
+                    ),
+                ): vol.All(int, vol.Range(min=1, max=500)),
                 # Position-fix P2: dock compass bearing used to project
                 # dock-frame (x_m, y_m) into compass-frame (north_m, east_m).
                 # 0-359 deg clockwise from north. Default 0; user can change.

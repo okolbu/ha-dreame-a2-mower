@@ -116,6 +116,7 @@ CONF_VIDEO_ARCHIVE_KEEP: Final = "video_archive_keep"
 CONF_VIDEO_ARCHIVE_MAX_MB: Final = "video_archive_max_mb"
 CONF_SESSION_ARCHIVE_KEEP: Final = "session_archive_keep"
 CONF_WIFI_ARCHIVE_KEEP: Final = "wifi_archive_keep"
+CONF_MESSAGES_KEEP: Final = "messages_keep"
 
 # Debug-services gate (P2 sub-task 2.5). When False (the default), the two
 # developer-only diagnostic services — dump_map_diagnostics + discover_cloud_api
@@ -165,6 +166,7 @@ DEFAULT_SESSION_ARCHIVE_KEEP: Final = 50
 # (see WifiArchiveStore.enforce_retention), so this is 20 *per map*, matching
 # DEFAULT_LIDAR_ARCHIVE_KEEP.
 DEFAULT_WIFI_ARCHIVE_KEEP: Final = 20
+DEFAULT_MESSAGES_KEEP: Final = 100
 
 # UI strings
 WORK_LOG_PLACEHOLDER: Final = "(pick a session)"
