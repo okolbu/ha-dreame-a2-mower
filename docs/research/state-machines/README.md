@@ -8,9 +8,9 @@ Three matrices that document the integration's state model:
 
 The audit verifier at `tools/state_machine/state_machine_audit.py` runs three checks per entity (sourcing / idle / reboot) against these matrices. When the verifier shows all green the integration's state model is clean.
 
-Spec: [`docs/superpowers/specs/2026-05-13-state-machine-audit-design.md`](../../superpowers/specs/2026-05-13-state-machine-audit-design.md).
+Spec: `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-05-13-state-machine-audit-design.md`.
 
-Plan: [`docs/superpowers/plans/2026-05-13-state-machine-audit.md`](../../superpowers/plans/2026-05-13-state-machine-audit.md).
+Plan: `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/2026-05-13-state-machine-audit.md`.
 
 ## Baseline (2026-05-13, pre-remediation)
 

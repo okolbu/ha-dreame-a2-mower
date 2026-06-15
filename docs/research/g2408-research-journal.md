@@ -819,7 +819,7 @@ integration uses as the universal "refetch + rebuild map" trigger.
   `cfg_individual.PRE` row, distinct from `cfg_keys.PRE`)
 - Canonical: § cfg_individual endpoints
 - Audit code: `tools/inventory_audit.py` `_consistency_check` function
-- Spec: `docs/superpowers/specs/2026-05-05-g2408-protocol-inventory-design.md` §6
+- Spec: `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-05-05-g2408-protocol-inventory-design.md` §6
   acceptance criterion #12
 
 ---
@@ -1391,8 +1391,8 @@ command shape still unknown.
 
 ### Cross-references
 
-- `docs/superpowers/specs/2026-05-07-multi-map-design.md` — full design
-- `docs/superpowers/plans/2026-05-07-multi-map-implementation.md` — plan
+- `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-05-07-multi-map-design.md` — full design
+- `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/2026-05-07-multi-map-implementation.md` — plan
 - Inventory: `MAPL`, `s1p50`, `s2p65`, `o200` entries
 - Code: `coordinator._apply_mapl`, `coordinator._refresh_mapl`,
   `cloud_client.fetch_map`, `map_decoder.parse_cloud_maps`
@@ -1737,7 +1737,7 @@ from a flat layout to `lidar/{map_id}/` subdirs with a one-shot startup
 migration. WiFi heatmap and LiDAR top-down/full cameras are now per-map
 with map_id in the HTTP view URL and the LiDAR card JS.
 
-Tasks 1-14 of `docs/superpowers/plans/2026-05-10-multi-map-phase-2-foundation.md`
+Tasks 1-14 of `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/2026-05-10-multi-map-phase-2-foundation.md`
 landed; T7 (schedule entity per-map) was deferred to Plan 2 because the
 current cloud_state.ScheduleData has flat slots with no map_id field —
 making it per-map requires investigating slot_id→map_id mapping + a

@@ -1,7 +1,7 @@
 # Contributing to the Dreame A2 Mower integration
 
 This integration is in active rebuild — see the spec at
-`docs/superpowers/specs/2026-04-27-greenfield-integration-design.md`
+`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-04-27-greenfield-integration-design.md`
 for the architecture and roadmap.
 
 ## Do not commit secrets

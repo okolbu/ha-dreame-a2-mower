@@ -11,7 +11,7 @@ Actionable items only. Each entry follows the shape:
 **Cross-refs:** journal topic, inventory row(s), spec/plan if any.
 ```
 
-For resolved / closed items see `docs/DONE.md`.
+For resolved / closed items see `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/DONE.md`.
 For the protocol *blank-spots* (undecoded bits/bytes, uncertain slots, corpus
 coverage + how to validate each) see `docs/research/knowledge-gaps.md`.
 For shipped versions, resolved findings, and the RE journey see
@@ -345,8 +345,8 @@ loose ends remain:
 **Done when:** borderline codes are decided against live evidence, 24 renamed,
 and the vacuum descriptions are pruned/marked.
 **Status:** open (feature shipped; these are refinements)
-**Cross-refs:** `docs/superpowers/plans/2026-06-01-s2p2-fault-partition.md` (moved
-to OLD on branch finish); `inventory.yaml § s2p2`; `mower/error_codes.py FAULT_CODES`.
+**Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/2026-06-01-s2p2-fault-partition.md`;
+`inventory.yaml § s2p2`; `mower/error_codes.py FAULT_CODES`.
 
 ### Probe for the AI-photo / obstacle-photo cloud endpoint
 
@@ -504,89 +504,9 @@ map-edit to find it. Fallback: `setDeviceData` MAP-blob write (risky; needs a
 re-encode parity test first).
 **Status:** open
 **Cross-refs:** spec
-`docs/superpowers/specs/2026-05-08-cloud-write-integration-design.md`
+`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-05-08-cloud-write-integration-design.md`
 "Phase 2"; `docs/research/cloud-write-reference.md`; archived research
 `OLD/ha-dreame-a2-mower-docs/research/map-edit-write-todo.md`.
-
-### Re-verify EdgeMaster / Mowing Efficiency cloud-field correlations
-
-**Why:** `docs/research/historical/g2408-protocol-PRESERVED-RAW-2026-05-06.md`
-catalogued EdgeMaster (`s6p2[2]`) and Mowing Efficiency (`s6p2[1]`)
-as BT-only / not-in-cloud-CFG. Those claims predate the
-2026-05-08 cloud-discovery findings and may be outdated; both could
-now be writable via `setDeviceData` if the cloud surfaces them under a
-chunked-batch key we haven't probed.
-**Done when:** Toggle each in the app while monitoring the empty-batch
-read; if any chunked-batch key changes, surface as a new entity. If
-neither changes, document as confirmed BT-only post-cloud-discovery.
-**Status:** RESOLVED 2026-06-03 — confirmed no routed-action write surface.
-The premise ("maybe cloud-writable post-discovery") was tested directly
-rather than via the empty-batch route: Mowing Efficiency is `CFG.PRE[1]`,
-and a live `set_pre` of the correct 2-element shape returned `out[0].r=-3`
-(no setter for `t='PRE'`) with the findBot relay control confirmed awake
-("Robot is here" + `r=0`). Per the 2026-05-09 r-code disambiguation `r=-3`
-is target-level, so it is shape-independent. EdgeMaster (`s6p2[2]`) has no
-`PRE` slot on g2408 and `PRE` has no setter regardless. So neither is
-writable via the routed-action CFG surface; `s6p2` itself is a read-only
-push reflector. `set_pre` now parses `out[0].r` and fails honestly instead
-of reporting false success. The ONE remaining unknown — the app's actual
-write RPC — is the Phase-3 HTTPS-sniff work tracked under "Determine whether
-HA writes drive the device…" below; it is NOT specific to these two fields.
-**Cross-refs:** `docs/research/wire-captures/pre-write-r3-2026-06-03.md`;
-`tools/probes/probe_pre_write.py`; `inventory.yaml § PRE` + `§ s6p2` (2026-06-03
-verifications); historical doc; `docs/research/cloud-write-reference.md`.
-
-### SCHEDULE not refreshed — app schedule edits don't reach the integration
-
-**Status:** RESOLVED 2026-06-08 — decoder bug, not a refresh/cloud-stale problem.
-
-**Root cause (verified):** The cloud SCHEDULE blob WAS fresh and reaching the
-integration (live empty-batch fetch showed `v=35422` with the new record present)
-— hypotheses (a) periodic-refresh-missing and (c) cloud-stale are both DEBUNKED.
-The new entry was a **Sunday** 21:30 zone mow, and the SCHEDULE wire weekday nibble
-is `tm_wday` (0=Sun..6=Sat), NOT the `1=Mon..7=Sun` the decoder assumed. Sunday's
-nibble is `0`, which `_decode_one_record`'s `1 <= weekday <= 7` guard rejected →
-`_decode_blob` returned `()` for the **entire slot**, so the user's whole active
-"Spr & Sum Schedule" went blank (not just the new line). Mon..Sat coincide between
-the two conventions, which is why every prior schedule decoded fine and this hid
-for weeks.
-
-**Fix:** `protocol/schedule_decode.py` — weekday nibble accepted as 0..6 and
-mapped to the mask bit via `(nibble+6)%7`; `_decode_blob` now SKIPS a single
-content-malformed record instead of dropping the whole slot (defense in depth).
-`protocol/schedule_encode.py` — inverse `(bit+1)%7` so Sunday round-trips to
-nibble 0. Proven byte-exact against the live record `aa08010a150001ed`
-(probe/probe_schedule_live.py, 2026-06-08). Tests:
-`tests/protocol/test_schedule.py::test_decode_real_slot0_with_sunday_zone`,
-`::test_roundtrip_sunday_zone_byte_identical`,
-`::test_decode_skips_unknown_record_keeps_rest_of_slot`.
-**Cross-refs:** `cloud_client/_fetchers.py` (`fetch_full_cloud_state` SCHEDULE branch);
-`coordinator/_cloud_state.py` (`_refresh_cloud_state`, 2-min timer); `protocol/schedule_decode.py`.
-
-### Capture zone / edge action codes for SCHEDULE blob
-
-**Why:** The SCHEDULE blob format was decoded 2026-05-08 (see
-`protocol/schedule.py` for the verified record layout). The action-
-type nibble has only been observed as `0` (All-area mowing) — the
-zone (1?) and edge (2?) codes are not yet pinned down. The user's
-Dreame app supports All-area / Zone / Edge plans; capturing one of
-each in the cloud blob would close out the catalogue.
-**Done when:** the user adds a Zone-mowing and Edge-mowing schedule
-in the app, the next cloud dump is captured, and the `_ACTION_LABELS`
-dict in `sensor.py` is updated with the verified codes (plus
-appropriate test fixtures in `tests/protocol/test_schedule.py`).
-**Status:** RESOLVED 2026-06-08 — live capture (probe/probe_schedule_live.py)
-caught a slot containing all three action types: all-area (`action=0`, 7-byte),
-zone (`action=1`, 8-byte, `aa08010a150001ed` = Sun 21:30 zone_id=1), and edge
-(`action=2`, 9-byte, `aa09627424000100ed` = Sat 19:00 zone_id=1 extra=0x00).
-Action codes 0/1/2 confirmed against real data; `_ACTION_LABELS` (all_area/zone/edge)
-already correct. The byte layout in `schedule_decode.py` is now live-verified
-(only the weekday convention needed correcting — see the resolved SCHEDULE-refresh
-item above). The edge `extra` byte (rec[7]) was 0x00 here; whether it is the
-edge-index selector remains [UNVERIFIED] (needs a 2nd defined edge — see s99/TASKID
-3-element note).
-**Cross-refs:** `custom_components/dreame_a2_mower/protocol/schedule_decode.py`;
-`probe/probe_schedule_live.py`
 
 ### OTA_INFO field semantics
 
@@ -691,7 +611,7 @@ detection sites; `_handle_emergency_stop_transition` is replaced;
 docs/events.md gains the alert section; emergency_stop banner
 behavior is unchanged from the user's perspective.
 **Status:** open
-**Cross-refs:** `docs/superpowers/specs/2026-05-07-event-surface-design.md` § "Out of scope"
+**Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-05-07-event-surface-design.md` § "Out of scope"
 
 ---
 
@@ -726,7 +646,7 @@ surface) flagged five non-blocking follow-ups that should not be lost:
 closed with a "won't fix because X" note.
 **Status:** open
 **Cross-refs:** final review on commit `e32c8f4..51f6883`;
-`docs/superpowers/plans/2026-05-07-event-surface-lifecycle.md`
+`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/2026-05-07-event-surface-lifecycle.md`
 
 ---
 
@@ -744,7 +664,7 @@ a log signal but is noise on the user-visible sensor.
 entry is None. INFO-level logging of those novelty events stays so
 contributor diagnostics aren't lost.
 **Status:** open
-**Cross-refs:** `coordinator.py` novelty dispatch around line 2843;
+**Cross-refs:** `coordinator/_property_apply.py` (`handle_property_push` novelty dispatch);
 `observability/registry.py`
 
 ---
@@ -775,7 +695,7 @@ contributor diagnostics aren't lost.
 **Workaround for users right now**: open the Dreame app's Real-Time Location sub-page directly. The HA dashboard hides the map card while ATA[2] is off and falls back to a "toggle on to enable" notice — the same notice now mentions this gap so the user knows the integration's path isn't the same as the app's.
 
 **Status:** open (Phase 3 — needs HTTPS capture). Recipe candidate to bundle with the broader Phase 3 sniff session (Phase 3 also covers SETTINGS / AI_HUMAN.0 / SCHEDULE writes).
-**Cross-refs:** `docs/research/entity-validation-matrix.md` device_tracker row; `cloud_client.fetch_locn`; `coordinator._refresh_locn`; `OLD/alternatives_archive_2026-05-05/ha-dreame-a2-mower-legacy/custom_components/dreame_a2_mower/coordinator.py:287-294` (legacy reaching the same conclusion); archived negative-results detail `OLD/ha-dreame-a2-mower-docs/research/gps-tracking-todo.md`.
+**Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/entity-validation-matrix.md` device_tracker row (retired doc); `cloud_client.fetch_locn`; `coordinator._refresh_locn`; `OLD/alternatives_archive_2026-05-05/ha-dreame-a2-mower-legacy/custom_components/dreame_a2_mower/coordinator.py:287-294` (legacy reaching the same conclusion); archived negative-results detail `OLD/ha-dreame-a2-mower-docs/research/gps-tracking-todo.md`.
 
 ---
 
@@ -1159,25 +1079,6 @@ app-MITM counts as wire-verification across the board.
 album-photo findings are largely recorded).
 **Cross-refs:** `/data/claude/homeassistant/dreame*.md`; `inventory.yaml`;
 `entity-inventory.yaml`; CLAUDE.md § Fact discipline (app-MITM = wire-verified).
-
----
-
-### Move completed plans/specs out of the tree into OLD/
-
-**Why:** Folded in from `todo1.txt`. Per CLAUDE.md § Documentation canonicity,
-shipped specs/plans become historical the moment the work lands and must move to
-`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/` (same relative path) so a
-future session's grep/Explore doesn't retrieve them as current truth. This session
-shipped several map-editor specs/plans (`docs/superpowers/specs/2026-06-12-*`,
-`docs/plans/2026-06-12-*`, `docs/superpowers/specs/2026-06-12-polygon-draw.md`) plus
-earlier ones; target state is **zero `docs/superpowers/` in-tree**.
-**Done when:** all completed specs/plans/handoffs are moved under
-`OLD/ha-dreame-a2-mower-docs/...`; in-tree `docs/superpowers/` is empty (or holds
-only genuinely-active plans); code/doc cross-refs still resolve via the mirrored OLD
-path.
-**Status:** open (housekeeping).
-**Cross-refs:** CLAUDE.md § Documentation canonicity & lifecycle;
-`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/`.
 
 ---
 

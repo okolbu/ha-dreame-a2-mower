@@ -47,5 +47,5 @@ each with its own brainstorm → spec → plan → build cycle.
   `/data/claude/homeassistant/dreame-app-findings-2026-06-09-settings-sweep.md`,
   `/data/claude/homeassistant/dreame-app-WRITE-implementation-guide-2026-06-09.md`.
 - Open gaps: `docs/research/knowledge-gaps.md`.
-- Phase 0 spec/plan: `docs/superpowers/specs/2026-06-09-app-findings-phase0-knowledge-capture-design.md`,
-  `docs/superpowers/plans/2026-06-09-app-findings-phase0-knowledge-capture.md`.
+- Phase 0 spec/plan: `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-06-09-app-findings-phase0-knowledge-capture-design.md`,
+  `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/2026-06-09-app-findings-phase0-knowledge-capture.md`.

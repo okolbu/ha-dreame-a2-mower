@@ -2,7 +2,7 @@
 
 > **Generated** by `tools/state_machine/state_machine_audit.py`. Do not hand-edit; rerun the
 > audit instead. Spec:
-> `docs/superpowers/specs/2026-05-13-state-machine-audit-design.md`.
+> `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-05-13-state-machine-audit-design.md`.
 
 Sorted alphabetically by `<platform>.<key>` so entities reading the same
 field cluster together. Status column collapses the three checks into one

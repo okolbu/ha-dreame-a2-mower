@@ -62,5 +62,5 @@ A single sniff session covering 4-5 settings will likely identify the missing su
 ## Cross-reference
 
 - Companion finding for CFG: `cfg-write-regression-2026-05-09.md`
-- Spec: `docs/superpowers/specs/2026-05-09-protocol-validation-audit-design.md`
+- Spec: `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-05-09-protocol-validation-audit-design.md`
 - TODO entry: Phase 3 — capture Dreame app write RPC (now broader scope: covers SETTINGS, AI_HUMAN, SCHEDULE, plus int-list CFG keys)

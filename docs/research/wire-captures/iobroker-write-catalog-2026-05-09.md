@@ -250,4 +250,4 @@ Cross-referencing ioBroker's action table against `mower/actions.py:ACTION_TABLE
 - Companion finding (cloud-cache-only SETTINGS): `settings-surface-cloud-only-2026-05-09.md`
 - CFG fix that landed v1.0.2a9: `cfg-write-regression-2026-05-09.md`
 - ioBroker source: `/data/claude/homeassistant/OLD/alternatives_archive_2026-05-05/ioBroker.dreame/main.js` (commit `fe0db96`, 3921 lines)
-- Audit spec: `docs/superpowers/specs/2026-05-09-protocol-validation-audit-design.md`
+- Audit spec: `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-05-09-protocol-validation-audit-design.md`
