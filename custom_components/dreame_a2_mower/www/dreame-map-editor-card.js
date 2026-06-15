@@ -128,6 +128,7 @@ class DreameMapEditorCard extends HTMLElement {
       `.obj{cursor:pointer}` +
       `.obj-nogo{stroke:${NOGO_STROKE};fill:${NOGO_FILL};stroke-width:2}` +
       `.obj-ignore{stroke:${IGNORE_STROKE};fill:${IGNORE_FILL};stroke-width:2}` +
+      `.obj-decorative{fill:rgba(177,0,0,0.06);stroke:rgba(177,0,0,0.5);stroke-width:1.5;stroke-dasharray:5 4}` +
       `.draft{stroke:#1565c0;stroke-width:2;fill:rgba(21,101,192,0.15)}` +
       `.bbox{stroke:#1565c0;stroke-width:1;stroke-dasharray:4 3;fill:none;pointer-events:none}` +
       `.drawline{stroke:#1565c0;stroke-width:2;fill:none;pointer-events:none}` +
@@ -301,7 +302,7 @@ class DreameMapEditorCard extends HTMLElement {
     const objs = Array.isArray(a.editable_objects) ? a.editable_objects : [];
     this._objs = objs;
     const key = JSON.stringify(
-      objs.map((o) => [o.id, o.op, o.type, o.kind, o.points_m, o.radius])
+      objs.map((o) => [o.id, o.op, o.type, o.kind, o.shape_type, o.points_m, o.radius])
     );
     if (key === this._objKey) return;
     this._objKey = key;
@@ -319,9 +320,9 @@ class DreameMapEditorCard extends HTMLElement {
       if (Object.prototype.hasOwnProperty.call(this._overrides, k)) {
         const ov = this._overrides[k];
         if (ov === null) continue; // optimistically deleted
-        eff.push({ id: o.id, kind: o.kind, points_m: ov.points_m, radius: ov.radius || 0 });
+        eff.push({ id: o.id, kind: o.kind, shape_type: o.shape_type, points_m: ov.points_m, radius: ov.radius || 0 });
       } else {
-        eff.push({ id: o.id, kind: o.kind, points_m: o.points_m, radius: o.radius });
+        eff.push({ id: o.id, kind: o.kind, shape_type: o.shape_type, points_m: o.points_m, radius: o.radius });
       }
     }
     for (const p of this._provisional || []) eff.push(p); // created (no id)
@@ -340,6 +341,24 @@ class DreameMapEditorCard extends HTMLElement {
       if (selId != null && o.id === selId && o.kind === selKind) continue;
       const pts = Array.isArray(o.points_m) ? o.points_m : [];
       const pix = pts.map((m) => metersToPixel(m[0], m[1], this._proj));
+      // Decorative mow-shapes (shape_type >= 9: heart/cloud/etc.) are already
+      // drawn in the server-rendered editor background, pixel-identical to the
+      // live map. The card must NOT draw a 2-point <polygon> over them (that's
+      // the "phantom no-go line" bug) — draw ONLY a faint axis-aligned bbox
+      // <rect> as the select/delete hit-area. Decorative shapes are
+      // create+delete (no reshape-in-place), so the rect is purely a click
+      // target; the visible shape comes from the background.
+      if ((o.shape_type || 0) >= 9) {
+        if (pix.length >= 2) {
+          const bb = this._pixBbox(pix);
+          parts.push(
+            `<rect class="obj obj-decorative" x="${bb.x.toFixed(1)}" ` +
+            `y="${bb.y.toFixed(1)}" width="${bb.w.toFixed(1)}" ` +
+            `height="${bb.h.toFixed(1)}" data-id="${o.id}" data-kind="${o.kind}"/>`
+          );
+        }
+        continue;
+      }
       const cls = o.kind === "ignore" ? "obj obj-ignore" : "obj obj-nogo";
       if (pix.length >= 2) {
         const d = pix.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(" ");
@@ -398,6 +417,29 @@ class DreameMapEditorCard extends HTMLElement {
   // not a bug; surfacing the original shape needs the decoder to expose it.
   _draftFromObject(o) {
     const pix = (o.points_m || []).map((m) => metersToPixel(m[0], m[1], this._proj));
+    // Decorative mow-shapes (shape_type >= 9) are create+delete — there is no
+    // reshape-in-place op. Build a DELETE-ONLY draft: no line/polygon model
+    // inference, just the bbox corners for the selection outline + delete
+    // handle. The shape itself stays drawn in the server-rendered background.
+    if ((o.shape_type || 0) >= 9) {
+      const bb = this._pixBbox(pix);
+      return {
+        category: o.kind === "ignore" ? "ignore" : "nogo",
+        shape: o.kind,
+        model: "decorative",
+        resize: null,
+        kind: o.kind,
+        objectId: o.id,
+        category_code: o.kind === "ignore" ? 4 : 0,
+        pts: [
+          [bb.x, bb.y],
+          [bb.x + bb.w, bb.y],
+          [bb.x + bb.w, bb.y + bb.h],
+          [bb.x, bb.y + bb.h],
+        ],
+        radius: 0,
+      };
+    }
     const draft = {
       category: o.kind === "ignore" ? "ignore" : "nogo",
       shape: o.kind === "ignore" ? "polygon" : null,
@@ -756,6 +798,28 @@ class DreameMapEditorCard extends HTMLElement {
       return;
     }
     const parts = [];
+    // Decorative selection: the shape is drawn in the background, so show ONLY a
+    // dashed bbox outline + a delete handle (no resize/rotate/vertex/endpoint
+    // handles — decorative shapes are create+delete, not reshaped in place).
+    if (d.model === "decorative") {
+      const bb = this._bboxOf(d);
+      parts.push(
+        `<rect class="bbox" x="${bb.x.toFixed(1)}" y="${bb.y.toFixed(1)}" ` +
+        `width="${bb.w.toFixed(1)}" height="${bb.h.toFixed(1)}"/>`
+      );
+      const dx = bb.x + bb.w + DEL_OFF;
+      const dy = bb.y - DEL_OFF;
+      parts.push(
+        `<g class="del" data-role="del">` +
+        `<circle data-role="del" cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="${HANDLE_R + 2}"/>` +
+        `<text data-role="del" x="${dx.toFixed(1)}" y="${(dy + 4).toFixed(1)}" ` +
+        `text-anchor="middle" font-size="14" font-family="system-ui">×</text>` +
+        `</g>`
+      );
+      g.innerHTML = parts.join("");
+      this._syncActionButtons();
+      return;
+    }
     // Shape body + resize/endpoint handles, per manipulation model.
     if (d.model === "circle") {
       const c = d.pts[0];
@@ -836,6 +900,22 @@ class DreameMapEditorCard extends HTMLElement {
     );
   }
 
+  // Axis-aligned bbox of a list of pixel points {x,y,w,h}. Pure helper used for
+  // the decorative hit-area rect (and reused by _bboxOf for the draft corners).
+  _pixBbox(pix) {
+    let minx = Infinity;
+    let miny = Infinity;
+    let maxx = -Infinity;
+    let maxy = -Infinity;
+    for (const [x, y] of pix) {
+      if (x < minx) minx = x;
+      if (y < miny) miny = y;
+      if (x > maxx) maxx = x;
+      if (y > maxy) maxy = y;
+    }
+    return { x: minx, y: miny, w: maxx - minx, h: maxy - miny };
+  }
+
   // Pixel-space bbox of the current draft (for handle/rotate placement only).
   _bboxOf(d) {
     let pts = d.pts;
@@ -899,7 +979,7 @@ if (!customElements.get("dreame-map-editor-card")) {
 
 // Card version banner — lets the user confirm which build loaded in the
 // browser console (the cards "cache hard"; a stale cache shows the old version).
-const CARD_VERSION = "1.0.27a5";
+const CARD_VERSION = "1.0.27a6";
 console.info(
   `%c dreame-map-editor-card v${CARD_VERSION} `,
   "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"

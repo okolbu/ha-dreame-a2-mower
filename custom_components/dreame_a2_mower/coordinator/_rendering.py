@@ -196,11 +196,23 @@ class _RenderingMixin:
             )
             # Map-editor card background: same canvas (bx*/by*/width_px/height_px
             # are decode-time fields, untouched by dataclasses.replace), but with
-            # the exclusion zones STRIPPED so the editor's overlays are the ONLY
-            # place no-go/ignore areas are drawn — avoids the double-draw/ghosting
-            # while the device→cloud edit propagation lags.
+            # the EDITABLE exclusion zones STRIPPED so the editor's overlays are
+            # the ONLY place no-go/ignore line/rect/circle areas are drawn —
+            # avoids the double-draw/ghosting while the device→cloud edit
+            # propagation lags. DECORATIVE shapes (heart/cloud/etc., shape_type in
+            # DECORATIVE_SHAPE_TYPES) are KEPT so they render in the editor base
+            # pixel-identically to the live map — they are create+delete (never
+            # reshaped in-place), so there is no edit-lag double-draw to avoid,
+            # and the card draws only a faint select/delete hit-area over them.
             import dataclasses
-            clean_md = dataclasses.replace(map_data, exclusion_zones=())
+            from ..map_render._shape_masks import DECORATIVE_SHAPE_TYPES
+            clean_md = dataclasses.replace(
+                map_data,
+                exclusion_zones=tuple(
+                    z for z in map_data.exclusion_zones
+                    if z.shape_type in DECORATIVE_SHAPE_TYPES
+                ),
+            )
             editor_png = await self.hass.async_add_executor_job(
                 partial(
                     render_base, clean_md,

@@ -140,6 +140,47 @@ async def test_render_base_rerenders_when_activity_flips_to_repositioning():
 
 
 @pytest.mark.asyncio
+async def test_editor_base_keeps_decorative_drops_standard_exclusions():
+    """The editor-base render strips EDITABLE exclusions (line/rect/circle/
+    ignore — drawn as card overlays) but KEEPS DECORATIVE shapes (heart/cloud/
+    etc., shape_type in DECORATIVE_SHAPE_TYPES) so they render in the editor
+    background pixel-identically to the live map. Pins the clean_md filter."""
+    from custom_components.dreame_a2_mower.map_decoder import ExclusionZone
+
+    heart = ExclusionZone(
+        points=((5000.0, 5000.0), (9000.0, 8000.0)),
+        subtype=None, obj_id=101,
+        points_m=((5.0, 5.0), (9.0, 8.0)),
+        shape_type=13,  # decorative -> KEEP in editor base
+    )
+    line = ExclusionZone(
+        points=((2000.0, 2000.0), (4000.0, 6000.0)),
+        subtype=None, obj_id=102,
+        points_m=((2.0, 2.0), (4.0, 6.0)),
+        shape_type=1,  # standard no-go line -> STRIP (card draws it)
+    )
+    coord = _make_coord()
+    base = coord.cloud_state.maps_by_id[1]
+    coord.cloud_state.maps_by_id[1] = dataclasses.replace(
+        base, exclusion_zones=(heart, line)
+    )
+
+    _set_activity(
+        coord, activity=CurrentActivity.IDLE, mow_session=MowSession.BETWEEN_SESSIONS
+    )
+    await coord._render_base()
+
+    # Two executor renders: [0] = live base (all zones), [1] = editor base (clean_md).
+    assert len(coord.hass.calls) == 2
+    editor_partial = coord.hass.calls[1]
+    clean_md = editor_partial.args[0]
+    kept = clean_md.exclusion_zones
+    assert [z.shape_type for z in kept] == [13], (
+        "editor base must keep the decorative heart and drop the standard line"
+    )
+
+
+@pytest.mark.asyncio
 async def test_render_base_noop_when_no_active_map():
     coord = _make_coord()
     coord._active_map_id = None
