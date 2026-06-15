@@ -147,11 +147,32 @@ the snapshot, and solving the finalize "fresh-since-boot" signal another way —
 the spec §5 *single-ingestion-funnel* (`apply_update(source, fields)`), entangled
 with Phase 3e. **Sequenced after 3e** (which persists `area_mowed_m2` and reworks
 the finalize gate, untangling `task_state_code`).
-**Done when:** the StateSnapshot↔MowerState overlap is genuinely single-sourced
-(decoded values funnel straight to the SM; internal consumers read the snapshot;
-finalize uses an explicit fresh-since-boot latch, not the MowerState default-None
-signal); full suite green; render + finalize live-validated on a revived mower.
-**Status:** deferred (sequenced after Phase 3e; premise corrected 2026-06-14).
+**RESOLVED 2026-06-15 — the funnel is NOT worth building (CLOSED).** A third
+independent design pass (agent `aff0b2c8`, post-3e) confirmed the overlap is a
+**decode-staging artifact, not two-homes-for-one-fact**: the entity layer already
+reads battery/wifi/position/error/phase/task exclusively from `snapshot()`, so the
+only remaining `self.data.*` reads are coordinator-internal session-lifecycle /
+live-map / refresher logic that legitimately wants the per-push decoded value. The
+full `apply_update` funnel (rewriting the pure-applier signature + every refresher)
+is over-engineering for a single-user repo. Decisions taken:
+  - The "fresh-since-boot" finalize signal is **already** an explicit latch
+    (`_real_task_state_observed`, `coordinator/_core.py:135` + `_mqtt_handlers.py:448`)
+    sitting beside the `data.task_state_code is None` check — no snapshot redirect
+    needed, no rain-reboot risk. Documented; do not reintroduce a snapshot `is None` read.
+  - `error_code` is NOT truly duplicated (raw-last-code vs the snapshot's latched
+    fault `errors` set) — keep on MowerState.
+  - `battery_level` / `wifi_rssi_dbm` / `position_x/y/heading` / `mowing_phase` /
+    `slam_task_label` / `task_state_code` — KEEP on MowerState (staging target;
+    load-bearing internal readers).
+  - **Done:** dropped `position_north_m` / `position_east_m` from MowerState (commit
+    `2e41212`) — the only genuinely-dead fields (no writer, no MowerState reader;
+    they live solely on `StateSnapshot`). The render-fallback dead path
+    (`_rendering.py`) was left in place (harmless; removing it needs an active-mow
+    live check the idle mower can't provide). The `make_bare_coordinator()` test
+    helper remains an optional future nicety (no consumer now that no further field
+    moves are planned).
+**Status:** RESOLVED/CLOSED 2026-06-15 — funnel rejected as over-engineering; dead
+fields dropped; staging layer kept by design.
 **Cross-refs:** `/data/claude/homeassistant/refactor-2026-06-13/spec.md` §4 Phase 3d
 + §5 single-ingestion-funnel; `mower/state.py`, `mower/state_snapshot.py`,
 `mower/state_machine.py`, `coordinator/_property_apply.py`, `coordinator/_mqtt_handlers.py`;
