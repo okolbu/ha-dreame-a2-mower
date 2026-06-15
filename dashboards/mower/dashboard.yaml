@@ -153,8 +153,8 @@ title: Dreame A2 Mower
 #   - /dreame_a2_mower/dreame-multi-select-card.js  (generic multi-select; register as JavaScript Module)
 
 views:
-  - title: Mower
-    path: mower
+  - title: Overview
+    path: overview
     type: panel
     icon: mdi:robot-mower-outline
     cards:
@@ -567,7 +567,7 @@ views:
                       name: Head to point
                       icon: mdi:map-marker-right
 
-  - title: Map Selector
+  - title: Maps & Zones
     path: maps
     type: panel
     icon: mdi:map-marker-multiple
@@ -658,13 +658,6 @@ views:
                     content: |
                       **Map 2** — {{ '%.2f' | format(states('sensor.dreame_a2_mower_map_2_area') | float(0)) }} m²
 
-  - title: Settings & Zones
-    path: settings-zones
-    type: panel
-    icon: mdi:tune
-    cards:
-      - type: vertical-stack
-        cards:
           - *tab_header_settings_zones
 
           # 3-column grid: zone counts (col 1) | custom mode (col 2) | pathway obstacle (col 3)
@@ -797,26 +790,24 @@ views:
               # ───── Col 3 — Zone counts + Plan 2 placeholders ─────
               - type: vertical-stack
                 cards:
-                  - type: entities
-                    title: Zone counts
-                    show_header_toggle: false
-                    entities:
-                      - entity: sensor.dreame_a2_mower_map_1_exclusion_zones
-                        name: Map 1 — Exclusion zones
-                      - entity: sensor.dreame_a2_mower_map_2_exclusion_zones
-                        name: Map 2 — Exclusion zones
-                      - entity: sensor.dreame_a2_mower_map_1_ignore_obstacle_zones
-                        name: Map 1 — Ignore-obstacle zones
-                      - entity: sensor.dreame_a2_mower_map_2_ignore_obstacle_zones
-                        name: Map 2 — Ignore-obstacle zones
-                      - entity: sensor.dreame_a2_mower_map_1_maintenance_points
-                        name: Map 1 — Maintenance points
-                      - entity: sensor.dreame_a2_mower_map_2_maintenance_points
-                        name: Map 2 — Maintenance points
-                      - entity: sensor.dreame_a2_mower_map_1_spots
-                        name: Map 1 — Spots
-                      - entity: sensor.dreame_a2_mower_map_2_spots
-                        name: Map 2 — Spots
+                  # Zone counts — auto-entities glob over the per-map count
+                  # sensors (replaces the former hand-listed 8-row block).
+                  # REQUIRES the Lovelace resource (type: module):
+                  #   /hacsfiles/lovelace-auto-entities/auto-entities.js
+                  - type: custom:auto-entities
+                    card:
+                      type: entities
+                      title: Zone counts
+                      show_header_toggle: false
+                    filter:
+                      include:
+                        - entity_id: sensor.dreame_a2_mower_map_*_exclusion_zones
+                        - entity_id: sensor.dreame_a2_mower_map_*_ignore_obstacle_zones
+                        - entity_id: sensor.dreame_a2_mower_map_*_maintenance_points
+                        - entity_id: sensor.dreame_a2_mower_map_*_spots
+                      exclude: []
+                    sort:
+                      method: entity_id
                   - type: markdown
                     content: |
                       ### 🚧 Custom Mode (Plan 2)
@@ -861,13 +852,6 @@ views:
                     map_id: 1
                     action_label: Start edge patrol
 
-  - title: Map Editor
-    path: map-editor
-    type: panel
-    icon: mdi:vector-square-edit
-    cards:
-      - type: vertical-stack
-        cards:
           - *tab_header_map_editor
 
           # Interactive map-editor card (bundled, served from the integration
@@ -975,108 +959,10 @@ views:
                       - entity: time.dreame_a2_mower_charging_end_time
                         name: Charging end
 
-  - title: LiDAR
-    path: lidar
-    type: panel
-    icon: mdi:radar
-    cards:
-      - type: vertical-stack
-        cards:
-          - *tab_header_lidar
-
-          # 1fr 2fr 1fr row: archive (25%) | lidar card (50%) | re-tag (25%).
-          # `type: grid` doesn't support per-child cell-spanning that survives
-          # HA's hui-card wrapper, so we use a horizontal-stack and override
-          # its #root flex layout to a CSS grid with explicit column widths.
-          - type: horizontal-stack
-            card_mod:
-              style: |
-                #root {
-                  display: grid !important;
-                  grid-template-columns: 1fr 2fr 1fr !important;
-                  gap: 8px !important;
-                }
-            cards:
-              - type: entities
-                title: Archive
-                entities:
-                  - entity: sensor.dreame_a2_mower_lidar_archive_count
-                    name: Total scans
-                  - entity: select.dreame_a2_mower_lidar_archive
-                    name: Selected scan
-
-              - type: custom:dreame-a2-lidar-card
-                url: /api/dreame_a2_mower/lidar/selected.pcd
-                picker_entity: select.dreame_a2_mower_lidar_archive
-
-              - type: markdown
-                content: |
-                  ### Re-tag a mis-categorized scan
-                  Use **Developer Tools → Services** with
-                  `dreame_a2_mower.move_lidar_scan` — provide `from_map_id`,
-                  `filename` (from picker option text), `to_map_id`.
-
-  - title: WiFi Coverage
-    path: wifi
-    type: panel
-    icon: mdi:wifi
-    cards:
-      - type: vertical-stack
-        cards:
-          - *tab_header_wifi
-
-          # 1fr 2fr 1fr row: viewer controls (25%) | heatmap (50%) | refresh (25%).
-          # See LiDAR tab for why horizontal-stack + #root grid-template-columns
-          # is used instead of `type: grid` with span — HA's hui-card wrapper
-          # blocks the :host { grid-column: span 2 } trick.
-          - type: horizontal-stack
-            card_mod:
-              style: |
-                #root {
-                  display: grid !important;
-                  grid-template-columns: 1fr 2fr 1fr !important;
-                  gap: 8px !important;
-                }
-            cards:
-              - type: entities
-                title: Viewer controls
-                show_header_toggle: false
-                entities:
-                  - entity: select.dreame_a2_mower_wifi_archive
-                    name: Heatmap
-                  - entity: input_boolean.dreame_a2_mower_wifi_flip_x
-                    name: Flip X (override)
-                    icon: mdi:flip-horizontal
-                  - entity: input_boolean.dreame_a2_mower_wifi_flip_y
-                    name: Flip Y (override)
-                    icon: mdi:flip-vertical
-                  - entity: sensor.dreame_a2_mower_wifi_map_last_refresh
-                    name: Last refresh
-
-              # Heatmap alone via picture-entity. Base-map overlay was attempted
-              # via picture-elements with image_entity — broken across HA's
-              # streaming-vs-static camera proxy paths for our custom static
-              # cameras. Deferred until heatmap → map_id correlation is solved
-              # (see docs/research/wifi-heatmap-todo.md Issue #4).
-              - type: picture-entity
-                entity: camera.dreame_a2_mower_wifi_heatmap_selected
-                name: WiFi heatmap
-                camera_view: auto
-                show_state: false
-                tap_action:
-                  action: none
-                hold_action:
-                  action: none
-
-              - type: entities
-                entities:
-                  - entity: button.dreame_a2_mower_refresh_wifi_heatmaps
-                    name: Refresh WiFi heatmaps (all maps)
-
-  - title: Sessions
+  - title: Sessions & History
     path: sessions
-    icon: mdi:history
     type: panel
+    icon: mdi:history
     cards:
       - type: vertical-stack
         cards:
@@ -1431,8 +1317,92 @@ views:
                           b: 50
                         height: 280
 
-  - title: More Settings
-    path: more-settings
+          - *tab_header_lidar
+
+          # 1fr 2fr 1fr row: archive (25%) | lidar card (50%) | re-tag (25%).
+          # `type: grid` doesn't support per-child cell-spanning that survives
+          # HA's hui-card wrapper, so we use a horizontal-stack and override
+          # its #root flex layout to a CSS grid with explicit column widths.
+          - type: horizontal-stack
+            card_mod:
+              style: |
+                #root {
+                  display: grid !important;
+                  grid-template-columns: 1fr 2fr 1fr !important;
+                  gap: 8px !important;
+                }
+            cards:
+              - type: entities
+                title: Archive
+                entities:
+                  - entity: sensor.dreame_a2_mower_lidar_archive_count
+                    name: Total scans
+                  - entity: select.dreame_a2_mower_lidar_archive
+                    name: Selected scan
+
+              - type: custom:dreame-a2-lidar-card
+                url: /api/dreame_a2_mower/lidar/selected.pcd
+                picker_entity: select.dreame_a2_mower_lidar_archive
+
+              - type: markdown
+                content: |
+                  ### Re-tag a mis-categorized scan
+                  Use **Developer Tools → Services** with
+                  `dreame_a2_mower.move_lidar_scan` — provide `from_map_id`,
+                  `filename` (from picker option text), `to_map_id`.
+
+          - *tab_header_wifi
+
+          # 1fr 2fr 1fr row: viewer controls (25%) | heatmap (50%) | refresh (25%).
+          # See LiDAR tab for why horizontal-stack + #root grid-template-columns
+          # is used instead of `type: grid` with span — HA's hui-card wrapper
+          # blocks the :host { grid-column: span 2 } trick.
+          - type: horizontal-stack
+            card_mod:
+              style: |
+                #root {
+                  display: grid !important;
+                  grid-template-columns: 1fr 2fr 1fr !important;
+                  gap: 8px !important;
+                }
+            cards:
+              - type: entities
+                title: Viewer controls
+                show_header_toggle: false
+                entities:
+                  - entity: select.dreame_a2_mower_wifi_archive
+                    name: Heatmap
+                  - entity: input_boolean.dreame_a2_mower_wifi_flip_x
+                    name: Flip X (override)
+                    icon: mdi:flip-horizontal
+                  - entity: input_boolean.dreame_a2_mower_wifi_flip_y
+                    name: Flip Y (override)
+                    icon: mdi:flip-vertical
+                  - entity: sensor.dreame_a2_mower_wifi_map_last_refresh
+                    name: Last refresh
+
+              # Heatmap alone via picture-entity. Base-map overlay was attempted
+              # via picture-elements with image_entity — broken across HA's
+              # streaming-vs-static camera proxy paths for our custom static
+              # cameras. Deferred until heatmap → map_id correlation is solved
+              # (see docs/research/wifi-heatmap-todo.md Issue #4).
+              - type: picture-entity
+                entity: camera.dreame_a2_mower_wifi_heatmap_selected
+                name: WiFi heatmap
+                camera_view: auto
+                show_state: false
+                tap_action:
+                  action: none
+                hold_action:
+                  action: none
+
+              - type: entities
+                entities:
+                  - entity: button.dreame_a2_mower_refresh_wifi_heatmaps
+                    name: Refresh WiFi heatmaps (all maps)
+
+  - title: Settings
+    path: settings
     type: panel
     icon: mdi:cog
     cards:
@@ -1615,7 +1585,7 @@ views:
                   - entity: number.dreame_a2_mower_voice_volume
                     name: Volume
 
-  - title: Diagnostics
+  - title: Diagnostics & Tools
     path: diagnostics
     type: panel
     icon: mdi:wrench
@@ -1701,13 +1671,6 @@ views:
                   `dreame_a2_mower.download_diagnostics` (Tools tab) to
                   download.
 
-  - title: Tools
-    path: tools
-    type: panel
-    icon: mdi:tools
-    cards:
-      - type: vertical-stack
-        cards:
           - *tab_header_tools
 
           # 4-column grid: manual | recovery | configuration | diagnostics download
@@ -1788,13 +1751,6 @@ views:
           - type: custom:dreame-a2-photo-gallery-card
             entity: sensor.dreame_a2_mower_photo_gallery
 
-  - title: Photo Privacy
-    path: privacy
-    type: panel
-    icon: mdi:shield-account
-    cards:
-      - type: vertical-stack
-        cards:
           - *tab_header_photo_privacy
 
           # AI Photo capture + authorization warning, vertical-stacked and
