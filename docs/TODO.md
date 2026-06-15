@@ -23,6 +23,37 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
+### Bundle `_CoreMixin.__init__` attrs into typed per-concern objects (Refactor Phase 3f attr-bundling — deferred as over-engineering)
+
+**Why:** The refactor plan (`spec.md §4 Phase 3f`) proposed extracting `_CoreMixin.__init__`'s
+~69 `self._foo` attrs into typed per-concern objects (`self.render`, `self.wifi`,
+`self.session`, `self.rain`). A ground-truth scope 2026-06-15 (agent `a2a58b2`) found the
+**full bundling is near-zero net readability gain + real silent-breakage risk** for this
+single-user repo, so only the safe core shipped (Slice A: CLAUDE.md table regen + dead-seed
+cleanup). The attr-bundling itself was **deferred** (user-confirmed 2026-06-15). Findings:
+  - ~25 of the 63 private attrs are consumed by the **entity/camera/service layer**, many via
+    **string `getattr(coordinator, "_foo")`** (e.g. `"_active_map_id"`, `"_wifi_archive_index"`,
+    `"_picked_session_summary"`, `"_last_notification"`) — a move silently breaks these with NO
+    test or type-checker failure. Any bundling MUST first enumerate + fix those sites and/or
+    leave `@property` shims (which re-flatten the surface you just bundled → ~zero net gain).
+  - The cross-mixin **spine** (`data`, `cloud_state`, `_active_map_id`, `live_map`,
+    `state_machine`; 4–7 mixins each) **can't be bundled** — it's the coordinator's real
+    contract — so even "full" bundling leaves the god-object coupling intact.
+  - >50 test files build the coordinator via `object.__new__` + hand-seed init attrs by name
+    (heaviest: `tests/integration/test_coordinator.py`, ~43 seeds). A bundling breaks them all.
+  - **Prerequisite if ever done:** first land a shared `make_bare_coordinator()` test helper
+    (the 3e code-quality reviewer's suggestion) so the ~50 `__new__` fixtures seed init state
+    in ONE place — then an attr move is a one-file change. This safety-net is also worth doing
+    standalone to kill the recurring "new init attr breaks ~8 fixtures" tax.
+**Done when:** EITHER a cohesive subset (render-cache / wifi-archive) is bundled behind verified
+`@property` shims with every entity-layer string-getattr site updated + the test-helper safety
+net in place, OR this is explicitly closed as not-worth-it. Best folded into the eventual
+real-3d (spec §5 single-ingestion-funnel) rather than done alone.
+**Status:** deferred (over-engineering for the payoff; user-confirmed 2026-06-15).
+**Cross-refs:** `/data/claude/homeassistant/refactor-2026-06-13/spec.md` §4 Phase 3f;
+`coordinator/_core.py` `_CoreMixin.__init__`; `feedback_no_migration_overengineering`;
+the Phase-3d dedup TODO above (the real state-restructure home).
+
 ### Split residual `MowerState` into per-domain dataclasses (Refactor Phase 3d, step 2 — deferred)
 
 **Why:** `MowerState` (`mower/state.py`) is a single flat `@dataclass(slots=True)`
