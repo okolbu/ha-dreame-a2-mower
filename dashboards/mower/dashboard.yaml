@@ -82,7 +82,7 @@ _tab_header_schedule: &tab_header_schedule
   content: |
     <hr style="border:0;border-top:3px solid var(--primary-color);margin:12px 0 0 0;"/>
 
-    ## 📅 Schedule — Active map: {{ states('select.dreame_a2_mower_active_map') }} &nbsp;<span style="font-size:0.75em;color:var(--secondary-text-color)">read-only on cloud; switch on Map Selector</span>
+    ## 📅 Schedule — Active map: {{ states('select.dreame_a2_mower_active_map') }} &nbsp;<span style="font-size:0.75em;color:var(--secondary-text-color)">edit slots in the card below — writes to the device; switch maps on Map Selector</span>
 
 _tab_header_lidar: &tab_header_lidar
   type: markdown
@@ -369,7 +369,9 @@ views:
                   name: Recharge
                   show_state: false
 
-          # Row: Doing-something (mowing / cruising / mapping / returning) → Pause · End · Recharge
+          # Row: Doing-something (mowing / cruising / mapping) → Pause · End · Recharge
+          # (`returning` is handled by its own row below so Cancel dock return
+          # can be offered without showing it mid-mow.)
           - type: conditional
             conditions:
               - entity: sensor.dreame_a2_mower_current_activity
@@ -377,7 +379,6 @@ views:
                   - mowing
                   - cruising_to_point
                   - fast_mapping
-                  - returning
                   - repositioning
             card:
               type: horizontal-stack
@@ -398,7 +399,33 @@ views:
                   name: Recharge
                   show_state: false
 
-          # Row: Paused in session → Continue · End · Recharge
+          # Row: Returning to dock → Pause · Cancel dock return · End
+          - type: conditional
+            conditions:
+              - entity: sensor.dreame_a2_mower_current_activity
+                state: returning
+            card:
+              type: horizontal-stack
+              cards:
+                - type: button
+                  entity: button.dreame_a2_mower_pause
+                  icon: mdi:pause
+                  name: Pause
+                  show_state: false
+                - type: button
+                  entity: button.dreame_a2_mower_cancel_dock_return
+                  icon: mdi:keyboard-return
+                  name: Cancel dock return
+                  show_state: false
+                - type: button
+                  entity: button.dreame_a2_mower_stop
+                  icon: mdi:stop
+                  name: End
+                  show_state: false
+
+          # Row: Paused in session → Resume · Continue · End · Recharge
+          # Resume (op=5) un-pauses the current session; "Continue" (start_mowing)
+          # is the legacy verb kept for parity. Both are surfaced.
           - type: conditional
             conditions:
               - entity: sensor.dreame_a2_mower_current_activity
@@ -406,6 +433,11 @@ views:
             card:
               type: horizontal-stack
               cards:
+                - type: button
+                  entity: button.dreame_a2_mower_resume
+                  icon: mdi:play-circle
+                  name: Resume
+                  show_state: false
                 - type: button
                   entity: button.dreame_a2_mower_start_mowing
                   icon: mdi:play
@@ -488,14 +520,15 @@ views:
                   - event.dreame_a2_mower_lifecycle
                   - event.dreame_a2_mower_alert
 
-              # GPS map — disabled until we identify a working live-location source.
-              # Original YAML kept in the .pre-cleanup-20260513.yaml.bak file.
-              - type: markdown
-                content: |
-                  ### 🚧 GPS Tracking
-                  Work in progress — Dreame does not expose live GPS
-                  coordinates over the cloud API. The map will reappear here
-                  once we identify the correct source.
+              # GPS map — absolute position from the cloud location/getRecords
+              # endpoint, refreshed every 60 s (_refresh_gps → device_tracker
+              # with standard latitude/longitude attrs). Shipped v1.0.25a3.
+              - type: map
+                title: GPS Location
+                default_zoom: 17
+                hours_to_show: 0
+                entities:
+                  - device_tracker.dreame_a2_mower_location
 
               # Head to Maintenance Point — follows the active map by matching the
               # active_map select's STATE ("Map 1"/"Map 2") — plain string equality,
@@ -701,9 +734,9 @@ views:
                           name: Edge target
                   - type: markdown
                     content: >
-                      Read-only — all map edits happen in the Dreame app. See
-                      `docs/research/map-edit-write-todo.md` for the write-surface
-                      research status.
+                      Zone targets above pick which saved zone/spot/edge the next
+                      run uses. To **draw or delete** no-go / ignore / mow shapes,
+                      use the **Map Editor** tab — those edits write to the device.
 
               # ───── Col 2 — General Mode (per-map) ─────
               # Ordered to match the Dreame app's per-map Settings page
@@ -716,9 +749,12 @@ views:
                 cards:
                   - type: conditional
                     conditions:
+                      # State-based match ("Map 1"/"Map 2"), not the legacy
+                      # conditional card's `attribute:` shorthand which it
+                      # silently ignores (comparing entity STATE instead) — see
+                      # the Head-to-Maintenance card comment above.
                       - entity: select.dreame_a2_mower_active_map
-                        attribute: current_map_id
-                        state: "0"
+                        state: "Map 1"
                     card:
                       type: entities
                       title: General Mode (Map 1)
@@ -739,8 +775,7 @@ views:
                   - type: conditional
                     conditions:
                       - entity: select.dreame_a2_mower_active_map
-                        attribute: current_map_id
-                        state: "1"
+                        state: "Map 2"
                     card:
                       type: entities
                       title: General Mode (Map 2)
@@ -810,6 +845,20 @@ views:
                     service: dreame_a2_mower.start_edge_patrol
                     id_param: contour_ids
                     map_id: 0
+                    action_label: Start edge patrol
+                  - type: custom:dreame-multi-select-card
+                    title: Point Patrol — Map 2
+                    entity: sensor.dreame_a2_mower_map_2_patrol_points
+                    service: dreame_a2_mower.start_point_patrol
+                    id_param: point_ids
+                    map_id: 1
+                    action_label: Start point patrol
+                  - type: custom:dreame-multi-select-card
+                    title: Edge Patrol — Map 2
+                    entity: sensor.dreame_a2_mower_map_2_patrol_edges
+                    service: dreame_a2_mower.start_edge_patrol
+                    id_param: contour_ids
+                    map_id: 1
                     action_label: Start edge patrol
 
   - title: Map Editor
@@ -1544,7 +1593,7 @@ views:
                         name: Push interval (3 / 10 / 20 min)
                   - type: markdown
                     content: |
-                      _All Human Presence fields are read-only on this firmware (REC writes return r=-3). When the REC write path is identified, the scenario / alert / interval entries will be promoted from binary_sensor/sensor to switch/select._
+                      _**Alert enabled** and **Sensitivity** are writable (top two rows). The scenario flags, voice/push alert, and push interval below are read-only status from the device — those REC sub-fields have no confirmed write path on this firmware._
 
               # ───── Child Lock ─────
               - type: entities
@@ -1625,20 +1674,23 @@ views:
                       - **MQTT / API protocol version:** not exposed by Dreame
                         cloud
 
-              - type: entities
-                title: Cloud refresh
-                entities:
-                  - entity: sensor.dreame_a2_mower_data_freshness
-                    name: Data freshness
-
-              - type: markdown
-                content: |
-                  ### 🚧 Cloud-state version / settings versions (not yet implemented)
-
-                  `sensor.dreame_a2_mower_cloud_state_version`,
-                  `sensor.dreame_a2_mower_settings_version_canonical`, and
-                  `sensor.dreame_a2_mower_settings_version_applied` are not yet
-                  exposed as entities.
+              - type: vertical-stack
+                cards:
+                  - type: entities
+                    title: Position (MPOS)
+                    show_header_toggle: false
+                    entities:
+                      - entity: sensor.dreame_a2_mower_mpos
+                        name: MPOS (x / y / yaw)
+                      - entity: button.dreame_a2_mower_refresh_mpos
+                        name: Refresh MPOS
+                        icon: mdi:crosshairs-gps
+                  - type: markdown
+                    content: |
+                      Read-only diagnostic. `x` / `y` / `yaw` are in the
+                      device's raw map frame (units/orientation unverified) —
+                      observe-only, not used to drive position. Tap **Refresh
+                      MPOS** to re-poll.
 
               - type: markdown
                 content: |
