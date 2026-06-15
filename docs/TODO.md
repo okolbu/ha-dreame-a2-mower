@@ -209,11 +209,13 @@ heart 13, triangle 14, teardrop 15, mushroom 16, cloud 17, rainbow 18) were extr
 from the app palette `[screenshot:OLD/IMG_4615.PNG]` into `map_render/_shape_masks.py`.
 `editable_objects` now carries `shape_type`/`kind` (no longer calls the heart a "line").
 Golden fixture's fabricated shapeTypes corrected + a heart case added; read-side
-shapeType enum recorded in `inventory.yaml`. **OPEN follow-ups:** (a) heart ORIENTATION
-uses the `-angle` convention (one line, `base_map.py:340`) — verify against the app and
-flip if rotated wrong [user to confirm on the live map]; (b) the JS map-editor card
-still draws decorative shapes as their bbox/points (drawing real shapes there is a
-separate future card task).
+shapeType enum recorded in `inventory.yaml`. **ALL RESOLVED:** (a) orientation `-angle` + size `_DECORATIVE_SHAPE_SCALE=0.62` (heart
+~half the no-go line) user-confirmed live (v1.0.27a5). (b) map-editor card RESOLVED
+v1.0.27a6 (`a0f85e3`): it drew the heart as a 2-point "phantom no-go line". Now the editor
+base render keeps decorative shapes (`coordinator/_rendering.py` filters to
+`DECORATIVE_SHAPE_TYPES`) so the heart shows in the editor bg identically to the live map,
+and the card (`www/dreame-map-editor-card.js`) draws decorative shapes (`shape_type>=9`)
+as a faint dashed select/delete hit-area, not a line (create+delete, no reshape).
 **Status:** RESOLVED 2026-06-15 (render + decode shipped; orientation + editor-card
 drawing are minor open follow-ups above).
 **Cross-refs:** `protocol/map_decoder.py` (`_collect_exclusion_entries`, `ExclusionZone`),
