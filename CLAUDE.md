@@ -229,20 +229,32 @@ and the matching plan).
 Each submodule owns one concern. When adding a new method, place it in
 the submodule whose concern it matches:
 
+**Mixin-bearing files** (each defines one `_<Concern>Mixin`; LOC current as of 2026-06-15):
+
+| File | LOC | Mixin | Concern |
+|---|---|---|---|
+| `__init__.py` | 78 | — (assembly) | Class assembly + public re-exports |
+| `_mqtt_handlers.py` | 1247 | `_MqttHandlersMixin` | MQTT message routing, state-update glue, event_occured, MAPL apply |
+| `_session.py` | 1232 | `_SessionMixin` | Restore / persist / finalize (one router + latch) / replay / work-log render |
+| `_core.py` | 1023 | `_CoreMixin` | `__init__` (the sole `self._foo` owner), `_async_update_data`, properties, `_init_cloud`, `_init_mqtt` |
+| `_lidar_oss.py` | 941 | `_LidarOssMixin` | LiDAR archive + cloud-OSS fetch/finalize + photo/video gallery |
+| `_writes.py` | 826 | `_WritesMixin` | `write_*` (settings, schedule, ai_human, action) + `dispatch_action` + `start_mowing_*` |
+| `_device_sync.py` | 467 | `_DeviceSyncMixin` | Map sub-device registry sync + emergency-stop banner + `_fire_*` lifecycle events |
+| `_wifi_archive.py` | 364 | `_WifiArchiveMixin` | WiFi heatmap archive refresh + matcher plumbing |
+| `_rendering.py` | 348 | `_RenderingMixin` | Live-map render, live-trail re-render, last-session-obstacle overlay |
+| `_refreshers.py` | 331 | `_RefreshersMixin` | All `_refresh_*` cloud-refresh cycles |
+| `_notifications.py` | 234 | `_NotificationsMixin` | Account/device notification fetch + dedup → `sensor.last_notification` feed |
+| `_cloud_state.py` | 227 | `_CloudStateMixin` | `cloud_state` apply to MowerState + map fetch / persist |
+
+**Non-mixin helper modules** (pure functions / classes imported by the mixins above — NO `_*Mixin`, NOT in the inheritance list):
+
 | File | LOC | Concern |
 |---|---|---|
-| `__init__.py` | 76 | Class assembly + public re-exports |
-| `_core.py` | 787 | `__init__`, `_async_update_data`, properties, `_init_cloud`, `_init_mqtt` |
-| `_refreshers.py` | 782 | All `_refresh_*` cloud-refresh cycles |
-| `_session.py` | 667 | Restore / persist / finalize / replay / work-log render |
-| `_mqtt_handlers.py` | 667 | MQTT message routing, state-update glue, event_occured, MAPL apply |
-| `_property_apply.py` | 591 | Module-level helpers + constants — pure `(siid, piid, value) → MowerState` functions |
-| `_writes.py` | 543 | `write_*` (settings, schedule, ai_human, action) + `dispatch_action` + `start_mowing_*` |
-| `_lidar_oss.py` | 480 | LiDAR archive + cloud-OSS fetch handlers |
-| `_device_sync.py` | 395 | Map sub-device registry sync + emergency-stop banner + `_fire_*` lifecycle events |
-| `_cloud_state.py` | 366 | `cloud_state` apply to MowerState + map fetch / persist |
-| `_rendering.py` | 287 | Live-map render, live-trail re-render, last-session-obstacle overlay |
-| `_wifi_archive.py` | 246 | WiFi heatmap archive refresh + matcher plumbing |
+| `_property_apply.py` | 847 | Module-level helpers + constants — pure `(siid, piid, value) → MowerState` functions |
+| `_recorder_merge.py` | 432 | Fill battery/wifi/state/charging/error sample gaps from HA recorder history at finalize |
+| `_snapshot.py` | 139 | Build the session-begin firmware `settings_snapshot` from MowerState |
+| `_restore_merge.py` | 123 | Restore-then-merge of `in_progress.json` payloads on boot |
+| `_write_errors.py` | 78 | `raise_for_write_result` — map a `WriteResult` to `ServiceValidationError`/`HomeAssistantError` |
 
 ### Mixin pattern
 

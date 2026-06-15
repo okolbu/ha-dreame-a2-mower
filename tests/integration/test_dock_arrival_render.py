@@ -45,8 +45,6 @@ def _make_coord_for_dock_test(
     coord._prev_task_state = None
     coord._real_task_state_observed = False
     coord._live_map_dirty = False
-    coord._live_trail_dirty = False
-    coord._last_live_render_unix = 0.0
     coord._prev_error_code = None
     coord._prev_charging_status = None
     coord._rain_delay_started_at = None

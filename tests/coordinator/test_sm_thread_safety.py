@@ -45,8 +45,6 @@ def _make_coord(*, capture: list):
     coord._pending_saw_patrol_start = False
     coord._pending_finalize_done = None
     coord._live_map_dirty = False
-    coord._live_trail_dirty = False
-    coord._last_live_render_unix = 0.0
     coord._last_lidar_object_name = None
     coord._prev_s2p56_empty = None
     coord.entry = MagicMock()
@@ -311,8 +309,6 @@ def test_run_inline_mock_applies_everything():
     coord._pending_saw_patrol_start = False
     coord._pending_finalize_done = None
     coord._live_map_dirty = False
-    coord._live_trail_dirty = False
-    coord._last_live_render_unix = 0.0
     coord._last_lidar_object_name = None
     coord._prev_s2p56_empty = None
     coord.entry = MagicMock()

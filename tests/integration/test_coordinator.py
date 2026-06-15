@@ -571,8 +571,6 @@ def _make_coordinator_for_session_tests():
     coord.freshness = FreshnessTracker()
     # v1.0.0a18: live-trail re-render needs these in __init__-bypassing fixtures.
     coord._live_map_dirty = False
-    coord._live_trail_dirty = False
-    coord._last_live_render_unix = 0.0
     coord.cloud_state = MagicMock()
     coord.cloud_state.maps_by_id = {}
     coord._static_map_pngs_by_id = {}
@@ -1878,8 +1876,6 @@ def test_restore_then_mqtt_first_push_preserves_track():
     # _on_state_update needs these in addition to the persist-test stub.
     coord.novel_registry = NovelObservationRegistry()
     coord.freshness = FreshnessTracker()
-    coord._live_trail_dirty = False
-    coord._last_live_render_unix = 0.0
     coord._prev_error_code = None
     coord._last_notification = None
     coord._lifecycle_event = None
