@@ -339,7 +339,13 @@ g2408-wire-LABELLED, so kept OUT of error_codes.py per the confidence gate:
 - 72 — "Returning to dock after pause timeout" (dreame-mower PAUSE_TIMEOUT_RETURNING,
   type INFO). [partial] — sibling of confirmed 71 (idle-timeout-returning) AND
   corroborated by the g2408 corpus (72 fires near s2p1 state=5 returning, x3 in
-  probe_log_20260520).
+  probe_log_20260520). Further corroborated 2026-06-13 by the pause-timeout
+  TIMING: s2p1=4 (auto/hold pause) fired at 21:45:19 and s2p2=72 fired at
+  22:45:18 — exactly ~1 h later — i.e. the pause hit its 1-hour timeout and
+  the mower began returning, matching PAUSE_TIMEOUT_RETURNING. (That return
+  ultimately failed — mower stuck on lawn → battery 5% → s2p57 firmware
+  self-shutdown 2026-06-14; see § s2p57.) Still kept OUT of error_codes.py
+  until a cloud-LABELLED fire is captured (the slug name is still borrowed).
 
 Watch out — corrected vs earlier / vacuum readings (evidence in verifications):
 - 28 is the cloud wear%-gated BLADE-WEAR push, NOT an off-dock-relocate
@@ -606,12 +612,20 @@ First captured on the g2408 wire 2026-06-14: a single standalone
 properties_changed push carrying the bare scalar `value: 1` (the only
 param in the message) [probe_log_20260612_174439.jsonl@2026-06-14T04:42:16].
 The observed payload is a bare int, NOT the previously-hypothesized
-`dict (shutdown signal)`. Whether this fire corresponds to an OTA reboot
-vs a manual power-down is not yet evidenced (no correlated OTA/offline
-marker captured alongside it).
+`dict (shutdown signal)`. This particular fire was a LOW-BATTERY FIRMWARE
+SELF-SHUTDOWN, not an OTA reboot and not a manual power-down: the mower was
+stuck on the lawn unable to make it back to the dock, and when the battery
+drained to 5% the firmware shut the robot down on its own (presumably to
+avoid a full discharge). It woke again only when physically carried to the
+charging dock and plugged in [user-observation:2026-06-14]. So at least one
+s2p57=1 trigger is a firmware-initiated protective shutdown at the ~5%
+battery floor. Other triggers (OTA reboot, thermal cutoff, manual
+power-down) remain plausible per the apk but are still unconfirmed on the
+g2408 wire — do not attribute a future s2p57=1 to a manual shutdown without
+a correlated marker.
 
 **Open questions:**
-- Confirm the trigger cause: is the value=1 fire an OTA reboot, a manual power-down, or both? Capture a correlated offline/OTA marker alongside the next s2p57.
+- Are there OTHER s2p57=1 triggers besides the ~5% low-battery self-shutdown (OTA reboot, thermal cutoff, manual power-down)? The low-battery cause is now confirmed for one occurrence; capture a correlated OTA/offline marker if s2p57=1 ever fires outside a low-battery context.
 - Are there other s2p57 values (e.g. distinguishing reboot vs shutdown), or is it always 1?
 - Is this a command echo or a push the device sends spontaneously?
 

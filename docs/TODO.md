@@ -233,8 +233,17 @@ from 2026-06-13 21:44 through the latest capture is enumerated; the bumper-error
 located on the wire (`error_code` s2p2 / s1p1 bumper bit / a new slot) and, if new, recorded in
 `inventory.yaml` with evidence (+ `error_codes.py` only if the `state_codes` row reaches
 confirmed/partial, per the confidence gate).
-**Status:** open
-**Cross-refs:** inventory `s2p57` (recorded 2026-06-14), `binary_sensor.bumper`,
+**Progress (2026-06-15, from `todo5.txt`):** the three user-flagged firsts from this window
+are now understood + recorded — they form one coherent incident: the mower got **stuck on the
+lawn** unable to reach the dock, so `s2p1=4` (auto/hold pause) fired 21:45:19, hit its ~1-hour
+timeout → `s2p2=72` "returning after pause timeout" fired 22:45:18 (the exact-1h timing now
+behaviourally corroborates code 72), the return failed, and at 5% battery the firmware
+self-shut-down → `s2p57=1` on 2026-06-14. All recorded in `inventory.yaml` (§ s2p1 / s2p2 /
+s2p57); `State` enum gained `PAUSED_HOLD=4`; `observed_values[72]` bumped unknown→partial. The
+**bumper-error** part of this sweep is still **open** — not yet located on the wire (s2p2 / s1p1
+bumper bit / new slot).
+**Status:** open (bumper-error only; s2p1=4 / s2p2=72 / s2p57 resolved)
+**Cross-refs:** inventory `s2p57` / `s2p1` / `s2p2` (recorded 2026-06-15), `binary_sensor.bumper`,
 `mower/error_codes.py` + inventory `state_codes`, `tools/probes/`, `docs/research/knowledge-gaps.md`.
 
 ### Control honesty — residual follow-ups (core shipped 2026-06-04)

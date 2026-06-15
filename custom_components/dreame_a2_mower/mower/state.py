@@ -27,6 +27,14 @@ class State(IntEnum):
     WORKING = 1
     STANDBY = 2
     PAUSED = 3
+    # Value 4 also renders "Paused" in the Dreame app (same label as 3), but is
+    # the auto/hold pause variant subject to a ~1 h timeout — distinct from the
+    # user pause (3, co-incident with s2p56 status=[[1,4]]). After the timeout
+    # the mower either auto-resumes (observed 2026-05-25) or auto-returns to the
+    # dock via s2p2=72 "returning after pause timeout" (observed 2026-06-13:
+    # s2p1=4 @21:45 → s2p2=72 @22:45, exactly 1 h later). See inventory.yaml
+    # § s2p1 verifications (2026-05-25, 2026-06-15) and § s2p2 code 72.
+    PAUSED_HOLD = 4
     RETURNING = 5
     CHARGING = 6
     MAPPING = 11

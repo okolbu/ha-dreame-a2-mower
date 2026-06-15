@@ -44,6 +44,21 @@ const NOGO_FILL = "rgba(220,60,60,0.18)";
 const IGNORE_STROKE = "rgb(60,170,90)";
 const IGNORE_FILL = "rgba(60,170,90,0.18)";
 
+// Per-category accent RGB — each toolbar button is tinted with a
+// semi-transparent version of the colour of the SHAPE it draws (so the
+// "No-go" buttons read light-red because no-go zones render red, etc.).
+// Values mirror the overlay CSS below: nogo->.obj-nogo, ignore->.obj-ignore,
+// mow->.obj-decorative, spot->.obj-spot, maintenance->.obj-maint,
+// patrol->.obj-patrol. Used as the `--btn` custom property per button.
+const CAT_RGB = {
+  nogo: "220,60,60",
+  ignore: "60,170,90",
+  mow: "177,0,0",
+  spot: "0,150,200",
+  maintenance: "180,120,0",
+  patrol: "0,140,140",
+};
+
 const HANDLE_R = 7;       // resize-handle radius (px, viewBox units)
 const ROTATE_OFF = 36;    // rotate-handle offset above the bbox top (px)
 const DEL_OFF = 18;       // delete-X offset (px)
@@ -131,9 +146,15 @@ class DreameMapEditorCard extends HTMLElement {
     this.shadowRoot.innerHTML =
       `<style>:host{display:block}` +
       `.bar{display:flex;flex-wrap:wrap;gap:4px;align-items:center;padding:6px 4px}` +
+      // Each button is tinted with its shape's colour via the per-button
+      // `--btn` custom property (set in _buildToolbar); fallback grey for any
+      // button without a known category. Resting = faint tint + coloured
+      // border; selected (.on) = strong fill of the same colour + white text.
       `.bar button{font:12px/1 system-ui,sans-serif;padding:4px 8px;border-radius:6px;` +
-      `border:1px solid rgba(0,0,0,.3);background:rgba(255,255,255,.9);cursor:pointer}` +
-      `.bar button.on{background:rgb(120,170,230);color:#fff}` +
+      `border:1px solid rgba(var(--btn,120,120,120),.55);` +
+      `background:rgba(var(--btn,120,120,120),.16);cursor:pointer}` +
+      `.bar button.on{background:rgba(var(--btn,120,170,230),.92);` +
+      `border-color:rgba(var(--btn,120,170,230),.92);color:#fff}` +
       `.bar select{font:12px/1 system-ui,sans-serif;padding:3px 6px;border-radius:6px}` +
       `.bar .sp{flex:1}` +
       `.bar #msg{font:12px/1 system-ui,sans-serif;color:#d32f2f;padding:0 4px}` +
@@ -194,6 +215,8 @@ class DreameMapEditorCard extends HTMLElement {
       b.type = "button";
       b.textContent = t.label;
       b.dataset.tool = t.id;
+      // Tint the button with its shape's colour (see CAT_RGB).
+      b.style.setProperty("--btn", CAT_RGB[t.save && t.save.category] || "120,120,120");
       b.addEventListener("click", () => this._selectTool(t.id));
       bar.appendChild(b);
     }
