@@ -19,9 +19,10 @@ exercises EVERY transformed render path:
   - a **circle** no-go exclusion (id 102 — the cloud represents circles as a
     multi-point polygon; the decoder has no radius concept, it rotates+reflects
     the points like any polygon),
-  - a **LINE** no-go exclusion (id 103 — a 2-point forbidden area; this is the
-    KNOWN BUG: ``render_base_map`` skips polygons with ``< 3`` points, so it
-    renders INVISIBLE. The golden pins that it stays invisible.),
+  - a **LINE** no-go exclusion (id 103, shapeType 1 — a 2-point forbidden area
+    that the shapeType-aware render draws as a thick line),
+  - a **decorative HEART** no-go exclusion (id 401, shapeType 13 — 2 bbox
+    corners + angle; the render stamps a scaled+rotated silhouette),
   - an **ignore-obstacle** zone (``notObsAreas`` id 201, subtype="ignore"),
   - a **spot area** (``spotAreas`` id 301, angle 15° — rotated + reflected),
   - **clean / maintenance points** (``cleanPoints`` — "M" glyph markers),
@@ -38,17 +39,17 @@ ARRAY: both the freshly-rendered PNG and the committed golden PNG are loaded
 via PIL, normalised to RGBA, and their raw ``tobytes()`` pixel buffers are
 sha256-hashed and compared. Same fixture → same pixels → same hash, every run.
 
-Pinned bugs (see docs/TODO.md "Base-map render drops line no-go zones …")
--------------------------------------------------------------------------
-The line-type (2-point) no-go is ABSENT from the golden render. The golden
-captures the current (buggy) behaviour on purpose — the transform-move must
-NOT make it visible. ``test_line_nogo_is_invisible_in_golden`` documents and
-guards this.
+Line + decorative shapes (FIXED)
+--------------------------------
+The line-type (2-point, shapeType 1) no-go and the decorative heart
+(shapeType 13) are now DRAWN — the shapeType-aware render replaced the old
+``len(points) < 3`` skip. ``TestLineAndDecorativeNowRendered`` proves each
+contributes pixels via ablation.
 
 Regenerating the golden
 -----------------------
-Only when the render output is *intentionally* changed (e.g. the post-3a TODO
-that fixes the line-nogo bug). Run with ``DREAME_REGEN_GOLDEN=1`` set:
+Only when the render output is *intentionally* changed (e.g. this line +
+decorative-shape render fix). Run with ``DREAME_REGEN_GOLDEN=1`` set:
 
     DREAME_REGEN_GOLDEN=1 .venv-vanilla/bin/python -m pytest \
         tests/integration/test_map_render_golden.py -q
@@ -162,12 +163,29 @@ class TestFixturePopulatesEveryTransformedPath:
         assert len(circ) == 1
         assert len(circ[0].points) == 16  # 16-point circle approximation
 
-    def test_line_exclusion_present_but_two_point(self):
-        """The LINE no-go decodes as a 2-point exclusion (the bug input)."""
+    def test_line_exclusion_present_two_point(self):
+        """The LINE no-go (shapeType 1) decodes as a 2-point exclusion that the
+        FIXED render draws as a thick line (not skipped)."""
         md = _map_data()
         line = [ez for ez in md.exclusion_zones if ez.obj_id == 103]
         assert len(line) == 1
-        assert len(line[0].points) == 2  # 2 points → render skips it
+        assert len(line[0].points) == 2
+        assert line[0].shape_type == 1
+
+    def test_decorative_heart_exclusion_present(self):
+        """The heart no-go (shapeType 13) decodes as a 2-corner UN-rotated bbox
+        with the raw angle carried for the render stamp."""
+        md = _map_data()
+        heart = [ez for ez in md.exclusion_zones if ez.obj_id == 401]
+        assert len(heart) == 1
+        ez = heart[0]
+        assert ez.shape_type == 13
+        assert ez.angle == 90.29
+        # Decorative path stays un-rotated: the 2 points are the raw bbox
+        # corners exactly as supplied (angle 90.29 NOT baked in).
+        assert len(ez.points) == 2
+        assert ez.points[0] == (-9000.0, -2000.0)
+        assert ez.points[1] == (-4000.0, 3000.0)
 
     def test_ignore_zone_present(self):
         md = _map_data()
@@ -261,32 +279,21 @@ class TestGoldenRender:
 # ---------------------------------------------------------------------------
 
 
-class TestGoldenPinsKnownRenderBugs:
-    """docs/TODO.md "Base-map render drops line no-go zones + novelty shapes".
+class TestLineAndDecorativeNowRendered:
+    """The line no-go + decorative heart that USED to be dropped are now drawn.
 
-    These are PINNED, not fixed: the output-preserving P3a refactor must keep
-    the current (buggy) render. Fixing them is the post-3a TODO, which will
-    regenerate the golden to expect the corrected render.
+    These were previously PINNED bugs (2-point exclusions skipped by the old
+    ``len(points) < 3`` guard). The shapeType-aware render fix draws real LINEs
+    (shapeType 1) as thick lines and decorative shapes (shapeType >=9) as
+    stamped silhouettes. These ablation tests prove each contributes pixels.
     """
 
-    def test_line_nogo_decoded_but_below_render_threshold(self):
-        """The line no-go is present in MapData but has < 3 points, so
-        ``render_base_map`` skips it (the invisible-line bug). The golden —
-        rendered from this same MapData — therefore does NOT draw it."""
-        md = _map_data()
-        line = [ez for ez in md.exclusion_zones if ez.obj_id == 103]
-        assert len(line) == 1
-        assert len(line[0].points) < 3, (
-            "line no-go must stay 2-point so the render's >=3 guard skips it"
-        )
+    def test_line_nogo_now_contributes_pixels_via_ablation(self):
+        """Render-level proof the 2-point LINE no-go (id 103) NOW draws pixels.
 
-    def test_line_nogo_absent_from_render_via_ablation(self):
-        """Render-level proof the line no-go contributes NO pixels.
-
-        Re-parse the fixture, drop the 2-point line exclusion from the
-        MapData, render that, and confirm the pixels are IDENTICAL to the
-        full-fixture render. If the line were drawn, removing it would change
-        pixels — so identical hashes prove it draws nothing (the pinned bug).
+        Re-parse the fixture, drop the line exclusion, render, and confirm the
+        pixels DIFFER from the full render. Different hashes prove the line is
+        drawn (the FIXED behavior).
         """
         import dataclasses
 
@@ -297,7 +304,23 @@ class TestGoldenPinsKnownRenderBugs:
 
         with_line = _pixel_hash(render_base_map(md_full))
         without_line = _pixel_hash(render_base_map(md_no_line))
-        assert with_line == without_line, (
-            "removing the 2-point line no-go changed the render — it is NOT "
-            "invisible as the pinned bug asserts"
+        assert with_line != without_line, (
+            "removing the 2-point line no-go did NOT change the render — the "
+            "line is still invisible; the shapeType render fix regressed"
+        )
+
+    def test_decorative_heart_now_contributes_pixels_via_ablation(self):
+        """Render-level proof the heart no-go (id 401) NOW stamps pixels."""
+        import dataclasses
+
+        md_full = _map_data()
+        kept = tuple(ez for ez in md_full.exclusion_zones if ez.obj_id != 401)
+        assert len(kept) == len(md_full.exclusion_zones) - 1
+        md_no_heart = dataclasses.replace(md_full, exclusion_zones=kept)
+
+        with_heart = _pixel_hash(render_base_map(md_full))
+        without_heart = _pixel_hash(render_base_map(md_no_heart))
+        assert with_heart != without_heart, (
+            "removing the decorative heart no-go did NOT change the render — "
+            "the stamp is not being drawn"
         )

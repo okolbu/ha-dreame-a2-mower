@@ -107,7 +107,7 @@ def test_camera_map_schema_version_pinned():
     attrs = _make_map_camera().extra_state_attributes
     assert attrs["schema_version"] == MAP_ATTR_SCHEMA_VERSION
     assert isinstance(attrs["schema_version"], int)
-    assert MAP_ATTR_SCHEMA_VERSION == 1
+    assert MAP_ATTR_SCHEMA_VERSION == 2
 
 
 def test_camera_map_projection_exact_shape():
@@ -133,7 +133,7 @@ def test_camera_editable_objects_exact_element_shape():
     objs = _make_map_camera().extra_state_attributes["editable_objects"]
     assert objs, "expected at least one editable object from the fixture map"
     for o in objs:
-        assert set(o) == {"id", "op", "type", "kind", "points_m", "radius"}
+        assert set(o) == {"id", "op", "type", "kind", "shape_type", "points_m", "radius"}
 
 
 def test_camera_wifi_overlay_exact_shape(tmp_path):

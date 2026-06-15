@@ -34,6 +34,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from .cloud_map_geom import _rotate_path_around_centroid
+from ..map_render._shape_masks import DECORATIVE_SHAPE_TYPES
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -114,6 +115,16 @@ class ExclusionZone:
     # in the SAME frame ×1000 — render applies the reflection. See
     # docs/research/wire-captures/map-edit-frame-verification-2026-06-12.md.
     points_m: tuple[tuple[float, float], ...] = ()
+    # Cloud ``shapeType`` read-side enum (0=area, 1=line, 2=rotated-rect,
+    # 3=circle, 5=point, 7=spot, 9=square, 12=circle, 13=heart, 14=triangle,
+    # 15=teardrop, 16=mushroom, 17=cloud, 18=rainbow). For DECORATIVE types
+    # (>=9, in map_render._shape_masks.DECORATIVE_SHAPE_TYPES) the 2 ``points``
+    # are the raw axis-aligned bbox corners (UN-rotated) and ``angle`` carries
+    # the raw cloud angle so the render can stamp a silhouette rotated by it.
+    # For non-decorative types ``points`` are centroid-rotated as before and
+    # ``angle`` is informational. See cloud-map-geometry.md §4.1.
+    shape_type: int | None = None
+    angle: float | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -306,11 +317,21 @@ class MapData:
 def _collect_exclusion_entries(
     entries_wrapper: Any,
     subtype: str | None,
-) -> list[tuple[int | None, list[dict], str | None, tuple[tuple[float, float], ...]]]:
+) -> list[
+    tuple[
+        int | None,
+        list[dict],
+        str | None,
+        tuple[tuple[float, float], ...],
+        int | None,
+        float | None,
+    ]
+]:
     """Parse one exclusion-zone wrapper dict into rotated-path entries.
 
-    Returns a list of ``(obj_id, rotated_path, subtype, points_m)`` 4-tuples,
-    where each ``rotated_path`` is the output of
+    Returns a list of
+    ``(obj_id, rotated_path, subtype, points_m, shape_type, raw_angle)``
+    6-tuples, where each ``rotated_path`` is the output of
     :func:`_rotate_path_around_centroid` (a list of ``{x, y}`` dicts) and
     ``points_m`` is that same un-reflected path converted to METERS
     (``(x/1000, y/1000)`` per corner) for the edit frame the map-editor card
@@ -318,8 +339,23 @@ def _collect_exclusion_entries(
     convention spots/zones use), or ``None`` for the id-less dict form.  The
     cloud's angle convention is mirror-flipped vs the app's rendering; angles
     are negated before rotating (see §4.1 of cloud-map-geometry.md).
+
+    ``shape_type`` is the cloud ``shapeType`` value (or ``None`` if absent).
+    For DECORATIVE shapeTypes (``shape_type in DECORATIVE_SHAPE_TYPES``, e.g.
+    heart=13) the 2 ``path`` points are axis-aligned bbox corners that the app
+    tessellates client-side; we keep them UN-rotated so the render can build
+    the bbox and rotate a stamped silhouette by ``raw_angle`` instead.
     """
-    result: list[tuple[int | None, list[dict], str | None, tuple[tuple[float, float], ...]]] = []
+    result: list[
+        tuple[
+            int | None,
+            list[dict],
+            str | None,
+            tuple[tuple[float, float], ...],
+            int | None,
+            float | None,
+        ]
+    ] = []
     entries = entries_wrapper.get("value", []) if isinstance(entries_wrapper, dict) else []
     for entry in entries:
         obj_id: int | None = None
@@ -339,12 +375,23 @@ def _collect_exclusion_entries(
         if not path:
             continue
         raw_angle = zdata.get("angle")
-        rot_angle = -raw_angle if raw_angle is not None else None
-        rotated = _rotate_path_around_centroid(path, rot_angle)
+        shape_type: int | None
+        try:
+            shape_type = int(st) if (st := zdata.get("shapeType")) is not None else None
+        except (TypeError, ValueError):
+            shape_type = None
+        if shape_type in DECORATIVE_SHAPE_TYPES:
+            # Decorative: the 2 points are raw axis-aligned bbox corners; keep
+            # them un-rotated. The render stamps the silhouette mask scaled to
+            # the bbox and rotated by raw_angle.
+            rotated = [dict(pt) for pt in path]
+        else:
+            rot_angle = -raw_angle if raw_angle is not None else None
+            rotated = _rotate_path_around_centroid(path, rot_angle)
         points_m = tuple(
             (float(pt["x"]) / 1000.0, float(pt["y"]) / 1000.0) for pt in rotated
         )
-        result.append((obj_id, rotated, subtype, points_m))
+        result.append((obj_id, rotated, subtype, points_m, shape_type, raw_angle))
     return result
 
 
@@ -700,7 +747,14 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
     spot_raw = cloud_response.get("spotAreas", {})
 
     rotated_exclusions: list[
-        tuple[int | None, list[dict], str | None, tuple[tuple[float, float], ...]]
+        tuple[
+            int | None,
+            list[dict],
+            str | None,
+            tuple[tuple[float, float], ...],
+            int | None,
+            float | None,
+        ]
     ] = [
         *_collect_exclusion_entries(forbidden_raw, None),     # red
         *_collect_exclusion_entries(ignore_raw, "ignore"),    # green
@@ -716,7 +770,7 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
     by1_exp = by1
     bx2_exp = bx2
     by2_exp = by2
-    for (_oid, rp, _sub, _pm) in rotated_exclusions:
+    for (_oid, rp, _sub, _pm, _stype, _ang) in rotated_exclusions:
         for pt in rp:
             x, y = float(pt["x"]), float(pt["y"])
             bx1_exp = min(bx1_exp, x)
@@ -747,7 +801,7 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
     # is in, ×1000). See cloud-map-geometry.md §3.3 + the P3a transform-move.
     # -----------------------------------------------------------------------
     excl_out: list[ExclusionZone] = []
-    for (obj_id, rp, subtype, points_m) in rotated_exclusions:
+    for (obj_id, rp, subtype, points_m, shape_type, raw_angle) in rotated_exclusions:
         pts = tuple(
             (float(pt["x"]), float(pt["y"]))
             for pt in rp
@@ -755,7 +809,12 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
         if pts:
             excl_out.append(
                 ExclusionZone(
-                    points=pts, subtype=subtype, obj_id=obj_id, points_m=points_m
+                    points=pts,
+                    subtype=subtype,
+                    obj_id=obj_id,
+                    points_m=points_m,
+                    shape_type=shape_type,
+                    angle=(float(raw_angle) if raw_angle is not None else None),
                 )
             )
 

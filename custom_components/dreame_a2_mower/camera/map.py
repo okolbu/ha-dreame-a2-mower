@@ -16,7 +16,27 @@ from ..coordinator import DreameA2MowerCoordinator
 # Bump this integer whenever that attribute SHAPE changes so a card can detect
 # a backend it doesn't understand instead of mis-rendering silently. The card
 # contract is pinned in tests/integration/test_card_contract.py.
-MAP_ATTR_SCHEMA_VERSION = 1
+# v2: editable_objects descriptors gained "shape_type" + a richer "kind"
+# (decorative shapes like "heart"/"cloud", real "line") instead of just
+# "nogo"/"ignore".
+MAP_ATTR_SCHEMA_VERSION = 2
+
+# Cloud ``shapeType`` -> human ``kind`` for editable_objects descriptors. Read
+# side only; covers the real LINE (1) and the decorative palette (>=9). Absent
+# values fall back to the subtype-derived "nogo"/"ignore".
+_SHAPE_TYPE_KIND: dict[int, str] = {
+    1: "line",
+    2: "nogo",
+    3: "nogo",
+    9: "square",
+    12: "circle",
+    13: "heart",
+    14: "triangle",
+    15: "teardrop",
+    16: "mushroom",
+    17: "cloud",
+    18: "rainbow",
+}
 
 
 def _last_known_point(snapshot: Any) -> list[Any] | None:
@@ -122,18 +142,28 @@ class DreameA2MapCamera(
 
         - no-go / forbidden (``subtype is None``) -> op 215, type 2
         - designated-ignore (``subtype == "ignore"``) -> op 234, type 0
+
+        ``shape_type`` (the cloud ``shapeType`` enum) and a human ``kind`` are
+        carried through so the card stops mislabeling a decorative heart no-go
+        as a "line": a 2-point heart (shapeType 13) reads ``kind="heart"``, a
+        real no-go line (shapeType 1) ``kind="line"``, etc.
         """
         out: list[dict] = []
         for z in getattr(map_data, "exclusion_zones", ()):
             if z.obj_id is None:
                 continue
             is_ignore = z.subtype == "ignore"
+            shape_type = getattr(z, "shape_type", None)
+            kind = _SHAPE_TYPE_KIND.get(shape_type) if shape_type is not None else None
+            if kind is None:
+                kind = "ignore" if is_ignore else "nogo"
             out.append(
                 {
                     "id": z.obj_id,
                     "op": 234 if is_ignore else 215,
                     "type": 0 if is_ignore else 2,
-                    "kind": "ignore" if is_ignore else "nogo",
+                    "kind": kind,
+                    "shape_type": shape_type,
                     "points_m": [list(p) for p in z.points_m],
                     "radius": 0.0,
                 }

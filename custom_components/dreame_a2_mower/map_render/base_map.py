@@ -20,6 +20,7 @@ from ._geometry import (
     _cloud_to_px,
     _zone_point_to_px,
 )
+from ._shape_masks import DECORATIVE_SHAPE_TYPES
 
 if TYPE_CHECKING:
     from ..cloud_state import MowPathData
@@ -56,6 +57,35 @@ def _mower_icon() -> Image.Image:
             io.BytesIO(base64.b64decode(MOWER_ICON_PNG_B64))
         ).convert("RGBA")
     return _MOWER_ICON_CACHE
+
+
+# Width (px) of a real no-go LINE (shapeType 1, 2-point path). Mirrors the
+# nav-path line width but thinner so the red line reads as a barrier, not a road.
+_EXCL_LINE_WIDTH_PX: int = 6
+
+# Lazy-decoded decorative-shape silhouette masks (shapeType -> L-mode image).
+# Mirrors _MOWER_ICON_CACHE: decoded once from the base64 assets in
+# _shape_masks.py and reused across renders.
+_SHAPE_MASK_CACHE: dict[int, Image.Image] = {}
+
+
+def _shape_mask(shape_type: int) -> Image.Image | None:
+    """Return the decoded L-mode silhouette mask for ``shape_type`` (or None).
+
+    White-on-black PNG; used as the alpha mask when stamping a decorative no-go
+    silhouette (heart/cloud/...). Decoded lazily and cached module-level.
+    """
+    if shape_type in _SHAPE_MASK_CACHE:
+        return _SHAPE_MASK_CACHE[shape_type]
+    import base64
+
+    from ._shape_masks import SHAPE_MASK_PNG_B64
+    b64 = SHAPE_MASK_PNG_B64.get(shape_type)
+    if b64 is None:
+        return None
+    mask = Image.open(io.BytesIO(base64.b64decode(b64))).convert("L")
+    _SHAPE_MASK_CACHE[shape_type] = mask
+    return mask
 
 
 def render_base_map(
@@ -261,26 +291,103 @@ def render_base_map(
     #    presentation step (_zone_point_to_px) applies the midline reflection
     #    + pixel-grid divide (P3a transform-move).
     # -----------------------------------------------------------------------
+    def _stamp_decorative_shape(
+        ez,
+        fill_colour: tuple[int, int, int, int],
+        outline_colour: tuple[int, int, int, int],
+    ) -> None:
+        """Stamp a decorative no-go silhouette (heart/cloud/...) onto ``image``.
+
+        ``ez.points`` are the 2 raw axis-aligned bbox corners (cloud-frame mm,
+        UN-rotated). We project them to pixels, scale the silhouette mask to the
+        pixel bbox, fill it with the translucent exclusion colour via the mask
+        alpha, rotate by the cloud angle, and alpha-composite at the bbox centre.
+
+        Falls back to a bbox rectangle for an unknown decorative shapeType so the
+        zone still shows *something*.
+        """
+        nonlocal image, draw
+        a = _zone_point_to_px(ez.points[0][0], ez.points[0][1], map_data)
+        b = _zone_point_to_px(ez.points[1][0], ez.points[1][1], map_data)
+        x0, x1 = min(a[0], b[0]), max(a[0], b[0])
+        y0, y1 = min(a[1], b[1]), max(a[1], b[1])
+        w = max(1, round(x1 - x0))
+        h = max(1, round(y1 - y0))
+        cx = (x0 + x1) / 2.0
+        cy = (y0 + y1) / 2.0
+        mask = _shape_mask(ez.shape_type) if ez.shape_type is not None else None
+        if mask is None:
+            # Unknown decorative type — draw the bbox rectangle as a fallback.
+            _LOGGER.debug(
+                "render_base_map: no mask for decorative shapeType=%r — bbox fallback",
+                ez.shape_type,
+            )
+            overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+            ov_draw = ImageDraw.Draw(overlay, "RGBA")
+            ov_draw.rectangle(
+                [x0, y0, x1, y1], fill=fill_colour, outline=outline_colour, width=1
+            )
+            image = Image.alpha_composite(image, overlay)
+            draw = ImageDraw.Draw(image, "RGBA")
+            return
+        m = mask.resize((w, h))
+        stamp = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+        stamp.paste(Image.new("RGBA", (w, h), fill_colour), (0, 0), m)
+        # Rotation: see spec — the map gets a final FLIP_TOP_BOTTOM and zone
+        # points are midline-reflected, so the on-screen angle is ambiguous.
+        # First guess is -angle (matches the -angle handedness the polygon path
+        # uses). Orchestrator tunes against the live heart (angle 90.29).
+        ang = -(ez.angle or 0.0)
+        if ang:
+            stamp = stamp.rotate(ang, expand=True, resample=Image.BICUBIC)
+        px = round(cx - stamp.width / 2.0)
+        py = round(cy - stamp.height / 2.0)
+        image.alpha_composite(stamp, (px, py))
+        _LOGGER.debug(
+            "render_base_map: stamped decorative shapeType=%r (bbox %dx%d, ang=%.1f)",
+            ez.shape_type,
+            w,
+            h,
+            ang,
+        )
+
     for ez in map_data.exclusion_zones:
-        if len(ez.points) < 3:
-            continue
-        ez_px = [
-            _zone_point_to_px(cx, cy, map_data)
-            for (cx, cy) in ez.points
-        ]
-        flat = [coord for pt in ez_px for coord in pt]
         if ez.subtype == "ignore":
             fill_colour = p["ignore_fill"]
             outline_colour = p["ignore_outline"]
         else:
             fill_colour = p["excl_fill"]
             outline_colour = p["excl_outline"]
-        _composite_polygon(flat, fill_colour, outline_colour, 1)
-        _LOGGER.debug(
-            "render_base_map: drew exclusion zone (subtype=%r, %d corners)",
-            ez.subtype,
-            len(ez_px),
-        )
+
+        if ez.shape_type in DECORATIVE_SHAPE_TYPES:
+            _stamp_decorative_shape(ez, fill_colour, outline_colour)
+            continue
+
+        if len(ez.points) == 2:
+            # A real no-go LINE (shapeType 1) — draw a thick line between the
+            # two endpoints (mirror the nav-path line draw).
+            a = _zone_point_to_px(ez.points[0][0], ez.points[0][1], map_data)
+            b = _zone_point_to_px(ez.points[1][0], ez.points[1][1], map_data)
+            draw.line([a, b], fill=outline_colour, width=_EXCL_LINE_WIDTH_PX)
+            _LOGGER.debug(
+                "render_base_map: drew exclusion line (subtype=%r)", ez.subtype
+            )
+            continue
+
+        if len(ez.points) >= 3:
+            ez_px = [
+                _zone_point_to_px(cx, cy, map_data)
+                for (cx, cy) in ez.points
+            ]
+            flat = [coord for pt in ez_px for coord in pt]
+            _composite_polygon(flat, fill_colour, outline_colour, 1)
+            _LOGGER.debug(
+                "render_base_map: drew exclusion zone (subtype=%r, %d corners)",
+                ez.subtype,
+                len(ez_px),
+            )
+            continue
+        # else: <2 points — nothing to draw.
 
     # -----------------------------------------------------------------------
     # 3b. Spot zones — drawn the same way as exclusions but tracked

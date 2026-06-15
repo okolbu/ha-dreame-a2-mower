@@ -10098,18 +10098,36 @@ oss_map_keys:
     payload_shape: "{dataType:'Map', value:[[zone_id, {id, type, shapeType, path:[{x,y}...], angle}]...]}"
     semantic: |
       Classic exclusion / no-go zones (red in the Dreame app). Each entry is a
-      [key, record] pair; shapeType=2 = rotated rectangle (path = unrotated corners,
-      angle = rotation degrees). id matches the s2p50 entity id from create / delete
-      events. Distinct from notObsAreas despite sharing the same shape.
-      Surfaced as sensor.exclusion_zones (state=zone count, attrs.zones=per-zone geometry).
+      [key, record] pair carrying a READ-side `shapeType` that the live-map
+      decoder now honors (was previously inferred from point-count only). Read
+      enum: 0=area, 1=line(2pt), 2=rotated-rect(4pt, angle=deg), 3=circle
+      (multi-pt polygon), 5=point, 7=spot, plus DECORATIVE silhouettes
+      9=square,12=circle,13=heart,14=triangle,15=teardrop,16=mushroom,
+      17=cloud,18=rainbow (stored as 2 bbox corners + angle; the app
+      tessellates client-side — the integration stamps a scaled+rotated mask).
+      For shapeType>=9 the path stays UN-rotated (raw bbox corners); for
+      line(1)/rect(2)/circle(3) the path is centroid-rotated by -angle at decode.
+      id matches the s2p50 entity id from create / delete events. Distinct from
+      notObsAreas despite sharing the same shape. Surfaced as
+      sensor.exclusion_zones (state=zone count, attrs.zones=per-zone geometry).
     status:
       seen_on_wire: false
+      last_seen: "2026-06-15"
       decoded: confirmed
     references:
       integration_code: "custom_components/dreame_a2_mower/dreame/map.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
       alt_repos:
         - "github.com/antondaubert/dreame-mower (map_data_parser.py:211)"
+    verifications:
+      - date: "2026-06-15"
+        status: verified
+        claim: "forbiddenAreas READ-side shapeType: line=1 (2-point horizontal/vertical wall), rotated-rect=2 (4 corners + angle deg), circle=3 (multi-point polygon), heart=13 (2 bbox corners + angle). Live active-map fetch_map carried 4 entries: id101 shapeType:2 angle109.9, id102 shapeType:3 (circle), id103 shapeType:1 (2pt line [{1590,-7190},{-4400,-7190}]), id301 shapeType:13 (heart, 2 bbox corners + angle90.29). [screenshot:OLD/IMG_4615.PNG] for the decorative palette names."
+        evidence: "live fetch_map active map 2026-06-15 (forbiddenAreas.value 4 entries: id101/102/103/301)"
+      - date: "2026-06-15"
+        status: partial
+        claim: "DECORATIVE read-side shapeTypes 9=square,12=circle,14=triangle,16=mushroom (and 15=teardrop,17=cloud,18=rainbow) are PRESUMED from the app Shapes-palette ordering; only heart=13 is wire-verified on the read side so far. Each is stored as 2 bbox corners + angle (square as 4pt on the write side). The integration stamps a per-type silhouette mask (map_render/_shape_masks.py)."
+        evidence: "screenshot:OLD/IMG_4615.PNG (Shapes-palette order)"
 
   - id: "map_key_notObsAreas"
     name: "notObsAreas"
