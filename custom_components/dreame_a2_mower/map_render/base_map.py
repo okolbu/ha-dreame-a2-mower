@@ -62,6 +62,12 @@ def _mower_icon() -> Image.Image:
 # Width (px) of a real no-go LINE (shapeType 1, 2-point path). Mirrors the
 # nav-path line width but thinner so the red line reads as a barrier, not a road.
 _EXCL_LINE_WIDTH_PX: int = 6
+# Decorative shapes (heart/cloud/…) are stamped at this fraction of their
+# cloud bbox — the app insets the shape within its bounding box, so filling
+# the full bbox renders too large. Calibrated 2026-06-15 against the user's
+# map (IMG_4623): the heart's left-right extent should be ~half the no-go
+# line width (heart bbox 4955mm, line 5990mm → 0.62 gives ~half). Tune here.
+_DECORATIVE_SHAPE_SCALE: float = 0.62
 
 # Lazy-decoded decorative-shape silhouette masks (shapeType -> L-mode image).
 # Mirrors _MOWER_ICON_CACHE: decoded once from the base64 assets in
@@ -330,13 +336,15 @@ def render_base_map(
             image = Image.alpha_composite(image, overlay)
             draw = ImageDraw.Draw(image, "RGBA")
             return
-        m = mask.resize((w, h))
-        stamp = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-        stamp.paste(Image.new("RGBA", (w, h), fill_colour), (0, 0), m)
-        # Rotation: see spec — the map gets a final FLIP_TOP_BOTTOM and zone
-        # points are midline-reflected, so the on-screen angle is ambiguous.
-        # First guess is -angle (matches the -angle handedness the polygon path
-        # uses). Orchestrator tunes against the live heart (angle 90.29).
+        # Inset within the bbox so the stamp isn't slightly oversized (the app
+        # draws the shape with margin). Centre stays at (cx, cy).
+        sw = max(1, round(w * _DECORATIVE_SHAPE_SCALE))
+        sh = max(1, round(h * _DECORATIVE_SHAPE_SCALE))
+        m = mask.resize((sw, sh))
+        stamp = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+        stamp.paste(Image.new("RGBA", (sw, sh), fill_colour), (0, 0), m)
+        # Rotation: -angle is the correct on-screen handedness (user-confirmed
+        # 2026-06-15 — the live heart at angle 90.29 renders upright).
         ang = -(ez.angle or 0.0)
         if ang:
             stamp = stamp.rotate(ang, expand=True, resample=Image.BICUBIC)
