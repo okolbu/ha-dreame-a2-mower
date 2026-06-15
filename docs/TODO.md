@@ -220,129 +220,6 @@ and the vacuum descriptions are pruned/marked.
 **Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/2026-06-01-s2p2-fault-partition.md`;
 `inventory.yaml § s2p2`; `mower/error_codes.py FAULT_CODES`.
 
-### Probe for the AI-photo / obstacle-photo cloud endpoint
-
-**Why:** The app shows AI obstacle photos with a confidence overlay (e.g. "human 80%"
-= 80% it's a human in view). A SECOND app instance on another device shows the SAME
-historical photo set → the photos sync via the cloud API, not BT. No "photo taken" MQTT
-slot has been identified, so the photo list/metadata almost certainly lives behind a
-cloud endpoint parallel to the `device-messages/v2` notification endpoint we already
-found. Worth probing.
-**Done when:** a photo/AI cloud endpoint (list + per-photo metadata incl. the
-class+confidence overlay, e.g. "human 80%") is identified and documented, or ruled out.
-
-**Progress (2026-05-31, `probe_ai_photo.py` + `iotstatus/history`/IPC sweeps):**
-Systematically ruled the photo list OUT of every device-keyed surface reachable
-with the integration's Dreame-Auth token (backend A):
-- **batch device-data** — `getDeviceData` ignores the `key` filter and returns the
-  full model; there is no AI/photo key. (Already true of every `cloud/dumps/`
-  empty-batch read.)
-- **`iotstatus/history`** (the device-data time-series query) — property-history for
-  s2p55 / s2p51 / s1p53 → `{"list":[]}`; also empty for s2p1/s2p2 and siid=1/2
-  event-history (eiid 1..20). This device historises nothing server-side.
-- **`message-record/list`** categories 1..20 → 0 records (re-confirmed).
-- **`device-messages/v2`** → empty (its ~6-7d retention window had no records at probe time).
-- **guessed `/dreame-*/{ai-photo,obstacle-photos,device-photos}` paths** → 404.
-
-**The one live lead:** `/smart-app/ipc/detection/event/list` — `libapp.so` carries a
-full IPC event model (`imageUrl`, `picUrl`, `confidence`, `eventType`; detection
-classes Human / Bird / Fire / Crying). It accepts our token (HTTP 400 *"Missing
-necessary request parameters"*, **not** 404/auth), but the g2408 device record has
-`videoStatus:null` + `featureCode:-1` → the mower is **not** enrolled as an IPC/camera
-device, so this is most likely Dreame's security-camera product line. 7 param shapes
-(deviceId/iotId/did × time/paging variants) all stayed at HTTP 400.
-
-**Key state correction:** the feature is **ON at the cloud level** — `CFG.AOP=1` and
-`REC[7] photo_consent=1` across all 8 dumps (2026-05-04..05-12). So the always-empty
-`ai_obstacle[]` is **not** a disabled-feature artifact. This contradicts the stale
-`reference_app_config` "Capture Photos AI Obstacles = Off" note (AOP maps to exactly
-that switch — `switch_global.py:475/871`). Since the user reports the gallery syncing
-to a 2nd app device, the photos DO exist cloud-side — on the app's own OAuth/Aliyun
-backend (B/C), which our integration token can't fully drive.
-
-**BREAKTHROUGH (2026-05-31) — Tasshack/dreame-vacuum analogue: there is NO separate
-endpoint.** The vacuum integration reads obstacle photos inline from the map blob's
-`ai_obstacle` array — the SAME field our `protocol/session_summary.py:140,385` already
-parses (empty in our corpus). Per `OLD/.../dreame-vacuum/dreame/map.py:2086` +
-`types.py:898`, each entry is `[x, y, type, possibility, key, file_name, random]`:
-- photo exists only when `len>=7 and int(key)>=1000` (else it's a detection-only marker);
-- `possibility` = the "human 80%" confidence (×100);
-- `type` = obstacle class (vacuum enum 128-139 = furniture/clutter; the **mower's
-  classes differ** — Human/Animal/Object per the app);
-- `file_name` = an **OSS object name**, fetched via `get_interim_file_url(file_name)`
-  — the SAME OSS path our mower already uses for maps/LiDAR (`cloud_client/_oss.py`).
-The vacuum AES-CBC-decrypts the crop (its maps are encrypted binary); **g2408 maps are
-plaintext JSON**, so the mower's `file_name` is likely a plaintext OSS key (decryption
-need TBD). "2nd-device same set" = both apps read the same cloud blob's `ai_obstacle` +
-fetch the same OSS objects — no per-account gallery service. Historical photos: vacuum
-pulls them via `OBJECT_NAME` property-history; mower equivalent = MAPL/map-object history.
-
-**LIVE TEST 2026-05-31 (partly refutes the vacuum analogue for LIVE surfaces).**
-During a real walk-in-front mow where BOTH apps showed the new photo (mower still
-mowing, not docked), every backend-A surface was empty: `getDeviceData` has NO
-`ai_obstacle` key and all MAP `obstacles` are `[]`; siid=2/4/5 event-history + s2p55/
-s2p51 property-history (last 90 min) empty; and the photo produced ZERO MQTT signal
-(the `s2p51 {time,tz}` push is the clock heartbeat, not a detection). So unlike the
-vacuum (ai_obstacle inline in the backend-A map blob), the g2408's LIVE photo lives
-ONLY on the app's OAuth/Aliyun backend (B/C) — matching `/smart-app/ipc/detection/
-event/list` accepting our token but rejecting all 24 param shapes. **The session-end
-`.0550` `ai_obstacle` (the one backend-A field that's ever carried it) is still
-unchecked for a detection session — that's the remaining MITM-free hope.** Tools:
-`capture_ai_obstacle.py` (live MQTT) + `fetch_session_photos.py` (after-dock session
-enumerator via `iotstatus/history` siid=4 eiid=1, piid=9=object_name).
-
-**CONCLUSIVE 2026-05-31 — session-summary `ai_obstacle` REFUTED too.** The user gave
-3 app-confirmed photo times; two (2026-05-30 19:15:20 + 19:22:54) fall inside the
-05-30 19:00→19:27 session, yet that session's `.0550` summary has `ai_obstacle=[]`
-(obstacle[LiDAR]=7). Photos captured but never written to ai_obstacle. Plus byte-diff
-at all 3 photo times shows NO MQTT signal (byte[4] human-presence pulse never fired).
-So the g2408's AI photos are on the app's B/C backend ONLY; `ai_obstacle` is a
-vacuum-inherited slot the firmware never fills. The "MITM-free via session summary"
-plan is dead.
-
-**OBJ-list-by-type TESTED 2026-05-31 — negative.** The integration lists OSS objects
-via `action(siid=2, aiid=50, [{m:'g', t:'OBJ', d:{type:'wifimap'}}])`. Swept ~40 types
-while the mower was mowing (relay 80001 is intermittent — landed with retries; the
-direct `dreame-iot-com-10000/device/sendCommand` call works, NOT probe_a2_mqtt's
-`send()` which flaked). Result: the OBJ handler exposes ONLY map artifacts —
-`wifimap` (1 obj `.0550.txt`) and `3dmap` (2 objs `.0550.bin` LiDAR) — every
-photo/obstacle/human/camera/session/event name returned `{name:[]}`. Both real types
-yield objects; no photo type does. So the OBJ list (the "list all images" candidate)
-does NOT carry AI photos.
-
-**Status:** backend-A EXHAUSTED — device-data, history, session-summary, MQTT, AND the
-OBJ-list-by-type all tested empty for photos. Photos are B/C-backend-only. The ONLY
-path is an **app HTTPS MITM** of the obstacle gallery (proxyman/) or cracking the
-`/smart-app/ipc/detection/event/list` params (same wall as Phase-2 MAP write /
-cruise-to-point). `fetch_session_photos.py` / `probe_obj_types.py` returning empty is
-now confirmed-expected. Reframe the feature as MITM-gated.
-**Next step (MITM-FREE):** capture the live MAP blob + session summary during/after a
-**real detection** (walk in front of the mower mid-mow with AOP on) and check whether
-`ai_obstacle` populates with 7-element entries; if so, fetch `file_name` via the existing
-`get_interim_file_url`. Then surface as a per-obstacle camera/event entity. (The earlier
-HTTPS-MITM step is now a fallback, not the primary path.)
-
-**TOOL READY — `/data/claude/homeassistant/capture_ai_obstacle.py`** (dev-box only,
-read-only; validated end-to-end 2026-05-31 against a real session summary — OSS
-fetch + decode + obstacle-scan all confirmed working). Run it, then walk in front of
-the mower mid-mow. It tails MQTT (flags s2p55/s2p51/s2p2/s1p1/s1p4 + event_occured
-object_names), polls the cloud, downloads every OSS object it sees, dumps any
-non-empty `ai_obstacle`/`obstacle` array (decoded per the vacuum analogue), and for
-each `ai_obstacle` entry with a `file_name` downloads the photo bytes and classifies
-them (JPEG/PNG/gzip/maybe-AES). Output → `ai_obstacle_capture_<ts>/` (capture.jsonl +
-objects/ + SUMMARY.txt). `--test-object <name>` verifies the OSS path without waiting.
-Once a capture confirms the on-wire `ai_obstacle` layout, wire the integration parse
-(`session_summary.ai_obstacle` is already a raw tuple) + a per-obstacle camera/event entity.
-**Implementation note:** `session_summary.ai_obstacle` is already parsed (raw tuple) and
-`get_interim_file_url`/`get_file_url` already exist — wiring is mostly: parse the
-7-element entry, fetch+maybe-decrypt `file_name`, expose confidence/type/coords.
-**Cross-refs:** `OLD/alternatives_archive_2026-05-05/alternatives/dreame-vacuum`
-(`dreame/map.py:2086`, `types.py:898`, `protocol.py:371`); GH `Tasshack/dreame-vacuum#1326`;
-`inventory.yaml` § s2p55 (verifications 2026-05-31); `protocol/session_summary.py:140,385`;
-`cloud_client/_oss.py`; `probe_ai_photo.py`; `docs/research/g2408-research-journal.md`.
-
----
-
 ### Probe `message-record/list` for the System/Sharing/Service/Activity tabs
 
 **Why:** `device-messages/v2` returns only per-device (A2) records. The other
@@ -766,7 +643,12 @@ newest-with-most-points) is chosen for the HA LiDAR camera and documented.
     instance, at least once at boot, so a fresh install on a device that already has
     historical cloud photos/videos catches up (the 1 h sync only goes forward).
   - **Photo overlays** — render date + (for AI obstacles) the class + confidence%
-    ("human 80%") burned onto the photo OR as a caption/subtitle.
+    ("human 80%") AND the detection **bounding box**: draw the `x/y/w/h` rectangle from the
+    parsed COM `detections` (already extracted by `protocol/photo_meta.py:parse_jpeg_com` →
+    `ArchivedPhoto.detections`; class+conf are already on the camera as
+    `detection_class`/`detection_confidence` attrs) onto the photo, with the label on/beside
+    the box (caption/subtitle as a fallback). The metadata is in hand — this is a pure render
+    task, no further probing needed.
 **Done when:** each sub-item is implemented or explicitly deferred with a reason;
 all three sets are captured (incl. the ephemeral live-session obstacle shots),
 surfaced on the dashboard with overlays, linked to sessions, and a boot backfill
