@@ -24,6 +24,7 @@ from .entities.sensor.device import (
     SENSORS,
     DreameA2ApiEndpointSensor,
     DreameA2CurrentActivitySensor,
+    DreameA2DeviceMessagesSensor,
     DreameA2DiagnosticSensor,
     DreameA2IntegrationVersionSensor,
     DreameA2LastNotificationSensor,
@@ -36,6 +37,8 @@ from .entities.sensor.device import (
     DreameA2RainResumeSensor,
     DreameA2ScheduleCountSensor,
     DreameA2Sensor,
+    DreameA2ServiceMessagesSensor,
+    DreameA2SharedMessagesSensor,
     DreameA2WifiHeatmapAgeSensor,
     DreameA2WifiRefreshStatusSensor,
     _active_fault_text,
@@ -95,6 +98,9 @@ async def async_setup_entry(
             DreameA2IntegrationVersionSensor(coordinator),
             DreameA2PickedSessionSensor(coordinator),
             DreameA2PhotoGallerySensor(coordinator),
+            DreameA2DeviceMessagesSensor(coordinator),
+            DreameA2ServiceMessagesSensor(coordinator),
+            DreameA2SharedMessagesSensor(coordinator),
         ]
     )
     for map_id in sorted(coordinator.cloud_state.maps_by_id.keys()):

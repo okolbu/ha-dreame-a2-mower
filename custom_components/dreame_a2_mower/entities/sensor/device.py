@@ -1473,3 +1473,67 @@ class DreameA2IntegrationVersionSensor(
     @property
     def native_value(self):
         return _manifest_version()
+
+
+# ---------------------------------------------------------------------------
+# Message-list sensors (T6)
+# Three read-only parent-device sensors: state = unread count, items attr = list.
+# ---------------------------------------------------------------------------
+
+class _DreameA2MessageListSensor(
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+):
+    """Base: state = unread count, items attr = the normalised list.
+
+    Reads ``self.coordinator.data.<_FIELD>`` (a MowerState list field).
+    The full list is excluded from the recorder (mirrors DreameA2PhotoGallerySensor).
+    """
+
+    _attr_has_entity_name = True
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _unrecorded_attributes = frozenset({"*"})
+    _FIELD: str = ""  # MowerState list attribute name
+
+    def _items(self) -> list:
+        return list(getattr(self.coordinator.data, self._FIELD, None) or [])
+
+    @property
+    def native_value(self) -> int:
+        # State is the UNREAD count (not total): the actionable signal for
+        # messages is "how many are new". Total is len(items) in the attrs.
+        return sum(1 for it in self._items() if it.get("unread"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"items": self._items()}
+
+
+class DreameA2DeviceMessagesSensor(_DreameA2MessageListSensor):
+    """Device-targeted messages (device_messages list)."""
+
+    _attr_name = "Device messages"
+    _attr_icon = "mdi:robot"
+    _MOWER_KEY = "device_messages"
+    _FIELD = "device_messages"
+
+
+class DreameA2ServiceMessagesSensor(_DreameA2MessageListSensor):
+    """Service/account messages (service_messages list)."""
+
+    _attr_name = "Service messages"
+    _attr_icon = "mdi:email-newsletter"
+    # _MOWER_KEY differs from _FIELD ("service_messages") so the unique_id does
+    # not collide with the existing descriptor-based service_messages_unread
+    # sensor / any future descriptor keyed on "service_messages".
+    _MOWER_KEY = "service_messages_list"
+    _FIELD = "service_messages"
+
+
+class DreameA2SharedMessagesSensor(_DreameA2MessageListSensor):
+    """Shared messages from other account members (shared_messages list)."""
+
+    _attr_name = "Shared messages"
+    _attr_icon = "mdi:account-multiple"
+    _MOWER_KEY = "shared_messages"
+    _FIELD = "shared_messages"
