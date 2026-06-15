@@ -1728,6 +1728,59 @@ entities:
         claim: "DreameA2Sensor descriptor key=service_messages_unread; value_fn=lambda s: s.service_messages_unread; entity_category=DIAGNOSTIC"
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
+  # Phase messages: message-list sensors (device / service / shared)
+
+  - id: "sensor.dreame_a2_mower_device_messages"
+    platform: sensor
+    class: "DreameA2DeviceMessagesSensor"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py:1512"
+    device: parent
+    source:
+      wire: "device-messages/v2 (Phase messages _refresh_messages)"
+      state_path: "MowerState.device_messages"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-15"
+    verifications:
+      - date: "2026-06-15"
+        status: presumed
+        claim: "Code-read (not live-verified): DreameA2DeviceMessagesSensor reads MowerState.device_messages; state=unread count, items attr=full list; EntityCategory.DIAGNOSTIC"
+
+  - id: "sensor.dreame_a2_mower_service_messages"
+    platform: sensor
+    class: "DreameA2ServiceMessagesSensor"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py:1521"
+    device: parent
+    source:
+      wire: "message-record/list v1 serviceMsg.msgRecord (Phase messages _refresh_messages)"
+      state_path: "MowerState.service_messages"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-15"
+    verifications:
+      - date: "2026-06-15"
+        status: presumed
+        claim: "Code-read (not live-verified): DreameA2ServiceMessagesSensor reads MowerState.service_messages; state=unread count, items attr=full list; EntityCategory.DIAGNOSTIC. unique_id suffix=service_messages_list (differs from field/entity_id 'service_messages' to avoid collision with the service_messages_unread descriptor)"
+
+  - id: "sensor.dreame_a2_mower_shared_messages"
+    platform: sensor
+    class: "DreameA2SharedMessagesSensor"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py:1533"
+    device: parent
+    source:
+      wire: "share-messages endpoint (Phase messages _refresh_messages)"
+      state_path: "MowerState.shared_messages"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-15"
+    verifications:
+      - date: "2026-06-15"
+        status: presumed
+        claim: "Code-read (not live-verified): DreameA2SharedMessagesSensor reads MowerState.shared_messages; state=unread count, items attr=full list; EntityCategory.DIAGNOSTIC"
+
   # Phase D: OSS quota sensors (checkDevOssStorage → MowerState)
 
   - id: "sensor.dreame_a2_mower_oss_storage_used"
