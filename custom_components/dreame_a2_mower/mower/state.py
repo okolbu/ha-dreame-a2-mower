@@ -186,6 +186,14 @@ class MowerState:
     service_messages_unread: int | None = None
     system_messages_unread: int | None = None
     latest_service_message: str | None = None
+    # Source: device-messages/v2 (device_messages), message-record/list v1
+    # serviceMsg.msgRecord (service_messages), share-messages (shared_messages).
+    # Each is a list of normalized message dicts
+    # ({id,title,date,body,link,unread}) produced by
+    # protocol/message_record.py. Persistence: volatile.
+    device_messages: list[dict] = field(default_factory=list)
+    service_messages: list[dict] = field(default_factory=list)
+    shared_messages: list[dict] = field(default_factory=list)
 
     # Source: s1.1 byte[17] signed live RSSI (preferred while mowing /
     # connected) with a CFG.NET fallback that populates immediately on
