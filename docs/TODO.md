@@ -220,19 +220,21 @@ and the vacuum descriptions are pruned/marked.
 **Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/2026-06-01-s2p2-fault-partition.md`;
 `inventory.yaml § s2p2`; `mower/error_codes.py FAULT_CODES`.
 
-### Probe `message-record/list` for the System/Sharing/Service/Activity tabs
+### Confirm the share-messages record shape (live capture)
 
-**Why:** `device-messages/v2` returns only per-device (A2) records. The other
-four tabs in the app come from `/dreame-message-push/v2/message-record/list`,
-which returned `code=0 records=0` for `categories=[1..5]`. Possible reasons:
-right category id is higher than 5, or `did` is the wrong filter for an
-account-scoped endpoint, or content is behind v1 or a different service.
-Not blocking the cloud-notification feature (we don't want Dreame-wide
-announcements in the integration); just an open research question.
-**Done when:** the actual category ids for System Messages and friends are
-known, or we conclude the endpoint isn't reachable with current auth.
-**Status:** open (low priority)
-**Cross-refs:** `docs/research/app-api-surface-2026-05-25.md` § device-messages/v2; `probe_a2_endpoints.py`.
+**Why:** The "Messages/Info" feature shipped (see DONE.md "Probe message-record/list…") —
+Device / Service / Sharing message lists are now sensors + a dashboard tab. The Device and
+Service parsers are wire-verified; the **share-messages** record field names
+(`protocol/message_record.py:normalize_share`) are parsed DEFENSIVELY and not yet confirmed
+against a real `GET /dreame-messaging/user/share-messages?version=v1` response (the account
+may have 0 shares).
+**Done when:** a live capture confirms the share record fields (id/title/date/body/link/read);
+`normalize_share` is tightened + a fixture-driven test added; `inventory.yaml`
+§ message_record_and_messaging_endpoints gets a verification.
+**Status:** open (low priority — confirmatory; parser already works defensively)
+**Cross-refs:** `protocol/message_record.py:normalize_share`;
+`cloud_client/_fetchers.py:fetch_share_messages`; `tests/protocol/test_message_record.py`;
+the plan's Task 7 (`OLD/ha-dreame-a2-mower-docs/superpowers/plans/2026-06-15-messages-info-tab.md`).
 
 ### OTA_INFO field semantics
 
