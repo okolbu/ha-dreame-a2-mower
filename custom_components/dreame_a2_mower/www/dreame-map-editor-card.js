@@ -7,11 +7,11 @@
 //   entity_picture), editable_objects, map_id, available_map_ids
 // and writes via the dreame_a2_mower create_no_go_zone / create_ignore_obstacle
 // / create_mow_shape / create_spot / create_maintenance_point /
-// delete_map_object services.
+// create_patrol_point / delete_map_object services.
 //
-// NOTE: patrol points (cruisePoints, o=223) are DEFERRED — their create/delete
-// wire is UNVERIFIED, so there is intentionally no patrol tool here. See
-// docs/TODO.md "Patrol-point editor CRUD deferred".
+// Patrol points (cruisePoints, o=223) ARE editable here (wire-confirmed
+// app-mitm 2026-06-15): a single oriented point, DISTINCT opcode from the
+// maintenance point (o=224), delete category 2 (not 3).
 //
 // ALL numeric geometry (projection, rect/bbox corners, rotate, resize, circle,
 // wire-shape mapping) lives in ./_dreame-map-edit-geom.js — this card is DOM +
@@ -73,9 +73,12 @@ const TOOLS = [
   { id: "mow_rainbow", label: "Mow Rainbow", model: "edge", save: { category: "mow", shape: "rainbow" } },
   // Spot = own opcode (o=214), same 4-corner rect geometry as a no-go rect.
   { id: "spot_rect", label: "Spot ▭", model: "corners", resize: "rect", save: { category: "spot", shape: "rect" } },
-  // Maintenance point = NEW single-point model (o=224): click to place, drag to
+  // Maintenance point = single-point model (o=224): click to place, drag to
   // move (edit-in-place), X to delete. No resize/rotate/vertex.
   { id: "maint_point", label: "Maint ⊕", model: "point", save: { category: "maintenance", shape: "point" } },
+  // Patrol / cruise point = single-point model (o=223): DISTINCT opcode from
+  // maintenance, delete category 2. Same point model (place / move / delete).
+  { id: "patrol_point", label: "Patrol ⊕", model: "point", save: { category: "patrol", shape: "point" } },
 ];
 
 class DreameMapEditorCard extends HTMLElement {
@@ -141,10 +144,19 @@ class DreameMapEditorCard extends HTMLElement {
       `.obj-ignore{stroke:${IGNORE_STROKE};fill:${IGNORE_FILL};stroke-width:2}` +
       `.obj-decorative{fill:rgba(177,0,0,0.06);stroke:rgba(177,0,0,0.5);stroke-width:1.5;stroke-dasharray:5 4}` +
       `.obj-spot{fill:rgba(0,150,200,0.12);stroke:rgba(0,150,200,0.8);stroke-width:2}` +
-      `.obj-maint circle{fill:rgba(255,160,0,0.85);stroke:#fff;stroke-width:1.5}` +
+      // NON-selected point markers — muted/desaturated so the SELECTED draft
+      // marker (.marker, bright orange) is visually distinct (selection state).
+      // Maintenance = muted amber, patrol = muted teal (distinct kinds).
+      `.obj-maint circle{fill:rgba(180,120,0,0.45);stroke:#fff;stroke-width:1.5}` +
       `.obj-maint line{stroke:#fff;stroke-width:1.5;pointer-events:none}` +
-      `.marker circle{fill:rgba(255,160,0,0.9);stroke:#fff;stroke-width:1.5}` +
+      `.obj-patrol circle{fill:rgba(0,140,140,0.45);stroke:#fff;stroke-width:1.5}` +
+      `.obj-patrol line{stroke:#fff;stroke-width:1.5;pointer-events:none}` +
+      // SELECTED draft marker — bright (full-saturation), so exactly the one
+      // selected point reads as active. Patrol selection uses a teal accent.
+      `.marker circle{fill:rgba(255,160,0,0.95);stroke:#fff;stroke-width:2}` +
       `.marker line{stroke:#fff;stroke-width:1.5;pointer-events:none}` +
+      `.marker-patrol circle{fill:rgba(0,200,200,0.95);stroke:#fff;stroke-width:2}` +
+      `.marker-patrol line{stroke:#fff;stroke-width:1.5;pointer-events:none}` +
       `.draft{stroke:#1565c0;stroke-width:2;fill:rgba(21,101,192,0.15)}` +
       `.bbox{stroke:#1565c0;stroke-width:1;stroke-dasharray:4 3;fill:none;pointer-events:none}` +
       `.drawline{stroke:#1565c0;stroke-width:2;fill:none;pointer-events:none}` +
@@ -355,11 +367,13 @@ class DreameMapEditorCard extends HTMLElement {
     const parts = [];
     for (const o of this._effectiveObjects(objs)) {
       if (selId != null && o.id === selId && o.kind === selKind) continue;
-      // Maintenance points (o=224) are single-point objects — draw a marker
-      // (circle + crosshair), NOT a polygon line. The click target is the <g>.
-      if (o.kind === "maintenance" && Array.isArray(o.point_m)) {
+      // Maintenance (o=224) / patrol (o=223) points are single-point objects —
+      // draw a marker (circle + crosshair), NOT a polygon line. The click
+      // target is the <g>. Patrol uses a distinct (teal) marker class.
+      if ((o.kind === "maintenance" || o.kind === "patrol") && Array.isArray(o.point_m)) {
         const c = metersToPixel(o.point_m[0], o.point_m[1], this._proj);
-        parts.push(this._markerSvg(c, "obj obj-maint", o.id, o.kind));
+        const cls = o.kind === "patrol" ? "obj obj-patrol" : "obj obj-maint";
+        parts.push(this._markerSvg(c, cls, o.id, o.kind));
         continue;
       }
       const pts = Array.isArray(o.points_m) ? o.points_m : [];
@@ -446,15 +460,16 @@ class DreameMapEditorCard extends HTMLElement {
   // identical — but the shape label is lost). Re-typing on edit is expected,
   // not a bug; surfacing the original shape needs the decoder to expose it.
   _draftFromObject(o) {
-    // Maintenance point (o=224): single-point draft. Drag-to-move = edit-in-place.
-    if (o.kind === "maintenance" && Array.isArray(o.point_m)) {
+    // Maintenance (o=224) / patrol (o=223) point: single-point draft.
+    // Drag-to-move = edit-in-place. Patrol is a DISTINCT category (delete 2).
+    if ((o.kind === "maintenance" || o.kind === "patrol") && Array.isArray(o.point_m)) {
       const c = metersToPixel(o.point_m[0], o.point_m[1], this._proj);
       return {
-        category: "maintenance",
+        category: o.kind, // "maintenance" | "patrol"
         shape: "point",
         model: "point",
         resize: null,
-        kind: "maintenance",
+        kind: o.kind,
         objectId: o.id,
         pts: [c],
         radius: 0,
@@ -788,6 +803,18 @@ class DreameMapEditorCard extends HTMLElement {
           heading: 0,
           object_id: d.objectId != null ? d.objectId : -1,
         });
+      } else if (d.category === "patrol") {
+        // o=223: a single oriented point -> flat (x, y); heading defaults 0
+        // (read map has none, so a MOVE resets heading to 0). DISTINCT opcode
+        // from maintenance. Create or move (edit-in-place).
+        const [x, y] = points[0];
+        await this._hass.callService("dreame_a2_mower", "create_patrol_point", {
+          map_id: mapId,
+          x,
+          y,
+          heading: 0,
+          object_id: d.objectId != null ? d.objectId : -1,
+        });
       }
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -800,7 +827,7 @@ class DreameMapEditorCard extends HTMLElement {
     // stale pre-edit data (which can lag the device by minutes). The descriptor
     // `kind` mirrors the editable_objects kind for this category.
     const kind = this._kindForCategory(d.category);
-    const isPoint = d.category === "maintenance";
+    const isPoint = d.category === "maintenance" || d.category === "patrol";
     const overlay = isPoint
       ? { point_m: points[0] }
       : { points_m: points, radius };
@@ -823,14 +850,16 @@ class DreameMapEditorCard extends HTMLElement {
     if (cat === "ignore") return "ignore";
     if (cat === "spot") return "spot";
     if (cat === "maintenance") return "maintenance";
+    if (cat === "patrol") return "patrol";
     return "nogo";
   }
 
   // Map a draft category to the delete_map_object wire category (o=218 type):
-  // 0 = nogo/mow, 1 = spot, 3 = maintenance, 4 = ignore.
+  // 0 = nogo/mow, 1 = spot, 2 = patrol, 3 = maintenance, 4 = ignore.
   _deleteCategory(cat) {
     if (cat === "ignore") return 4;
     if (cat === "spot") return 1;
+    if (cat === "patrol") return 2;
     if (cat === "maintenance") return 3;
     return 0;
   }
@@ -900,7 +929,10 @@ class DreameMapEditorCard extends HTMLElement {
     // (data-role="move" on the <g>), drag = edit-in-place.
     if (d.model === "point") {
       const c = d.pts[0];
-      parts.push(this._markerSvg(c, "marker", null, null, ` data-role="move"`));
+      // Patrol draft = teal accent marker; maintenance = orange. Both are the
+      // bright "selected" variant (vs the muted non-selected obj markers).
+      const markerCls = d.category === "patrol" ? "marker marker-patrol" : "marker";
+      parts.push(this._markerSvg(c, markerCls, null, null, ` data-role="move"`));
       const dx = c[0] + DEL_OFF;
       const dy = c[1] - DEL_OFF;
       parts.push(
@@ -1100,7 +1132,12 @@ class DreameMapEditorCard extends HTMLElement {
 //    submit label never flips to "Save" for mow shapes because they are not in
 //    editable_objects, so there is no selectable existing mow object).
 //  - The X / Delete on a SELECTED existing object removes it (delete_map_object,
-//    category 0 nogo / 4 ignore). The map_id used is the toolbar selector value.
+//    category 0 nogo / 4 ignore / 1 spot / 3 maintenance / 2 patrol). The map_id
+//    used is the toolbar selector value.
+//  - Patrol points (o=223): the Patrol ⊕ tool drops a marker; Create saves via
+//    create_patrol_point (flat x, y, heading 0); selecting an existing patrol
+//    point shows the bright teal marker (distinct from the muted non-selected
+//    obj-patrol markers), and exactly ONE point is selected at a time.
 
 if (!customElements.get("dreame-map-editor-card")) {
   customElements.define("dreame-map-editor-card", DreameMapEditorCard);
@@ -1114,7 +1151,7 @@ if (!customElements.get("dreame-map-editor-card")) {
 
 // Card version banner — lets the user confirm which build loaded in the
 // browser console (the cards "cache hard"; a stale cache shows the old version).
-const CARD_VERSION = "1.0.27a7";
+const CARD_VERSION = "1.0.27a8";
 console.info(
   `%c dreame-map-editor-card v${CARD_VERSION} `,
   "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"

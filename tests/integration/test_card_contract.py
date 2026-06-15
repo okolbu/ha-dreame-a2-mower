@@ -52,6 +52,7 @@ def _make_map_camera():
         ExclusionZone,
         SpotZone,
         MaintenancePoint,
+        PatrolPoint,
     )
 
     md = SimpleNamespace(
@@ -70,6 +71,9 @@ def _make_map_camera():
         ),
         maintenance_points=(
             MaintenancePoint(point_id=301, x_mm=2500.0, y_mm=-1300.0),
+        ),
+        patrol_points=(
+            PatrolPoint(point_id=401, x_mm=7000.0, y_mm=2000.0),
         ),
     )
     coord = object.__new__(DreameA2MowerCoordinator)
@@ -121,7 +125,7 @@ def test_camera_map_schema_version_pinned():
     attrs = _make_map_camera().extra_state_attributes
     assert attrs["schema_version"] == MAP_ATTR_SCHEMA_VERSION
     assert isinstance(attrs["schema_version"], int)
-    assert MAP_ATTR_SCHEMA_VERSION == 3
+    assert MAP_ATTR_SCHEMA_VERSION == 4
 
 
 def test_camera_map_projection_exact_shape():
@@ -147,7 +151,7 @@ def test_camera_editable_objects_exact_element_shape():
     objs = _make_map_camera().extra_state_attributes["editable_objects"]
     assert objs, "expected at least one editable object from the fixture map"
     # Two element shapes: polygon objects (no-go/ignore/spot) carry points_m;
-    # single-point objects (maintenance, o=224) carry point_m instead.
+    # single-point objects (maintenance o=224, patrol o=223) carry point_m.
     poly_keys = {"id", "op", "type", "kind", "shape_type", "points_m", "radius"}
     point_keys = {"id", "op", "type", "kind", "point_m"}
     kinds = set()
@@ -156,12 +160,16 @@ def test_camera_editable_objects_exact_element_shape():
         if o["kind"] == "maintenance":
             assert set(o) == point_keys
             assert o["op"] == 224 and o["type"] == 3
+        elif o["kind"] == "patrol":
+            assert set(o) == point_keys
+            # DISTINCT opcode from maintenance; delete type 2.
+            assert o["op"] == 223 and o["type"] == 2
         else:
             assert set(o) == poly_keys
             if o["kind"] == "spot":
                 assert o["op"] == 214 and o["type"] == 1
-    # The fixture surfaces all three new/old kinds.
-    assert {"spot", "maintenance"} <= kinds
+    # The fixture surfaces all old + new point kinds.
+    assert {"spot", "maintenance", "patrol"} <= kinds
 
 
 def test_camera_wifi_overlay_exact_shape(tmp_path):

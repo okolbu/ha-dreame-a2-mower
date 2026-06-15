@@ -23,26 +23,6 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
-### Patrol-point editor CRUD deferred (o=223 create/delete UNVERIFIED)
-
-**Why:** The interactive map editor now does CREATE/MOVE/DELETE for spots
-(o=214) and maintenance points (o=224), wire-confirmed `[app-mitm:2026-06-12]`.
-Patrol points (`cruisePoints`, type=8, o=223) were intentionally left out: only
-their edit-in-place op was captured — patrol **create/delete** wire is
-`[UNVERIFIED]`. Wiring a `create_patrol_point` / delete-category service off an
-unverified payload could corrupt a real map.
-**Done when:** a live app↔mower MITM captures a patrol-point CREATE and a DELETE
-(opcode + payload + delete `type` enum) and they're recorded in `inventory.yaml
-§ map_edit`; then add a `maint_point`-style `"point"` tool + `create_patrol_point`
-service + a delete category, mirroring the maintenance-point path.
-**Status:** blocked-by-capture (patrol create/delete MITM).
-**Cross-refs:** `www/dreame-map-editor-card.js` (header note near TOOLS),
-`camera/map.py` `_editable_objects_from_map` (patrol NOT surfaced), the shipped
-spot/maintenance path (`coordinator/_writes.py` `create_spot` /
-`create_maintenance_point`), `inventory.yaml § map_edit`. The existing
-`start_point_patrol` / `start_edge_patrol` RUN services + patrol sensors are a
-SEPARATE feature and are unaffected.
-
 ### Bundle `_CoreMixin.__init__` attrs into typed per-concern objects (Refactor Phase 3f attr-bundling — deferred as over-engineering)
 
 **Why:** The refactor plan (`spec.md §4 Phase 3f`) proposed extracting `_CoreMixin.__init__`'s

@@ -1,10 +1,13 @@
-// Spot + maintenance-point render/save harness for dreame-map-editor-card.js.
+// Spot + maintenance/patrol-point render/save harness for dreame-map-editor-card.js.
 //
 // Spots (o=214, kind "spot", 4 points_m) render as <polygon class="obj obj-spot">.
 // Maintenance points (o=224, kind "maintenance", point_m [x,y]) render as a
 // MARKER (<g class="obj obj-maint"> with a circle + crosshair), NOT a polygon
 // line. A NEW point-model draft (the maintenance create tool) saves via the
 // create_maintenance_point service with flat (x, y) + heading 0.
+// Patrol points (o=223, kind "patrol", point_m [x,y]) mirror maintenance but
+// are a DISTINCT opcode: render as <g class="obj obj-patrol">, save via
+// create_patrol_point, delete category 2.
 //
 // Per feedback_frontend_card_verification: `node --check` only catches syntax;
 // this runs the REAL render + submit functions against a minimal DOM stub.
@@ -60,7 +63,11 @@ const maint = {
   id: 301, kind: "maintenance", op: 224, type: 3,
   point_m: [3.0, -1.0],
 };
-const objs = [spot, maint];
+const patrol = {
+  id: 401, kind: "patrol", op: 223, type: 2,
+  point_m: [7.0, 2.0],
+};
+const objs = [spot, maint, patrol];
 card._objs = objs;
 
 // 1) _renderObjects markup.
@@ -69,6 +76,8 @@ const objectsHtml = gObjects.innerHTML;
 
 // 2) Build a draft from the existing maintenance point -> point model.
 const maintDraft = card._draftFromObject(maint);
+// 2b) Build a draft from the existing patrol point -> point model (category patrol).
+const patrolDraft = card._draftFromObject(patrol);
 // 3) Build a draft from the existing spot -> corners/rect model.
 const spotDraft = card._draftFromObject(spot);
 
@@ -77,12 +86,29 @@ card._draft = maintDraft;
 card._renderDraft();
 const maintDraftHtml = gDraft.innerHTML;
 
+// 4b) Render the patrol-point draft -> bright (selected) marker, distinct class.
+card._draft = patrolDraft;
+card._renderDraft();
+const patrolDraftHtml = gDraft.innerHTML;
+card._draft = null;
+card._provisional = [];
+
 // 5) A FRESH point-model create draft saves via create_maintenance_point.
 const maintTool = { save: { category: "maintenance", shape: "point" }, model: "point" };
 const newDraft = card._makeDraft(maintTool, [120, 130]);
 card._draft = newDraft;
 await card._onSubmit();
 const maintCreateCall = calls.find((c) => c.service === "create_maintenance_point");
+
+// 5b) A FRESH patrol create draft saves via create_patrol_point (flat x,y,heading 0).
+calls.length = 0;
+card._draft = null;
+card._provisional = [];
+const patrolTool = { save: { category: "patrol", shape: "point" }, model: "point" };
+const newPatrol = card._makeDraft(patrolTool, [150, 160]);
+card._draft = newPatrol;
+await card._onSubmit();
+const patrolCreateCall = calls.find((c) => c.service === "create_patrol_point");
 
 // 6) A fresh spot-rect create draft saves via create_spot (4 corners).
 calls.length = 0;
@@ -94,11 +120,74 @@ card._draft = newSpot;
 await card._onSubmit();
 const spotCreateCall = calls.find((c) => c.service === "create_spot");
 
-// 7) Delete categories for an existing spot + maintenance.
+// 7) Delete categories for an existing spot + maintenance + patrol.
 calls.length = 0;
 await card._deleteExisting(spotDraft);
 await card._deleteExisting(maintDraft);
+await card._deleteExisting(patrolDraft);
 const deleteCalls = calls.filter((c) => c.service === "delete_map_object").map((c) => c.data.category);
+
+// ---- Fix 3: SELECTION-STATE lifecycle ----------------------------------
+// Reset to a clean slate with two maintenance points A (501) + B (502).
+const ptA = { id: 501, kind: "maintenance", op: 224, type: 3, point_m: [2.0, 2.0] };
+const ptB = { id: 502, kind: "maintenance", op: 224, type: 3, point_m: [6.0, 6.0] };
+const selObjs = [ptA, ptB];
+card._objs = selObjs;
+card._overrides = {};
+card._provisional = [];
+card._tool = null;
+
+// (a) Select point A -> exactly one #draft marker at A; A skipped in #objects;
+//     B drawn normal (muted non-selected class).
+card._draft = card._draftFromObject(ptA);
+card._renderObjects(selObjs);
+card._renderDraft();
+const sel_objectsAfterSelectA = gObjects.innerHTML;
+const sel_draftAfterSelectA = gDraft.innerHTML;
+const selA = {
+  draftMarkerCount: (sel_draftAfterSelectA.match(/class="marker/g) || []).length,
+  objectsHasA: sel_objectsAfterSelectA.includes('data-id="501"'),
+  objectsHasB: sel_objectsAfterSelectA.includes('data-id="502"'),
+  // B must be a NON-selected muted marker, NOT the bright .marker class.
+  objectsBIsMuted: sel_objectsAfterSelectA.includes("obj-maint"),
+  objectsHasBrightMarker: /class="marker[ "]/.test(sel_objectsAfterSelectA),
+};
+
+// (b) Switch tool -> _selectTool clears the draft; #draft empties; both points
+//     back in #objects, none selected.
+card._selectTool("patrol_point");
+card._renderObjects(card._objs);
+const selB = {
+  draftEmpty: gDraft.innerHTML === "",
+  objectsHasA: gObjects.innerHTML.includes('data-id="501"'),
+  objectsHasB: gObjects.innerHTML.includes('data-id="502"'),
+  objectsHasBrightMarker: /class="marker[ "]/.test(gObjects.innerHTML),
+};
+
+// (c) Create-then-remove a provisional point: create (no id) -> provisional;
+//     then a fresh-draft delete clears the draft. No EXISTING point may render
+//     as selected and no provisional leak after the clear.
+card._tool = null;
+card._draft = null;
+card._provisional = [];
+card._overrides = {};
+// fresh create draft (no objectId) -> submit -> provisional pushed.
+calls.length = 0;
+const freshTool = { save: { category: "maintenance", shape: "point" }, model: "point" };
+card._draft = card._makeDraft(freshTool, [50, 50]);
+await card._onSubmit();
+const provisionalCount = (card._provisional || []).length;
+// now arm a new fresh draft and delete it (X on an unsaved draft) -> clears.
+card._draft = card._makeDraft(freshTool, [70, 70]);
+card._onDeleteHandle();
+card._renderObjects(card._objs);
+const selC = {
+  provisionalAfterCreate: provisionalCount,
+  draftAfterRemove: gDraft.innerHTML,
+  draftClearedAfterRemove: gDraft.innerHTML === "",
+  // no existing point (501/502) renders with the bright selected .marker class.
+  noExistingSelected: !/class="marker[ "]/.test(gObjects.innerHTML),
+};
 
 process.stdout.write(JSON.stringify({
   objectsHtml,
@@ -109,6 +198,13 @@ process.stdout.write(JSON.stringify({
     category: maintDraft.category,
     nPts: (maintDraft.pts || []).length,
   },
+  patrolDraft: {
+    model: patrolDraft.model,
+    objectId: patrolDraft.objectId,
+    kind: patrolDraft.kind,
+    category: patrolDraft.category,
+    nPts: (patrolDraft.pts || []).length,
+  },
   spotDraft: {
     model: spotDraft.model,
     objectId: spotDraft.objectId,
@@ -117,7 +213,12 @@ process.stdout.write(JSON.stringify({
     nPts: (spotDraft.pts || []).length,
   },
   maintDraftHtml,
+  patrolDraftHtml,
   maintCreateCall,
+  patrolCreateCall,
   spotCreateCall,
   deleteCalls,
+  selA,
+  selB,
+  selC,
 }));

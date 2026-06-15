@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
@@ -748,7 +748,23 @@ class _WritesMixin:
         LOGGER.info(
             "[map-edit] map %d, %d mutation(s), ok=%s", map_id, len(mutations), ok
         )
+        # Immediate refresh often grabs STALE cloud data — the mower→cloud
+        # propagation of a map edit takes seconds-to-a-minute and the next
+        # regular refresh is up to ~2 min away, so the edited/deleted shape
+        # would linger. Run the immediate refresh anyway, then schedule a few
+        # staggered DELAYED re-fetches so the integration picks up the
+        # propagated change in seconds. Scheduled unconditionally — a delete
+        # that "hasn't applied yet" still benefits — and outside the write
+        # lock (async_call_later fires later on the event loop).
         await self._refresh_cloud_state()
+        for delay in (8, 20, 40):
+            async_call_later(
+                self.hass,
+                delay,
+                lambda _now: self.hass.async_create_task(
+                    self._refresh_cloud_state()
+                ),
+            )
         return ok
 
     async def rename_zone(self, map_id: int, region: int, name: str) -> bool:
@@ -762,8 +778,9 @@ class _WritesMixin:
     ) -> bool:
         """Delete a map object by id+category on `map_id` (o=218).
 
-        category: 0 = zone/no-go/mow-shape, 1 = spot, 3 = maintenance point,
-        4 = ignore-obstacle (all confirmed values; app-mitm 2026-06-12).
+        category: 0 = zone/no-go/mow-shape, 1 = spot, 2 = patrol/cruise point,
+        3 = maintenance point, 4 = ignore-obstacle (all confirmed values;
+        app-mitm 2026-06-12 + 2026-06-15 patrol).
         """
         return await self.edit_map(
             int(map_id), [(218, {"id": int(object_id), "type": int(category)})]
@@ -839,6 +856,25 @@ class _WritesMixin:
         Delete reuses ``delete_map_object`` with category 3.
         """
         return await self.edit_map(int(map_id), [(224, {
+            "id": int(object_id),
+            "points": [float(x), float(y), float(heading)],
+        })])
+
+    async def create_patrol_point(
+        self, map_id, x, y, heading=0.0, object_id=-1
+    ) -> bool:
+        """Create (or move) a patrol / cruise point (o=223).
+
+        DISTINCT opcode from the maintenance point (o=224), though both are
+        oriented points with the same FLAT 3-element wire array
+        ``[x, y, heading]``. `x`/`y` are meters in the map edit-frame;
+        `heading` is in radians and defaults 0.0 (the read map carries no
+        heading, so a MOVE — edit-in-place via a real object_id — resets
+        heading to 0). object_id: -1 creates a new point; an existing id moves
+        it. Delete reuses ``delete_map_object`` with category 2.
+        (wire-confirmed app-mitm 2026-06-15.)
+        """
+        return await self.edit_map(int(map_id), [(223, {
             "id": int(object_id),
             "points": [float(x), float(y), float(heading)],
         })])

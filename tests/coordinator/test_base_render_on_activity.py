@@ -181,6 +181,54 @@ async def test_editor_base_keeps_decorative_drops_standard_exclusions():
 
 
 @pytest.mark.asyncio
+async def test_editor_base_strips_spots_maintenance_patrol():
+    """Fix 2: spots / maintenance points / patrol points are emptied from the
+    editor background (clean_md) so they are drawn ONLY as card overlays — a
+    hard refresh (which wipes the card's optimistic state) must not show a stale
+    cloud object bleeding through the server PNG. The LIVE base keeps them."""
+    from custom_components.dreame_a2_mower.map_decoder import (
+        MaintenancePoint,
+        PatrolPoint,
+        SpotZone,
+    )
+
+    spot = SpotZone(
+        spot_id=1, name="Spot A",
+        points=((5000.0, 5000.0), (9000.0, 5000.0), (9000.0, 8000.0), (5000.0, 8000.0)),
+        points_m=((5.0, 5.0), (9.0, 5.0), (9.0, 8.0), (5.0, 8.0)),
+    )
+    maint = MaintenancePoint(point_id=301, x_mm=3000.0, y_mm=-1000.0)
+    patrol = PatrolPoint(point_id=401, x_mm=7000.0, y_mm=2000.0)
+
+    coord = _make_coord()
+    base = coord.cloud_state.maps_by_id[1]
+    coord.cloud_state.maps_by_id[1] = dataclasses.replace(
+        base,
+        spot_zones=(spot,),
+        maintenance_points=(maint,),
+        patrol_points=(patrol,),
+    )
+
+    _set_activity(
+        coord, activity=CurrentActivity.IDLE, mow_session=MowSession.BETWEEN_SESSIONS
+    )
+    await coord._render_base()
+
+    # [0] = live base (keeps spots/maintenance/patrol), [1] = editor base (clean_md).
+    assert len(coord.hass.calls) == 2
+    live_md = coord.hass.calls[0].args[0]
+    clean_md = coord.hass.calls[1].args[0]
+    # Live base still carries them.
+    assert len(live_md.spot_zones) == 1
+    assert len(live_md.maintenance_points) == 1
+    assert len(live_md.patrol_points) == 1
+    # Editor base strips all three (card-overlay-only).
+    assert clean_md.spot_zones == ()
+    assert clean_md.maintenance_points == ()
+    assert clean_md.patrol_points == ()
+
+
+@pytest.mark.asyncio
 async def test_render_base_noop_when_no_active_map():
     coord = _make_coord()
     coord._active_map_id = None

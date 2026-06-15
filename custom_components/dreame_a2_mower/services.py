@@ -52,6 +52,7 @@ SERVICE_CREATE_IGNORE_OBSTACLE = "create_ignore_obstacle"
 SERVICE_CREATE_MOW_SHAPE = "create_mow_shape"
 SERVICE_CREATE_SPOT = "create_spot"
 SERVICE_CREATE_MAINTENANCE_POINT = "create_maintenance_point"
+SERVICE_CREATE_PATROL_POINT = "create_patrol_point"
 SERVICE_SPLIT_ZONE = "split_zone"
 SERVICE_MERGE_ZONES = "merge_zones"
 
@@ -173,6 +174,14 @@ SCHEMA_CREATE_SPOT = vol.Schema({
 })
 
 SCHEMA_CREATE_MAINTENANCE_POINT = vol.Schema({
+    vol.Optional("map_id"): vol.Coerce(int),
+    vol.Required("x"): vol.Coerce(float),
+    vol.Required("y"): vol.Coerce(float),
+    vol.Optional("heading", default=0.0): vol.Coerce(float),
+    vol.Optional("object_id", default=-1): vol.Coerce(int),
+})
+
+SCHEMA_CREATE_PATROL_POINT = vol.Schema({
     vol.Optional("map_id"): vol.Coerce(int),
     vol.Required("x"): vol.Coerce(float),
     vol.Required("y"): vol.Coerce(float),
@@ -815,7 +824,7 @@ async def _handle_rename_zone(
 async def _handle_delete_map_object(
     coordinator: DreameA2MowerCoordinator, call: ServiceCall
 ) -> None:
-    """Delete a map object by id+category (o=218; 0=zone/no-go/mow, 1=spot, 3=maintenance, 4=ignore)."""
+    """Delete a map object by id+category (o=218; 0=zone/no-go/mow, 1=spot, 2=patrol, 3=maintenance, 4=ignore)."""
     ok = await coordinator.delete_map_object(
         int(call.data["map_id"]),
         int(call.data["object_id"]),
@@ -899,6 +908,24 @@ async def _handle_create_maintenance_point(
             object_id=int(call.data.get("object_id", -1)),
         ),
         "Create maintenance point", "create_maintenance_point",
+    )
+
+
+@service_handler
+async def _handle_create_patrol_point(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
+    """Create (or move) a patrol / cruise point on a map (o=223)."""
+    map_id = call.data.get("map_id")
+    if map_id is None:
+        map_id = getattr(coordinator, "_active_map_id", None) or 0
+    await _run_map_edit(
+        coordinator.create_patrol_point(
+            int(map_id), float(call.data["x"]), float(call.data["y"]),
+            heading=float(call.data.get("heading", 0.0)),
+            object_id=int(call.data.get("object_id", -1)),
+        ),
+        "Create patrol point", "create_patrol_point",
     )
 
 
@@ -1011,6 +1038,8 @@ async def async_register_services(hass: HomeAssistant, entry: Any | None = None)
                                   _handle_create_spot, schema=SCHEMA_CREATE_SPOT)
     hass.services.async_register(DOMAIN, SERVICE_CREATE_MAINTENANCE_POINT,
                                   _handle_create_maintenance_point, schema=SCHEMA_CREATE_MAINTENANCE_POINT)
+    hass.services.async_register(DOMAIN, SERVICE_CREATE_PATROL_POINT,
+                                  _handle_create_patrol_point, schema=SCHEMA_CREATE_PATROL_POINT)
     hass.services.async_register(DOMAIN, SERVICE_SPLIT_ZONE,
                                   _handle_split_zone, schema=SCHEMA_SPLIT_ZONE)
     hass.services.async_register(DOMAIN, SERVICE_MERGE_ZONES,

@@ -195,11 +195,18 @@ class _RenderingMixin:
                 mode.value, active_id, md5,
             )
             # Map-editor card background: same canvas (bx*/by*/width_px/height_px
-            # are decode-time fields, untouched by dataclasses.replace), but with
-            # the EDITABLE exclusion zones STRIPPED so the editor's overlays are
-            # the ONLY place no-go/ignore line/rect/circle areas are drawn —
-            # avoids the double-draw/ghosting while the device→cloud edit
-            # propagation lags. DECORATIVE shapes (heart/cloud/etc., shape_type in
+            # are decode-time fields, untouched by dataclasses.replace), but the
+            # editor base = LAWN + DECORATIVE shapes ONLY. Every object that the
+            # card can reshape / move / delete is stripped from the server PNG and
+            # drawn ONLY as a card overlay, so optimistic edit/delete works (no
+            # double-draw, no bg-vs-overlay offset while the device→cloud edit
+            # propagation lags):
+            #   - EDITABLE exclusion zones (no-go/ignore line/rect/circle) stripped.
+            #   - spot_zones / maintenance_points / patrol_points emptied — they
+            #     used to be baked into the server background, so a hard refresh
+            #     (which wipes the card's optimistic state) would show the stale
+            #     cloud object through. Now they're card-overlay-only.
+            # DECORATIVE shapes (heart/cloud/etc., shape_type in
             # DECORATIVE_SHAPE_TYPES) are KEPT so they render in the editor base
             # pixel-identically to the live map — they are create+delete (never
             # reshaped in-place), so there is no edit-lag double-draw to avoid,
@@ -212,6 +219,9 @@ class _RenderingMixin:
                     z for z in map_data.exclusion_zones
                     if z.shape_type in DECORATIVE_SHAPE_TYPES
                 ),
+                spot_zones=(),
+                maintenance_points=(),
+                patrol_points=(),
             )
             editor_png = await self.hass.async_add_executor_job(
                 partial(

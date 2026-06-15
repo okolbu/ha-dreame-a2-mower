@@ -19,7 +19,9 @@ from ..coordinator import DreameA2MowerCoordinator
 # v2: editable_objects descriptors gained "shape_type" + a richer "kind"
 # (decorative shapes like "heart"/"cloud", real "line") instead of just
 # "nogo"/"ignore".
-MAP_ATTR_SCHEMA_VERSION = 3
+# v4: editable_objects now surfaces patrol/cruise points (kind="patrol",
+# op=223, delete type 2) alongside maintenance points.
+MAP_ATTR_SCHEMA_VERSION = 4
 
 # Cloud ``shapeType`` -> human ``kind`` for editable_objects descriptors. Read
 # side only; covers the real LINE (1) and the decorative palette (>=9). Absent
@@ -187,8 +189,6 @@ class DreameA2MapCamera(
         # Maintenance points (cleanPoints, o=224) — single-point objects. A new
         # ``point_m`` [x, y] field (metres) replaces ``points_m`` for the card's
         # point-model marker. The read map carries no heading; create defaults 0.
-        # Patrol points (cruisePoints, o=223) are DEFERRED — create/delete wire
-        # UNVERIFIED, so they are intentionally NOT surfaced here (see docs/TODO.md).
         for p in getattr(map_data, "maintenance_points", ()):
             if getattr(p, "point_id", None) is None:
                 continue
@@ -198,6 +198,22 @@ class DreameA2MapCamera(
                     "op": 224,
                     "type": 3,
                     "kind": "maintenance",
+                    "point_m": [p.x_mm / 1000.0, p.y_mm / 1000.0],
+                }
+            )
+        # Patrol / cruise points (cruisePoints, o=223) — single-point objects,
+        # DISTINCT opcode from maintenance (o=224) with delete type 2. Same
+        # ``point_m`` [x, y] marker model; the read map carries no heading, so
+        # create defaults 0. (wire-confirmed app-mitm 2026-06-15.)
+        for p in getattr(map_data, "patrol_points", ()):
+            if getattr(p, "point_id", None) is None:
+                continue
+            out.append(
+                {
+                    "id": p.point_id,
+                    "op": 223,
+                    "type": 2,
+                    "kind": "patrol",
                     "point_m": [p.x_mm / 1000.0, p.y_mm / 1000.0],
                 }
             )

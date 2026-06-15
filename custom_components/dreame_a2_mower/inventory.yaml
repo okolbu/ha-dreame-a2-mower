@@ -4536,13 +4536,20 @@ opcodes:
       map-layer object by its id and object-category type. type=4 is the
       confirmed value for ignore-obstacle zones (object category 4).
 
-      The `type` field is the element-category enum, now fully mapped from the
-      2026-06-12 map-edit CRUD capture [app-mitm:2026-06-12-mapedit-rotate-edit]:
-      0 = no-go zone / mowing-shape, 1 = spot, 3 = maintenance-point,
-      4 = ignore-obstacle zone. (Quirk: the ignore-obstacle element is added &
-      edited with type:0 in its OWN opcode o:234, but is DELETED here with
-      type:4 — the o:218 enum is the canonical element category, distinct from
-      the o:234 add-payload `type`.)
+      The `type` field is the element-category enum, now FULLY mapped (0–4)
+      from the 2026-06-12 map-edit CRUD capture
+      [app-mitm:2026-06-12-mapedit-rotate-edit] plus the 2026-06-15 patrol
+      capture [app-mitm:2026-06-15-patrol-point-crud]:
+        0 = no-go zone / mowing-shape
+        1 = spot
+        2 = patrol / cruise point   (create/move via o:223)
+        3 = maintenance-point       (create/move via o:224)
+        4 = ignore-obstacle zone    (add/edit via o:234 type:0)
+      (Quirk: the ignore-obstacle element is added & edited with type:0 in its
+      OWN opcode o:234, but is DELETED here with type:4 — the o:218 enum is the
+      canonical element category, distinct from the o:234 add-payload `type`.)
+      NOTE: patrol (2) and maintenance (3) are DISTINCT delete categories, the
+      same way their create opcodes (o:223 vs o:224) are distinct.
 
       The firmware echoes o:218 on s2p50 carrying the deleted entity's id;
       ids:[] in all observed captures. CONFIRMED via multiple captures
@@ -4553,7 +4560,7 @@ opcodes:
     status:
       seen_on_wire: true
       first_seen: "2026-04-26"
-      last_seen: "2026-06-12"
+      last_seen: "2026-06-15"
       decoded: confirmed
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
@@ -4569,8 +4576,12 @@ opcodes:
         claim: "o:218 delete `type` is the full element-category enum: 0=no-go/mowing-shape, 1=spot, 3=maintenance-point, 4=ignore-obstacle zone. Confirmed by deleting one element of each kind in the map-edit CRUD capture. Quirk: ignore-obstacle adds/edits with o:234 type:0 but deletes with o:218 type:4. [app-mitm:2026-06-12-mapedit-rotate-edit]"
         evidence: "app-mitm:2026-06-12-mapedit-rotate-edit"
       - date: "2026-06-15"
+        status: verified
+        claim: "o:218 delete `type` enum is fully 0–4: 0=no-go/mow-shape, 1=spot, 2=patrol/cruise point, 3=maintenance-point, 4=ignore-obstacle. type:2 (patrol) confirmed by the patrol delete capture (delete o:218{id:6,type:2} after a create/move). [app-mitm:2026-06-15-patrol-point-crud]"
+        evidence: "app-mitm:2026-06-15-patrol-point-crud (FINDING-patrol-point-crud-2026-06-15.md)"
+      - date: "2026-06-15"
         status: presumed
-        claim: "Integration delete_map_object service + map-editor card now pass categories 1 (spot) and 3 (maintenance) in addition to the existing 0/4. Wire payload unchanged ({id,type}); NOT yet device-validated."
+        claim: "Integration delete_map_object service + map-editor card now pass categories 1 (spot), 2 (patrol) and 3 (maintenance) in addition to the existing 0/4. Wire payload unchanged ({id,type}); NOT yet device-validated."
 
   - id: "o219"
     op: 219
@@ -4653,30 +4664,55 @@ opcodes:
 
   - id: "o223"
     op: 223
-    name: "edit_oriented_point"
+    name: "edit_patrol_point"
     category: "opcode"
-    payload_shape: "SEND {m:'a', o:223, d:{id:N, points:[x, y, heading]}} (app — seen 2026-06-12 in an older capture)"
+    payload_shape: "SEND {m:'a', o:223, d:{id:N, points:[x, y, heading]}} (app — confirmed 2026-06-15); commit via o:201"
     semantic: |
-      Move / edit an oriented point — a single point carrying a heading
-      [x, y, heading] (heading in radians). [app-mitm:2026-06-12-mapedit-rotate-edit]
-      Seen on the wire (older capture) but the element KIND is [UNVERIFIED]:
-      inferred to be a cruise / clean point (cf. cruisePoints type=8), DISTINCT
-      from the maintenance point — which uses its own opcode o:224. Only a
-      move/edit (id:<real>) was observed; create (id:-1) and delete are
-      [UNKNOWN — to capture]. Do not conflate with o:224 (maintenance point).
+      Create / move a patrol / cruise point — a single ORIENTED point
+      [x, y, heading] (heading in radians). [app-mitm:2026-06-15-patrol-point-crud]
+      The element kind is now WIRE-CONFIRMED as the patrol/cruise point (the MAP
+      blob's cruisePoints, type=8) — patrol has its OWN dedicated in-app map
+      editor, like every other element kind. The earlier [UNVERIFIED] "inferred
+      cruise point" framing is upgraded to confirmed.
+
+      `id` is the create/edit discriminator (same convention as o:215/o:224):
+      id:-1 = create new (device assigns a real id on commit — observed id 6);
+      id:<real> = move/edit that patrol point in place. DELETE is via o:218
+      {id, type:2} (patrol = category 2 in the o:218 delete enum), NOT o:223.
+      (Resolves the old mystery: the historical o:223 {id:5/6} was a patrol-point
+      MOVE.)
+
+      Sequence: o:204 (begin) → o:223 {id} → o:201 (commit). Live captured:
+      create o:223 {id:-1, points:[-2.27, 9.66, 0.06]} → assigned id 6; then
+      move o:223 {id:6, points:[-6.58, 4.67, 0.06]}; then delete o:218 {id:6,
+      type:2}.
+
+      DISTINCT opcode from o:224 (maintenance point) — both are oriented
+      [x,y,heading] points but separate editors / opcodes / delete categories
+      (patrol=2, maintenance=3). Do not conflate.
+
+      Patrol points are CREATED via o:223 here, but RUN via o:107
+      (start_cruise_point {point:[ids]}) — separate concerns.
     status:
       seen_on_wire: true
       first_seen: "2026-06-12"
-      last_seen: "2026-06-12"
-      decoded: partial
+      last_seen: "2026-06-15"
+      decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
-      apk: "/data/claude/homeassistant/OLD/from-mitm-claude/dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points"
+      apk: "/data/claude/homeassistant/FINDING-patrol-point-crud-2026-06-15.md § New this session"
     verifications:
       - date: "2026-06-12"
         status: partial
         claim: "o:223 {id, [x,y,heading]} moves an oriented point (seen on wire, older capture). Element kind UNVERIFIED — inferred cruise/cleanPoint, distinct from the o:224 maintenance point. No create/delete captured. [app-mitm:2026-06-12-mapedit-rotate-edit]"
         evidence: "app-mitm:2026-06-12-mapedit-rotate-edit"
+      - date: "2026-06-15"
+        status: verified
+        claim: "o:223 is the patrol/cruise-point editor: create o:223{id:-1,points:[x,y,heading]} (device-assigned id 6), move o:223{id:<real>,...}, delete o:218{id,type:2}. Element kind WIRE-CONFIRMED (patrol/cruise point = cruisePoints type=8), upgrading the prior UNVERIFIED inference. DISTINCT opcode from o:224 maintenance (delete type 2 vs 3). [app-mitm:2026-06-15-patrol-point-crud]"
+        evidence: "app-mitm:2026-06-15-patrol-point-crud (FINDING-patrol-point-crud-2026-06-15.md: create→id6, move, delete type:2)"
+      - date: "2026-06-15"
+        status: presumed
+        claim: "Integration now WIRES o:223 via coordinator.create_patrol_point → edit_map [(223,{id,points:[x,y,heading]})] (service create_patrol_point + map-editor card patrol_point tool, delete category 2, editable_objects patrol descriptor op=223/type=2/kind=patrol). Heading defaults 0.0 (read map carries none). Payload matches the 2026-06-15 capture; NOT yet device-validated (orchestrator + user validate after ship)."
 
   - id: "o224"
     op: 224
@@ -4699,6 +4735,10 @@ opcodes:
       id:<real> = move/edit that maintenance point in place. DELETE is via
       o:218 {id, type:3} (maintenance-point = category 3 in the o:218 delete
       enum), NOT o:224.
+
+      DISTINCT opcode from o:223 (patrol / cruise point) — both are oriented
+      [x,y,heading] points but separate editors / opcodes / delete categories
+      (maintenance=3, patrol=2). Do not conflate. [app-mitm:2026-06-15-patrol-point-crud]
 
       Sequence: o:204 (begin) → o:224 {id} → o:201 (commit).
     status:

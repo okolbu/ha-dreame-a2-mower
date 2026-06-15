@@ -1489,7 +1489,7 @@ never reached.
 | o219 | rename_zone | SEND {m:'a', o:219, d:{region:N, name:'...'}} (app — confirmed 2026-06-09) | APK-KNOWN |  |
 | o220 | split_zone | SEND {m:'a', o:220, d:{id:N, line_start:{x,y}, line_end:{x,y}}} (app — confirmed 2026-06-09) | APK-KNOWN |  |
 | o221 | merge_zones | SEND {m:'a', o:221, d:{ids:[N, ...]}} (app — confirmed 2026-06-09) | APK-KNOWN |  |
-| o223 | edit_oriented_point | SEND {m:'a', o:223, d:{id:N, points:[x, y, heading]}} (app — seen 2026-06-12 in an older capture) | SEEN-UNDECODED |  |
+| o223 | edit_patrol_point | SEND {m:'a', o:223, d:{id:N, points:[x, y, heading]}} (app — confirmed 2026-06-15); commit via o:201 | DECODED-UNWIRED |  |
 | o224 | edit_maintenance_point | SEND {m:'a', o:224, d:{id:N, points:[x, y, heading]}} (app — confirmed 2026-06-12); commit via o:201 | DECODED-UNWIRED |  |
 | o234 | add_ignore_obstacle_zone | SEND {m:'a', o:234, d:{id:-1, type:0, points:[...]}} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:234, id:N, ids:[], exe:T, status:T}, t:'TASK'} | WIRED |  |
 | o400 | camera_live_view | SEND {m:'a', o:400, d:{on:0|1}} (app — confirmed 2026-06-09) | APK-KNOWN |  |
@@ -2064,13 +2064,20 @@ routed action s2a50 {m:'a', o:218, d:{id:N, type:T}} to delete a
 map-layer object by its id and object-category type. type=4 is the
 confirmed value for ignore-obstacle zones (object category 4).
 
-The `type` field is the element-category enum, now fully mapped from the
-2026-06-12 map-edit CRUD capture [app-mitm:2026-06-12-mapedit-rotate-edit]:
-0 = no-go zone / mowing-shape, 1 = spot, 3 = maintenance-point,
-4 = ignore-obstacle zone. (Quirk: the ignore-obstacle element is added &
-edited with type:0 in its OWN opcode o:234, but is DELETED here with
-type:4 — the o:218 enum is the canonical element category, distinct from
-the o:234 add-payload `type`.)
+The `type` field is the element-category enum, now FULLY mapped (0–4)
+from the 2026-06-12 map-edit CRUD capture
+[app-mitm:2026-06-12-mapedit-rotate-edit] plus the 2026-06-15 patrol
+capture [app-mitm:2026-06-15-patrol-point-crud]:
+  0 = no-go zone / mowing-shape
+  1 = spot
+  2 = patrol / cruise point   (create/move via o:223)
+  3 = maintenance-point       (create/move via o:224)
+  4 = ignore-obstacle zone    (add/edit via o:234 type:0)
+(Quirk: the ignore-obstacle element is added & edited with type:0 in its
+OWN opcode o:234, but is DELETED here with type:4 — the o:218 enum is the
+canonical element category, distinct from the o:234 add-payload `type`.)
+NOTE: patrol (2) and maintenance (3) are DISTINCT delete categories, the
+same way their create opcodes (o:223 vs o:224) are distinct.
 
 The firmware echoes o:218 on s2p50 carrying the deleted entity's id;
 ids:[] in all observed captures. CONFIRMED via multiple captures
@@ -2118,17 +2125,35 @@ No echo observed on s2p50. [UNKNOWN — to capture]
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
-### o223 — `edit_oriented_point`
+### o223 — `edit_patrol_point`
 
-Move / edit an oriented point — a single point carrying a heading
-[x, y, heading] (heading in radians). [app-mitm:2026-06-12-mapedit-rotate-edit]
-Seen on the wire (older capture) but the element KIND is [UNVERIFIED]:
-inferred to be a cruise / clean point (cf. cruisePoints type=8), DISTINCT
-from the maintenance point — which uses its own opcode o:224. Only a
-move/edit (id:<real>) was observed; create (id:-1) and delete are
-[UNKNOWN — to capture]. Do not conflate with o:224 (maintenance point).
+Create / move a patrol / cruise point — a single ORIENTED point
+[x, y, heading] (heading in radians). [app-mitm:2026-06-15-patrol-point-crud]
+The element kind is now WIRE-CONFIRMED as the patrol/cruise point (the MAP
+blob's cruisePoints, type=8) — patrol has its OWN dedicated in-app map
+editor, like every other element kind. The earlier [UNVERIFIED] "inferred
+cruise point" framing is upgraded to confirmed.
 
-**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: /data/claude/homeassistant/OLD/from-mitm-claude/dreame-app-mapedit-rotate-edit-2026-06-12.md § Maintenance points`
+`id` is the create/edit discriminator (same convention as o:215/o:224):
+id:-1 = create new (device assigns a real id on commit — observed id 6);
+id:<real> = move/edit that patrol point in place. DELETE is via o:218
+{id, type:2} (patrol = category 2 in the o:218 delete enum), NOT o:223.
+(Resolves the old mystery: the historical o:223 {id:5/6} was a patrol-point
+MOVE.)
+
+Sequence: o:204 (begin) → o:223 {id} → o:201 (commit). Live captured:
+create o:223 {id:-1, points:[-2.27, 9.66, 0.06]} → assigned id 6; then
+move o:223 {id:6, points:[-6.58, 4.67, 0.06]}; then delete o:218 {id:6,
+type:2}.
+
+DISTINCT opcode from o:224 (maintenance point) — both are oriented
+[x,y,heading] points but separate editors / opcodes / delete categories
+(patrol=2, maintenance=3). Do not conflate.
+
+Patrol points are CREATED via o:223 here, but RUN via o:107
+(start_cruise_point {point:[ids]}) — separate concerns.
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: /data/claude/homeassistant/FINDING-patrol-point-crud-2026-06-15.md § New this session`
 
 ### o224 — `edit_maintenance_point`
 
@@ -2147,6 +2172,10 @@ id:-1 = create new (device assigns a real id on commit — observed id 6);
 id:<real> = move/edit that maintenance point in place. DELETE is via
 o:218 {id, type:3} (maintenance-point = category 3 in the o:218 delete
 enum), NOT o:224.
+
+DISTINCT opcode from o:223 (patrol / cruise point) — both are oriented
+[x,y,heading] points but separate editors / opcodes / delete categories
+(maintenance=3, patrol=2). Do not conflate. [app-mitm:2026-06-15-patrol-point-crud]
 
 Sequence: o:204 (begin) → o:224 {id} → o:201 (commit).
 
