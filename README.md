@@ -6,11 +6,11 @@ fork** of any upstream vacuum or mower project.
 
 ## Status
 
-🟢 **Alpha pre-release (`v1.0.18a*`).** Feature-complete for a single
+🟢 **Alpha pre-release (`v1.0.27a2`).** Feature-complete for a single
 `dreame.mower.g2408` on one Dreame cloud account, and in daily use against
 a live mower. Distributed as a HACS pre-release while protocol coverage and
 live validation continue. Built greenfield for the A2 — the original F1–F7
-phase rollout lives in `docs/superpowers/plans/`; since then the
+phase rollout lives in `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/`; since then the
 coordinator, cloud client, entity platforms, and map renderer have each
 been decomposed into focused packages and multi-map support was added.
 
@@ -24,18 +24,44 @@ been decomposed into focused packages and multi-map support was added.
 - **Battery, charging status, error code, obstacle flag, rain
   protection, positioning failed, battery temp low** as native HA
   entities.
-- **Position** as `device_tracker` (lat/lon via cloud LOCN) plus
+- **Position** as `device_tracker` — absolute GPS lat/lon read from the
+  cloud `location/getRecords` history (`_refresh_gps`, 60 s) — plus
   `sensor.position_x_m` / `_y_m` / `_north_m` / `_east_m` derived
-  from s1.4 + station-bearing rotation.
+  from s1.4 + station-bearing rotation, and an `MPOS` diagnostic sensor
+  (`{x, y, yaw}`, raw/untransformed) with an on-demand Refresh MPOS button.
 
 ### Control surface
 - `action_mode` select (`all_areas` / `edge` / `zone` / `spot`).
+- **Resume** and **Cancel dock return** buttons (in addition to the
+  mower entity's `start_mowing` / `pause` / `dock`).
 - Services: `set_active_selection`, `mow_zone`, `mow_edge`, `mow_spot`,
-  `recharge`, `find_bot`, `lock_bot`, `suppress_fault`,
-  `set_schedule_plans`, `finalize_session`, `replay_session`,
-  `refresh_cloud_state`, `show_lidar_fullscreen`.
+  `recharge`, `find_bot`, `suppress_fault`, `set_schedule_plans`,
+  `finalize_session`, `replay_session`, `refresh_cloud_state`,
+  `show_lidar_fullscreen`, `start_point_patrol`, `start_edge_patrol`.
 - All routed through the cloud RPC `s2.50 aiid=50` envelope (the only
   command path that works on g2408 — direct `action()` returns 80001).
+
+### Schedule editing
+- Edit mowing schedules from HA — the bundled
+  **schedule card** (`dreame-a2-schedule-card.js`) drives the
+  `set_schedule_plans` service, which writes the schedule back to the
+  mower over the chunked `SCHD*V3` transport (decoded + byte-verified).
+
+### Map editor
+- Draw and manage map objects from HA via services:
+  `create_no_go_zone`, `create_ignore_obstacle`, `create_mow_shape`,
+  `rename_zone`, `delete_map_object`, `split_zone`, `merge_zones` —
+  all routed as map-edit transactions (`o=200` select → `o=204` begin →
+  mutations → `o=201` commit). A bundled map-editor card
+  (`dreame-map-editor-card.js`) surfaces them on the dashboard.
+
+### Photo & video gallery
+- **`sensor.dreame_a2_mower_photo_gallery`** — categorized cloud media
+  (person / patrol / obstacle / album), synced hourly from the Dreame
+  OSS bucket. State is the total item count; the `items` attribute
+  carries the newest-first photo + video list (each with a signed media
+  URL) for the bundled gallery card. Surfaced on the dashboard's
+  Photos view.
 
 ### Settings (cloud + s2.51)
 - Switches: rain protection, DnD, low-speed-at-night, custom charging
@@ -141,16 +167,19 @@ session totals). The replay picker spans all maps. See `docs/multi-map.md`.
 Mowing start/pause/resume/end and dock arrive/depart fire as HA event
 entities (`event.dreame_a2_mower_lifecycle`). Each event carries a
 payload with the action mode, area mowed, etc. — wire them to push
-notifications, Logbook, automations, or your own dashboards. See
-`docs/events.md` for the full event reference and recipes. The
-follow-up alert tier (emergency_stop, lifted, stuck, ...) lands in
-a later release.
+notifications, Logbook, automations, or your own dashboards. The
+integration also ships a **device-trigger** platform, so the HA
+automation editor offers per-event triggers ("Mowing started",
+"Human detected", "Arrived at maintenance point", ...) directly off
+the mower device. See `docs/events.md` for the full event reference
+and recipes. The follow-up alert tier (emergency_stop, lifted,
+stuck, ...) lands in a later release.
 
 ### Showcase dashboard
-An 11-view Lovelace dashboard at `dashboards/mower/dashboard.yaml`:
-Mower, Map Selector, Settings & Zones, Schedule, LiDAR, WiFi Coverage,
-Sessions, More Settings, Diagnostics, Tools, and Photo Privacy. Uses
-standard HA cards plus the bundled custom cards (LiDAR / schedule /
+A 7-view Lovelace dashboard at `dashboards/mower/dashboard.yaml`:
+Overview, Maps & Zones, Schedule, Sessions & History, Settings,
+Diagnostics & Tools, and Photos. Uses standard HA cards plus the
+bundled custom cards (LiDAR / schedule / map-editor / live-map /
 replay) and a few common HACS cards (apexcharts, button-card, card-mod,
 plotly).
 
@@ -284,9 +313,9 @@ so historical session and LiDAR data carry over without migration.
 
 ## Documentation
 
-- **`docs/superpowers/specs/2026-04-27-greenfield-integration-design.md`**
+- **`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-04-27-greenfield-integration-design.md`**
   — full spec including the 48-item behavioral parity checklist.
-- **`docs/superpowers/plans/`** — phase-by-phase implementation plans
+- **`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/`** — phase-by-phase implementation plans
   (F1 through F7).
 - **`custom_components/dreame_a2_mower/entity-inventory.yaml`** — the
   authoritative per-entity inventory: read source + verification status
