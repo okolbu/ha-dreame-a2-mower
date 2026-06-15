@@ -236,7 +236,7 @@ if (!customElements.get("dreame-mower-map-card")) {
 
 // Card version banner — lets the user confirm which build loaded in the
 // browser console (the cards "cache hard"; a stale cache shows the old version).
-const CARD_VERSION = "1.0.27a2";
+const CARD_VERSION = "1.0.27a3";
 console.info(
   `%c dreame-mower-map-card v${CARD_VERSION} `,
   "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"
