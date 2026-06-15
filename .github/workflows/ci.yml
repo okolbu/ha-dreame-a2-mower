@@ -149,12 +149,15 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          # voluptuous + requests are needed because importing
-          # custom_components.dreame_a2_mower triggers __init__.py which
-          # transitively pulls services.py (`import voluptuous`) and
-          # cloud_client.py (`import requests`). Without them the
-          # inventory/loader test fails at collection time.
-          pip install pytest PyYAML voluptuous requests
+          # Importing custom_components.dreame_a2_mower triggers __init__.py
+          # which transitively pulls the integration's real third-party deps
+          # (voluptuous via services, requests via cloud_client, pillow+numpy
+          # via rendering, paho-mqtt+aiohttp via the MQTT/view layer,
+          # pycryptodome via crypto). Some inventory tests now import the
+          # package (e.g. test_control_mode_code_sync imports control_honesty),
+          # so the inventory job needs the SAME dep set as full-test-suite —
+          # otherwise collection fails with ModuleNotFoundError (e.g. PIL).
+          pip install pytest PyYAML voluptuous requests pillow numpy paho-mqtt pycryptodome aiohttp
 
       - name: Run tool + inventory tests
         run: python -m pytest tests/tools/ tests/inventory/ -v

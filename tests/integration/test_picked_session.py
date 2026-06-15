@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import json
+import os
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -14,6 +16,30 @@ from custom_components.dreame_a2_mower.session_card import (
 )
 
 FIXTURE_DIR = Path("tests/protocol/data/sessions")
+
+
+@pytest.fixture(autouse=True)
+def _fixed_timezone():
+    """Pin the process timezone so session-card labels are deterministic.
+
+    Labels/timestamps are built with naive ``datetime.fromtimestamp`` (system
+    local time — correct in production, where HA sets the process TZ to the
+    user's configured zone). Without a pin the assertions below depend on where
+    the suite runs: the dev box (Europe/Oslo, UTC+2 for the 2026-04-26 fixture →
+    ``21:49``) vs CI (UTC → ``19:49``). Pin to the dev/user zone so the
+    characterization holds everywhere.
+    """
+    prev = os.environ.get("TZ")
+    os.environ["TZ"] = "Europe/Oslo"
+    time.tzset()
+    try:
+        yield
+    finally:
+        if prev is None:
+            os.environ.pop("TZ", None)
+        else:
+            os.environ["TZ"] = prev
+        time.tzset()
 
 
 def _make_entry_from_raw(raw: dict) -> SimpleNamespace:
