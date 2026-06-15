@@ -50,7 +50,7 @@ cleanup). The attr-bundling itself was **deferred** (user-confirmed 2026-06-15).
 net in place, OR this is explicitly closed as not-worth-it. Best folded into the eventual
 real-3d (spec §5 single-ingestion-funnel) rather than done alone.
 **Status:** deferred (over-engineering for the payoff; user-confirmed 2026-06-15).
-**Cross-refs:** `/data/claude/homeassistant/refactor-2026-06-13/spec.md` §4 Phase 3f;
+**Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/refactor-2026-06-13/spec.md` §4 Phase 3f;
 `coordinator/_core.py` `_CoreMixin.__init__`; `feedback_no_migration_overengineering`;
 the Phase-3d dedup TODO above (the real state-restructure home).
 
@@ -107,7 +107,7 @@ containers with each field's upstream source legible; all `coordinator.data`
 readers + the 84 test imports resolve (via shims or a clean rename); full suite
 green; no behavior change (dedup already shipped).
 **Status:** deferred (long-term readability goal; user-confirmed 2026-06-14).
-**Cross-refs:** `/data/claude/homeassistant/refactor-2026-06-13/spec.md` §4
+**Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/refactor-2026-06-13/spec.md` §4
 Phase 3d; `mower/state.py`; `feedback_no_migration_overengineering` (the cost
 caveat); the Phase-3d dedup spec/commit (step 1).
 
@@ -173,7 +173,7 @@ is over-engineering for a single-user repo. Decisions taken:
     moves are planned).
 **Status:** RESOLVED/CLOSED 2026-06-15 — funnel rejected as over-engineering; dead
 fields dropped; staging layer kept by design.
-**Cross-refs:** `/data/claude/homeassistant/refactor-2026-06-13/spec.md` §4 Phase 3d
+**Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/refactor-2026-06-13/spec.md` §4 Phase 3d
 + §5 single-ingestion-funnel; `mower/state.py`, `mower/state_snapshot.py`,
 `mower/state_machine.py`, `coordinator/_property_apply.py`, `coordinator/_mqtt_handlers.py`;
 the per-domain-split TODO below (Phase 3d step 2).
@@ -1141,7 +1141,7 @@ is visually confirmed unchanged (lawn/zones/dock/obstacles land identically); th
 `tests/www/test_projection_parity.py` still passes (it is the regression gate for the
 transform-move); zone types are unified with all existing render/decoder tests green.
 **Status:** blocked-by-dead-mower (needs revival + live map-render visual check).
-**Cross-refs:** `refactor-2026-06-13/p3a-frame-spec.md` § "Explicitly DEFERRED";
+**Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/refactor-2026-06-13/p3a-frame-spec.md` § "Explicitly DEFERRED";
 `custom_components/dreame_a2_mower/map_decoder.py:716-729`;
 `custom_components/dreame_a2_mower/map_render/_geometry.py` (`_cloud_to_px` /
 `_renderer_to_px`); `tests/www/test_projection_parity.py`.
