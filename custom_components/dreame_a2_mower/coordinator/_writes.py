@@ -762,7 +762,8 @@ class _WritesMixin:
     ) -> bool:
         """Delete a map object by id+category on `map_id` (o=218).
 
-        category: 0 = zone/no-go, 4 = ignore-obstacle (confirmed values).
+        category: 0 = zone/no-go/mow-shape, 1 = spot, 3 = maintenance point,
+        4 = ignore-obstacle (all confirmed values; app-mitm 2026-06-12).
         """
         return await self.edit_map(
             int(map_id), [(218, {"id": int(object_id), "type": int(category)})]
@@ -806,6 +807,40 @@ class _WritesMixin:
         _mes.validate_mow_shape(shape, pts)
         return await self.edit_map(int(map_id), [(215, {
             "id": int(object_id), "type": t, "points": pts, "radius": 0,
+        })])
+
+    async def create_spot(self, map_id, points, object_id=-1) -> bool:
+        """Create (or edit-in-place) a spot area (o=214).
+
+        Spots are 4 axis-aligned corners — same geometry as a no-go rect, but
+        their own opcode with NO type/radius/name on the wire. `points` are
+        exactly four [x, y] meter pairs in the map edit-frame.
+        object_id: -1 creates a new spot; an existing id edits it in place.
+        Delete reuses ``delete_map_object`` with category 1.
+        """
+        from ..protocol import map_edit_shapes as _mes
+        pts = _mes.as_pairs(points)
+        if len(pts) != 4:
+            raise ValueError(f"spot needs exactly 4 points, got {len(pts)}")
+        return await self.edit_map(int(map_id), [(214, {
+            "id": int(object_id), "points": pts,
+        })])
+
+    async def create_maintenance_point(
+        self, map_id, x, y, heading=0.0, object_id=-1
+    ) -> bool:
+        """Create (or move) a maintenance / clean point (o=224).
+
+        Wire payload is a FLAT 3-element array ``[x, y, heading]`` (NOT a
+        list-of-pairs). `x`/`y` are meters in the map edit-frame; `heading` is
+        in radians and defaults 0.0 (the read map carries no heading, so a MOVE
+        — edit-in-place via a real object_id — resets heading to 0).
+        object_id: -1 creates a new point; an existing id moves it.
+        Delete reuses ``delete_map_object`` with category 3.
+        """
+        return await self.edit_map(int(map_id), [(224, {
+            "id": int(object_id),
+            "points": [float(x), float(y), float(heading)],
         })])
 
     async def split_zone(self, map_id, zone_id, line_start, line_end) -> bool:

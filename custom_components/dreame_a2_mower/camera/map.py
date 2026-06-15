@@ -19,7 +19,7 @@ from ..coordinator import DreameA2MowerCoordinator
 # v2: editable_objects descriptors gained "shape_type" + a richer "kind"
 # (decorative shapes like "heart"/"cloud", real "line") instead of just
 # "nogo"/"ignore".
-MAP_ATTR_SCHEMA_VERSION = 2
+MAP_ATTR_SCHEMA_VERSION = 3
 
 # Cloud ``shapeType`` -> human ``kind`` for editable_objects descriptors. Read
 # side only; covers the real LINE (1) and the decorative palette (>=9). Absent
@@ -166,6 +166,39 @@ class DreameA2MapCamera(
                     "shape_type": shape_type,
                     "points_m": [list(p) for p in z.points_m],
                     "radius": 0.0,
+                }
+            )
+        # Spots — own opcode (o=214), same 4-corner geometry as a no-go rect.
+        # Surface the meter-frame corners the editor card draws + edits.
+        for s in getattr(map_data, "spot_zones", ()):
+            if getattr(s, "spot_id", None) is None:
+                continue
+            out.append(
+                {
+                    "id": s.spot_id,
+                    "op": 214,
+                    "type": 1,
+                    "kind": "spot",
+                    "shape_type": None,
+                    "points_m": [list(p) for p in getattr(s, "points_m", ())],
+                    "radius": 0.0,
+                }
+            )
+        # Maintenance points (cleanPoints, o=224) — single-point objects. A new
+        # ``point_m`` [x, y] field (metres) replaces ``points_m`` for the card's
+        # point-model marker. The read map carries no heading; create defaults 0.
+        # Patrol points (cruisePoints, o=223) are DEFERRED — create/delete wire
+        # UNVERIFIED, so they are intentionally NOT surfaced here (see docs/TODO.md).
+        for p in getattr(map_data, "maintenance_points", ()):
+            if getattr(p, "point_id", None) is None:
+                continue
+            out.append(
+                {
+                    "id": p.point_id,
+                    "op": 224,
+                    "type": 3,
+                    "kind": "maintenance",
+                    "point_m": [p.x_mm / 1000.0, p.y_mm / 1000.0],
                 }
             )
         return out

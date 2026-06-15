@@ -37,6 +37,68 @@ async def test_create_mow_shape():
 
 
 @pytest.mark.asyncio
+async def test_create_spot_exact_o214_payload():
+    c = _coord()
+    pts = [[1.0, 1.0], [3.0, 1.0], [3.0, 3.0], [1.0, 3.0]]
+    await c.create_spot(0, pts)
+    # o=214, NO type/radius/name — just id + the 4 corner pairs.
+    assert c.edit_map.await_args.args[0] == 0
+    assert c.edit_map.await_args.args[1][0] == (214, {
+        "id": -1,
+        "points": [[1.0, 1.0], [3.0, 1.0], [3.0, 3.0], [1.0, 3.0]],
+    })
+
+
+@pytest.mark.asyncio
+async def test_create_spot_edit_in_place_passes_object_id():
+    c = _coord()
+    await c.create_spot(2, [[0, 0], [1, 0], [1, 1], [0, 1]], object_id=55)
+    op, payload = c.edit_map.await_args.args[1][0]
+    assert c.edit_map.await_args.args[0] == 2
+    assert op == 214 and payload["id"] == 55
+
+
+@pytest.mark.asyncio
+async def test_create_spot_requires_exactly_four_points():
+    c = _coord()
+    with pytest.raises(ValueError):
+        await c.create_spot(0, [[0, 0], [1, 1], [2, 2]])   # 3 points
+    c.edit_map.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_create_maintenance_point_exact_o224_flat_payload():
+    c = _coord()
+    await c.create_maintenance_point(0, 2.5, -1.3)
+    # o=224 carries a FLAT 3-element [x, y, heading] array, heading defaults 0.0.
+    assert c.edit_map.await_args.args[0] == 0
+    assert c.edit_map.await_args.args[1][0] == (224, {
+        "id": -1,
+        "points": [2.5, -1.3, 0.0],
+    })
+
+
+@pytest.mark.asyncio
+async def test_create_maintenance_point_move_with_heading():
+    c = _coord()
+    await c.create_maintenance_point(1, 4.0, 5.0, heading=1.57, object_id=88)
+    op, payload = c.edit_map.await_args.args[1][0]
+    assert c.edit_map.await_args.args[0] == 1
+    assert op == 224
+    assert payload == {"id": 88, "points": [4.0, 5.0, 1.57]}
+
+
+@pytest.mark.asyncio
+async def test_delete_categories_spot_and_maintenance():
+    c = _coord()
+    await c.delete_map_object(0, 7, 1)   # spot
+    await c.delete_map_object(0, 42, 3)  # maintenance
+    muts = [call.args[1][0] for call in c.edit_map.await_args_list]
+    assert muts[0] == (218, {"id": 7, "type": 1})
+    assert muts[1] == (218, {"id": 42, "type": 3})
+
+
+@pytest.mark.asyncio
 async def test_split_and_merge():
     c = _coord()
     await c.split_zone(0, 1, [-0.19, -11.41], [-5.21, -6.22])

@@ -160,6 +160,11 @@ class SpotZone:
     name: str
     points: tuple[tuple[float, float], ...]
     area_m2: float = 0.0
+    # Edit-frame polygon corners in METERS (÷1000 of ``points``, un-reflected
+    # cloud frame) — feeds the map-editor card's editable_objects directly,
+    # exactly like ExclusionZone.points_m. The o=214 spot create/edit wire
+    # takes these 4 corners back in metres.
+    points_m: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -825,8 +830,15 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
             for pt in rp
         )
         if pts:
+            points_m = tuple((x / 1000.0, y / 1000.0) for (x, y) in pts)
             spot_out.append(
-                SpotZone(spot_id=spot_id, name=name, points=pts, area_m2=area_m2)
+                SpotZone(
+                    spot_id=spot_id,
+                    name=name,
+                    points=pts,
+                    area_m2=area_m2,
+                    points_m=points_m,
+                )
             )
 
     # -----------------------------------------------------------------------

@@ -56,7 +56,7 @@ entities:
     write_path: read-only
     status:
       seen_working: true
-      last_verified: "2026-06-01"
+      last_verified: "2026-06-15"
     verifications:
       - date: "2026-05-14"
         status: verified
@@ -85,6 +85,10 @@ entities:
         status: verified
         claim: "calibration_points RE-ADDED to extra_state_attributes (it had been dropped in the live-map rehaul, 81f7c74, which is what broke the WebGL LiDAR card's map underlay — the underlay fetches the camera's base PNG directly and never consumed the SVG live card). 3 mower-frame mm ↔ served-PNG pixel correspondences computed from map_projection via the renderer formula px=(bx2-x)/grid, py=(by2-y)/grid, then vertical flip y=(h-1)-py. Kept in _unrecorded_attributes (out of recorder)."
         evidence: "tests/integration/test_map_camera_attributes.py::test_extra_state_attributes_exposes_calibration_points + ::test_calibration_points_is_unrecorded; live visual confirmation 2026-06-08 (v1.0.24a6): user toggled Map underlay on the LiDAR card and the base map textures back in"
+      - date: "2026-06-15"
+        status: presumed
+        claim: "editable_objects now also surfaces SPOT descriptors {id, op:214, type:1, kind:'spot', shape_type:None, points_m:[[x,y]×4], radius} and MAINTENANCE-POINT descriptors {id, op:224, type:3, kind:'maintenance', point_m:[x,y]} (a NEW single-point field; the read map has no heading). MAP_ATTR_SCHEMA_VERSION bumped 2→3. The map-editor card draws spots as <polygon obj-spot> and maintenance points as a marker (NOT a polygon line), and writes via the NEW services create_spot (o=214) + create_maintenance_point (o=224, flat [x,y,heading=0]); delete_map_object extended to categories 1 (spot) / 3 (maintenance). Patrol points (o=223) intentionally NOT surfaced — create/delete wire UNVERIFIED (see docs/TODO.md). NOT yet device-validated."
+        evidence: "tests/integration/test_editable_objects_attr.py::test_editable_objects_spot_and_maintenance + test_card_contract.py::test_camera_editable_objects_exact_element_shape; tests/www/test_map_editor_points.py (node render+save harness); coordinator/_writes.py create_spot/create_maintenance_point; camera/map.py _editable_objects_from_map"
     references:
       code: "custom_components/dreame_a2_mower/_camera_map.py:14"
       wire_entry: "MAPL"

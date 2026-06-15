@@ -21,6 +21,7 @@ from .protocol.map_decoder import (  # noqa: F401
     MowingZone,
     NavPath,
     PatrolPoint,
+    SpotZone,
     apply_session_geometry,
     join_map_parts,
     parse_cloud_map,

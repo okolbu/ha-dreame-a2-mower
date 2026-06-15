@@ -4458,6 +4458,9 @@ opcodes:
         status: verified
         claim: "App sends o:214 {id, points:[4 axis-aligned corners]} to create (id:-1, device-assigned id 4) and edit/resize (id:<real>) a spot map element; no rotation; delete via o:218 {id,type:1}. NET-NEW opcode, not in prior canonical catalog. [app-mitm:2026-06-12-mapedit-rotate-edit]"
         evidence: "app-mitm:2026-06-12-mapedit-rotate-edit"
+      - date: "2026-06-15"
+        status: presumed
+        claim: "Integration now WIRES o:214 via coordinator.create_spot → edit_map [(214,{id,points:[[x,y]×4]})] (service create_spot + map-editor card spot tool, delete category 1). Payload matches the 2026-06-12 capture; NOT yet device-validated (orchestrator + user validate after ship)."
 
   - id: "o215"
     op: 215
@@ -4565,6 +4568,9 @@ opcodes:
         status: verified
         claim: "o:218 delete `type` is the full element-category enum: 0=no-go/mowing-shape, 1=spot, 3=maintenance-point, 4=ignore-obstacle zone. Confirmed by deleting one element of each kind in the map-edit CRUD capture. Quirk: ignore-obstacle adds/edits with o:234 type:0 but deletes with o:218 type:4. [app-mitm:2026-06-12-mapedit-rotate-edit]"
         evidence: "app-mitm:2026-06-12-mapedit-rotate-edit"
+      - date: "2026-06-15"
+        status: presumed
+        claim: "Integration delete_map_object service + map-editor card now pass categories 1 (spot) and 3 (maintenance) in addition to the existing 0/4. Wire payload unchanged ({id,type}); NOT yet device-validated."
 
   - id: "o219"
     op: 219
@@ -4708,6 +4714,9 @@ opcodes:
         status: verified
         claim: "App sends o:224 {id, [x,y,heading]} to create (id:-1, device-assigned id 6) and move/edit (id:<real>) a maintenance point (oriented point, heading in rad); delete via o:218 {id,type:3}. NET-NEW opcode, not in prior canonical catalog. [app-mitm:2026-06-12-mapedit-rotate-edit]"
         evidence: "app-mitm:2026-06-12-mapedit-rotate-edit"
+      - date: "2026-06-15"
+        status: presumed
+        claim: "Integration now WIRES o:224 via coordinator.create_maintenance_point → edit_map [(224,{id,points:[x,y,heading]})] FLAT 3-array (service create_maintenance_point + map-editor card point tool, delete category 3, heading defaults 0.0 — read map has none so MOVE resets heading). Payload matches the 2026-06-12 capture; NOT yet device-validated."
 
   - id: "o234"
     op: 234

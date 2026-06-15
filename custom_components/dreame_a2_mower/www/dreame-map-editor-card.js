@@ -1,11 +1,17 @@
 // Interactive map-editor card: base <image> in an SVG viewBox plus draggable
-// SVG overlays for the map's no-go / ignore / mow-shape edit objects.
+// SVG overlays for the map's no-go / ignore / mow-shape / spot / maintenance
+// edit objects.
 //
 // Reads camera.dreame_a2_mower_map .attributes:
 //   map_projection, editor_base_url (clean no-exclusions bg; falls back to
 //   entity_picture), editable_objects, map_id, available_map_ids
 // and writes via the dreame_a2_mower create_no_go_zone / create_ignore_obstacle
-// / create_mow_shape / delete_map_object services.
+// / create_mow_shape / create_spot / create_maintenance_point /
+// delete_map_object services.
+//
+// NOTE: patrol points (cruisePoints, o=223) are DEFERRED — their create/delete
+// wire is UNVERIFIED, so there is intentionally no patrol tool here. See
+// docs/TODO.md "Patrol-point editor CRUD deferred".
 //
 // ALL numeric geometry (projection, rect/bbox corners, rotate, resize, circle,
 // wire-shape mapping) lives in ./_dreame-map-edit-geom.js — this card is DOM +
@@ -65,6 +71,11 @@ const TOOLS = [
   { id: "mow_mushroom", label: "Mow Mushroom", model: "edge", save: { category: "mow", shape: "mushroom" } },
   { id: "mow_cloud", label: "Mow Cloud", model: "edge", save: { category: "mow", shape: "cloud" } },
   { id: "mow_rainbow", label: "Mow Rainbow", model: "edge", save: { category: "mow", shape: "rainbow" } },
+  // Spot = own opcode (o=214), same 4-corner rect geometry as a no-go rect.
+  { id: "spot_rect", label: "Spot ▭", model: "corners", resize: "rect", save: { category: "spot", shape: "rect" } },
+  // Maintenance point = NEW single-point model (o=224): click to place, drag to
+  // move (edit-in-place), X to delete. No resize/rotate/vertex.
+  { id: "maint_point", label: "Maint ⊕", model: "point", save: { category: "maintenance", shape: "point" } },
 ];
 
 class DreameMapEditorCard extends HTMLElement {
@@ -129,6 +140,11 @@ class DreameMapEditorCard extends HTMLElement {
       `.obj-nogo{stroke:${NOGO_STROKE};fill:${NOGO_FILL};stroke-width:2}` +
       `.obj-ignore{stroke:${IGNORE_STROKE};fill:${IGNORE_FILL};stroke-width:2}` +
       `.obj-decorative{fill:rgba(177,0,0,0.06);stroke:rgba(177,0,0,0.5);stroke-width:1.5;stroke-dasharray:5 4}` +
+      `.obj-spot{fill:rgba(0,150,200,0.12);stroke:rgba(0,150,200,0.8);stroke-width:2}` +
+      `.obj-maint circle{fill:rgba(255,160,0,0.85);stroke:#fff;stroke-width:1.5}` +
+      `.obj-maint line{stroke:#fff;stroke-width:1.5;pointer-events:none}` +
+      `.marker circle{fill:rgba(255,160,0,0.9);stroke:#fff;stroke-width:1.5}` +
+      `.marker line{stroke:#fff;stroke-width:1.5;pointer-events:none}` +
       `.draft{stroke:#1565c0;stroke-width:2;fill:rgba(21,101,192,0.15)}` +
       `.bbox{stroke:#1565c0;stroke-width:1;stroke-dasharray:4 3;fill:none;pointer-events:none}` +
       `.drawline{stroke:#1565c0;stroke-width:2;fill:none;pointer-events:none}` +
@@ -302,7 +318,7 @@ class DreameMapEditorCard extends HTMLElement {
     const objs = Array.isArray(a.editable_objects) ? a.editable_objects : [];
     this._objs = objs;
     const key = JSON.stringify(
-      objs.map((o) => [o.id, o.op, o.type, o.kind, o.shape_type, o.points_m, o.radius])
+      objs.map((o) => [o.id, o.op, o.type, o.kind, o.shape_type, o.points_m, o.point_m, o.radius])
     );
     if (key === this._objKey) return;
     this._objKey = key;
@@ -320,9 +336,9 @@ class DreameMapEditorCard extends HTMLElement {
       if (Object.prototype.hasOwnProperty.call(this._overrides, k)) {
         const ov = this._overrides[k];
         if (ov === null) continue; // optimistically deleted
-        eff.push({ id: o.id, kind: o.kind, shape_type: o.shape_type, points_m: ov.points_m, radius: ov.radius || 0 });
+        eff.push({ id: o.id, kind: o.kind, shape_type: o.shape_type, points_m: ov.points_m, point_m: ov.point_m, radius: ov.radius || 0 });
       } else {
-        eff.push({ id: o.id, kind: o.kind, shape_type: o.shape_type, points_m: o.points_m, radius: o.radius });
+        eff.push({ id: o.id, kind: o.kind, shape_type: o.shape_type, points_m: o.points_m, point_m: o.point_m, radius: o.radius });
       }
     }
     for (const p of this._provisional || []) eff.push(p); // created (no id)
@@ -339,6 +355,13 @@ class DreameMapEditorCard extends HTMLElement {
     const parts = [];
     for (const o of this._effectiveObjects(objs)) {
       if (selId != null && o.id === selId && o.kind === selKind) continue;
+      // Maintenance points (o=224) are single-point objects — draw a marker
+      // (circle + crosshair), NOT a polygon line. The click target is the <g>.
+      if (o.kind === "maintenance" && Array.isArray(o.point_m)) {
+        const c = metersToPixel(o.point_m[0], o.point_m[1], this._proj);
+        parts.push(this._markerSvg(c, "obj obj-maint", o.id, o.kind));
+        continue;
+      }
       const pts = Array.isArray(o.points_m) ? o.points_m : [];
       const pix = pts.map((m) => metersToPixel(m[0], m[1], this._proj));
       // Decorative mow-shapes (shape_type >= 9: heart/cloud/etc.) are already
@@ -359,7 +382,10 @@ class DreameMapEditorCard extends HTMLElement {
         }
         continue;
       }
-      const cls = o.kind === "ignore" ? "obj obj-ignore" : "obj obj-nogo";
+      const cls =
+        o.kind === "ignore" ? "obj obj-ignore"
+        : o.kind === "spot" ? "obj obj-spot"
+        : "obj obj-nogo";
       if (pix.length >= 2) {
         const d = pix.map((q) => `${q[0].toFixed(1)},${q[1].toFixed(1)}`).join(" ");
         parts.push(`<polygon class="${cls}" points="${d}" data-id="${o.id}" data-kind="${o.kind}"/>`);
@@ -404,6 +430,10 @@ class DreameMapEditorCard extends HTMLElement {
       draft.radius = d;
     } else if (tool.model === "line") {
       draft.pts = [[cx - d, cy], [cx + d, cy]];
+    } else if (tool.model === "point") {
+      // single point (maintenance): no drag-to-size, just a placed marker.
+      draft.pts = [[cx, cy]];
+      draft.radius = 0;
     }
     return draft;
   }
@@ -416,7 +446,34 @@ class DreameMapEditorCard extends HTMLElement {
   // identical — but the shape label is lost). Re-typing on edit is expected,
   // not a bug; surfacing the original shape needs the decoder to expose it.
   _draftFromObject(o) {
+    // Maintenance point (o=224): single-point draft. Drag-to-move = edit-in-place.
+    if (o.kind === "maintenance" && Array.isArray(o.point_m)) {
+      const c = metersToPixel(o.point_m[0], o.point_m[1], this._proj);
+      return {
+        category: "maintenance",
+        shape: "point",
+        model: "point",
+        resize: null,
+        kind: "maintenance",
+        objectId: o.id,
+        pts: [c],
+        radius: 0,
+      };
+    }
     const pix = (o.points_m || []).map((m) => metersToPixel(m[0], m[1], this._proj));
+    // Spot (o=214): a 4-corner rect, reshaped like a no-go rect.
+    if (o.kind === "spot") {
+      return {
+        category: "spot",
+        shape: "rect",
+        model: "corners",
+        resize: "rect",
+        kind: "spot",
+        objectId: o.id,
+        pts: pix,
+        radius: 0,
+      };
+    }
     // Decorative mow-shapes (shape_type >= 9) are create+delete — there is no
     // reshape-in-place op. Build a DELETE-ONLY draft: no line/polygon model
     // inference, just the bbox corners for the selection outline + delete
@@ -713,6 +770,24 @@ class DreameMapEditorCard extends HTMLElement {
           shape: d.shape,
           points,
         });
+      } else if (d.category === "spot") {
+        // o=214: 4 corner points, own opcode (no type/radius). Create or edit.
+        await this._hass.callService("dreame_a2_mower", "create_spot", {
+          map_id: mapId,
+          points,
+          object_id: d.objectId != null ? d.objectId : -1,
+        });
+      } else if (d.category === "maintenance") {
+        // o=224: a single point -> flat (x, y); heading defaults 0 (read map has
+        // none, so a MOVE resets heading to 0). Create or move (edit-in-place).
+        const [x, y] = points[0];
+        await this._hass.callService("dreame_a2_mower", "create_maintenance_point", {
+          map_id: mapId,
+          x,
+          y,
+          heading: 0,
+          object_id: d.objectId != null ? d.objectId : -1,
+        });
       }
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -722,14 +797,19 @@ class DreameMapEditorCard extends HTMLElement {
     }
     this._setBusy(false);
     // Optimistically reflect the edit so the overlay does NOT snap back to HA's
-    // stale pre-edit data (which can lag the device by minutes).
-    const kind = d.category === "ignore" ? "ignore" : "nogo";
+    // stale pre-edit data (which can lag the device by minutes). The descriptor
+    // `kind` mirrors the editable_objects kind for this category.
+    const kind = this._kindForCategory(d.category);
+    const isPoint = d.category === "maintenance";
+    const overlay = isPoint
+      ? { point_m: points[0] }
+      : { points_m: points, radius };
     if (d.objectId != null) {
-      this._overrides[`${kind}:${d.objectId}`] = { points_m: points, radius };
+      this._overrides[`${kind}:${d.objectId}`] = overlay;
     } else if (d.category !== "mow") {
-      // new nogo/ignore -> provisional overlay (mow shapes aren't decoded into
-      // editable_objects, so there's nothing to reconcile — skip them).
-      this._provisional.push({ id: null, kind, points_m: points, radius });
+      // new nogo/ignore/spot/maintenance -> provisional overlay (mow shapes
+      // aren't decoded into editable_objects, so there's nothing to reconcile).
+      this._provisional.push({ id: null, kind, ...overlay });
     }
     // Clear selection; the next camera refresh re-publishes editable_objects.
     this._draft = null;
@@ -738,9 +818,26 @@ class DreameMapEditorCard extends HTMLElement {
     this._renderDraft();
   }
 
+  // Map a draft category to its editable_objects descriptor kind.
+  _kindForCategory(cat) {
+    if (cat === "ignore") return "ignore";
+    if (cat === "spot") return "spot";
+    if (cat === "maintenance") return "maintenance";
+    return "nogo";
+  }
+
+  // Map a draft category to the delete_map_object wire category (o=218 type):
+  // 0 = nogo/mow, 1 = spot, 3 = maintenance, 4 = ignore.
+  _deleteCategory(cat) {
+    if (cat === "ignore") return 4;
+    if (cat === "spot") return 1;
+    if (cat === "maintenance") return 3;
+    return 0;
+  }
+
   async _deleteExisting(d) {
     if (!this._hass || d.objectId == null) return;
-    const category = d.category === "ignore" ? 4 : 0;
+    const category = this._deleteCategory(d.category);
     this._setBusy(true);
     try {
       await this._hass.callService("dreame_a2_mower", "delete_map_object", {
@@ -756,7 +853,7 @@ class DreameMapEditorCard extends HTMLElement {
     }
     this._setBusy(false);
     // Optimistically hide the deleted object until HA's lagging data catches up.
-    const kind = d.category === "ignore" ? "ignore" : "nogo";
+    const kind = this._kindForCategory(d.category);
     this._overrides[`${kind}:${d.objectId}`] = null;
     this._draft = null;
     this._renderObjects(this._objs || []);
@@ -798,6 +895,25 @@ class DreameMapEditorCard extends HTMLElement {
       return;
     }
     const parts = [];
+    // Point model (maintenance, o=224): a draggable marker + a delete handle.
+    // No resize/rotate/vertex — the marker body itself is the move target
+    // (data-role="move" on the <g>), drag = edit-in-place.
+    if (d.model === "point") {
+      const c = d.pts[0];
+      parts.push(this._markerSvg(c, "marker", null, null, ` data-role="move"`));
+      const dx = c[0] + DEL_OFF;
+      const dy = c[1] - DEL_OFF;
+      parts.push(
+        `<g class="del" data-role="del">` +
+        `<circle data-role="del" cx="${dx.toFixed(1)}" cy="${dy.toFixed(1)}" r="${HANDLE_R + 2}"/>` +
+        `<text data-role="del" x="${dx.toFixed(1)}" y="${(dy + 4).toFixed(1)}" ` +
+        `text-anchor="middle" font-size="14" font-family="system-ui">×</text>` +
+        `</g>`
+      );
+      g.innerHTML = parts.join("");
+      this._syncActionButtons();
+      return;
+    }
     // Decorative selection: the shape is drawn in the background, so show ONLY a
     // dashed bbox outline + a delete handle (no resize/rotate/vertex/endpoint
     // handles — decorative shapes are create+delete, not reshaped in place).
@@ -900,6 +1016,25 @@ class DreameMapEditorCard extends HTMLElement {
     );
   }
 
+  // Single-point marker (o=224 maintenance): a filled circle + a small white
+  // crosshair. `cls` is the group class; data-id/data-kind make the whole <g>
+  // the select/click target. `extra` is appended to the group's attrs (e.g.
+  // data-role="move" on the draft so the body is drag-to-move).
+  _markerSvg(c, cls, id, kind, extra = "") {
+    const x = c[0].toFixed(1);
+    const y = c[1].toFixed(1);
+    const idAttr = id != null ? ` data-id="${id}"` : "";
+    const kindAttr = kind != null ? ` data-kind="${kind}"` : "";
+    const r = HANDLE_R + 2;
+    return (
+      `<g class="${cls}"${idAttr}${kindAttr}${extra}>` +
+      `<circle${idAttr}${kindAttr}${extra} cx="${x}" cy="${y}" r="${r}"/>` +
+      `<line x1="${(c[0] - r).toFixed(1)}" y1="${y}" x2="${(c[0] + r).toFixed(1)}" y2="${y}"/>` +
+      `<line x1="${x}" y1="${(c[1] - r).toFixed(1)}" x2="${x}" y2="${(c[1] + r).toFixed(1)}"/>` +
+      `</g>`
+    );
+  }
+
   // Axis-aligned bbox of a list of pixel points {x,y,w,h}. Pure helper used for
   // the decorative hit-area rect (and reused by _bboxOf for the draft corners).
   _pixBbox(pix) {
@@ -979,7 +1114,7 @@ if (!customElements.get("dreame-map-editor-card")) {
 
 // Card version banner — lets the user confirm which build loaded in the
 // browser console (the cards "cache hard"; a stale cache shows the old version).
-const CARD_VERSION = "1.0.27a6";
+const CARD_VERSION = "1.0.27a7";
 console.info(
   `%c dreame-map-editor-card v${CARD_VERSION} `,
   "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"

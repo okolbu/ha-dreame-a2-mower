@@ -5150,10 +5150,18 @@ placeholder.
 ### map_key_forbiddenAreas — `forbiddenAreas`
 
 Classic exclusion / no-go zones (red in the Dreame app). Each entry is a
-[key, record] pair; shapeType=2 = rotated rectangle (path = unrotated corners,
-angle = rotation degrees). id matches the s2p50 entity id from create / delete
-events. Distinct from notObsAreas despite sharing the same shape.
-Surfaced as sensor.exclusion_zones (state=zone count, attrs.zones=per-zone geometry).
+[key, record] pair carrying a READ-side `shapeType` that the live-map
+decoder now honors (was previously inferred from point-count only). Read
+enum: 0=area, 1=line(2pt), 2=rotated-rect(4pt, angle=deg), 3=circle
+(multi-pt polygon), 5=point, 7=spot, plus DECORATIVE silhouettes
+9=square,12=circle,13=heart,14=triangle,15=teardrop,16=mushroom,
+17=cloud,18=rainbow (stored as 2 bbox corners + angle; the app
+tessellates client-side — the integration stamps a scaled+rotated mask).
+For shapeType>=9 the path stays UN-rotated (raw bbox corners); for
+line(1)/rect(2)/circle(3) the path is centroid-rotated by -angle at decode.
+id matches the s2p50 entity id from create / delete events. Distinct from
+notObsAreas despite sharing the same shape. Surfaced as
+sensor.exclusion_zones (state=zone count, attrs.zones=per-zone geometry).
 
 **See also:** `custom_components/dreame_a2_mower/dreame/map.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:211)`
 

@@ -50,6 +50,8 @@ SERVICE_DELETE_MAP_OBJECT = "delete_map_object"
 SERVICE_CREATE_NO_GO_ZONE = "create_no_go_zone"
 SERVICE_CREATE_IGNORE_OBSTACLE = "create_ignore_obstacle"
 SERVICE_CREATE_MOW_SHAPE = "create_mow_shape"
+SERVICE_CREATE_SPOT = "create_spot"
+SERVICE_CREATE_MAINTENANCE_POINT = "create_maintenance_point"
 SERVICE_SPLIT_ZONE = "split_zone"
 SERVICE_MERGE_ZONES = "merge_zones"
 
@@ -161,6 +163,20 @@ SCHEMA_CREATE_MOW_SHAPE = vol.Schema({
         "teardrop", "mushroom", "cloud", "rainbow",
     ]),
     vol.Required("points"): list,
+    vol.Optional("object_id", default=-1): vol.Coerce(int),
+})
+
+SCHEMA_CREATE_SPOT = vol.Schema({
+    vol.Optional("map_id"): vol.Coerce(int),
+    vol.Required("points"): list,
+    vol.Optional("object_id", default=-1): vol.Coerce(int),
+})
+
+SCHEMA_CREATE_MAINTENANCE_POINT = vol.Schema({
+    vol.Optional("map_id"): vol.Coerce(int),
+    vol.Required("x"): vol.Coerce(float),
+    vol.Required("y"): vol.Coerce(float),
+    vol.Optional("heading", default=0.0): vol.Coerce(float),
     vol.Optional("object_id", default=-1): vol.Coerce(int),
 })
 
@@ -799,7 +815,7 @@ async def _handle_rename_zone(
 async def _handle_delete_map_object(
     coordinator: DreameA2MowerCoordinator, call: ServiceCall
 ) -> None:
-    """Delete a map object by id+category (o=218; 0=zone/no-go, 4=ignore)."""
+    """Delete a map object by id+category (o=218; 0=zone/no-go/mow, 1=spot, 3=maintenance, 4=ignore)."""
     ok = await coordinator.delete_map_object(
         int(call.data["map_id"]),
         int(call.data["object_id"]),
@@ -848,6 +864,41 @@ async def _handle_create_mow_shape(
             object_id=int(call.data.get("object_id", -1)),
         ),
         "Create mow shape", "create_mow_shape",
+    )
+
+
+@service_handler
+async def _handle_create_spot(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
+    """Create (or edit-in-place) a spot area on a map (o=214, 4 corner metres)."""
+    map_id = call.data.get("map_id")
+    if map_id is None:
+        map_id = getattr(coordinator, "_active_map_id", None) or 0
+    await _run_map_edit(
+        coordinator.create_spot(
+            int(map_id), call.data["points"],
+            object_id=int(call.data.get("object_id", -1)),
+        ),
+        "Create spot", "create_spot",
+    )
+
+
+@service_handler
+async def _handle_create_maintenance_point(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
+    """Create (or move) a maintenance / clean point on a map (o=224)."""
+    map_id = call.data.get("map_id")
+    if map_id is None:
+        map_id = getattr(coordinator, "_active_map_id", None) or 0
+    await _run_map_edit(
+        coordinator.create_maintenance_point(
+            int(map_id), float(call.data["x"]), float(call.data["y"]),
+            heading=float(call.data.get("heading", 0.0)),
+            object_id=int(call.data.get("object_id", -1)),
+        ),
+        "Create maintenance point", "create_maintenance_point",
     )
 
 
@@ -956,6 +1007,10 @@ async def async_register_services(hass: HomeAssistant, entry: Any | None = None)
                                   _handle_create_ignore_obstacle, schema=SCHEMA_CREATE_IGNORE_OBSTACLE)
     hass.services.async_register(DOMAIN, SERVICE_CREATE_MOW_SHAPE,
                                   _handle_create_mow_shape, schema=SCHEMA_CREATE_MOW_SHAPE)
+    hass.services.async_register(DOMAIN, SERVICE_CREATE_SPOT,
+                                  _handle_create_spot, schema=SCHEMA_CREATE_SPOT)
+    hass.services.async_register(DOMAIN, SERVICE_CREATE_MAINTENANCE_POINT,
+                                  _handle_create_maintenance_point, schema=SCHEMA_CREATE_MAINTENANCE_POINT)
     hass.services.async_register(DOMAIN, SERVICE_SPLIT_ZONE,
                                   _handle_split_zone, schema=SCHEMA_SPLIT_ZONE)
     hass.services.async_register(DOMAIN, SERVICE_MERGE_ZONES,
@@ -996,6 +1051,8 @@ def async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_START_POINT_PATROL, SERVICE_START_EDGE_PATROL,
         SERVICE_RENAME_ZONE, SERVICE_DELETE_MAP_OBJECT,
         SERVICE_CREATE_NO_GO_ZONE, SERVICE_CREATE_IGNORE_OBSTACLE,
-        SERVICE_CREATE_MOW_SHAPE, SERVICE_SPLIT_ZONE, SERVICE_MERGE_ZONES,
+        SERVICE_CREATE_MOW_SHAPE, SERVICE_CREATE_SPOT,
+        SERVICE_CREATE_MAINTENANCE_POINT,
+        SERVICE_SPLIT_ZONE, SERVICE_MERGE_ZONES,
     ):
         hass.services.async_remove(DOMAIN, svc)

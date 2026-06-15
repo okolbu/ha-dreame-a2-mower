@@ -48,7 +48,11 @@ def _make_map_camera():
     from custom_components.dreame_a2_mower.camera import DreameA2MapCamera
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
     from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
-    from custom_components.dreame_a2_mower.map_decoder import ExclusionZone
+    from custom_components.dreame_a2_mower.map_decoder import (
+        ExclusionZone,
+        SpotZone,
+        MaintenancePoint,
+    )
 
     md = SimpleNamespace(
         name="Main Lawn", bx1=0.0, by1=0.0, bx2=20000.0, by2=21000.0,
@@ -56,6 +60,16 @@ def _make_map_camera():
         exclusion_zones=(
             ExclusionZone(points=((0.0, 0.0), (1.0, 1.0)), subtype=None, obj_id=101),
             ExclusionZone(points=((2.0, 2.0),), subtype="ignore", obj_id=102),
+        ),
+        spot_zones=(
+            SpotZone(
+                spot_id=201, name="Spot A", points=((1000.0, 1000.0),),
+                area_m2=4.0,
+                points_m=((1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0)),
+            ),
+        ),
+        maintenance_points=(
+            MaintenancePoint(point_id=301, x_mm=2500.0, y_mm=-1300.0),
         ),
     )
     coord = object.__new__(DreameA2MowerCoordinator)
@@ -107,7 +121,7 @@ def test_camera_map_schema_version_pinned():
     attrs = _make_map_camera().extra_state_attributes
     assert attrs["schema_version"] == MAP_ATTR_SCHEMA_VERSION
     assert isinstance(attrs["schema_version"], int)
-    assert MAP_ATTR_SCHEMA_VERSION == 2
+    assert MAP_ATTR_SCHEMA_VERSION == 3
 
 
 def test_camera_map_projection_exact_shape():
@@ -132,8 +146,22 @@ def test_camera_positional_arrays_layout():
 def test_camera_editable_objects_exact_element_shape():
     objs = _make_map_camera().extra_state_attributes["editable_objects"]
     assert objs, "expected at least one editable object from the fixture map"
+    # Two element shapes: polygon objects (no-go/ignore/spot) carry points_m;
+    # single-point objects (maintenance, o=224) carry point_m instead.
+    poly_keys = {"id", "op", "type", "kind", "shape_type", "points_m", "radius"}
+    point_keys = {"id", "op", "type", "kind", "point_m"}
+    kinds = set()
     for o in objs:
-        assert set(o) == {"id", "op", "type", "kind", "shape_type", "points_m", "radius"}
+        kinds.add(o["kind"])
+        if o["kind"] == "maintenance":
+            assert set(o) == point_keys
+            assert o["op"] == 224 and o["type"] == 3
+        else:
+            assert set(o) == poly_keys
+            if o["kind"] == "spot":
+                assert o["op"] == 214 and o["type"] == 1
+    # The fixture surfaces all three new/old kinds.
+    assert {"spot", "maintenance"} <= kinds
 
 
 def test_camera_wifi_overlay_exact_shape(tmp_path):
