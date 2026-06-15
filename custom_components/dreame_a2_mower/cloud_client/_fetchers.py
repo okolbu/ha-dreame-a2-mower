@@ -990,7 +990,60 @@ class _FetchersMixin:
             "service_unread": svc.get("unread"),
             "system_unread": sysm.get("unread"),
             "latest": latest,
+            "service_records": recs,
         }
+
+    def fetch_share_messages(self, limit: int = 100, offset: int = 0) -> list | None:
+        """Sharing-tab messages via /dreame-messaging/user/share-messages.
+
+        GET …/share-messages?version=v1&limit=<limit>&offset=<offset>.
+        Returns the raw record list (data.content), or None on failure.
+        Logs at WARNING; does not raise.
+        """
+        self._ensure_strings()
+        if getattr(self, "_key_expire", None) and time.time() > self._key_expire:
+            self.login()
+        strings = getattr(self, "_strings", None) or self.strings
+        headers = {
+            "Accept": "*/*",
+            "Accept-Language": "en-US;q=0.8",
+            "Accept-Encoding": "gzip, deflate",
+            strings[47]: strings[3],
+            strings[49]: strings[5],
+            strings[50]: getattr(self, "_ti", None) or strings[6],
+            strings[51]: strings[52],
+            strings[46]: getattr(self, "_key", ""),
+        }
+        if getattr(self, "_country", None) == "cn":
+            headers[strings[48]] = strings[4]
+        try:
+            url = f"{self.get_api_url()}/dreame-messaging/user/share-messages"
+            resp = self._session.get(
+                url,
+                headers=headers,
+                params={"version": "v1", "limit": limit, "offset": offset},
+                timeout=10,
+            )
+            if resp.status_code != 200:
+                _LOGGER.warning(
+                    "fetch_share_messages: HTTP %d (body: %s)",
+                    resp.status_code, resp.text[:200],
+                )
+                return None
+            body = resp.json()
+        except Exception as ex:  # pragma: no cover
+            _LOGGER.warning("fetch_share_messages: %s", ex)
+            return None
+        if not isinstance(body, dict) or body.get("code") not in (0, 200):
+            _LOGGER.debug(
+                "fetch_share_messages: non-zero response code: %r msg=%r",
+                (body or {}).get("code") if isinstance(body, dict) else None,
+                (body or {}).get("msg") if isinstance(body, dict) else None,
+            )
+            return None
+        records = body.get("data") or {}
+        recs = records.get("content") if isinstance(records, dict) else None
+        return recs if isinstance(recs, list) else None
 
     def list_oss_media(self, media_type: str, *, size: int = 12, max_pages: int = 20) -> list | None:
         """List OSS media via iotoss/userDidOssList. media_type 'jpg' (photos) or
