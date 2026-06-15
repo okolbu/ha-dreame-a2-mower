@@ -51,3 +51,54 @@ def test_fetch_share_messages_none_on_error_code():
     # fetch_device_messages.
     c = _client(_Resp(200, {"code": -1, "msg": "bad", "data": None}))
     assert c.fetch_share_messages(limit=50) is None
+
+
+# ---------------------------------------------------------------------------
+# _RefreshersMixin._refresh_messages — normalize + trim integration test
+# ---------------------------------------------------------------------------
+
+import dataclasses
+import pytest
+from custom_components.dreame_a2_mower.coordinator._refreshers import _RefreshersMixin
+from custom_components.dreame_a2_mower.mower.state import MowerState
+
+
+@pytest.mark.asyncio
+async def test_refresh_messages_normalizes_and_trims():
+    coord = _RefreshersMixin.__new__(_RefreshersMixin)
+    coord.data = MowerState()
+    # self.entry is the real config-entry attribute (assigned in _core.py line 116)
+    coord.entry = type("E", (), {"options": {"messages_keep": 2}})()
+    # 5 service records — should be trimmed to cap=2, newest first
+    svc = [
+        {
+            "id": str(i),
+            "createTime": i,
+            "multiLangDisplay": '{"en":{"name":"m%d"}}' % i,
+        }
+        for i in range(5)
+    ]
+    cloud = type("C", (), {})()
+    cloud.fetch_message_record = lambda: {
+        "service_unread": 1,
+        "system_unread": 0,
+        "latest": "x",
+        "service_records": svc,
+    }
+    # did is derived from cloud attrs: getattr(cloud, "device_id", None) or getattr(cloud, "_did", None)
+    cloud.device_id = "did123"
+    cloud.fetch_device_messages = lambda did, n: []
+    cloud.fetch_share_messages = lambda limit, offset=0: []
+    coord._cloud = cloud
+    captured = {}
+    coord.async_set_updated_data = lambda new: captured.update(new=new)
+
+    async def _exec(fn, *a):
+        return fn(*a)
+
+    coord.hass = type("H", (), {})()
+    coord.hass.async_add_executor_job = _exec
+    await _RefreshersMixin._refresh_messages(coord)
+    new = captured["new"]
+    assert len(new.service_messages) == 2          # trimmed to cap
+    assert new.service_messages[0]["title"] == "m4"  # newest first

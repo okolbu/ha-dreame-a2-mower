@@ -24,10 +24,13 @@ from ..archive.lidar import LidarArchive
 from ..archive.session import ArchivedSession, SessionArchive
 from ..wifi_archive_store import WifiArchiveEntry, WifiArchiveStore
 from ..cloud_client import DreameA2CloudClient
+from ..protocol import message_record as _msg
 from ..const import (
     CONF_COUNTRY,
     CONF_LIDAR_ARCHIVE_KEEP,
     CONF_LIDAR_ARCHIVE_MAX_MB,
+    CONF_MESSAGES_KEEP,
+    DEFAULT_MESSAGES_KEEP,
     CONF_PASSWORD,
     CONF_SESSION_ARCHIVE_KEEP,
     CONF_STATION_BEARING_DEG,
@@ -260,16 +263,44 @@ class _RefreshersMixin:
         LOGGER.info("mpos refresh: result=%s", (res or {}).get("result"))
 
     async def _refresh_messages(self) -> None:
-        """Account message-list unread counts via message-record/list v1."""
+        """Account message lists + unread counts via message-record/list v1,
+        device-messages/v2, and share-messages. Trims each list to the cap."""
         if not hasattr(self, "_cloud"):
             return
+        entry = getattr(self, "entry", None)
+        cap = int(
+            entry.options.get(CONF_MESSAGES_KEEP, DEFAULT_MESSAGES_KEEP)
+            if entry is not None else DEFAULT_MESSAGES_KEEP
+        )
+        # did is derived the same way as _notifications.py
+        did = getattr(self._cloud, "device_id", None) or getattr(self._cloud, "_did", None)
         m = await self.hass.async_add_executor_job(self._cloud.fetch_message_record)
-        if not m:
+        dev_raw = await self.hass.async_add_executor_job(
+            self._cloud.fetch_device_messages, did, 10
+        )
+        share_raw = await self.hass.async_add_executor_job(
+            self._cloud.fetch_share_messages, cap
+        )
+        kw: dict = {}
+        if m:
+            kw["service_messages_unread"] = m.get("service_unread")
+            kw["system_messages_unread"] = m.get("system_unread")
+            kw["latest_service_message"] = m.get("latest")
+            kw["service_messages"] = [
+                msg.as_dict()
+                for msg in _msg.normalize_service(m.get("service_records"))[:cap]
+            ]
+        if dev_raw is not None:
+            kw["device_messages"] = [
+                msg.as_dict() for msg in _msg.normalize_device(dev_raw)[:cap]
+            ]
+        if share_raw is not None:
+            kw["shared_messages"] = [
+                msg.as_dict() for msg in _msg.normalize_share(share_raw)[:cap]
+            ]
+        if not kw:
             return
-        new = dataclasses.replace(
-            self.data, service_messages_unread=m.get("service_unread"),
-            system_messages_unread=m.get("system_unread"),
-            latest_service_message=m.get("latest"))
+        new = dataclasses.replace(self.data, **kw)
         if new != self.data:
             self.async_set_updated_data(new)
 

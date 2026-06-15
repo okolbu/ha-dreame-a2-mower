@@ -13,6 +13,10 @@ def _coord(gps=None, remote=None, msg=None):
         fetch_gps=MagicMock(return_value=gps),
         fetch_remote=MagicMock(return_value=remote),
         fetch_message_record=MagicMock(return_value=msg),
+        fetch_device_messages=MagicMock(return_value=[]),
+        fetch_share_messages=MagicMock(return_value=[]),
+        device_id=None,
+        _did=None,
     )
     c.data = MowerState()
     async def _exec(fn, *a): return fn(*a)
