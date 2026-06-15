@@ -83,7 +83,7 @@ class DreameMowerMapCard extends HTMLElement {
     this.shadowRoot.innerHTML =
       `<style>:host{display:block}.wrap{position:relative}` +
       `svg{width:100%;height:auto;display:block}` +
-      `.trail{fill:none;stroke:rgb(178,223,138);stroke-width:3;` +
+      `.trail{fill:none;stroke:rgba(178,223,138,0.6);stroke-width:3;` +
       `stroke-linejoin:round;stroke-linecap:round}` +
       `#wifiToggle{position:absolute;top:8px;right:8px;z-index:2;` +
       `font:12px/1 system-ui,sans-serif;padding:4px 8px;border-radius:6px;` +
