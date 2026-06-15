@@ -4,8 +4,8 @@ Pure module (no I/O). Three upstream sources feed the dashboard "Info" tab:
 
   - service  — v1 message-record/list serviceMsg.msgRecord
                (multiLangDisplay JSON, readStatus, createTime)  [verified]
-  - device   — device-messages/v2 content[] (messageId, sendTime,
-               multiLang text; no reliable read flag)            [verified]
+  - device   — device-messages/v2 content[] (messageId, string sendTime,
+               localizationContents:{en}; no reliable read flag) [verified]
   - share    — /dreame-messaging/user/share-messages             [field names
                confirmed by live capture — see the plan's Task 7]
 
@@ -40,19 +40,29 @@ class Message:
 
 
 def _iso(ts: Any) -> str | None:
-    """Epoch seconds (or ms) → ISO-8601 UTC string, or None."""
+    """Epoch seconds/ms OR a 'YYYY-MM-DD HH:MM:SS' string → ISO-8601 UTC, or None."""
     if ts is None:
         return None
+    # Numeric epoch (int/float, or a numeric string).
     try:
         v = float(ts)
     except (TypeError, ValueError):
-        return None
-    if v > 1e11:  # milliseconds
-        v /= 1000.0
-    try:
-        return datetime.fromtimestamp(v, tz=timezone.utc).isoformat()
-    except (OverflowError, OSError, ValueError):
-        return None
+        v = None
+    if v is not None:
+        if v > 1e11:  # milliseconds
+            v /= 1000.0
+        try:
+            return datetime.fromtimestamp(v, tz=timezone.utc).isoformat()
+        except (OverflowError, OSError, ValueError):
+            return None
+    # String datetime (device-messages/v2 sendTime), assumed UTC.
+    if isinstance(ts, str):
+        for fmt in ("%Y-%m-%d %H:%M:%S", "%Y-%m-%dT%H:%M:%S"):
+            try:
+                return datetime.strptime(ts, fmt).replace(tzinfo=timezone.utc).isoformat()
+            except ValueError:
+                continue
+    return None
 
 
 def _en_display(rec: dict) -> dict:
@@ -107,17 +117,23 @@ def normalize_device(records: list[dict] | None) -> list[Message]:
     for rec in records or []:
         if not isinstance(rec, dict):
             continue
-        en = _en_display(rec)
+        loc = rec.get("localizationContents")
+        text = None
+        if isinstance(loc, dict):
+            text = loc.get("en") or loc.get("en-US")
         ts = rec.get("sendTime") or rec.get("createTime")
         out.append(
             (
                 ts,
                 Message(
                     id=str(rec.get("messageId") or rec.get("id") or ""),
-                    title=str(en.get("name") or en.get("content") or ""),
+                    title=str(text or ""),
                     date=_iso(ts),
-                    body=en.get("content") or None,
-                    link=en.get("link") or None,
+                    # Device-messages/v2 carries the whole text in one
+                    # localization string — no separate body/link.
+                    body=None,
+                    link=None,
+                    # No reliable read flag → treat all as unread.
                     unread=True,
                 ),
             )

@@ -47,18 +47,38 @@ def test_normalize_service_tolerates_missing_keys():
     ]
 
 
-def test_normalize_device_has_no_read_flag_so_all_unread():
+def test_normalize_device_real_shape():
     recs = [
         {
             "messageId": "m1",
-            "sendTime": 1780000000,
-            "multiLangDisplay": json.dumps({"en": {"name": "Right drive wheel error"}}),
+            "sendTime": "2026-06-01 14:22:00",
+            "localizationContents": {"en": "Right drive wheel error", "en-US": "x"},
         }
     ]
     out = normalize_device(recs)
     assert out[0].id == "m1"
     assert out[0].title == "Right drive wheel error"
-    assert out[0].unread is True  # device has no reliable read flag → treated unread
+    assert out[0].date == "2026-06-01T14:22:00+00:00"
+    assert out[0].body is None
+    assert out[0].link is None
+    assert out[0].unread is True  # no read flag → unread
+
+
+def test_normalize_device_orders_newest_first_by_string_sendtime():
+    recs = [
+        {"messageId": "old", "sendTime": "2026-06-01 10:00:00",
+         "localizationContents": {"en": "old"}},
+        {"messageId": "new", "sendTime": "2026-06-02 10:00:00",
+         "localizationContents": {"en": "new"}},
+    ]
+    assert [m.id for m in normalize_device(recs)] == ["new", "old"]
+
+
+def test_normalize_device_tolerates_missing_keys():
+    out = normalize_device([{"messageId": "x"}])
+    assert out == [
+        Message(id="x", title="", date=None, body=None, link=None, unread=True)
+    ]
 
 
 def test_normalize_share_defensive_returns_messages():
