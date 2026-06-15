@@ -56,8 +56,6 @@ def test_mower_state_f2_fields_default_to_none():
     assert s.mowing_phase is None
     assert s.position_x_m is None
     assert s.position_y_m is None
-    assert s.position_north_m is None
-    assert s.position_east_m is None
     assert s.position_lat is None
     assert s.position_lon is None
     assert s.wifi_rssi_dbm is None
@@ -84,8 +82,6 @@ def test_mower_state_f2_construction_with_all_fields():
         mowing_phase=2,
         position_x_m=1.23,
         position_y_m=-4.56,
-        position_north_m=1.23,
-        position_east_m=-4.56,
         position_lat=59.123,
         position_lon=10.456,
         wifi_rssi_dbm=-65,

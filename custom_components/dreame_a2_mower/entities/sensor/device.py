@@ -684,11 +684,12 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().wifi_rssi_dbm,
     ),
-    # Position quartet — read from the persisted snapshot so values survive
+    # Position quartet — all read from the persisted snapshot so values survive
     # HA restarts. position_x_m / position_y_m are written by
     # MowerStateMachine.handle_position on every s1p4 telemetry push;
-    # position_north_m / position_east_m have no live writer yet (declared
-    # for future expansion) and will read None until one is added.
+    # position_north_m / position_east_m are written by the same handler from
+    # the compass-frame projection, but only when the station-bearing option is
+    # set (else they read None).
     DreameA2DiagnosticSensorEntityDescription(
         key="position_x_m",
         name="Position X",

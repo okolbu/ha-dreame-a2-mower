@@ -151,9 +151,9 @@ class MowerState:
     # front-to-back shape shows the actual driving direction.
     position_heading_deg: float | None = None
 
-    # Source: computed (x, y rotated by station compass bearing). Persistence: persistent.
-    position_north_m: float | None = None
-    position_east_m: float | None = None
+    # NOTE: position_north_m / position_east_m live ONLY on StateSnapshot
+    # (written by MowerStateMachine.handle_position; the N/E sensors read the
+    # snapshot). They were never written here — dropped from MowerState 2026-06-15.
 
     # Source: LOCN routed action (confirmed). Persistence: persistent.
     # Sentinel [-1, -1] → both None.
