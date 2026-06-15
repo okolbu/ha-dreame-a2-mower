@@ -139,16 +139,22 @@ side-effect of the fixed a3 raise — gone, no code change). See `DONE.md` "Make
 entities honest", `docs/research/control-honesty-audit-2026-06-03.md`, and the research
 journal for the shipped detail. What ACTUALLY remains open:
 
-1. **Live re-probes to finalize uncertain classifications** (device-blocked):
-   - **WRP, LANG (lcd/voice), AI_HUMAN** — held at `read_only_pending` due to the 2026-05-09
-     contradiction (`cfg-write-regression` "no setter, r=-3" vs the `_build_wrp` /
-     `_build_text_language` "verified live" docstrings). Re-probe via `set_cfg` (parses
-     `out[0].r`): r=0+behaviour ⇒ flip `device_writable`; r=-3 ⇒ `read_only_confirmed` +
-     retract the docstring claim. One line in `CONTROL_MODES` + the matching inventory row per
-     flip (the sync test enforces both).
+1. **Finalize remaining uncertain classifications.** Reframed 2026-06-15 against inventory:
+   the old WRP/LANG/AI_HUMAN "2026-05-09 r=-3 vs verified-live contradiction" is **resolved** —
+   the `r=-3` was a wrong-envelope probe bug (`d:{value:[...]}` vs the bare `d:[...]`, debunked
+   in inventory § PRE 2026-06-03), so the "no setter" reading was false. WRP
+   (`select.rain_protection_resume_hours`) and LANG (`select.lcd_language` / `voice_language`)
+   are now `control_mode: device_writable` (LANG typed write confirmed `[app-mitm:2026-06-09]`,
+   wired in Phase A1). What remains:
+   - **AI_HUMAN** — still `read_only_pending`, but NOT a wire unknown: it's a cloud
+     chunked-batch boolean whose write path already exists in code
+     (`coordinator/_writes.py:write_ai_human_enabled` → `write_chunked_key("AI_HUMAN", …)`) and
+     is *deliberately* unexposed pending a feature decision. Action: decide whether to wire the
+     switch; if yes, confirm the cloud write lands, then flip `CONTROL_MODES` + the entity-inventory
+     row to `device_writable` (the sync test enforces both).
    - **Bucket B actions:** s5a2/3/4 (may 80001), op=200, op=10, op=12 — confirm they land
-     (also clears the provisional flag on the shipped action buttons).
-   Probe tooling: `tools/probes/probe_pre_write.py`.
+     (also clears the provisional flag on the shipped action buttons). Probe tooling:
+     `tools/probes/probe_pre_write.py`.
 2. **MISTA area fallback sensor — deferred (conditional).** Needs a dedicated cloud-fetch of the
    MISTA `cfg_individual` endpoint (not currently polled) and is mid-run-only (r=-1/-3 when idle,
    per `project_g2408_mista_decoded`). Build only if the s1p4 MQTT area stream proves unreliable.
