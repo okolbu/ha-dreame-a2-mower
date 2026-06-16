@@ -6,6 +6,33 @@
 #
 # Schema documentation: docs/research/inventory/README.md
 # Spec: docs/superpowers/specs/2026-05-05-g2408-protocol-inventory-design.md
+#
+# ─────────────────────────────────────────────────────────────────────────
+# READ/WRITE SURFACES (load-bearing — a directionality claim is unsound until
+# checked against ALL of these; the device exposes more than one channel):
+#   1. Routed-action (device control plane) — action(siid:2,aiid:50) on
+#      device/sendCommand, {m:g|s|a, t:KEY, o:OP, d:…}. CFG keys read (m:g) and
+#      write (m:s) here are DEVICE-APPLIED (e.g. PRE bare-array, DND, LOW, WRP,
+#      BAT, STUN). r=-3 = "no setter for THIS key at THIS address" — a LOCAL
+#      verdict, NOT global non-writability. A key can be write-only here yet
+#      readable elsewhere (CRUISED writes here, reads back via CRUISE.0).
+#   2. getCFG bundle — read-only multi-key CFG dump (AOP ATA BAT BP CLS CMS DLS
+#      DND FDP LANG LIT LOW MSG_ALERT PATH PRE PROT REC STUN TIME VER VOICE VOL
+#      WRF WRP). Convenience read of channel-1 CFG state.
+#   3. iotuserdata device-data KV — iotuserdata/{get,set}DeviceData, keyed
+#      FAMILY.n / FAMILY.info. A CLOUD RECORD store. Device-application is
+#      PER-KEY and MUST be verified, never assumed from presence: SETTINGS.* is
+#      cloud-cache-only and does NOT reach the device (PRE is authoritative —
+#      proven 2026-05-09, see wire-captures/settings-surface-cloud-only); whereas
+#      CRUISE.0 is the readback of routed-written CRUISED config. Many settings
+#      DUAL-WRITE (device surface + cloud record) — capturing only one half
+#      misleads.
+#
+# PROVENANCE PRIORITY (load-bearing): an app-MITM finding (snooping the app↔mower
+# link) OVERRIDES any older probe-only or APK-derived claim it contradicts. When
+# they disagree, the app-MITM observation wins and the older claim is superseded
+# (archived out — see CLAUDE.md § Documentation lifecycle), not kept inline.
+# ─────────────────────────────────────────────────────────────────────────
 
 _sources:
   apk_md: "github.com/TA2k/ioBroker.dreame/blob/main/apk.md"
@@ -7022,9 +7049,9 @@ cfg_individual:
       AI_HUMAN.0="true". [app-mitm:2026-06-09-settings-sweep]
       iotuserdata/{get,set}DeviceData is a general account-preference KV
       store keyed by did+sign; other keys include AUTO_TIMEZONE.0
-      (app timezone auto-sync preference — NOT a mower CFG) and
-      prop.s_auto_upgrade (firmware auto-update preference).
-      [app-mitm:2026-06-09-settings-sweep]
+      (app timezone auto-sync preference, JSON-string bool — NOT a mower CFG),
+      FBD_NTYPE.0 (see its own entry below) and prop.s_auto_upgrade (firmware
+      auto-update preference). [app-mitm:2026-06-09-settings-sweep]
     status:
       seen_on_wire: false
       first_seen: "2026-06-09"
@@ -7037,6 +7064,38 @@ cfg_individual:
         status: verified
         claim: "AI_HUMAN.0='\"true\"'/'\"\false\"' (JSON-string bool) is the consent key in iotuserdata; revoking cascades REC.report[1]→0; capture requires AOP=1+REC.report[1]=1+AI_HUMAN.0=true."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "FBD_NTYPE"
+    name: "feedback_notification_type"
+    category: "cfg_individual"
+    payload_shape: "iotuserdata KV: FBD_NTYPE.0 = JSON-string per-map array [{<code>:<val>,…},{}]; FBD_NTYPE.info = counter int"
+    semantic: |
+      iotuserdata device-data KV (same get/setDeviceData cloud store as
+      AI_HUMAN / AUTO_TIMEZONE — surface #3, a CLOUD RECORD, see the header
+      READ/WRITE SURFACES note). FBD_NTYPE.0 observed as a JSON-string per-map
+      array, e.g. [{"101":0,"102":15},{}] — one element per map, each a map of
+      numeric code → value; FBD_NTYPE.info = counter/version int that bumps per
+      write. Heavy traffic in the 2026-06-16 app-mitm capture (read ~87×,
+      write ~22×). [app-mitm:2026-06-16-retest-sweep]
+      The 101/102 code semantics are not yet isolated — likely per-category
+      feedback / notification preferences, but unconfirmed [UNKNOWN — to capture:
+      toggle one notification category in-app and diff which code/value changes].
+      Device-side effect UNVERIFIED: this is the cloud KV store, and (exactly
+      like SETTINGS.*) a setDeviceData write here is NOT proven to reach the
+      device — do not assume device-application without a single-variable
+      capture. [UNVERIFIED]
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-16"
+      last_seen: "2026-06-16"
+      decoded: partial
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
+    verifications:
+      - date: "2026-06-16"
+        status: partial
+        claim: "FBD_NTYPE.0 = JSON-string per-map array of {numeric-code: value} (e.g. [{\"101\":0,\"102\":15},{}]); FBD_NTYPE.info = counter; read+write observed on iotuserdata get/setDeviceData. 101/102 code semantics and device-side effect not yet isolated."
+        evidence: "app-mitm:2026-06-16-retest-sweep (miio-13267.jsonl get/setDeviceData FBD_NTYPE; FINDING-retest-candidates-directionality-2026-06-16.md)"
 
   - id: "SCHDDV3"
     name: "schedule_data_v3_write"

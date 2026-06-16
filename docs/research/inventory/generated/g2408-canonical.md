@@ -2813,6 +2813,7 @@ in HOURS (e.g. 4→5 confirmed); sen=sensitivity level.
 | CMS | consumables_individual | {value: [blade_min, brush_min, robot_min, aux_min]} | WIRED |  |
 | DEV | device_info | {fw, mac, ota, sn} | WIRED |  |
 | DOCK | dock_state_and_position | {dock: {connect_status, in_region, x, y, yaw, near_x, near_y, near_yaw, path_connect}} | WIRED |  |
+| FBD_NTYPE | feedback_notification_type | iotuserdata KV: FBD_NTYPE.0 = JSON-string per-map array [{<code>:<val>,…},{}]; FBD_NTYPE.info = counter int | UNCLASSIFIED |  |
 | IOT | iot_connection_status | {status: bool} | APK-KNOWN |  |
 | LOCN | dock_gps_origin | {pos: [lon, lat]} | WIRED |  |
 | MAPD | map_data | (observed: r=-3 in all 3 cloud dumps so far; payload-on-success unknown) | APK-KNOWN |  |
@@ -2877,9 +2878,9 @@ Human-photo capture requires ALL of: AOP=1 AND REC.report[1]=1 AND
 AI_HUMAN.0="true". [app-mitm:2026-06-09-settings-sweep]
 iotuserdata/{get,set}DeviceData is a general account-preference KV
 store keyed by did+sign; other keys include AUTO_TIMEZONE.0
-(app timezone auto-sync preference — NOT a mower CFG) and
-prop.s_auto_upgrade (firmware auto-update preference).
-[app-mitm:2026-06-09-settings-sweep]
+(app timezone auto-sync preference, JSON-string bool — NOT a mower CFG),
+FBD_NTYPE.0 (see its own entry below) and prop.s_auto_upgrade (firmware
+auto-update preference). [app-mitm:2026-06-09-settings-sweep]
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 
@@ -2977,6 +2978,25 @@ near_x:19, near_y:-3, near_yaw:1912, path_connect:0}.
 - yaw unit — degrees fits yaw:112 but near_yaw:1912 doesn't.
 
 **See also:** `custom_components/dreame_a2_mower/cloud_client.py`, `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX DOCK`
+
+### FBD_NTYPE — `feedback_notification_type`
+
+iotuserdata device-data KV (same get/setDeviceData cloud store as
+AI_HUMAN / AUTO_TIMEZONE — surface #3, a CLOUD RECORD, see the header
+READ/WRITE SURFACES note). FBD_NTYPE.0 observed as a JSON-string per-map
+array, e.g. [{"101":0,"102":15},{}] — one element per map, each a map of
+numeric code → value; FBD_NTYPE.info = counter/version int that bumps per
+write. Heavy traffic in the 2026-06-16 app-mitm capture (read ~87×,
+write ~22×). [app-mitm:2026-06-16-retest-sweep]
+The 101/102 code semantics are not yet isolated — likely per-category
+feedback / notification preferences, but unconfirmed [UNKNOWN — to capture:
+toggle one notification category in-app and diff which code/value changes].
+Device-side effect UNVERIFIED: this is the cloud KV store, and (exactly
+like SETTINGS.*) a setDeviceData write here is NOT proven to reach the
+device — do not assume device-application without a single-variable
+capture. [UNVERIFIED]
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 
 ### IOT — `iot_connection_status`
 

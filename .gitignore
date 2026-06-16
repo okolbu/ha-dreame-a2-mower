@@ -57,3 +57,6 @@ docs/research/inventory/generated/coverage-report.md
 
 # Git worktrees created by the using-git-worktrees workflow (never commit)
 .claude/worktrees/
+
+# macOS AppleDouble files (from the Mac MITM box sync)
+._*
