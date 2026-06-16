@@ -2435,23 +2435,26 @@ properties:
       CORRECTION: the g2408 DOES have a camera (feature:"video_tx", Tencent IoT
       Video / XP2P — see api_endpoints § tencent_video). The earlier "no camera
       module has been confirmed on g2408" note here was stale and is retracted.
-      [app-mitm:2026-06-12-live-video] What remains UNVERIFIED is whether THIS
-      property slot (s4p22) is the control surface for camera AI detection on g2408:
-      the camera is driven via the o=400 live-view toggle plus the
-      dreame-third-video/tx credential chain, and AI-obstacle capture is gated by
-      CFG.AOP (not by any observed s4p22 write). s4p22 has never been seen on the
-      g2408 wire; it may be a no-op, a read-back, or absent. [UNVERIFIED]
+      [app-mitm:2026-06-12-live-video] RESOLVED 2026-06-16: s4p22 is NOT a g2408
+      property. A full-corpus push census (211,880 properties_changed records across
+      the probe logs + app-MITM captures) shows the device reports siid 1/2/3/5/6/99
+      only — siid 4 never appears for any piid; and get_properties is dead on g2408
+      (80001), so there is no GET read path either. AI_DETECTION (s4p22) is a
+      vacuum-fork mapping with no g2408 surface — camera AI is driven via o=400 +
+      dreame-third-video/tx + CFG.AOP, not this slot. The integration already gates
+      it off (mower/capabilities.py: ai_detection=False). [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      decoded: verified
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:688)"
         - "github.com/nicolasglg/dreame-mova-mower (types.py:741)"
-    open_questions:
-      - "Is s4p22 the g2408's camera-AI control surface, or is AI capture wholly gated by CFG.AOP + o=400? s4p22 unseen on the wire."
-      - "Does s4p22 interact with s4p59 (PET_DETECTIVE)?"
     verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "s4p22 (AI_DETECTION) is absent on g2408 — siid 4 never appears in 211,880 properties_changed pushes across the full corpus (device reports siid 1/2/3/5/6/99 only); get_properties is dead (80001) so no GET path. Vacuum-fork mapping; integration capability-gates it off (capabilities.ai_detection=False)."
+        evidence: "app-mitm-census:2026-06-16 (probe/logs/*.jsonl + dreame-mitm captures; siid=4 push count = 0 of 211880)"
 
   - id: "s4p23"
     siid: 4
@@ -2535,21 +2538,25 @@ properties:
       from the MAP blob's cruisePoints array (type=8), and a patrol auto-enables the
       camera (o=400) for auto-capture. So the earlier "does not expose cruise-point
       behaviour in current captures" note was stale. [app-mitm:2026-06-12-live-video]
-      What remains UNVERIFIED is whether THIS property slot (s4p44) carries the
-      patrol mode-type on g2408: patrol is driven via the s2.50 o107/o108 routed
-      actions, not an observed s4p44 write; s4p44 has never been seen on the g2408
-      wire. [UNVERIFIED]
+      RESOLVED 2026-06-16: s4p44 is NOT a g2408 property. The full-corpus push
+      census (211,880 properties_changed records) shows the device reports siid
+      1/2/3/5/6/99 only — siid 4 never appears for any piid; get_properties is dead
+      on g2408 (80001) so no GET path either. CRUISE_TYPE (s4p44) is a vacuum-fork
+      mapping with no g2408 surface — patrol is driven entirely via the s2.50
+      o107/o108 routed actions and the MAP-blob cruisePoints array, not this slot.
+      [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      decoded: verified
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:699)"
         - "github.com/nicolasglg/dreame-mova-mower (types.py:752)"
-    open_questions:
-      - "Does s4p44 carry the patrol mode-type on g2408, or is patrol wholly driven by the o107/o108 routed actions? s4p44 unseen on the wire."
-      - "Does cruisePoints in the OSS map blob connect to s4p44?"
     verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "s4p44 (CRUISE_TYPE) is absent on g2408 — siid 4 never appears in 211,880 properties_changed pushes across the full corpus; get_properties is dead (80001) so no GET path. Patrol is driven via o107/o108 routed actions + MAP-blob cruisePoints, not this slot. Vacuum-fork mapping."
+        evidence: "app-mitm-census:2026-06-16 (probe/logs/*.jsonl + dreame-mitm captures; siid=4 push count = 0 of 211880)"
 
   - id: "s4p47"
     siid: 4
@@ -2610,23 +2617,25 @@ properties:
       CORRECTION: the g2408 DOES have a camera (feature:"video_tx", Tencent XP2P —
       see api_endpoints § tencent_video), so the earlier "no camera module confirmed
       → likely absent" reasoning here was stale and is retracted.
-      [app-mitm:2026-06-12-live-video] The presence of a camera does NOT establish
-      that pet-detection is a g2408 feature: s4p59 has never been seen on the g2408
-      wire, the app exposes a Human-Presence detection surface (REC settings) but no
-      observed "pet" toggle, and AI-obstacle classes captured so far are person /
-      patrol / obstacle. Whether s4p59 exists / does anything on g2408 stays
-      UNVERIFIED. [UNVERIFIED]
+      [app-mitm:2026-06-12-live-video] RESOLVED 2026-06-16: s4p59 is NOT a g2408
+      property. The full-corpus push census (211,880 properties_changed records)
+      shows the device reports siid 1/2/3/5/6/99 only — siid 4 never appears for any
+      piid; get_properties is dead on g2408 (80001) so no GET path either. The app
+      exposes a Human-Presence surface (REC settings) but no "pet" toggle, and the
+      captured AI-obstacle classes are person/patrol/obstacle. PET_DETECTIVE (s4p59)
+      is a vacuum-fork mapping with no g2408 surface. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      decoded: verified
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:706)"
         - "github.com/nicolasglg/dreame-mova-mower (types.py:759)"
-    open_questions:
-      - "Does the g2408 firmware implement a pet-detection mode at all? Camera exists, but no 'pet' toggle observed (the app surfaces Human-Presence, not pet)."
-      - "If present, does it interact with s4p22 (AI_DETECTION)?"
     verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "s4p59 (PET_DETECTIVE) is absent on g2408 — siid 4 never appears in 211,880 properties_changed pushes across the full corpus; get_properties is dead (80001) so no GET path. No 'pet' toggle in the app; AI classes are person/patrol/obstacle. Vacuum-fork mapping."
+        evidence: "app-mitm-census:2026-06-16 (probe/logs/*.jsonl + dreame-mitm captures; siid=4 push count = 0 of 211880)"
 
   - id: "s1p5"
     siid: 1
