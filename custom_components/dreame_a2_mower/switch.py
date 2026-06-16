@@ -32,8 +32,9 @@ Read-only (wire payload NOT fully reconstructible):
                                 (sensitivity) decoded; [2..8] not in MowerState.
 
 Live-verification concerns:
-  - BAT[2] = unknown_flag is always 1 in observed data; reconstructed payload
-    uses 1 as the hard-coded value.  Same concern as F4.6.1 number.py.
+  - BAT[2] = unknown_flag (semantic TBD; consistently 1 in observed data).
+    Writes now preserve it via RMW from the live CFG blob
+    (cfg_payloads.build_bat_power/build_bat_charging) — no longer hard-coded.
   - LIT[7] = unknown trailing toggle not characterised; this is why LIT-backed
     switches are read-only in F4.
 """

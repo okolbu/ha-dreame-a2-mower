@@ -782,47 +782,45 @@ fixture saved under `tests/protocol/fixtures/`; decoder and renderer updated.
 
 ### Patrol Logs — remaining open items
 
-**Trigger + capture + integration surfacing are closed — see `docs/DONE.md`**
-("Patrol Logs — trigger and wire format"): a patrol was triggered and captured,
-the integration types it `session_type=patrol`, replays it, and excludes it from
-the "Mowing" aggregates (handled like `maintenance_run`). A few low-priority /
-blocked bits remain:
+**Trigger + capture + integration surfacing + activity-typing + photo retrieval
+are closed — see `docs/DONE.md`** ("Patrol Logs — trigger and wire format" and
+"Patrol Logs — activity typing, photo retrieval, app-tab"): a patrol is triggered,
+captured, typed `session_type=patrol`, replayed, excluded from the "Mowing"
+aggregates, surfaced as `patrol_edge`/`patrol_point` activities, and its
+auto-capture photos render on the photo-archive dashboard tab. **T1, T2 and T4
+are DONE and moved to DONE.md.** What remains:
 **Remaining:**
-- The app's "Patrol Logs" TAB is still empty (separate from the mower session
-  archive — origin unknown).
-- Per-field OSS schema for patrol keys: now mostly decoded 2026-06-03 — see
+- ~~App "Patrol Logs" TAB empty~~ — RESOLVED 2026-06-15: the tab now carries
+  ~10–15 entries, matching our per-session replay captures (so it is fed by the
+  same session-summary archive `[UNVERIFIED]` — count-parity, not a wire capture).
+- Per-field OSS schema for patrol keys: mostly decoded — see
   `inventory.yaml § summary_point / summary_point_status / summary_complete_count /
   summary_photo_list / summary_photo_detected / summary_pref`. The s4 eiid1
-  piid→summary cross-walk is partial (piid10≈photo_detected, piid2=complete_count,
+  piid→summary cross-walk is still partial (piid10≈photo_detected, piid2=complete_count,
   piid14≈map_area, piid60=stop_reason); still need a `photo_detected=0` session to
   confirm piid10, and piid3/7/11/12/15 remain ambiguous.
-
-**Integration work surfaced by the 2026-06-03 point patrol (op=107):**
-- **[T1] ✅ DONE (2026-06-03).** First-class patrol activities added. State machine
-  maps s2p50 op=108→`patrol_edge`, op=107→`patrol_point` (`state_machine.py` op_map +
-  the s2p1=1 working-tick override), so the activity sensor no longer sits at
-  `repositioning` for the whole patrol. Flips at the op echo (the undock→first-point
-  drive legitimately stays `repositioning` until then). Tests:
-  `tests/state_machine/test_patrol_live_activity.py`.
-- **[T2] ✅ DONE (2026-06-03).** Edge vs Point distinguished as the two activities
-  above, labelled "Edge Patrol"/"Point Patrol" (`strings.json` + `translations/en.json`;
-  `mode_enum` 107=Point Patrol / 108=Edge Patrol). lawn_mower projects both → MOWING.
-- **[T3] PARTIAL (2026-06-03).** Root cause FIXED: `classify_session_type` now treats
-  op=107 as patrol (was falling through → the new run mislabelled "Mowing"), and
-  `mode_enum` has 107. So a freshly-finalized point patrol types `patrol` and the
-  picker shows `[Patrol]`. **Remaining:** (a) the picker still shows a generic
-  `[Patrol]` — to show `[Edge Patrol]`/`[Point Patrol]` the archive INDEX entry
-  (`archive/session.py:ArchivedSession`) must carry the mode/subtype (persisted-format
-  change); (b) sessions archived BEFORE this fix keep their old type on disk.
-  **Both (a) and (b) are DEFERRED into the session-format brainstorm below.**
+- **[T3] ✅ DONE (2026-06-16).** Picker labels postfix the patrol subtype + actual
+  run time, keeping `[Patrol]` as the primary tag: `[Patrol] [Map N] <ts> — Point / Dmin`
+  (mode 107) / `… — Edge / Dmin` (108); either part omitted when unknown (legacy /
+  non-echoed patrol → bare `[Patrol]`). Implemented via a new `ArchivedSession.mode`
+  field (mirrored from raw_dict `mow_type_raw`, backward-compat `None`) +
+  `session_card.py:format_session_label` (`_PATROL_SUBTYPE` derived from the
+  `mode_enum` SoT). The work-log SELECT + calendar inherit it (shared helper).
+  Tests: `tests/integration/test_session_label_type.py`,
+  `tests/archive/test_session.py::test_index_entry_carries_mode_from_raw_json`.
+  **Only residual** (sub-task b): sessions archived BEFORE this change carry no
+  `mode` in their index entry → render bare `[Patrol]` (graceful); rebuild via
+  `tools/session/rebuild_session.py` to backfill the subtype. Optional follow-up:
+  postfix a MOW subtype (All areas/Zone/Edge/Spot) the same way — the `mode` field
+  already carries 100–103, so it's a one-line `format_session_label` change if wanted.
 
 **[BRAINSTORM] Session title + archive-format design (decide before touching the
-persisted format).** Scope agreed 2026-06-03:
-  1. **Subtype in the picker title, for BOTH patrol and mow.** If patrol surfaces
-     Edge/Point, mowing should match: `[Mowing — All areas]` / `[Mowing — Edge]` /
-     `[Mowing — Zone]` / `[Mowing — Spot]` and `[Patrol — Edge]` / `[Patrol — Point]`.
-     Patrol and mow should feel the same. Needs a persisted subtype/mode on
-     `ArchivedSession` + a unified `format_session_label`.
+persisted format).** Scope agreed 2026-06-03; label design RESOLVED 2026-06-15 (see T3):
+  1. **Subtype postfix in the picker title — ✅ DONE (2026-06-16, see T3).** Kept
+     `[Mowing]`/`[Patrol]` as the primary tag and POSTFIXED the subtype (+ duration):
+     `[Patrol] … — Point / Dmin`. The `[Patrol — Point]` / `[Mowing — Edge]` bracket
+     form was NOT adopted. Mow-subtype postfix remains an optional follow-up (the
+     `ArchivedSession.mode` field already carries 100–103).
   2. **Scheduled vs manual visual differentiation:** considered, NOT now (start_mode
      is decoded; revisit later).
   3. **Can a patrol be scheduled?** RESOLVED — NO. The app's schedule UI offers only
@@ -832,15 +830,15 @@ persisted format).** Scope agreed 2026-06-03:
      patrol via `saw_patrol_start`/s2p2=51, so if firmware ever emitted a scheduled
      patrol it would still type `patrol` — defensive only.)
   4. **House per-point/edge settings + `photo_list`** on the patrol session record so
-     they're tied to the session — gated on T4 (image location) for the photos.
+     they're tied to the session — photos are now reachable (T4 done), so this is
+     UNGATED; the per-point settings remain reconstruct-only (T5).
   5. **Migration:** rebuild existing sessions via `tools/session/rebuild_session.py` once the
      format lands (the 2026-06-03 point patrol currently reads `[Mowing]` on disk).
-- **[T4] Auto-Capture photo retrieval (blocked-by-path).** Photos are referenced in
-  the summary `photo_list` (real filenames) but the bytes are not yet fetchable — the
-  bare leaf is NoSuchKey in the summary's Aliyun dir and the exact `479D/` Xiaomi-FDS
-  subpath is unknown. Needs app-capture or APK; see `project_g2408_ai_photo_probe` +
-  `inventory.yaml § summary_photo_list`. Also: `fetch_session_photos.py` only reads
-  `ai_obstacle` — patch it to read `photo_list`.
+- **[T4] Auto-Capture photo retrieval — ✅ DONE (2026-06-15, moved to DONE.md).**
+  The "blocked-by-path / 479D-FDS subpath unknown" premise was debunked by the
+  2026-06-09 app-MITM (photos live in the `dreame-eu` OSS album bucket); confirmed
+  for patrol 2026-06-15 — 18 patrol photos render on the photo-archive dashboard tab.
+  See `inventory.yaml § summary_photo_list` (`decoded: confirmed`).
 - **[T6] Partial/interrupted edge patrol mis-typed `maintenance_run` ("To Point").**
   Observed 2026-06-03 on a real edge patrol (op=108) that was interrupted by a stuck
   event then by rain protection (OLD code — pre-T1/T3 deploy). It archived as a
@@ -858,11 +856,14 @@ persisted format).** Scope agreed 2026-06-03:
   Side observation (LEAVE debugging for now per user): rain protection appears to
   CANCEL a patrol (the app cancelled the session), unlike a mow which it pauses —
   TBD whether that's firmware behaviour.
-- **[T5] Settings are reconstructable, not stored.** Per-point cycles =
-  count of in-place ~360° rotations at the point; auto-capture = whether photo_list
-  timestamps fall in that point's dwell window. If per-point patrol info is ever
-  surfaced, derive it this way (the requested toggle values exist on no reachable
-  surface). See `inventory.yaml § o107`.
+- **[T5] Settings are reconstructable, not stored — SETTLED conclusion (no action).**
+  Wire-confirmed (`inventory.yaml § o107` / `summary_point`): the per-point app
+  settings (Number of Patrol Cycles, Auto-Capture) are command-only and absent from
+  every reachable read surface (`summary_point.param` is `{}`). They are NOT
+  fetchable — if per-point patrol info is ever surfaced, DERIVE it: cycles = count of
+  in-place ~360° rotations at the point; auto-capture = whether `photo_list`
+  timestamps fall in that point's dwell window. No probing or write-path work remains
+  here; kept only as the derivation recipe.
 **Procedure:** [docs/research/g2408-capture-procedures.md#4-patrol-log-trigger-investigation](g2408-capture-procedures.md#4-patrol-log-trigger-investigation)
 **Cross-refs:** journal topic `s2p50 op-code catalog`; apk opcodes 107/108; DONE.md "Patrol Logs"
 
@@ -878,20 +879,6 @@ during update (sensors, entities) verified.
 **Status:** blocked-by-rare-event (wait for next firmware update notification)
 **Procedure:** [docs/research/g2408-capture-procedures.md#1-firmware-update-flow](g2408-capture-procedures.md#1-firmware-update-flow)
 **Cross-refs:** journal topic `s2p50 op-code catalog`; inventory `s2p2_state_14`
-
----
-
-### Change PIN Code — confirm wire format
-
-**Why:** The app has a "Change PIN Code" action. The wire format is unknown —
-likely BT-only given PIN is a security-critical local secret. The integration
-cannot currently read or write PIN.
-**Done when:** PIN change is attempted while probe log is running; result is
-either a cloud wire sequence documented in `protocol/config_s2p51.py`, or
-BT-only confirmed and documented in `docs/research/g2408-protocol.md §1`.
-**Status:** blocked-by-capture
-**Procedure:** [docs/research/g2408-capture-procedures.md#8-change-pin-code-wire-format](g2408-capture-procedures.md#8-change-pin-code-wire-format)
-**Cross-refs:** journal topic `s1p1 byte[3] bit 7 PIN-required clarification`; `docs/research/g2408-protocol.md §1`
 
 ---
 
@@ -921,110 +908,3 @@ Outcome: either a button entity is added with the right display conditions, or
 the service is documented as power-user-only.
 **Status:** blocked-by-safe-test-design (need a controlled fault scenario)
 **Cross-refs:** `custom_components/dreame_a2_mower/actions.py`; journal topic `s1p1 byte[3] bit 7 PIN-required clarification`
-
----
-
-## Phase 3: capture the Dreame app's write RPC — covers 28+ entities across multiple cloud surfaces
-
-**Why:** Audit Tasks 3 and 4 (2026-05-09) + the SCHEDULE round-up probe (also 2026-05-09) revealed that **multiple cloud surfaces the integration uses for writes are cloud-cache-only or have missing setters on g2408**. The Dreame app uses a different write surface that we haven't reverse-engineered.
-
-**SCHEDULE-specific update 2026-05-09:** ran `/tmp/probe_schedule_write.py` testing 5 candidate paths against the SCHEDULE blob. All returned `r=0` (cloud accepts) but the `v` version field never bumped — meaning the cloud is silently dropping the writes on every alternative path too. Direct MIoT `s8.{1..5}` returns 80001 (RPC tunnel closed for siid=8 on this firmware). Confirms SCHEDULE is genuinely Phase 3: the Dreame app must use either MQTT-direct publish to `/cmd/<did>/` (bypassing cloud RPC) or a different HTTP endpoint outside the routed-action / chunked-batch / MIoT-property surfaces we've enumerated.
-
-Affected entities (all silently fail to drive the device after the v1.0.2a9 partial fix):
-
-1. **CFG int-list keys (7 entities + sub-rows):** DND, LOW, WRP, BAT, LIT, REC, LANG. The cloud's routed-action `s2.50 m='s' t=KEY` returns `r=-3` (no setter). Direct MIoT `set_property(siid, piid, value)` returns `80001`. `r=-3` confirmed to mean "no setter at this address" — not a wire-format issue (cloud is lenient on the keys it does support, e.g. coerced `[1,4]` to `1` for CLS). See `wire-captures/cfg-write-regression-2026-05-09.md`. **NEW HYPOTHESIS (2026-05-09):** ioBroker.dreame uses **named-key payloads** for these complex CFG keys instead of wrapped lists — e.g. `WRP = {value:1, time:8, sen:0}`, `DND = {value:1, time:[1200,480]}`, `LIT = {value:1, time:[480,1200], light:[1,1,1,1], fill:0}`. We always sent `{value: <list>}` which is rejected with r=-3. Likely fix: refactor `set_cfg` to accept arbitrary `d` dict, then live-probe one key at a time. Catalog and test cases: `wire-captures/iobroker-write-catalog-2026-05-09.md`.
-
-2. **SETTINGS-backed entities (13 entities):** All "Mowing settings page" entities — number.mowing_height / _cutter_position / _cutter_position_height / _edge_mowing_num / _obstacle_avoidance_height / _distance / _sensitivity; select.mowing_direction / _mowing_direction_mode / _edge_walk_mode; switch.edge_mowing_auto / _safe / _obstacle_avoidance / .obstacle_avoidance_enabled; switch.ai_obstacle_recognition_humans / _animals / _objects. The `setDeviceData` chunked-batch surface accepts the writes and persists them in the cloud chunked-batch dump, but the device firmware never sees the change and the Dreame app reads from a different surface (verified live 2026-05-09 — Map 2 app showed all 3 AI bits on even after cold-restart, while cloud had ai=6). See `wire-captures/settings-surface-cloud-only-2026-05-09.md`.
-
-3. **AI_HUMAN.0 (1 entity), SCHEDULE (1 service):** Same chunked-batch surface as SETTINGS — almost certainly the same cloud-cache-only behavior. Confirm in audit Tasks 5 and 6.
-
-The Dreame app obviously has a working device-write path: 3 weeks of s2p51 push fires show settings actually changing on the device when the user toggles in the app. **The path is not in our cloud_client repertoire and not in the legacy integration's repertoire either.**
-
-**Probe-safety incident** during Task 3 wire-format brute-forcing: an `s2.aiid=1` call inadvertently triggered a global-mower-start action (the device ignored `m='s' t='WRP'` and treated it as a normal start command). Brute-force search of siid/aiid combinations is therefore not safe. Future probing must EITHER stay on `aiid=50` (varying only m/t/d) OR run only when the mower is docked AND the user is watching.
-
-**Done when:** an HTTPS sniff of the Dreame app's "Save" tap on the affected pages identifies the wire format. Likely candidates:
-- MQTT direct command publish to a `/cmd/<did>/` topic (the legacy Xiaomi pattern)
-- A different cloud HTTP endpoint we haven't probed
-- A different `method=` field (not `set_properties` or `action`)
-- A new siid/aiid combination not in the integration's repertoire
-
-A single sniff session capturing 4-5 different settings (one mowing-settings-page toggle, one DND change, one AI_HUMAN toggle, one schedule edit) will likely reveal the missing surface — they probably all use the same one.
-
-Once captured, the integration routes the affected ~28 entities through the new path, retests end-to-end, and the audit's ✗ rows flip to ✓.
-
-**Status:** open (deferred — needs traffic capture; substantial follow-up code work after that). NB the CFG int-list portion may be solvable without a sniff — see the named-key hypothesis above and `iobroker-write-catalog-2026-05-09.md`.
-**Cross-refs:** `docs/research/wire-captures/cfg-write-regression-2026-05-09.md`; `docs/research/wire-captures/settings-surface-cloud-only-2026-05-09.md`; `docs/research/wire-captures/iobroker-write-catalog-2026-05-09.md`; probe-safety incident note in the CFG file.
-
----
-
-## Determine whether HA writes drive the device, or only update the cloud cache
-
-**Why:** A whole class of g2408 settings — AI Obstacle Recognition
-(humans/animals/objects), Mowing Direction, Edge Mowing Auto/Safe/
-Obstacle Avoidance, LiDAR Obstacle Recognition, Obstacle Avoidance
-Distance/Height/Sensitivity, Mowing Height, Cutter Position,
-Mowing Pattern, Edge Walk Mode, Edge Passes, Start from Stop Point,
-Pathway Obstacle Avoidance, EdgeMaster — are all readable from the
-cloud and propagate end-to-end across app instances (verified
-2026-05-09 via two-device test: toggle in app A, cold-start app B
-on a different device → app B reflects the change without any BT
-involvement). The full list and per-entity status lives in
-`docs/research/entity-sync-matrix.md`.
-
-The integration writes via `setDeviceData`. The cloud accepts the
-write (CFG.VER bumps, SETTINGS reflects, refresh-button confirms).
-What's NOT yet established is whether the device *firmware* applies
-the HA-initiated write — i.e. whether the mower's actual behaviour
-changes. Earlier we suspected "no" because the original Dreame app
-session kept showing the pre-HA-write value, but that may simply be
-the app's settings-screen UI cache (the same cache that hides
-app-to-app changes until forced refresh).
-
-**Right test (not yet performed):** HA writes X to a setting; then
-cold-start a Dreame app instance that has never seen the device's
-local cache. If it shows X, HA writes propagate fully and the
-"doesn't apply" theory was a UI-cache illusion. If it shows the
-pre-HA-write value, HA's `setDeviceData` only updated the cloud
-cache and the device firmware uses a different write surface.
-
-If HA writes are confirmed insufficient, the next step is HTTPS-
-sniffing the Dreame app's "Save" tap to capture the actual RPC the
-app uses (likely a routed-action `setX` target we haven't enumerated,
-since direct MIoT `set_property` returns 80001 for most siids).
-
-**Done when:** the test above is performed live and either:
-1. HA writes confirmed end-to-end propagating → close as "no action,
-   the apparent gap was UI cache"; OR
-2. HA writes confirmed insufficient → app's actual write RPC is
-   captured, wired into a `coordinator.write_*` method, and a
-   follow-up live test confirms full propagation.
-**Status:** open (deferred — needs user-side cold-start test, then
-possibly a traffic capture).
-**Cross-refs:** `docs/research/entity-sync-matrix.md` (full list of
-affected entities); `docs/research/g2408-research-journal.md` 2026-05-09
-entry "BT-only classification retracted".
-
----
-
-## BAT[2] hardcoded `1` in build helpers (write-path audit, 2026-05-09)
-
-**Why:** The sole finding still open from the 2026-05-09 write-path audit —
-which checked for structural read/write mismatches like the SETTINGS
-dual-entry / SCHEDULE-mode bugs (commits `b25b5ac` / `4868016` /
-`b89c574`) and found no other dual-source storage shapes. (The audit's
-other finding, the PRE encoder inflation, is now closed — see DONE.md.)
-Three build helpers — `_build_bat_auto_recharge` (number.py),
-`_build_bat_resume` (number.py), `_build_bat_custom_charging`
-(switch_global.py:130) — all hardcode `BAT[2] = 1` instead of reading it
-from MowerState. The decoder explicitly drops `BAT[2]` with
-`# unknown_flag (consistently 1; semantic TBD)`. Live data confirms
-`BAT[2] = 1` today (2026-05-09), so writes are correct now, but the
-"consistently 1" assumption is brittle — if firmware ever stores
-something else there, every BAT-related write clobbers it.
-**Done when:** `bat_unknown_flag` is added to MowerState, populated
-from `bat_raw[2]` in the CFG decoder, and the three build helpers
-pass `int(state.bat_unknown_flag or 1)` instead of the literal `1`.
-**Status:** open (deferred — defensive cleanup, low priority)
-**Cross-refs:** `custom_components/dreame_a2_mower/switch_global.py:130-147`;
-`custom_components/dreame_a2_mower/number.py:79-118`;
-`coordinator/_property_apply.py:566-574` (decoder dropping `bat_raw[2]`).

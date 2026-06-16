@@ -11088,7 +11088,7 @@ session_summary_fields:
       verification below and dreame-app-implementation-guide-2026-06-09.md §4.
     status:
       seen_on_wire: false
-      decoded: partial
+      decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
     verifications:
@@ -11122,9 +11122,17 @@ session_summary_fields:
           JPEG (ffd8 magic). Fixed protocol/photo_keys.build_photo_object_key to
           return the bare form.
         evidence: "tools/probes/oss_photo_probe.py live run 2026-06-09 (57373-byte JPEG)"
+      - date: "2026-06-15"
+        status: verified
+        claim: >-
+          Patrol auto-capture photos confirmed reachable END-TO-END on the live
+          integration: the photo-archive dashboard tab renders 18 patrol photos,
+          confirming patrol photos land in the SAME dreame-eu ali_dreame/<ts>.jpg
+          album bucket as AI-obstacle photos (closes the former patrol-photo-bucket
+          open question). The 479D/Xiaomi-FDS hypothesis stays debunked.
+        evidence: "user-observed: 18 patrol photos rendered on the photo-archive dashboard tab (2026-06-15)"
     open_questions:
       - "transient-obstacle-photo-api: The transient session-obstacle photos (live-map clickable icons that die after the session) use a different, uncaptured API — no real mow ran. Capture during a real obstacle-hitting mow."
-      - "patrol-photo-bucket: Confirm patrol photos land in the same ali_dreame/<ts>.jpg album bucket as AI-obstacle photos."
       - "aiobs-photo-index: The pre-signed photo-index call (returns the album URL set) was not on HTTPS; likely a sendCommand t=AIOBS read or MQTT event (see the AIOBS inventory entry). Not needed for Phase 1 (photo_list suffices)."
 
   - id: "summary_photo_detected"

@@ -5716,7 +5716,6 @@ verification below and dreame-app-implementation-guide-2026-06-09.md §4.
 
 **Open questions:**
 - transient-obstacle-photo-api: The transient session-obstacle photos (live-map clickable icons that die after the session) use a different, uncaptured API — no real mow ran. Capture during a real obstacle-hitting mow.
-- patrol-photo-bucket: Confirm patrol photos land in the same ali_dreame/<ts>.jpg album bucket as AI-obstacle photos.
 - aiobs-photo-index: The pre-signed photo-index call (returns the album URL set) was not on HTTPS; likely a sendCommand t=AIOBS read or MQTT event (see the AIOBS inventory entry). Not needed for Phase 1 (photo_list suffices).
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`

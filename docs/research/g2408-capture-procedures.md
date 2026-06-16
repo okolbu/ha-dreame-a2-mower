@@ -292,30 +292,18 @@ Every procedure follows this structure:
 - For each consistently-erroring endpoint with corroborating apk evidence: keep it out of inventory.yaml as genuinely absent (record the "consistent-across-N-dumps + apk-says-vacuum-only" justification in the journal).
 - Add a journal entry under `cfg_individual MISTA reversal` topic noting the broader cadence study results.
 
-## 8. Change PIN code wire format
+## 8. Change PIN code wire format — RESOLVED (2026-06-09, app-MITM)
 
-**Closes:** "Change PIN Code" open item from TODO.md; documents the BT-only constraint.
-**Trigger type:** `blocked-on-firmware-cooperation`
-**Estimated effort:** ~15 min to confirm the gap; days/weeks if pursuing BT instrumentation
+**Closed:** the "Change PIN Code" TODO item. The wire format was captured directly by the
+2026-06-09 app↔mower MITM settings sweep — it is a **cloud CFG-individual RPC, NOT BT-only**
+(the BT-only expectation that drove the diff procedure below was wrong). See `inventory.yaml § PIN`:
 
-### Prerequisites
-- Probe log running.
-- `dreame_cloud_dump.py` ready to capture before/after.
-- Mower docked.
+- **Write:** `{type:'auth'|'update', value:<plaintext int>}` (`auth`=verify existing, `update`=set
+  new; plaintext integer, TLS-only — not hashed).
+- **Read** (`m:g` → `t:PIN`): `{result, time}` (`result:0`=no PIN-required event pending; `time`=
+  last lift-lockout timestamp).
 
-### Procedure
-1. Bookmark probe log; capture cloud dump #1.
-2. In Dreame app: Settings → Security / Anti-Theft → Change PIN Code. Enter current PIN; set a new one.
-3. Capture cloud dump #2 immediately.
-4. Compare dumps; check probe log for s2p51 / s2p50 / event_occured during the action window.
-
-### What to look for
-- ANY MQTT activity during the change. Specifically check:
-  - s2p51 push (the multiplexed-config slot)
-  - PIN cfg_individual entry change
-  - sensor.cfg_keys_raw._last_diff naming PIN
-- If nothing fires on any of those, the PIN change is BT-only.
-
-### After capture
-- If the change is BT-only (expected): document in the inventory row for PIN cfg_individual that this endpoint cannot be exercised from the integration. Mark this procedure's closes-list as resolved with `blocked-on-firmware-cooperation`.
-- If something DID fire: update the relevant rows; this would be a new finding worth a journal entry.
+**DECODED-UNWIRED:** deliberately not exposed — a plaintext-PIN write over a HA entity is a
+security non-goal. The only residual is the `PIN.result`/`PIN.time` lift-lockout-flow semantics
+(tracked as an `inventory.yaml § PIN` open question). The diff-based capture procedure that used to
+live here is retired (it assumed BT-only and is superseded by the app-MITM capture).
