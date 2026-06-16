@@ -7,6 +7,7 @@ adds pytest-homeassistant-custom-component fixtures separately.
 from __future__ import annotations
 
 import dataclasses
+import enum
 import sys
 import types
 from pathlib import Path
@@ -297,6 +298,23 @@ def _make_ha_stub() -> None:
     btn_mod = types.ModuleType("homeassistant.components.button")
     btn_mod.ButtonEntity = object  # type: ignore[attr-defined]
     sys.modules["homeassistant.components.button"] = btn_mod
+
+    # homeassistant.components.update — used by update.py firmware entity
+    upd_mod = types.ModuleType("homeassistant.components.update")
+
+    class _UpdateEntity:  # noqa: D101
+        """Minimal stub mirroring homeassistant.components.update.UpdateEntity."""
+
+    class _UpdateEntityFeature(enum.IntFlag):  # noqa: D101
+        INSTALL = 1
+        SPECIFIC_VERSION = 2
+        PROGRESS = 4
+        BACKUP = 8
+        RELEASE_NOTES = 16
+
+    upd_mod.UpdateEntity = _UpdateEntity  # type: ignore[attr-defined]
+    upd_mod.UpdateEntityFeature = _UpdateEntityFeature  # type: ignore[attr-defined]
+    sys.modules["homeassistant.components.update"] = upd_mod
 
     # homeassistant.components.device_tracker — used by device_tracker.py entity
     dt_mod = types.ModuleType("homeassistant.components.device_tracker")

@@ -2882,6 +2882,37 @@ entities:
       (entity_registry_enabled_default=False).
       EntityCategory.DIAGNOSTIC. Added 2026-06-16 (D1).
 
+  - id: "update.dreame_a2_mower_firmware"
+    platform: update
+    class: "DreameA2FirmwareUpdateEntity"
+    class_file: "custom_components/dreame_a2_mower/update.py"
+    device: parent
+    source:
+      wire: "checkDeviceVersion + s1p2/s1p3 + manualFirmwareUpdate"
+      state_path: "coordinator.data.firmware_version / .firmware_latest"
+    write_path: "install() -> coordinator.async_trigger_firmware_update() -> manualFirmwareUpdate"
+    status:
+      seen_working: false
+      last_verified: "2026-06-16"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "Firmware UpdateEntity: installed=DEV.fw, latest=checkDeviceVersion.newVersion, progress=s1p2/s1p3, install()=manualFirmwareUpdate. Read side live-verifiable; install path build-correct, unverifiable until next real firmware (device at 0625)."
+        evidence: "app-mitm:2026-06-16-firmware-ota"
+    references:
+      wire_entry: "inventory.yaml s1p2/s1p3 (live OTA) + checkDeviceVersion + manualFirmwareUpdate"
+      code: "custom_components/dreame_a2_mower/update.py"
+    notes: |
+      HA `update` platform entity for the mower's own firmware OTA (NOT the HACS
+      integration-version update). installed_version = coord.data.firmware_version
+      (CFG.DEV.fw); latest_version = coord.data.firmware_latest (checkDeviceVersion
+      newVersion) when firmware_update_available else falls back to installed
+      ("up to date"). in_progress = (ota_state == 2); update_percentage =
+      coord.data.ota_progress (s1p3), falling back to cloud_state.ota_status[1].
+      async_release_notes = coord.data.firmware_release_notes. async_install fires
+      coordinator.async_trigger_firmware_update(); a device refusal (WiFi/charge
+      gating) raises HomeAssistantError. Added 2026-06-16 (D3).
+
   - id: "sensor.dreame_a2_mower_schedule_count"
     platform: sensor
     class: "DreameA2ScheduleCountSensor"

@@ -40,6 +40,11 @@
     }
   },
   "entity": {
+    "update": {
+      "firmware": {
+        "name": "Firmware"
+      }
+    },
     "number": {
       "station_bearing_deg": {
         "name": "Dock compass bearing"

@@ -23,6 +23,7 @@ PLATFORMS: Final = [
     "button",
     "event",
     "calendar",
+    "update",
 ]
 """HA platforms this integration sets up. F5 = session lifecycle surface added button."""
 

@@ -40,6 +40,11 @@
     }
   },
   "entity": {
+    "update": {
+      "firmware": {
+        "name": "Firmware"
+      }
+    },
     "button": {
       "refresh_wifi_heatmaps": {
         "name": "Refresh WiFi heatmaps"
