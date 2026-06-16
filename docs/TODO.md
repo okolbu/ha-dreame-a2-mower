@@ -803,30 +803,25 @@ _(none currently)_
 
 ## Blocked
 
-### Mowing direction / Crisscross / Chequerboard pattern
-
-**Why:** No observable property on the device's MQTT `/status/` topic carries
-mowing direction or pattern. An 8-change test on 2026-05-04 produced eight
-`s6p2` events all with the identical payload — the actual setting value is
-absent from the outbound MQTT. Likely cloud-resident or BT-only.
-**Done when:** A CFG key carrying the direction value is found via `getCFG`
-brute-force (try `MOWP`, `MD`, `DIR`, `ANG`, `PAT`) OR the feature is
-confirmed cloud/BT-only and documented as unsurfaceable.
-**Status:** blocked-by-investigation (BT-only suspected)
-**Cross-refs:** `docs/research/g2408-protocol.md §1.2` (80001 / BT channel)
-
----
-
 ### `ai_obstacle` blob format
 
 **Why:** `SessionSummary.ai_obstacle` is typed `tuple[Any, ...]` because no
 captured session has produced a non-empty value. Need an AI-obstacle trigger
 event to capture the wire shape.
-**Done when:** A session produces `ai_obstacle: [...]` in the OSS JSON;
+**Still blocked after the 2026-06-16 session:** real **AI-human detections did fire**
+this session (the `ai_human` gallery photos + "Human entry … View snapshots" alerts),
+yet the session-summary `ai_obstacle` array stayed **empty in every capture** —
+confirming the detection photos ride a SEPARATE channel (the OSS gallery /
+`userDidOssList`), not the summary's `ai_obstacle`. So the trigger that populates
+`ai_obstacle` in the OSS JSON is still uncaptured (it may require an *object/animal*
+AI-obstacle on the path, distinct from a human-presence alert).
+**Done when:** a session produces `ai_obstacle: [...]` in the OSS JSON;
 fixture saved under `tests/protocol/fixtures/`; decoder and renderer updated.
-**Status:** blocked-by-capture (need mower to detect an obstacle with AI camera)
+**Status:** blocked-by-capture (need a non-empty `ai_obstacle` — human-presence alerts
+do NOT populate it).
 **Procedure:** [docs/research/g2408-capture-procedures.md#2-take-a-photo-flow-apk-s-takepic-vs-ha-integration-path](g2408-capture-procedures.md#2-take-a-photo-flow-apk-s-takepic-vs-ha-integration-path)
-**Cross-refs:** `protocol/session_summary.py`; journal topic `apk cross-walk findings`
+**Cross-refs:** `protocol/session_summary.py`; journal topic `apk cross-walk findings`;
+DONE.md "Mowing direction" (closed by CFG.PRE[5]).
 
 ---
 
