@@ -194,15 +194,16 @@ journal for the shipped detail. What ACTUALLY remains open:
    timestamps fall in the point's rotation window — both demonstrated on the 2026-06-03 2-cyc/ON
    vs 1-cyc/OFF run). The ONLY thing missing is the **authored per-point setting values** (the
    app's "Patrol Cycles 1/2/3" + per-point "Auto-Capture on/off" toggles) as a *directly-readable
-   config*: inventory confirms they are command-only and NOT on any reachable surface (not in
-   `cruisePoints`, s2p56, `/status/`, the o107 SEND payload, and the summary `param:{}` is empty).
-   So there is no undiscovered cloud read-source to hunt.
-   **Done when** ONE of: (a) surface the *effective* cycles + auto-capture read-only, derived from
-   telemetry (rotation count + photo-window), on the patrol-points sensor; OR (b) MITM the
-   app→cloud patrol-write to read the *authored* toggle values exactly. The sensor `items` keep
-   `cycles:null` / `auto_capture:null` until (a) or (b) lands.
-   **Cross-refs:** inventory `o107` / `o400` / `summary_cruise_points` / `summary_photo_list`
-   verifications (2026-06-03/04/09); `reference_app_api_probe` (for path (b)).
+   config*. **UPDATE 2026-06-16:** path (b) is effectively DONE — the authored write surface is now
+   decoded (`CRUISED` CFG key `{idx, value:[-1, point_id, auto_capture(0/1), cycles(1/2/3)]}`,
+   app-MITM; see DONE.md todo6 #6 + `inventory.yaml § CRUISED`). What's still missing is a CRUISED
+   *read-back* (none captured), so surfacing the *displayed* value needs optimistic local state from
+   our own writes OR the telemetry reconstruction (path a). The remaining work moved to its own TODO.
+   **Done when:** see the dedicated "Surface authored patrol per-point cycles + auto-capture (CRUISED
+   write-path)" item at the top of this file. The sensor `items` keep `cycles:null`/`auto_capture:null`
+   until that lands.
+   **Cross-refs:** `inventory.yaml § CRUISED` / `§ o107` / `§ o111`; DONE.md todo6 #6;
+   `reference_app_api_probe`.
 4. **Patrol render/timing polish** (render-side, minor; overlaps "Patrol Logs" + "Surface
    dock-departure repositioning UX"):
    - replay doesn't VISUALISE the on-the-spot 360° spins — the local track DOES capture them
@@ -660,28 +661,29 @@ newest-with-most-points) is chosen for the HA LiDAR camera and documented.
      longer clickable, so there's no access. They are almost certainly still stored
      cloud-side and must be captured + retained too (this 3rd set may not yet be
      covered by the shipped categoriser).
-**Open sub-items (todo1.txt 1-4):**
-  - **Dashboard surfacing** of all three sets — a gallery view, ideally mirroring
-    the app's photo/video tabs + per-type filtering.
-  - **Link photo sets to sessions** — both the long-term patrol/AI sets and the
-    ephemeral per-session obstacle shots. [BRAINSTORM] (see Patrol-Logs T4 +
-    the session-format brainstorm for the patrol half.)
-  - **Boot backfill** — post-fetch ALL upstream-available photos/videos for this HA
-    instance, at least once at boot, so a fresh install on a device that already has
-    historical cloud photos/videos catches up (the 1 h sync only goes forward).
-  - **Photo overlays** — render date + (for AI obstacles) the class + confidence%
-    ("human 80%") AND the detection **bounding box**: draw the `x/y/w/h` rectangle from the
-    parsed COM `detections` (already extracted by `protocol/photo_meta.py:parse_jpeg_com` →
-    `ArchivedPhoto.detections`; class+conf are already on the camera as
-    `detection_class`/`detection_confidence` attrs) onto the photo, with the label on/beside
-    the box (caption/subtitle as a fallback). The metadata is in hand — this is a pure render
-    task, no further probing needed.
-**Done when:** each sub-item is implemented or explicitly deferred with a reason;
-all three sets are captured (incl. the ephemeral live-session obstacle shots),
-surfaced on the dashboard with overlays, linked to sessions, and a boot backfill
-exists.
-**Status:** open (backend shipped; surfacing + the 3rd set + backfill + overlays +
-session-linking remain).
+**Sub-items (todo1.txt 1-4):**
+  - **Dashboard surfacing** — ✅ DONE. `dreame-a2-photo-gallery-card.js` renders the
+    gallery with per-category filter tabs (AI·Human/Animal/Object, Obstacle, Patrol,
+    Manual) + a Videos tab + click-to-enlarge lightbox.
+  - **Link photo sets to sessions** — ✅ DONE for the long-term patrol/AI sets
+    (2026-06-16, todo6 #3 Part B): `session_photos_manifest` matches a session's
+    `photo_list` and surfaces thumbnails on the replay screen. The EPHEMERAL 3rd set
+    (below) is not linkable until it's captured.
+  - **Boot backfill** — ✅ DONE. `_core.py` runs `_refresh_oss_gallery(max_pages=400)`
+    at startup (full history) in addition to the hourly forward sync.
+  - **Photo overlays** — ✅ DONE (2026-06-16): the gallery + replay lightboxes draw the
+    JPEG-COM `detections` as a bounding box + `"79% - person"` label via the shared
+    `_dreame-map-core.js:attachDetectionOverlay`. Date shows in the caption.
+**What actually remains — the ephemeral "normal obstacle" 3rd set:** captured every time
+the mower works around an obstacle during a session, reachable in the app ONLY by tapping a
+live-session obstacle icon (icons die at session end). Its upload/fetch mechanism is UNKNOWN
+(NOT the patrol lazy-upload path — see the obstacle-icon open question under the device-message
+linking work) and it is NOT in the shipped categoriser/gallery. Until that mechanism is
+captured it can't be archived, surfaced, or session-linked.
+**Done when:** the 3rd (ephemeral obstacle) set's cloud mechanism is identified, then it is
+captured + surfaced + session-linked like the other two — OR confirmed unreachable and documented.
+**Status:** open — surfacing/overlays/backfill/long-term-linking all SHIPPED; only the 3rd
+ephemeral obstacle-photo set (capture mechanism unknown) remains.
 **Cross-refs:** the (resolved) "Probe for the AI-photo / obstacle-photo cloud
 endpoint" item above; "Patrol Logs" T4 (Auto-Capture photo retrieval) + the
 session-format brainstorm; memory `project_app_capture_phase1` /
