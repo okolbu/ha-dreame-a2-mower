@@ -5212,6 +5212,36 @@ cfg_keys:
     open_questions:
       - "CMS[3] semantic — does it track Link Module, Garage, MCA10, or a presence summary? Needs a unit that has one of those accessories (all -1 here). Note Link is a day-based subscription, not a minutes wear-meter, so a wear-meter interpretation of CMS[3] is suspect."
 
+  - id: "CRUISED"
+    name: "patrol_point_attributes"
+    category: "cfg"
+    payload_shape: "{idx: int, value: list[int]}"
+    semantic: |
+      Per-patrol-point attributes — cycles (1/2/3) and auto-capture-photos
+      toggle. Sent as a CFG write (m:s) with a named-key envelope, NOT via
+      o=223 (point geometry) or o=107 (run-patrol). One sample captured:
+      {idx:0, value:[-1,3,1,3]}. Field-map UNDECODED [UNVERIFIED]: field
+      order (which element = cycles, which = auto-capture) is NOT confirmed;
+      no read captured to establish the shape. Behaviour known: auto-capture
+      = fixed 3 photos/point → gallery. Cross-ref: cfg_individual patrol/
+      cruise-point (o=223 create/edit) for the geometry opcode.
+      [app-mitm:2026-06-16-firmware-ota]
+    status:
+      seen_on_wire: true
+      first_seen: "2026-06-16"
+      last_seen: "2026-06-16"
+      decoded: partial
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    open_questions:
+      - "CRUISED field order — which element of value[] is cycles, which is auto-capture? No read captured."
+      - "CRUISED value[-1,3,1,3]: is -1 a sentinel for 'applies to all points'? Undecoded."
+    verifications:
+      - date: "2026-06-16"
+        status: partial
+        claim: "CRUISED CFG write {idx,value:[-1,3,1,3]} carries per-point cycles + auto-capture; field order undecoded, no read."
+        evidence: "app-mitm:2026-06-16-firmware-ota cloud/captures/mitm_session_20260616/miio-13267.jsonl"
+
   - id: "DLS"
     name: "daylight_savings"
     category: "cfg"
@@ -6005,19 +6035,30 @@ cfg_individual:
     semantic: |
       Authoritative device identifiers. Wired in v1.0.0a76. sn is the
       hardware serial (replaces flaky s1p5 cloud RPC), fw is the firmware
-      version, mac cross-checks the cloud device record's mac, ota semantic
-      UNCONFIRMED (NOT the Auto-update Firmware app toggle — values
-      disagree). Sample: {fw: "4.3.6_0550", mac: "00:00:00:00:00:00",
-      ota: 1, sn: "G2408000TESTSN0000"}.
+      version, mac cross-checks the cloud device record's mac.
+      Transport: siid:2 aiid:50 {m:'g', t:'DEV'} — all four fields
+      (fw, mac, ota, sn) confirmed in one routed read alongside the OTA
+      flow [app-mitm:2026-06-16-firmware-ota].
+      ota flag: observed =1 — semantics SOFT [UNVERIFIED]: "OTA-capable
+      or update-pending — NOT the app Auto-update Firmware toggle" (values
+      disagree with the Auto-update setting). Sample: {fw: "4.3.6_0550",
+      mac: "00:00:00:00:00:00", ota: 1, sn: "G2408000TESTSN0000"}.
     status:
-      seen_on_wire: false
+      seen_on_wire: true
+      first_seen: "2026-06-16"
+      last_seen: "2026-06-16"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §getX DEV"
       integration_code: "custom_components/dreame_a2_mower/cloud_client.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
-      - "ota field — NOT the Auto-update Firmware toggle; semantics unconfirmed."
+      - "ota field — NOT the Auto-update Firmware toggle; =1 observed; OTA-capable or update-pending [UNVERIFIED]."
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "DEV routed read siid2/aiid50 {m:g,t:DEV} -> {fw:'4.3.6_0550', mac, ota:1, sn} confirmed alongside the OTA flow."
+        evidence: "app-mitm:2026-06-16-firmware-ota cloud/captures/mitm_session_20260616/miio-13267.jsonl"
 
   - id: "DOCK"
     name: "dock_state_and_position"
@@ -7528,11 +7569,16 @@ heartbeat_bytes:
     status:
       seen_on_wire: true
       first_seen: "2026-04-30"
-      last_seen: "2026-04-30"
+      last_seen: "2026-06-16"
       decoded: confirmed
     references:
       integration_code: "custom_components/dreame_a2_mower/protocol/heartbeat.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "byte[17] tracked a deliberate AP change -80 to -60 dBm (WiFi); byte[18] did NOT move with the AP -- reinforces byte[17]=WiFi RSSI, byte[18]=cellular."
+        evidence: "app-mitm:2026-06-16-firmware-ota cloud/captures/mitm_session_20260616/mqtt-19973.log"
 
   - id: "s1p1_b18"
     byte: 18

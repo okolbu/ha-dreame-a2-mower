@@ -334,8 +334,9 @@ Validate: correlate event args with the session that fired them.
   the map-blob `ai_obstacle` array was empty in every capture, MQTT :19973
   carried zero photo refs, and no obstacle/detection/IPC endpoint was ever
   touched — because every capture was emulator-driven UI with no REAL mow + REAL
-  detection, the only scenario that arms type-3. Two competing hypotheses for
-  what tapping a live icon does, both `[UNVERIFIED]`: (a) read a now-populated
+  detection, the only scenario that arms type-3. Two all-area/overnight mows in
+  the 2026-06-16 session produced 0 new gallery objects. Two competing hypotheses
+  for what tapping a live icon does, both `[UNVERIFIED]`: (a) read a now-populated
   `ai_obstacle [x,y,type,possibility,key,file_name,random]` entry from the live
   map blob and mint a signed URL to the SAME `ali_dreame/` OSS (dreame-vacuum
   analogue), or (b) hit a distinct endpoint (lead:
@@ -345,6 +346,32 @@ Validate: correlate event args with the session that fired them.
   `scripts/harvest-obstacle-capture.sh` to diff for non-empty `ai_obstacle`,
   NEW OSS GETs, and any new detection/photo endpoint — a new object key OR a
   populated `ai_obstacle` confirms type-3 and disambiguates (a) vs (b).
+  Status 2026-06-16: rig armed (`scripts/arm-obstacle-capture.sh`,
+  `harvest-obstacle-capture.sh`, `obstacle-watch.sh` in MITM toolkit); needs
+  a real mow + real detection + live obstacle-icon tap.
+
+- **CRUISED patrol-attribute decode** — `[UNKNOWN — to capture]`. The CRUISED
+  CFG write carries per-patrol-point cycles (1/2/3) and auto-capture-photos toggle.
+  One sample captured 2026-06-16: `{idx:0, value:[-1,3,1,3]}`. Field order is
+  UNDECODED [UNVERIFIED]: which element of `value[]` maps to cycles vs auto-capture
+  is not established; no read of CRUISED was captured. Auto-capture behaviour known:
+  3 photos/point → gallery. Blocked during a mow (cannot toggle safely mid-run).
+  See inventory `cfg_keys § CRUISED` for the captured sample.
+  Capture step: in an app-MITM session with the mower docked, toggle cycles 1→2→3
+  and auto-capture on/off independently and diff the `CRUISED` write `value[]`
+  between each toggle. Also capture a GET of CRUISED to confirm the read shape.
+
+- **BT manual-drive / joystick steering** — `[UNKNOWN — to capture]` (BT GATT;
+  off-cloud). Manual drive requires Bluetooth proximity (out-of-range = mower stops,
+  controls vanish). Steering commands are BT GATT, NOT cloud — so they never appear
+  on the :13267 miio or :19973 MQTT surfaces. Capture path: enable BT HCI snoop
+  on a real Android phone (`adb shell settings put global bluetooth_hci_log 1`),
+  drive the mower in manual mode, retrieve `btsnoop_hci.log` and open in Wireshark
+  `btatt` / `btle` dissector. The emulator has NO host-BT passthrough (only simulated
+  RootCanal/netsim) — this gap cannot be closed via the emulator rig.
+  Note: the related **draw-by-driving** zone-definition wire is a separate BT gap at
+  the "Draw-by-driving zone definition wire" entry above (same BT surface; different
+  app flow). Both require the real-phone btsnoop capture path.
 - **iotoss auth mode: JWT vs body sign** — the integration sends userDidOssList and
   checkDevOssStorage requests with a JWT Bearer header (standard for other endpoints).
   The app-MITM capture 2026-06-09 showed the app sends an additional body `sign`
