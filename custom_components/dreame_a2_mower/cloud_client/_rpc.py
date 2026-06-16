@@ -258,11 +258,23 @@ class _RpcMixin:
             retry_count=retry_count,
         )
 
-    def request(self, url: str, data: Any, retry_count: int = 2) -> Any:
+    def request(
+        self,
+        url: str,
+        data: Any,
+        retry_count: int = 2,
+        content_type: str = "application/x-www-form-urlencoded",
+    ) -> Any:
         """POST to a Dreame cloud API endpoint with token-auth headers.
 
         Auto-refreshes the session token when ``_key_expire`` is past.
         Returns parsed JSON or ``None`` on failure.
+
+        ``content_type`` defaults to ``application/x-www-form-urlencoded``
+        (every existing RPC caller relies on this — they pass a JSON STRING
+        body that the form encoder leaves untouched). Pass
+        ``application/json`` for app-relay endpoints (e.g. iotuserbind OTA)
+        that the captured app calls send as JSON.
 
         Source: legacy ``dreame/protocol.py`` ``DreameMowerDreameHomeCloudProtocol.request()``.
         """
@@ -275,7 +287,7 @@ class _RpcMixin:
                 self.login()
             headers = {
                 "Accept": "*/*",
-                "Content-Type": "application/x-www-form-urlencoded",
+                "Content-Type": content_type,
                 "Accept-Language": "en-US;q=0.8",
                 "Accept-Encoding": "gzip, deflate",
                 strings[47]: strings[3],
