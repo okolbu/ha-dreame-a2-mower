@@ -91,6 +91,11 @@ properties:
     piid: 2
     name: "ota_state"
     category: "property"
+    value_kind: enum
+    observed_values:
+      - {value: 1, status: confirmed}
+      - {value: 2, status: confirmed}
+      - {value: 3, status: confirmed}
     payload_shape: "int (enum)"
     value_catalog:
       0: "UNDEFINED"
@@ -139,6 +144,7 @@ properties:
     piid: 3
     name: "ota_progress"
     category: "property"
+    value_kind: continuous
     payload_shape: "int 0..100"
     unit:
       wire: "percent"
@@ -423,6 +429,7 @@ properties:
       - {value: 6, status: unknown}
       - {value: 11, status: unknown}
       - {value: 13, status: unknown}
+      - {value: 14, status: unknown}
       - {value: 16, status: unknown}
     payload_shape: "int (enum)"
     value_catalog:
@@ -601,6 +608,7 @@ properties:
       - {value: 9, status: confirmed}
       - {value: 20, status: unknown}
       - {value: 23, status: confirmed}
+      - {value: 24, status: unknown}
       - {value: 27, status: confirmed}
       - {value: 28, status: confirmed}
       - {value: 30, status: confirmed}
@@ -1484,6 +1492,9 @@ properties:
     piid: 57
     name: "robot_shutdown_trigger"
     category: "trigger"
+    value_kind: enum
+    observed_values:
+      - {value: 1, status: partial}
     payload_shape: "scalar int — observed value 1 [probe_log_20260612_174439.jsonl@2026-06-14T04:42:16]; NOT the apk-hypothesized dict"
     semantic: |
       Robot shutdown trigger. Apk subscribes at L181482-181512 and dispatches
@@ -1884,6 +1895,7 @@ properties:
       - {value: 12, status: unknown}
       - {value: 13, status: unknown}
       - {value: 14, status: unknown}
+      - {value: 15, status: unknown}
       - {value: 16, status: unknown}
       - {value: 19, status: unknown}
       - {value: 20, status: unknown}
