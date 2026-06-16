@@ -39,6 +39,15 @@ HANDOVER) surfaced wire facts that need a live app-MITM / probe capture to confi
 4. **[s2p55]** app-MITM during a real AI-obstacle detection to capture the photo list/URL backend call.
 5. **[s4p22 / s4p44 / s4p59]** direct GET probes to resolve the camera-AI / patrol-mode / pet-detection
    capability surfaces.
+6. **[CRUISED] decode the app's write CONTEXT** (confirmed-blocking, related to #1): the integration's
+   bare routed-action CRUISED write (`set_cfg('CRUISED', {idx, value})`) is **accepted-but-no-effect** on
+   g2408 — live 2026-06-16 it returned r=0 but `CRUISE.0` did not change, for both CREATE (new point)
+   and UPDATE (existing point). The APP's CRUISED write DOES take effect, so capture EXACTLY what the
+   app does around it (candidate: an `o=200` select / `o=204`→`o=201` edit-txn wrapper, or a different
+   transport / extra field). This unblocks the patrol cycles/auto-capture WRITE (the
+   `set_patrol_point_config` service + map-editor panel — read works, write is a no-op until this lands).
+   Likely the SAME root cause as #1 (PRE device-effect): integration routed CFG writes may all need the
+   app's write context. Also pins the `'1,0'` settings key + the `value[0]=-1` sentinel.
 **Already tracked separately (not duplicated here):** type-3 ephemeral obstacle photos (Photo/video
 archive item) and the lazy patrol-photo upload (session_summary_download open-question).
 **Status:** open (capture backlog; needs the MITM rig / live device).

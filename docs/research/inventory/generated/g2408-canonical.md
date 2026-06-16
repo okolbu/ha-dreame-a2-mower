@@ -2449,6 +2449,16 @@ cycles/auto-capture by parsing `CRUISE.0` from the existing map/getDeviceData
 fetch — no round-trip, no telemetry reconstruction needed.
 [app-mitm:2026-06-16-cruise-readback; live routed-get probe 2026-06-16 for the r=-3]
 
+⚠ WRITE is ACCEPTED-BUT-NO-EFFECT from the integration (live 2026-06-16): a bare
+routed-action `{m:'s',t:'CRUISED',d:{idx,value}}` (what set_cfg sends) returns
+r=0/accepted but does NOT change `CRUISE.0` — neither a CREATE (absent point) nor
+an UPDATE (existing point). Only the APP's CRUISED write takes effect (the
+round-trip above), so the firmware needs the app's write CONTEXT that the bare
+set_cfg lacks (candidate: an `o=200` select / `o=204`→`o=201` edit txn wrapper, or
+a different transport). Same class as op=10/op=12. So the READ half works; the
+`set_patrol_point_config` service + editor write-panel are unproven/no-effect until
+that context is captured (MITM TODO).
+
 Patrol-point GEOMETRY is separate (o=223 {id, points:[x,y,heading]}, and the
 cloud cruisePoints type=8 blob); it carries NO zone tag — the zone a point
 sits in is derived from its coordinates.

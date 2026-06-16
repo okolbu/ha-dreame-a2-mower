@@ -5572,6 +5572,16 @@ cfg_keys:
       fetch — no round-trip, no telemetry reconstruction needed.
       [app-mitm:2026-06-16-cruise-readback; live routed-get probe 2026-06-16 for the r=-3]
 
+      ⚠ WRITE is ACCEPTED-BUT-NO-EFFECT from the integration (live 2026-06-16): a bare
+      routed-action `{m:'s',t:'CRUISED',d:{idx,value}}` (what set_cfg sends) returns
+      r=0/accepted but does NOT change `CRUISE.0` — neither a CREATE (absent point) nor
+      an UPDATE (existing point). Only the APP's CRUISED write takes effect (the
+      round-trip above), so the firmware needs the app's write CONTEXT that the bare
+      set_cfg lacks (candidate: an `o=200` select / `o=204`→`o=201` edit txn wrapper, or
+      a different transport). Same class as op=10/op=12. So the READ half works; the
+      `set_patrol_point_config` service + editor write-panel are unproven/no-effect until
+      that context is captured (MITM TODO).
+
       Patrol-point GEOMETRY is separate (o=223 {id, points:[x,y,heading]}, and the
       cloud cruisePoints type=8 blob); it carries NO zone tag — the zone a point
       sits in is derived from its coordinates.
@@ -5621,6 +5631,22 @@ cfg_keys:
           (time/etime) only — NOT num/ap. So patrol cycles + auto-capture are
           reconstructable read-side from the existing map fetch; no extra round-trip.
         evidence: "app-mitm:2026-06-16-cruise-readback (FINDING-cruise-config-readback-2026-06-16.md; miio-13267.jsonl CRUISE.0 reads 06-15/06-16 vs the 06-09 write)"
+      - date: "2026-06-16"
+        status: verified
+        claim: |
+          INTEGRATION-originated CRUISED routed-writes are ACCEPTED-BUT-NO-EFFECT on
+          g2408. A live set via action(siid:2,aiid:50) {m:'s',t:'CRUISED',d:{idx:0,
+          value:[...]}} returns out[0].r=0 (set_cfg True) but CRUISE.0 does NOT change
+          — neither a CREATE (point 4, absent entry: no new settings key appears) nor
+          an UPDATE (point 3 cycles 3->2: settings '3' stays num:3, version unchanged),
+          even after a 10s wait. The APP's CRUISED write DOES take effect (the
+          2026-06-16-cruise-readback round-trip), so the firmware distinguishes the
+          app's write context from the bare routed-action the integration sends. Same
+          accepted-but-no-effect class as op=10/op=12. Consequence: the
+          set_patrol_point_config service + map-editor write-panel are unproven/no-effect
+          until the app's CRUISED write context is captured (MITM). The READ half
+          (CRUISE.0 -> sensor/editor) works.
+        evidence: "live set_cfg('CRUISED',...) probe 2026-06-16 (create point 4 + update point 3 cycles 3->2; both r=0/True; CRUISE.0 + version unchanged after 10s; settings keys observed '3' + '1,0')"
     references:
       integration_code: "WRITE: coordinator/_writes.py:write_patrol_point_config -> cloud_client.set_cfg('CRUISED', {idx, value:[-1, point_id, auto, cycles]}), exposed as service set_patrol_point_config + the map-editor card inline panel. READ: protocol/cruise_config.py:parse_cruise_config -> CloudState.cruise_config_by_map -> patrol-points sensor + camera editable_objects."
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"

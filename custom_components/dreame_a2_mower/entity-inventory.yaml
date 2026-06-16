@@ -576,9 +576,9 @@ entities:
         claim: "state = count of MapData.patrol_points; extra_state_attributes['items'] = [{id,label,x_mm,y_mm,cycles:null,auto_capture:null}]. cruisePoints live-confirmed type=8."
         evidence: "live fetch_map 2026-06-04 (cruisePoints ids 3,4,5); map_decoder._parse_cruise_points"
       - date: "2026-06-16"
-        status: presumed
-        claim: "items[].cycles/auto_capture now sourced from the CRUISE.0 device-data key (parse_cruise_config -> CloudState.cruise_config_by_map; default 1/False when absent), superseding the prior null. Writable via the set_patrol_point_config service -> coordinator.write_patrol_point_config -> set_cfg('CRUISED', {idx, value:[-1, point_id, auto, cycles]}); the map-editor card exposes an inline cycles/auto-capture panel on a selected committed patrol point. Code-read, not yet device-validated."
-        evidence: "code: protocol/cruise_config.py, entities/sensor/map.py, coordinator/_writes.py:write_patrol_point_config, services.py set_patrol_point_config, www/dreame-map-editor-card.js; protocol fact app-mitm:2026-06-16 (CRUISE.0 readback)"
+        status: verified
+        claim: "items[].cycles/auto_capture sourced READ-side from the CRUISE.0 device-data key (parse_cruise_config -> CloudState.cruise_config_by_map; default 1/False when absent), superseding the prior null — live-confirmed the sensor + map-editor panel show the real values. WRITE (set_patrol_point_config -> write_patrol_point_config -> set_cfg('CRUISED', {idx, value:[-1, point_id, auto, cycles]}) + the map-editor inline panel) is ACCEPTED-BUT-NO-EFFECT on g2408: the device returns r=0 but CRUISE.0 does not change (create AND update), live-tested 2026-06-16 — write unproven pending the app's CRUISED write context (see inventory § CRUISED). So READ works, WRITE does not (yet)."
+        evidence: "live 2026-06-16: editable_objects shows point 3 = cycles3/auto-true; set_cfg('CRUISED',...) for create(pt4)+update(pt3) returned r=0 but CRUISE.0 unchanged after 10s"
     references:
       wire_entry: "o107"
       code: "custom_components/dreame_a2_mower/sensor_map.py"
@@ -586,8 +586,9 @@ entities:
       Generic `items` attribute consumed by dreame-multi-select-card. cycles/
       auto_capture are sourced from the CRUISE.0 device-data key
       (parse_cruise_config -> CloudState.cruise_config_by_map), default 1/False when
-      absent; writable via the set_patrol_point_config service (CRUISED CFG write)
-      and the map-editor card's inline cycles/auto-capture panel.
+      absent. The set_patrol_point_config service + map-editor inline panel attempt a
+      CRUISED write, but it is ACCEPTED-BUT-NO-EFFECT on g2408 (live 2026-06-16, r=0 but
+      CRUISE.0 unchanged); the READ works. See inventory § CRUISED for the write gap.
 
   - id: "sensor.dreame_a2_mower_map_N_patrol_edges"
     platform: sensor
