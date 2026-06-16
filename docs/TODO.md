@@ -266,16 +266,23 @@ the plan's Task 7 (`OLD/ha-dreame-a2-mower-docs/superpowers/plans/2026-06-15-mes
 
 **Why:** v1.0.0a100 surfaces `cloud_state.ota_status` as
 `(int, int)` — the test fixture observed `(2, 100)`. We assume
-the first field is a status code and the second is a percent (0-100),
-but neither has been confirmed during a real OTA update. The
-sensor uses `state = ota_status[0]` and `attr percent = ota_status[1]`;
-mapping numeric statuses to human-readable strings (idle / downloading /
-applying / failed / etc.) requires observation during an actual OTA.
-**Done when:** the status-code → state-string mapping is documented
-in `docs/research/g2408-research-journal.md` and the sensor either
-returns the string directly or exposes both via attributes.
-**Status:** blocked-by-OTA-observation (next firmware update).
-**Cross-refs:** spec "Out of scope" item 5.
+the first field is a status code and the second is a percent (0-100).
+**UNBLOCKED 2026-06-16:** a real OTA (0550→0625) was observed and the
+**status-code enum is now confirmed** — the apk OTAState lineage
+`0 UNDEFINED / 1 IDLE / 2 UPGRADING / 3 UPGRADE_SUCCESS / 4 UPGRADE_FAILED`
+(see `inventory.yaml § s1p2 ota_state`, observed `1→2→3→1` live; `s1p3` = download %).
+So `(2, 100)` reads as (UPGRADING, 100 %).
+**Remaining (small):** (a) map `ota_status[0]` through that enum so the sensor
+returns the state string (or exposes both); (b) confirm the cloud `ota_status`
+tuple actually mirrors the MQTT `s1p2`/`s1p3` pair (it was not separately captured
+during the OTA — the live capture was via the s1p2/s1p3 pushes). The device-firmware
+UpdateEntity + `ota_state`/`ota_progress` sensors (v1.0.28a7) already surface the
+MQTT path; this item is just the legacy `cloud_state.ota_status` tuple's string mapping.
+**Done when:** the `ota_status` sensor returns the OTAState string (or both via attrs),
+and the cloud-tuple↔s1p2/s1p3 correspondence is confirmed or documented as assumed.
+**Status:** unblocked (enum confirmed); small mapping + tuple-source-confirm remain.
+**Cross-refs:** `inventory.yaml § s1p2 ota_state` / `§ s1p3`; DONE.md "Firmware update flow";
+spec "Out of scope" item 5.
 
 ### Add integration icon via home-assistant/brands PR
 
