@@ -1,4 +1,6 @@
+import pytest
 from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.dreame_a2_mower.cloud_state import CloudState
 
@@ -69,3 +71,27 @@ def test_editable_objects_patrol_carries_cycles_auto():
     objs = cam._editable_objects_from_map(md)
     patrol = [o for o in objs if o.get("kind") == "patrol"][0]
     assert patrol["cycles"] == 2 and patrol["auto_capture"] is True
+
+
+@pytest.mark.asyncio
+async def test_write_patrol_point_config_builds_cruised():
+    from custom_components.dreame_a2_mower.coordinator._writes import _WritesMixin
+    c = _WritesMixin.__new__(_WritesMixin)
+    c._cloud = SimpleNamespace(set_cfg=MagicMock(return_value=True))
+    async def _exec(fn, *a): return fn(*a)
+    c.hass = SimpleNamespace(async_add_executor_job=AsyncMock(side_effect=_exec))
+    ok = await c.write_patrol_point_config(
+        map_id=0, point_id=3, cycles=3, auto_capture=True
+    )
+    assert ok is True
+    c._cloud.set_cfg.assert_called_once_with(
+        "CRUISED", {"idx": 0, "value": [-1, 3, 1, 3]}
+    )
+
+
+@pytest.mark.asyncio
+async def test_write_patrol_point_config_rejects_bad_cycles():
+    from custom_components.dreame_a2_mower.coordinator._writes import _WritesMixin
+    c = _WritesMixin.__new__(_WritesMixin)
+    with pytest.raises(ValueError):
+        await c.write_patrol_point_config(map_id=0, point_id=3, cycles=4, auto_capture=False)
