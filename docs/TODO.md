@@ -914,19 +914,6 @@ persisted format).** Scope agreed 2026-06-03; label design RESOLVED 2026-06-15 (
 
 ---
 
-### Firmware update flow — capture wire sequence
-
-**Why:** Only one firmware update has occurred on the user's mower, before the
-integration was running. The MQTT sequence during an update (STATE=14,
-s2p53 progress, s2p57 shutdown trigger) is undocumented.
-**Done when:** An update is captured; MQTT sequence documented; HA behaviour
-during update (sensors, entities) verified.
-**Status:** blocked-by-rare-event (wait for next firmware update notification)
-**Procedure:** [docs/research/g2408-capture-procedures.md#1-firmware-update-flow](g2408-capture-procedures.md#1-firmware-update-flow)
-**Cross-refs:** journal topic `s2p50 op-code catalog`; inventory `s2p2_state_14`
-
----
-
 ### Pathway Obstacle Avoidance test — CFG.BP / CFG.PATH semantics
 
 **Why:** Two CFG keys (`BP`, `PATH`) still have placeholder semantics.
