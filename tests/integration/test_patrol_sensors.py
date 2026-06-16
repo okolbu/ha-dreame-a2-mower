@@ -8,6 +8,9 @@ from custom_components.dreame_a2_mower.map_decoder import PatrolPoint
 def _coord_with_map(map_obj):
     coord = MagicMock()
     coord.cloud_state.maps_by_id = {0: map_obj}
+    # Return a real empty dict so no cruise config is present; prevents MagicMock
+    # auto-speculation from leaking into the cycles/auto_capture values.
+    coord.cloud_state.cruise_config_by_map = {}
     return coord
 
 
@@ -18,8 +21,10 @@ def test_patrol_points_sensor_items():
     s = DreameA2PatrolPointsSensor(_coord_with_map(m), map_id=0)
     assert s.native_value == 2
     items = s.extra_state_attributes["items"]
+    # cycles defaults to 1 and auto_capture defaults to False (app's new-point defaults)
+    # when no CRUISE.0 config is present for this point.
     assert items[0] == {"id": 3, "label": "Patrol point 3", "x_mm": -3050.0,
-                        "y_mm": -5480.0, "cycles": None, "auto_capture": None}
+                        "y_mm": -5480.0, "cycles": 1, "auto_capture": False}
 
 
 def test_patrol_edges_sensor_items_outer_only():

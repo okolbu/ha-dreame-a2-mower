@@ -158,19 +158,23 @@ class DreameA2PatrolPointsSensor(_DreameA2PerMapSensorBase):
     def extra_state_attributes(self):
         m = self._map()
         pts = (getattr(m, "patrol_points", None) or ()) if m is not None else ()
-        return {
-            "items": [
-                {
-                    "id": p.point_id,
-                    "label": f"Patrol point {p.point_id}",
-                    "x_mm": p.x_mm,
-                    "y_mm": p.y_mm,
-                    "cycles": None,
-                    "auto_capture": None,
-                }
-                for p in pts
-            ]
-        }
+        cfg = (
+            self.coordinator.cloud_state.cruise_config_by_map.get(self._map_id, {})
+            if getattr(self.coordinator, "cloud_state", None) is not None
+            else {}
+        )
+        items = []
+        for p in pts:
+            pc = cfg.get(p.point_id) or {}
+            items.append({
+                "id": p.point_id,
+                "label": f"Patrol point {p.point_id}",
+                "x_mm": p.x_mm,
+                "y_mm": p.y_mm,
+                "cycles": pc.get("cycles", 1),
+                "auto_capture": pc.get("auto_capture", False),
+            })
+        return {"items": items}
 
 
 class DreameA2PatrolEdgesSensor(_DreameA2PerMapSensorBase):

@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 from custom_components.dreame_a2_mower.cloud_state import CloudState
 
 
@@ -20,3 +22,29 @@ def test_cloud_state_has_cruise_config_default_empty():
 def test_cloud_state_carries_cruise_config():
     cs = _bare_cloud_state(cruise_config_by_map={0: {3: {"cycles": 2, "auto_capture": True}}})
     assert cs.cruise_config_by_map[0][3]["cycles"] == 2
+
+
+def _patrol_sensor(map_id, points, cruise_cfg):
+    from custom_components.dreame_a2_mower.entities.sensor.map import DreameA2PatrolPointsSensor
+    sensor = DreameA2PatrolPointsSensor.__new__(DreameA2PatrolPointsSensor)
+    md = SimpleNamespace(patrol_points=points)
+    sensor._map = lambda: md
+    sensor.coordinator = SimpleNamespace(
+        cloud_state=_bare_cloud_state(cruise_config_by_map=cruise_cfg)
+    )
+    sensor._map_id = map_id
+    return sensor
+
+
+def test_patrol_sensor_fills_cycles_and_auto_capture():
+    pts = [SimpleNamespace(point_id=3, x_mm=-3050, y_mm=-5480)]
+    s = _patrol_sensor(0, pts, {0: {3: {"cycles": 3, "auto_capture": True}}})
+    item = s.extra_state_attributes["items"][0]
+    assert item["cycles"] == 3 and item["auto_capture"] is True
+
+
+def test_patrol_sensor_defaults_when_no_config():
+    pts = [SimpleNamespace(point_id=4, x_mm=0, y_mm=0)]
+    s = _patrol_sensor(0, pts, {})
+    item = s.extra_state_attributes["items"][0]
+    assert item["cycles"] == 1 and item["auto_capture"] is False
