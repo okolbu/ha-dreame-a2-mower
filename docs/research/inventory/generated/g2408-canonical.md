@@ -7,8 +7,8 @@
 | id | name | shape | status | unit |
 |----|------|-------|--------|------|
 | s1p1 | heartbeat | 20-byte blob | WIRED |  |
-| s1p2 | ota_state | int (enum) | APK-KNOWN |  |
-| s1p3 | ota_progress | int 0..100 | APK-KNOWN | % (×1.0) |
+| s1p2 | ota_state | int (enum) | DECODED-UNWIRED |  |
+| s1p3 | ota_progress | int 0..100 | DECODED-UNWIRED | % (×1.0) |
 | s1p4 | mowing_telemetry | 33-byte / 8-byte / 10-byte variants | WIRED |  |
 | s1p5 | hardware_serial | string (e.g., "G2408000TESTSN0000") | WIRED | string (×1.0) |
 | s1p50 | state_change_ping | empty_dict | WIRED |  |
@@ -88,44 +88,41 @@ Confirmed 2026-04-17 through 2026-05-05 across the full probe corpus.
 OTA firmware-update state. Apk-documented via OTAState enum (L57342):
 0=UNDEFINED, 1=IDLE, 2=UPGRADING, 3=UPGRADE_SUCCESS, 4=UPGRADE_FAILED,
 5=CANNOT_UPGRADE. Apk subscribes to this property at L181402-181404 and
-surfaces it in the OTA progress UI. Not observed in g2408 probe corpus
-(no firmware update was captured during the probe period).
+surfaces it in the OTA progress UI.
 
-Expect to see transitions 1→2→3 (or 1→2→4) during the next OTA event.
-Should fire before/after s1p3 (OTA progress) pushes.
+WIRE-VERIFIED [app-mitm:2026-06-16-firmware-ota]: live 0550→0625 update
+captured end-to-end. Observed transitions: 1 (idle, update available but
+not started) → 2 (UPGRADING, held throughout download+install) → 3
+(UPGRADE_SUCCESS, transient, 1 sample on reconnect) → back to 1.
+
+VALUE-MAP CONFLICT RESOLVED: the upstream dreame-mower fork lineage
+(2=new_firmware_available) is DISPROVED — s1p2 read 1=IDLE while
+hasNewFirmware:true and no update was in progress. The apk OTAState
+lineage (2=UPGRADING, 3=UPGRADE_SUCCESS, 4=UPGRADE_FAILED) is CONFIRMED.
+
+"New firmware available" is NOT signalled by s1p2. The signal is the
+cloud checkDeviceVersion endpoint (iotuserbind/checkDeviceVersion →
+hasNewFirmware:true). See api_endpoints entry ota_check_version.
 
 **Open questions:**
-- Capture s1p2 transitions during the next firmware update to confirm value semantics.
 - Does g2408 emit CANNOT_UPGRADE (5) when battery is too low for OTA?
-- VALUE-MAP CONFLICT: the upstream dreame-mower fork (different app/device
-lineage) maps s1p2 (FIRMWARE_INSTALL_STATE_PROPERTY) value 2 =
-'new_firmware_available', 3 = 'installing_firmware_after_download', 4 =
-'firmware_download_failed' — which DISAGREES with this entry's apk
-OTAState enum (2=UPGRADING, 3=UPGRADE_SUCCESS, 4=UPGRADE_FAILED). Neither
-is g2408 wire-verified (no OTA captured). If the upstream lineage applies,
-s1p2==2 is the "new firmware available" signal an UpdateEntity would key
-off; if the apk enum applies, availability isn't on s1p2 at all and only
-comes from a cloud OTA-check endpoint (not yet located — the app's
-Current/Latest version fields are not in device/info, which only carries
-`ver`=current fw 4.3.6_0550 and a dynamic `latestStatus` connection enum).
-The next OTA event resolves which lineage is correct.
-
 
 **See also:** `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 1 piid:2`
 
 ### s1p3 — `ota_progress`
 
-OTA firmware-update download/install progress counter, 0..100. Apk-
-documented at L181422-181424; surfaces as the progress bar in the
-OTA update UI. Not observed in g2408 probe corpus (no firmware update
-was captured during the probe period).
+OTA firmware-update download progress counter, 0..100. Apk-documented
+at L181422-181424; surfaces as the progress bar in the OTA update UI.
 
-Expected behaviour: pushes incrementally from 0 to 100 while s1p2 is
-UPGRADING (2). A jump to 100 followed by s1p2 → UPGRADE_SUCCESS (3)
-marks the completed update.
+WIRE-VERIFIED [app-mitm:2026-06-16-firmware-ota]: live 0550→0625 update
+captured. s1p3 climbed 0→3→19→33→47→61→74→89→100 during DOWNLOAD (matched
+the app's % readout exactly). During the subsequent install phase (app showed
+24→50→75→99%), s1p3 stayed PINNED at 100 — the install % is app-local, not
+on the wire. s1p3 reset to 0 after UPGRADE_SUCCESS.
 
-**Open questions:**
-- Capture s1p3 during the next firmware update to confirm 0..100 range and cadence.
+This property tracks DOWNLOAD PERCENT ONLY. Install progress is not
+wire-exposed; the second "% installed" counter shown by the app is
+computed app-side / device-side-during-flash.
 
 **See also:** `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 1 piid:3`
 
@@ -2276,6 +2273,7 @@ payload shape (calibration parameters) unknown.
 | BP | start_from_stop_point | list[int(2)] [start_from_stop_point(0/1), stop_point_term_days(1-7)] | WIRED |  |
 | CLS | child_lock | int {0,1} | WIRED |  |
 | CMS | consumables_wear_meters | list[int(4)] [blade_min, brush_min, robot_min, aux_min] | WIRED |  |
+| CRUISED | patrol_point_attributes | {idx: int, value: list[int]} | SEEN-UNDECODED |  |
 | DLS | daylight_savings | int=0 | WIRED |  |
 | DND | do_not_disturb | list[int(3)] [enabled, start_min, end_min] | WIRED |  |
 | FDP | frost_protection | int {0,1} | WIRED |  |
@@ -2395,6 +2393,24 @@ which one (or a presence summary) is unproven. Samples: [3084,0,0,-1],
 - CMS[3] semantic — does it track Link Module, Garage, MCA10, or a presence summary? Needs a unit that has one of those accessories (all -1 here). Note Link is a day-based subscription, not a minutes wear-meter, so a wear-meter interpretation of CMS[3] is suspect.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX CMS`
+
+### CRUISED — `patrol_point_attributes`
+
+Per-patrol-point attributes — cycles (1/2/3) and auto-capture-photos
+toggle. Sent as a CFG write (m:s) with a named-key envelope, NOT via
+o=223 (point geometry) or o=107 (run-patrol). One sample captured:
+{idx:0, value:[-1,3,1,3]}. Field-map UNDECODED [UNVERIFIED]: field
+order (which element = cycles, which = auto-capture) is NOT confirmed;
+no read captured to establish the shape. Behaviour known: auto-capture
+= fixed 3 photos/point → gallery. Cross-ref: cfg_individual patrol/
+cruise-point (o=223 create/edit) for the geometry opcode.
+[app-mitm:2026-06-16-firmware-ota]
+
+**Open questions:**
+- CRUISED field order — which element of value[] is cycles, which is auto-capture? No read captured.
+- CRUISED value[-1,3,1,3]: is -1 a sentinel for 'applies to all points'? Undecoded.
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § CFG keys`
 
 ### DLS — `daylight_savings`
 
@@ -2847,13 +2863,17 @@ Sample: {value: [3084, 0, 0, -1]}.
 
 Authoritative device identifiers. Wired in v1.0.0a76. sn is the
 hardware serial (replaces flaky s1p5 cloud RPC), fw is the firmware
-version, mac cross-checks the cloud device record's mac, ota semantic
-UNCONFIRMED (NOT the Auto-update Firmware app toggle — values
-disagree). Sample: {fw: "4.3.6_0550", mac: "00:00:00:00:00:00",
-ota: 1, sn: "G2408000TESTSN0000"}.
+version, mac cross-checks the cloud device record's mac.
+Transport: siid:2 aiid:50 {m:'g', t:'DEV'} — all four fields
+(fw, mac, ota, sn) confirmed in one routed read alongside the OTA
+flow [app-mitm:2026-06-16-firmware-ota].
+ota flag: observed =1 — semantics SOFT [UNVERIFIED]: "OTA-capable
+or update-pending — NOT the app Auto-update Firmware toggle" (values
+disagree with the Auto-update setting). Sample: {fw: "4.3.6_0550",
+mac: "00:00:00:00:00:00", ota: 1, sn: "G2408000TESTSN0000"}.
 
 **Open questions:**
-- ota field — NOT the Auto-update Firmware toggle; semantics unconfirmed.
+- ota field — NOT the Auto-update Firmware toggle; =1 observed; OTA-capable or update-pending [UNVERIFIED].
 
 **See also:** `custom_components/dreame_a2_mower/cloud_client.py`, `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX DEV`
 

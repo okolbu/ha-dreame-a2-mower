@@ -12060,7 +12060,7 @@ api_endpoints:
     status:
       seen_on_wire: false
       first_seen: "2026-06-09"
-      last_seen: "2026-06-12"
+      last_seen: "2026-06-16"
       decoded: partial
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
@@ -12080,6 +12080,10 @@ api_endpoints:
         status: verified
         claim: "Captured Tencent identity is productId='B64XZHGZUT', deviceName='I4rl99pelxmAV2zt', deviceId='B64XZHGZUT/I4rl99pelxmAV2zt' (secretId/secretKey redacted). Call order: 1→2 at app start, 3→4 just before live view. accesstoken reused in steps 2+4, expireAt ≈ 7 d; p2pInfo is per-session (re-fetch getP2PInfo each session). o=15 {c:0|1} is a separate camera toggle for remote-control mode. Full setup chain consolidated in docs/research/live-video-stream-setup.md."
         evidence: "app-mitm:2026-06-12-live-video"
+      - date: "2026-06-16"
+        status: partial
+        claim: "XP2P live-video setup chain (accesstoken->isDevUser->getIdentity->getP2PInfo, o=400 enable, OSS snapshot/record) captured; P2P media payload is off-relay UDP, uncaptured."
+        evidence: "app-mitm:2026-06-16-firmware-ota cloud/captures/mitm_session_20260616/api-calls.jsonl"
 
   - id: "push_prefs"
     name: "message_push_preferences"

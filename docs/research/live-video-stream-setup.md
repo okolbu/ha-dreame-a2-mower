@@ -5,11 +5,13 @@ The media stream itself is Tencent XP2P **P2P/UDP, off-relay** — not capturabl
 HTTPS/MQTT rig and not needed for setup. Everything an integration needs to *establish*
 a session, *snapshot/record*, and *retrieve* recordings is captured and documented here.
 
-> ⚠️ **Inventory correction required.** `inventory.yaml` / `g2408-canonical.md` currently
-> annotate the camera properties (s4p22, s4p44, s4p59, s4p83) with *"g2408 has no confirmed
-> camera module."* **That is stale and wrong.** The g2408 HAS a camera: `feature:"video_tx"`,
+> ✅ **Inventory correction DONE (2026-06-16).** The camera corrections landed and the
+> `tencent_video` api_endpoints stub now carries the XP2P setup chain + OSS snapshot/record
+> + a 2026-06-16 verification (see § 8 below).
+>
+> The g2408 HAS a camera: `feature:"video_tx"`,
 > vendor `tx` = Tencent IoT Video; live view, two-way audio, and AI/human photos are all real
-> and captured. Fix those entries when folding this in. The earlier "not IPC-enrolled
+> and captured. (Those entries are now corrected.) The earlier "not IPC-enrolled
 > (`videoStatus:null`, `featureCode:-1`)" note refers to the **Dreame security-camera** product
 > line's `/smart-app/ipc/...` surface — a DIFFERENT path; the mower's camera uses
 > `dreame-third-video/tx/*` + Tencent XP2P, documented below.
@@ -168,13 +170,14 @@ POST /dreame-user-iot/iotoss/userDidOssList?current=1&size=10000   {did,sign,ts}
 - **`pwd` from addOssNew:** purpose unconfirmed.
 - **Token lifetimes:** `accesstoken expireAt` ~7 d; `p2pInfo` treat as per-session.
 
-## 8. Inventory.yaml edits to make (for the authoritative source)
-1. Add a `live_video` / camera-session entry with the §2 chain (endpoints, order, shapes,
-   XP2P SDK requirement) and the §4 snapshot/record flow.
-2. **Correct** s4p22 / s4p44 / s4p59 / s4p83 and any "no camera module on g2408" notes —
-   the camera exists (`feature:"video_tx"`, Tencent XP2P). Keep the distinction from the
-   `/smart-app/ipc/*` security-camera line.
-3. Cross-link `o400 camera_live_view`, `o=15 {c}`, and the OSS gallery (`userDidOssList`).
+## 8. Inventory.yaml edits — DONE (2026-06-16)
+1. ✅ `tencent_video` api_endpoints entry carries the §2 chain (endpoints, order, shapes,
+   XP2P SDK requirement) and cross-links the §4 snapshot/record flow
+   (`iotoss_addOssNew_ossUploaded` entry). 2026-06-16 verification appended.
+2. ✅ s4p22 / s4p44 / s4p59 / s4p83 and the "no camera module on g2408" notes corrected —
+   the camera exists (`feature:"video_tx"`, Tencent XP2P); the distinction from the
+   `/smart-app/ipc/*` security-camera line is preserved.
+3. ✅ `o400 camera_live_view`, `o=15 {c}`, and the OSS gallery (`userDidOssList`) are cross-linked.
 
 ## 9. Sources (on the capture share `/Volumes/claude/homeassistant/`)
 - `dreame-app-WRITE-implementation-guide-2026-06-09.md` §🎥 / §5
