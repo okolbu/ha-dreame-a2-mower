@@ -212,6 +212,17 @@ export function circleFromCenterEdge(center, edge) {
   return { center: [center[0], center[1]], radius };
 }
 
+// Build the set_patrol_point_config service payload from the selected patrol
+// object's current cycles/auto_capture, overridden by the changed control.
+export function patrolConfigServiceData(mapId, obj, change) {
+  return {
+    map_id: mapId,
+    point_id: obj.id,
+    cycles: change.cycles != null ? change.cycles : (obj.cycles ?? 1),
+    auto_capture: change.auto_capture != null ? change.auto_capture : !!obj.auto_capture,
+  };
+}
+
 // Map an editor draft to the wire shape: { points: [[x,y]...], radius }.
 //
 // state contracts by (category, shape):

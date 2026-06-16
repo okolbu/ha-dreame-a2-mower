@@ -31,6 +31,7 @@ import {
   resizeOrientedEdge,
   rotateEdgeAboutCenter,
   circleFromCenterEdge,
+  patrolConfigServiceData,
 } from "./_dreame-map-edit-geom.js";
 
 // ----- read-only overlay rendering (Task 5) -------------------------------
@@ -158,6 +159,17 @@ class DreameMapEditorCard extends HTMLElement {
       `.bar select{font:12px/1 system-ui,sans-serif;padding:3px 6px;border-radius:6px}` +
       `.bar .sp{flex:1}` +
       `.bar #msg{font:12px/1 system-ui,sans-serif;color:#d32f2f;padding:0 4px}` +
+      `#patrol-panel{display:none;align-items:center;gap:8px;flex-wrap:wrap;` +
+      `padding:6px 4px;border-top:1px solid rgba(0,140,140,.25);` +
+      `background:rgba(0,140,140,.06);font:12px/1 system-ui,sans-serif}` +
+      `#patrol-panel.visible{display:flex}` +
+      `#patrol-panel label{color:#555;margin-right:2px}` +
+      `#patrol-panel .pcyc{display:flex;gap:3px}` +
+      `#patrol-panel .pcyc button{font:12px/1 system-ui,sans-serif;padding:3px 8px;` +
+      `border-radius:6px;border:1px solid rgba(0,140,140,.55);` +
+      `background:rgba(0,140,140,.16);cursor:pointer}` +
+      `#patrol-panel .pcyc button.on{background:rgba(0,140,140,.85);` +
+      `border-color:rgba(0,140,140,.85);color:#fff}` +
       `.wrap{position:relative}` +
       `svg{width:100%;height:auto;display:block;touch-action:none}` +
       `.obj{cursor:pointer}` +
@@ -197,7 +209,8 @@ class DreameMapEditorCard extends HTMLElement {
       `<g id="objects"></g>` +
       `<g id="draft"></g>` +
       `</svg>` +
-      `</div>`;
+      `</div>` +
+      `<div id="patrol-panel"></div>`;
     this._buildToolbar();
     const svg = this.shadowRoot.getElementById("svg");
     svg.addEventListener("pointerdown", (e) => this._onPointerDown(e));
@@ -487,7 +500,7 @@ class DreameMapEditorCard extends HTMLElement {
     // Drag-to-move = edit-in-place. Patrol is a DISTINCT category (delete 2).
     if ((o.kind === "maintenance" || o.kind === "patrol") && Array.isArray(o.point_m)) {
       const c = metersToPixel(o.point_m[0], o.point_m[1], this._proj);
-      return {
+      const draft = {
         category: o.kind, // "maintenance" | "patrol"
         shape: "point",
         model: "point",
@@ -497,6 +510,12 @@ class DreameMapEditorCard extends HTMLElement {
         pts: [c],
         radius: 0,
       };
+      // Carry patrol-specific config fields so the panel pre-fills correctly.
+      if (o.kind === "patrol") {
+        draft.cycles = o.cycles ?? 1;
+        draft.auto_capture = !!o.auto_capture;
+      }
+      return draft;
     }
     const pix = (o.points_m || []).map((m) => metersToPixel(m[0], m[1], this._proj));
     // Spot (o=214): a 4-corner rect, reshaped like a no-go rect.
@@ -917,7 +936,7 @@ class DreameMapEditorCard extends HTMLElement {
     const g = this.shadowRoot.getElementById("draft");
     if (!g) return;
     const d = this._draft;
-    if (!d) { g.innerHTML = ""; this._syncActionButtons(); return; }
+    if (!d) { g.innerHTML = ""; this._syncActionButtons(); this._renderPatrolPanel(null); return; }
     // Draw mode (polygon): open polyline through the placed points + a dashed
     // close-preview from last->first + a vertex dot per point (first one larger
     // & distinct, the close-target hint). NO bbox / resize / rotate / delete.
@@ -944,6 +963,7 @@ class DreameMapEditorCard extends HTMLElement {
       });
       g.innerHTML = dparts.join("");
       this._syncActionButtons();
+      this._renderPatrolPanel(null);
       return;
     }
     const parts = [];
@@ -967,6 +987,7 @@ class DreameMapEditorCard extends HTMLElement {
       );
       g.innerHTML = parts.join("");
       this._syncActionButtons();
+      this._renderPatrolPanel(d);
       return;
     }
     // Decorative selection: the shape is drawn in the background, so show ONLY a
@@ -989,6 +1010,7 @@ class DreameMapEditorCard extends HTMLElement {
       );
       g.innerHTML = parts.join("");
       this._syncActionButtons();
+      this._renderPatrolPanel(null);
       return;
     }
     // Shape body + resize/endpoint handles, per manipulation model.
@@ -1062,6 +1084,77 @@ class DreameMapEditorCard extends HTMLElement {
     );
     g.innerHTML = parts.join("");
     this._syncActionButtons();
+    this._renderPatrolPanel(null);
+  }
+
+  // Render the inline patrol-config panel (cycles + auto-capture) below the map
+  // when a committed patrol point is selected (id >= 0). Hidden otherwise.
+  // Reads cycles/auto_capture from `d` (the draft — which carries the optimistic
+  // local values after each service call). Writes via set_patrol_point_config.
+  _renderPatrolPanel(d) {
+    const panel = this.shadowRoot && this.shadowRoot.getElementById("patrol-panel");
+    if (!panel) return;
+    // Show only for a committed (id >= 0) patrol draft; hide for everything else.
+    const show = d && d.category === "patrol" && d.objectId != null && d.objectId >= 0;
+    if (!show) {
+      panel.className = "";
+      panel.innerHTML = "";
+      return;
+    }
+    const cycles = d.cycles ?? 1;
+    const autoCap = !!d.auto_capture;
+    panel.className = "visible";
+    panel.innerHTML =
+      `<label>Cycles:</label>` +
+      `<div class="pcyc">` +
+      [1, 2, 3].map((n) =>
+        `<button data-cyc="${n}"${n === cycles ? ' class="on"' : ""}>${n}</button>`
+      ).join("") +
+      `</div>` +
+      `<label style="margin-left:8px">Auto-capture:</label>` +
+      `<input type="checkbox" id="patrolAuto"${autoCap ? " checked" : ""}>`;
+    // Cycles buttons.
+    for (const btn of panel.querySelectorAll("button[data-cyc]")) {
+      btn.addEventListener("click", () => {
+        const n = Number(btn.dataset.cyc);
+        this._onPatrolConfigChange({ cycles: n });
+      });
+    }
+    // Auto-capture toggle.
+    const chk = panel.getElementById
+      ? panel.getElementById("patrolAuto")
+      : panel.querySelector("#patrolAuto");
+    if (!chk) {
+      // querySelector fallback (getElementById not on a div, use shadowRoot)
+    }
+    const autoChk = panel.querySelector("#patrolAuto");
+    if (autoChk) {
+      autoChk.addEventListener("change", () => {
+        this._onPatrolConfigChange({ auto_capture: autoChk.checked });
+      });
+    }
+  }
+
+  // Handle a patrol-config control change: call the service, update the draft
+  // optimistically, re-render the panel.
+  _onPatrolConfigChange(change) {
+    const d = this._draft;
+    if (!d || d.category !== "patrol" || d.objectId == null || !this._hass) return;
+    // Build the object descriptor patrolConfigServiceData needs (id + current values).
+    const obj = { id: d.objectId, kind: "patrol", cycles: d.cycles ?? 1, auto_capture: !!d.auto_capture };
+    const data = patrolConfigServiceData(this._editMapId, obj, change);
+    // Optimistic local update BEFORE the async call so the panel reflects the
+    // change instantly (mirrors how _onSubmit updates _overrides before re-render).
+    d.cycles = data.cycles;
+    d.auto_capture = data.auto_capture;
+    this._renderPatrolPanel(d);
+    // Fire the service call async (no busy-spinner — the panel itself already
+    // reflects the new state; a service error just logs to the console).
+    this._hass.callService("dreame_a2_mower", "set_patrol_point_config", data)
+      .catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error("dreame-map-editor: set_patrol_point_config failed", err);
+      });
   }
 
   _handle(x, y, role, idx) {
