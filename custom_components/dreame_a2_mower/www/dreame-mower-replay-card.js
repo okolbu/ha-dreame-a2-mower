@@ -19,7 +19,7 @@
 //   ...
 //   - type: custom:dreame-mower-replay-card
 //     entity: sensor.dreame_a2_mower_picked_session
-import { projectPoint, iconRotation, buildMowerIconSvg } from "./_dreame-map-core.js";
+import { projectPoint, iconRotation, buildMowerIconSvg, attachDetectionOverlay } from "./_dreame-map-core.js";
 
 const ICON_PX = 32;
 
@@ -129,11 +129,13 @@ class DreameMowerReplayCard extends HTMLElement {
     this._legSpecs = legSpecs;
     // Per-session photo thumbnails (signed URLs from the picked_session sensor;
     // photo_list-matched server-side — patrol / "to point" auto-capture). Click
-    // opens the full image. Strip is omitted when the session has no photos.
+    // opens an in-card lightbox (with AI-detection overlay). Strip omitted when
+    // the session has no photos.
     const photos = Array.isArray(a.photos) ? a.photos : [];
+    this._sessionPhotos = photos;
     const photoStrip = photos.length
-      ? `<div class="photos">` + photos.map((p) =>
-          `<img class="thumb" src="${p.thumb_url}" data-full="${p.url}" ` +
+      ? `<div class="photos">` + photos.map((p, i) =>
+          `<img class="thumb" src="${p.thumb_url}" data-idx="${i}" ` +
           `loading="lazy" title="${p.category || "photo"}"/>`).join("") + `</div>`
       : "";
     const paths = legSpecs.map((s, i) => `
@@ -221,11 +223,12 @@ class DreameMowerReplayCard extends HTMLElement {
         ${photoStrip}
       </ha-card>`;
     this._lastAttrs = a;
-    // Click a thumbnail to open the full-size photo in a new tab.
+    // Click a thumbnail to open the full-size photo in an in-card lightbox.
     this.shadowRoot.querySelectorAll(".photos .thumb").forEach((img) => {
       img.onclick = () => {
-        const full = img.getAttribute("data-full");
-        if (full) window.open(full, "_blank", "noopener");
+        const idx = Number(img.getAttribute("data-idx"));
+        const photo = (this._sessionPhotos || [])[idx];
+        if (photo) this._openPhotoLightbox(photo);
       };
     });
     this._startAnimation(a);
@@ -626,6 +629,50 @@ class DreameMowerReplayCard extends HTMLElement {
     const ent = this._hass && this._hass.states && this._hass.states['number.dreame_a2_mower_trail_render_width'];
     const v = parseFloat(ent && ent.state);
     return Number.isFinite(v) ? Math.round(v) : 24;
+  }
+
+  // In-card lightbox for a session photo (matches the gallery card's popup
+  // instead of opening a new browser tab), with the AI-detection overlay.
+  _openPhotoLightbox(photo) {
+    this._closePhotoLightbox();
+    const lb = document.createElement("div");
+    lb.style.cssText =
+      "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);" +
+      "display:flex;align-items:center;justify-content:center;";
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "position:relative;display:inline-block;line-height:0;";
+    wrap.addEventListener("click", (e) => e.stopPropagation());
+    const img = document.createElement("img");
+    img.src = photo.url;
+    img.style.cssText = "max-width:92vw;max-height:86vh;display:block;";
+    wrap.appendChild(img);
+    attachDetectionOverlay(wrap, img, photo.detections);
+    lb.appendChild(wrap);
+    const close = document.createElement("button");
+    close.textContent = "×";
+    close.setAttribute("aria-label", "Close");
+    close.style.cssText =
+      "position:absolute;top:12px;right:16px;width:40px;height:40px;border:none;" +
+      "border-radius:50%;background:rgba(255,255,255,0.15);color:#fff;" +
+      "font-size:24px;line-height:1;cursor:pointer;";
+    close.addEventListener("click", (e) => { e.stopPropagation(); this._closePhotoLightbox(); });
+    lb.appendChild(close);
+    lb.addEventListener("click", () => this._closePhotoLightbox());
+    this._photoLbKey = (e) => { if (e.key === "Escape") this._closePhotoLightbox(); };
+    document.addEventListener("keydown", this._photoLbKey);
+    this._photoLb = lb;
+    this.shadowRoot.appendChild(lb);
+  }
+
+  _closePhotoLightbox() {
+    if (this._photoLbKey) {
+      document.removeEventListener("keydown", this._photoLbKey);
+      this._photoLbKey = null;
+    }
+    if (this._photoLb && this._photoLb.parentNode) {
+      this._photoLb.parentNode.removeChild(this._photoLb);
+    }
+    this._photoLb = null;
   }
 
   _applyRenderStyle() {

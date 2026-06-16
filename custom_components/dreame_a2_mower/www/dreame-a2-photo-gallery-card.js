@@ -18,6 +18,8 @@
 //   video: {type:"video", id, ts, date, category:"video", duration:int(sec),
 //           url, thumb_url}
 
+import { attachDetectionOverlay } from "./_dreame-map-core.js";
+
 const CATEGORY_LABELS = {
   ai_human: "AI · Human",
   ai_animal: "AI · Animal",
@@ -141,7 +143,11 @@ class DreameA2PhotoGalleryCard extends HTMLElement {
         display: flex; align-items: center; justify-content: center;
         flex-direction: column;
       }
-      .lb img, .lb video { max-width: 92%; max-height: 86%; display: block; }
+      .lb video { max-width: 92%; max-height: 86%; display: block; }
+      .lb .lbwrap {
+        position: relative; display: inline-block; line-height: 0;
+      }
+      .lb .lbwrap img { max-width: 92vw; max-height: 86vh; display: block; }
       .lb .lbcap {
         margin-top: 12px; color: #eee; font-size: 13px;
         max-width: 92%; text-align: center;
@@ -281,14 +287,21 @@ class DreameA2PhotoGalleryCard extends HTMLElement {
       media.setAttribute("autoplay", "");
       media.setAttribute("playsinline", "");
       if (item.url) media.setAttribute("src", item.url);
+      // Clicking the media itself must NOT close the lightbox.
+      media.addEventListener("click", (e) => e.stopPropagation());
+      lb.appendChild(media);
     } else {
       media = document.createElement("img");
       if (item.url) media.setAttribute("src", item.url);
       media.alt = item.category || "photo";
+      // Wrap so AI-detection bounding boxes + labels overlay the photo.
+      const wrap = document.createElement("div");
+      wrap.className = "lbwrap";
+      wrap.addEventListener("click", (e) => e.stopPropagation());
+      wrap.appendChild(media);
+      attachDetectionOverlay(wrap, media, item.detections);
+      lb.appendChild(wrap);
     }
-    // Clicking the media itself must NOT close the lightbox.
-    media.addEventListener("click", (e) => e.stopPropagation());
-    lb.appendChild(media);
 
     const cap = document.createElement("div");
     cap.className = "lbcap";

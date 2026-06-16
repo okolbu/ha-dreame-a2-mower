@@ -176,6 +176,57 @@ export function buildMowerIconSvg(iconUrl, sizePx) {
   );
 }
 
+// Format one COM detection as "79% - person" (confidence% - class). The class
+// + confidence come straight from the JPEG COM marker (protocol/photo_meta.py).
+export function detectionLabel(d) {
+  const cls = d && d.cls != null ? String(d.cls) : "?";
+  const conf = Math.round(((d && d.conf) || 0) * 100);
+  return conf + "% - " + cls;
+}
+
+// Draw AI-detection bounding boxes + labels over a full-size photo. `wrap` is a
+// position:relative box that tightly contains `img` (so % positioning maps onto
+// the rendered image); detections carry PIXEL coords {x,y,w,h} in the source
+// image's frame, so boxes are placed as percentages of img.naturalWidth/Height
+// (scale-invariant). Labels are constant-size HTML (not scaled with the image).
+// No-op when there are no detections. Waits for the image to load if needed.
+export function attachDetectionOverlay(wrap, img, detections) {
+  if (!wrap || !img || !Array.isArray(detections) || !detections.length) return;
+  const build = () => {
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
+    if (!nw || !nh) return;
+    wrap.querySelectorAll(".det-box").forEach((e) => e.remove()); // re-entrant safe
+    for (const d of detections) {
+      if (!d || d.x == null || d.w == null) continue;
+      const x = Number(d.x);
+      const y = Number(d.y) || 0;
+      const w = Number(d.w);
+      const h = Number(d.h) || 0;
+      const box = document.createElement("div");
+      box.className = "det-box";
+      box.style.cssText =
+        "position:absolute;border:2px solid #ffd400;box-sizing:border-box;" +
+        "pointer-events:none;" +
+        `left:${(x / nw) * 100}%;top:${(y / nh) * 100}%;` +
+        `width:${(w / nw) * 100}%;height:${(h / nh) * 100}%;`;
+      const lbl = document.createElement("div");
+      lbl.textContent = detectionLabel(d);
+      lbl.style.cssText =
+        "position:absolute;left:-2px;font:12px/1.35 system-ui,sans-serif;" +
+        "background:#ffd400;color:#000;padding:0 4px;white-space:nowrap;" +
+        "border-radius:2px;";
+      // Sit the label above the box, unless the box hugs the top edge (then
+      // drop it inside so it doesn't clip off-image).
+      lbl.style.top = y / nh < 0.06 ? "0" : "-1.45em";
+      box.appendChild(lbl);
+      wrap.appendChild(box);
+    }
+  };
+  if (img.complete && img.naturalWidth) build();
+  else img.addEventListener("load", build, { once: true });
+}
+
 if (typeof window !== "undefined") {
   window.DreameMapCore = {
     projectPoint,
@@ -187,5 +238,7 @@ if (typeof window !== "undefined") {
     rssiToRgb,
     WIFI_STRONGEST,
     WIFI_WEAKEST,
+    detectionLabel,
+    attachDetectionOverlay,
   };
 }
