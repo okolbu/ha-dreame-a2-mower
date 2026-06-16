@@ -882,23 +882,39 @@ class _WritesMixin:
     async def write_patrol_point_config(
         self, *, map_id: int, point_id: int, cycles: int, auto_capture: bool
     ) -> bool:
-        """Set a patrol point's per-point cycles + auto-capture (CRUISED CFG key).
+        """Set a patrol point's per-point cycles + auto-capture.
 
-        Standalone CFG write (NOT part of the o=223 geometry txn). idx = the
-        0-based map index (== map_id, same convention as PRE). value =
-        [-1, point_id, auto_capture(0/1), cycles]; value[0]=-1 is a constant
-        sentinel. Read-back is via the CRUISE.0 device-data key (no m:g getter
-        on t:CRUISED). See inventory.yaml § CRUISED. Returns the device verdict
-        (set_cfg -> out[0].r==0).
+        DUAL-WRITE — the app sends BOTH of these for every patrol-config change,
+        and CRUISED alone does NOT stick (it only updates the cloud CRUISE.0
+        record; cycles never reach the device). Order matches the wire
+        [app-mitm:2026-06-16 (miio-13267.jsonl, 12:26-12:31 window)]:
+
+          1. routed_action(111, {"point":[point_id, cycles]}) -> {m:'a',p:0,
+             o:111,d:{point:[id,cycles]}} — the DEVICE-APPLIED cycles write.
+          2. set_cfg("CRUISED", {idx, value:[-1, point_id, auto, cycles]}) —
+             the cloud-record half, read back via the CRUISE.0 device-data key
+             (no m:g getter on t:CRUISED).
+
+        o=111 carries ONLY [point_id, cycles]; auto_capture lives solely in
+        CRUISED (config the device reads at patrol-run time). idx = the 0-based
+        map index (== map_id, same convention as PRE). value[0]=-1 is a constant
+        sentinel. See inventory.yaml § CRUISED. Returns True only when BOTH legs
+        are accepted (out[0].r==0).
         """
         if int(cycles) not in (1, 2, 3):
             raise ValueError(f"cycles must be 1, 2 or 3, got {cycles!r}")
-        value = [-1, int(point_id), 1 if auto_capture else 0, int(cycles)]
-        return bool(
-            await self.hass.async_add_executor_job(
-                self._cloud.set_cfg, "CRUISED", {"idx": int(map_id), "value": value}
+        # Leg 1: o=111 applies the cycles to the device (the missing half).
+        cycles_ok = await self.hass.async_add_executor_job(
+            lambda: self._cloud.routed_action(
+                111, {"point": [int(point_id), int(cycles)]}
             )
         )
+        # Leg 2: CRUISED records cycles + auto_capture (cloud CRUISE.0).
+        value = [-1, int(point_id), 1 if auto_capture else 0, int(cycles)]
+        cruised_ok = await self.hass.async_add_executor_job(
+            self._cloud.set_cfg, "CRUISED", {"idx": int(map_id), "value": value}
+        )
+        return bool(cycles_ok) and bool(cruised_ok)
 
     async def split_zone(self, map_id, zone_id, line_start, line_end) -> bool:
         """Split a zone by a line (o=220). DESTRUCTIVE: clears that zone's schedule/prefs."""

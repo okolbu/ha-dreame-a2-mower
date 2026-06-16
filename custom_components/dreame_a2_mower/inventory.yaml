@@ -4262,10 +4262,14 @@ opcodes:
     semantic: |
       Per-point patrol CYCLES setter (net-new, app-MITM 2026-06-16). At patrol
       run-start the app sends o=111 {point:[id, cycles]} alongside o=107 (run) and
-      o=400 {on:true} (camera). The authored per-point cycles + auto-capture are
-      ALSO persisted via the `CRUISED` CFG key (see cfg key CRUISED); the
-      relationship between the o=111 run-time send and the CRUISED stored value
-      (which is authoritative) is not yet established. [app-mitm:2026-06-16]
+      o=400 {on:true} (camera). RESOLVED 2026-06-16: o=111 is ALSO sent at
+      CONFIG time — the app dual-writes o=111 (device-applied cycles) THEN
+      `CRUISED` (cloud record, see cfg key CRUISED) for every per-point change.
+      o=111 is the authoritative DEVICE cycles path and is REQUIRED — a
+      CRUISED-only write updates the cloud CRUISE.0 record but the cycles never
+      reach the device. auto_capture is NOT carried by o=111 (CRUISED-only).
+      [app-mitm:2026-06-16 (miio-13267.jsonl 12:26-12:31: each CRUISED set
+      preceded by o=111 {point:[id,cycles]})]
     status:
       seen_on_wire: true
       first_seen: "2026-06-16"
@@ -4276,8 +4280,10 @@ opcodes:
         status: partial
         claim: "o=111 {point:[id, cycles]} observed at patrol start (with o=107 + o=400) as a per-point cycles setter. Net-new opcode; payload shape from app-MITM, device-side effect not independently confirmed."
         evidence: "app-mitm:2026-06-16 (FINDING-patrol-photos-session-summary-2026-06-16.md)"
-    open_questions:
-      - "o=111 vs CRUISED[3] cycles — which is authoritative, and is o=111 required or redundant at run time? [UNKNOWN — to capture]."
+      - date: "2026-06-16"
+        status: verified
+        claim: "o=111 is the per-point cycles write at CONFIG time too, not just run-start: the app dual-writes o=111 {point:[id,cycles]} (device-applied) THEN CRUISED (cloud record) for every per-point cycles change. o=111 is REQUIRED — CRUISED alone does not push cycles to the device. Integration now sends both (coordinator/_writes.py:write_patrol_point_config)."
+        evidence: "app-mitm:2026-06-16 (miio-13267.jsonl 12:26-12:31; every CRUISED set preceded by o=111 {point:[id,cycles]})"
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
 
@@ -5681,13 +5687,16 @@ cfg_keys:
           until the app's CRUISED write context is captured (MITM). The READ half
           (CRUISE.0 -> sensor/editor) works.
         evidence: "live set_cfg('CRUISED',...) probe 2026-06-16 (create point 4 + update point 3 cycles 3->2; both r=0/True; CRUISE.0 + version unchanged after 10s; settings keys observed '3' + '1,0')"
+      - date: "2026-06-16"
+        status: verified
+        claim: "RESOLVED why a CRUISED-only write does not stick: the write is DUAL. The app always sends routed_action o=111 {point:[id,cycles]} (device-applied) IMMEDIATELY BEFORE the CRUISED set, for EVERY per-point change (config time, not just run-start). CRUISED-alone is accepted (r=0) but the device does NOT commit it to CRUISE.0 — see the CRUISED-only probe above (r=0 yet CRUISE.0 unchanged). o=111 is the required precursor that makes BOTH cycles AND auto_capture persist (auto_capture rides only in CRUISED, but only commits once o=111 establishes the point). Integration fixed to send o=111 then CRUISED."
+        evidence: "app-mitm:2026-06-16 (miio-13267.jsonl 12:26-12:31 window — every CRUISED set preceded by o=111 {point:[id,cycles]}); cross-ref the CRUISED-only probe above"
     references:
-      integration_code: "WRITE: coordinator/_writes.py:write_patrol_point_config -> cloud_client.set_cfg('CRUISED', {idx, value:[-1, point_id, auto, cycles]}), exposed as service set_patrol_point_config + the map-editor card inline panel. READ: protocol/cruise_config.py:parse_cruise_config -> CloudState.cruise_config_by_map -> patrol-points sensor + camera editable_objects."
+      integration_code: "WRITE (DUAL — BOTH legs required): coordinator/_writes.py:write_patrol_point_config sends (1) routed_action(111, {point:[id,cycles]}) THEN (2) set_cfg('CRUISED', {idx, value:[-1, point_id, auto, cycles]}). CRUISED-alone is accepted (r=0) but does NOT update CRUISE.0; the o=111 precursor is what commits it. Exposed as service set_patrol_point_config + the map-editor card inline panel. READ: protocol/cruise_config.py:parse_cruise_config -> CloudState.cruise_config_by_map -> patrol-points sensor + camera editable_objects."
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     open_questions:
       - "value[0]=-1 sentinel meaning (type/marker?) — not mirrored in CRUISE.0; likely a device-assign/version placeholder [UNKNOWN — to capture]."
       - "CRUISE.0 settings comma-joined key '1,0' (vs the bare '3') — point id 1 with a sub-index, or a grouped pair? Set one distinct point and diff which settings key changes [partial — to capture]."
-      - "Relationship between CRUISED cycles and the o=111 {point:[id,cycles]} per-point cycles setter seen at run start — which is authoritative? [UNKNOWN — to capture]."
 
   - id: "PROT"
     name: "navigation_path"
