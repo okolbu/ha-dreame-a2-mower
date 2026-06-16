@@ -143,7 +143,8 @@ class DreameA2PatrolPointsSensor(_DreameA2PerMapSensorBase):
     State = count; ``extra_state_attributes['items']`` is the generic
     multi-select shape consumed by dreame-multi-select-card. Decoded from
     MAP key ``cruisePoints`` (type=8). Read-only; placement is app-only.
-    cycles/auto_capture are null — not readable from any known surface yet.
+    cycles/auto_capture are sourced from the CRUISE.0 device-data key via
+    ``coordinator.cloud_state.cruise_config_by_map`` (default 1/False when absent).
     """
 
     _attr_name = "Patrol points"
