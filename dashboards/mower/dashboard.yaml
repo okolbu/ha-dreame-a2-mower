@@ -140,6 +140,13 @@ _tab_header_photos: &tab_header_photos
 
     ## 🖼️ Photos &nbsp;<span style="font-size:0.75em;color:var(--secondary-text-color)">archived obstacle / patrol / person photos + videos — tap a thumbnail to enlarge</span>
 
+_tab_header_info: &tab_header_info
+  type: markdown
+  content: |
+    <hr style="border:0;border-top:3px solid var(--primary-color);margin:12px 0 0 0;"/>
+
+    ## 📨 Messages &nbsp;<span style="font-size:0.75em;color:var(--secondary-text-color)">device, service &amp; sharing messages from the Dreame cloud</span>
+
 title: Dreame A2 Mower
 
 # Custom cards used by this dashboard — register these as Lovelace
@@ -1608,6 +1615,8 @@ views:
                     entities:
                       - entity: sensor.dreame_a2_mower_firmware_version_dev
                         name: Firmware version
+                      - entity: update.dreame_a2_mower_firmware
+                        name: Firmware update
                       - entity: sensor.dreame_a2_mower_cloud_device_id
                         name: Cloud device id
                       - entity: sensor.dreame_a2_mower_api_endpoint
@@ -1618,6 +1627,12 @@ views:
                     content: |
                       Serial number + MAC address are on the Device info card
                       (Settings → Devices → Dreame A2 Mower).
+
+                      **Firmware update** shows the mower's own firmware
+                      (installed vs latest from the Dreame cloud). When an
+                      update is available the row exposes an **Install** action;
+                      the mower gates it on WiFi signal + charge, so a refusal
+                      means move it closer to the dock/AP and retry.
 
               - type: vertical-stack
                 cards:
@@ -1874,3 +1889,42 @@ views:
                   `custom_components/dreame_a2_mower/www/ai_obstacle_recognition_privacy.md`
                   in this integration's source, or the public site:
                   https://www.dreame.tech/policy/privacy
+  - title: Info
+    path: info
+    type: panel
+    icon: mdi:message-text
+    cards:
+      - type: vertical-stack
+        cards:
+          - *tab_header_info
+
+          - type: markdown
+            title: 🤖 Device messages
+            content: |
+              {% set items = state_attr('sensor.dreame_a2_mower_device_messages','items') or [] %}
+              **{{ states('sensor.dreame_a2_mower_device_messages') }} unread** · {{ items | count }} total
+              {% for m in items %}
+              - {{ '🔵' if m.unread else '⚪' }} **{{ m.title }}** — <small>{{ m.date }}</small>{% if m.body %}<br>{{ m.body }}{% endif %}{% if m.link %} · [open]({{ m.link }}){% endif %}
+              {% endfor %}
+              {% if not items %}_No messages_{% endif %}
+
+          - type: markdown
+            title: 📨 Service messages
+            content: |
+              {% set items = state_attr('sensor.dreame_a2_mower_service_messages','items') or [] %}
+              **{{ states('sensor.dreame_a2_mower_service_messages') }} unread** · {{ items | count }} total
+              {% for m in items %}
+              - {{ '🔵' if m.unread else '⚪' }} **{{ m.title }}** — <small>{{ m.date }}</small>{% if m.body %}<br>{{ m.body }}{% endif %}{% if m.link %} · [open]({{ m.link }}){% endif %}
+              {% endfor %}
+              {% if not items %}_No messages_{% endif %}
+
+          - type: markdown
+            title: 👥 Shared messages
+            content: |
+              {% set items = state_attr('sensor.dreame_a2_mower_shared_messages','items') or [] %}
+              **{{ states('sensor.dreame_a2_mower_shared_messages') }} unread** · {{ items | count }} total
+              {% for m in items %}
+              - {{ '🔵' if m.unread else '⚪' }} **{{ m.title }}** — <small>{{ m.date }}</small>{% if m.body %}<br>{{ m.body }}{% endif %}{% if m.link %} · [open]({{ m.link }}){% endif %}
+              {% endfor %}
+              {% if not items %}_No messages_{% endif %}
+
