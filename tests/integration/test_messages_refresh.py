@@ -92,6 +92,10 @@ async def test_refresh_messages_normalizes_and_trims():
     coord._cloud = cloud
     captured = {}
     coord.async_set_updated_data = lambda new: captured.update(new=new)
+    # Cross-mixin call (provided by _LidarOssMixin via MRO in the real
+    # coordinator); the isolated mixin under test needs a stub. No-op = no
+    # snapshot photos linked, which is correct for this normalize/trim test.
+    coord.link_message_snapshot_photos = lambda messages: None
 
     async def _exec(fn, *a):
         return fn(*a)

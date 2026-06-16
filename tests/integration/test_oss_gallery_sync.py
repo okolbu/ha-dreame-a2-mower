@@ -118,6 +118,50 @@ def test_session_photos_manifest_matches_photo_list_by_ts():
     )
 
 
+def _snapshot_coord(photos):
+    c = MIXIN()
+    c._photo_archive = SimpleNamespace(list_photos=lambda: photos)
+    c._sign_media_path = lambda path: path + "?sig=X"
+    return c
+
+
+def test_link_message_snapshot_photos_matches_ai_human_in_window():
+    """A 'View snapshots in the app.' notification links to the ai_human photo
+    that lands a few seconds later (timestamp-window match)."""
+    P = SimpleNamespace
+    photos = [
+        P(filename="2026-06-15_1781558884_32e14546.jpg", name="1781558884_person.jpg",
+          unix_ts=1781558884, category="ai_human", detections=[{"cls": "human", "conf": 0.8}]),
+        P(filename="far_1781550000_aaaa.jpg", name="1781550000.jpg",
+          unix_ts=1781550000, category="ai_human", detections=[]),  # ~2.5h before -> out of window
+        P(filename="patrol_1781558886_bbbb.jpg", name="1781558886.jpg",
+          unix_ts=1781558886, category="patrol", detections=[]),    # in window but patrol -> excluded
+    ]
+    c = _snapshot_coord(photos)
+    msgs = [
+        {"id": "m1", "title": "Human entry into the mapped area is detected. Please be alert. View snapshots in the app.",
+         "date": "2026-06-15T21:27:59+00:00"},   # unix 1781558879; photo at +5s
+        {"id": "m2", "title": "Mowing task complete. View work log in the app.",
+         "date": "2026-06-15T21:30:00+00:00"},   # no marker -> untouched
+    ]
+    c.link_message_snapshot_photos(msgs)
+
+    assert [p["id"] for p in msgs[0]["photos"]] == ["2026-06-15_1781558884_32e14546.jpg"]
+    assert msgs[0]["photos"][0]["detections"] == [{"cls": "human", "conf": 0.8}]
+    assert msgs[0]["photos"][0]["thumb_url"].startswith("/api/dreame_a2_mower/photo/")
+    assert "photos" not in msgs[1]  # non-snapshot message left untouched
+
+
+def test_link_message_snapshot_photos_no_match_leaves_key_absent():
+    c = _snapshot_coord([
+        SimpleNamespace(filename="x.jpg", name="x", unix_ts=1, category="ai_human", detections=[]),
+    ])
+    msgs = [{"id": "m", "title": "Human detected. View snapshots in the app.",
+             "date": "2026-06-15T21:27:59+00:00"}]
+    c.link_message_snapshot_photos(msgs)
+    assert "photos" not in msgs[0]  # no photo in window -> no key
+
+
 def test_session_photos_manifest_empty_without_photo_list():
     c = MIXIN()
     c._photo_archive = SimpleNamespace(list_photos=lambda: [])

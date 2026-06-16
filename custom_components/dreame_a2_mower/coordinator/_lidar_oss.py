@@ -99,6 +99,18 @@ def _photo_ts_from_name(name: str) -> int:
     return int(m.group(1)) if m else 0
 
 
+def _iso_to_unix(value: Any) -> int | None:
+    """Parse a Message.date ISO-8601 string (e.g. '2026-06-15T21:27:59+00:00')
+    to a unix timestamp; None on anything unparseable."""
+    if not isinstance(value, str) or not value:
+        return None
+    from datetime import datetime
+    try:
+        return int(datetime.fromisoformat(value).timestamp())
+    except (ValueError, TypeError):
+        return None
+
+
 def fetch_photos_from_summary(cloud, archive, raw_dict, *, sign) -> int:
     """Fetch every photo_list leaf into the PhotoArchive. Returns count added.
 
@@ -1000,14 +1012,65 @@ class _LidarOssMixin:
                 if p.filename in seen:
                     continue
                 seen.add(p.filename)
-                url = self._sign_media_path("/api/dreame_a2_mower/photo/" + p.filename)
-                items.append({
-                    "id": p.filename,
-                    "ts": int(p.unix_ts),
-                    "category": p.category,
-                    "detections": p.detections or [],
-                    "url": url,
-                    "thumb_url": url,
-                })
+                items.append(self._signed_photo_thumb(p))
         items.sort(key=lambda it: it["ts"])
         return items
+
+    def _signed_photo_thumb(self, p) -> dict:
+        """One archived photo → a signed gallery item dict (thumb == full URL)."""
+        url = self._sign_media_path("/api/dreame_a2_mower/photo/" + p.filename)
+        return {
+            "id": p.filename,
+            "ts": int(p.unix_ts),
+            "category": p.category,
+            "detections": p.detections or [],
+            "url": url,
+            "thumb_url": url,
+        }
+
+    # A "View snapshots in the app." notification carries no photo reference —
+    # only its timestamp; the AI-detection photo lands a few seconds LATER
+    # (e.g. a human-detection alert at T had its ai_human photo at T+5s,
+    # app-mitm corpus 2026-06-15). So link by a timestamp window over the
+    # AI-detection categories (NOT patrol, which has its own "view work log"
+    # notification and its own per-session linkage).
+    _SNAPSHOT_MARKER = "view snapshots"
+    _SNAPSHOT_CATEGORIES = ("ai_human", "obstacle", "person")
+    _SNAPSHOT_WINDOW_BEFORE_S = 120
+    _SNAPSHOT_WINDOW_AFTER_S = 600
+
+    @classmethod
+    def _is_snapshot_message(cls, msg: dict) -> bool:
+        return cls._SNAPSHOT_MARKER in str(msg.get("title") or "").lower()
+
+    def link_message_snapshot_photos(self, messages: list[dict]) -> None:
+        """Attach matched snapshot thumbnails (signed) to device-message dicts
+        IN PLACE, as ``msg['photos']``. Messages without the "View snapshots in
+        the app." marker, or with no photo in the time window, are left
+        untouched (no ``photos`` key). Matching is timestamp-window over the
+        AI-detection photo categories — see the class constants above."""
+        archive = getattr(self, "_photo_archive", None)
+        if archive is None or not messages:
+            return
+        if not any(self._is_snapshot_message(m) for m in messages):
+            return  # avoid the archive read when nothing needs linking
+        det_photos = [
+            p for p in archive.list_photos()
+            if p.category in self._SNAPSHOT_CATEGORIES
+        ]
+        if not det_photos:
+            return
+        for m in messages:
+            if not self._is_snapshot_message(m):
+                continue
+            ts = _iso_to_unix(m.get("date"))
+            if ts is None:
+                continue
+            lo = ts - self._SNAPSHOT_WINDOW_BEFORE_S
+            hi = ts + self._SNAPSHOT_WINDOW_AFTER_S
+            matched = sorted(
+                (p for p in det_photos if lo <= int(p.unix_ts) <= hi),
+                key=lambda p: int(p.unix_ts),
+            )
+            if matched:
+                m["photos"] = [self._signed_photo_thumb(p) for p in matched]

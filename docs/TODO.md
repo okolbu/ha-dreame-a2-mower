@@ -23,87 +23,6 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
-<!-- The block below was folded in from todo6.txt (2026-06-16 app-MITM session).
-     Each FINDING-*.md is WIRE-VERIFIED (app↔mower MITM) and OVERRIDES any prior
-     disagreeing claim in inventory.yaml / docs per CLAUDE.md § Fact discipline. -->
-
-### Fold FINDING-s2p56 per-zone status + s1p4 phase_raw into inventory (todo6 #1)
-
-**Why:** Wire-verified on a 2-zone Map2 all-area mow (fw 0625): `s2p56 task_state` is a
-**per-zone/per-target status array** `{status:[[zone_id, stage]]}` with stage enum
-`{-1 queued, 0 active, 2 done}` — current zone = the stage-0 entry; matches the app's green-✓.
-Same array family as patrol-point status. Separately, `s1p4 byte[8] phase_raw` is a **task-plan
-segment index** (resets per mow, monotonic) — it does NOT track zones (spanned a zone1-edge AND
-all of zone2 in one capture), so "which zone" MUST come from s2p56, not phase_raw.
-**Done when:** `inventory.yaml § s2p56` documents the `[[zone_id,stage]]` shape + stage enum
-(stage-0 = active) with an `[app-mitm:2026-06-16]`/probe-log evidence tag; `§ s1p4` phase_raw
-is annotated as task-plan-entry index (not zone-aligned); any prior disagreeing prose retracted;
-then surface the per-zone progress in the integration where it adds value (e.g. active-zone /
-zones-done attrs on a sensor).
-**Status:** open (wire-verified — document first, then implement)
-**Cross-refs:** `FINDING-s2p56-per-zone-status-2026-06-16.md`; `probe/logs/probe_log_20260612_174439.jsonl`;
-`inventory.yaml § s2p56` (line ~1327), `§ s1p4`.
-
-### Fold FINDING-edgemaster-PRE10 + PRE 19→21 OTA schema change into inventory (todo6 #2)
-
-**Why:** Wire-verified (fw 0625, clean ON↔OFF toggle): **EdgeMaster = `PRE[10]`** (0=off/1=on) —
-confirms the inventory's tentative `[10]` and resolves the "AutoEdge/SafeEdge/EdgeMaster/OA-on-
-Edges order TBD". **Plus a schema change the inventory does not yet reflect:** the OTA
-`4.3.6_0550 → 0625` extended PRE from **19 → 21 ints** (two fields APPENDED: `[19]=0, [20]=30`);
-indices 0–18 did NOT shift. General lesson: re-validate array-CFG layouts after a firmware update.
-**Done when:** `inventory.yaml § PRE` payload_shape + index map updated to 21 ints with `[19]`/`[20]`
-flagged NEW post-0625 (values 0, 30 — semantics TBD), `[10]=EdgeMaster` recorded `confirmed` with an
-`[app-mitm:2026-06-16]` verification, and an OTA-extends-CFG-arrays caveat noted; the integration's
-PRE builder (`protocol/cfg_action.py`) handles the 21-length array without dropping/misaligning the
-new trailing fields; tests green.
-**Status:** open (wire-verified — document first, then implement)
-**Cross-refs:** `FINDING-edgemaster-PRE10-2026-06-16.md`; `inventory.yaml § PRE` (line ~5533);
-`protocol/cfg_action.py`; control-honesty EdgeMaster writable item.
-
-### Media gallery fetch cadence + end-of-session trigger (todo6 #3)
-
-**Why:** The OSS gallery currently refreshes on a fixed 1 h `_refresh_oss_gallery` cycle. Sessions
-(both patrols AND normal mows) generally produce the media, so the *end of a session* is a strong
-extra trigger to look for new images/videos shortly after — far more timely than waiting up to an
-hour. Relates to #7 (patrol photos) for the patrol half, but normal mows should also be covered.
-**Shipped (2026-06-16, pending live confirm):**
-  - **Part A — end-of-session gallery refresh.** `_do_oss_fetch_body` now calls
-    `_schedule_post_session_gallery_refresh()`, a one-shot `async_call_later` (60 s) that runs
-    `_refresh_oss_gallery` after finalize, so VIDEOS + any gallery media not in the summary's
-    `photo_list` (already fetched immediately by `fetch_photos_from_summary`) appear within ~minute
-    instead of up to 1 h. Bounded (one per finalize) + idempotent. Delayed 60 s to let the device's
-    async upload land. Test: `test_oss_gallery_sync.py` (scheduler tests).
-  - **Part B — session photos on the replay screen.** `coordinator.session_photos_manifest(raw_dict)`
-    builds signed thumbnails for a session by matching its `photo_list` to the PhotoArchive **by
-    capture timestamp** (so the `_person` gallery variant still links); attached as `photos` on the
-    picked_session payload (`build_picked_session_summary`); the replay card
-    (`dreame-mower-replay-card.js`) renders a click-to-open thumbnail strip. Matching is
-    **photo_list-only** for now (covers patrol + "to point" auto-capture).
-**Remaining / follow-up:**
-  - **Time-window match for AI-obstacle photos** — if a session's obstacle/AI photos fall OUTSIDE
-    `photo_list`, union in archived photos whose capture ts ∈ [session.start, session.end].
-    Deferred until we understand how those photo types appear relative to `photo_list` (user call,
-    2026-06-16). `session_photos_manifest` is structured to make this a localized change.
-  - Live confirm: deploy integration (needs HA restart — code change, not just config reload) +
-    replay card; select a patrol / "to point" session and verify thumbnails render + open.
-**Status:** Part A + B shipped (photo_list match), unit-tested; live confirm + time-window union pending.
-**Cross-refs:** `coordinator/_lidar_oss.py` (`_schedule_post_session_gallery_refresh`,
-`session_photos_manifest`, `_refresh_oss_gallery`); `session_card.py:build_picked_session_summary`
-(`photos`); `coordinator/_session.py`; `www/dreame-mower-replay-card.js`;
-`FINDING-patrol-photos-session-summary-2026-06-16.md`; the Photo/video archive item below.
-
-### Notification "View snapshots in the app." → fetch + link photos (todo6 #4)
-
-**Why:** Some notification messages append a "View snapshots in the app." line, signalling that the
-event produced photos. The integration should detect that marker, fetch the corresponding photos,
-and link the notification → the actual photo (timestamp-matched, presumably).
-**Done when:** the notification parser flags messages carrying the snapshot marker, triggers a photo
-fetch, and exposes the link (e.g. an attribute on `sensor.last_notification` or the photo camera);
-timestamp→photo correlation is documented.
-**Status:** open
-**Cross-refs:** `coordinator/_notifications.py`; `protocol/message_record.py`;
-`coordinator/_lidar_oss.py` gallery; `protocol/photo_meta.py`.
-
 ### Review the redundant `_track_snapshot` live-map setup (todo6 #5)
 
 **Why:** There is a partially-redundant `_track_snapshot` setup for the live mowing path, possibly
@@ -116,66 +35,46 @@ or kept with a documented rationale.
 **Status:** open (investigation/refactor)
 **Cross-refs:** `coordinator/_rendering.py`, `live_map/state.py`; grep `_track_snapshot`.
 
-### Fold FINDING-CRUISED per-point patrol config into inventory + surface authored values (todo6 #6)
+### Surface authored patrol per-point cycles + auto-capture (CRUISED write-path)
 
-**Why:** Wire-verified (fw 0625, single-toggle diffs): per-point patrol settings live in a
-**`CRUISED` CFG write** `{idx:<map_index>, value:[-1, point_id, auto_capture(0/1), cycles(1/2/3)]}`
-(`value[0]=-1` sentinel). This **resolves control-honesty TODO #3 path (b)** — the *authored*
-per-point cycles + auto-capture toggle values are now directly readable/writable, not only
-reconstructable from telemetry. Patrol-point geometry (`o=223`) carries no zone tag (zone derived
-from coords). Overrides the prior "no directly-readable config exists" framing.
-**Done when:** `inventory.yaml` documents the `CRUISED` key (field map + per-point semantics) with an
-`[app-mitm:2026-06-16]` verification; the control-honesty TODO #3 + the patrol-points sensor's
-`cycles:null`/`auto_capture:null` are reconciled (surface the authored values, read and/or write);
-`value[0]=-1` sentinel + the `o=107` run send-payload remain flagged TBD.
-**Status:** open (wire-verified — document first, then implement)
-**Cross-refs:** `FINDING-CRUISED-decoded-2026-06-16.md`; `inventory.yaml § cruise*`/§ CFG keys;
-control-honesty residual follow-up #3 (this section, below); `project_patrol_point_surfacing`.
+**Why:** `CRUISED` is now decoded + documented (DONE.md — todo6 #6): per-point patrol config is a CFG
+write `{idx:<map>, value:[-1, point_id, auto_capture(0/1), cycles(1/2/3)]}`. The *authored* values are
+therefore writable, but **no CRUISED READ was captured** — so surfacing the effective per-point
+cycles/auto-capture on the patrol-points sensor (currently `cycles:null`/`auto_capture:null`) still
+needs either (a) a read source, or (b) optimistic local state mirrored from our own writes, or (c) the
+telemetry-derived reconstruction (rotation count + photo-window). Mower is dead → unverifiable now.
+**Done when:** the patrol-points sensor surfaces effective cycles + auto-capture (read and/or write),
+OR this is explicitly closed as reconstruct-only. `value[0]=-1` sentinel + the `o=107` run send-payload
+remain TBD.
+**Status:** open (decode shipped; write/read surfacing deferred — needs live mower).
+**Cross-refs:** `inventory.yaml § CRUISED` / `§ o107` / `§ o111`; control-honesty residual follow-up #3
+(below); `project_patrol_point_surfacing`.
 
-### Fold FINDING-patrol-photos lazy upload + session-summary JSON into inventory (todo6 #7)
+### Time-window photo→session match for AI-obstacle photos (follow-up to todo6 #3/#4)
 
-**Why:** Wire-verified end-to-end (fw 0625): **patrol** auto-capture photos are **lazy/on-demand** —
-they upload to OSS and register in `userDidOssList` ONLY when the in-app "View Patrol Photos" viewer
-is opened (the `getDownloadUrl` click triggers device upload + register + OSS GET). NB this is the
-**patrol-photo path only** — it does NOT explain the intermittent/non-clickable **live-session
-obstacle icons**, which are a **separate, distinct set of images** (type-3 ephemeral obstacle photos,
-observed clickable in the app only once; mechanism unknown). Do not conflate the two.
-The same click returns a **rich session-summary JSON** (`iot/tmp/.../<ts>.<fw>.json`) carrying
-`mode/result/stop_reason/photo_list(flat <ts>.jpg names)/point[]/point_status/ai_obstacle/...` —
-the mow/patrol session-log shape. `photo_list` ≠ `ai_obstacle` (obstacle photos are a separate,
-still-uncaptured array).
-**Done when:** `inventory.yaml` documents `iotfile/getDownloadUrl` → session-summary JSON (field
-catalog) + the lazy-upload mechanism, with an `[app-mitm:2026-06-16]` tag; the integration's photo
-fetch accounts for the lazy/on-demand window where relevant (ties into #3 end-of-session fetch).
-**Status:** open (wire-verified — document first, then implement)
-**Cross-refs:** `FINDING-patrol-photos-session-summary-2026-06-16.md`; `coordinator/_lidar_oss.py`;
-`protocol/session_summary.py`, `protocol/photo_meta.py`; item #3 (media fetch cadence).
+**Why:** Session-replay thumbnails (todo6 #3 Part B) and notification photo-linking (todo6 #4) both
+match **photo_list-only** / AI-detection-category-by-timestamp today. If a session's AI-obstacle photos
+fall OUTSIDE `photo_list`, they won't appear on the replay screen. Deferred (user call 2026-06-16) until
+we understand how those photo types appear relative to `photo_list`.
+**Done when:** `session_photos_manifest` optionally unions archived photos whose capture ts ∈
+[session.start, session.end] (it's structured for this), validated against a real session that produced
+AI-obstacle photos.
+**Status:** open (deferred — needs a session with out-of-photo_list AI-obstacle photos to validate).
+**Cross-refs:** `coordinator/_lidar_oss.py:session_photos_manifest` / `link_message_snapshot_photos`.
 
-### Fix: WiFi overlay doesn't update on active-map change (todo6 #8 — small bug)
+### Custom device-messages card for photo popup + detection overlay (follow-up to todo6 #4)
 
-**Why:** The WiFi RSSI overlay on the live map does not change when the active map is switched —
-e.g. switching Map2 → Map1 still shows Map2's RSSI blocks. A hard browser refresh fixes it, so the
-overlay/camera image is cached and not invalidated on the map-change event (a recurring access-token
-rotation class — see `feedback_camera_image_refresh_pattern`).
-**Root cause (2026-06-16):** NOT a camera access-token issue — the overlay is drawn client-side
-from the `wifi_overlay` attribute. The card (`dreame-mower-map-card.js:_syncWifi`) gated its overlay
-re-render on a **geometry-only** key (`WxH@startX,startY:len`) with no map identity and no projection.
-Two maps whose heatmaps share grid geometry collided on that key, so a map switch skipped the
-re-render and left the prior map's RSSI rects painted (drawn with the prior map's projection — hence
-both "shows map2 blocks after switching to map1" when ON, and "map2 overlay scaled to map1" when
-toggled ON after an OFF switch). The absent-overlay branch also didn't clear the `<g>`.
-**Fix (code shipped, unit-tested):** new pure `wifiOverlayKey(overlay, map_id, projection)` in
-`_dreame-map-core.js` keys on map identity + projection + geometry; `_syncWifi` uses it and clears the
-`<g>` (resets the key) when the overlay is absent. Test: `tests/www/test_wifi_overlay_key.py`
-(+ harness). No coordinator/payload change.
-**Done when:** ~~code fix + unit test~~ DONE; remaining: **live HA visual confirmation** (deploy the
-card, switch maps both ON and OFF→toggle, confirm the overlay tracks the active map at the right
-scale) — blocked on a live mower/HA session.
-**Status:** fix shipped + unit-tested; live visual confirmation pending (deploy via the dashboard
-SCP procedure; cards cache hard → hard-refresh once after deploy).
-**Cross-refs:** `www/dreame-mower-map-card.js:_syncWifi`, `www/_dreame-map-core.js:wifiOverlayKey`;
-`camera/map.py` (publishes `wifi_overlay`/`map_id`/`map_projection`); `coordinator/_wifi_archive.py`
-(`active_map_wifi_overlay`); `reference_ha_dashboard_deploy`.
+**Why:** Device-message snapshot photos are surfaced via a **markdown** card, which HA sanitizes — so
+those thumbnails open the full image in a **new browser tab**, without the click-to-enlarge lightbox +
+AI-detection bbox/label overlay that the gallery and replay cards now have (shared
+`_dreame-map-core.js:attachDetectionOverlay`). A small custom card reading
+`sensor.dreame_a2_mower_device_messages.items` would unify the UX.
+**Done when:** a bundled `www/` custom card renders the device-messages list with per-message photo
+thumbnails that open the same in-card lightbox + overlay; the markdown card is replaced on the Info tab.
+**Status:** open (deferred follow-up; markdown card works, just new-tab + no overlay).
+**Cross-refs:** `www/dreame-a2-photo-gallery-card.js` (lightbox+overlay pattern),
+`www/_dreame-map-core.js:attachDetectionOverlay`; `dashboards/mower/dashboard.yaml` (Device messages card);
+`sensor.dreame_a2_mower_device_messages` (`items[].photos`).
 
 ### Bundle `_CoreMixin.__init__` attrs into typed per-concern objects (Refactor Phase 3f attr-bundling — deferred as over-engineering)
 

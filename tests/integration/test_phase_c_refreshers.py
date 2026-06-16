@@ -25,6 +25,8 @@ def _coord(gps=None, remote=None, msg=None, dev=None, ota=None):
     c.hass = SimpleNamespace(async_add_executor_job=AsyncMock(side_effect=_exec))
     c.async_set_updated_data = lambda s: setattr(c, "data", s)
     c._update_device_registry_serial = MagicMock()
+    # Cross-mixin call provided by _LidarOssMixin via MRO in the real coordinator.
+    c.link_message_snapshot_photos = lambda messages: None
     return c
 
 

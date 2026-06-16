@@ -1904,7 +1904,7 @@ views:
               {% set items = state_attr('sensor.dreame_a2_mower_device_messages','items') or [] %}
               **{{ states('sensor.dreame_a2_mower_device_messages') }} unread** · {{ items | count }} total
               {% for m in items %}
-              - {{ '🔵' if m.unread else '⚪' }} **{{ m.title }}** — <small>{{ m.date }}</small>{% if m.body %}<br>{{ m.body }}{% endif %}{% if m.link %} · [open]({{ m.link }}){% endif %}
+              - {{ '🔵' if m.unread else '⚪' }} **{{ m.title }}** — {% if m.date %}<small>{{ as_local(as_datetime(m.date)).strftime('%Y-%m-%d %H:%M') }}</small>{% endif %}{% if m.body %}<br>{{ m.body }}{% endif %}{% if m.link %} · [open]({{ m.link }}){% endif %}{% set ph = m.get('photos') or [] %}{% if ph %}<br>{% for p in ph %}<a href="{{ p.url }}" target="_blank"><img src="{{ p.thumb_url }}" height="72"></a> {% endfor %}{% endif %}
               {% endfor %}
               {% if not items %}_No messages_{% endif %}
 
@@ -1914,7 +1914,7 @@ views:
               {% set items = state_attr('sensor.dreame_a2_mower_service_messages','items') or [] %}
               **{{ states('sensor.dreame_a2_mower_service_messages') }} unread** · {{ items | count }} total
               {% for m in items %}
-              - {{ '🔵' if m.unread else '⚪' }} **{{ m.title }}** — <small>{{ m.date }}</small>{% if m.body %}<br>{{ m.body }}{% endif %}{% if m.link %} · [open]({{ m.link }}){% endif %}
+              - {{ '🔵' if m.unread else '⚪' }} **{{ m.title }}** — {% if m.date %}<small>{{ as_local(as_datetime(m.date)).strftime('%Y-%m-%d %H:%M') }}</small>{% endif %}{% if m.body %}<br>{{ m.body }}{% endif %}{% if m.link %} · [open]({{ m.link }}){% endif %}
               {% endfor %}
               {% if not items %}_No messages_{% endif %}
 
@@ -1924,7 +1924,7 @@ views:
               {% set items = state_attr('sensor.dreame_a2_mower_shared_messages','items') or [] %}
               **{{ states('sensor.dreame_a2_mower_shared_messages') }} unread** · {{ items | count }} total
               {% for m in items %}
-              - {{ '🔵' if m.unread else '⚪' }} **{{ m.title }}** — <small>{{ m.date }}</small>{% if m.body %}<br>{{ m.body }}{% endif %}{% if m.link %} · [open]({{ m.link }}){% endif %}
+              - {{ '🔵' if m.unread else '⚪' }} **{{ m.title }}** — {% if m.date %}<small>{{ as_local(as_datetime(m.date)).strftime('%Y-%m-%d %H:%M') }}</small>{% endif %}{% if m.body %}<br>{{ m.body }}{% endif %}{% if m.link %} · [open]({{ m.link }}){% endif %}
               {% endfor %}
               {% if not items %}_No messages_{% endif %}
 

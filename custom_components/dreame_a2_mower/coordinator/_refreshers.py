@@ -291,9 +291,12 @@ class _RefreshersMixin:
                 for msg in _msg.normalize_service(m.get("service_records"))[:cap]
             ]
         if dev_raw is not None:
-            kw["device_messages"] = [
+            dev_list = [
                 msg.as_dict() for msg in _msg.normalize_device(dev_raw)[:cap]
             ]
+            # Link "View snapshots in the app." notifications to their photos.
+            self.link_message_snapshot_photos(dev_list)
+            kw["device_messages"] = dev_list
         if share_raw is not None:
             kw["shared_messages"] = [
                 msg.as_dict() for msg in _msg.normalize_share(share_raw)[:cap]

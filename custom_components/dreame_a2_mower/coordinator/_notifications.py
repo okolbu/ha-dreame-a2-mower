@@ -126,6 +126,9 @@ class _NotificationsMixin:
         new_list = [
             m.as_dict() for m in message_record.normalize_device(records)[:cap]
         ]
+        # Link "View snapshots in the app." notifications to their AI-detection
+        # photos (timestamp-window match), in place.
+        self.link_message_snapshot_photos(new_list)
         new = dataclasses.replace(self.data, device_messages=new_list)
         if new != self.data:
             self.async_set_updated_data(new)
