@@ -11,7 +11,7 @@ helpers that build a new CloudState and replace.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from .map_decoder import MapData
@@ -125,3 +125,7 @@ class CloudState:
     mapl: list[list[Any]] | None
     mihis: dict[str, Any]
     fetched_at_unix: int
+    # Per-map patrol-point config from the CRUISE.0 device-data key:
+    # {map_idx: {point_id: {"cycles": int, "auto_capture": bool}}}. Empty when
+    # CRUISE.0 is absent. See protocol/cruise_config.py + inventory.yaml § CRUISED.
+    cruise_config_by_map: dict = field(default_factory=dict)

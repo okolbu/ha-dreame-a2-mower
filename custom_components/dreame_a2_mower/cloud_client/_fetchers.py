@@ -328,6 +328,7 @@ class _FetchersMixin:
         CloudState rather than failing the whole fetch.
         """
         from ..cloud_state import CloudState, ScheduleData, SettingsRoot
+        from ..protocol.cruise_config import parse_cruise_config
         from ..map_decoder import parse_cloud_maps
         from ..protocol.batch_grouper import group_keys_by_prefix, join_family_chunks
         from ..protocol.m_path import parse_m_path_batch
@@ -534,6 +535,7 @@ class _FetchersMixin:
             mapl=mapl,
             mihis=mihis,
             fetched_at_unix=int(_time.time()),
+            cruise_config_by_map=parse_cruise_config(batch.get("CRUISE.0")),
         )
 
     def fetch_device_messages(
