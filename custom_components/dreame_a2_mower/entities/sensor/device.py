@@ -842,6 +842,25 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         value_fn=lambda coord: getattr(coord.data, "ota_capable_raw", None),
     ),
     DreameA2DiagnosticSensorEntityDescription(
+        key="ota_state",
+        translation_key="ota_state",
+        icon="mdi:progress-download",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        # s1p2 live OTA state (1=idle, 2=upgrading, 3=success). None until an
+        # OTA push. Wire-confirmed 0550->0625, 2026-06-16.
+        value_fn=lambda coord: getattr(coord.data, "ota_state", None),
+    ),
+    DreameA2DiagnosticSensorEntityDescription(
+        key="ota_progress",
+        translation_key="ota_progress",
+        icon="mdi:download-network-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
+        # s1p3 live OTA download percent (0..100). Install % is app-local.
+        value_fn=lambda coord: getattr(coord.data, "ota_progress", None),
+    ),
+    DreameA2DiagnosticSensorEntityDescription(
         key="cloud_device_id",
         translation_key="cloud_device_id",
         icon="mdi:cloud-tags",

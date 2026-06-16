@@ -49,3 +49,18 @@ def test_integration_version_sensor():
     val = s.native_value
     assert isinstance(val, str)
     assert val
+
+
+def test_ota_state_and_progress_sensors_present():
+    from custom_components.dreame_a2_mower.entities.sensor.device import DIAGNOSTIC_SENSORS
+    keys = {d.key for d in DIAGNOSTIC_SENSORS}
+    assert "ota_state" in keys
+    assert "ota_progress" in keys
+
+
+def test_ota_state_value_fn_reads_mower_state():
+    from types import SimpleNamespace
+    from custom_components.dreame_a2_mower.entities.sensor.device import DIAGNOSTIC_SENSORS
+    desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "ota_state")
+    coord = SimpleNamespace(data=SimpleNamespace(ota_state=2))
+    assert desc.value_fn(coord) == 2

@@ -2712,6 +2712,8 @@ entities:
         hardware_serial        — coord.data.hardware_serial (CFG.DEV.sn)
         firmware_version_dev   — coord.data.firmware_version (CFG.DEV.fw)
         ota_capable_raw        — coord.data.ota_capable_raw (CFG.DEV.ota)
+        ota_state              — coord.data.ota_state (s1p2 via property_mapping)
+        ota_progress           — coord.data.ota_progress (s1p3 via property_mapping)
         cloud_device_id        — coord._cloud.device_id (cloud account record ID)
         mac_address            — coord._cloud.mac_address (WiFi MAC from cloud)
         weather_forecast_reference — coord.data.weather_forecast_reference (CFG.WRF) → "on"/"off"
@@ -2826,6 +2828,59 @@ entities:
       semantics not yet decoded (TODO). extra_state_attributes exposes
       {"percent": ota_status[1]}. Returns None when cloud_state is None or
       ota_status is None (e.g. no active OTA).
+
+  - id: "sensor.dreame_a2_mower_ota_state"
+    platform: sensor
+    class: "DreameA2DiagnosticSensor"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
+    device: parent
+    source:
+      wire: "s1p2 via property_mapping"
+      state_path: "coordinator.data.ota_state"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-16"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "ota_state / ota_progress diagnostic sensors read MowerState fields fed by s1p2/s1p3 property_mapping; wire-confirmed 0550->0625."
+        evidence: "app-mitm:2026-06-16-firmware-ota"
+    references:
+      wire_entry: "inventory.yaml s1p2 (live OTA state)"
+      code: "custom_components/dreame_a2_mower/entities/sensor/device.py"
+    notes: |
+      Live s1p2 OTA state via property_mapping (1=idle, 2=upgrading,
+      3=success). Reads coord.data.ota_state; None until an OTA push.
+      Disabled-by-default (entity_registry_enabled_default=False).
+      EntityCategory.DIAGNOSTIC. Added 2026-06-16 (D1).
+
+  - id: "sensor.dreame_a2_mower_ota_progress"
+    platform: sensor
+    class: "DreameA2DiagnosticSensor"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
+    device: parent
+    source:
+      wire: "s1p3 via property_mapping"
+      state_path: "coordinator.data.ota_progress"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-16"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "ota_state / ota_progress diagnostic sensors read MowerState fields fed by s1p2/s1p3 property_mapping; wire-confirmed 0550->0625."
+        evidence: "app-mitm:2026-06-16-firmware-ota"
+    references:
+      wire_entry: "inventory.yaml s1p3 (live OTA download percent)"
+      code: "custom_components/dreame_a2_mower/entities/sensor/device.py"
+    notes: |
+      Live s1p3 OTA download percent (0..100) via property_mapping.
+      Reads coord.data.ota_progress; None until an OTA push (install %
+      is app-local). Disabled-by-default
+      (entity_registry_enabled_default=False).
+      EntityCategory.DIAGNOSTIC. Added 2026-06-16 (D1).
 
   - id: "sensor.dreame_a2_mower_schedule_count"
     platform: sensor

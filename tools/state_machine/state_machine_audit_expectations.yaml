@@ -451,6 +451,18 @@ sensor.ota_status:
   reboot: unavailable_ok
   note: "Diagnostic; reads cloud_state.ota_status[0]. None at cold-start until cloud poll fills."
 
+sensor.ota_state:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "Live s1p2 OTA state via property_mapping; None until an OTA push."
+
+sensor.ota_progress:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "Live s1p3 OTA download percent via property_mapping; None until an OTA push."
+
 sensor.position_east_m:
   holder: snapshot
   idle: unavailable

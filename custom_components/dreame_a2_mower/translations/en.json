@@ -262,6 +262,8 @@
       "ota_capable_raw": {
         "name": "OTA flag (raw)"
       },
+      "ota_state": { "name": "OTA state" },
+      "ota_progress": { "name": "OTA progress" },
       "cloud_device_id": {
         "name": "Cloud device ID"
       },
