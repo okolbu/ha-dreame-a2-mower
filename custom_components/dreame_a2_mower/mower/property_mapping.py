@@ -57,6 +57,17 @@ PROPERTY_MAPPING: dict[tuple[int, int], PropertyMappingEntry] = {
     (3, 1): PropertyMappingEntry(field_name="battery_level"),         # s3.1 BATTERY_LEVEL
     (3, 2): PropertyMappingEntry(field_name="charging_status"),       # s3.2 CHARGING_STATUS
 
+    # s1.2 / s1.3 OTA state + download progress (live MQTT during an update).
+    # Wire-confirmed 0550->0625, 2026-06-16. See inventory.yaml s1p2/s1p3.
+    (1, 2): PropertyMappingEntry(
+        field_name="ota_state",
+        extract_value=lambda v: int(v) if isinstance(v, (int, float, bool)) else None,
+    ),
+    (1, 3): PropertyMappingEntry(
+        field_name="ota_progress",
+        extract_value=lambda v: int(v) if isinstance(v, (int, float, bool)) else None,
+    ),
+
     # F2 additions:
     (1, 53): PropertyMappingEntry(field_name="bluetooth_connected"),       # bool
     (2, 2): PropertyMappingEntry(field_name="error_code"),           # int

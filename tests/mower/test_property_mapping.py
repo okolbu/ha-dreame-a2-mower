@@ -127,3 +127,16 @@ def test_property_mapping_includes_lidar_object_name():
     assert entry.field_name == "latest_lidar_object_name"
     # No disambiguator — the field is a plain string OSS object key.
     assert entry.disambiguator is None
+
+
+def test_s1p2_maps_to_ota_state():
+    """s1.2 carries the OTA state integer during a firmware update."""
+    assert resolve_field((1, 2), 2) == "ota_state"
+    assert PROPERTY_MAPPING[(1, 2)].extract_value(2) == 2
+
+
+def test_s1p3_maps_to_ota_progress():
+    """s1.3 carries the OTA download-progress integer during a firmware update."""
+    assert resolve_field((1, 3), 47) == "ota_progress"
+    assert PROPERTY_MAPPING[(1, 3)].extract_value(47) == 47
+    assert PROPERTY_MAPPING[(1, 3)].extract_value("bad") is None
