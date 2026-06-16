@@ -54,6 +54,27 @@ def test_patrol_label():
     assert "m²" not in lbl
 
 
+def test_mow_all_areas_label_has_subtype():
+    """A mow with a known mode (100 = All areas) postfixes the subtype ahead of
+    the m²/duration, parallel to the patrol format."""
+    lbl = format_session_label(_entry(session_type="mow", mode=100, area_mowed_m2=42.0, duration_min=21))
+    assert lbl.startswith("[Mowing] [Map 2]")
+    assert "— All areas / 42.0 m² / 21min" in lbl
+
+
+def test_mow_zone_label_has_subtype():
+    lbl = format_session_label(_entry(session_type="mow", mode=102, area_mowed_m2=9.0, duration_min=6))
+    assert "— Zone / 9.0 m² / 6min" in lbl
+
+
+def test_mow_unknown_mode_keeps_old_format():
+    """A mow with no recorded mode keeps the original m²/duration-only format."""
+    lbl = format_session_label(_entry(session_type="mow", area_mowed_m2=42.0, duration_min=21))
+    assert lbl.startswith("[Mowing] [Map 2]")
+    assert "— 42.0 m² / 21min" in lbl
+    assert "All areas" not in lbl and "Zone" not in lbl
+
+
 def test_patrol_point_label_has_point_subtype_and_duration():
     """mode=107 (Point Patrol) postfixes '— Point / Dmin', keeping [Patrol] as the
     primary tag. Patrol picker entries carry no m², so the subtype + actual run

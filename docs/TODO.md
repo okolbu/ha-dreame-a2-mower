@@ -808,19 +808,21 @@ are DONE and moved to DONE.md.** What remains:
   `mode_enum` SoT). The work-log SELECT + calendar inherit it (shared helper).
   Tests: `tests/integration/test_session_label_type.py`,
   `tests/archive/test_session.py::test_index_entry_carries_mode_from_raw_json`.
-  **Only residual** (sub-task b): sessions archived BEFORE this change carry no
-  `mode` in their index entry → render bare `[Patrol]` (graceful); rebuild via
-  `tools/session/rebuild_session.py` to backfill the subtype. Optional follow-up:
-  postfix a MOW subtype (All areas/Zone/Edge/Spot) the same way — the `mode` field
-  already carries 100–103, so it's a one-line `format_session_label` change if wanted.
+  The MOW subtype postfix landed too (2026-06-16): `[Mowing] [Map N] <ts> —
+  All areas / N.N m² / Dmin` (modes 100/101/102/103 → All areas/Edge/Zone/Spot,
+  via `MOW_MODE_CODES`); omitted when mode unknown → original area-only format.
+  Live index was backfilled with `mode` for all patrol + mow entries.
+  **Nothing residual** — old entries without `mode` degrade gracefully to the
+  bare/area-only form; `tools/session/rebuild_session.py` can backfill if ever
+  wanted.
 
 **[BRAINSTORM] Session title + archive-format design (decide before touching the
 persisted format).** Scope agreed 2026-06-03; label design RESOLVED 2026-06-15 (see T3):
   1. **Subtype postfix in the picker title — ✅ DONE (2026-06-16, see T3).** Kept
      `[Mowing]`/`[Patrol]` as the primary tag and POSTFIXED the subtype (+ duration):
      `[Patrol] … — Point / Dmin`. The `[Patrol — Point]` / `[Mowing — Edge]` bracket
-     form was NOT adopted. Mow-subtype postfix remains an optional follow-up (the
-     `ArchivedSession.mode` field already carries 100–103).
+     form was NOT adopted. The MOW subtype postfix (`— All areas / N.N m² / Dmin`)
+     also shipped 2026-06-16, so patrol and mow now match.
   2. **Scheduled vs manual visual differentiation:** considered, NOT now (start_mode
      is decoded; revisit later).
   3. **Can a patrol be scheduled?** RESOLVED — NO. The app's schedule UI offers only

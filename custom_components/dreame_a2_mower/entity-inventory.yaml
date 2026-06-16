@@ -1201,7 +1201,9 @@ entities:
           Either part is omitted when unknown (legacy / non-echoed patrol → bare
           [Patrol]). Backed by a new ArchivedSession.mode field mirrored from
           raw_dict "mow_type_raw", so the index-built picker label needs no
-          per-session file read. Mow / To Point / Manual labels unchanged.
+          per-session file read. Mows postfix the subtype the same way
+          ("— All areas / N.N m² / Mmin", modes 100-103); To Point / Manual
+          unchanged.
         evidence: "tests/integration/test_session_label_type.py::test_patrol_point_label_has_point_subtype_and_duration + ::test_patrol_edge_label_has_edge_subtype_and_duration; tests/archive/test_session.py::test_index_entry_carries_mode_from_raw_json"
       - date: "2026-05-30"
         status: verified
@@ -2399,10 +2401,11 @@ entities:
       code: "custom_components/dreame_a2_mower/select_global.py:530"
     notes: |
       Pure integration-state picker — no device wire. Options are human-readable
-      labels: mows "[Mowing] [Map N] YYYY-MM-DD HH:MM — N.N m² / Mmin", patrols
-      "[Patrol] [Map N] ... — Point|Edge / Mmin" (subtype from mode 107/108,
-      either part omitted when unknown), plus [To Point] / [Manual]. Capped at 50
-      newest. In-progress sessions (still_running=True) are filtered out.
+      labels: mows "[Mowing] [Map N] YYYY-MM-DD HH:MM — <subtype> / N.N m² / Mmin"
+      (subtype All areas/Edge/Zone/Spot from mode 100-103, omitted when unknown),
+      patrols "[Patrol] [Map N] ... — Point|Edge / Mmin" (subtype from mode
+      107/108, either part omitted when unknown), plus [To Point] / [Manual].
+      Capped at 50 newest. In-progress sessions (still_running=True) are filtered out.
       Placeholder "(— select session —)" clears work-log camera + picked-session
       summary. Renamed from DreameA2ReplaySessionSelect in Task 9.
 

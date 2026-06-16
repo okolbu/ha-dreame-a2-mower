@@ -13,7 +13,7 @@ from datetime import datetime
 from typing import Any
 
 from .const import NON_MOW_SESSION_TYPES
-from .protocol.mode_enum import MODE_BY_CODE
+from .protocol.mode_enum import MODE_BY_CODE, MOW_MODE_CODES
 
 MODE_LABELS: dict[int, str] = {code: info.label for code, info in MODE_BY_CODE.items()}
 """Mode-enum display labels (100 All areas / 101 Edge / 102 Zone / 103 Spot /
@@ -444,9 +444,15 @@ def format_session_label(entry: Any) -> str:
         if parts:
             base += " — " + " / ".join(parts)
     else:
+        # Postfix the mow subtype (All areas/Edge/Zone/Spot, from the OSS mode)
+        # ahead of the m²/duration, parallel to the patrol format. Omitted when
+        # the mode is unknown (legacy entries) → original area-only format.
+        mode = getattr(entry, "mode", None)
+        subtype = MODE_LABELS.get(mode) if mode in MOW_MODE_CODES else None
+        lead = f"{subtype} / " if subtype else ""
         base = (
             f"[Mowing] {map_prefix} {ts_str}"
-            f" — {entry.area_mowed_m2:.1f} m² / {entry.duration_min}min"
+            f" — {lead}{entry.area_mowed_m2:.1f} m² / {entry.duration_min}min"
         )
     if not getattr(entry, "local_trail_complete", True):
         return f"⚠ {base} (partial trail)"
