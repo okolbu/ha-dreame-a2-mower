@@ -384,9 +384,11 @@ class DreameMapEditorCard extends HTMLElement {
       if (Object.prototype.hasOwnProperty.call(this._overrides, k)) {
         const ov = this._overrides[k];
         if (ov === null) continue; // optimistically deleted
-        eff.push({ id: o.id, kind: o.kind, shape_type: o.shape_type, points_m: ov.points_m, point_m: ov.point_m, radius: ov.radius || 0 });
+        // cycles/auto_capture carry from the base object — a geometry override
+        // never changes them (they're set via set_patrol_point_config, not edit_map).
+        eff.push({ id: o.id, kind: o.kind, shape_type: o.shape_type, points_m: ov.points_m, point_m: ov.point_m, radius: ov.radius || 0, cycles: o.cycles, auto_capture: o.auto_capture });
       } else {
-        eff.push({ id: o.id, kind: o.kind, shape_type: o.shape_type, points_m: o.points_m, point_m: o.point_m, radius: o.radius });
+        eff.push({ id: o.id, kind: o.kind, shape_type: o.shape_type, points_m: o.points_m, point_m: o.point_m, radius: o.radius, cycles: o.cycles, auto_capture: o.auto_capture });
       }
     }
     for (const p of this._provisional || []) eff.push(p); // created (no id)
