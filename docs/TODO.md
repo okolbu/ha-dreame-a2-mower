@@ -23,6 +23,24 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
+### Surface patrol per-point cycles + auto-capture from `CRUISE.0` device-data
+
+**Why:** REOPENED 2026-06-16 — the readback source is now found (it was wrongly closed as
+"read impossible"). The authored per-point cycles + auto-capture are readable via the **`CRUISE.0`
+device-data key** in the existing `getDeviceData` response (NOT `m:g t:CRUISED`, which returns
+`r=-3`): a per-map JSON array `[{version, settings:{<point_id>:{num:<cycles>, ap:<auto_capture>}}}, …]`
+(`FINDING-cruise-config-readback-2026-06-16.md`, round-trip confirmed). So the patrol-points sensor's
+`cycles:null`/`auto_capture:null` can be filled read-side from data the integration ALREADY fetches —
+no extra round-trip, no telemetry reconstruction.
+**Done when:** the map/device-data fetch parses `CRUISE.0` (per-map → `settings[point_id] = {num, ap}`)
+and the patrol-points sensor surfaces effective per-point cycles + auto-capture (cross-joined to the
+`cruisePoints` geometry/dwell). Two minor capture loose-ends may be left as inventory open_questions:
+the comma-joined `'1,0'` settings key and the `value[0]=-1` sentinel.
+**Status:** open (implementation — read source confirmed; mower is live for verification).
+**Cross-refs:** `inventory.yaml § CRUISED` (CRUISE.0 verification + field map); `cloud_client` getDeviceData /
+`fetch_map` path; `entities/sensor` patrol-points sensor; `FINDING-cruise-config-readback-2026-06-16.md`;
+control-honesty residual #3.
+
 ### Time-window photo→session match for AI-obstacle photos (follow-up to todo6 #3/#4)
 
 **Why:** Session-replay thumbnails (todo6 #3 Part B) and notification photo-linking (todo6 #4) both
@@ -187,9 +205,10 @@ journal for the shipped detail. What ACTUALLY remains open:
    is therefore CLOSED (CRUISED) — see DONE.md "Surface authored patrol per-point cycles".
    **Done when:** OPTIONAL — if the patrol-points sensor is ever to show effective cycles/auto-capture,
    derive via path (a) reconstruction or mirror our own CRUISED writes; otherwise leave
-   `cycles:null`/`auto_capture:null`. No protocol unknown remains — a CRUISED read-back is confirmed
-   IMPOSSIBLE (live routed-get `r=-3` + absent from getCFG bundle, write-only; 2026-06-16), so a
-   displayed value can only come from write-mirroring or telemetry reconstruction.
+   `cycles:null`/`auto_capture:null`. No protocol unknown remains — and the readback IS available:
+   not via `m:g t:CRUISED` (that returns `r=-3`) but via the `CRUISE.0` device-data key
+   (`{num:cycles, ap:auto_capture}` per point, `FINDING-cruise-config-readback-2026-06-16`). Surfacing
+   it is tracked as the dedicated "Surface patrol per-point cycles … from CRUISE.0 device-data" item above.
    **Cross-refs:** `inventory.yaml § CRUISED` / `§ o107` / `§ o111`; DONE.md "Surface authored patrol
    per-point cycles" + todo6 #6; `reference_app_api_probe`.
 4. **Patrol render/timing polish** (render-side, minor; overlaps "Patrol Logs" + "Surface

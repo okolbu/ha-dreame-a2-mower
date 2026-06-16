@@ -2449,20 +2449,30 @@ they are NOT in the o=107 send, the s2p56 queue, or the .0550 session summary
 (`param:{}`). Auto-capture behaviour: fixed 3 photos/point → userDidOssList
 gallery (type-1 photos, lazy/on-demand — see api key getDownloadUrl).
 
-WRITE-ONLY (no getter): a live routed-get {m:'g',t:'CRUISED',d:…} returns
-out[0].r=-3 for d ∈ {null, {idx:0}, {idx:1}}, and CRUISED is ABSENT from the
-getCFG bundle (AOP…WRP) — so the authored values cannot be read back. Same
-write-only class as DND/LOW/WRP. To DISPLAY effective per-point cycles/auto-
-capture, mirror our own CRUISED writes (optimistic) or reconstruct from
-telemetry (cycles = 360°-rotation count; auto-capture = photo-window).
-[live routed-get probe 2026-06-16]
+NO routed-action getter, BUT READABLE via device-data: a live routed-get
+{m:'g',t:'CRUISED',d:…} returns out[0].r=-3 for all d shapes, and CRUISED is
+ABSENT from the getCFG bundle — so it can't be read at the s2.50 address.
+HOWEVER the authored values ARE mirrored read-side in the **`CRUISE.0`
+device-data key** (in the `getDeviceData` response, alongside `MAP.*`), as a
+JSON-string per-map outer array:
+  `[{version, settings:{<point_id>:{num:<cycles>, ap:<auto_capture bool>}}}, …]`
+(element[0]=map0, element[1]=map1; unused map = `{version:-1, settings:{}}`;
+`version` device-owned, increments per edit). Sibling key `CRUISE.info=107`
+(the patrol opcode). Round-trip confirmed: write `CRUISED {idx:0,value:[-1,3,1,3]}`
+→ `CRUISE.0` `settings '3':{num:3, ap:true}` with `version` bumped.
+Field map: `value[1]`→settings KEY (point id), `value[2]`→`ap`, `value[3]`→`num`;
+`value[0]=-1` NOT mirrored. So the patrol-points sensor CAN surface effective
+cycles/auto-capture by parsing `CRUISE.0` from the existing map/getDeviceData
+fetch — no round-trip, no telemetry reconstruction needed.
+[app-mitm:2026-06-16-cruise-readback; live routed-get probe 2026-06-16 for the r=-3]
 
 Patrol-point GEOMETRY is separate (o=223 {id, points:[x,y,heading]}, and the
 cloud cruisePoints type=8 blob); it carries NO zone tag — the zone a point
 sits in is derived from its coordinates.
 
 **Open questions:**
-- value[0]=-1 sentinel meaning (type/marker?) [UNKNOWN — to capture].
+- value[0]=-1 sentinel meaning (type/marker?) — not mirrored in CRUISE.0; likely a device-assign/version placeholder [UNKNOWN — to capture].
+- CRUISE.0 settings comma-joined key '1,0' (vs the bare '3') — point id 1 with a sub-index, or a grouped pair? Set one distinct point and diff which settings key changes [partial — to capture].
 - Relationship between CRUISED cycles and the o=111 {point:[id,cycles]} per-point cycles setter seen at run start — which is authoritative? [UNKNOWN — to capture].
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py (write path TBD); coordinator/ patrol-point surfacing`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`
