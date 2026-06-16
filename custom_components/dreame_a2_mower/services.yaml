@@ -624,6 +624,44 @@ create_patrol_point:
           max: 1000000
           mode: box
 
+set_patrol_point_config:
+  name: Set patrol point config
+  description: >
+    Set a patrol point's Number of Patrol Cycles (1/2/3) and Auto-Capture &
+    Upload Photos (on/off) — the CRUISED CFG attributes. Standalone write, not
+    part of the geometry edit. Read back via the patrol-points sensor / map
+    editor (CRUISE.0 device-data).
+  fields:
+    map_id:
+      name: Map ID
+      description: 0-based map index. Defaults to the active map when omitted.
+      required: false
+      example: 0
+      selector:
+        number: {min: 0, max: 10, mode: box}
+    point_id:
+      name: Point ID
+      description: The patrol point's id (from sensor.dreame_a2_mower_map_N_patrol_points).
+      required: true
+      example: 3
+      selector:
+        number: {min: 0, max: 99, mode: box}
+    cycles:
+      name: Cycles
+      description: Number of patrol cycles at this point.
+      required: true
+      example: 2
+      selector:
+        select:
+          options: ["1", "2", "3"]
+    auto_capture:
+      name: Auto-capture
+      description: Capture & upload photos at this point.
+      required: true
+      example: true
+      selector:
+        boolean:
+
 split_zone:
   name: Split zone (DESTRUCTIVE)
   description: >

@@ -53,6 +53,7 @@ SERVICE_CREATE_MOW_SHAPE = "create_mow_shape"
 SERVICE_CREATE_SPOT = "create_spot"
 SERVICE_CREATE_MAINTENANCE_POINT = "create_maintenance_point"
 SERVICE_CREATE_PATROL_POINT = "create_patrol_point"
+SERVICE_SET_PATROL_POINT_CONFIG = "set_patrol_point_config"
 SERVICE_SPLIT_ZONE = "split_zone"
 SERVICE_MERGE_ZONES = "merge_zones"
 
@@ -187,6 +188,13 @@ SCHEMA_CREATE_PATROL_POINT = vol.Schema({
     vol.Required("y"): vol.Coerce(float),
     vol.Optional("heading", default=0.0): vol.Coerce(float),
     vol.Optional("object_id", default=-1): vol.Coerce(int),
+})
+
+SCHEMA_SET_PATROL_POINT_CONFIG = vol.Schema({
+    vol.Optional("map_id"): vol.Coerce(int),
+    vol.Required("point_id"): vol.Coerce(int),
+    vol.Required("cycles"): vol.All(vol.Coerce(int), vol.In((1, 2, 3))),
+    vol.Required("auto_capture"): vol.Coerce(bool),
 })
 
 SCHEMA_SPLIT_ZONE = vol.Schema({
@@ -930,6 +938,26 @@ async def _handle_create_patrol_point(
 
 
 @service_handler
+async def _handle_set_patrol_point_config(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
+    """Set a patrol point's cycles + auto-capture (CRUISED CFG write)."""
+    map_id = call.data.get("map_id")
+    if map_id is None:
+        map_id = getattr(coordinator, "_active_map_id", None) or 0
+    try:
+        ok = await coordinator.write_patrol_point_config(
+            map_id=int(map_id),
+            point_id=int(call.data["point_id"]),
+            cycles=int(call.data["cycles"]),
+            auto_capture=bool(call.data["auto_capture"]),
+        )
+    except ValueError as err:
+        raise ServiceValidationError(f"set_patrol_point_config: {err}") from err
+    _raise_for_edit_ok(ok, "Set patrol point config")
+
+
+@service_handler
 async def _handle_split_zone(
     coordinator: DreameA2MowerCoordinator, call: ServiceCall
 ) -> None:
@@ -1040,6 +1068,8 @@ async def async_register_services(hass: HomeAssistant, entry: Any | None = None)
                                   _handle_create_maintenance_point, schema=SCHEMA_CREATE_MAINTENANCE_POINT)
     hass.services.async_register(DOMAIN, SERVICE_CREATE_PATROL_POINT,
                                   _handle_create_patrol_point, schema=SCHEMA_CREATE_PATROL_POINT)
+    hass.services.async_register(DOMAIN, SERVICE_SET_PATROL_POINT_CONFIG,
+                                  _handle_set_patrol_point_config, schema=SCHEMA_SET_PATROL_POINT_CONFIG)
     hass.services.async_register(DOMAIN, SERVICE_SPLIT_ZONE,
                                   _handle_split_zone, schema=SCHEMA_SPLIT_ZONE)
     hass.services.async_register(DOMAIN, SERVICE_MERGE_ZONES,
@@ -1082,6 +1112,7 @@ def async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_CREATE_NO_GO_ZONE, SERVICE_CREATE_IGNORE_OBSTACLE,
         SERVICE_CREATE_MOW_SHAPE, SERVICE_CREATE_SPOT,
         SERVICE_CREATE_MAINTENANCE_POINT,
+        SERVICE_CREATE_PATROL_POINT, SERVICE_SET_PATROL_POINT_CONFIG,
         SERVICE_SPLIT_ZONE, SERVICE_MERGE_ZONES,
     ):
         hass.services.async_remove(DOMAIN, svc)

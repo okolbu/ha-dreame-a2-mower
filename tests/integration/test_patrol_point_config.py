@@ -95,3 +95,89 @@ async def test_write_patrol_point_config_rejects_bad_cycles():
     c = _WritesMixin.__new__(_WritesMixin)
     with pytest.raises(ValueError):
         await c.write_patrol_point_config(map_id=0, point_id=3, cycles=4, auto_capture=False)
+
+
+@pytest.mark.asyncio
+async def test_set_patrol_point_config_handler_calls_coordinator(monkeypatch):
+    """The @service_handler-decorated handler resolves the coordinator via
+    _coordinator_from_call (monkeypatched here) and forwards kwargs correctly."""
+    from custom_components.dreame_a2_mower import services as svc
+
+    coord = SimpleNamespace(
+        write_patrol_point_config=AsyncMock(return_value=True),
+        _active_map_id=0,
+    )
+    monkeypatch.setattr(svc, "_coordinator_from_call", lambda hass, call: coord)
+
+    # The decorated handler takes (call) — coordinator is resolved internally.
+    call = SimpleNamespace(
+        hass=SimpleNamespace(),
+        data={"point_id": 3, "cycles": 2, "auto_capture": True},
+    )
+    await svc._handle_set_patrol_point_config(call)
+
+    coord.write_patrol_point_config.assert_awaited_once_with(
+        map_id=0, point_id=3, cycles=2, auto_capture=True
+    )
+
+
+@pytest.mark.asyncio
+async def test_set_patrol_point_config_handler_uses_explicit_map_id(monkeypatch):
+    """When map_id is supplied explicitly it takes precedence over _active_map_id."""
+    from custom_components.dreame_a2_mower import services as svc
+
+    coord = SimpleNamespace(
+        write_patrol_point_config=AsyncMock(return_value=True),
+        _active_map_id=0,
+    )
+    monkeypatch.setattr(svc, "_coordinator_from_call", lambda hass, call: coord)
+
+    call = SimpleNamespace(
+        hass=SimpleNamespace(),
+        data={"map_id": 2, "point_id": 5, "cycles": 3, "auto_capture": False},
+    )
+    await svc._handle_set_patrol_point_config(call)
+
+    coord.write_patrol_point_config.assert_awaited_once_with(
+        map_id=2, point_id=5, cycles=3, auto_capture=False
+    )
+
+
+@pytest.mark.asyncio
+async def test_set_patrol_point_config_handler_raises_on_device_rejection(monkeypatch):
+    """A False return from write_patrol_point_config raises ServiceValidationError."""
+    from homeassistant.exceptions import ServiceValidationError
+    from custom_components.dreame_a2_mower import services as svc
+
+    coord = SimpleNamespace(
+        write_patrol_point_config=AsyncMock(return_value=False),
+        _active_map_id=0,
+    )
+    monkeypatch.setattr(svc, "_coordinator_from_call", lambda hass, call: coord)
+
+    call = SimpleNamespace(
+        hass=SimpleNamespace(),
+        data={"point_id": 3, "cycles": 1, "auto_capture": False},
+    )
+    with pytest.raises(ServiceValidationError):
+        await svc._handle_set_patrol_point_config(call)
+
+
+@pytest.mark.asyncio
+async def test_set_patrol_point_config_handler_raises_on_bad_cycles(monkeypatch):
+    """ValueError from write_patrol_point_config is re-raised as ServiceValidationError."""
+    from homeassistant.exceptions import ServiceValidationError
+    from custom_components.dreame_a2_mower import services as svc
+
+    coord = SimpleNamespace(
+        write_patrol_point_config=AsyncMock(side_effect=ValueError("cycles must be 1, 2 or 3")),
+        _active_map_id=0,
+    )
+    monkeypatch.setattr(svc, "_coordinator_from_call", lambda hass, call: coord)
+
+    call = SimpleNamespace(
+        hass=SimpleNamespace(),
+        data={"point_id": 3, "cycles": 5, "auto_capture": False},
+    )
+    with pytest.raises(ServiceValidationError):
+        await svc._handle_set_patrol_point_config(call)
