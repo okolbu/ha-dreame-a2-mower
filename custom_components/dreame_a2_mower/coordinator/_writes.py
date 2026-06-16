@@ -895,3 +895,14 @@ class _WritesMixin:
             raise ValueError(f"merge needs >=2 zone ids, got {zone_ids}")
         return await self.edit_map(int(map_id), [(221, {"ids": zone_ids})])
 
+    async def async_trigger_firmware_update(self) -> bool:
+        """Fire the OTA "update now" trigger. Returns the device decision
+        (False = refused: weak WiFi / charge -- gated device-side)."""
+        if not hasattr(self, "_cloud"):
+            return False
+        return bool(
+            await self.hass.async_add_executor_job(
+                self._cloud.trigger_firmware_update
+            )
+        )
+

@@ -170,3 +170,35 @@ def test_write_ai_human_enabled_uses_write_chunked_key():
     coord._refresh_cloud_state = MagicMock(side_effect=_stub_refresh)
     asyncio.run(coord.write_ai_human_enabled(True))
     coord._cloud.write_chunked_key.assert_called_once_with("AI_HUMAN", '"true"')
+
+
+def _make_coord_for_firmware_update():
+    """Build a minimal coordinator stub for async_trigger_firmware_update tests."""
+    from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
+    coord = object.__new__(DreameA2MowerCoordinator)
+    coord._cloud = MagicMock()
+    coord.hass = MagicMock()
+    async def _run(fn, *a, **k):
+        return fn(*a, **k)
+    coord.hass.async_add_executor_job = lambda fn, *a: _run(fn, *a)
+    return coord
+
+
+def test_trigger_firmware_update_returns_device_decision():
+    """async_trigger_firmware_update returns the device's bool decision."""
+    coord = _make_coord_for_firmware_update()
+
+    coord._cloud.trigger_firmware_update = MagicMock(return_value=True)
+    assert asyncio.run(coord.async_trigger_firmware_update()) is True
+
+    coord._cloud.trigger_firmware_update = MagicMock(return_value=False)
+    assert asyncio.run(coord.async_trigger_firmware_update()) is False
+
+
+def test_trigger_firmware_update_no_cloud_returns_false():
+    """async_trigger_firmware_update returns False without raising when _cloud absent."""
+    from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
+    coord = object.__new__(DreameA2MowerCoordinator)
+    coord.hass = MagicMock()
+    # _cloud intentionally absent
+    assert asyncio.run(coord.async_trigger_firmware_update()) is False
