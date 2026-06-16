@@ -12121,3 +12121,79 @@ api_endpoints:
         status: verified
         claim: "Device rename is account-level (iotuserbind/device/rename); region is read-only (no SET endpoint); country→region cosmetic (NO/SE both stay eu); smarthome home/room is vacuum lineage (N/A for mower). All confirmed N/A for the integration."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "ota_check_version"
+    name: "iotuserbind_checkDeviceVersion"
+    category: "api_endpoint"
+    payload_shape: "POST :13267/dreame-user-iot/iotuserbind/checkDeviceVersion {did,sign,timestamp} → {curVersion,newVersion,hasNewFirmware,description,firmwareType,status,errorCode,force}"
+    semantic: |
+      Firmware OTA availability check. [app-mitm:2026-06-16-firmware-ota]
+      Endpoint: POST eu.iot.dreame.tech:13267/dreame-user-iot/iotuserbind/checkDeviceVersion
+      Request body: {did, sign, timestamp}
+      Response (data): {curVersion:"4.3.6_0550", newVersion:"4.3.6_0625",
+        hasNewFirmware:true, description:"<changelog — multilingual: Czech/Hungarian/
+        Lithuanian/Slovak/Romanian/Latvian support; fixed positioning failures; fixed
+        missed mowing from incomplete cutter lowering; added turn direction …>",
+        firmwareType:"PLATFORM", status, errorCode, force}
+      [app-mitm:2026-06-16-firmware-ota]
+      API-only, polled by the app on open / on the update view; NOT pushed over MQTT.
+      curVersion = installed firmware version (matches DEV.fw and s1 device/info `ver`).
+      newVersion = latest available firmware. hasNewFirmware = update-available bool.
+      description = multilingual changelog for the new version.
+      [app-mitm:2026-06-16-firmware-ota]
+      This is the Current/Latest source an HA UpdateEntity needs: curVersion + newVersion
+      + hasNewFirmware. Resolves the inventory's "OTA-check endpoint not yet located" gap
+      (see s1p2 / ota_state entry). Observed 0550->0625 in the 2026-06-16 session:
+      before update: hasNewFirmware:true; after update landed: curVersion 0625,
+      hasNewFirmware:false.
+      [app-mitm:2026-06-16-firmware-ota]
+      IMPORTANT: s1p2 (ota_state) reads 1 (idle) while hasNewFirmware:true but update
+      not yet started -- the "firmware available" signal is this endpoint, NOT s1p2.
+      s1p2/s1p3 are active-OTA state/progress indicators only (idle until download starts).
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-16"
+      last_seen: "2026-06-16"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "POST …/checkDeviceVersion {did,sign,timestamp} → {curVersion,newVersion,hasNewFirmware,description}; s1p2=1(idle) while hasNewFirmware:true + update not started -- firmware availability is this endpoint, NOT s1p2. Resolves 'OTA-check endpoint not yet located'."
+        evidence: "app-mitm:2026-06-16-firmware-ota cloud/captures/mitm_session_20260616/api-calls.jsonl"
+
+  - id: "ota_trigger_update"
+    name: "iotuserbind_manualFirmwareUpdate"
+    category: "api_endpoint"
+    payload_shape: "POST :13267/dreame-user-iot/iotuserbind/manualFirmwareUpdate {did,uid,sign,timestamp} → {code,success,data:{success,code},msg}"
+    semantic: |
+      The "update now" trigger. [app-mitm:2026-06-16-firmware-ota]
+      Endpoint: POST eu.iot.dreame.tech:13267/dreame-user-iot/iotuserbind/manualFirmwareUpdate
+      Request body: {did, uid, sign, timestamp}
+      Response: {code:0, success:true, data:{success:false, code:0}, msg:"操作成功"}
+      [app-mitm:2026-06-16-firmware-ota]
+      Outer success:true = API received the request. INNER data.success:false = the
+      firmware update was REFUSED. Refusal is gated cloud/device-side on link quality
+      (RSSI) and charge, NOT an app guard -- the app sends the trigger unconditionally;
+      the cloud/device rejects it when conditions are unmet.
+      [app-mitm:2026-06-16-firmware-ota]
+      Observed 2026-06-16: mower at RSSI -80 dBm (byte[17] of s1p1 heartbeat); OTA
+      refused with data.success:false. The accepted 0550->0625 update ran after the mower
+      connected to a closer AP (RSSI improved -80 to -60 dBm), acting on a queued command;
+      no new data.success:true call was captured -- the cloud queues or retries internally.
+      [app-mitm:2026-06-16-firmware-ota]
+      Still uncaptured on a good link: the data.success:true path, blob URL/manifest,
+      and the s1p2/s1p3 install-state/progress transitions. [UNKNOWN -- to capture]
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-16"
+      last_seen: "2026-06-16"
+      decoded: confirmed
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "POST …/manualFirmwareUpdate {did,uid,sign,ts} → {data:{success,code}}; outer success:true = received; data.success:false = refused; refusal is cloud/device-side (RSSI gate), not an app guard."
+        evidence: "app-mitm:2026-06-16-firmware-ota cloud/captures/mitm_session_20260616/api-calls.jsonl"
