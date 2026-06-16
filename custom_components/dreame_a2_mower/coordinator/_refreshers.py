@@ -339,6 +339,23 @@ class _RefreshersMixin:
             except (TypeError, ValueError):
                 pass
 
+        ov = await self.hass.async_add_executor_job(
+            getattr(self._cloud, "fetch_ota_version", lambda: None)
+        )
+        if isinstance(ov, dict):
+            latest = ov.get("newVersion")
+            if isinstance(latest, str) and latest:
+                updates["firmware_latest"] = latest
+            avail = ov.get("hasNewFirmware")
+            if isinstance(avail, bool):
+                updates["firmware_update_available"] = avail
+            notes = ov.get("description")
+            if isinstance(notes, str) and notes:
+                updates["firmware_release_notes"] = notes
+            cur = ov.get("curVersion")
+            if isinstance(cur, str) and cur and "firmware_version" not in updates:
+                updates["firmware_version"] = cur
+
         if not updates:
             return
 

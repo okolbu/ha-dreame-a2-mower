@@ -7,7 +7,7 @@ from custom_components.dreame_a2_mower.coordinator._refreshers import _Refresher
 from custom_components.dreame_a2_mower.mower.state import MowerState
 
 
-def _coord(gps=None, remote=None, msg=None):
+def _coord(gps=None, remote=None, msg=None, dev=None, ota=None):
     c = _RefreshersMixin()
     c._cloud = SimpleNamespace(
         fetch_gps=MagicMock(return_value=gps),
@@ -15,6 +15,8 @@ def _coord(gps=None, remote=None, msg=None):
         fetch_message_record=MagicMock(return_value=msg),
         fetch_device_messages=MagicMock(return_value=[]),
         fetch_share_messages=MagicMock(return_value=[]),
+        fetch_dev=MagicMock(return_value=dev),
+        fetch_ota_version=MagicMock(return_value=ota),
         device_id=None,
         _did=None,
     )
@@ -22,6 +24,7 @@ def _coord(gps=None, remote=None, msg=None):
     async def _exec(fn, *a): return fn(*a)
     c.hass = SimpleNamespace(async_add_executor_job=AsyncMock(side_effect=_exec))
     c.async_set_updated_data = lambda s: setattr(c, "data", s)
+    c._update_device_registry_serial = MagicMock()
     return c
 
 
@@ -57,3 +60,33 @@ async def test_refresh_messages_sets_unread():
     await c._refresh_messages()
     assert c.data.service_messages_unread == 2 and c.data.system_messages_unread == 1
     assert c.data.latest_service_message == "Sale"
+
+
+@pytest.mark.asyncio
+async def test_refresh_dev_folds_ota_version():
+    c = _coord(
+        dev={"sn": "G2408000TESTSN0000", "fw": "4.3.6_0550", "ota": 1},
+        ota={
+            "curVersion": "4.3.6_0550",
+            "newVersion": "4.3.6_0625",
+            "hasNewFirmware": True,
+            "description": "notes",
+        },
+    )
+    await c._refresh_dev()
+    assert c.data.firmware_latest == "4.3.6_0625"
+    assert c.data.firmware_update_available is True
+    assert c.data.firmware_release_notes == "notes"
+    # DEV updates still applied in the same pass.
+    assert c.data.hardware_serial == "G2408000TESTSN0000"
+    assert c.data.firmware_version == "4.3.6_0550"
+
+
+@pytest.mark.asyncio
+async def test_refresh_dev_no_ota_method_does_not_crash():
+    """Stub clouds lacking fetch_ota_version must not break _refresh_dev."""
+    c = _coord(dev={"sn": "SN1", "fw": "4.3.6_0550", "ota": 1})
+    del c._cloud.fetch_ota_version
+    await c._refresh_dev()
+    assert c.data.hardware_serial == "SN1"
+    assert c.data.firmware_latest is None
