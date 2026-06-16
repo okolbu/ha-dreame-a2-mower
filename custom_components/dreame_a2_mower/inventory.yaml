@@ -12129,7 +12129,8 @@ api_endpoints:
     semantic: |
       Firmware OTA availability check. [app-mitm:2026-06-16-firmware-ota]
       Endpoint: POST eu.iot.dreame.tech:13267/dreame-user-iot/iotuserbind/checkDeviceVersion
-      Request body: {did, sign, timestamp}
+      Request body: {did, sign, timestamp}. The 'sign' request field's algorithm/inputs
+      are [UNKNOWN -- to capture].
       Response (data): {curVersion:"4.3.6_0550", newVersion:"4.3.6_0625",
         hasNewFirmware:true, description:"<changelog — multilingual: Czech/Hungarian/
         Lithuanian/Slovak/Romanian/Latvian support; fixed positioning failures; fixed
@@ -12170,13 +12171,15 @@ api_endpoints:
     semantic: |
       The "update now" trigger. [app-mitm:2026-06-16-firmware-ota]
       Endpoint: POST eu.iot.dreame.tech:13267/dreame-user-iot/iotuserbind/manualFirmwareUpdate
-      Request body: {did, uid, sign, timestamp}
+      Request body: {did, uid, sign, timestamp}. The 'sign' request field's algorithm/inputs
+      are [UNKNOWN -- to capture].
       Response: {code:0, success:true, data:{success:false, code:0}, msg:"操作成功"}
       [app-mitm:2026-06-16-firmware-ota]
       Outer success:true = API received the request. INNER data.success:false = the
       firmware update was REFUSED. Refusal is gated cloud/device-side on link quality
-      (RSSI) and charge, NOT an app guard -- the app sends the trigger unconditionally;
-      the cloud/device rejects it when conditions are unmet.
+      (RSSI, observed) and charge ([UNVERIFIED] -- inferred from app behaviour), NOT
+      an app guard -- the app sends the trigger unconditionally; the cloud/device rejects
+      it when conditions are unmet.
       [app-mitm:2026-06-16-firmware-ota]
       Observed 2026-06-16: mower at RSSI -80 dBm (byte[17] of s1p1 heartbeat); OTA
       refused with data.success:false. The accepted 0550->0625 update ran after the mower
@@ -12189,7 +12192,7 @@ api_endpoints:
       seen_on_wire: false
       first_seen: "2026-06-16"
       last_seen: "2026-06-16"
-      decoded: confirmed
+      decoded: partial
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
     verifications:
