@@ -309,7 +309,10 @@ class _CoreMixin:
         # Live position stream published on the map camera entity (Task 5).
         self._live_point_seq: int = 0
         self._latest_point: list | None = None        # [x_m, y_m, heading|None, t]
-        self._track_snapshot: list | None = None       # full session-so-far
+        # Cold-start backfill cache: (len(live_map.track), derived rows). The
+        # snapshot is derived on demand from live_map.track (live_track_snapshot)
+        # — no per-push mirror — so it survives a mid-session restart for free.
+        self._track_snapshot_cache: tuple[int, list] | None = None
         # Remaining PNG cache slots, one per render pipeline:
         #   _static_map_pngs_by_id — per-map static base + M_PATH (cumulative)
         #   _work_log_png          — picker-selected archived session

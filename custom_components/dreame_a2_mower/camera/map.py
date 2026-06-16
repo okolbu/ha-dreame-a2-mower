@@ -78,8 +78,8 @@ class DreameA2MapCamera(
     # NOTE: nav_paths_pt_count_by_map and settings_dual_level_diagnostic are
     # diagnostic-only attrs that are also large; calibration_points is the
     # legacy name kept here so it stays excluded if ever re-added.
-    # track_snapshot length is bounded by _LIVE_TRACK_SNAPSHOT_MAX in
-    # coordinator/_rendering.py (P1.4 backstop cap).
+    # track_snapshot length is bounded by LIVE_TRACK_SNAPSHOT_MAX in
+    # coordinator/_rendering.py (decimated, not truncated).
     _unrecorded_attributes = frozenset({
         "track_snapshot", "latest_point", "point_seq", "last_known_point",
         "settings_dual_level_diagnostic", "nav_paths_pt_count_by_map",
@@ -278,7 +278,7 @@ class DreameA2MapCamera(
             attrs["editable_objects"] = self._editable_objects_from_map(md)
         attrs["point_seq"] = self.coordinator._live_point_seq
         attrs["latest_point"] = self.coordinator._latest_point
-        attrs["track_snapshot"] = self.coordinator._track_snapshot
+        attrs["track_snapshot"] = self.coordinator.live_track_snapshot()
         # Last-known position for the idle icon: the live card draws a static
         # mower icon here BETWEEN sessions (when the live stream is empty). A
         # live session's points take over on the card. See _last_known_point.

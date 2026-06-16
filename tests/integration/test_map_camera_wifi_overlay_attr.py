@@ -27,7 +27,9 @@ def _make_camera(tmp_path: Path, *, with_body: bool):
     coord._base_png_mode = SimpleNamespace(value="green")
     coord._live_point_seq = 0
     coord._latest_point = None
-    coord._track_snapshot = []
+    coord._track_snapshot_cache = None
+    from custom_components.dreame_a2_mower.live_map.state import LiveMapState
+    coord.live_map = LiveMapState()
     coord.cloud_state = cloud_state
     coord._active_map_id = 0
     coord.state_machine = MowerStateMachine()

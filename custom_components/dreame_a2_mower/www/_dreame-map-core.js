@@ -91,6 +91,39 @@ export function rssiToRgb(rssi) {
   return { r, g, b: 0 };
 }
 
+// Trail gap-splitting for the cold-start backfill. A snapshot row is
+// [x_m, y_m, heading|null, t]; the mower keeps moving while the integration is
+// down (HA restart / disabled), so two consecutive captured points can straddle
+// a real gap. Drawing one continuous polyline would bridge that gap with a
+// phantom mow-line. gapBreakIndices returns the set of indices that START a new
+// subpath (pen-up before them) — any step whose elapsed time exceeds
+// gapSeconds. A stationary pause (deduped, same position either side) also trips
+// this, but the resulting break is zero-length, so it's harmless. Null
+// timestamps can't be measured and never break.
+export function gapBreakIndices(snap, gapSeconds) {
+  const breaks = new Set();
+  let prevT = null;
+  for (let i = 0; i < snap.length; i += 1) {
+    const t = snap[i][3];
+    if (prevT != null && t != null && t - prevT > gapSeconds) breaks.add(i);
+    prevT = t;
+  }
+  return breaks;
+}
+
+// Build an SVG path `d` from projected [x,y] points, starting a fresh subpath
+// (moveto) at index 0 and at every index in `breaks` (a Set). Everything else
+// is a lineto. With an empty `breaks` this is a single continuous polyline.
+export function trailPathD(points, breaks) {
+  let d = "";
+  for (let i = 0; i < points.length; i += 1) {
+    const q = points[i];
+    const cmd = i === 0 || (breaks && breaks.has(i)) ? "M" : "L";
+    d += `${i ? " " : ""}${cmd} ${q[0].toFixed(1)} ${q[1].toFixed(1)}`;
+  }
+  return d;
+}
+
 // Build the mower-icon SVG group. The caller rotates the <g> by
 // iconRotation(...) about (0,0) and translates it to the projected screen
 // position. Starts hidden until first positioned.
@@ -123,6 +156,8 @@ if (typeof window !== "undefined") {
   window.DreameMapCore = {
     projectPoint,
     iconRotation,
+    gapBreakIndices,
+    trailPathD,
     buildMowerIconSvg,
     ICON_ART_FORWARD_DEG,
     rssiToRgb,
