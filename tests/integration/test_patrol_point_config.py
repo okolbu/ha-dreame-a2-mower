@@ -77,13 +77,21 @@ def test_editable_objects_patrol_carries_cycles_auto():
 async def test_write_patrol_point_config_builds_cruised():
     from custom_components.dreame_a2_mower.coordinator._writes import _WritesMixin
     c = _WritesMixin.__new__(_WritesMixin)
-    c._cloud = SimpleNamespace(set_cfg=MagicMock(return_value=True))
+    # Dual-write: leg 1 = routed o=111 (device-applied cycles), leg 2 = CRUISED
+    # (cloud CRUISE.0 record incl. auto_capture). CRUISED alone does not stick.
+    c._cloud = SimpleNamespace(
+        routed_action=MagicMock(return_value={"out": [{"r": 0}]}),
+        set_cfg=MagicMock(return_value=True),
+    )
     async def _exec(fn, *a): return fn(*a)
     c.hass = SimpleNamespace(async_add_executor_job=AsyncMock(side_effect=_exec))
     ok = await c.write_patrol_point_config(
         map_id=0, point_id=3, cycles=3, auto_capture=True
     )
     assert ok is True
+    # Leg 1: o=111 carries [point_id, cycles] only.
+    c._cloud.routed_action.assert_called_once_with(111, {"point": [3, 3]})
+    # Leg 2: CRUISED carries [-1, point_id, auto(0/1), cycles].
     c._cloud.set_cfg.assert_called_once_with(
         "CRUISED", {"idx": 0, "value": [-1, 3, 1, 3]}
     )

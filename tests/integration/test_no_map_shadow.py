@@ -12,6 +12,8 @@ def test_no_cached_maps_shadow_in_source():
     assert src.is_dir(), f"source tree not found at {src}"
     hits = []
     for path in src.rglob("*.py"):
+        if path.name.startswith("._"):
+            continue  # macOS AppleDouble sidecar (binary; not real source)
         for lineno, line in enumerate(path.read_text().splitlines(), 1):
             if "_cached_maps_by_id" in line:
                 hits.append(f"{path}:{lineno}: {line.strip()}")

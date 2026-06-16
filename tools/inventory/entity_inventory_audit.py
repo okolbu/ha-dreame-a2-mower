@@ -70,9 +70,11 @@ def _class_graph() -> tuple[dict[str, list[str]], dict[str, str]]:
     bases: dict[str, list[str]] = {}
     loc: dict[str, str] = {}
     for path in CC.rglob("*.py"):
+        if path.name.startswith("._"):
+            continue  # macOS AppleDouble sidecar (binary; not real source)
         try:
             tree = ast.parse(path.read_text())
-        except SyntaxError:
+        except (SyntaxError, UnicodeDecodeError):
             continue
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
