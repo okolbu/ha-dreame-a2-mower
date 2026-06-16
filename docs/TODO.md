@@ -23,18 +23,6 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
-### Review the redundant `_track_snapshot` live-map setup (todo6 #5)
-
-**Why:** There is a partially-redundant `_track_snapshot` setup for the live mowing path, possibly
-leftover from before API/MQTT calls were trustworthy. It was just updated to support better backfill
-of path segments on the live map, but the dual complexity vs the primary `live_map.track` is unclear
-— it seems too complex and it's unknown what problem with `live_map.track` it actually solves.
-**Done when:** the `_track_snapshot` mechanism is traced end-to-end, its purpose vs `live_map.track`
-is established (what it actually fixes), and it is either removed/simplified for a cleaner integration
-or kept with a documented rationale.
-**Status:** open (investigation/refactor)
-**Cross-refs:** `coordinator/_rendering.py`, `live_map/state.py`; grep `_track_snapshot`.
-
 ### Surface authored patrol per-point cycles + auto-capture (CRUISED write-path)
 
 **Why:** `CRUISED` is now decoded + documented (DONE.md — todo6 #6): per-point patrol config is a CFG
