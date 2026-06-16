@@ -749,25 +749,6 @@ archive item above (shares the OSS gallery).
 
 ---
 
-### Capture all `dreame*.md` MITM findings into inventory.yaml (treat as wire-validated)
-
-**Why:** Folded in from `todo1.txt`. The app↔mower MITM-emulator capture docs in
-`/data/claude/homeassistant/dreame*.md` (settings sweep, schedule write, map-edit
-rotate/edit, obstacle photos, the WRITE-implementation guide, etc.) are
-write-validated by the MITM rig, but not all of their findings have been promoted
-into `inventory.yaml` / `entity-inventory.yaml` — leaving some in prose only, which
-is exactly the drift the fact-discipline rule guards against. Per CLAUDE.md,
-app-MITM counts as wire-verification across the board.
-**Done when:** every wire/protocol fact in the `dreame*.md` set has a corresponding
-`inventory.yaml` (or `entity-inventory.yaml`) record with `status: verified` + an
-`[app-mitm:<date>-<topic>]` evidence tag; the docs are reduced to pointers/context.
-**Status:** open (housekeeping; partially done — schedule / map-edit / settings /
-album-photo findings are largely recorded).
-**Cross-refs:** `/data/claude/homeassistant/dreame*.md`; `inventory.yaml`;
-`entity-inventory.yaml`; CLAUDE.md § Fact discipline (app-MITM = wire-verified).
-
----
-
 ### Phase 3a DEFERRED — move the render transform out of `map_decoder` + unify zone types
 
 **Why:** The P3a frame-untangle (2026-06-14) shipped only the SAFE, render-output-
