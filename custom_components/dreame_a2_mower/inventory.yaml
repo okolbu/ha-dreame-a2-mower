@@ -1390,9 +1390,24 @@ properties:
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-16"
+      last_seen: "2026-06-16"
       decoded: confirmed
     verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: |
+          Per-target queue confirmed for a MULTI-ZONE all-area mow (extends the
+          2026-05-30 spot/point evidence to zones). Live 2-zone Map2 all-area mow:
+          13:12:57 [[1,0],[2,-1]] (zone1 active stage 0, zone2 queued -1) → 13:29:54
+          [[1,0],[2,0]] (zone2 -1→0) → 13:29:54 [[1,2],[2,0]] (zone1 0→2 DONE, zone2
+          active). The CURRENT zone = the entry whose stage == 0; done = stage 2;
+          pending = -1. The first element `id` = the ZONE id and matches
+          MAP.*.mowingAreas ids (so per-zone progress is map-joinable). Pinned by
+          the user's app observation: zone-1 got its green ✓ exactly when its stage
+          went to 2. Pushed over MQTT on task-state changes (not in get_properties
+          polls). NOTE: which-zone MUST come from s2p56 — NOT from s1p4 phase_raw
+          (see s1p4_33b_phase_raw 2026-06-16).
+        evidence: "probe/logs/probe_log_20260612_174439.jsonl @ 2026-06-16 (2-zone Map2 all-area mow, fw 0625); FINDING-s2p56-per-zone-status-2026-06-16.md"
       - date: "2026-05-30"
         status: verified
         claim: |
@@ -3930,9 +3945,26 @@ opcodes:
       last_seen: "2026-06-09"
       decoded: confirmed
     open_questions:
-      - "Per-point settings (cycles count, auto-capture flag) are not in the SEND payload captured by app-mitm — they may be embedded in the d:{point:[...]} structure or in per-point sub-objects. [UNKNOWN — to capture] Check if the point ids reference cruisePoints entries that already carry time/etime settings."
+      - "RESOLVED 2026-06-16: per-point cycles + auto-capture are NOT in the o=107 payload — they live in a separate `CRUISED` CFG write (see cfg key `CRUISED`). The o=107 send remains the bare point-id list {point:[...]}; whether it carries per-point cycles inline is still UNVERIFIED (the app's o=111 setter is the per-point cycles path)."
       - "s2p56 [[3,0],[4,-1]]: confirm point_id vs state field order and state vocab (0=active? -1=pending? 2=arrived as in o=109?) across more captures."
     verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: |
+          Per-point patrol cycles + auto-capture ARE captured — they live in a
+          separate `CRUISED` CFG write {idx:<map>, value:[-1, point_id,
+          auto_capture(0/1), cycles(1/2/3)]} (app→device, app-MITM). They are NOT in
+          the o=107 payload, the s2p56 queue, or the .0550 summary `param:{}` — those
+          are outcome/route records. So the toggles are observable after all: read/write
+          via the CRUISED CFG key, not via o=107. (At patrol run the app also sends
+          o=400 {on:true} for the camera and an o=111 {point:[id,cycles]} per-point
+          cycles setter.) Supersedes the 2026-06-03 "unobservable on every surface" conclusion.
+        evidence: "app-mitm:2026-06-16 (FINDING-CRUISED-decoded-2026-06-16.md); see cfg key CRUISED"
+      - date: "2026-06-16"
+        status: retracted
+        claim: "per-point cycles + auto-capture are command-only and captured in a CRUISED CFG write, not unobservable"
+        retracts: "Conclusion: those two toggles are command-only (app→device), unobservable on every surface we can reach (MQTT echo, s2p56, and the cloud .0550 summary)."
+        reason: "The app→device command WAS captured by the 2026-06-16 app-MITM: per-point cycles + auto-capture are written via the `CRUISED` CFG key {idx, value:[-1, point_id, auto_capture, cycles]}. The earlier 'unobservable' verdict held only because the prior capture path saw the /status/ uplink + summary, not the app→device CFG write."
       - date: "2026-06-03"
         status: verified
         claim: "op=107 (start_cruise_point / POINT patrol) is real on g2408. A user double-point patrol emitted s2p50 {o:107, exe:true, status:true, error:0, estimate_time:155, time:10664} at 20:44:10, with s2p2=51 (started) and s2p56 []→[[3,0],[4,-1]] (2-point queue). Blades-up (s1p4 area=0). Companion to o:108 edge patrol."
@@ -4316,6 +4348,33 @@ opcodes:
       - "Confirm g2408 honours o:110 for BUILDING mode start."
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+
+  - id: "o111"
+    op: 111
+    name: "set_cruise_point_cycles"
+    category: "opcode"
+    payload_shape: "SEND {m:'a', o:111, d:{point:[point_id, cycles]}}"
+    semantic: |
+      Per-point patrol CYCLES setter (net-new, app-MITM 2026-06-16). At patrol
+      run-start the app sends o=111 {point:[id, cycles]} alongside o=107 (run) and
+      o=400 {on:true} (camera). The authored per-point cycles + auto-capture are
+      ALSO persisted via the `CRUISED` CFG key (see cfg key CRUISED); the
+      relationship between the o=111 run-time send and the CRUISED stored value
+      (which is authoritative) is not yet established. [app-mitm:2026-06-16]
+    status:
+      seen_on_wire: true
+      first_seen: "2026-06-16"
+      last_seen: "2026-06-16"
+      decoded: partial
+    verifications:
+      - date: "2026-06-16"
+        status: partial
+        claim: "o=111 {point:[id, cycles]} observed at patrol start (with o=107 + o=400) as a per-point cycles setter. Net-new opcode; payload shape from app-MITM, device-side effect not independently confirmed."
+        evidence: "app-mitm:2026-06-16 (FINDING-patrol-photos-session-summary-2026-06-16.md)"
+    open_questions:
+      - "o=111 vs CRUISED[3] cycles — which is authoritative, and is o=111 required or redundant at run time? [UNKNOWN — to capture]."
+    references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
 
   - id: "o200"
@@ -5533,15 +5592,24 @@ cfg_keys:
   - id: "PRE"
     name: "mowing_preferences"
     category: "cfg"
-    payload_shape: "list[int(19)] — 19-element int array; transport action(siid:2,aiid:50) {m:'s',t:'PRE',d:[…19 ints…]}"
+    payload_shape: "list[int] — 19 ints on fw≤4.3.6_0550, 21 ints on fw≥4.3.6_0625 (two fields APPENDED at [19],[20]); indices 0–18 unchanged. transport action(siid:2,aiid:50) {m:'s',t:'PRE',d:[…ints…]}"
     semantic: |
       Mowing preferences write array. 19 elements confirmed by 2026-06-09
       app-MITM sweep (28 toggle-and-back writes, each index isolated).
-      Transport: action(siid:2,aiid:50) {m:'s',t:'PRE',d:[…19 ints…]} via
+      Transport: action(siid:2,aiid:50) {m:'s',t:'PRE',d:[…ints…]} via
       device/sendCommand; app receives code:0 (r=0 equivalent).
       [app-mitm:2026-06-09-settings-sweep]
 
-      Baseline (General Mode, all-on): [0,0,0,0,55,1,8,1,0,1,1,2,1,20,10,7,1,2,0]
+      OTA schema change: the 4.3.6_0550 → 4.3.6_0625 update extended PRE from
+      19 → 21 ints — two fields APPENDED at the end ([19]=0, [20]=30, semantics
+      TBD); existing indices 0–18 did NOT shift, so the index map below still
+      holds on 0625. [app-mitm:2026-06-16] General caveat: re-validate array-CFG
+      layouts (PRE, LIT, DND, …) after a firmware update — an OTA can extend them.
+      The integration RMW builder (protocol/cfg_payloads.py:apply_pre) copies the
+      full fetched array and patches one index, so a 21-int fetch round-trips
+      intact without code change.
+
+      Baseline (General Mode, all-on, 0550/19-int): [0,0,0,0,55,1,8,1,0,1,1,2,1,20,10,7,1,2,0]
 
       Index map (all confirmed [app-mitm:2026-06-09-settings-sweep] unless noted):
         [0]  version/checksum byte — app writes 0, firmware echoes 123 on read.
@@ -5557,7 +5625,11 @@ cfg_keys:
         [7]  Automatic Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
         [8]  reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
         [9]  Obstacle Avoidance on Edges: 0=off, 1=on. Confirmed by isolated toggle.
-        [10] EdgeMaster: 0=off, 1=on. Confirmed by isolated toggle.
+        [10] EdgeMaster: 0=off, 1=on. Confirmed by isolated toggle (re-confirmed
+             by a clean ON↔OFF single-index toggle on fw 0625 [app-mitm:2026-06-16]).
+             Resolves the prior "AutoEdge/SafeEdge/EdgeMaster/OA-on-Edges order TBD".
+             (Behaviour: after the area mow, two extra edge passes at 3 cm height with
+             blades side-shifted toward the edge; PRE[10] is just the on/off.)
         [11] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
         [12] LiDAR Obstacle Recognition: 0=off, 1=on. Confirmed isolated; disabling
              greys out Obstacle Avoidance Height in the app.
@@ -5568,8 +5640,11 @@ cfg_keys:
         [16] Safe Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
         [17] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
         [18] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+        [19] NEW post-0625 (appended by the 0550→0625 OTA) — default 0. [UNKNOWN — to capture]
+        [20] NEW post-0625 (appended by the 0550→0625 OTA) — default 30 (resembles a
+             minutes/percent value). [UNKNOWN — to capture]
 
-      Per-zone (Custom Mode) writes use the same 19-int array with [2] set to the
+      Per-zone (Custom Mode) writes use the same int array with [2] set to the
       zone index. Enable custom-mode per zone via PREP first
       ({m:'s',t:'PREP',d:{idx:<zone_0based>,value:1}}).
 
@@ -5589,9 +5664,13 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
-      last_seen: "2026-06-10"
+      last_seen: "2026-06-16"
       decoded: confirmed
     verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "EdgeMaster = PRE[10] (0=off/1=on) re-confirmed by a clean single-index ON↔OFF toggle on fw 4.3.6_0625 (only index 10 changed); resolves the 'AutoEdge/SafeEdge/EdgeMaster/OA-on-Edges order TBD'. Separately, the 0550→0625 OTA extended PRE from 19 → 21 ints — two fields APPENDED at [19]=0,[20]=30; indices 0–18 did NOT shift. General caveat: re-validate array-CFG layouts after a firmware update. The integration's RMW builder (cfg_payloads.apply_pre) copies the full fetched array, so the 21-int fetch round-trips intact without code change."
+        evidence: "app-mitm:2026-06-16 (FINDING-edgemaster-PRE10-2026-06-16.md)"
       - date: "2026-06-03"
         status: verified
         claim: |
@@ -5646,6 +5725,59 @@ cfg_keys:
       - "cfg-write-path: Confirm the app uses the same device/sendCommand path (code:0) for CFG writes (height/RGBPSTA/notifications/rain/DND), a cleaner route than our 80001-prone path [UNKNOWN — to capture]."
       - "pre-reserved: Confirm indices 8,11,17,18 are truly reserved (no-op) or locate their settings via Custom Mode or other pages [UNKNOWN — to capture]."
       - "settings-only-fields: SETTINGS-only fields cutterPosition/cutterPositionHeight/edgeMowingNum/edgeMowingWalkMode/obstacleAvoidanceSensitivity/edgeCuttingAttachment have NO PRE index; whether a SETTINGS-only write changes the mower is unverified. Capture: toggle each in app-MITM and diff PRE vs SETTINGS to see which store carries it [UNKNOWN — to capture]."
+
+  - id: "CRUISED"
+    name: "patrol_point_settings"
+    category: "cfg"
+    payload_shape: "{idx:<map_index>, value:[-1, point_id, auto_capture(0/1), cycles(1/2/3)]}"
+    semantic: |
+      PER-POINT patrol settings (one write per point). Transport: miio
+      action(siid:2,aiid:50) {m:'s', t:'CRUISED', d:{idx, value:[...]}} on
+      device/sendCommand. Wire-decoded by single-toggle diffs on fw 4.3.6_0625.
+      [app-mitm:2026-06-16]
+
+        idx          = MAP index (1 = Map2; an earlier sample on another map was idx:0).
+        value[0]     = -1  — constant sentinel (purpose TBD; likely a type/marker).
+        value[1]     = point id — WHICH patrol point this write configures (NOT a
+                       count). Switching the edited point 1→2 changed value[1] 1→2.
+        value[2]     = Auto-Capture & Upload Photos at this point (0=off, 1=on).
+                       UI: a camera icon next to the point (light=off / dark=on).
+        value[3]     = patrol cycles for this point (1/2/3). UI: an ×1/×2/×3 badge.
+
+      Each point has its OWN cycles + auto-capture (hence the per-point camera +
+      ×N icons). This is the ONLY surface carrying the authored per-point toggles —
+      they are NOT in the o=107 send, the s2p56 queue, or the .0550 session summary
+      (`param:{}`). Auto-capture behaviour: fixed 3 photos/point → userDidOssList
+      gallery (type-1 photos, lazy/on-demand — see api key getDownloadUrl).
+
+      Patrol-point GEOMETRY is separate (o=223 {id, points:[x,y,heading]}, and the
+      cloud cruisePoints type=8 blob); it carries NO zone tag — the zone a point
+      sits in is derived from its coordinates.
+    status:
+      seen_on_wire: true
+      first_seen: "2026-06-16"
+      last_seen: "2026-06-16"
+      decoded: confirmed
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: |
+          CRUISED = per-point patrol config {idx:map, value:[-1, point_id,
+          auto_capture(0/1), cycles(1/2/3)]}. Wire-verified by consecutive
+          single-change writes: point1 [-1,1,0,2]→[-1,1,0,3] (cycles 2→3, only
+          value[3]) → [-1,1,1,3] (auto ON, only value[2]) → point2 [-1,2,1,1]
+          (value[1]=2 = now editing point 2). End state point1={cycles3,auto on},
+          point2={cycles1,auto on}. value[1]=point id (not a count), value[2]=auto-
+          capture, value[3]=cycles, value[0]=-1 sentinel. Resolves the o=107
+          "per-point settings unobservable" open question.
+        evidence: "app-mitm:2026-06-16 (FINDING-CRUISED-decoded-2026-06-16.md); Map2, points 1 & 2, fw 0625"
+    references:
+      integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py (write path TBD); coordinator/ patrol-point surfacing"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    open_questions:
+      - "value[0]=-1 sentinel meaning (type/marker?) [UNKNOWN — to capture]."
+      - "No CRUISED READ captured — is there a {m:'g',t:'CRUISED'} fetch, or are the per-point values only reconstructable from the app's own state / telemetry? [UNKNOWN — to capture]."
+      - "Relationship between CRUISED cycles and the o=111 {point:[id,cycles]} per-point cycles setter seen at run start — which is authoritative? [UNKNOWN — to capture]."
 
   - id: "PROT"
     name: "navigation_path"
@@ -7820,14 +7952,35 @@ telemetry_fields:
       6-7=next edge/zone passes. phase=15 observed in last 23 frames of
       2026-04-20 full-run (post-complete return, counters frozen).
 
+      NOT zone-aligned (2026-06-16): phase_raw indexes whole task-plan ENTRIES
+      whose boundaries do NOT line up with zones. On a 2-zone Map2 all-area mow,
+      phase_raw=1 SPANNED the zone1-edge AND all of zone-2 while s2p56 had already
+      flipped zone-2 active — so the per-zone Session-2 mapping above is that one
+      plan's layout, not a general zone map. Do NOT use phase_raw to answer
+      "which zone" — use s2p56 (the per-target [[zone_id,stage]] queue).
+      EdgeMaster OFF did NOT remove the perimeter edge pass (still a phase_raw=1
+      entry) — the normal edge mow is separate from the EdgeMaster feature.
+
       Current Phase enum labels (MOWING/TRANSIT/PHASE_2/RETURNING) are
       placeholder and should be retired. Expose as task_phase diagnostic
       sensor. Multiple values per session are normal.
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-05"
+      last_seen: "2026-06-16"
       decoded: confirmed
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: |
+          phase_raw (byte[8]) = task-plan segment index, resets to 0 per mow,
+          monotonic — and is NOT zone-aligned. On a 2-zone Map2 all-area mow,
+          phase_raw=0 ran the big first block (~16 min) then phase_raw=1 spanned
+          the zone1-edge AND all of zone-2 so far, while s2p56 had already flipped
+          zone-2 active. So phase_raw does not track zones (nor cleanly area-vs-edge);
+          "which zone" comes from s2p56. (An earlier rain-resumed mow marched
+          phase_raw 5→…→23 from replans.)
+        evidence: "probe/logs/probe_log_20260612_174439.jsonl @ 2026-06-16 (2-zone Map2 all-area mow, fw 0625); FINDING-s2p56-per-zone-status-2026-06-16.md"
     references:
       integration_code: "custom_components/dreame_a2_mower/protocol/telemetry.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Telemetry (s1p4) fields"
@@ -11872,6 +12025,75 @@ api_endpoints:
         status: verified
         claim: "gps_get_records now WIRED + surfaced: feeds the device_tracker entity with absolute WGS84 coordinates (newest record by updateTime). Replaces the non-functional LOCN-projection as the mower-position source."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "session_summary_download"
+    name: "iotfile_getDownloadUrl_session_summary"
+    category: "api_endpoint"
+    payload_shape: "POST :13267 …/iotfile/getDownloadUrl {did, key:'iot/tmp/000000/ali_dreame/YYYY/MM/DD/<acct>/<did>_<ts>.<fw>.json'} → signed OSS URL → GET = session-summary JSON"
+    semantic: |
+      Patrol/mow SESSION-SUMMARY JSON fetch. The app requests it via
+      iotfile/getDownloadUrl when the user opens a work-log / patrol-log entry's
+      detail or "View Patrol Photos" view; the returned signed OSS URL points at a
+      temp object iot/tmp/000000/ali_dreame/<YYYY/MM/DD>/<acct>/<did>_<ts>.<fw>.json
+      (`.<fw>` = firmware version, e.g. `.0625`). [app-mitm:2026-06-16]
+      This is the SAME session-summary the integration already archives via the s4
+      eiid1 / piid9 OSS object key (see s4 piid9) — the field catalog below is its shape.
+
+      LAZY / on-demand PATROL-photo upload (patrol auto-capture photos ONLY): the
+      patrol auto-capture photos do NOT auto-push. On opening the in-app "View Patrol
+      Photos" viewer the SAME getDownloadUrl click triggers: (1) this session-summary
+      JSON fetch; (2) the device uploads the 3 photos/point to OSS on-demand
+      (checkDevOssStorage grows ~675 KB); (3) they register in userDidOssList; (4) they
+      GET from the gallery OSS path …/ali_dreame/<unixts>.jpg (bare ts, no _person suffix).
+      So patrol auto-capture photos exist on OSS only AFTER their viewer is opened (a
+      short window). [app-mitm:2026-06-16]
+
+      SCOPE LIMIT — this is the PATROL-photo path only. It does NOT explain, and is
+      UNRELATED to, the intermittent / non-clickable LIVE-SESSION OBSTACLE icons: those
+      tappable obstacle photos are a SEPARATE, DISTINCT set of images (the type-3
+      ephemeral "normal obstacle" photos), observed clickable+rendering in the app only
+      ONCE; their upload/fetch mechanism is UNKNOWN and is NOT the patrol getDownloadUrl
+      lazy flow. Do not conflate the two. (The `ai_obstacle` summary array is likewise a
+      separate, still-uncaptured channel.) [corrected per user app-observation 2026-06-16]
+
+      Session-summary JSON field catalog [app-mitm:2026-06-16]:
+        mode (107=patrol / 100-103 mow types), complete_count, result,
+        stop_reason (-1=normal), start / end / time;
+        photo_detected (0/1), photo_list:["<unixts>.jpg", ...]  ← FLAT filename list,
+          fetched from the gallery OSS path (NOT the ai_obstacle array);
+        point:[{id, point:[x_cm, y_cm, heading], time(dwell s), type, param:{}}],
+          point_status:[[point_id, stage]] (mirrors live s2p56; stage 2=done);
+        ai_obstacle:[] (separate), obstacle:[], spot:[], human_detected, recognition,
+          faults:[]; map / map_area / md5 / dock[x,y,θ] / trajectory / pref[60,0] /
+          pre_type / start_mode / areas.
+        point[].point is in CENTIMETRES ([-131,-720,0] = the -1.31,-7.2 m from o=223).
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-03"
+      last_seen: "2026-06-16"
+      decoded: confirmed
+    references:
+      integration_code: "custom_components/dreame_a2_mower/protocol/session_summary.py; cloud_client/_oss.py:get_interim_file_url; coordinator/_lidar_oss.py (gallery sync)"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: |
+          iotfile/getDownloadUrl fetches the patrol/mow session-summary JSON
+          (iot/tmp/.../<ts>.<fw>.json) with the field catalog above; photo_list is a
+          flat <ts>.jpg filename list. PATROL auto-capture photos upload to OSS LAZILY —
+          only when the in-app "View Patrol Photos" viewer is opened (the getDownloadUrl
+          click triggers the device upload + userDidOssList register + OSS GET). Scope is
+          the PATROL-photo path only; it does NOT cover the live-session obstacle icons.
+        evidence: "app-mitm:2026-06-16 (FINDING-patrol-photos-session-summary-2026-06-16.md); 1-point/1-cycle patrol, auto-capture ON, fw 0625"
+      - date: "2026-06-16"
+        status: retracted
+        claim: "the patrol-photo lazy getDownloadUrl flow is the PATROL path only and does NOT explain the intermittent/non-clickable live-session obstacle icons, which are a separate set of images with an unknown mechanism"
+        retracts: "Auto-capture photos upload to OSS LAZILY — only when the in-app viewer is opened (the getDownloadUrl click triggers the device upload + userDidOssList register + OSS GET), explaining the \"icons not clickable / no photos\" intermittency."
+        reason: "User app-observation (2026-06-16): the lazy fetch of patrol images has nothing to do with the intermittent/non-clickable obstacle icons. The clickable obstacle icons are a SEPARATE set of images (type-3 ephemeral obstacle photos), observed working in the app only once; their mechanism is unknown. The FINDING's extrapolation that the patrol lazy-upload 'resolves the icons-not-clickable mystery' conflated two distinct photo channels."
+    open_questions:
+      - "Does the patrol lazy upload mean a fresh post-session userDidOssList poll MISSES patrol auto-capture photos until something opens the viewer? If so, the integration may need to trigger the getDownloadUrl-equivalent to force the upload. [UNKNOWN — to capture / test]."
+      - "Live-session OBSTACLE icon photos (type-3): upload/fetch mechanism UNKNOWN; observed clickable in the app only ONCE. Distinct from patrol photos. [UNKNOWN — to capture]."
 
   - id: "oss_photo_list"
     name: "iotoss_userDidOssList"

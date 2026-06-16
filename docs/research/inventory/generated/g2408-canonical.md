@@ -1488,6 +1488,7 @@ never reached.
 | o108 | start_cruise_side | SEND {m:'a', o:108, d:{edge:[[m,c]]}} (contour pairs, CONFIRMED LIVE 2026-06-04); ECHO s2p50 {o:108, exe:true, status:true, t:'TASK'} | DECODED-UNWIRED |  |
 | o109 | start_clean_point | SEND {m:'a', p:0, o:109, d:{point:[point_id]}} via routed_action; ECHO s2p50 {o:109, exe:true, status:true|false, [estimate_time, time]} | WIRED |  |
 | o110 | start_learning_map | {m:'a', o:110} | APK-KNOWN |  |
+| o111 | set_cruise_point_cycles | SEND {m:'a', o:111, d:{point:[point_id, cycles]}} | SEEN-UNDECODED |  |
 | o200 | select_map | SEND {m:'a', o:200, d:{idx:N}} (app — confirmed 2026-06-09); ECHO {d:{exe:true, o:200, status:true}, t:'TASK'} | DECODED-UNWIRED |  |
 | o201 | map_edit_commit | SEND {m:'a', o:201} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:201, status:true, error:0}, t:'TASK'} (device → cloud) | WIRED |  |
 | o204 | map_edit_begin | SEND {m:'a', o:204} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:204, exe:T, status:T, ...}, t:'TASK'} (device → cloud) | WIRED |  |
@@ -1852,7 +1853,7 @@ current capture path, patrol settings are unobservable on the wire. Next
 candidate is the s4 eiid1 session-summary OSS object at patrol end.
 
 **Open questions:**
-- Per-point settings (cycles count, auto-capture flag) are not in the SEND payload captured by app-mitm — they may be embedded in the d:{point:[...]} structure or in per-point sub-objects. [UNKNOWN — to capture] Check if the point ids reference cruisePoints entries that already carry time/etime settings.
+- RESOLVED 2026-06-16: per-point cycles + auto-capture are NOT in the o=107 payload — they live in a separate `CRUISED` CFG write (see cfg key `CRUISED`). The o=107 send remains the bare point-id list {point:[...]}; whether it carries per-point cycles inline is still UNVERIFIED (the app's o=111 setter is the per-point cycles path).
 - s2p56 [[3,0],[4,-1]]: confirm point_id vs state field order and state vocab (0=active? -1=pending? 2=arrived as in o=109?) across more captures.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
@@ -1913,6 +1914,20 @@ corpus; the integration does not currently wire this action.
 - Confirm g2408 honours o:110 for BUILDING mode start.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
+
+### o111 — `set_cruise_point_cycles`
+
+Per-point patrol CYCLES setter (net-new, app-MITM 2026-06-16). At patrol
+run-start the app sends o=111 {point:[id, cycles]} alongside o=107 (run) and
+o=400 {on:true} (camera). The authored per-point cycles + auto-capture are
+ALSO persisted via the `CRUISED` CFG key (see cfg key CRUISED); the
+relationship between the o=111 run-time send and the CRUISED stored value
+(which is authoritative) is not yet established. [app-mitm:2026-06-16]
+
+**Open questions:**
+- o=111 vs CRUISED[3] cycles — which is authoritative, and is o=111 required or redundant at run time? [UNKNOWN — to capture].
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`
 
 ### o200 — `select_map`
 
@@ -2274,6 +2289,7 @@ payload shape (calibration parameters) unknown.
 | CLS | child_lock | int {0,1} | WIRED |  |
 | CMS | consumables_wear_meters | list[int(4)] [blade_min, brush_min, robot_min, aux_min] | WIRED |  |
 | CRUISED | patrol_point_attributes | {idx: int, value: list[int]} | SEEN-UNDECODED |  |
+| CRUISED | patrol_point_settings | {idx:<map_index>, value:[-1, point_id, auto_capture(0/1), cycles(1/2/3)]} | WIRED |  |
 | DLS | daylight_savings | int=0 | WIRED |  |
 | DND | do_not_disturb | list[int(3)] [enabled, start_min, end_min] | WIRED |  |
 | FDP | frost_protection | int {0,1} | WIRED |  |
@@ -2282,7 +2298,7 @@ payload shape (calibration parameters) unknown.
 | LOW | low_speed_nighttime | list[int(3)] [enabled, start_min, end_min] | WIRED |  |
 | MSG_ALERT | notification_preferences | list[int(4)] [anomaly, error, task, consumables] | WIRED |  |
 | PATH | pathway_obstacle_avoidance | int {0,1} | WIRED |  |
-| PRE | mowing_preferences | list[int(19)] — 19-element int array; transport action(siid:2,aiid:50) {m:'s',t:'PRE',d:[…19 ints…]} | WIRED |  |
+| PRE | mowing_preferences | list[int] — 19 ints on fw≤4.3.6_0550, 21 ints on fw≥4.3.6_0625 (two fields APPENDED at [19],[20]); indices 0–18 unchanged. transport action(siid:2,aiid:50) {m:'s',t:'PRE',d:[…ints…]} | WIRED |  |
 | PROT | navigation_path | int {0,1} | WIRED |  |
 | REC | human_presence_detection | list[int(9)] [enabled, sensitivity, standby, mowing, recharge, patrol, alert, photo_consent, push_min] | WIRED |  |
 | STUN | auto_recharge_standby | int {0,1} | WIRED |  |
@@ -2412,6 +2428,38 @@ cruise-point (o=223 create/edit) for the geometry opcode.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § CFG keys`
 
+### CRUISED — `patrol_point_settings`
+
+PER-POINT patrol settings (one write per point). Transport: miio
+action(siid:2,aiid:50) {m:'s', t:'CRUISED', d:{idx, value:[...]}} on
+device/sendCommand. Wire-decoded by single-toggle diffs on fw 4.3.6_0625.
+[app-mitm:2026-06-16]
+
+  idx          = MAP index (1 = Map2; an earlier sample on another map was idx:0).
+  value[0]     = -1  — constant sentinel (purpose TBD; likely a type/marker).
+  value[1]     = point id — WHICH patrol point this write configures (NOT a
+                 count). Switching the edited point 1→2 changed value[1] 1→2.
+  value[2]     = Auto-Capture & Upload Photos at this point (0=off, 1=on).
+                 UI: a camera icon next to the point (light=off / dark=on).
+  value[3]     = patrol cycles for this point (1/2/3). UI: an ×1/×2/×3 badge.
+
+Each point has its OWN cycles + auto-capture (hence the per-point camera +
+×N icons). This is the ONLY surface carrying the authored per-point toggles —
+they are NOT in the o=107 send, the s2p56 queue, or the .0550 session summary
+(`param:{}`). Auto-capture behaviour: fixed 3 photos/point → userDidOssList
+gallery (type-1 photos, lazy/on-demand — see api key getDownloadUrl).
+
+Patrol-point GEOMETRY is separate (o=223 {id, points:[x,y,heading]}, and the
+cloud cruisePoints type=8 blob); it carries NO zone tag — the zone a point
+sits in is derived from its coordinates.
+
+**Open questions:**
+- value[0]=-1 sentinel meaning (type/marker?) [UNKNOWN — to capture].
+- No CRUISED READ captured — is there a {m:'g',t:'CRUISED'} fetch, or are the per-point values only reconstructable from the app's own state / telemetry? [UNKNOWN — to capture].
+- Relationship between CRUISED cycles and the o=111 {point:[id,cycles]} per-point cycles setter seen at run start — which is authoritative? [UNKNOWN — to capture].
+
+**See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py (write path TBD); coordinator/ patrol-point surfacing`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`
+
 ### DLS — `daylight_savings`
 
 Daylight savings flag (hypothesized). Observed stable at 0 across
@@ -2533,11 +2581,20 @@ Sample: 1 (on/true).
 
 Mowing preferences write array. 19 elements confirmed by 2026-06-09
 app-MITM sweep (28 toggle-and-back writes, each index isolated).
-Transport: action(siid:2,aiid:50) {m:'s',t:'PRE',d:[…19 ints…]} via
+Transport: action(siid:2,aiid:50) {m:'s',t:'PRE',d:[…ints…]} via
 device/sendCommand; app receives code:0 (r=0 equivalent).
 [app-mitm:2026-06-09-settings-sweep]
 
-Baseline (General Mode, all-on): [0,0,0,0,55,1,8,1,0,1,1,2,1,20,10,7,1,2,0]
+OTA schema change: the 4.3.6_0550 → 4.3.6_0625 update extended PRE from
+19 → 21 ints — two fields APPENDED at the end ([19]=0, [20]=30, semantics
+TBD); existing indices 0–18 did NOT shift, so the index map below still
+holds on 0625. [app-mitm:2026-06-16] General caveat: re-validate array-CFG
+layouts (PRE, LIT, DND, …) after a firmware update — an OTA can extend them.
+The integration RMW builder (protocol/cfg_payloads.py:apply_pre) copies the
+full fetched array and patches one index, so a 21-int fetch round-trips
+intact without code change.
+
+Baseline (General Mode, all-on, 0550/19-int): [0,0,0,0,55,1,8,1,0,1,1,2,1,20,10,7,1,2,0]
 
 Index map (all confirmed [app-mitm:2026-06-09-settings-sweep] unless noted):
   [0]  version/checksum byte — app writes 0, firmware echoes 123 on read.
@@ -2553,7 +2610,11 @@ Index map (all confirmed [app-mitm:2026-06-09-settings-sweep] unless noted):
   [7]  Automatic Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
   [8]  reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
   [9]  Obstacle Avoidance on Edges: 0=off, 1=on. Confirmed by isolated toggle.
-  [10] EdgeMaster: 0=off, 1=on. Confirmed by isolated toggle.
+  [10] EdgeMaster: 0=off, 1=on. Confirmed by isolated toggle (re-confirmed
+       by a clean ON↔OFF single-index toggle on fw 0625 [app-mitm:2026-06-16]).
+       Resolves the prior "AutoEdge/SafeEdge/EdgeMaster/OA-on-Edges order TBD".
+       (Behaviour: after the area mow, two extra edge passes at 3 cm height with
+       blades side-shifted toward the edge; PRE[10] is just the on/off.)
   [11] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
   [12] LiDAR Obstacle Recognition: 0=off, 1=on. Confirmed isolated; disabling
        greys out Obstacle Avoidance Height in the app.
@@ -2564,8 +2625,11 @@ Index map (all confirmed [app-mitm:2026-06-09-settings-sweep] unless noted):
   [16] Safe Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
   [17] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
   [18] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+  [19] NEW post-0625 (appended by the 0550→0625 OTA) — default 0. [UNKNOWN — to capture]
+  [20] NEW post-0625 (appended by the 0550→0625 OTA) — default 30 (resembles a
+       minutes/percent value). [UNKNOWN — to capture]
 
-Per-zone (Custom Mode) writes use the same 19-int array with [2] set to the
+Per-zone (Custom Mode) writes use the same int array with [2] set to the
 zone index. Enable custom-mode per zone via PREP first
 ({m:'s',t:'PREP',d:{idx:<zone_0based>,value:1}}).
 
@@ -3937,6 +4001,15 @@ Session 2 observations: phase 1=dock transit corridor, 2=zone area-fill
 (west), 3=zone area-fill (middle), 4=zone area-fill (east), 5=edge mow,
 6-7=next edge/zone passes. phase=15 observed in last 23 frames of
 2026-04-20 full-run (post-complete return, counters frozen).
+
+NOT zone-aligned (2026-06-16): phase_raw indexes whole task-plan ENTRIES
+whose boundaries do NOT line up with zones. On a 2-zone Map2 all-area mow,
+phase_raw=1 SPANNED the zone1-edge AND all of zone-2 while s2p56 had already
+flipped zone-2 active — so the per-zone Session-2 mapping above is that one
+plan's layout, not a general zone map. Do NOT use phase_raw to answer
+"which zone" — use s2p56 (the per-target [[zone_id,stage]] queue).
+EdgeMaster OFF did NOT remove the perimeter edge pass (still a phase_raw=1
+entry) — the normal edge mow is separate from the EdgeMaster feature.
 
 Current Phase enum labels (MOWING/TRANSIT/PHASE_2/RETURNING) are
 placeholder and should be retired. Expose as task_phase diagnostic
