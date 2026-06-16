@@ -91,6 +91,30 @@ export function rssiToRgb(rssi) {
   return { r, g, b: 0 };
 }
 
+// Cache-bust identity for the live-map WiFi overlay <g>. The card only
+// re-renders the overlay rects when this key changes, so it MUST capture
+// everything that affects what/where they draw:
+//   - map identity (mapId): two maps whose heatmaps share grid geometry would
+//     otherwise collide on a geometry-only key, so switching maps left the prior
+//     map's rects on the canvas ("showing map2 blocks after switching to map1").
+//   - projection (proj): the rects are positioned via projectPoint(...,proj);
+//     a projection change must force a re-render or the overlay draws at the old
+//     map's scale ("overlay scaled to map1 on a map2 background").
+//   - overlay geometry/length: catches same-map heatmap regeneration.
+// Returns null for an absent / no-data overlay so the caller can clear the <g>
+// and reset its stored key.
+export function wifiOverlayKey(overlay, mapId, proj) {
+  if (!overlay || !Array.isArray(overlay.data)) return null;
+  const p = proj
+    ? `${proj.bx2_mm}/${proj.by2_mm}/${proj.pixel_size_mm}/${proj.height_px}`
+    : "noproj";
+  const m = mapId == null ? "?" : mapId;
+  return (
+    `m${m}|${overlay.width}x${overlay.height}` +
+    `@${overlay.start_x_m},${overlay.start_y_m}:${overlay.data.length}|${p}`
+  );
+}
+
 // Trail gap-splitting for the cold-start backfill. A snapshot row is
 // [x_m, y_m, heading|null, t]; the mower keeps moving while the integration is
 // down (HA restart / disabled), so two consecutive captured points can straddle

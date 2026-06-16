@@ -13,6 +13,7 @@ import {
   trailPathD,
   buildMowerIconSvg,
   rssiToRgb,
+  wifiOverlayKey,
 } from "./_dreame-map-core.js";
 
 const ICON_PX = 32;
@@ -78,9 +79,19 @@ class DreameMowerMapCard extends HTMLElement {
     }
   }
   _ensureSvg(a) {
-    if (this.shadowRoot && this.shadowRoot.getElementById("svg")) return;
-    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     const p = a.map_projection;
+    if (this.shadowRoot && this.shadowRoot.getElementById("svg")) {
+      // Already built — but the active map may have CHANGED. The viewBox and
+      // base <image> box are pinned to the map that was active when the SVG was
+      // first built; if we don't re-frame them here, a switch to a map with
+      // different width_px/height_px leaves overlay/trail pixel coords (computed
+      // from the NEW projection) being interpreted in the OLD map's viewBox.
+      // Visible as the WiFi tiles landing in a small corner (switch to a larger
+      // map) or overflowing off the image (switch to a smaller map).
+      this._applyFrame(p);
+      return;
+    }
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
     const iconUrl = this._cfg.icon_url || "/dreame_a2_mower/mower-icon.png";
     // The wifi <g> sits BETWEEN the base image and the trail: it paints OVER
     // the opaque lawn PNG (so cells are visible) but UNDER the trail + mower
@@ -110,6 +121,29 @@ class DreameMowerMapCard extends HTMLElement {
     const btn = this.shadowRoot.getElementById("wifiToggle");
     btn.addEventListener("click", () => this._toggleWifi());
   }
+  _applyFrame(p) {
+    // Sync the SVG viewBox + base <image> box to the CURRENT projection. No-op
+    // unless the active map's pixel dimensions changed (e.g. a map switch).
+    const svg = this.shadowRoot && this.shadowRoot.getElementById("svg");
+    if (!svg) return;
+    const vb = `0 0 ${p.width_px} ${p.height_px}`;
+    if (svg.getAttribute("viewBox") === vb) return;
+    svg.setAttribute("viewBox", vb);
+    const base = this.shadowRoot.getElementById("base");
+    if (base) {
+      base.setAttribute("width", p.width_px);
+      base.setAttribute("height", p.height_px);
+    }
+    // The previously-rendered overlay + trail are in the OLD pixel frame and are
+    // now mis-scaled. Force a WiFi re-render (next _syncWifi) and re-seed the
+    // trail from the snapshot in the new frame (idle icon re-places itself each
+    // update from last_known_point, so it self-corrects).
+    this._wifiKey = null;
+    this._trail = [];
+    this._breaks = new Set();
+    this._redrawTrail();
+    this._seq = -1;
+  }
   _toggleWifi() {
     this._wifiOn = !this._wifiOn;
     try { window.localStorage.setItem(WIFI_LS_KEY, this._wifiOn ? "1" : "0"); }
@@ -127,12 +161,18 @@ class DreameMowerMapCard extends HTMLElement {
     const overlay = a.wifi_overlay;
     if (!overlay || !Array.isArray(overlay.data)) {
       if (btn) btn.style.display = "none";
+      // Clear any previously-rendered overlay so a stale map's RSSI rects don't
+      // linger when the active map has no (cached) heatmap yet.
+      const g = this.shadowRoot.getElementById("wifi");
+      if (g) g.innerHTML = "";
+      this._wifiKey = null;
       return;
     }
     if (btn) btn.style.display = "block";
-    const key =
-      `${overlay.width}x${overlay.height}@${overlay.start_x_m},${overlay.start_y_m}:` +
-      `${overlay.data.length}`;
+    // Key on map identity + projection + geometry — NOT geometry alone — so a
+    // map switch always re-renders (different maps can share heatmap geometry,
+    // and the rects must follow the active map's projection). See wifiOverlayKey.
+    const key = wifiOverlayKey(overlay, a.map_id, a.map_projection);
     if (key !== this._wifiKey) {
       this._wifiKey = key;
       this._renderWifi(overlay, a.map_projection);
