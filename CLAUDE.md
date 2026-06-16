@@ -56,14 +56,29 @@ Append a record under the entry's `verifications:` list. Required fields:
 ```yaml
 verifications:
   - date: "<YYYY-MM-DD>"            # today, from runtime context
-    status: verified | partial | presumed | retracted
-    claim: "one-line statement of what's true (or what was retracted)"
+    status: verified | partial | presumed
+    claim: "one-line statement of what's true"
     evidence: "<log_file>@<rough-ts>" | "app-screenshot:<name>" | "apk:<ref>" | omit if status=presumed
-    retracts: "<prior claim text>"   # required when status=retracted
-    reason: "<why retracted>"        # required when status=retracted
 ```
 
 Also update `status.last_seen` to today's date.
+
+**Retractions / supersessions — do NOT leave `status: retracted` inline (policy 2026-06-16).**
+`inventory.yaml` (and `entity-inventory.yaml`) hold **current truth only**: grep over an
+inline retracted claim surfaces the debunked text without its retraction context and the
+next session regenerates it as fact (this happened twice in one session — the
+SETTINGS-writability and the PRE/EdgeMaster "not writable" mistakes). When you retract or
+supersede a prior claim:
+1. **Remove** the now-false content (the stale `semantic:` prose and/or the superseded
+   `verifications:` item) from the inventory file.
+2. **Append** the full record to the archive
+   `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/inventory-history/<section>.md`
+   — one entry per supersession: entry id, the **verbatim** prior claim, the reason, the
+   date, and the evidence that superseded it. This archive is the durable, addressable
+   record; it replaces the inline `retracted` log.
+
+`status: retracted` is allowed ONLY as a transient marker within a single working session;
+before handoff, fold it into the archive and delete it from the inventory.
 
 ### The honesty constraint
 
@@ -85,6 +100,16 @@ it needs rewording.
   proven by a clean single-variable diff against an app↔mower capture may be
   marked `confirmed` and a control flipped writable, tagged
   `[app-mitm:<date>-<topic>]`.
+
+### Provenance priority (app-MITM overrides)
+
+**App-MITM observations are authoritative over older probe-only or APK-derived
+claims.** When an app-MITM capture contradicts an earlier probe-log or
+APK-catalogued "fact", the app-MITM finding wins: update the inventory to the
+app-MITM truth and archive the older claim (per the retraction/supersession rule
+above — remove inline, append to `OLD/.../inventory-history/`). Do not preserve the
+contradicted older claim inline, even with a tag. (Mirrored at the top of
+`inventory.yaml` in the PROVENANCE PRIORITY header note.)
 
 ### Where this rule does NOT apply
 
@@ -115,17 +140,19 @@ part. Use Edit/Write directly when natural.
 | `verified` | direct evidence cited — wire capture, screenshot, or apk reference |
 | `partial` | decoded with known gaps (e.g., 3 of 4 bytes understood) |
 | `presumed` | hypothesis only; no evidence yet |
-| `retracted` | prior claim withdrawn; the record exists so the claim isn't regenerated |
+| `retracted` | **archive-only** — transient within a session; the durable record lives in `OLD/.../inventory-history/`, NOT inline in `inventory.yaml` |
 
 ### Why this matters
 
-When the agent ships a finding in prose only, the next session reads the
-prose without the structure that says how confident it is. Three weeks
-later, the prose has been overwritten or buried, the agent re-derives
-the original wrong claim, and the user has to debunk it again. The
-inventory entries are the only thing that survives that cycle — they
-keep prior claims (including retracted ones) addressable, so the agent
-doesn't have to rediscover what was already learned.
+When the agent ships a finding in prose only, the next session reads it without
+the structure that says how confident it is, and re-derives the original wrong
+claim. Two things now prevent that: (1) the inventory entry records the
+**current** fact with its provenance tag, and (2) the
+`OLD/ha-dreame-a2-mower-docs/inventory-history/` archive holds every **superseded**
+claim with the evidence that killed it — so a debunked claim stays addressable for
+"have we seen this before?" **without** sitting in the live file where a grep would
+resurrect it as truth. Current truth lives in `inventory.yaml`; dead claims live in
+the archive. Never reintroduce an inline `retracted` log.
 
 ### `error_codes.py` confidence gate (durable guard)
 

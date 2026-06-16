@@ -507,31 +507,14 @@ the feature is ON at the cloud level — CFG.AOP=1 and REC[7] photo_consent=1
 across all dumps — and the user reports the photo set syncing to a 2nd app
 device, so photos DO exist cloud-side.
 
-UPDATE 2026-05-31 — Tasshack/dreame-vacuum analogue (likely supersedes the
-"needs a separate endpoint / MITM" conclusion above). The vacuum integration
-reads obstacle photos with NO dedicated endpoint: each photo is an inline
-entry in the map blob's `ai_obstacle` array (the SAME field name our
-session_summary.py already parses, empty in our corpus). Per
-OLD/.../dreame-vacuum/dreame/map.py (~L2086) each entry is
-`[x, y, type, possibility, key, file_name, random]` — a photo exists only
-when `len>=7 and int(key)>=1000`; a 4-element entry is a detection-only
-marker. `possibility` = the "human 80%" confidence (×100), `type` = obstacle
-class (vacuum enum 128-139 = furniture/clutter; the MOWER's classes will
-differ — Human/Animal/Object per the app), `file_name` = an OSS object name
-fetched via `get_interim_file_url(file_name)` (the SAME OSS path our mower
-already uses for maps/LiDAR — cloud_client/_oss.py). The vacuum AES-CBC
-decrypts the crop (aes_iv+key) because its maps are encrypted binary; the
-g2408's maps are PLAINTEXT JSON, so the mower's file_name is likely a
-plaintext OSS key (decryption need TBD). The "2nd-device same set" =
-both apps read the same cloud blob's ai_obstacle + fetch the same OSS
-objects (no per-account gallery service). Historical photos: the vacuum
-pulls them via OBJECT_NAME property-history; the mower equivalent is the
-MAPL/map-object history. STATUS: structural template only — NOT yet
-g2408 wire-confirmed (our ai_obstacle has always been empty). Confirm by
-capturing the live MAP blob + session summary during/after a REAL detection
-and checking whether ai_obstacle populates with 7-element entries; if so,
-fetch file_name via the existing get_interim_file_url. This is MITM-FREE and
-replaces the earlier blocked-by-MITM next step.
+The Tasshack/dreame-vacuum inline-`ai_obstacle` analogue (each photo an
+entry in the map blob's `ai_obstacle` array) was investigated as a
+MITM-free path but has been REFUTED for the g2408 — see the 2026-05-31
+verifications: the g2408 session-summary `ai_obstacle` field is empty even
+across app-confirmed detection events, and a live test found NO `ai_obstacle`
+key in any backend-A surface during a real detection. The mower's AI photos
+live exclusively on the app's OAuth/Aliyun backend (B/C), reachable only via
+app HTTPS MITM.
 
 **See also:** `protocol/session_summary.py:140,385 (ai_obstacle already parsed); cloud_client/_oss.py (get_interim_file_url already present)`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §AI_OBSTACLE_REPORT; apks/aa/lib/arm64-v8a/libapp.so (IpcEventModel)`
 
@@ -565,13 +548,13 @@ observed shapes on g2408:
   task_state_code — correct for both 2- and 3-element, and it surfaces the
   3-element PAUSE [1,0,4] which the old middle-read missed. (v1.0.x 2026-05-30;
   property_mapping.py (2,56).)
-  NB the earlier "3-element = edge/spot/zone mows" attribution is imprecise:
-  3-element correlates with SCHEDULED runs (morning all-area mode=100 included),
-  not mow type. App-triggered runs (points, manual, the 2-spot mow) stay 2-element.
-  [CORRECTED 2026-06-07 — see verifications: the split tracks MOW TYPE = EDGE.
-  3-element ⟺ EDGE mow; 2-element ⟺ all-area / zone / spot / manual. Confirmed by
-  14/14 days of 07:58 all-area = 2-element, scheduled zone = 2-element, and all 10
-  three-element days being short evening edge sessions. NOT scheduled-correlated.]
+  The 2-vs-3-element split tracks MOW TYPE = EDGE (resolved 2026-06-07, see
+  verifications). 3-element ⟺ EDGE mow; 2-element ⟺ all-area / zone / spot /
+  manual. Confirmed by 14/14 days of 07:58 all-area = 2-element, scheduled
+  zone = 2-element, and all 10 three-element days being short evening edge
+  sessions. NOT scheduled-correlated (an earlier "3-element correlates with
+  SCHEDULED runs" attribution was debunked — the recurring 07:58 all-area
+  scheduled mow is 2-element on 14/14 days).
 
 The integration extracts status[0][-1] (the LAST element = stage) as
 task_state_code: 0=running, 4=paused, 2=complete, None=no task. This is
@@ -2475,7 +2458,7 @@ sits in is derived from its coordinates.
 - CRUISE.0 settings comma-joined key '1,0' (vs the bare '3') — point id 1 with a sub-index, or a grouped pair? Set one distinct point and diff which settings key changes [partial — to capture].
 - Relationship between CRUISED cycles and the o=111 {point:[id,cycles]} per-point cycles setter seen at run start — which is authoritative? [UNKNOWN — to capture].
 
-**See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py (write path TBD); coordinator/ patrol-point surfacing`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`
+**See also:** `WRITE: coordinator/_writes.py:write_patrol_point_config -> cloud_client.set_cfg('CRUISED', {idx, value:[-1, point_id, auto, cycles]}), exposed as service set_patrol_point_config + the map-editor card inline panel. READ: protocol/cruise_config.py:parse_cruise_config -> CloudState.cruise_config_by_map -> patrol-points sensor + camera editable_objects.`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`
 
 ### DLS — `daylight_savings`
 

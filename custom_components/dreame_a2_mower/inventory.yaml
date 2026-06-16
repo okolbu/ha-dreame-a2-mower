@@ -430,12 +430,6 @@ properties:
       last_seen: "2026-06-05"
       decoded: confirmed
     verifications:
-      - date: "2026-06-05"
-        status: retracted
-        claim: "s1p53 is the controlling-app BLE/Bluetooth connection flag (true while an app is BLE-connected; toggles on app foreground/background)."
-        evidence: "user reproduced 2026-06-05 by entering/leaving the phone app; apk 'BLE Connection Status'; OLD/.../dreame-mower/.../dreame/const.py:53 BLUETOOTH_PROPERTY siid=1 piid=53 name='bluetooth_connected'; value is bool (918 samples in probe corpus)"
-        retracts: "g2408 behaviour is obstacle-detection: 26 triggers observed in ~15 min near an exclusion zone, mean duration ~6.6 s"
-        reason: "The obstacle reading was a correlation artifact (app handled during that window). Two independent sources (apk + dreame-mower) name it BLE/Bluetooth connectivity, and the user reproduced the toggle by foreground/backgrounding the app. Relabelled obstacle_flag→bluetooth_connected across the integration."
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:61 + binary_sensor.py (bluetooth_connected)"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes"
@@ -813,11 +807,13 @@ properties:
                   activated. Returning to the station."
             63 → "Robot is working. Scheduled task cancelled."
             70 → "Robot will continue the unfinished task."
-          Reconciles 28's two faces: wire = off-dock relocate marker (fires
-          14/14 on undock); cloud-push = "blades-worn" trigger (wear%-gated;
-          same-text repeats with no fresh wire 28 confirm gating). The cloud
-          maps s2p2=28 to the blade-worn text but only emits the push when
-          wear% justifies — matching the 2026-05-15 observation.
+          On 28: cloud-push = "blades-worn" trigger (wear%-gated; same-text
+          repeats with no fresh wire 28 confirm gating). The cloud maps s2p2=28
+          to the blade-worn text but only emits the push when wear% justifies —
+          matching the 2026-05-15 observation. (The earlier "wire = off-dock
+          relocate marker, fires 14/14 on undock" half of this was later
+          debunked by full-corpus analysis — see the 2026-05-30 retraction;
+          28 fires mostly while DOCKED, not on undock.)
           Resolves the 12:32 36-mystery: 36 = "Failed to start the task.
           Please retry." 12:32's 20 and 33 sources were not in the user's
           recent 10-record window (likely pruned from the cloud store).
@@ -890,31 +886,6 @@ properties:
           75 is not. Should be added to S2P2_EVENT_TYPES / error_codes.py and
           surfaced (lifecycle/alert event candidate).
         evidence: "probe_log_20260520_131350.jsonl @ 2026-05-30 16:51:41 (s2p2=76, only occurrence in corpus); user-confirmed app text 'Cannot reach the maintenance point. Task ended.'; success contrast @ 16:59-17:01 (s2p2=75)"
-      - date: "2026-05-30"
-        status: retracted
-        retracts: "s2p2=28 is the UNDOCK / off-dock marker, NOT a blade code. ... it fires exactly once per undock — 14/14 — always within 1-2 s of s2p1→1 (CHARGING→MOWING), and never anywhere else."
-        reason: |
-          DEBUNKED BY FULL-CORPUS ANALYSIS. The "off-dock relocate marker /
-          fires 14/14 on every undock" reading was a biased-sample artifact:
-          the 14/14 was computed from the single probe_log_20260520 log, which
-          covers exactly 2026-05-20..25 — the worn-blade window just before the
-          user's 2026-05-26 blade reset — so 28 happened to fire on every
-          undock IN THAT LOG. Across ALL 9 probe logs (_corpus.py):
-            - 66 undocks total; only 16 carried s2p2=28, and ALL 16 fall in
-              2026-05-15..05-25. Zero of the ~42 undocks before 05-15 had it;
-              zero of the undocks after the 05-26 blade reset had it.
-            - Of all 32 s2p2=28 events corpus-wide, 29 fire while DOCKED
-              (mode 6/13 = charging / charge-complete), only 2 while mowing —
-              i.e. 28 fires sitting ON the dock, not during an off-dock 360.
-          This matches the cloud device-messages/v2 mapping (28 → "Blades are
-          severely worn") and the 2026-05-26 blade-reset experiment: s2p2=28 is
-          the wear%-gated BLADE-WEAR notification, fired around the charging
-          window, NOT an off-dock relocate marker. The "1-2 s after s2p1→1"
-          timing was coincidence (the blade push lands near the charge→undock
-          boundary). The physical off-dock 360 reorient carries NO dedicated
-          s2p2 code (the 2026-05-30 maintenance-spot undock did a confirmed 360
-          and fired 30 then 75, no 28).
-        evidence: "_corpus.py over probe_log_*.jsonl (9 logs, 66 undocks, 32 s2p2=28 events); cloud device-messages/v2 28→blades-worn mapping (this entry's 2026-05-26 verification); 2026-05-30 maintenance-spot undock with confirmed 360 + no 28"
       - date: "2026-05-30"
         status: verified
         claim: |
@@ -1229,31 +1200,14 @@ properties:
       across all dumps — and the user reports the photo set syncing to a 2nd app
       device, so photos DO exist cloud-side.
 
-      UPDATE 2026-05-31 — Tasshack/dreame-vacuum analogue (likely supersedes the
-      "needs a separate endpoint / MITM" conclusion above). The vacuum integration
-      reads obstacle photos with NO dedicated endpoint: each photo is an inline
-      entry in the map blob's `ai_obstacle` array (the SAME field name our
-      session_summary.py already parses, empty in our corpus). Per
-      OLD/.../dreame-vacuum/dreame/map.py (~L2086) each entry is
-      `[x, y, type, possibility, key, file_name, random]` — a photo exists only
-      when `len>=7 and int(key)>=1000`; a 4-element entry is a detection-only
-      marker. `possibility` = the "human 80%" confidence (×100), `type` = obstacle
-      class (vacuum enum 128-139 = furniture/clutter; the MOWER's classes will
-      differ — Human/Animal/Object per the app), `file_name` = an OSS object name
-      fetched via `get_interim_file_url(file_name)` (the SAME OSS path our mower
-      already uses for maps/LiDAR — cloud_client/_oss.py). The vacuum AES-CBC
-      decrypts the crop (aes_iv+key) because its maps are encrypted binary; the
-      g2408's maps are PLAINTEXT JSON, so the mower's file_name is likely a
-      plaintext OSS key (decryption need TBD). The "2nd-device same set" =
-      both apps read the same cloud blob's ai_obstacle + fetch the same OSS
-      objects (no per-account gallery service). Historical photos: the vacuum
-      pulls them via OBJECT_NAME property-history; the mower equivalent is the
-      MAPL/map-object history. STATUS: structural template only — NOT yet
-      g2408 wire-confirmed (our ai_obstacle has always been empty). Confirm by
-      capturing the live MAP blob + session summary during/after a REAL detection
-      and checking whether ai_obstacle populates with 7-element entries; if so,
-      fetch file_name via the existing get_interim_file_url. This is MITM-FREE and
-      replaces the earlier blocked-by-MITM next step.
+      The Tasshack/dreame-vacuum inline-`ai_obstacle` analogue (each photo an
+      entry in the map blob's `ai_obstacle` array) was investigated as a
+      MITM-free path but has been REFUTED for the g2408 — see the 2026-05-31
+      verifications: the g2408 session-summary `ai_obstacle` field is empty even
+      across app-confirmed detection events, and a live test found NO `ai_obstacle`
+      key in any backend-A surface during a real detection. The mower's AI photos
+      live exclusively on the app's OAuth/Aliyun backend (B/C), reachable only via
+      app HTTPS MITM.
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
@@ -1309,21 +1263,6 @@ properties:
           stale reference_app_config "Capture Photos AI Obstacles = Off" note;
           AOP maps to that exact switch per switch_global.py:475/871.)
         evidence: "cloud/dumps/dump_2026050*..dump_20260512*.json AOP=1, REC=[1,1,1,1,1,1,0,1,3]"
-      - date: "2026-05-31"
-        status: presumed
-        claim: |
-          Mower AI obstacle photos are almost certainly inline in the map blob's
-          `ai_obstacle` array (NO dedicated endpoint), per the structurally
-          identical Tasshack/dreame-vacuum implementation: each entry is
-          [x, y, type, possibility, key, file_name, random]; photo present when
-          len>=7 and key>=1000; possibility = confidence (×100); file_name = OSS
-          object name fetched via get_interim_file_url (the path we already use
-          for maps/LiDAR). Vacuum AES-decrypts the crop (its maps are encrypted);
-          g2408 maps are plaintext JSON so the mower's may not be. NOT g2408
-          wire-confirmed — our ai_obstacle has always been empty. This supersedes
-          the earlier blocked-by-MITM conclusion with a MITM-free confirm path:
-          capture live MAP blob + session summary during a real detection.
-        # status=presumed → no evidence pointer (analogue, not g2408 capture)
       - date: "2026-05-31"
         status: verified
         claim: |
@@ -1389,13 +1328,13 @@ properties:
         task_state_code — correct for both 2- and 3-element, and it surfaces the
         3-element PAUSE [1,0,4] which the old middle-read missed. (v1.0.x 2026-05-30;
         property_mapping.py (2,56).)
-        NB the earlier "3-element = edge/spot/zone mows" attribution is imprecise:
-        3-element correlates with SCHEDULED runs (morning all-area mode=100 included),
-        not mow type. App-triggered runs (points, manual, the 2-spot mow) stay 2-element.
-        [CORRECTED 2026-06-07 — see verifications: the split tracks MOW TYPE = EDGE.
-        3-element ⟺ EDGE mow; 2-element ⟺ all-area / zone / spot / manual. Confirmed by
-        14/14 days of 07:58 all-area = 2-element, scheduled zone = 2-element, and all 10
-        three-element days being short evening edge sessions. NOT scheduled-correlated.]
+        The 2-vs-3-element split tracks MOW TYPE = EDGE (resolved 2026-06-07, see
+        verifications). 3-element ⟺ EDGE mow; 2-element ⟺ all-area / zone / spot /
+        manual. Confirmed by 14/14 days of 07:58 all-area = 2-element, scheduled
+        zone = 2-element, and all 10 three-element days being short evening edge
+        sessions. NOT scheduled-correlated (an earlier "3-element correlates with
+        SCHEDULED runs" attribution was debunked — the recurring 07:58 all-area
+        scheduled mow is 2-element on 14/14 days).
 
       The integration extracts status[0][-1] (the LAST element = stage) as
       task_state_code: 0=running, 4=paused, 2=complete, None=no task. This is
@@ -1474,17 +1413,6 @@ properties:
           delays). The true session-end is signalled later by an empty status
           `[]` event or by the integration's cloud-summary gate.
         evidence: "/data/claude/homeassistant/probe/logs/probe_log_20260514_211550.jsonl@2026-05-09 19:00:46→2026-05-10 14:11:55 + user confirmation"
-      - date: "2026-05-16"
-        status: retracted
-        claim: |
-          tried treating status[0][-1] as the unified sub_state extractor in
-          tools/session/rebuild_session.py
-        retracts: "sub_state is the LAST element, status[0][-1] cross-format"
-        reason: |
-          Hypothesis fit the 13-min 2026-05-16 19:00 case but broke the 19-hour
-          2026-05-09 19:00 case (rain-paused edge mow). Reverted. The rebuild
-          tool now falls back to the HA archive's start/end fields when no
-          probe-detected window matches the requested --session-start.
       - date: "2026-06-07"
         status: partial
         claim: |
@@ -1571,11 +1499,6 @@ properties:
         status: partial
         claim: "s2p57 fires on the g2408 wire as a standalone properties_changed push with bare scalar value=1 (single occurrence captured)"
         evidence: "probe_log_20260612_174439.jsonl@2026-06-14T04:42:16"
-      - date: "2026-06-14"
-        status: retracted
-        claim: "payload is a bare scalar int (value=1), not a dict"
-        retracts: "dict (shutdown signal)"
-        reason: "first wire capture shows a bare int value=1, not a dict — payload_shape corrected"
       - date: "2026-06-14"
         status: partial
         claim: |
@@ -2061,12 +1984,6 @@ properties:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
     verifications:
       - date: "2026-06-05"
-        status: retracted
-        claim: "energy/discharge-index reading (dreame-mower const.py:83) stands; ioBroker's competing 'Positioning Mode (5-107)' name is RULED OUT for g2408."
-        evidence: "full corpus 2026-06-05: s5p107 has 184 distinct values spanning 1-255 — inconsistent with a small mode enum; the wide spread fits an energy/discharge index (counter), not a positioning mode"
-        retracts: "ioBroker.dreame main.js:824 'Positioning Mode (5-107)'"
-        reason: "A positioning-MODE would have a handful of discrete values; the g2408 corpus shows 184 distinct values across 1-255, which is a continuous index, not a mode. The dreame-mower 'energy_index' naming + the load-weighted s2p1-mode gradient are the better-supported reading. (Note per 2026-06-05 discipline: both are sibling-integration POTENTIALS; the energy interpretation is corpus-supported but the exact unit is still open below.)"
-      - date: "2026-06-05"
         status: verified
         claim: |
           STRUCTURAL: s5p107 ANCHORS a periodic siid5 diagnostic frame — it is the
@@ -2252,40 +2169,18 @@ properties:
         status: verified
         claim: "every Save-button press emits s6p2 regardless of value change; redundant saves emit identical frames"
         evidence: "probe_log_20260514_210450.jsonl @ 21:07:47, 21:08:38, 21:08:46 — three noop saves all emitted [60, 0, True, 2]"
-      - date: "2026-05-14"
-        status: retracted
-        retracts: "byte[3] is constant 2 across 25/25 captures"
-        reason: "outlier of 198 observed in older probe_log_20260419_130434.jsonl @ 2026-05-10T17:04:16, missed in the original audit"
-      - date: "2026-05-14"
-        status: retracted
-        retracts: "settings-saved tripwire: every BT-only settings change kicks the device into re-publishing s6p2"
-        reason: "BT-only mechanism debunked 2026-05-09 — the integration's setDeviceData chunked-batch is cloud-cache-only and never reaches the device. No Bluetooth transport involved. See docs/research/wire-captures/settings-surface-cloud-only-2026-05-09.md"
-      - date: "2026-05-14"
-        status: retracted
-        retracts: "properties_changed is value-deduped (redundant save is silent)"
-        reason: "noop save test 21:07:47–21:08:46 emitted three identical s6p2 frames; the earlier silent observation was actually the user dismissing the unsaved-changes warning, not a redundant save"
       - date: "2026-06-03"
         status: verified
         claim: |
-          No device-write surface for the s6p2 fields via routed-action CFG.
-          Mowing Efficiency (s6p2[1]) maps to CFG.PRE[1]; a direct write of
-          t='PRE' returned r=-3 (no setter) with the relay confirmed awake —
-          see § PRE 2026-06-03 verification. EdgeMaster (s6p2[2]) has no PRE
-          slot on g2408 and PRE has no setter regardless, so neither is
-          writable through this surface. s6p2 itself is a device→cloud push
-          (read-only reflector of the app's Mowing-Settings save); it is not a
-          write target. The app's actual write RPC is still uncaptured (Phase 3).
+          s6p2 itself is a device→cloud push (read-only reflector of the
+          app's Mowing-Settings save); it is not a write target. The app's
+          write surface is the routed-action CFG.PRE array (app-MITM
+          2026-06-09 settings sweep): Mowing Efficiency (s6p2[1]) maps to
+          CFG.PRE[3] and EdgeMaster (s6p2[2]) to CFG.PRE[10] in the confirmed
+          19-element PRE write array (PRE[1] is the map index). An earlier
+          direct probe write of t='PRE' returned r=-3 with the relay awake;
+          live g2408-firmware honoring of these PRE writes remains unverified.
         evidence: "docs/research/wire-captures/pre-write-r3-2026-06-03.md"
-      - date: "2026-06-09"
-        status: retracted
-        claim: "EdgeMaster has an app-side write slot at PRE[10]; the prior 'no PRE slot on g2408' claim is withdrawn. (Whether g2408 firmware honors a PRE[10] write is unverified — the EdgeMaster control remains read-only-noop pending live verification.)"
-        retracts: "EdgeMaster (s6p2[2]) has no PRE slot on g2408 and PRE has no setter regardless, so neither is writable through this surface."
-        reason: "2026-06-09 app-MITM isolated toggle wrote EdgeMaster via PRE[10]. app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-09"
-        status: retracted
-        claim: "Mowing Efficiency maps to CFG.PRE[3], not PRE[1] (PRE[1] is the map index in the confirmed 19-element PRE write array)."
-        retracts: "Mowing Efficiency (s6p2[1]) maps to CFG.PRE[1]; a direct write of t='PRE' returned r=-3 (no setter) with the relay confirmed awake — see § PRE 2026-06-03 verification."
-        reason: "2026-06-09 app-MITM sweep confirmed the 19-element PRE index map: PRE[3]=Mowing Efficiency, PRE[1]=map index. app-mitm:2026-06-09-settings-sweep"
     open_questions:
       - "What is byte[3]? Usually 2, one 198 outlier — possibly a mid-session status flag or schema/frame-type marker. Needs more samples around mid-mow setting changes."
 
@@ -2557,12 +2452,6 @@ properties:
       - "Is s4p22 the g2408's camera-AI control surface, or is AI capture wholly gated by CFG.AOP + o=400? s4p22 unseen on the wire."
       - "Does s4p22 interact with s4p59 (PET_DETECTIVE)?"
     verifications:
-      - date: "2026-06-12"
-        status: retracted
-        claim: "g2408 has a camera (feature:'video_tx', Tencent XP2P); the slot's prior 'no camera module confirmed' framing is withdrawn. Whether s4p22 itself controls it stays unverified."
-        retracts: "On g2408 no camera module has been confirmed; this slot may be a no-op or absent."
-        reason: "App-MITM (2026-06-09 settings sweep, re-confirmed 2026-06-12) captured the live-view credential chain on dreame-third-video/tx/* and the feature tag feature:'video_tx' — the camera is real. See docs/research/live-video-stream-setup.md and api_endpoints § tencent_video."
-        evidence: "app-mitm:2026-06-12-live-video"
 
   - id: "s4p23"
     siid: 4
@@ -2661,12 +2550,6 @@ properties:
       - "Does s4p44 carry the patrol mode-type on g2408, or is patrol wholly driven by the o107/o108 routed actions? s4p44 unseen on the wire."
       - "Does cruisePoints in the OSS map blob connect to s4p44?"
     verifications:
-      - date: "2026-06-12"
-        status: retracted
-        claim: "Cruise/patrol behaviour IS exposed on g2408 (o107 point patrol, o108 edge patrol, cruisePoints type=8 in MAP); the 'not seen in probe corpus' framing is withdrawn. Whether s4p44 itself carries it stays unverified."
-        retracts: "The g2408 mower does not expose cruise-point behaviour in current captures; this slot may be present but unused or not applicable to this model."
-        reason: "Patrol-point surfacing shipped 2026-06-04 (o107/o108 live-confirmed, cruisePoints type=8); the live-video capture additionally confirms a patrol auto-enables the camera. The 'no cruise behaviour' premise is false."
-        evidence: "app-mitm:2026-06-12-live-video"
 
   - id: "s4p47"
     siid: 4
@@ -2744,12 +2627,6 @@ properties:
       - "Does the g2408 firmware implement a pet-detection mode at all? Camera exists, but no 'pet' toggle observed (the app surfaces Human-Presence, not pet)."
       - "If present, does it interact with s4p22 (AI_DETECTION)?"
     verifications:
-      - date: "2026-06-12"
-        status: retracted
-        claim: "g2408 has a camera (feature:'video_tx', Tencent XP2P); the 'no camera → likely absent' inference for this slot is withdrawn. Whether pet-detection is a g2408 feature stays unverified."
-        retracts: "Requires camera AI (s4p22). On g2408 no camera module is confirmed; this slot is likely absent or a no-op."
-        reason: "App-MITM (2026-06-09/2026-06-12) captured the Tencent live-view cred chain and feature:'video_tx'; the camera is real, so the absence argument premised on 'no camera' is invalid. See docs/research/live-video-stream-setup.md."
-        evidence: "app-mitm:2026-06-12-live-video"
 
   - id: "s1p5"
     siid: 1
@@ -3379,11 +3256,6 @@ opcodes:
         claim: "App sends o:3 as routed action s2a50 {m:'a', o:3} to stop/end a session. No payload fields. [app-mitm:2026-06-09-settings-sweep]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
       - date: "2026-06-10"
-        status: retracted
-        claim: "The integration does NOT send o:3 as a command — it uses the direct action(siid=5, aiid=2) path (ACTION_TABLE[MowerAction.STOP]). The app uses the routed-action form instead."
-        retracts: "The integration does NOT send o:3 as a command — it uses the direct action(siid=5, aiid=2) path (ACTION_TABLE[MowerAction.STOP]). The app uses the routed-action form instead."
-        reason: "Phase B wired STOP via ACTION_TABLE.routed_o=3 (s2a50 {m:'a', o:3}), replacing the direct siid:5/aiid:2 path that returned 80001 on g2408."
-      - date: "2026-06-10"
         status: verified
         claim: "Integration now wires MowerAction.STOP via ACTION_TABLE routed_o=3 (s2a50 {m:'a', o:3}), replacing the direct siid:5/aiid:2 path (was 80001 no-op on g2408). Evidence: app-mitm:2026-06-09-settings-sweep confirms the routed form is what the app sends."
         evidence: "app-mitm:2026-06-09-settings-sweep"
@@ -3417,19 +3289,9 @@ opcodes:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
     verifications:
       - date: "2026-06-09"
-        status: retracted
-        claim: "Joystick control — pause. Part of the o:2–7 manual joystick control group. Apk-documented; not observed on g2408 wire."
-        retracts: "Joystick control — pause. Part of the o:2–7 manual joystick control group. Apk-documented; not observed on g2408 wire."
-        reason: "App-mitm 2026-06-09 confirms o:4 is the general PAUSE command for all session types, not only joystick control. The joystick framing was too narrow."
-      - date: "2026-06-09"
         status: verified
         claim: "App sends o:4 as routed action s2a50 {m:'a', o:4} to pause a mowing session. No payload fields. DISTINCT from stop (o:3). [app-mitm:2026-06-09-settings-sweep]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-10"
-        status: retracted
-        claim: "The integration does NOT send o:4 as a command — it uses the direct action(siid=5, aiid=4) path (ACTION_TABLE[MowerAction.PAUSE]). The app uses the routed-action form instead."
-        retracts: "The integration does NOT send o:4 as a command — it uses the direct action(siid=5, aiid=4) path (ACTION_TABLE[MowerAction.PAUSE]). The app uses the routed-action form instead."
-        reason: "Phase B wired PAUSE via ACTION_TABLE.routed_o=4 (s2a50 {m:'a', o:4}), replacing the direct siid:5/aiid:4 path that returned 80001 on g2408."
       - date: "2026-06-10"
         status: verified
         claim: "Integration now wires MowerAction.PAUSE via ACTION_TABLE routed_o=4 (s2a50 {m:'a', o:4}), replacing the direct siid:5/aiid:4 path (was 80001 no-op on g2408). Evidence: app-mitm:2026-06-09-settings-sweep confirms the routed form is what the app sends."
@@ -3462,19 +3324,9 @@ opcodes:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
     verifications:
       - date: "2026-06-09"
-        status: retracted
-        claim: "Joystick control — continue / resume. Part of the o:2–7 manual joystick control group. Apk-documented; not observed on g2408 wire."
-        retracts: "Joystick control — continue / resume. Part of the o:2–7 manual joystick control group. Apk-documented; not observed on g2408 wire."
-        reason: "App-mitm 2026-06-09 confirms o:5 is the general RESUME command for all session types, not only joystick control."
-      - date: "2026-06-09"
         status: verified
         claim: "App sends o:5 as routed action s2a50 {m:'a', o:5} to resume a paused session. No payload fields. [app-mitm:2026-06-09-settings-sweep]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-10"
-        status: retracted
-        claim: "The integration does not currently use a routed o:5 form — resume is handled implicitly (the START_MOWING / mow dispatch covers both new and resume starts)."
-        retracts: "The integration does not currently use a routed o:5 form — resume is handled implicitly (the START_MOWING / mow dispatch covers both new and resume starts)."
-        reason: "Phase B added MowerAction.RESUME → ACTION_TABLE routed_o=5 (s2a50 {m:'a', o:5}), wiring an explicit resume path."
       - date: "2026-06-10"
         status: verified
         claim: "Integration now wires MowerAction.RESUME via ACTION_TABLE routed_o=5 (s2a50 {m:'a', o:5}). New DreameA2ResumeMowingButton entity added (Phase B)."
@@ -3516,11 +3368,6 @@ opcodes:
         status: verified
         claim: "App sends o:6 as routed action s2a50 {m:'a', o:6} to command dock/recharge. No payload fields. [app-mitm:2026-06-09-settings-sweep]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-10"
-        status: retracted
-        claim: "The integration uses action(siid=5, aiid=3) for DOCK/RECHARGE (ACTION_TABLE[MowerAction.DOCK / MowerAction.RECHARGE]); the app uses the routed-action form instead."
-        retracts: "The integration uses action(siid=5, aiid=3) for DOCK/RECHARGE (ACTION_TABLE[MowerAction.DOCK / MowerAction.RECHARGE]); the app uses the routed-action form instead."
-        reason: "Phase B wired DOCK/RECHARGE via ACTION_TABLE routed_o=6 (s2a50 {m:'a', o:6}), replacing the direct siid:5/aiid:3 path that returned 80001 on g2408."
       - date: "2026-06-10"
         status: verified
         claim: "Integration now wires MowerAction.DOCK and MowerAction.RECHARGE via ACTION_TABLE routed_o=6 (s2a50 {m:'a', o:6}), replacing the direct siid:5/aiid:3 path (was 80001 no-op on g2408). Evidence: app-mitm:2026-06-09-settings-sweep confirms the routed form is what the app sends."
@@ -3987,11 +3834,6 @@ opcodes:
           o=400 {on:true} for the camera and an o=111 {point:[id,cycles]} per-point
           cycles setter.) Supersedes the 2026-06-03 "unobservable on every surface" conclusion.
         evidence: "app-mitm:2026-06-16 (FINDING-CRUISED-decoded-2026-06-16.md); see cfg key CRUISED"
-      - date: "2026-06-16"
-        status: retracted
-        claim: "per-point cycles + auto-capture are command-only and captured in a CRUISED CFG write, not unobservable"
-        retracts: "Conclusion: those two toggles are command-only (app→device), unobservable on every surface we can reach (MQTT echo, s2p56, and the cloud .0550 summary)."
-        reason: "The app→device command WAS captured by the 2026-06-16 app-MITM: per-point cycles + auto-capture are written via the `CRUISED` CFG key {idx, value:[-1, point_id, auto_capture, cycles]}. The earlier 'unobservable' verdict held only because the prior capture path saw the /status/ uplink + summary, not the app→device CFG write."
       - date: "2026-06-03"
         status: verified
         claim: "op=107 (start_cruise_point / POINT patrol) is real on g2408. A user double-point patrol emitted s2p50 {o:107, exe:true, status:true, error:0, estimate_time:155, time:10664} at 20:44:10, with s2p2=51 (started) and s2p56 []→[[3,0],[4,-1]] (2-point queue). Blades-up (s1p4 area=0). Companion to o:108 edge patrol."
@@ -4055,9 +3897,10 @@ opcodes:
           Per-point `param` is EMPTY {} for both points, so the requested Number-of-
           Patrol-Cycles (2/1) and Auto-Capture (on/off) toggles are NOT stored in
           the summary either — the summary is an OUTCOME record (route, durations
-          time=60s/pt, completion), not an input-settings record. Conclusion: those
-          two toggles are command-only (app→device), unobservable on every surface
-          we can reach (MQTT echo, s2p56, and the cloud .0550 summary).
+          time=60s/pt, completion), not an input-settings record. (The toggles ARE
+          captured after all — via a separate `CRUISED` CFG write app→device, not on
+          the MQTT echo / s2p56 / .0550 summary; see the 2026-06-16 verification and
+          cfg key CRUISED. [app-mitm:2026-06-16])
         evidence: "patrol_oss_20260603/objects/ali_dreame_2026_06_03_BM169439_-112293549_184603810.0550.json (fetched via iotfile/getDownloadUrl 2026-06-03)"
       - date: "2026-06-03"
         status: verified
@@ -4443,11 +4286,6 @@ opcodes:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
     verifications:
       - date: "2026-06-09"
-        status: retracted
-        claim: "Outbound command payload shape (map_id field?). Inbound echo confirmed; outbound is still unknown because probe captures mqtt subscriptions only."
-        retracts: "Outbound command payload shape (map_id field?). Inbound echo confirmed; outbound is still unknown because probe captures mqtt subscriptions only."
-        reason: "App-mitm 2026-06-09 captured the SEND form: {m:'a', o:200, d:{idx:N}}. The idx field is the target map index. Outbound shape is now confirmed."
-      - date: "2026-06-09"
         status: verified
         claim: "App sends o:200 as {m:'a', o:200, d:{idx:N}} to select the active map, where idx is the map index. [app-mitm:2026-06-09-settings-sweep]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
@@ -4670,11 +4508,6 @@ opcodes:
       apk: "ioBroker.dreame/apk.md §Actions map-edit confirm"
     verifications:
       - date: "2026-06-09"
-        status: retracted
-        claim: "Legacy map-edit confirmation echo. Older captures (2026-04-20) show o:215 as the \"second of the map-edit pair\" (zone edit confirm), carrying id and ids fields. Later captures (2026-04-26) show o:234 in the same role. The integration triggers a MAP rebuild on o:215 OR o:201 with status:true error:0 — covers both old and new confirmation opcode."
-        retracts: "Legacy map-edit confirmation echo. Older captures (2026-04-20) show o:215 as the \"second of the map-edit pair\" (zone edit confirm), carrying id and ids fields. Later captures (2026-04-26) show o:234 in the same role. The integration triggers a MAP rebuild on o:215 OR o:201 with status:true error:0 — covers both old and new confirmation opcode."
-        reason: "App-mitm 2026-06-09 confirms o:215 is the add-no-go-zone COMMAND (with {id,type,points,radius} payload) that the app sends; the echo behaviour in older captures was the firmware's ack of that same command. The 'legacy' framing was incorrect — o:215 is current and active."
-      - date: "2026-06-09"
         status: verified
         claim: "App sends o:215 as {m:'a', o:215, d:{id,type,points,radius}} to add a no-go zone. type: 1=line/2=poly/3=circle; preset shapes: 9=Square/13=Heart/17=Cloud/18=Rainbow. [app-mitm:2026-06-09-settings-sweep]"
         evidence: "app-mitm:2026-06-09-settings-sweep"
@@ -4868,10 +4701,6 @@ opcodes:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
       apk: "/data/claude/homeassistant/FINDING-patrol-point-crud-2026-06-15.md § New this session"
     verifications:
-      - date: "2026-06-12"
-        status: partial
-        claim: "o:223 {id, [x,y,heading]} moves an oriented point (seen on wire, older capture). Element kind UNVERIFIED — inferred cruise/cleanPoint, distinct from the o:224 maintenance point. No create/delete captured. [app-mitm:2026-06-12-mapedit-rotate-edit]"
-        evidence: "app-mitm:2026-06-12-mapedit-rotate-edit"
       - date: "2026-06-15"
         status: verified
         claim: "o:223 is the patrol/cruise-point editor: create o:223{id:-1,points:[x,y,heading]} (device-assigned id 6), move o:223{id:<real>,...}, delete o:218{id,type:2}. Element kind WIRE-CONFIRMED (patrol/cruise point = cruisePoints type=8), upgrading the prior UNVERIFIED inference. DISTINCT opcode from o:224 maintenance (delete type 2 vs 3). [app-mitm:2026-06-15-patrol-point-crud]"
@@ -4996,11 +4825,6 @@ opcodes:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
     verifications:
-      - date: "2026-06-09"
-        status: retracted
-        claim: "Camera-stream start (binocular/stereo camera activation). Apk-documented as startBinocular. Not observed on g2408 wire; likely a camera-streaming feature not yet wired in the integration."
-        retracts: "Camera-stream start (binocular/stereo camera activation). Apk-documented as startBinocular. Not observed on g2408 wire; likely a camera-streaming feature not yet wired in the integration."
-        reason: "App-mitm 2026-06-09 confirms o:400 is the camera/live-view on/off toggle ({d:{on:0|1}}), fires at patrol start too, not a discrete stream-start. The apk name 'startBinocular' was misleading; it is a toggle, and it is used on g2408."
       - date: "2026-06-09"
         status: verified
         claim: "App sends o:400 as {m:'a', o:400, d:{on:0|1}} for camera live-view on/off. Also fires at patrol start (auto-enables camera for auto-capture). [app-mitm:2026-06-09-settings-sweep]"
@@ -5203,21 +5027,11 @@ cfg_keys:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     verifications:
       - date: "2026-06-09"
-        status: retracted
-        claim: "BP = [start_from_stop_point, stop_point_term_days]; write {on,day}."
-        retracts: "TBD. Same shape as WRP list(2). Sample: [1, 4]. No toggle-correlation\ntest performed; semantics unknown. Exposed as diagnostic only."
-        reason: "App Start-from-Stop-Point toggle + Term picker wrote BP{on,day}. app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-09"
         status: verified
         claim: "BP write payload is {on:bool, day:1-7}; on=Start-from-Stop-Point
           boolean, day=Stop-Point Term in days (1-7). Read shape [on,day]
           confirmed by correlation with app BP:[1,4]."
         evidence: "app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-09"
-        status: retracted
-        claim: "BP[0] and BP[1] semantics are now confirmed (Start-from-Stop-Point bool + Stop-Point Term days); the open question is resolved."
-        retracts: "BP[0] and BP[1] — no toggle correlation yet; shape matches WRP but meaning unknown."
-        reason: "Resolved by the 2026-06-09 app-MITM sweep; see the entry's verified record. app-mitm:2026-06-09-settings-sweep"
 
   - id: "CLS"
     name: "child_lock"
@@ -5602,19 +5416,9 @@ cfg_keys:
       - "Per-pathway selection write (sub-menu with pathway IDs per map) — deferred, needs pathways drawn first. [UNKNOWN — to capture]"
     verifications:
       - date: "2026-06-09"
-        status: retracted
-        claim: "PATH = Pathway Obstacle Avoidance master enable; write {value:0|1}."
-        retracts: "Unknown on g2408. Observed stable at 1 (true) through a Navigation\nPath toggle test 2026-04-25 — NOT the Navigation Path setting despite\nearlier user guess (PROT is Navigation Path). Semantic TBD.\nExposed as sensor.cfg_path_raw (disabled-by-default diagnostic) so\nthe raw int is visible for future toggle-correlation tests.\nSample: true (coerced to 1)."
-        reason: "App MITM sweep 2026-06-09 confirmed PATH is Pathway Obstacle Avoidance master toggle; write {value:0|1} hits the wire. app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-09"
         status: verified
         claim: "PATH = Pathway Obstacle Avoidance master enable; write payload {value:0|1}."
         evidence: "app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-09"
-        status: retracted
-        claim: "PATH purpose is now confirmed as Pathway Obstacle Avoidance master enable; the open question is resolved."
-        retracts: "PATH — stable at true/1 through nav-path toggle; purpose still unknown."
-        reason: "Resolved by the 2026-06-09 app-MITM sweep; see the entry's verified record. app-mitm:2026-06-09-settings-sweep"
 
   - id: "PRE"
     name: "mowing_preferences"
@@ -5698,27 +5502,6 @@ cfg_keys:
         status: verified
         claim: "EdgeMaster = PRE[10] (0=off/1=on) re-confirmed by a clean single-index ON↔OFF toggle on fw 4.3.6_0625 (only index 10 changed); resolves the 'AutoEdge/SafeEdge/EdgeMaster/OA-on-Edges order TBD'. Separately, the 0550→0625 OTA extended PRE from 19 → 21 ints — two fields APPENDED at [19]=0,[20]=30; indices 0–18 did NOT shift. General caveat: re-validate array-CFG layouts after a firmware update. The integration's RMW builder (cfg_payloads.apply_pre) copies the full fetched array, so the 21-int fetch round-trips intact without code change."
         evidence: "app-mitm:2026-06-16 (FINDING-edgemaster-PRE10-2026-06-16.md)"
-      - date: "2026-06-03"
-        status: verified
-        claim: |
-          CFG.PRE has NO setter at the s2.50 routed-action address on g2408
-          fw 4.3.6_0550. Sending {m:'s', t:'PRE', d:{value:[0,1]}} (correct
-          2-element shape, flipping mode Standard→Efficient) returned
-          out[0].r=-3. The findBot control (op=9) returned r=0 and the mower
-          spoke "Robot is here" immediately before, so the relay was genuinely
-          awake — r=-3 is a real firmware verdict, not a sleeping-relay 80001.
-          Per the 2026-05-09 r-code disambiguation, r=-3 is target-level (no
-          setter for t='PRE'), so it is payload-shape-independent. Therefore
-          Mowing Efficiency (PRE[1]) is NOT device-writable via the routed-
-          action CFG surface — same class as the int-list keys DND/LOW/WRP/
-          BAT/LIT/REC/LANG. The prior "no write surface identified" was
-          extrapolation; this is the first direct evidence on the PRE surface.
-        evidence: "docs/research/wire-captures/pre-write-r3-2026-06-03.md (tools/probes/probe_pre_write.py --probe; CFG.VER=816 before)"
-      - date: "2026-06-10"
-        status: retracted
-        claim: "PRE r=-3 verdict retracted: the 2026-06-03 probe sent d:{value:[0,1]} (wrong envelope — array wrapped under a 'value' key); the correct envelope is the bare array d:[...]. The r=-3 was a shape/path mismatch, not a firmware veto."
-        retracts: "CFG.PRE has NO setter at the s2.50 routed-action address on g2408 fw 4.3.6_0550. Sending {m:'s', t:'PRE', d:{value:[0,1]}} (correct 2-element shape, flipping mode Standard→Efficient) returned out[0].r=-3. The findBot control (op=9) returned r=0 and the mower spoke \"Robot is here\" immediately before, so the relay was genuinely awake — r=-3 is a real firmware verdict, not a sleeping-relay 80001. Per the 2026-05-09 r-code disambiguation, r=-3 is target-level (no setter for t='PRE'), so it is payload-shape-independent. Therefore Mowing Efficiency (PRE[1]) is NOT device-writable via the routed-action CFG surface — same class as the int-list keys DND/LOW/WRP/BAT/LIT/REC/LANG. The prior \"no write surface identified\" was extrapolation; this is the first direct evidence on the PRE surface."
-        reason: "The 2026-06-03 probe wrapped the array under a 'value' key (d:{value:[0,1]}) — the wrong envelope. The app sends the bare array d:[...] and the relay returns code:0 (accepted) for every index. The r=-3 was an envelope mismatch, not a firmware rejection of the PRE surface. Capture: app-mitm:2026-06-09-settings-sweep (28 isolated toggle-and-back writes, all code:0)."
       - date: "2026-06-10"
         status: verified
         claim: "PRE correct write surface: bare-array SET action s2.a50 {m:s,t:PRE,d:[<19 ints>]}; [0]=version (app writes 0), [1]=map index, [2]=zone index (0=General Mode); scoped GET {m:g,t:PRE,d:{idx:<map_idx>,region:<zone_idx>}}. PRE is the device CFG the firmware reads; SETTINGS KV is the cloud record the app reads back. Dual-write (PRE first, then SETTINGS) is the app pattern; SETTINGS-only writes are cloud-cache-only and never change mower behavior. Phase A2 integration wires 14 General-Mode controls via apply_pre (coordinator.write_map_general_setting / write_map_general_ai_bit) + dual-write to SETTINGS where applicable."
@@ -5738,11 +5521,6 @@ cfg_keys:
           0/fw reads 123), [1]=map index, [2]=zone index. [15] bitmask bit0=Human
           bit1=Animal bit2=Object; [5] 0=Crisscross/1=Customize/2=Chequerboard."
         evidence: "app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-09"
-        status: retracted
-        claim: "PRE payload_shape corrected from a 2-element [zone_id, mode] array to the confirmed 19-element write array."
-        retracts: "Mowing preferences. g2408 has 2 elements [zone_id, mode], not the apk's 10. Alpha.86 removed the entities that read PRE[2..9]; only mow_mode and mow_mode_efficient (both reading PRE[1]) remain. zone_id selects which zone's preferences to apply; mode is the mowing mode for that zone. Sample: [0, 0]."
-        reason: "2026-06-09 app-MITM sweep confirmed the 19-element array; the prior 2-element claim was based on the integration's builder shape, not a wire capture. app-mitm:2026-06-09-settings-sweep"
     references:
       apk: "ioBroker.dreame/apk.md §setX PRE"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
@@ -5844,7 +5622,7 @@ cfg_keys:
           reconstructable read-side from the existing map fetch; no extra round-trip.
         evidence: "app-mitm:2026-06-16-cruise-readback (FINDING-cruise-config-readback-2026-06-16.md; miio-13267.jsonl CRUISE.0 reads 06-15/06-16 vs the 06-09 write)"
     references:
-      integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py (write path TBD); coordinator/ patrol-point surfacing"
+      integration_code: "WRITE: coordinator/_writes.py:write_patrol_point_config -> cloud_client.set_cfg('CRUISED', {idx, value:[-1, point_id, auto, cycles]}), exposed as service set_patrol_point_config + the map-editor card inline panel. READ: protocol/cruise_config.py:parse_cruise_config -> CloudState.cruise_config_by_map -> patrol-points sensor + camera editable_objects."
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     open_questions:
       - "value[0]=-1 sentinel meaning (type/marker?) — not mirrored in CRUISE.0; likely a device-assign/version placeholder [UNKNOWN — to capture]."
@@ -6689,11 +6467,6 @@ cfg_individual:
       - "PIN.result and PIN.time — exact semantics of the lift-lockout flow TBD (when does result become non-zero?)."
     verifications:
       - date: "2026-06-09"
-        status: retracted
-        claim: "PIN write payload confirmed: {type:'auth'|'update', value:<plaintext int>}; read {result,time}."
-        retracts: "Likely the lift-lockout PIN-state flow: result:0 = no PIN-required\nevent pending, time:0 = no last-PIN-entry timestamp. Partial\ndocumentation in §3.4 byte[10] bit 1. Not wired.\nSample: {result:0, time:0}."
-        reason: "App MITM sweep 2026-06-09 confirmed exact write payload: {type:auth|update, value:<plaintext int>}. The prior entry was hypothetical only. app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-09"
         status: verified
         claim: "Write is {type:'auth'|'update', value:<plaintext int>} (TLS-protected, not hashed).
           type=auth verifies existing PIN; type=update sets new PIN."
@@ -6734,11 +6507,6 @@ cfg_individual:
         status: presumed
         claim: "PRE bare GET (no args) returns r=-3 at idle — individual-fetch form is consistently rejected; data is accessible via all-keys CFG fetch instead."
         evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
-      - date: "2026-06-09"
-        status: retracted
-        claim: "cfg_individual PRE shape corrected to the 19-element write array (was described as a 2-element [zone_id, mode] list)."
-        retracts: "[zone_id, mode] 2-element list (see `cfg_keys.PRE`). So the data exists on g2408 — only the individual-target fetch path doesn't work."
-        reason: "2026-06-09 app-MITM sweep confirmed 19-element PRE; aligns with cfg_keys.PRE. app-mitm:2026-06-09-settings-sweep"
 
   - id: "PREI"
     name: "preference_info"
@@ -6892,11 +6660,6 @@ cfg_individual:
         status: verified
         claim: "Schedule write transport captured: 3-key txn SCHDDV3/SCHDIV3/SCHDSV3 (shared v=ms txn-id); SCHDTV3 is the read-side scalar only, not the write key."
         evidence: "app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-09"
-        status: retracted
-        claim: "SCHDTV3 SET write transport resolved — it is the SCHDDV3/SCHDIV3/SCHDSV3 3-key transaction (see those entries)."
-        retracts: "Capture a SCHDTV3 SET (add/edit a schedule with relays up) to get the write payload shape — GET only was observed in app-MITM 2026-06-09."
-        reason: "app-MITM 2026-06-09 captured the write transport (SCHDDV3 chunked protobuf + SCHDIV3 + SCHDSV3). app-mitm:2026-06-09-settings-sweep"
 
   - id: "CHECK"
     name: "self_check_command"
@@ -6995,35 +6758,9 @@ cfg_individual:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     verifications:
       - date: "2026-06-09"
-        status: retracted
-        claim: "Remote-control settings GET. Apk-documented at L176199 as getRemote = {m:'g', t:'REMOTE'}. Stored in the app's settings object as remote:{} (L182984). The exact fields of the remote settings dict are unknown — likely includes default cutting height and camera state for joystick sessions."
-        retracts: |
-          Remote-control settings GET. Apk-documented at L176199 as
-          getRemote = {m:'g', t:'REMOTE'}. Stored in the app's settings object
-          as remote:{} (L182984). The exact fields of the remote settings dict
-          are unknown — likely includes default cutting height and camera state
-          for joystick sessions.
-
-          Paired with SET commands via o:15 (remote_setting opcode). The GET
-          is used by the app to initialize the remote-control UI with persisted
-          defaults. Not wired in the integration.
-          App-MITM 2026-06-09 confirms the app issues routed-get t=REMOTE;
-          response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
-        reason: "App-MITM 2026-06-09 live capture shows t=REMOTE returns 4G SIM status {activeTime, cardId(ICCID), expiredTime, leftDays} — not remote-control settings. The APK analysis pointing to joystick/height/camera was incorrect for this key."
-      - date: "2026-06-09"
-        status: retracted
-        claim: "Prior partial verification of REMOTE as remote-control settings endpoint retracted."
-        retracts: "App issues routed-get t=REMOTE (remote control settings); response shape not yet captured on our client"
-        reason: "app-MITM 2026-06-09 confirmed t=REMOTE is 4G SIM status, not remote-control settings. Prior partial claim was based on APK analysis only. app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-09"
         status: verified
         claim: "action m:g t='REMOTE' returns {activeTime, cardId(ICCID), expiredTime, leftDays} — 4G SIM status; cardId matches GPS card4G ICCID."
         evidence: "app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-10"
-        status: retracted
-        claim: "Not wired in the integration (read-only status; integration uses the GPS getRecords endpoint for card4G/ICCID cross-reference)."
-        retracts: "Not wired in the integration (read-only status; integration uses the GPS getRecords endpoint for card4G/ICCID cross-reference)."
-        reason: "Phase C wiring complete: REMOTE is now wired and surfaced as 4 diagnostic SIM sensors (cardId/activeTime/expiredTime/leftDays). app-mitm:2026-06-09-settings-sweep"
       - date: "2026-06-10"
         status: verified
         claim: "REMOTE now WIRED + surfaced: 4 diagnostic SIM sensors (cardId/activeTime/expiredTime/leftDays) in the integration."
@@ -7639,12 +7376,6 @@ heartbeat_bytes:
       last_seen: "2026-05-31"
       decoded: confirmed
     verifications:
-      - date: "2026-05-31"
-        status: retracted
-        claim: "byte[11] is battery% (bits 0-6) + charging flag (bit 7); byte[12] high nibble is a 4-bit rolling counter."
-        retracts: "Monotonic counter, little-endian u16 spanning bytes [11-12]. Increments with each heartbeat emission."
-        reason: "Corpus analysis over 9 probe logs (67,677 heartbeats): byte[11]&0x7F == s3p1 battery in 99.3% of frames (Pearson +0.9992) and bit7 tracks s3p2 charging exactly. byte[12] consecutive deltas cluster on multiples of 16, i.e. only the high nibble counts. The [11-12] u16 was a misread; battery was hiding in the low byte."
-        evidence: "probe_log_*.jsonl (9 logs) corpus correlation 2026-05-31; s3p1/s3p2 cross-tab; live MQTT 2026-05-31 13:20 byte[11]&0x7F=66 == s3p1=66 push in same stream"
     references:
       integration_code: "custom_components/dreame_a2_mower/protocol/heartbeat.py:74"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes"
@@ -7719,19 +7450,6 @@ heartbeat_bytes:
       integration_code: "custom_components/dreame_a2_mower/protocol/heartbeat.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes"
     verifications:
-      - date: "2026-05-30"
-        status: retracted
-        retracts: "Startup state machine byte. Transitions through a fixed sequence during device boot: 0 → 64 → 68 → 4 → 5 → 7 → 135. Steady-state value after full boot is 135."
-        reason: |
-          Corpus cross-tab (_s1p1.py, 66,083 s1p1 frames / 9 logs) shows byte[14]
-          is an activity/locomotion-state byte correlated with s2p1 mode, NOT a
-          one-time boot sequence: it is 0 while DOCKED (mode 6/13, 95-97%) and
-          135 while MOWING (mode 1, 95%), with 0x80-range sub-states for
-          returning/idle. The 0→64→68→4→5→7→135 walk is the undock→operating
-          (reorient) transition that runs on every undock, not just boot, and the
-          docked steady-state is 0, not 135. Re-named startup_state_machine →
-          locomotion_state and downgraded confirmed → partial.
-        evidence: "_s1p1.py per-mode byte[14] distribution over probe_log_*.jsonl (9 logs, 66,083 frames, 2026-04-17..05-30); 2026-05-30 popup capture @ 17:25 (docked byte[14]=0 → undock walk → 135)"
     open_questions:
       - "Enumerate the 0x80-range sub-states: does the low nibble during 'returning' (136/139/140/141/143/148) step monotonically through return phases, or is it a flag field? Capture a labelled return-to-dock."
       - "byte[13] (undocumented, 19 corpus values) is ALSO mode-correlated (255 when docked/charge-done, 35 mowing, 40 returning, building-specific 17-27) — likely a companion state byte to [14]; characterise together."
@@ -11421,7 +11139,7 @@ session_summary_fields:
     verifications:
       - date: "2026-06-03"
         status: verified
-        claim: "photo_list=[\"1780512275.jpg\",\"1780512296.jpg\",\"1780512302.jpg\"] on the mode=107 patrol; stems are UNIX-sec UTC matching point-1's auto-capture-ON rotation window (20:44:35/:56/20:45:02 local); point-2 (capture OFF) produced none. Photo bytes not retrievable — bare leaf is NoSuchKey in the summary's Aliyun dir; likely in the 479D Xiaomi-FDS bucket, subpath unknown."
+        claim: "photo_list=[\"1780512275.jpg\",\"1780512296.jpg\",\"1780512302.jpg\"] on the mode=107 patrol; stems are UNIX-sec UTC matching point-1's auto-capture-ON rotation window (20:44:35/:56/20:45:02 local); point-2 (capture OFF) produced none."
         evidence: "summary photo_list field + getOss1dDownloadUrl NoSuchKey on ali_dreame/2026/06/03/BM169439/1780512275.jpg (2026-06-03)"
       - date: "2026-06-09"
         status: partial
@@ -11432,11 +11150,6 @@ session_summary_fields:
           the .0550.json summary's photo_list[] leaves map 1:1 to <ts>.jpg.
           _person.jpg = person/guard detection variant.
         evidence: "dreame-app-implementation-guide-2026-06-09.md"
-      - date: "2026-06-09"
-        status: retracted
-        claim: "Album photos are reachable via the dreame-eu OSS bucket"
-        retracts: "Photo bytes not retrievable — bare leaf is NoSuchKey in the summary's Aliyun dir; likely in the 479D Xiaomi-FDS bucket, subpath unknown."
-        reason: "App capture shows photos in the SAME OSS bucket the integration already fetches LiDAR PCD from."
       - date: "2026-06-09"
         status: verified
         claim: >-
@@ -11552,15 +11265,6 @@ session_summary_fields:
     references:
       integration_code: "custom_components/dreame_a2_mower/coordinator/_lidar_oss.py"
     verifications:
-      - date: "2026-05-19"
-        status: verified
-        claim: "Schema added in v1.0.16a7; sessions started after that release carry the field — older sessions still render via the _mowing_legs/_traversal_legs split if present, else as a single-color trail."
-        evidence: "code: coordinator/_lidar_oss.py:_inject_live_map_into_raw_dict (dd81758)"
-      - date: "2026-05-28"
-        status: retracted
-        claim: "_legs_meta / _local_legs / _mowing_legs / _traversal_legs archive keys are no longer written or read by the integration."
-        retracts: "Schema added in v1.0.16a7; sessions started after that release carry the field — older sessions still render via the _mowing_legs/_traversal_legs split if present, else as a single-color trail."
-        reason: "replaced by per-point `track` stream in the 2026-05-28 session-replay rewrite; _local_legs, _legs_meta, _mowing_legs, _traversal_legs removed from both archive writes and readers"
 
   - id: "summary_track_break_positions"
     key_path: "*.track[i]"  # appears in map[].track, spot[N].track, trajectory[].track
@@ -11721,10 +11425,7 @@ session_summary_fields:
       - date: "2026-05-28"
         status: presumed
         claim: "Stored as list-of-segments under archive key 'cloud_track'; absent from archives predating the 2026-05-28 session-replay rewrite."
-      - date: "2026-05-28"
-        status: retracted
-        retracts: "Used by live_map.classify_track stage 2 (cloud-rescue): if a local `traversal` point falls inside a cloud-mowed area, it is upgraded to `mowing`."
-        reason: "cloud-coverage rescue removed same day. On a full-lawn mow the cloud's blades-down segments blanket the lawn, so a cross-area traversal (driving over already-mowed grass) sits on the cloud path and was falsely upgraded to mowing — all 478 genuine traversal points on a 2613-pt mow flipped. area-delta is the sole role authority; cloud_track is reference-only."
+
 
   - id: "event_s4eiid1_arg1"
     key_path: "args[piid=1]"
@@ -12190,11 +11891,6 @@ api_endpoints:
           click triggers the device upload + userDidOssList register + OSS GET). Scope is
           the PATROL-photo path only; it does NOT cover the live-session obstacle icons.
         evidence: "app-mitm:2026-06-16 (FINDING-patrol-photos-session-summary-2026-06-16.md); 1-point/1-cycle patrol, auto-capture ON, fw 0625"
-      - date: "2026-06-16"
-        status: retracted
-        claim: "the patrol-photo lazy getDownloadUrl flow is the PATROL path only and does NOT explain the intermittent/non-clickable live-session obstacle icons, which are a separate set of images with an unknown mechanism"
-        retracts: "Auto-capture photos upload to OSS LAZILY — only when the in-app viewer is opened (the getDownloadUrl click triggers the device upload + userDidOssList register + OSS GET), explaining the \"icons not clickable / no photos\" intermittency."
-        reason: "User app-observation (2026-06-16): the lazy fetch of patrol images has nothing to do with the intermittent/non-clickable obstacle icons. The clickable obstacle icons are a SEPARATE set of images (type-3 ephemeral obstacle photos), observed working in the app only once; their mechanism is unknown. The FINDING's extrapolation that the patrol lazy-upload 'resolves the icons-not-clickable mystery' conflated two distinct photo channels."
     open_questions:
       - "Does the patrol lazy upload mean a fresh post-session userDidOssList poll MISSES patrol auto-capture photos until something opens the viewer? If so, the integration may need to trigger the getDownloadUrl-equivalent to force the upload. [UNKNOWN — to capture / test]."
       - "Live-session OBSTACLE icon photos (type-3): upload/fetch mechanism UNKNOWN; observed clickable in the app only ONCE. Distinct from patrol photos. [UNKNOWN — to capture]."
