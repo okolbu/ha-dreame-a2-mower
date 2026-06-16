@@ -787,7 +787,10 @@ regression wouldn't be caught automatically):
 is visually confirmed unchanged (lawn/zones/dock/obstacles land identically); the new
 `tests/www/test_projection_parity.py` still passes (it is the regression gate for the
 transform-move); zone types are unified with all existing render/decoder tests green.
-**Status:** blocked-by-dead-mower (needs revival + live map-render visual check).
+**Status:** UNBLOCKED 2026-06-16 — the mower is live again (mowed + patrolled + OTA'd
+0550→0625 this session; live map renders were exercised during the WiFi-overlay work). The
+dead-mower blocker is gone; now open work, gated only on doing the relocation + a deliberate
+before/after live map-render visual comparison — not on hardware availability.
 **Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/refactor-2026-06-13/p3a-frame-spec.md` § "Explicitly DEFERRED";
 `custom_components/dreame_a2_mower/map_decoder.py:716-729`;
 `custom_components/dreame_a2_mower/map_render/_geometry.py` (`_cloud_to_px` /
