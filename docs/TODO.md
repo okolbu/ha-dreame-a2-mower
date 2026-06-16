@@ -23,21 +23,6 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
-### Surface authored patrol per-point cycles + auto-capture (CRUISED write-path)
-
-**Why:** `CRUISED` is now decoded + documented (DONE.md — todo6 #6): per-point patrol config is a CFG
-write `{idx:<map>, value:[-1, point_id, auto_capture(0/1), cycles(1/2/3)]}`. The *authored* values are
-therefore writable, but **no CRUISED READ was captured** — so surfacing the effective per-point
-cycles/auto-capture on the patrol-points sensor (currently `cycles:null`/`auto_capture:null`) still
-needs either (a) a read source, or (b) optimistic local state mirrored from our own writes, or (c) the
-telemetry-derived reconstruction (rotation count + photo-window). Mower is dead → unverifiable now.
-**Done when:** the patrol-points sensor surfaces effective cycles + auto-capture (read and/or write),
-OR this is explicitly closed as reconstruct-only. `value[0]=-1` sentinel + the `o=107` run send-payload
-remain TBD.
-**Status:** open (decode shipped; write/read surfacing deferred — needs live mower).
-**Cross-refs:** `inventory.yaml § CRUISED` / `§ o107` / `§ o111`; control-honesty residual follow-up #3
-(below); `project_patrol_point_surfacing`.
-
 ### Time-window photo→session match for AI-obstacle photos (follow-up to todo6 #3/#4)
 
 **Why:** Session-replay thumbnails (todo6 #3 Part B) and notification photo-linking (todo6 #4) both
@@ -198,12 +183,15 @@ journal for the shipped detail. What ACTUALLY remains open:
    decoded (`CRUISED` CFG key `{idx, value:[-1, point_id, auto_capture(0/1), cycles(1/2/3)]}`,
    app-MITM; see DONE.md todo6 #6 + `inventory.yaml § CRUISED`). What's still missing is a CRUISED
    *read-back* (none captured), so surfacing the *displayed* value needs optimistic local state from
-   our own writes OR the telemetry reconstruction (path a). The remaining work moved to its own TODO.
-   **Done when:** see the dedicated "Surface authored patrol per-point cycles + auto-capture (CRUISED
-   write-path)" item at the top of this file. The sensor `items` keep `cycles:null`/`auto_capture:null`
-   until that lands.
-   **Cross-refs:** `inventory.yaml § CRUISED` / `§ o107` / `§ o111`; DONE.md todo6 #6;
-   `reference_app_api_probe`.
+   our own writes OR the telemetry reconstruction (path a). The "find the authored source" question
+   is therefore CLOSED (CRUISED) — see DONE.md "Surface authored patrol per-point cycles".
+   **Done when:** OPTIONAL — if the patrol-points sensor is ever to show effective cycles/auto-capture,
+   derive via path (a) reconstruction or mirror our own CRUISED writes; otherwise leave
+   `cycles:null`/`auto_capture:null`. No protocol unknown remains — a CRUISED read-back is confirmed
+   IMPOSSIBLE (live routed-get `r=-3` + absent from getCFG bundle, write-only; 2026-06-16), so a
+   displayed value can only come from write-mirroring or telemetry reconstruction.
+   **Cross-refs:** `inventory.yaml § CRUISED` / `§ o107` / `§ o111`; DONE.md "Surface authored patrol
+   per-point cycles" + todo6 #6; `reference_app_api_probe`.
 4. **Patrol render/timing polish** (render-side, minor; overlaps "Patrol Logs" + "Surface
    dock-departure repositioning UX"):
    - replay doesn't VISUALISE the on-the-spot 360° spins — the local track DOES capture them

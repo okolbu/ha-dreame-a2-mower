@@ -2449,13 +2449,20 @@ they are NOT in the o=107 send, the s2p56 queue, or the .0550 session summary
 (`param:{}`). Auto-capture behaviour: fixed 3 photos/point → userDidOssList
 gallery (type-1 photos, lazy/on-demand — see api key getDownloadUrl).
 
+WRITE-ONLY (no getter): a live routed-get {m:'g',t:'CRUISED',d:…} returns
+out[0].r=-3 for d ∈ {null, {idx:0}, {idx:1}}, and CRUISED is ABSENT from the
+getCFG bundle (AOP…WRP) — so the authored values cannot be read back. Same
+write-only class as DND/LOW/WRP. To DISPLAY effective per-point cycles/auto-
+capture, mirror our own CRUISED writes (optimistic) or reconstruct from
+telemetry (cycles = 360°-rotation count; auto-capture = photo-window).
+[live routed-get probe 2026-06-16]
+
 Patrol-point GEOMETRY is separate (o=223 {id, points:[x,y,heading]}, and the
 cloud cruisePoints type=8 blob); it carries NO zone tag — the zone a point
 sits in is derived from its coordinates.
 
 **Open questions:**
 - value[0]=-1 sentinel meaning (type/marker?) [UNKNOWN — to capture].
-- No CRUISED READ captured — is there a {m:'g',t:'CRUISED'} fetch, or are the per-point values only reconstructable from the app's own state / telemetry? [UNKNOWN — to capture].
 - Relationship between CRUISED cycles and the o=111 {point:[id,cycles]} per-point cycles setter seen at run start — which is authoritative? [UNKNOWN — to capture].
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py (write path TBD); coordinator/ patrol-point surfacing`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`

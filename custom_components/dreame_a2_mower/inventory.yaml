@@ -5750,6 +5750,14 @@ cfg_keys:
       (`param:{}`). Auto-capture behaviour: fixed 3 photos/point → userDidOssList
       gallery (type-1 photos, lazy/on-demand — see api key getDownloadUrl).
 
+      WRITE-ONLY (no getter): a live routed-get {m:'g',t:'CRUISED',d:…} returns
+      out[0].r=-3 for d ∈ {null, {idx:0}, {idx:1}}, and CRUISED is ABSENT from the
+      getCFG bundle (AOP…WRP) — so the authored values cannot be read back. Same
+      write-only class as DND/LOW/WRP. To DISPLAY effective per-point cycles/auto-
+      capture, mirror our own CRUISED writes (optimistic) or reconstruct from
+      telemetry (cycles = 360°-rotation count; auto-capture = photo-window).
+      [live routed-get probe 2026-06-16]
+
       Patrol-point GEOMETRY is separate (o=223 {id, points:[x,y,heading]}, and the
       cloud cruisePoints type=8 blob); it carries NO zone tag — the zone a point
       sits in is derived from its coordinates.
@@ -5771,12 +5779,23 @@ cfg_keys:
           capture, value[3]=cycles, value[0]=-1 sentinel. Resolves the o=107
           "per-point settings unobservable" open question.
         evidence: "app-mitm:2026-06-16 (FINDING-CRUISED-decoded-2026-06-16.md); Map2, points 1 & 2, fw 0625"
+      - date: "2026-06-16"
+        status: verified
+        claim: |
+          CRUISED is WRITE-ONLY on the routed-action surface. A live routed-get
+          action(siid:2,aiid:50) {m:'g',t:'CRUISED',d:…} returned out[0].r=-3 for
+          d ∈ {null, {idx:0}, {idx:1}}, and CRUISED is ABSENT from the getCFG
+          bundle (which returned AOP/ATA/BAT/BP/CLS/CMS/DLS/DND/FDP/LANG/LIT/LOW/
+          MSG_ALERT/PATH/PRE/PROT/REC/STUN/TIME/VER/VOICE/VOL/WRF/WRP — no CRUISED).
+          So the authored per-point values cannot be read back; surfacing them needs
+          optimistic write-mirroring or telemetry reconstruction. Resolves the
+          prior "no CRUISED read captured" open question.
+        evidence: "live routed-get probe 2026-06-16 (tools/probes read_key_probe-style; r=-3 all shapes; getCFG bundle dump)"
     references:
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py (write path TBD); coordinator/ patrol-point surfacing"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     open_questions:
       - "value[0]=-1 sentinel meaning (type/marker?) [UNKNOWN — to capture]."
-      - "No CRUISED READ captured — is there a {m:'g',t:'CRUISED'} fetch, or are the per-point values only reconstructable from the app's own state / telemetry? [UNKNOWN — to capture]."
       - "Relationship between CRUISED cycles and the o=111 {point:[id,cycles]} per-point cycles setter seen at run start — which is authoritative? [UNKNOWN — to capture]."
 
   - id: "PROT"
