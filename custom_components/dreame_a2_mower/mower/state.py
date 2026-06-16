@@ -261,6 +261,27 @@ class MowerState:
     # we can correlate it with an app action. Persistence: persistent.
     ota_capable_raw: int | None = None
 
+    # Source: s1p2 ota_state via property_mapping (live MQTT during an OTA).
+    # 1=idle, 2=UPGRADING, 3=UPGRADE_SUCCESS (transient). None until first push.
+    # Wire-confirmed 0550->0625, 2026-06-16. Persistence: volatile.
+    ota_state: int | None = None
+
+    # Source: s1p3 ota_progress via property_mapping -- DOWNLOAD percent 0..100
+    # (install % is app-local, not wired). None until first push. Volatile.
+    ota_progress: int | None = None
+
+    # Source: checkDeviceVersion.newVersion (cloud, _refresh_dev 6 h loop).
+    # Latest firmware string e.g. "4.3.6_0625"; None until first poll.
+    firmware_latest: str | None = None
+
+    # Source: checkDeviceVersion.hasNewFirmware (cloud). True when an update
+    # is available. None until first poll. Persistence: cloud-derived.
+    firmware_update_available: bool | None = None
+
+    # Source: checkDeviceVersion.description -- multilingual changelog for the
+    # latest firmware. None until first poll.
+    firmware_release_notes: str | None = None
+
     # Source: s1.1 error bit-mask (confirmed 2026-04-30 19:37–19:39 against
     # corresponding app notifications). All volatile.
     #   drop_tilt        — byte[1] bit 1; "Robot tilted"
