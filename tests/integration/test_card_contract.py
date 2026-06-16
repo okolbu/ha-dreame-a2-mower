@@ -93,6 +93,7 @@ def _make_map_camera():
     coord.cloud_state = SimpleNamespace(
         maps_by_id={0: md}, forbidden_node_types_by_map={},
         settings=SimpleNamespace(raw=[]),
+        cruise_config_by_map={0: {401: {"cycles": 2, "auto_capture": True}}},
     )
     coord._active_map_id = 0
     coord.state_machine = MowerStateMachine()
@@ -132,7 +133,7 @@ def test_camera_map_schema_version_pinned():
     attrs = _make_map_camera().extra_state_attributes
     assert attrs["schema_version"] == MAP_ATTR_SCHEMA_VERSION
     assert isinstance(attrs["schema_version"], int)
-    assert MAP_ATTR_SCHEMA_VERSION == 4
+    assert MAP_ATTR_SCHEMA_VERSION == 5
 
 
 def test_camera_map_projection_exact_shape():
@@ -158,17 +159,19 @@ def test_camera_editable_objects_exact_element_shape():
     objs = _make_map_camera().extra_state_attributes["editable_objects"]
     assert objs, "expected at least one editable object from the fixture map"
     # Two element shapes: polygon objects (no-go/ignore/spot) carry points_m;
-    # single-point objects (maintenance o=224, patrol o=223) carry point_m.
+    # single-point objects (maintenance o=224) carry point_m;
+    # patrol objects (o=223) carry point_m + cycles + auto_capture.
     poly_keys = {"id", "op", "type", "kind", "shape_type", "points_m", "radius"}
-    point_keys = {"id", "op", "type", "kind", "point_m"}
+    maint_keys = {"id", "op", "type", "kind", "point_m"}
+    patrol_keys = {"id", "op", "type", "kind", "point_m", "cycles", "auto_capture"}
     kinds = set()
     for o in objs:
         kinds.add(o["kind"])
         if o["kind"] == "maintenance":
-            assert set(o) == point_keys
+            assert set(o) == maint_keys
             assert o["op"] == 224 and o["type"] == 3
         elif o["kind"] == "patrol":
-            assert set(o) == point_keys
+            assert set(o) == patrol_keys
             # DISTINCT opcode from maintenance; delete type 2.
             assert o["op"] == 223 and o["type"] == 2
         else:

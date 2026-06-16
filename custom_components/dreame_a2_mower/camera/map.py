@@ -21,7 +21,9 @@ from ..coordinator import DreameA2MowerCoordinator
 # "nogo"/"ignore".
 # v4: editable_objects now surfaces patrol/cruise points (kind="patrol",
 # op=223, delete type 2) alongside maintenance points.
-MAP_ATTR_SCHEMA_VERSION = 4
+# v5: patrol entries gain "cycles" (int, default 1) + "auto_capture" (bool,
+# default False) sourced from CloudState.cruise_config_by_map.
+MAP_ATTR_SCHEMA_VERSION = 5
 
 # Cloud ``shapeType`` -> human ``kind`` for editable_objects descriptors. Read
 # side only; covers the real LINE (1) and the decorative palette (>=9). Absent
@@ -132,8 +134,10 @@ class DreameA2MapCamera(
         v = hashlib.sha1(png).hexdigest()[:12]
         return f"/api/dreame_a2_mower/map.png?v={v}"
 
-    @staticmethod
-    def _editable_objects_from_map(map_data: Any) -> list[dict]:
+    def _editable_objects_from_map(
+        self,
+        map_data: Any,
+    ) -> list[dict]:
         """Surface the active map's exclusion objects as edit-frame descriptors.
 
         One dict per :class:`ExclusionZone` that carries a cloud ``obj_id``
@@ -205,9 +209,18 @@ class DreameA2MapCamera(
         # DISTINCT opcode from maintenance (o=224) with delete type 2. Same
         # ``point_m`` [x, y] marker model; the read map carries no heading, so
         # create defaults 0. (wire-confirmed app-mitm 2026-06-15.)
+        # ``cycles`` + ``auto_capture`` come from CloudState.cruise_config_by_map
+        # (keyed by point_id); defaults 1 / False when no config is present.
+        cs = getattr(self.coordinator, "cloud_state", None)
+        _cruise: dict = {}
+        if cs is not None:
+            _cruise = getattr(cs, "cruise_config_by_map", {}).get(
+                self.coordinator._active_map_id, {}
+            )
         for p in getattr(map_data, "patrol_points", ()):
             if getattr(p, "point_id", None) is None:
                 continue
+            _pc = _cruise.get(p.point_id) or {}
             out.append(
                 {
                     "id": p.point_id,
@@ -215,6 +228,8 @@ class DreameA2MapCamera(
                     "type": 2,
                     "kind": "patrol",
                     "point_m": [p.x_mm / 1000.0, p.y_mm / 1000.0],
+                    "cycles": _pc.get("cycles", 1),
+                    "auto_capture": _pc.get("auto_capture", False),
                 }
             )
         return out

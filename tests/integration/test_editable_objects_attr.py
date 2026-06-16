@@ -7,13 +7,23 @@ from custom_components.dreame_a2_mower.map_decoder import (
 )
 
 
+def _bare_cam():
+    """Minimal DreameA2MapCamera instance (no coordinator state needed)."""
+    cam = DreameA2MapCamera.__new__(DreameA2MapCamera)
+    cam.coordinator = SimpleNamespace(
+        _active_map_id=0,
+        cloud_state=None,
+    )
+    return cam
+
+
 def test_editable_objects_attribute_shape():
     m = SimpleNamespace(exclusion_zones=(
         ExclusionZone(points=((0.0, 0.0),), subtype=None, obj_id=101, points_m=((9.65, -0.13), (4.12, 5.01))),
         ExclusionZone(points=((1.0, 1.0),), subtype="ignore", obj_id=102, points_m=((1.0, 2.0), (3.0, 4.0))),
         ExclusionZone(points=((2.0, 2.0),), subtype=None, obj_id=None, points_m=()),  # no id -> skip
     ))
-    objs = DreameA2MapCamera._editable_objects_from_map(m)
+    objs = _bare_cam()._editable_objects_from_map(m)
     ids = {(o["id"], o["kind"], o["op"]) for o in objs}
     assert (101, "nogo", 215) in ids
     assert (102, "ignore", 234) in ids
@@ -38,7 +48,7 @@ def test_editable_objects_spot_and_maintenance():
             MaintenancePoint(point_id=42, x_mm=2500.0, y_mm=-1300.0),
         ),
     )
-    objs = DreameA2MapCamera._editable_objects_from_map(m)
+    objs = _bare_cam()._editable_objects_from_map(m)
     by_kind = {o["kind"]: o for o in objs}
 
     # Exactly one spot + one maintenance (None-id spot skipped).

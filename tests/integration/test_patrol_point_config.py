@@ -48,3 +48,24 @@ def test_patrol_sensor_defaults_when_no_config():
     s = _patrol_sensor(0, pts, {})
     item = s.extra_state_attributes["items"][0]
     assert item["cycles"] == 1 and item["auto_capture"] is False
+
+
+def test_editable_objects_patrol_carries_cycles_auto():
+    from custom_components.dreame_a2_mower.camera.map import DreameA2MapCamera
+    cam = DreameA2MapCamera.__new__(DreameA2MapCamera)
+    md = SimpleNamespace(
+        patrol_points=[SimpleNamespace(point_id=3, x_mm=-3050, y_mm=-5480)],
+        exclusion_zones=(),
+        spot_zones=(),
+        maintenance_points=(),
+    )
+    cam.coordinator = SimpleNamespace(
+        _active_map_id=0,
+        cloud_state=_bare_cloud_state(
+            maps_by_id={0: md},
+            cruise_config_by_map={0: {3: {"cycles": 2, "auto_capture": True}}},
+        ),
+    )
+    objs = cam._editable_objects_from_map(md)
+    patrol = [o for o in objs if o.get("kind") == "patrol"][0]
+    assert patrol["cycles"] == 2 and patrol["auto_capture"] is True
