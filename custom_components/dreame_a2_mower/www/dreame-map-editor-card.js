@@ -1121,12 +1121,6 @@ class DreameMapEditorCard extends HTMLElement {
       });
     }
     // Auto-capture toggle.
-    const chk = panel.getElementById
-      ? panel.getElementById("patrolAuto")
-      : panel.querySelector("#patrolAuto");
-    if (!chk) {
-      // querySelector fallback (getElementById not on a div, use shadowRoot)
-    }
     const autoChk = panel.querySelector("#patrolAuto");
     if (autoChk) {
       autoChk.addEventListener("change", () => {
