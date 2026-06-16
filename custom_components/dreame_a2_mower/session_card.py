@@ -661,6 +661,7 @@ def build_picked_session_summary(
     picker_label: str,
     *,
     map_projection: dict | None = None,
+    photos: list[dict] | None = None,
 ) -> dict[str, Any]:
     """Compute the flat attribute dict for sensor.picked_session.
 
@@ -700,6 +701,10 @@ def build_picked_session_summary(
         if out.get("charge_used_pct", 0) > 0 and area
         else None
     )
+
+    # Per-session photo thumbnails for the replay screen (signed URLs built by
+    # the coordinator from the session's photo_list; [] when none / not built).
+    out["photos"] = photos or []
 
     # Always surface session classification fields.
     out["session_type"] = session_type

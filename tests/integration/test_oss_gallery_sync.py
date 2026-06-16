@@ -48,6 +48,84 @@ async def test_gallery_sync_skips_already_archived():
     c._photo_archive.archive.assert_not_called()
 
 
+@pytest.mark.asyncio
+async def test_post_session_gallery_refresh_scheduled_and_runs(monkeypatch):
+    """_schedule_post_session_gallery_refresh arms a delayed one-shot that
+    runs _refresh_oss_gallery (so videos / non-photo_list media appear within
+    ~Ns of finalize instead of waiting for the hourly sync)."""
+    c = MIXIN()
+    c.hass = SimpleNamespace()
+    c._refresh_oss_gallery = AsyncMock()
+
+    captured = {}
+
+    def _fake_call_later(hass, delay, action):
+        captured["delay"] = delay
+        captured["action"] = action
+        return lambda: None
+
+    monkeypatch.setattr(_lidar_oss, "async_call_later", _fake_call_later)
+    c._schedule_post_session_gallery_refresh()
+
+    assert captured["delay"] == c._POST_SESSION_GALLERY_DELAY_S
+    # Firing the scheduled callback triggers exactly one gallery sync.
+    await captured["action"](None)
+    c._refresh_oss_gallery.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_post_session_gallery_refresh_noop_without_hass(monkeypatch):
+    c = MIXIN()
+    c.hass = None
+    called = {"n": 0}
+    monkeypatch.setattr(
+        _lidar_oss, "async_call_later",
+        lambda *a, **k: called.__setitem__("n", called["n"] + 1),
+    )
+    c._schedule_post_session_gallery_refresh()  # must not raise / schedule
+    assert called["n"] == 0
+
+
+def test_session_photos_manifest_matches_photo_list_by_ts():
+    """session_photos_manifest links a session's photo_list to archived photos
+    by capture timestamp (so the `<ts>_person.jpg` gallery variant still matches
+    the bare `<ts>.jpg` photo_list name), and emits signed thumbnails."""
+    c = MIXIN()
+    P = SimpleNamespace
+    photos = [
+        # archived under the _person gallery name; photo_list has the bare name
+        P(filename="2026-06-16_1780952775_aabbccdd.jpg", name="1780952775_person.jpg",
+          unix_ts=1780952775, category="person", detections=[{"cls": "human"}]),
+        P(filename="2026-06-16_1780952780_eeff0011.jpg", name="1780952780.jpg",
+          unix_ts=1780952780, category="patrol", detections=[]),
+        # a photo NOT in this session's photo_list -> excluded
+        P(filename="2026-06-16_1780999999_99999999.jpg", name="1780999999.jpg",
+          unix_ts=1780999999, category="obstacle", detections=[]),
+    ]
+    c._photo_archive = SimpleNamespace(list_photos=lambda: photos)
+    c._sign_media_path = lambda path: path + "?sig=X"
+
+    items = c.session_photos_manifest({"photo_list": ["1780952775.jpg", "1780952780.jpg"]})
+
+    assert [it["id"] for it in items] == [
+        "2026-06-16_1780952775_aabbccdd.jpg",
+        "2026-06-16_1780952780_eeff0011.jpg",
+    ]  # oldest-first, the unlisted obstacle photo excluded
+    assert items[0]["category"] == "person"
+    assert items[0]["detections"] == [{"cls": "human"}]
+    assert items[0]["thumb_url"] == (
+        "/api/dreame_a2_mower/photo/2026-06-16_1780952775_aabbccdd.jpg?sig=X"
+    )
+
+
+def test_session_photos_manifest_empty_without_photo_list():
+    c = MIXIN()
+    c._photo_archive = SimpleNamespace(list_photos=lambda: [])
+    c._sign_media_path = lambda p: p
+    assert c.session_photos_manifest({}) == []
+    assert c.session_photos_manifest({"photo_list": []}) == []
+
+
 def _coord_real_archives(tmp_path, photos, videos, quota):
     """Coordinator with REAL Photo/Video archives so the manifest build can
     read list_photos()/list_videos(), plus a hass.http.async_sign_path stub."""

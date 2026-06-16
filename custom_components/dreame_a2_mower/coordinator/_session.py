@@ -294,6 +294,18 @@ class _SessionMixin:
         # --- 4b. Build the picked-session summary dict (T13) ---
         # Built after map_data is resolved so map_projection can be baked in
         # at construction time (no post-mutation, no transient None state).
+        # Per-session photo thumbnails (replay screen). Built separately with its
+        # own guard so a signing/IO hiccup degrades to no-photos rather than
+        # clearing the whole picked-session summary.
+        try:
+            session_photos = self.session_photos_manifest(raw_dict)
+        except Exception:
+            LOGGER.exception(
+                "[F5.9.1] render_work_log_session: session_photos_manifest failed "
+                "for filename=%s — rendering session without photos",
+                getattr(entry, "filename", "?"),
+            )
+            session_photos = []
         try:
             self._picked_session_summary = build_picked_session_summary(
                 raw_dict=raw_dict,
@@ -301,6 +313,7 @@ class _SessionMixin:
                 entry=entry,
                 picker_label=picker_label,
                 map_projection=extract_projection(map_data),
+                photos=session_photos,
             )
         except Exception:
             LOGGER.exception(

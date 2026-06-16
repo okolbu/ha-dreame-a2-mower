@@ -66,12 +66,30 @@ new trailing fields; tests green.
 (both patrols AND normal mows) generally produce the media, so the *end of a session* is a strong
 extra trigger to look for new images/videos shortly after — far more timely than waiting up to an
 hour. Relates to #7 (patrol photos) for the patrol half, but normal mows should also be covered.
-**Done when:** an OSS gallery refresh is kicked off shortly after session finalize (in addition to
-the 1 h cycle), bounded/debounced so it doesn't hammer OSS; new media appears within minutes of a
-session ending; deferred-with-reason if the lazy on-demand upload (#7) means the photos aren't on
-OSS until the in-app viewer opens.
-**Status:** open
-**Cross-refs:** `coordinator/_lidar_oss.py` (`_refresh_oss_gallery`, finalize path);
+**Shipped (2026-06-16, pending live confirm):**
+  - **Part A — end-of-session gallery refresh.** `_do_oss_fetch_body` now calls
+    `_schedule_post_session_gallery_refresh()`, a one-shot `async_call_later` (60 s) that runs
+    `_refresh_oss_gallery` after finalize, so VIDEOS + any gallery media not in the summary's
+    `photo_list` (already fetched immediately by `fetch_photos_from_summary`) appear within ~minute
+    instead of up to 1 h. Bounded (one per finalize) + idempotent. Delayed 60 s to let the device's
+    async upload land. Test: `test_oss_gallery_sync.py` (scheduler tests).
+  - **Part B — session photos on the replay screen.** `coordinator.session_photos_manifest(raw_dict)`
+    builds signed thumbnails for a session by matching its `photo_list` to the PhotoArchive **by
+    capture timestamp** (so the `_person` gallery variant still links); attached as `photos` on the
+    picked_session payload (`build_picked_session_summary`); the replay card
+    (`dreame-mower-replay-card.js`) renders a click-to-open thumbnail strip. Matching is
+    **photo_list-only** for now (covers patrol + "to point" auto-capture).
+**Remaining / follow-up:**
+  - **Time-window match for AI-obstacle photos** — if a session's obstacle/AI photos fall OUTSIDE
+    `photo_list`, union in archived photos whose capture ts ∈ [session.start, session.end].
+    Deferred until we understand how those photo types appear relative to `photo_list` (user call,
+    2026-06-16). `session_photos_manifest` is structured to make this a localized change.
+  - Live confirm: deploy integration (needs HA restart — code change, not just config reload) +
+    replay card; select a patrol / "to point" session and verify thumbnails render + open.
+**Status:** Part A + B shipped (photo_list match), unit-tested; live confirm + time-window union pending.
+**Cross-refs:** `coordinator/_lidar_oss.py` (`_schedule_post_session_gallery_refresh`,
+`session_photos_manifest`, `_refresh_oss_gallery`); `session_card.py:build_picked_session_summary`
+(`photos`); `coordinator/_session.py`; `www/dreame-mower-replay-card.js`;
 `FINDING-patrol-photos-session-summary-2026-06-16.md`; the Photo/video archive item below.
 
 ### Notification "View snapshots in the app." → fetch + link photos (todo6 #4)

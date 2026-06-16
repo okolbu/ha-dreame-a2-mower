@@ -316,6 +316,7 @@ def test_build_picked_session_summary_characterization():
         "mowing_height_mm",
         "obstacle_count",
         "outcome",
+        "photos",
         "pre_type_label",
         "pre_type_raw",
         "recharge_count",

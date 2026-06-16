@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_track_time_interval
+from homeassistant.helpers.event import async_call_later, async_track_time_interval
 from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
@@ -774,6 +774,35 @@ class _LidarOssMixin:
             },
         )
 
+        # A session just finalized — kick a one-shot OSS gallery sync shortly
+        # after, so VIDEOS and any gallery media NOT in the summary's photo_list
+        # (already fetched above by fetch_photos_from_summary) appear within
+        # ~seconds instead of waiting up to the 1h periodic sync. Delayed (not
+        # immediate) to give the device's async upload — incl. lazy auto-capture
+        # uploads, see api key session_summary_download — time to land on OSS.
+        self._schedule_post_session_gallery_refresh()
+
+    # Delay before the post-finalize gallery sync. Long enough for the device's
+    # async media upload to land on OSS, short enough to beat the hourly cycle.
+    _POST_SESSION_GALLERY_DELAY_S = 60
+
+    def _schedule_post_session_gallery_refresh(self) -> None:
+        """Schedule a single OSS gallery sync ``_POST_SESSION_GALLERY_DELAY_S``
+        after a session finalizes. Bounded (one per finalize) and idempotent
+        (``_refresh_oss_gallery`` dedups by name/id), so it is safe even if it
+        overlaps the hourly sync. No-op when hass is unavailable."""
+        hass = getattr(self, "hass", None)
+        if hass is None:
+            return
+
+        async def _run(_now: Any) -> None:
+            try:
+                await self._refresh_oss_gallery()
+            except Exception:  # noqa: BLE001 — a sync failure must not propagate
+                LOGGER.exception("post-session OSS gallery refresh failed")
+
+        async_call_later(hass, self._POST_SESSION_GALLERY_DELAY_S, _run)
+
     async def _refresh_oss_gallery(self, max_pages: int = 20) -> None:
         """Canonical OSS media sync: archive new photos (categorized via COM
         metadata) + videos, and update quota. Runs hourly + at startup (the
@@ -939,3 +968,46 @@ class _LidarOssMixin:
         LOGGER.debug(
             "[PHOTOS] manifest rebuilt: %d items", len(self._photo_gallery),
         )
+
+    def session_photos_manifest(self, raw_dict: dict) -> list[dict]:
+        """Signed thumbnails for ONE session's photos, for the replay screen.
+
+        Matching is photo_list-only for now: the session summary's authoritative
+        per-session filenames (covers patrol + 'to point' auto-capture). Matches
+        by CAPTURE TIMESTAMP (shared by the bare `<ts>.jpg` photo_list name and the
+        `<ts>_person.jpg` gallery variant) so md5-dedup storing either name still
+        links. AI-obstacle photos that fall OUTSIDE photo_list are NOT included
+        yet — a timestamp-window union is the planned follow-up (todo6 #6) once
+        their appearance relative to photo_list is understood.
+
+        Returns ``[{id, ts, category, detections, url, thumb_url}]`` (oldest-first)
+        — the same item shape the gallery card consumes; empty on any problem.
+        """
+        names = raw_dict.get("photo_list") or []
+        archive = getattr(self, "_photo_archive", None)
+        if not isinstance(names, list) or not names or archive is None:
+            return []
+        by_ts: dict[int, list] = {}
+        for p in archive.list_photos():
+            by_ts.setdefault(int(p.unix_ts), []).append(p)
+        seen: set[str] = set()
+        items: list[dict] = []
+        for name in names:
+            if not isinstance(name, str) or not name:
+                continue
+            ts = int(_photo_ts_from_name(name))
+            for p in by_ts.get(ts, ()):  # >1 only on same-second captures
+                if p.filename in seen:
+                    continue
+                seen.add(p.filename)
+                url = self._sign_media_path("/api/dreame_a2_mower/photo/" + p.filename)
+                items.append({
+                    "id": p.filename,
+                    "ts": int(p.unix_ts),
+                    "category": p.category,
+                    "detections": p.detections or [],
+                    "url": url,
+                    "thumb_url": url,
+                })
+        items.sort(key=lambda it: it["ts"])
+        return items

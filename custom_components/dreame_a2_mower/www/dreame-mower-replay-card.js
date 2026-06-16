@@ -127,6 +127,15 @@ class DreameMowerReplayCard extends HTMLElement {
     // Stash roles parallel to paths so _applyRenderStyle can look them up.
     this._pathRoles = legSpecs.map(s => s.role);
     this._legSpecs = legSpecs;
+    // Per-session photo thumbnails (signed URLs from the picked_session sensor;
+    // photo_list-matched server-side — patrol / "to point" auto-capture). Click
+    // opens the full image. Strip is omitted when the session has no photos.
+    const photos = Array.isArray(a.photos) ? a.photos : [];
+    const photoStrip = photos.length
+      ? `<div class="photos">` + photos.map((p) =>
+          `<img class="thumb" src="${p.thumb_url}" data-full="${p.url}" ` +
+          `loading="lazy" title="${p.category || "photo"}"/>`).join("") + `</div>`
+      : "";
     const paths = legSpecs.map((s, i) => `
       <path d="${this._buildLegPathD(s.pts, proj)}"
             fill="none" stroke="rgb(220,40,40)" stroke-width="3"
@@ -169,6 +178,16 @@ class DreameMowerReplayCard extends HTMLElement {
             border-radius: 4px; padding: 4px 12px;
             font-size: 16px; cursor: pointer;
           }
+          .photos {
+            display: flex; gap: 6px; padding: 0 8px 8px;
+            overflow-x: auto;
+          }
+          .photos .thumb {
+            height: 64px; width: auto; flex: 0 0 auto;
+            border-radius: 4px; cursor: pointer;
+            border: 1px solid var(--divider-color);
+            object-fit: cover;
+          }
         </style>
         <div class="map-wrap">
         <svg viewBox="0 0 ${proj.width_px} ${proj.height_px}"
@@ -199,8 +218,16 @@ class DreameMowerReplayCard extends HTMLElement {
                    style="width:90px;" />
           </label>
         </div>
+        ${photoStrip}
       </ha-card>`;
     this._lastAttrs = a;
+    // Click a thumbnail to open the full-size photo in a new tab.
+    this.shadowRoot.querySelectorAll(".photos .thumb").forEach((img) => {
+      img.onclick = () => {
+        const full = img.getAttribute("data-full");
+        if (full) window.open(full, "_blank", "noopener");
+      };
+    });
     this._startAnimation(a);
 
     // Controls are wired against a single playhead state machine
