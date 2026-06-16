@@ -77,17 +77,31 @@ if TYPE_CHECKING:
     from ..map_render import BackgroundMode
 
 
-# Backstop cap on the published live-stream snapshot mirror. The camera re-emits
-# the WHOLE _track_snapshot in extra_state_attributes on every ~1Hz push, so an
-# unbounded list makes per-push WebSocket cost grow with the session length —
-# O(n^2) bytes over a full mow. Capping to the most-recent N rows makes per-push
-# cost O(N) constant. Trade-off: a browser that JOINS mid-session seeds from this
-# snapshot and so sees only the capped tail; that is fine for the LIVE map (recent
-# path + current position is the point). The FULL trail is still complete two
-# places this cap does not touch: client-side (continuously-connected browsers
-# accumulate every latest_point delta into this._trail) and in the archive /
-# work-log render (the session source-of-truth is LiveMapState.track, uncapped).
-_LIVE_TRACK_SNAPSHOT_MAX = 1000
+# Wire budget for the cold-start backfill snapshot. The camera re-emits the WHOLE
+# snapshot in extra_state_attributes on every ~5s push, so it must stay bounded.
+# When the session's authoritative trail (live_map.track) exceeds this, the
+# snapshot is DECIMATED (every Nth point, first + last always kept) rather than
+# truncated-from-the-front — so a browser joining mid-session sees the FULL extent
+# of the path at reduced resolution, not just a recent tail. A polyline at ~2000
+# points is visually indistinguishable from one at 5000. The full-resolution trail
+# still lives uncapped in live_map.track (the archive / work-log source of truth)
+# and in continuously-connected browsers (which accumulate every latest_point).
+LIVE_TRACK_SNAPSHOT_MAX = 2000
+
+
+def _decimate(rows: list, max_points: int) -> list:
+    """Return at most ``max_points`` (+1) rows spanning the full extent of
+    ``rows``: every Nth row plus a guaranteed final row. Preserves the first and
+    last points so the trail's start and its hand-off to ``latest_point`` are
+    never lost. Returns a shallow copy when under budget."""
+    n = len(rows)
+    if n <= max_points:
+        return list(rows)
+    stride = -(-n // max_points)  # ceil(n / max_points)
+    out = rows[::stride]
+    if out[-1] is not rows[-1]:
+        out.append(rows[-1])
+    return out
 
 
 class _RenderingMixin:
@@ -261,36 +275,54 @@ class _RenderingMixin:
         """Reset the published live stream at session begin / cold-start."""
         self._live_point_seq = 0
         self._latest_point = None
-        self._track_snapshot = []
+        self._track_snapshot_cache = None
 
     def _publish_live_point(
         self, *, x_m: float, y_m: float, heading_deg: float | None, t: float
     ) -> None:
-        """Append one position to the published live stream.
+        """Publish one position to the incremental live stream.
 
         Heading is whatever MowerState carried (the byte heading on the 99.2%
         of frames that have one; for the rare 8-byte beacon it may be slightly
         stale — acceptable, the client has a motion-vector fallback and the
         flip-convention fix is what actually fixes wrong-facing). Only the
         latest point + seq cross the wire each push; the client accumulates the
-        trail. ``_track_snapshot`` is the catch-up payload for a fresh card.
+        trail. The cold-start backfill is served separately by
+        ``live_track_snapshot`` (derived from the authoritative ``live_map.track``
+        so it survives a restart) — there is no per-push mirror to maintain here.
         """
         pt = [float(x_m), float(y_m),
               None if heading_deg is None else float(heading_deg), float(t)]
         self._live_point_seq += 1
         self._latest_point = pt
-        if self._track_snapshot is not None:
-            self._track_snapshot.append(pt)
-            # Bound the catch-up mirror to the most-recent N rows. Keep it a plain
-            # list (not a deque): existing tests assert exact list-literal equality.
-            # We append exactly one per push, so a single del trims us back to N.
-            if len(self._track_snapshot) > _LIVE_TRACK_SNAPSHOT_MAX:
-                del self._track_snapshot[0]
         LOGGER.debug(
             "[MAP] publish: seq=%d pt=(%.2f,%.2f) hdg=%s",
             self._live_point_seq, x_m, y_m,
             f"{heading_deg:.1f}(byte)" if heading_deg is not None else "none(vector)",
         )
+
+    def live_track_snapshot(self) -> list[list]:
+        """Cold-start backfill: the session-so-far trail as ``[x_m, y_m,
+        heading_deg|None, t]`` rows, in capture order.
+
+        Derived on demand from the authoritative ``live_map.track`` (persisted
+        and restored from ``in_progress.json``), so a fresh card — including one
+        opened after an HA restart mid-session — repaints the whole captured path
+        before resuming live painting. Decimated to ``LIVE_TRACK_SNAPSHOT_MAX``
+        (first + last always kept) to bound the per-push wire cost. Cached by
+        track length so repeated attribute reads between ~5s appends are free.
+        """
+        track = self.live_map.track
+        n = len(track)
+        cache = self._track_snapshot_cache
+        if cache is not None and cache[0] == n:
+            return cache[1]
+        rows = [
+            [p.x_m, p.y_m, p.heading_deg, p.t]
+            for p in _decimate(track, LIVE_TRACK_SNAPSHOT_MAX)
+        ]
+        self._track_snapshot_cache = (n, rows)
+        return rows
 
     async def _load_last_session_obstacles(
         self, map_id: int

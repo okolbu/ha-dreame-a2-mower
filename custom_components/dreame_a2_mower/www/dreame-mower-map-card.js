@@ -9,12 +9,18 @@
 import {
   projectPoint,
   iconRotation,
+  gapBreakIndices,
+  trailPathD,
   buildMowerIconSvg,
   rssiToRgb,
 } from "./_dreame-map-core.js";
 
 const ICON_PX = 32;
 const GLIDE_MS = 5000;   // glide duration ~ the observed s1p4 cadence (~5s)
+// Backfill points more than this far apart in time straddle a gap the
+// integration didn't see (HA restart / downtime). The trail breaks there
+// instead of drawing a phantom line across it. Well above the ~5s cadence.
+const SEED_GAP_SECONDS = 30;
 const WIFI_LS_KEY = "dreame-mower-wifi-overlay-on";
 
 class DreameMowerMapCard extends HTMLElement {
@@ -23,6 +29,7 @@ class DreameMowerMapCard extends HTMLElement {
     this._cfg = cfg;
     this._seq = -1;
     this._trail = [];
+    this._breaks = new Set();   // indices that start a new subpath (gap pen-ups)
     this._iconAt = null;
     this._iconAngle = 0;
     this._anim = null;
@@ -165,6 +172,8 @@ class DreameMowerMapCard extends HTMLElement {
   _seedFromSnapshot(a) {
     const snap = a.track_snapshot || [];
     this._trail = snap.map((pt) => projectPoint(pt[0], pt[1], a.map_projection));
+    // Break the polyline across downtime gaps so they render empty, not bridged.
+    this._breaks = gapBreakIndices(snap, SEED_GAP_SECONDS);
     this._redrawTrail();
     if (this._trail.length) {
       this._iconAt = this._trail[this._trail.length - 1];
@@ -190,12 +199,7 @@ class DreameMowerMapCard extends HTMLElement {
   _redrawTrail() {
     const path = this.shadowRoot.getElementById("trail");
     if (!path) return;
-    path.setAttribute(
-      "d",
-      this._trail
-        .map((q, i) => `${i ? "L" : "M"} ${q[0].toFixed(1)} ${q[1].toFixed(1)}`)
-        .join(" ")
-    );
+    path.setAttribute("d", trailPathD(this._trail, this._breaks));
   }
   _animateIcon(from, to, toAngle) {
     if (this._anim) cancelAnimationFrame(this._anim);
@@ -236,7 +240,7 @@ if (!customElements.get("dreame-mower-map-card")) {
 
 // Card version banner — lets the user confirm which build loaded in the
 // browser console (the cards "cache hard"; a stale cache shows the old version).
-const CARD_VERSION = "1.0.28a5";
+const CARD_VERSION = "1.0.28a6";
 console.info(
   `%c dreame-mower-map-card v${CARD_VERSION} `,
   "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"

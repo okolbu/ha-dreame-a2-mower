@@ -19,6 +19,7 @@ def _make_camera(
 ):
     from custom_components.dreame_a2_mower.camera import DreameA2MapCamera
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
+    from custom_components.dreame_a2_mower.live_map.state import LiveMapState, TrackPoint
     from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
 
     md = SimpleNamespace(
@@ -38,7 +39,13 @@ def _make_camera(
     coord._base_png_mode = SimpleNamespace(value="green")
     coord._live_point_seq = 7
     coord._latest_point = [1.0, 2.0, 90.0, 1234.0]
-    coord._track_snapshot = [[0.0, 0.0, None, 1230.0], [1.0, 2.0, 90.0, 1234.0]]
+    coord._track_snapshot_cache = None
+    coord.live_map = LiveMapState(track=[
+        TrackPoint(t=1230.0, x_m=0.0, y_m=0.0, area_m2=0.0,
+                   heading_deg=None, task_state=0, role="mowing"),
+        TrackPoint(t=1234.0, x_m=1.0, y_m=2.0, area_m2=1.0,
+                   heading_deg=90.0, task_state=0, role="mowing"),
+    ])
     coord.cloud_state = cloud_state
     coord._active_map_id = 0
     sm = MowerStateMachine()
