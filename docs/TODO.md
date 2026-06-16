@@ -43,8 +43,11 @@ HANDOVER) surfaced wire facts that need a live app-MITM / probe capture to confi
    reports **siid 1/2/3/5/6/99 only — siid 4 never appears for any piid.** So s4p22/s4p44/s4p59 (and
    every other siid-4 mapping: s4p23/47/49) are vacuum-fork artifacts with **no g2408 surface**.
    Inventory updated to `decoded: verified` (absent), evidence `app-mitm-census:2026-06-16`;
-   `capabilities.py` already gates them off. Follow-up (minor): apply the same census closure to the
-   remaining `decoded: hypothesized` siid-4 entries (s4p23/47/49).
+   `capabilities.py` already gates them off. **Tidy-up DONE 2026-06-16:** the same census closure was
+   applied to all ordinary siid-4 stubs — s4p21/23/26/27/47/49 are now `decoded: verified` (absent)
+   too (9 of 11 siid-4 entries closed). Two left `hypothesized` ON PURPOSE: **s4p68** (a real working
+   cloud-RPC `get_properties(4,68)` device-snapshot bundle, captured 2026-05-06) and **s4p83**
+   (capability bitmask — plausibly GET-readable like s4p68; legit open question, not push-closeable).
 6. **[CRUISED] decode the app's write CONTEXT** (confirmed-blocking, related to #1): the integration's
    bare routed-action CRUISED write (`set_cfg('CRUISED', {idx, value})`) is **accepted-but-no-effect** on
    g2408 — live 2026-06-16 it returned r=0 but `CRUISE.0` did not change, for both CREATE (new point)

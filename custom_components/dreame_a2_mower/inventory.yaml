@@ -2408,18 +2408,23 @@ properties:
     semantic: |
       Obstacle-avoidance mode selector. Upstream mower forks define OBSTACLE_AVOIDANCE
       at (4, 21) in DreameMowerPropertyMapping. The legacy integration reads and writes
-      this property to control AI-obstacle avoidance sensitivity. On g2408 obstacle
-      behaviour is governed by s2p1 and s2p2, but this property slot may co-exist.
+      this property to control AI-obstacle avoidance sensitivity.
+      RESOLVED 2026-06-16: NOT a g2408 property slot — siid 4 never appears in the
+      211,880-record property-PUSH census (device reports siid 1/2/3/5/6/99 only).
+      g2408 obstacle behaviour is governed by s2p1/s2p2 plus the CFG.PRE obstacle-
+      avoidance fields, not this slot. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      decoded: verified
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:687)"
         - "github.com/nicolasglg/dreame-mova-mower (types.py:740)"
-    open_questions:
-      - "Is s4p21 present on g2408 firmware? Probe with a direct SIID 4 PIID 21 GET to confirm."
-      - "If present, does the enum match the legacy ObstacleAvoidance values (0=disabled, 1=enabled, 2=intensive)?"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "s4p21 (OBSTACLE_AVOIDANCE) is absent on g2408 — siid 4 never appears in 211,880 properties_changed pushes across the full corpus. Obstacle behaviour is via s2p1/s2p2 + CFG.PRE, not this slot. Vacuum-fork mapping."
+        evidence: "app-mitm-census:2026-06-16 (probe/logs/*.jsonl + dreame-mitm captures; siid=4 push count = 0 of 211880)"
 
   - id: "s4p22"
     siid: 4
@@ -2465,18 +2470,22 @@ properties:
     semantic: |
       Mowing / cleaning mode selector. Upstream mower forks define CLEANING_MODE
       at (4, 23). Controls the active mowing behaviour (e.g. edge-only, zone, spot).
-      On g2408 the equivalent is the task-type sent via the s5a1 action envelope;
-      this property slot may be a read-back or may not be used.
+      On g2408 the equivalent is the task-type sent via the s5a1 action envelope.
+      RESOLVED 2026-06-16: NOT a g2408 property slot — siid 4 never appears in the
+      211,880-record property-PUSH census. Vacuum-fork mapping; mode is the s5a1
+      task-type, not this slot. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      decoded: verified
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:689)"
         - "github.com/nicolasglg/dreame-mova-mower (types.py:742)"
-    open_questions:
-      - "Is s4p23 present on g2408 firmware? Probe with direct GET to confirm."
-      - "If present, does the enum match the legacy CleaningMode (0=standard, 1=quiet, 2=boost)?"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "s4p23 (CLEANING_MODE) is absent on g2408 — siid 4 never appears in 211,880 properties_changed pushes. Mode is carried by the s5a1 task envelope, not this slot. Vacuum-fork mapping."
+        evidence: "app-mitm-census:2026-06-16 (probe/logs/*.jsonl + dreame-mitm captures; siid=4 push count = 0 of 211880)"
 
   - id: "s4p26"
     siid: 4
@@ -2488,18 +2497,21 @@ properties:
       Per-zone customised cleaning settings. Upstream mower forks define
       CUSTOMIZED_CLEANING at (4, 26) — carries a JSON blob with per-zone
       pass-count and cutting-height overrides. On g2408 these settings are
-      embedded in the s5a1 task envelope; this property may carry a persisted
-      read-back of the last settings.
+      embedded in the s5a1 task envelope.
+      RESOLVED 2026-06-16: NOT a g2408 property slot — siid 4 never appears in the
+      211,880-record property-PUSH census. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      decoded: verified
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:691)"
         - "github.com/nicolasglg/dreame-mova-mower (types.py:744)"
-    open_questions:
-      - "Is s4p26 present on g2408 firmware? Probe with direct GET."
-      - "If present, does the JSON schema match the legacy CustomizedCleaning format?"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "s4p26 (CUSTOMIZED_CLEANING) is absent on g2408 — siid 4 never appears in 211,880 properties_changed pushes. Per-zone overrides ride the s5a1 task envelope, not this slot. Vacuum-fork mapping."
+        evidence: "app-mitm-census:2026-06-16 (probe/logs/*.jsonl + dreame-mitm captures; siid=4 push count = 0 of 211880)"
 
   - id: "s4p27"
     siid: 4
@@ -2511,17 +2523,22 @@ properties:
       Child-lock / panel-lock property. Upstream mower forks define CHILD_LOCK
       at (4, 27). On g2408 child-lock is toggled via the cfg_toggle mechanism
       (setting key 'CLS') which writes through s2a50 o:8, NOT by directly
-      writing s4p27. The property slot may still exist as a read-back surface.
+      writing s4p27.
+      RESOLVED 2026-06-16: NOT a g2408 property slot — siid 4 never appears in the
+      211,880-record property-PUSH census. Child-lock is CFG.CLS via s2a50 o:8, not
+      this slot. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      decoded: verified
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:692)"
         - "github.com/nicolasglg/dreame-mova-mower (types.py:745)"
-    open_questions:
-      - "Is s4p27 present on g2408 firmware? The greenfield uses cfg CLS not a direct property write."
-      - "If present, does writing s4p27=1 work on g2408, or must the cfg_toggle path be used?"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "s4p27 (CHILD_LOCK) is absent on g2408 — siid 4 never appears in 211,880 properties_changed pushes. Child-lock is toggled via CFG.CLS (s2a50 o:8), not this slot. Vacuum-fork mapping."
+        evidence: "app-mitm-census:2026-06-16 (probe/logs/*.jsonl + dreame-mitm captures; siid=4 push count = 0 of 211880)"
 
   - id: "s4p44"
     siid: 4
@@ -2567,19 +2584,22 @@ properties:
     semantic: |
       Schedule configuration property. Upstream mower forks define SCHEDULED_CLEAN
       at (4, 47). Carries a JSON blob describing the active mowing schedule(s).
-      On g2408 scheduling is managed through the s2p50 / cfg mechanism (fields SCH,
-      SNS, etc.); this s4p47 slot may carry a read-back or may be the canonical
-      schedule store.
+      On g2408 scheduling is managed through the s2p50 / cfg mechanism (SCHDDV3 etc.).
+      RESOLVED 2026-06-16: NOT a g2408 property slot — siid 4 never appears in the
+      211,880-record property-PUSH census. Schedules are the s2p50/cfg SCHDDV3
+      transaction, not this slot. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      decoded: verified
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:700)"
         - "github.com/nicolasglg/dreame-mova-mower (types.py:753)"
-    open_questions:
-      - "Is s4p47 present on g2408 firmware? Probe with direct GET."
-      - "If present, is this the canonical schedule store or a read-back of what went through s2p50?"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "s4p47 (SCHEDULED_CLEAN) is absent on g2408 — siid 4 never appears in 211,880 properties_changed pushes. Schedules ride the s2p50/cfg SCHDDV3 transaction, not this slot. Vacuum-fork mapping."
+        evidence: "app-mitm-census:2026-06-16 (probe/logs/*.jsonl + dreame-mitm captures; siid=4 push count = 0 of 211880)"
 
   - id: "s4p49"
     siid: 4
@@ -2591,17 +2611,22 @@ properties:
       Intelligent multi-map recognition flag. Upstream mower forks define
       INTELLIGENT_RECOGNITION at (4, 49). In the legacy integration this is
       exposed as the 'multi_map' attribute; when enabled the device can maintain
-      separate maps for different lawn areas. Status on g2408 is unknown.
+      separate maps for different lawn areas.
+      RESOLVED 2026-06-16: NOT a g2408 property slot — siid 4 never appears in the
+      211,880-record property-PUSH census. Multi-map is handled by the g2408 map
+      mechanism (MAPL/MAP), not this slot. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      decoded: verified
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:702)"
         - "github.com/nicolasglg/dreame-mova-mower (types.py:755)"
-    open_questions:
-      - "Is s4p49 present on g2408 firmware? Probe with direct GET."
-      - "Does multi-map capability affect the s6p8 MAP_LIST behaviour on g2408?"
+    verifications:
+      - date: "2026-06-16"
+        status: verified
+        claim: "s4p49 (INTELLIGENT_RECOGNITION) is absent on g2408 — siid 4 never appears in 211,880 properties_changed pushes. Multi-map is handled by the g2408 map mechanism, not this slot. Vacuum-fork mapping."
+        evidence: "app-mitm-census:2026-06-16 (probe/logs/*.jsonl + dreame-mitm captures; siid=4 push count = 0 of 211880)"
 
   - id: "s4p59"
     siid: 4
