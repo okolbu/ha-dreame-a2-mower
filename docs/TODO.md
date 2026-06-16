@@ -23,23 +23,27 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ## Open
 
-### Surface patrol per-point cycles + auto-capture from `CRUISE.0` device-data
+### MITM re-capture backlog (from the 2026-06-16 inventory-purge sweep)
 
-**Why:** REOPENED 2026-06-16 — the readback source is now found (it was wrongly closed as
-"read impossible"). The authored per-point cycles + auto-capture are readable via the **`CRUISE.0`
-device-data key** in the existing `getDeviceData` response (NOT `m:g t:CRUISED`, which returns
-`r=-3`): a per-map JSON array `[{version, settings:{<point_id>:{num:<cycles>, ap:<auto_capture>}}}, …]`
-(`FINDING-cruise-config-readback-2026-06-16.md`, round-trip confirmed). So the patrol-points sensor's
-`cycles:null`/`auto_capture:null` can be filled read-side from data the integration ALREADY fetches —
-no extra round-trip, no telemetry reconstruction.
-**Done when:** the map/device-data fetch parses `CRUISE.0` (per-map → `settings[point_id] = {num, ap}`)
-and the patrol-points sensor surfaces effective per-point cycles + auto-capture (cross-joined to the
-`cruisePoints` geometry/dwell). Two minor capture loose-ends may be left as inventory open_questions:
-the comma-joined `'1,0'` settings key and the `value[0]=-1` sentinel.
-**Status:** open (implementation — read source confirmed; mower is live for verification).
-**Cross-refs:** `inventory.yaml § CRUISED` (CRUISE.0 verification + field map); `cloud_client` getDeviceData /
-`fetch_map` path; `entities/sensor` patrol-points sensor; `FINDING-cruise-config-readback-2026-06-16.md`;
-control-honesty residual #3.
+**Why:** the purge sweep (`OLD/ha-dreame-a2-mower-docs/inventory-history/2026-06-16-purge.md`
+HANDOVER) surfaced wire facts that need a live app-MITM / probe capture to confirm or pin.
+**Tasks (each = one capture):**
+1. **[s6p2 / PRE] device-side EXECUTION of accepted PRE writes** (highest value): app-MITM proved
+   the app's PRE write slots + `code:0` (EdgeMaster=PRE[10], Efficiency=PRE[3]), but whether the
+   g2408 firmware actually *applies* an integration-originated PRE write is still `[UNVERIFIED]`.
+   Verify a single-toggle PRE write changes observed mower behaviour.
+2. **[s2p2=72]** capture a cloud-labelled pause-timeout-return fire → promote 72 to wire-confirmed +
+   admit to `error_codes.py` (per the confidence gate).
+3. **[s2p2=20 / 33]** capture cloud-labelled fires to pin the real g2408 text (vs borrowed
+   dreame-mower names).
+4. **[s2p55]** app-MITM during a real AI-obstacle detection to capture the photo list/URL backend call.
+5. **[s4p22 / s4p44 / s4p59]** direct GET probes to resolve the camera-AI / patrol-mode / pet-detection
+   capability surfaces.
+**Already tracked separately (not duplicated here):** type-3 ephemeral obstacle photos (Photo/video
+archive item) and the lazy patrol-photo upload (session_summary_download open-question).
+**Status:** open (capture backlog; needs the MITM rig / live device).
+**Cross-refs:** `OLD/ha-dreame-a2-mower-docs/inventory-history/2026-06-16-purge.md`; memory
+`dreame-mitm-toolkit`; `inventory.yaml` §§ PRE / s2p2 / s2p55 / s4p22 / s4p44 / s4p59.
 
 ### Time-window photo→session match for AI-obstacle photos (follow-up to todo6 #3/#4)
 
