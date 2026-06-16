@@ -1187,11 +1187,22 @@ entities:
       # legs, mowing_legs, traversal_legs, local_leg_count
     status:
       seen_working: false
-      last_verified: "2026-05-30"
+      last_verified: "2026-06-16"
     verifications:
       - date: "2026-05-15"
         status: presumed
         claim: "native_value is the picker label; extra_state_attributes is the full summary dict from build_picked_session_summary; both return empty/None when no session is picked"
+      - date: "2026-06-16"
+        status: verified
+        claim: |
+          Patrol picker labels now postfix subtype + actual run time:
+          "[Patrol] [Map N] <ts> — Point / Dmin" (mode 107) / "— Edge / Dmin"
+          (108), keeping [Patrol] as the primary tag (patrol entries carry no m²).
+          Either part is omitted when unknown (legacy / non-echoed patrol → bare
+          [Patrol]). Backed by a new ArchivedSession.mode field mirrored from
+          raw_dict "mow_type_raw", so the index-built picker label needs no
+          per-session file read. Mow / To Point / Manual labels unchanged.
+        evidence: "tests/integration/test_session_label_type.py::test_patrol_point_label_has_point_subtype_and_duration + ::test_patrol_edge_label_has_edge_subtype_and_duration; tests/archive/test_session.py::test_index_entry_carries_mode_from_raw_json"
       - date: "2026-05-30"
         status: verified
         claim: |
@@ -2388,7 +2399,9 @@ entities:
       code: "custom_components/dreame_a2_mower/select_global.py:530"
     notes: |
       Pure integration-state picker — no device wire. Options are human-readable
-      labels "[Mowing] [Map N] YYYY-MM-DD HH:MM — N.N m² / Mmin", capped at 50
+      labels: mows "[Mowing] [Map N] YYYY-MM-DD HH:MM — N.N m² / Mmin", patrols
+      "[Patrol] [Map N] ... — Point|Edge / Mmin" (subtype from mode 107/108,
+      either part omitted when unknown), plus [To Point] / [Manual]. Capped at 50
       newest. In-progress sessions (still_running=True) are filtered out.
       Placeholder "(— select session —)" clears work-log camera + picked-session
       summary. Renamed from DreameA2ReplaySessionSelect in Task 9.

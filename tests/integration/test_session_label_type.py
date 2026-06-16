@@ -52,3 +52,39 @@ def test_patrol_label():
     assert lbl.startswith("[Patrol] [Map 2]")
     # blades-up: no area/coverage in the label
     assert "m²" not in lbl
+
+
+def test_patrol_point_label_has_point_subtype_and_duration():
+    """mode=107 (Point Patrol) postfixes '— Point / Dmin', keeping [Patrol] as the
+    primary tag. Patrol picker entries carry no m², so the subtype + actual run
+    time stand in for the mow branch's 'm² / Dmin'."""
+    lbl = format_session_label(_entry(session_type="patrol", mode=107, duration_min=11))
+    assert lbl.startswith("[Patrol] [Map 2]")
+    assert "— Point / 11min" in lbl
+    assert "Edge" not in lbl
+    assert "m²" not in lbl
+
+
+def test_patrol_edge_label_has_edge_subtype_and_duration():
+    """mode=108 (Edge Patrol) postfixes '— Edge / Dmin'."""
+    lbl = format_session_label(_entry(session_type="patrol", mode=108, duration_min=7))
+    assert lbl.startswith("[Patrol] [Map 2]")
+    assert "— Edge / 7min" in lbl
+    assert "Point" not in lbl
+
+
+def test_patrol_unknown_mode_shows_duration_only():
+    """Patrol with no recorded mode (non-echoed saw_patrol_start, or a legacy
+    entry) → no subtype word, but the run time is still postfixed when present."""
+    lbl = format_session_label(_entry(session_type="patrol", duration_min=9))
+    assert lbl.startswith("[Patrol] [Map 2]")
+    assert "Point" not in lbl and "Edge" not in lbl
+    assert "— 9min" in lbl
+
+
+def test_patrol_no_mode_no_duration_is_bare():
+    """Neither subtype nor duration → the original bare [Patrol] label."""
+    lbl = format_session_label(_entry(session_type="patrol", duration_min=0))
+    assert lbl.startswith("[Patrol] [Map 2]")
+    assert "—" not in lbl
+    assert "min" not in lbl

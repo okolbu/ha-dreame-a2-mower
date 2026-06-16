@@ -21,6 +21,15 @@ MODE_LABELS: dict[int, str] = {code: info.label for code, info in MODE_BY_CODE.i
 labels can never drift from the slugs / state-machine map again (pre-2026-05-30 a
 local copy had 102 mislabelled "All areas"). Unmapped values render as raw=N."""
 
+_PATROL_SUBTYPE: dict[int, str] = {
+    code: info.label[: -len(" Patrol")]
+    for code, info in MODE_BY_CODE.items()
+    if info.label.endswith(" Patrol")
+}
+"""Patrol subtype word for the picker postfix: 107 -> "Point", 108 -> "Edge".
+Derived from MODE_BY_CODE labels ("Point Patrol" / "Edge Patrol") so it can't
+drift from the mode-enum SoT."""
+
 PRE_TYPE_LABELS: dict[int, str] = {
     0: "Default",
 }
@@ -419,8 +428,21 @@ def format_session_label(entry: Any) -> str:
     elif session_type == "manual_drive":
         base = f"[Manual] {map_prefix} {ts_str}"
     elif session_type == "patrol":
-        # Blades-up cruise — no area/coverage; cloud-finalized like a mow.
+        # Blades-up cruise — no area/coverage. Keep [Patrol] as the primary tag
+        # and postfix the subtype (Point/Edge, from the OSS mode) + the actual run
+        # time, mirroring the mow branch's "— m² / Dmin" (patrol entries carry no
+        # m²). Either part is omitted when unknown.
+        mode = getattr(entry, "mode", None)
+        subtype = _PATROL_SUBTYPE.get(mode) if mode is not None else None
+        duration_min = getattr(entry, "duration_min", 0) or 0
+        parts: list[str] = []
+        if subtype:
+            parts.append(subtype)
+        if duration_min:
+            parts.append(f"{duration_min}min")
         base = f"[Patrol] {map_prefix} {ts_str}"
+        if parts:
+            base += " — " + " / ".join(parts)
     else:
         base = (
             f"[Mowing] {map_prefix} {ts_str}"

@@ -120,6 +120,12 @@ class ArchivedSession:
     outcome: str | None = None
     target_ids: tuple[int, ...] | None = None
 
+    # OSS mode / op code (mirrored from raw_dict "mow_type_raw"): 100-103 mow
+    # variants, 107 point patrol, 108 edge patrol. Drives the picker's patrol
+    # subtype postfix (Point / Edge). None on legacy entries / sessions archived
+    # before this field, and on sessions that never got a cloud mode.
+    mode: int | None = None
+
     @classmethod
     def from_summary(
         cls,
@@ -131,6 +137,7 @@ class ArchivedSession:
         session_type: str | None = None,
         outcome: str | None = None,
         target_ids: list | tuple | None = None,
+        mode: int | None = None,
     ) -> ArchivedSession:
         return cls(
             filename=filename,
@@ -146,6 +153,7 @@ class ArchivedSession:
             session_type=session_type,
             outcome=outcome,
             target_ids=tuple(target_ids) if target_ids else None,
+            mode=int(mode) if mode is not None else None,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -169,6 +177,8 @@ class ArchivedSession:
             d["outcome"] = self.outcome
         if self.target_ids:
             d["target_ids"] = list(self.target_ids)
+        if self.mode is not None:
+            d["mode"] = self.mode
         return d
 
     @classmethod
@@ -192,6 +202,8 @@ class ArchivedSession:
             session_type=d.get("session_type"),
             outcome=d.get("outcome"),
             target_ids=tuple(d["target_ids"]) if d.get("target_ids") else None,
+            # Backward-compat: legacy entries lack 'mode' → None (no subtype postfix).
+            mode=int(d["mode"]) if d.get("mode") is not None else None,
         )
 
 
@@ -575,6 +587,7 @@ class SessionArchive:
             session_type=rj.get("session_type"),
             outcome=rj.get("outcome"),
             target_ids=rj.get("target_ids"),
+            mode=rj.get("mow_type_raw"),
         )
         return self._commit_to_index(entry, md5=md5, start_ts=start_ts)
 

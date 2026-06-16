@@ -517,6 +517,48 @@ def test_index_entry_carries_session_type_from_raw_json(tmp_path, summary, raw_j
     assert format_session_label(reloaded).startswith("[Patrol]")
 
 
+def test_index_entry_carries_mode_from_raw_json(tmp_path, summary, raw_json):
+    """The index entry must carry the session `mode` (mow_type_raw, e.g. 107 point
+    patrol / 108 edge patrol) pulled from raw_json, so the picker can postfix the
+    patrol subtype (Point/Edge) without opening the per-session file."""
+    rj = dict(raw_json)
+    rj["session_type"] = "patrol"
+    rj["mow_type_raw"] = 107
+    a = SessionArchive(tmp_path)
+    entry = a.archive(summary, raw_json=rj)
+    assert entry is not None
+    assert entry.mode == 107
+
+    # Survives index.json round-trip.
+    a2 = SessionArchive(tmp_path)
+    a2.load_index()
+    reloaded = a2.list_sessions()[0]
+    assert reloaded.mode == 107
+
+    # And the picker label reflects the subtype.
+    from custom_components.dreame_a2_mower.session_card import format_session_label
+    assert "— Point" in format_session_label(reloaded)
+
+
+def test_index_entry_mode_round_trip_and_legacy_default():
+    s = ArchivedSession(
+        filename="x.json", start_ts=1, end_ts=2, duration_min=1,
+        area_mowed_m2=0.0, map_area_m2=1, md5="abc",
+        session_type="patrol", mode=108,
+    )
+    d = s.to_dict()
+    assert d["mode"] == 108
+    s2 = ArchivedSession.from_dict(d)
+    assert s2.mode == 108
+
+    # Legacy entry without the key -> None.
+    legacy = ArchivedSession.from_dict({
+        "filename": "old.json", "start_ts": 1, "end_ts": 2,
+        "duration_min": 1, "area_mowed_m2": 1.0, "map_area_m2": 1, "md5": "abc",
+    })
+    assert legacy.mode is None
+
+
 def test_index_entry_session_type_round_trip_and_legacy_default():
     s = ArchivedSession(
         filename="x.json", start_ts=1, end_ts=2, duration_min=1,
