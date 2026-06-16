@@ -63,17 +63,9 @@ entities:
         claim: "re-renders within ~1s of MAPL active-map flip after fix; previously took up to 1min for the cloud_state refresh"
         evidence: "coordinator/_mqtt_handlers.py § _apply_mapl — async_create_task(_render_main_view()) added in _handle_mapl_update"
       - date: "2026-05-14"
-        status: retracted
-        retracts: "dashboard live-map card uses conditional aspect_ratios per active map to avoid object-fit:cover clipping"
-        reason: "conditional + per-map-aspect_ratio attempt rendered as a blank card slot on live HA after reboot — the whole card was missing, not empty content. Reverted to a single non-conditional picture-entity with no aspect_ratio; card height varies between maps but neither clips. Root cause of the conditional failure not identified — per_map_header at the top of the same view uses an apparently-identical pattern (conditional → picture-entity with aspect_ratio) and renders fine. Possible differences: aspect_ratio value (int 969 from `16:9` sexagesimal parse vs string '637x717'/'291x287'), or camera entity (per-map static camera vs the live active-map follower). Worth revisiting once we have a minimal repro."
-      - date: "2026-05-14"
         status: verified
         claim: "last-session obstacle overlay visible on live map immediately after boot (v1.0.11a3)"
         evidence: "user confirmed after reboot with v1.0.11a3; latest map-0 session 2026-05-13_1778697514_7bff1b02.json had 7 obstacles (polygon point counts 7-9)"
-      - date: "2026-05-14"
-        status: retracted
-        retracts: "obstacles overlay always appears on the live map"
-        reason: "v1.0.11a1 regressed this — the new early-render-on-MAPL path triggered _load_last_session_obstacles before session_archive.load_index() had completed at coordinator setup line 991. Empty index → cached `[]` for the active map → cache stayed poisoned until session-finalize invalidation. v1.0.11a2 guarded the empty-cache write on `_index_loaded`, but didn't re-trigger _render_main_view; the PNG produced earlier (with no obstacles) was still served until the next periodic refresh or live-trail event. v1.0.11a3 added an explicit _render_main_view after load_index completes."
       - date: "2026-06-01"
         status: presumed
         claim: "map camera serves coordinator._base_png (lawn + background only); trail+icon are client-side; publishes map_projection/point_seq/latest_point/track_snapshot/background_mode; calibration_points removed"
@@ -96,10 +88,6 @@ entities:
         status: presumed
         claim: "editable_objects now ALSO surfaces PATROL-POINT descriptors {id, op:223, type:2, kind:'patrol', point_m:[x,y]} (from MapData.patrol_points / cruisePoints type=8) — DISTINCT opcode from maintenance (o=224/type=3). MAP_ATTR_SCHEMA_VERSION bumped 3→4. The map-editor card draws patrol points as a marker <g obj-patrol> (distinct teal colour from maintenance) and writes via the NEW service create_patrol_point (o=223, flat [x,y,heading=0]); delete_map_object extended to category 2 (patrol). The prior 'patrol intentionally NOT surfaced — wire UNVERIFIED' framing is withdrawn (wire confirmed app-mitm 2026-06-15). ALSO: the EDITOR BACKGROUND (coordinator._editor_base_png / clean_md) now strips spot_zones + maintenance_points + patrol_points (in addition to editable exclusion zones) so all reshape/point-edit objects are CARD OVERLAYS only — a hard refresh no longer bleeds a stale cloud point through the server PNG. AND edit_map schedules staggered delayed cloud re-fetches (8/20/40 s via async_call_later) after every map edit so a propagated change surfaces in seconds, not up to ~2 min. NOT yet device-validated."
         evidence: "tests/www/test_map_editor_points.py (patrol render/save/delete + selection-state lifecycle harness); tests/integration/test_card_contract.py::test_camera_editable_objects_exact_element_shape (patrol op=223/type=2); tests/integration/test_edit_map.py::test_create_patrol_point_builds_o223_mutation + ::test_edit_map_schedules_delayed_refetches; tests/coordinator/test_base_render_on_activity.py::test_editor_base_strips_spots_maintenance_patrol; camera/map.py _editable_objects_from_map; coordinator/_writes.py create_patrol_point; coordinator/_rendering.py clean_md"
-      - date: "2026-06-15"
-        status: retracted
-        retracts: "Patrol points (o=223) intentionally NOT surfaced — create/delete wire UNVERIFIED (see docs/TODO.md)."
-        reason: "Patrol-point create/move/delete wire confirmed app-mitm 2026-06-15 (o:223 {id,points:[x,y,heading]} create+move, delete o:218 {id,type:2}); patrol CRUD now shipped in editable_objects + card + create_patrol_point service."
     references:
       code: "custom_components/dreame_a2_mower/_camera_map.py:14"
       wire_entry: "MAPL"
@@ -129,10 +117,6 @@ entities:
       seen_working: true
       last_verified: "2026-05-14"
     verifications:
-      - date: "2026-05-14"
-        status: retracted
-        retracts: "_attr_name was set to the map name (`map_name or f\"Map {map_id+1}\"`); produced doubled friendly_name \"Map 1 Map 1\" / \"Map 2 Map 2\""
-        reason: "device_info already names the sub-device after the map, and has_entity_name=True prepends it — explicit _attr_name = map_name caused the doubling. Fixed by setting _attr_name = \"Base\""
       - date: "2026-05-14"
         status: verified
         claim: "doubled friendly_name confirmed on live HA before fix"
@@ -394,11 +378,6 @@ entities:
     status:
       seen_working: false
       last_verified: "2026-05-15"
-    verifications:
-      - date: "2026-05-15"
-        status: retracted
-        retracts: "parent-level read-only EdgeMaster mirror tracking the last active map's value"
-        reason: "Removed 2026-05-15. Was misleading on a multi-map device — surfaced only the most-recently-active map's s6p2[2] value. The per-map switch (switch.dreame_a2_mower_map_N_edgemaster) is the correct surface. v1.0.11a5 drops the descriptor from switch.py's SWITCHES tuple; cleanup script handles the registry orphan."
     notes: |
       Removed in v1.0.11a5. The per-map switch (id
       "switch.dreame_a2_mower_map_N_edgemaster") is the only EdgeMaster
@@ -1231,11 +1210,6 @@ entities:
         claim: "extra_state_attributes now also exposes legs (list[list[[x_m,y_m]]]), state_samples (list[[ts,state]]), map_projection ({bx2_mm,by2_mm,pixel_size_mm,width_px,height_px} or None), and base_map_image_url (static /api/dreame_a2_mower/work_log.png) — consumed by the dreame-mower-replay-card custom Lovelace card"
         evidence: "tests/protocol/test_session_card.py::test_picked_session_summary_exposes_{legs,state_samples,map_projection,base_map_image_url}"
       - date: "2026-05-28"
-        status: retracted
-        claim: "Attributes legs, mowing_legs, traversal_legs, local_leg_count are no longer present on extra_state_attributes."
-        retracts: "extra_state_attributes now also exposes legs (list[list[[x_m,y_m]]]), state_samples (list[[ts,state]]), map_projection ({bx2_mm,by2_mm,pixel_size_mm,width_px,height_px} or None), and base_map_image_url (static /api/dreame_a2_mower/work_log.png) — consumed by the dreame-mower-replay-card custom Lovelace card"
-        reason: "legs / mowing_legs / traversal_legs / local_leg_count removed in the 2026-05-28 session-replay rewrite; replaced by track-derived attributes legs_timeline, track_first_ts, track_last_ts, distance_mowing_m, distance_traversal_m"
-      - date: "2026-05-28"
         status: presumed
         claim: "extra_state_attributes exposes legs_timeline (track-derived, list of leg dicts with role/start_ts/end_ts/pts), track_first_ts, track_last_ts (unix seconds from archive track), distance_mowing_m, distance_traversal_m; these all derive from the archive per-point track stream via session_card.build_picked_session_summary"
     references:
@@ -1265,18 +1239,6 @@ entities:
       seen_working: false
       last_verified: "2026-05-29"
     verifications:
-      - date: "2026-05-15"
-        status: retracted
-        retracts: "binary_sensor.rain_protection_active reads true while the mower is in the rain-protection wait window"
-        reason: |
-          Prior value_fn (binary_sensor.py:50) was `coord.data.error_code == 56`,
-          which only matches the one-shot s2p2=56 transition that fires once at
-          rain-detect. After that, s2p2 advances to 54/idle/dock and the sensor
-          flips off. The Dreame app correctly shows the protection STATE as
-          active for the full wait window (WRP[1] resume_hours from the s2p2=56
-          timestamp, or until the user taps Continue). The integration
-          previously had no equivalent. User-observed drift 2026-05-15: mower
-          at dock in rain-protection state, app shows active, sensor reads off.
       - date: "2026-05-29"
         status: presumed
         claim: "value_fn repointed to coordinator.rain_delay_active; sensor now reflects the whole rain-delay wait window, not just the momentary s2p2=56 flash"
@@ -1325,18 +1287,6 @@ entities:
       seen_working: true
       last_verified: "2026-06-10"
     verifications:
-      - date: "2026-05-16"
-        status: retracted
-        claim: |
-          number range corrected from 0-100 % to 0-2 (mode BOX → SLIDER),
-          unit_of_measurement=PERCENTAGE removed.
-        retracts: "native_max_value=100, unit_of_measurement=PERCENTAGE — sensitivity rendered as '1% of 100%' on the dashboard"
-        reason: |
-          REC[1] is a 3-value enum (0=Low, 1=Medium, 2=High) per
-          inventory.yaml id=REC sample [1,1,1,1,1,1,0,1,3] (decoded
-          2026-04-24). The earlier 0-100 % shape was guesswork from
-          the F4 ship that pre-dated the REC decode. Live re-confirmed
-          2026-05-16: app shows "Medium" while entity reports 1.
       - date: "2026-05-16"
         status: verified
         claim: |
@@ -2653,11 +2603,6 @@ entities:
         claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[5]) through coordinator.write_map_general_setting; dual-write to SETTINGS.mowingDirectionMode. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
       - date: "2026-06-10"
-        status: retracted
-        claim: "Ported from code 2026-05-31: reads mowingDirectionMode from cloud_state.settings.by_map_id_canonical[map_id], maps 0/1/2 to Striped/Crisscross/Chequerboard"
-        retracts: "Ported from code 2026-05-31: reads mowingDirectionMode from cloud_state.settings.by_map_id_canonical[map_id], maps 0/1/2 to Striped/Crisscross/Chequerboard; writes via coordinator.write_settings(map_id, field='mowingDirectionMode', value=idx). Read from select_map_settings.py:448-505 + coordinator/_writes.py:185; not re-confirmed live."
-        reason: "Label-to-index mapping was wrong. CONFIRMED device enum (inventory.yaml PRE[5] + 2026-06-09 app-MITM capture): 0=Crisscross, 1=Customize, 2=Chequerboard. 'Striped' does not exist on g2408 firmware. Corrected in _OPTIONS 2026-06-10."
-      - date: "2026-06-10"
         status: verified
         claim: "Correct device enum confirmed: PRE[5] / SETTINGS.mowingDirectionMode: 0=Crisscross, 1=Customize, 2=Chequerboard. _OPTIONS corrected to match. Customize pairs with per-map mowing_direction angle (PRE[6])."
         evidence: "app-mitm:2026-06-09-settings-sweep"
@@ -3807,10 +3752,6 @@ entities:
         status: presumed
         claim: "Ported from code 2026-05-31: DreameA2Time.native_value = _to_time(entity_description.minutes_fn(coordinator.data)); async_set_value logs warning and no-ops. Platform 'time' is a real registered HA platform (homeassistant.components.time.TimeEntity). Read from time.py:117-167; not re-confirmed live."
         evidence: "time.py:117-153 (class DreameA2Time(CoordinatorEntity, TimeEntity)); time.py:160-167 (async_setup_entry registered under DOMAIN); time.py:1 (module docstring confirms time platform)"
-      - date: "2026-06-10"
-        status: retracted
-        retracts: "schedule editing is BT-only per protocol-doc §1.1 on g2408"
-        reason: "Mow-schedule editing is writable via the SCHD*V3 routed-action transport (siid:2/aiid:50); BT-only was already debunked for settings (inventory.yaml:2115). The time.* entities are DND/charging/low-speed CFG times, not the mow schedule. [app-mitm:2026-06-10-schedule-write]"
       - date: "2026-06-10"
         status: presumed
         claim: "Phase A1 Task 7: DreameA2TimeEntityDescription now carries cfg_key + build_from_cfg_fn + field_updates_fn; async_set_value converts datetime.time to minutes, RMW-builds wire payload via cfg_payloads builders, writes via coordinator.write_setting. All 6 entities wired; LIT start/end have no MowerState minute fields and are not present. control_mode remains read_only_noop until Task 8 promotes them."
