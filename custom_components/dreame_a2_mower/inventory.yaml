@@ -5594,14 +5594,19 @@ cfg_keys:
         [6]  Mowing Direction angle (degrees, used when [5]=1 Customize only).
              Confirmed: 8↔64 via isolated write.
         [7]  Automatic Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
-        [8]  reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+        [8]  EdgeMaster-fixed edge param, no user UI (=0). Aligns to one of the
+             SETTINGS 0-fields {cutterPosition, edgeMowingWalkMode, edgeCuttingAttachment}
+             (paired with [18]). [partial — SETTINGS dual-write alignment 2026-06-17]
         [9]  Obstacle Avoidance on Edges: 0=off, 1=on. Confirmed by isolated toggle.
         [10] EdgeMaster: 0=off, 1=on. Confirmed by isolated toggle (re-confirmed
              by a clean ON↔OFF single-index toggle on fw 0625 [app-mitm:2026-06-16]).
              Resolves the prior "AutoEdge/SafeEdge/EdgeMaster/OA-on-Edges order TBD".
              (Behaviour: after the area mow, two extra edge passes at 3 cm height with
              blades side-shifted toward the edge; PRE[10] is just the on/off.)
-        [11] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+        [11] Edge/OA param, no UI on the mowing screen (=2). One of the value-2 pair
+             {edgeMowingNum (2 passes), obstacleAvoidanceSensitivity (2=medium)} —
+             other is [17]. Toggle OA/AI sensitivity to disambiguate.
+             [partial — SETTINGS alignment 2026-06-17]
         [12] LiDAR Obstacle Recognition: 0=off, 1=on. Confirmed isolated; disabling
              greys out Obstacle Avoidance Height in the app.
         [13] Obstacle Avoidance Height: 5/10/15/20 cm. Multi-value confirmed.
@@ -5609,15 +5614,28 @@ cfg_keys:
         [15] AI Obstacle Recognition bitmask: bit0(1)=Human, bit1(2)=Animal,
              bit2(4)=Object. All-on=7. Bit order confirmed: Human-off 7→6.
         [16] Safe Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
-        [17] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
-        [18] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
-        [19] Turning Method: 0=Efficient, 1=Lawn-Care. Confirmed by an isolated
-             single-index toggle [app-mitm:2026-06-17]: Lawn-Care write differed
-             from the Efficient write ONLY at [19] (1 vs 0). Appended by the
-             0550→0625 OTA; the UI ("Turning Method Settings" sub-page of Mowing
-             Settings) shipped in app 2.5.8.1.
-        [20] NEW post-0625 (appended by the 0550→0625 OTA) — default 30 (resembles a
-             minutes/percent value). [UNKNOWN — to capture]
+        [17] Edge/OA param, no UI on the mowing screen (=2). The OTHER of the value-2
+             pair {edgeMowingNum, obstacleAvoidanceSensitivity} (with [11]).
+             [partial — SETTINGS alignment 2026-06-17]
+        [18] EdgeMaster-fixed edge param, no user UI (=0). The OTHER of the value-0
+             set {cutterPosition, edgeMowingWalkMode, edgeCuttingAttachment} (with [8]).
+             [partial — SETTINGS alignment 2026-06-17]
+        [19] Turning Method: 0=Efficient, 1=Lawn-Care (= SETTINGS steeringMode).
+             Confirmed by an isolated single-index toggle [app-mitm:2026-06-17]:
+             Lawn-Care write differed from Efficient ONLY at [19] (1 vs 0); SETTINGS
+             dual-write alignment cross-confirms steeringMode. Appended by the
+             0550→0625 OTA; UI ("Turning Method Settings" sub-page) shipped in app 2.5.8.1.
+        [20] cutterPositionHeight — EdgeMaster edge-pass CUTTING HEIGHT, cm×10
+             (30 = 3.0 cm, matching the fixed EdgeMaster "3 cm" edge passes). Resolved
+             via SETTINGS dual-write alignment 2026-06-17 (PRE[20]=30 ↔ SETTINGS
+             cutterPositionHeight=3); appended by the 0550→0625 OTA. [confirmed —
+             value+encoding match].
+        NOTE [8/11/17/18/20] resolved 2026-06-17 by aligning the named SETTINGS.0
+             zone object (dual-written with PRE on every save) to the positional PRE
+             array: every known PRE index matches its SETTINGS field by value, and the
+             leftover SETTINGS fields (the EdgeMaster-fixed edge params + OA sensitivity,
+             none with a mowing-screen UI) account for these 5 — which is why they were
+             constant across all single-toggle sweeps.
 
       Per-zone (Custom Mode) writes use the same int array with [2] set to the
       zone index. Enable custom-mode per zone via PREP first
@@ -5642,6 +5660,10 @@ cfg_keys:
       last_seen: "2026-06-16"
       decoded: confirmed
     verifications:
+      - date: "2026-06-17"
+        status: partial
+        claim: "The 5 long-standing 'reserved/unknown' PRE indices [8],[11],[17],[18],[20] are resolved (by name) via SETTINGS dual-write alignment: the named SETTINGS.0 zone object is written together with PRE on every Mowing-Settings save, so each known PRE index matches its SETTINGS field by value, and the leftover SETTINGS fields account for these 5 — all EdgeMaster-fixed edge params + OA sensitivity with NO mowing-screen UI (why they never moved in single-toggle sweeps). [20]=cutterPositionHeight (30=3.0cm×10) is high-confidence (unique value); [11]/[17]={edgeMowingNum, obstacleAvoidanceSensitivity} and [8]/[18]={cutterPosition, edgeMowingWalkMode, edgeCuttingAttachment} remain value-tied (need a setting that varies them to pin exactly). Also cross-confirms PRE[19]=steeringMode."
+        evidence: "app-mitm:2026-06-17 (getDeviceData SETTINGS.0 map0/zone0 named fields aligned to PRE baseline [..,8:0,11:2,17:2,18:0,20:30]; user-confirmed EdgeMaster has no sub-UI and is fixed 2-pass/sideways/3cm)"
       - date: "2026-06-17"
         status: verified
         claim: "PRE[19] = Turning Method (0=Efficient, 1=Lawn-Care), resolving the post-0625 'NEW/UNKNOWN' [19] field. Isolated single-index toggle in app 2.5.8.1 (new 'Turning Method Settings' sub-page of Mowing Settings): the two map-0 PRE saves differed ONLY at [19] — Lawn-Care vs Efficient."
