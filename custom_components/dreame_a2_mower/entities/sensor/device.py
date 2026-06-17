@@ -1268,6 +1268,7 @@ class DreameA2ScheduleCountSensor(
                 {
                     "slot_id": s.slot_id,
                     "name": s.name,
+                    "enabled": bool(s.mode),
                     "plans": [
                         {
                             "time": _fmt_hhmm(p.time_min),
