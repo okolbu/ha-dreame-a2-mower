@@ -144,11 +144,15 @@ def test_write_schedule_uses_device_plane_not_kv():
     assert ok is True
     # KV path retired — never touched.
     coord._cloud.write_chunked_key.assert_not_called()
-    # Routed-action transport used: a SCHDTV3 read probe + the write legs.
-    ts = [c.args[2][0]["t"] for c in coord._cloud.action.call_args_list]
-    assert "SCHDTV3" in ts        # read-modify-write base
-    assert "SCHDIV3" in ts        # row header
-    assert "SCHDSV3" in ts        # row state (version bump)
+    # Routed-action transport used: a m:'g' SCHDIV3 live-read probe + the
+    # write legs. The read is the chunked GET (SCHDIV3 header), not the retired
+    # SCHDTV3 scalar.
+    legs = [(c.args[2][0].get("m"), c.args[2][0]["t"]) for c in coord._cloud.action.call_args_list]
+    ts = [t for _, t in legs]
+    assert ("g", "SCHDIV3") in legs   # read-modify-write base (live-read header)
+    assert ("s", "SCHDIV3") in legs   # write row header
+    assert "SCHDSV3" in ts            # row state (version bump)
+    assert "SCHDTV3" not in ts        # retired read probe
 
 
 def test_write_ai_human_enabled_uses_write_chunked_key():

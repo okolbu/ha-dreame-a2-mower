@@ -6888,41 +6888,57 @@ cfg_individual:
   - id: "SCHDTV3"
     name: "schedule_v3"
     category: "cfg_individual"
-    payload_shape: "int (scalar — likely schedule version or active-plan count; semantics unknown)"
+    payload_shape: "SCHDTV3 {t:N} -> scalar int (type/flag, NOT the schedule). LIVE read uses SCHDIV3+SCHDDV3 chunked GET (see semantic)."
     semantic: |
-      Schedule v3 endpoint. Live routed-get confirmed 2026-06-09: r=0, d=2
-      (scalar integer). Semantics unknown — could be the schedule-config
-      version counter, the number of active schedule entries, or a feature-
-      flag. Full schedule structure is NOT returned by bare GET [UNKNOWN —
-      the app may send args to retrieve the full list, or GET returns only
-      a version/count scalar and the schedule list is pushed separately].
-      App-MITM 2026-06-09 confirms the app issues action(siid:2,aiid:50)
-      {m:'g', t:'SCHDTV3'} [app-mitm:2026-06-09-settings-sweep].
-      The WRITE transport is a 3-key transaction using SCHDDV3/SCHDIV3/SCHDSV3
-      (see those cfg_individual entries); this key is the read-side scalar only.
-      [app-mitm:2026-06-09-settings-sweep]
+      Schedule v3 read surface. RESOLVED 2026-06-17 (app-mitm app 2.5.8.1 +
+      live cloud-relay run): the schedule is read with m:'g' over siid:2/aiid:50
+      as a TWO-KEY chunked GET — the inverse of the SCHD*V3 write transaction:
+
+        1. SCHDIV3 {i:0}            -> {i:0, l:<total bytes>, v:<version>}
+        2. SCHDDV3 {s, l, v} (loop) -> {d:<chunk str>, l:<bytes>, s:<offset>, v}
+           request s=offset, l=requested len (app uses min(100, remaining)),
+           v=version from the header; advance s by the response's l until
+           s == header l. Reassemble the chunk `d` strings in `s` order:
+        => {"d":[[slot,enabled,name,b64blob],...], "v":<version>}
+
+      Row shape = [slot, enabled, name, b64blob] — the SAME rows the SCHD*V3
+      WRITE uses; b64blob is the 7/8/9-byte run-record blob schedule_decode.py
+      already decodes. Synchronous over the cloud relay: the reply is
+      out[0].d (m:'g' required — m:'r' returns None, m:'a' returns r=-3).
+
+      The bare SCHDTV3 {t:N} GET returns only a scalar int (a type/flag, e.g. 0
+      or 2) — it is NOT the schedule and read_schedule_rows must NOT use it.
+      The cloud iotuserdata SCHEDULE.* KV is a STALE cache (lags like CRUISE.0)
+      and is NOT written back by app SCHD*V3 edits — do not read schedule from
+      it (cold-start fallback only). Evidence: app-mitm 2026-06-17 18:49:38-42
+      miio-13267.jsonl (v=58177, l=119, chunks @0/@76) + live cloud-relay run
+      [probe @2026-06-17]. App-MITM source: FINDING-schedule-stale-read-2026-06-17.md.
     status:
       seen_on_wire: true
-      last_seen: "2026-06-09"
-      decoded: partial
+      last_seen: "2026-06-17"
+      decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
-      - "Decode SCHDTV3 scalar d=2 — is it the schedule-config version, the count of active entries, or a feature flag? Correlate with add/delete schedule operations."
-      - "Does the app pass args to SCHDTV3 GET to retrieve the full schedule list, or is the full list pushed separately?"
+      - "Does the SCHDIV3->SCHDDV3 chunked GET return fresh rows when the device is DOCKED/asleep, or only when it is awake/online? (live verification used a moving device; fix falls back to the stale KV on any failure.)"
+      - "Decode the bare SCHDTV3 {t:N} scalar — type/flag vs version vs active-entry count. Not load-bearing now that the chunked GET is the schedule read."
     verifications:
-      - date: "2026-06-09"
-        status: partial
-        claim: "App issues routed-get t=SCHDTV3 (schedule v3); GET observed but SET not captured; response shape not yet captured on our client"
-        evidence: "dreame-app-implementation-guide-2026-06-09.md"
-      - date: "2026-06-09"
-        status: partial
-        claim: "SCHDTV3 routed-get returns r=0, d=2 (scalar integer); full schedule structure not returned by bare GET; semantics of the scalar unknown."
-        evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
       - date: "2026-06-09"
         status: verified
         claim: "Schedule write transport captured: 3-key txn SCHDDV3/SCHDIV3/SCHDSV3 (shared v=ms txn-id); SCHDTV3 is the read-side scalar only, not the write key."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-17"
+        status: verified
+        claim: "The cloud iotuserdata SCHEDULE.* KV is a STALE cache, NOT written back by app SCHD*V3 schedule edits: live empty-batch read held v=35477 / 6-plan slot-0 for hours while the device's real schedule was v=58177 / 3-plan slot-0. HA mirrors the KV exactly (sensor.schedule_count == KV) so the staleness is the read source, not the integration. get_batch_device_datas ignores its key arg (returns the full snapshot), so there is exactly one SCHEDULE.* and it is the stale one."
+        evidence: "probe/probe_schedule_live.py + ha_get_state(sensor.schedule_count) 2026-06-17; user second-app cross-check"
+      - date: "2026-06-17"
+        status: verified
+        claim: "LIVE schedule read = chunked m:'g' GET SCHDIV3 {i:0} (-> l=total,v=version) then SCHDDV3 {s,l,v} chunks reassembled to {d:[[slot,enabled,name,b64blob],...],v}. Verified end-to-end over the CLOUD RELAY (synchronous, reply in out[0].d): header {i:0,l:119,v:58177}, chunks l=76@s0 + l=43@s76, reassembled JSON parsed to slot0 enabled=1 'Spr & Sum' 3 plans + slot1 enabled=0. Matches the app's current schedule; SCHEDULE.0 KV at v=35477 was 6 plans (stale). m:'g' required (m:'r'->None, m:'a'->r=-3)."
+        evidence: "app-mitm:2026-06-17 miio-13267.jsonl; /tmp/probe_schd_full.py live cloud-relay run 2026-06-17"
+      - date: "2026-06-17"
+        status: verified
+        claim: "read_schedule_rows()'s prior SCHDTV3 {m:'r'} read with a d.rows expectation was wrong — SCHDTV3 returns a scalar, never rows; the function returned [] every time. Superseded by the SCHDIV3->SCHDDV3 chunked GET above."
+        evidence: "/tmp/probe_schd_raw.py live run 2026-06-17 (SCHDTV3 m:r -> None)"
 
   - id: "CHECK"
     name: "self_check_command"
@@ -7117,6 +7133,15 @@ cfg_individual:
       Protobuf field layout: diff known-schedule edits to map fields —
       [UNKNOWN — to capture]. [app-mitm:2026-06-09-settings-sweep]
       See also: SCHDIV3 (length descriptor), SCHDSV3 (slot enable/summary).
+
+      READ direction (same key, m:'g'): {m:'g', t:'SCHDDV3', d:{s:<offset>,
+      l:<req len>, v:<version from SCHDIV3 header>}} -> {d:"<chunk>", l:<actual
+      bytes>, s:<offset>, v}. Loop advancing s by the response l until s reaches
+      the header's total l; reassemble chunk `d` strings → the live schedule
+      JSON {"d":[[slot,enabled,name,b64blob],...],"v":<ver>}. This is the
+      authoritative schedule READ (the SCHEDULE.* KV is a stale cache). Verified
+      end-to-end over the cloud relay [probe @2026-06-17]. See SCHDTV3 entry for
+      the full read flow. [app-mitm:2026-06-17]
     status:
       seen_on_wire: false
       first_seen: "2026-06-09"
@@ -7151,6 +7176,13 @@ cfg_individual:
       reassembly is complete. [app-mitm:2026-06-09-settings-sweep]
       i semantics [UNKNOWN — to capture]: likely the schedule slot index or
       chunk sequence number. [app-mitm:2026-06-09-settings-sweep]
+
+      READ direction (same key, m:'g'): {m:'g', t:'SCHDIV3', d:{i:0}} ->
+      {i:0, l:<total bytes>, v:<schedule version>}. i=0 selects the whole
+      schedule; l is the total reassembled length to read via SCHDDV3 chunks;
+      v is the live schedule version (e.g. 58177). Header step of the
+      authoritative schedule READ. Verified over the cloud relay
+      [probe @2026-06-17]. See SCHDTV3 for the full flow. [app-mitm:2026-06-17]
     status:
       seen_on_wire: false
       first_seen: "2026-06-09"

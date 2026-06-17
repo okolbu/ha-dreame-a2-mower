@@ -56,7 +56,7 @@ from ..mower.state import ChargingStatus, MowerState
 from ..mower.state_machine import MowerStateMachine
 from ..mqtt_client import DreameA2MqttClient
 from ..observability.schemas import SCHEMA_SESSION_SUMMARY, SchemaCheck
-from ..protocol.schedule_action import read_schedule_rows, write_schedule_row
+from ..protocol.schedule_action import read_live_schedule, write_schedule_row
 from ..protocol.schedule_encode import encode_schedule_blob
 from ._property_apply import (
     _BLOB_SLOTS,
@@ -111,13 +111,23 @@ class _WritesMixin:
             LOGGER.warning("write_schedule: cloud client not ready")
             return False
 
-        cs = self.cloud_state
-        base_version = cs.schedule.version if cs is not None else 0
+        # Read the authoritative LIVE schedule once (rows for the skip-gate +
+        # the live version to bump). The SCHEDULE.* KV / cloud_state.version is
+        # a stale cache, so deriving the base version from it could emit a
+        # new_version BELOW the device's current and get the write rejected
+        # (verified 2026-06-17: KV v=35477 vs live v=58177).
+        live = await self.hass.async_add_executor_job(
+            read_live_schedule, self._cloud.action
+        )
+        if live is not None:
+            rows = live.get("d") or []
+            base_version = int(live.get("v") or 0)
+        else:
+            rows = []
+            cs = self.cloud_state
+            base_version = cs.schedule.version if cs is not None else 0
         new_version = base_version + 1
 
-        rows = await self.hass.async_add_executor_job(
-            read_schedule_rows, self._cloud.action
-        )
         by_slot = {
             r[0]: r for r in rows if isinstance(r, list) and len(r) == 4
         }

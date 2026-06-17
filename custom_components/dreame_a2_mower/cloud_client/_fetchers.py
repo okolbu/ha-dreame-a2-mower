@@ -433,9 +433,22 @@ class _FetchersMixin:
         else:
             settings_root = SettingsRoot(raw=[], by_map_id_canonical={})
 
-        # SCHEDULE.*
-        schedule: ScheduleData
-        if "SCHEDULE" in families:
+        # SCHEDULE — the SCHEDULE.* iotuserdata KV is a STALE cache that app
+        # schedule edits do NOT write back (verified 2026-06-17: KV held a
+        # 6-plan v=35477 for hours while the device's live schedule was a 3-plan
+        # v=58177). Prefer the authoritative device-plane read (SCHDIV3->SCHDDV3
+        # chunked GET); fall back to the KV only when the live read is
+        # unavailable (e.g. device offline / firmware reject).
+        from ..protocol.schedule_action import read_live_schedule
+        schedule = ScheduleData(version=0, slots=())
+        live_sched = None
+        try:
+            live_sched = read_live_schedule(self.action)
+        except Exception as ex:  # noqa: BLE001 — never fail the whole fetch
+            _LOGGER.debug("fetch_full_cloud_state: live schedule read raised: %s", ex)
+        if live_sched is not None:
+            schedule = parse_schedule_batch(live_sched)
+        elif "SCHEDULE" in families:
             sched_joined = join_family_chunks("SCHEDULE", batch)
             try:
                 import json as _json
@@ -444,8 +457,6 @@ class _FetchersMixin:
                 _LOGGER.debug("parse_full_cloud_state: SCHEDULE JSON parse failed: %s", e, exc_info=True)
                 sched_raw = {}
             schedule = parse_schedule_batch(sched_raw)
-        else:
-            schedule = ScheduleData(version=0, slots=())
 
         # AI_HUMAN — single chunk, JSON-encoded boolean.
         ai_human_enabled: bool | None = None
