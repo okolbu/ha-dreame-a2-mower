@@ -80,6 +80,12 @@ Probe candidate cruise-to-point command payload shapes on the live g2408.
 
 *When:* When reverse-engineering cruise-to-point (op=109) payloads. WRITES to the live device.
 
+### `python tools/probes/probe_draw_shape.py`  —  👤 owner
+
+Draw a no-go shape of an arbitrary type via the o:204/215/201 map-edit txn.
+
+*When:* Testing whether unused o:215 shape types (10/12) have a hidden firmware shape.
+
 ### `python tools/probes/probe_pre_write.py`  —  👤 owner
 
 Probe whether CFG.PRE is writable on the g2408 vs cloud-cache-only.
