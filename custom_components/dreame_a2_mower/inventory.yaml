@@ -523,15 +523,17 @@ properties:
       - date: "2026-06-17"
         status: verified
         claim: |
-          DELIBERATE pause-button press = s2p1=3 (PAUSED), wire-confirmed by an
-          isolated capture: user pressed pause mid-mow and s2p1 went 1 (WORKING)
-          → 3 (PAUSED). This CONFIRMS the 3-vs-4 split (previously partial): the
-          pause button lands in 3, NOT 4 (PAUSED_HOLD = the auto/hold/stranded
-          variant). Therefore the s2p2=72 "return after pause timeout" path is
-          NOT triggered by the pause button — 72 is the s2p1=4 (auto-held mid-task)
-          case only. (Open: whether a deliberate s2p1=3 pause has its own ~1h
-          timeout/return, and what code — distinct from 72.)
-        evidence: "integration MQTT log 2026-06-17 11:38:22 (s2p1 1→3 on deliberate pause, app 2.5.8.1, fw 0625)"
+          DELIBERATE pause-button press = s2p1=3 (PAUSED): user pressed pause
+          mid-mow → s2p1 1 (WORKING) → 3 (PAUSED). Confirms the 3-vs-4 state
+          split (3 = deliberate pause; 4 = PAUSED_HOLD = auto/hold/stranded).
+          BOTH pause states time out to s2p2=72 + auto-return after ~1 h: this
+          deliberate s2p1=3 pause fired s2p2=72 at EXACTLY +1 h (pause 11:38:22 →
+          72 @12:38:22 → s2p1 3→2→5 RETURNING, firmware-initiated, no app
+          command). So s2p2=72 "return after pause timeout" is triggered by
+          EITHER pause variant — NOT s2p1=4 only. (A same-day earlier note that
+          the pause button does not 72-timeout was wrong and is retracted —
+          disproven by this 12:38:22 capture.)
+        evidence: "integration MQTT log 2026-06-17 (s2p1 1→3 @11:38:22 deliberate pause; s2p2 50→72 + s2p1 3→2→5 @12:38:22, exactly +1h; app 2.5.8.1, fw 0625)"
       - date: "2026-05-31"
         status: verified
         claim: |
@@ -707,9 +709,10 @@ properties:
       - 20 — "Sensor error" (dreame-mower name SENSOR, type ERROR). [presumed]
         Corpus: x3 in probe_log_20260520, in a maintenance/mow sequence before 33/36/63.
       - 72 — "Returning to dock after pause timeout" (dreame-mower PAUSE_TIMEOUT_RETURNING,
-        type INFO). [partial] — sibling of confirmed 71 (idle-timeout-returning) AND
-        corroborated by the g2408 corpus (72 fires near s2p1 state=5 returning, x3 in
-        probe_log_20260520). Further corroborated 2026-06-13 by the pause-timeout
+        type INFO). [CONFIRMED 2026-06-17 — see § state_codes s2p2_72: clean deliberate-pause
+        capture fired 72 at exactly +1h then RETURNING] — sibling of confirmed 71
+        (idle-timeout-returning); fires from both s2p1=3 (deliberate pause) and s2p1=4 (auto-hold).
+        Earlier corroborated 2026-06-13 by the pause-timeout
         TIMING: s2p1=4 (auto/hold pause) fired at 21:45:19 and s2p2=72 fired at
         22:45:18 — exactly ~1 h later — i.e. the pause hit its 1-hour timeout and
         the mower began returning, matching PAUSE_TIMEOUT_RETURNING. (That return
@@ -9713,6 +9716,34 @@ state_codes:
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
+  - id: "s2p2_72"
+    code: 72
+    name: "RETURN_AFTER_PAUSE_TIMEOUT"
+    category: "state_code"
+    semantic: |
+      Return after pause timeout. When the mower sits PAUSED for ~1 hour it
+      fires s2p2=72 and auto-returns to the dock (firmware-initiated; no app
+      command on the wire). Fires from BOTH pause states: s2p1=3 (deliberate
+      pause button) and s2p1=4 (PAUSED_HOLD = auto/hold/stranded). Wire-confirmed
+      2026-06-17 with a clean deliberate-pause capture: s2p1 1→3 @11:38:22, then
+      s2p2 50→72 + s2p1 3→2→5 (RETURNING) at EXACTLY +1 h (@12:38:22). Earlier
+      corroboration 2026-06-13 from the s2p1=4 auto-hold case (72 ~1 h after the
+      4). Name matches dreame-mower PAUSE_TIMEOUT_RETURNING. Distinct from s2p2=71
+      (STANDBY-idle-too-long return) — 71 is from s2p1=2, 72 from a pause state.
+    status:
+      seen_on_wire: true
+      first_seen: "2026-06-13"
+      last_seen: "2026-06-17"
+      decoded: confirmed
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+    verifications:
+      - date: "2026-06-17"
+        status: verified
+        claim: "s2p2=72 = return-after-pause-timeout: a PAUSED mower (~1 h) fires 72 and auto-returns. Wire-confirmed by a clean deliberate s2p1=3 pause that fired 72 at exactly +1 h then RETURNING (s2p1=5). Fires from both s2p1=3 (deliberate) and s2p1=4 (auto-hold). Promotes 72 from prose-only/borrowed to wire-confirmed; admitted to error_codes.py."
+        evidence: "integration MQTT log 2026-06-17 (pause s2p1 1→3 @11:38:22; s2p2 50→72 + s2p1 3→2→5 @12:38:22 = exactly +1h; fw 0625)"
 
   - id: "s2p2_75"
     code: 75

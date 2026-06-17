@@ -32,15 +32,12 @@ HANDOVER) surfaced wire facts that need a live app-MITM / probe capture to confi
    the app's PRE write slots + `code:0` (EdgeMaster=PRE[10], Efficiency=PRE[3]), but whether the
    g2408 firmware actually *applies* an integration-originated PRE write is still `[UNVERIFIED]`.
    Verify a single-toggle PRE write changes observed mower behaviour.
-2. **[s2p2=72]** = "return after pause-timeout" — fires from `s2p1=4` (PAUSED_HOLD = the AUTO/HOLD
-   variant: stranded/stuck mid-task, e.g. low-battery hold; **NOT** a deliberate pause-button press).
-   The only sighting (2026-06-13) was a stuck/low-batt auto-hold → ~1 h → 72. Capture a cloud-labelled
-   72 fire to promote it to wire-confirmed + admit to `error_codes.py`. Realistic trigger: mower
-   auto-held mid-task left ~1 h — do NOT just press pause expecting 72. Distinct from `s2p2=71`
-   (already verified) which is the STANDBY-idle-too-long return. Sub-question **ANSWERED 2026-06-17**:
-   a DELIBERATE pause-button press = `s2p1=3` (PAUSED), a SEPARATE state from `s2p1=4` — so the pause
-   button does NOT 72-timeout. New open thread: does `s2p1=3` (deliberate pause) have its OWN ~1 h
-   timeout/return, and what code? (capture in progress).
+2. ~~**[s2p2=72]** = "return after pause-timeout"~~ — **CLOSED 2026-06-17.** Wire-confirmed: a
+   deliberate pause (`s2p1=3`) timed out at **exactly +1 h** → `s2p2=72` → auto-return (`s2p1=5`),
+   firmware-initiated (no app command). Fires from **both** pause states — `s2p1=3` (deliberate) AND
+   `s2p1=4` (PAUSED_HOLD/auto-hold) — so the earlier "pause button doesn't 72-timeout" guess was wrong
+   (retracted). Promoted to `state_codes s2p2_72` (decoded: confirmed) and admitted to `error_codes.py`
+   (`return_after_pause_timeout`). Distinct from `s2p2=71` (STANDBY-idle return, from `s2p1=2`).
 3. **[s2p2=20 / 33]** capture cloud-labelled fires to pin the real g2408 text (vs borrowed
    dreame-mower names).
 4. **[s2p55]** app-MITM during a real AI-obstacle detection to capture the photo list/URL backend call.
@@ -66,7 +63,7 @@ HANDOVER) surfaced wire facts that need a live app-MITM / probe capture to confi
    app's write context. Also pins the `'1,0'` settings key + the `value[0]=-1` sentinel.
 **Already tracked separately (not duplicated here):** type-3 ephemeral obstacle photos (Photo/video
 archive item) and the lazy patrol-photo upload (session_summary_download open-question).
-**Status:** open — 1 of 5 closed (#5 s4 properties, by corpus census 2026-06-16). Remainder need the MITM rig / live device.
+**Status:** open — 2 of 5 closed (#5 s4 properties via corpus census 2026-06-16; #2 s2p2=72 via live pause-timeout capture 2026-06-17). Remainder need the MITM rig / live device.
 **Cross-refs:** `OLD/ha-dreame-a2-mower-docs/inventory-history/2026-06-16-purge.md`; memory
 `dreame-mitm-toolkit`; `inventory.yaml` §§ PRE / s2p2 / s2p55 / s4p22 / s4p44 / s4p59.
 

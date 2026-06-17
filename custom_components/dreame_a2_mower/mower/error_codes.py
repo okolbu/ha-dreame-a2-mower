@@ -87,6 +87,8 @@ ERROR_CODE_DESCRIPTIONS: dict[int, str] = {
     # (inventory § s2p2). NB binary_sensor.positioning_failed + S2P2_EVENT_TYPES[71]
     # still carry the old label — see TODO "Fix s2p2=71 mislabel".
     71: "Standby outside station too long — auto-returning (apk 'positioning failed' unconfirmed on g2408)",
+    # 72: wire-confirmed 2026-06-17 — a PAUSED mower (~1h) auto-returns. inventory § s2p2.
+    72: "Returning to dock after pause timeout",
     73: "Top cover open",
     # 74: observed 2026-05-30 when a patrol was user-cancelled → return to dock
     # (fired with s2p1→2). Partial — single observation. inventory § s2p2.
@@ -148,6 +150,7 @@ S2P2_EVENT_TYPES: dict[int, str] = {
     63:  "schedule_cancelled_busy",         # cloud-verified 2026-05-26
     70:  "continue_unfinished_task",        # cloud-verified 2026-05-26
     71:  "standby_outside_station_too_long",  # verified 2026-05-30 (was "positioning_failure"; apk label wrong on g2408)
+    72:  "return_after_pause_timeout",      # wire-confirmed 2026-06-17 (paused ~1h -> auto-return; from s2p1=3 or 4)
     73:  "top_cover_open",
     74:  "patrol_ended",                    # verified 2026-05-30 (patrol cancelled → return to dock)
     75:  "arrived_at_maintenance_point",
