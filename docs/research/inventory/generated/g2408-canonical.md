@@ -1444,6 +1444,7 @@ never reached.
 | o12 | lock_bot | {m:'a', o:12, d:{lock: 0|1}} | APK-KNOWN |  |
 | o13 | cancel_dock_return | SEND {m:'a', o:13} (app); no echo observed | APK-KNOWN |  |
 | o15 | remote_setting | {m:'a', p:0, o:15, d:{c: 0|1} | {h: height*10}} | SEEN-UNDECODED |  |
+| o19 | update_station_location | SEND {m:'a', p:0, o:19} — NO payload (empty d) | DECODED-UNWIRED |  |
 | o100 | global_mower | SEND {m:'a', o:100, d:{need_bp}} (app); ECHO {area_id:N, exe:T, o:100, region_id:[1], time:N, t:'TASK'} (flat-field, not wrapped in d:{}) | WIRED |  |
 | o101 | edge_mower | SEND {m:'a', o:101, d:{edge:[[map_id, contour_id], ...]}} (app and integration) | WIRED |  |
 | o102 | zone_mower | SEND {m:'a', o:102, d:{region:[zone_id, ...]}} (app and integration) | WIRED |  |
@@ -1712,6 +1713,33 @@ implement joystick driving.
 - Does op=15 reliably echo for every manual-drive start, or only sometimes (like other app-triggered ops)?
 
 **See also:** `apk: ioBroker.dreame/apk.md §Remote Control remoteSetting L175109`
+
+### o19 — `update_station_location`
+
+Update station (dock) location — net-new in app 2.5.8.1 ("Update station
+location" button). PARAMETERLESS: the app sends only {m:'a',p:0,o:19} and
+the MOWER measures its own dock pose (no coordinates are sent). On receipt
+the robot undocks, does its usual LiDAR reorient spin while pointing at the
+dock to re-sense it, and writes a fresh dock pose. Wire-verified 2026-06-17
+(app 2.5.8.1, fw 4.3.6_0625): one send, out[0].r=0; app then polls the dock
+via m:g DOCK. [app-mitm:2026-06-17]
+
+USE: move the physical dock, put the mower in it, press the button — the
+mower re-localizes the new dock position. Almost certainly the same routine
+run at first install. No camera/light involvement (an apparent "lights on"
+was sunlight off the charging contacts).
+
+RESULT read-back: routed m:g DOCK returns
+{dock:{x,y,yaw, near_x,near_y,near_yaw, connect_status, in_region,
+path_connect}} (mm + yaw in 0.1deg-ish units). Before->after this capture
+(dock NOT physically moved, so a small re-measurement delta):
+x149,y10,yaw79,near(15,-7,1879) -> x150,y9,yaw89,near(17,-11,1889). The
+device also fires s1p51 (dock_position_update_trigger) when the pose
+changes, prompting the DOCK re-fetch. The integration already reads DOCK
+(coordinator _refresh_dock / cloud_client.fetch_dock); only the o=19 WRITE
+trigger is new.
+
+**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`
 
 ### o100 — `global_mower`
 
@@ -2487,15 +2515,22 @@ Write payload: {value:0|1}. [app-mitm:2026-06-09-settings-sweep]
 ### LANG — `language`
 
 Language. Confirmed 2026-04-24. Shape [text_idx, voice_idx].
-text_idx = app/UI language; voice_idx = robot voice language.
-Observed indices: voice_idx=7 → Norwegian. Transported via s2p51
-shape {"text": N, "voice": M} — decoded as Setting.LANGUAGE.
-Surfaced as sensor.robot_voice (state = voice language name where
-known, raw indices as attrs). Sample: [2, 7].
-Write payload: typed key {type:"voice"|"text", value:idx}.
-[app-mitm:2026-06-09-settings-sweep] voice and text are set
-separately via the type discriminator. Confirmed indices: English=0,
-Norwegian=7, Danish=9. Changing voice language triggers NO download
+text_idx = the DEVICE text/LCD language (a mower CFG); voice_idx = robot
+voice language. NOTE: text_idx is NOT the app's display language — the
+app-config "Languages" picker is app-local Flutter i18n (the app
+soft-restarts in the new locale and sends NOTHING to the mower; verified
+2026-06-17 with Romanian + Spanish, both zero mower writes). So the
+2.5.8.1 changelog's new languages (Czech/Hungarian/Lithuanian/Slovak/
+Romanian/Latvian) are APP-UI-ONLY; they do NOT reach text_idx or voice_idx.
+Transported via s2p51 shape {"text": N, "voice": M} — decoded as
+Setting.LANGUAGE. Surfaced as sensor.robot_voice (state = voice language
+name where known, raw indices as attrs). Sample: [2, 7].
+Write payload: typed key {type:"voice"|"text", value:idx}. Only type:voice
+writes are wire-confirmed (En=0, No=7, Da=9); the type:text write is
+apk-derived and NOT triggered by the app Languages picker — text_idx is set
+from a separate device-settings control drawing on the firmware-supported
+list (smaller than the app's i18n set). [app-mitm:2026-06-09-settings-sweep;
+2026-06-17 app-language test] Changing voice language triggers NO download
 on g2408 — voice packs are device-side firmware.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX LANG`
@@ -2618,7 +2653,11 @@ Index map (all confirmed [app-mitm:2026-06-09-settings-sweep] unless noted):
   [16] Safe Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
   [17] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
   [18] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
-  [19] NEW post-0625 (appended by the 0550→0625 OTA) — default 0. [UNKNOWN — to capture]
+  [19] Turning Method: 0=Efficient, 1=Lawn-Care. Confirmed by an isolated
+       single-index toggle [app-mitm:2026-06-17]: Lawn-Care write differed
+       from the Efficient write ONLY at [19] (1 vs 0). Appended by the
+       0550→0625 OTA; the UI ("Turning Method Settings" sub-page of Mowing
+       Settings) shipped in app 2.5.8.1.
   [20] NEW post-0625 (appended by the 0550→0625 OTA) — default 30 (resembles a
        minutes/percent value). [UNKNOWN — to capture]
 
