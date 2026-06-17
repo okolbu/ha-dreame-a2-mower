@@ -4586,11 +4586,22 @@ opcodes:
         16 = Mushroom         17 = Cloud            18 = Rainbow
         19 = Moon             20 = Star             21 = winged insect
         22 = Blob(?)          23 = Tree             24 = Carrot/amphora/leaf(?)
-      Gaps: 10 and 12 are UNUSED (no shape occupies them). Circle is 11, NOT 12
-      as previously inferred; the list runs to 24, NOT 18 (six shapes — 19-24 —
-      were hidden off-screen in the Shapes picker). Stencil shapes carry type +
-      a 2-point bounding box (radius=0); Circle (11) is the lone parametric one
-      (center + radius). [app-mitm:2026-06-17]
+      Gaps: 10 and 12 are UNUSED. Circle is 11, NOT 12 as previously inferred; the
+      list runs to 24, NOT 18 (six shapes — 19-24 — were hidden off-screen in the
+      Shapes picker). Stencil shapes carry type + a 2-point bounding box
+      (radius=0); Circle (11) is the lone parametric one (center + radius).
+      [app-mitm:2026-06-17]
+      Type 10 PROBED 2026-06-17 (tools/probes/probe_draw_shape.py): a crafted
+      o:215 {type:10, points:[[cx,cy]], radius:R} replayed at a real circle's
+      exact valid center+radius is protocol-ACCEPTED (r=0 on o:200/204/215/201)
+      but rendered NO shape — the app dropped out of edit mode, reloaded, and the
+      zone was discarded on the next map load. INDETERMINATE: this does NOT prove
+      10 is empty — it may be a real shape that wants a DIFFERENT param shape
+      (e.g. no radius, or a 2-pt bbox, or N outline points) and the firmware
+      accepted-then-discarded the malformed payload. With type/points/radius/count
+      all variable there are too many combinations to brute-force, so 10 (and 12)
+      stay best-labelled "no picker UI; not renderable with the circle-style
+      params tried" rather than definitively empty.
 
       Glyph descriptions — first screen 9-18 from OLD/IMG_4615.png (picker order
       Square,Circle,Heart,Triangle,Teardrop,Mushroom,Cloud,Rainbow — visually
