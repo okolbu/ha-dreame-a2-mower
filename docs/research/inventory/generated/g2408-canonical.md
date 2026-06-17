@@ -319,6 +319,7 @@ Lifecycle:
 - 60 Frost-protection-suppressed
 - 63 Scheduled task cancelled — robot working (busy)
 - 71 Standby outside station too long — auto-return
+- 72 Task paused too long — auto-returning to station to wait (cloud-labelled 2026-06-17)
 - 74 Patrol ended / cancelled
 - 75 Arrived at maintenance point
 - 76 Cannot reach maintenance point — task ended (give-up + return)
@@ -333,16 +334,6 @@ ALL our independently-confirmed g2408 codes: 24/28/30/43/51/54/71). NOT yet
 g2408-wire-LABELLED, so kept OUT of error_codes.py per the confidence gate:
 - 20 — "Sensor error" (dreame-mower name SENSOR, type ERROR). [presumed]
   Corpus: x3 in probe_log_20260520, in a maintenance/mow sequence before 33/36/63.
-- 72 — "Returning to dock after pause timeout" (dreame-mower PAUSE_TIMEOUT_RETURNING,
-  type INFO). [partial] — sibling of confirmed 71 (idle-timeout-returning) AND
-  corroborated by the g2408 corpus (72 fires near s2p1 state=5 returning, x3 in
-  probe_log_20260520). Further corroborated 2026-06-13 by the pause-timeout
-  TIMING: s2p1=4 (auto/hold pause) fired at 21:45:19 and s2p2=72 fired at
-  22:45:18 — exactly ~1 h later — i.e. the pause hit its 1-hour timeout and
-  the mower began returning, matching PAUSE_TIMEOUT_RETURNING. (That return
-  ultimately failed — mower stuck on lawn → battery 5% → s2p57 firmware
-  self-shutdown 2026-06-14; see § s2p57.) Still kept OUT of error_codes.py
-  until a cloud-LABELLED fire is captured (the slug name is still borrowed).
 
 Watch out — corrected vs earlier / vacuum readings (evidence in verifications):
 - 28 is the cloud wear%-gated BLADE-WEAR push, NOT an off-dock-relocate
@@ -2059,11 +2050,48 @@ Zone type encoding: [app-mitm:2026-06-09-settings-sweep]
   type 2 = polygon (corner points, radius=0)
   type 3 = circle (center point + radius)
 
-Mowing-shape preset types (decorative/preset shapes):
-  type 9  = Square (4 points)
-  type 13 = Heart
-  type 17 = Cloud
-  type 18 = Rainbow
+Mowing-shape preset/decorative ("novelty") types — FULL set wire-confirmed
+2026-06-17 by drawing each in app 2.5.8.1 and reading the o:215 type
+(supersedes the prior "9,12-18" guess, which was wrong on three counts):
+  9 = Square            11 = Circle (parametric: 1 center point + radius)
+  13 = Heart            14 = Triangle         15 = Teardrop
+  16 = Mushroom         17 = Cloud            18 = Rainbow
+  19 = Moon             20 = Star             21 = winged insect
+  22 = Blob(?)          23 = Tree             24 = Carrot/amphora/leaf(?)
+Gaps: 10 and 12 are UNUSED. Circle is 11, NOT 12 as previously inferred; the
+list runs to 24, NOT 18 (six shapes — 19-24 — were hidden off-screen in the
+Shapes picker). Stencil shapes carry type + a 2-point bounding box
+(radius=0); Circle (11) is the lone parametric one (center + radius).
+[app-mitm:2026-06-17]
+Types 10 AND 12 PROBED 2026-06-17 (tools/probes/probe_draw_shape.py) → both
+are EMPTY/unused (no firmware stencil). Each was sent via the o:200/204/215/
+201 txn in BOTH param formats: parametric (1 center point + radius, the
+Circle style) AND the stencil format (2-point bounding box + radius:0). The
+stencil format is the EXACT shape a real Teardrop(15) sends
+(points=[[x1,y1],[x2,y2]], radius:0 — captured same session), so wrong-params
+is ruled out. Every leg returned r=0 (protocol-accepted) but NOTHING
+rendered: the app jumped out of map-edit mode, showed "Loading" for several
+seconds, and the zone was discarded on the next map load — identical for 10
+and 12, in both formats. Conclusion: 10 and 12 are valid type ids the
+firmware ACKs but has no shape for; the novelty set genuinely skips them.
+
+Glyph descriptions — first screen 9-18 from OLD/IMG_4615.png (picker order
+Square,Circle,Heart,Triangle,Teardrop,Mushroom,Cloud,Rainbow — visually
+confirms the 10/12 gaps: Square→Circle skips 10, Circle→Heart skips 12):
+9=rounded Square, 11=Circle, 13=Heart, 14=rounded Triangle (point up),
+15=Teardrop (water-drop, pointed top), 16=Mushroom. Second screen 17-24
+from shapes2.png: 17=puffy Cloud,
+18=Rainbow/arch, 19=crescent Moon, 20=5-point Star, 21=symmetric WINGED
+INSECT (butterfly / 4-winged moth / bumblebee — exact glyph uncertain),
+22=amorphous Blob (uncertain), 23=conifer/pine Tree, 24=pointed
+teardrop/leaf (could be a stylized carrot or an amphora/urn — uncertain).
+
+RENDERING NOTE: the placed stencil fills only ~0.5-0.6 of its (squareish)
+o:215 bounding box — the actual cut shape is inset, not edge-to-edge. This
+shape-to-bbox ratio is what drives the integration's ~0.5-0.6 scaling factor
+when drawing these so the rendered shape matches what the firmware actually
+cuts. [user observation 2026-06-17; visible in shapes2.png — the placed
+Cloud sits well inside its dashed bbox]
 
 Sequence: o:204 (begin) → o:215 (add zone) → o:201 (commit) → o:-1 (teardown).
 The integration triggers a MAP rebuild on o:215 OR o:201 with status:true
@@ -2072,9 +2100,6 @@ error:0 — covers both confirmation opcodes.
 Earlier captures (2026-04-20) saw o:215 as a map-edit echo in the same
 "second slot" position; the app-mitm sweep confirms it is also the SEND
 command for adding no-go zones, not only a legacy echo.
-
-**Open questions:**
-- Shape type ids 9 (Square), 13 (Heart), 15 (Teardrop), 17 (Cloud), 18 (Rainbow) are WIRE-CONFIRMED (appear in o:215 capture payloads; 15 confirmed 2026-06-12 [app-mitm:2026-06-12-mapedit-rotate-edit]). Type ids 12 (Circle), 14 (Triangle), 16 (Mushroom) are [UNVERIFIED] — INFERRED from the Shapes-screen (IMG_4615.PNG) left→right ordering filling the 9,12-18 sequence, NOT seen on the wire. Capture: draw each in app-MITM and read its type in o:215 to confirm/correct. Type ids 10 and 11 (the gap between square=9 and circle=12) are [UNKNOWN — to capture] — no shape occupies them in this app's Shapes screen, so they appear unused on g2408.
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §Actions map-edit confirm`
 
@@ -2526,12 +2551,41 @@ Transported via s2p51 shape {"text": N, "voice": M} — decoded as
 Setting.LANGUAGE. Surfaced as sensor.robot_voice (state = voice language
 name where known, raw indices as attrs). Sample: [2, 7].
 Write payload: typed key {type:"voice"|"text", value:idx}. Only type:voice
-writes are wire-confirmed (En=0, No=7, Da=9); the type:text write is
-apk-derived and NOT triggered by the app Languages picker — text_idx is set
-from a separate device-settings control drawing on the firmware-supported
-list (smaller than the app's i18n set). [app-mitm:2026-06-09-settings-sweep;
-2026-06-17 app-language test] Changing voice language triggers NO download
-on g2408 — voice packs are device-side firmware.
+writes are wire-confirmed; the type:text write is apk-derived and NOT
+triggered by the app Languages picker.
+
+THREE DISTINCT LISTS (do not conflate; all enumerated in
+entities/select/global_.py):
+  - voice_idx = CFG.LANG[1] = robot voice, 16 langs in app voice-picker
+    order (map below). VOICE_LANGUAGE_NAMES.
+  - text_idx  = CFG.LANG[0] = the mower's physical LCD screen language — a
+    SEPARATE, DIFFERENT list: 13 langs ALPHABETICAL by native name
+    (Danish=0, German=1, English=2, Spanish=3, French=4, Italian=5,
+    Dutch=6, Norwegian=7, Polish=8, Finnish=9, Swedish=10, Simplified
+    Chinese=11, Traditional Chinese=12). Captured 2026-05-09 by reading the
+    mower LCD picker (Danish picked -> cloud read text=0). TEXT_LANGUAGE_NAMES.
+    It is NOT the voice list and NOT the app picker — fewer langs (no
+    Portuguese/Turkish/Russian/Lithuanian), different order.
+  - app UI language = the app-config "Languages" picker, 33 i18n locales,
+    1-indexed, NOT in CFG (app-local; the 2.5.8.1 new langs live only here).
+    APP_TEXT_LANGUAGE_NAMES.
+
+VOICE LANGUAGE ORDINAL MAP (CFG.LANG[1] = app Robot Voice list order,
+0-indexed). Wire-confirmed anchors marked ✓ (the rest inferred from the app
+list order, which the anchors validate perfectly):
+  0 English ✓  1 Chinese ✓  2 German ✓  3 French  4 Italian  5 Spanish
+  6 Portuguese  7 Norwegian ✓  8 Swedish  9 Danish ✓  10 Finnish  11 Dutch
+  12 Turkish  13 Polish  14 Russian  15 Lithuanian
+[app-mitm:2026-06-17 — voice writes value 0/1/2 captured; 7/9 from 06-09].
+The 2.5.8.1 app-UI languages NOT in this device list: Czech, Hungarian,
+Slovak, Romanian, Latvian (app-i18n only). Lithuanian (15) IS a device lang.
+
+CORRECTION 2026-06-17: changing the voice language to a not-yet-installed
+pack DOES trigger a download on the mower (observed live — Chinese/German
+fetched their packs). The prior "NO download — packs are device-side
+firmware" was only true for already-installed packs (En/No/Da). Avoid
+cycling all 16 in testing — each new pick downloads a pack to the device.
+[app-mitm:2026-06-09-settings-sweep; 2026-06-17 voice-list capture]
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX LANG`
 
@@ -2636,14 +2690,19 @@ Index map (all confirmed [app-mitm:2026-06-09-settings-sweep] unless noted):
   [6]  Mowing Direction angle (degrees, used when [5]=1 Customize only).
        Confirmed: 8↔64 via isolated write.
   [7]  Automatic Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
-  [8]  reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+  [8]  EdgeMaster-fixed edge param, no user UI (=0). Aligns to one of the
+       SETTINGS 0-fields {cutterPosition, edgeMowingWalkMode, edgeCuttingAttachment}
+       (paired with [18]). [partial — SETTINGS dual-write alignment 2026-06-17]
   [9]  Obstacle Avoidance on Edges: 0=off, 1=on. Confirmed by isolated toggle.
   [10] EdgeMaster: 0=off, 1=on. Confirmed by isolated toggle (re-confirmed
        by a clean ON↔OFF single-index toggle on fw 0625 [app-mitm:2026-06-16]).
        Resolves the prior "AutoEdge/SafeEdge/EdgeMaster/OA-on-Edges order TBD".
        (Behaviour: after the area mow, two extra edge passes at 3 cm height with
        blades side-shifted toward the edge; PRE[10] is just the on/off.)
-  [11] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
+  [11] Edge/OA param, no UI on the mowing screen (=2). One of the value-2 pair
+       {edgeMowingNum (2 passes), obstacleAvoidanceSensitivity (2=medium)} —
+       other is [17]. Toggle OA/AI sensitivity to disambiguate.
+       [partial — SETTINGS alignment 2026-06-17]
   [12] LiDAR Obstacle Recognition: 0=off, 1=on. Confirmed isolated; disabling
        greys out Obstacle Avoidance Height in the app.
   [13] Obstacle Avoidance Height: 5/10/15/20 cm. Multi-value confirmed.
@@ -2651,15 +2710,35 @@ Index map (all confirmed [app-mitm:2026-06-09-settings-sweep] unless noted):
   [15] AI Obstacle Recognition bitmask: bit0(1)=Human, bit1(2)=Animal,
        bit2(4)=Object. All-on=7. Bit order confirmed: Human-off 7→6.
   [16] Safe Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
-  [17] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
-  [18] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
-  [19] Turning Method: 0=Efficient, 1=Lawn-Care. Confirmed by an isolated
-       single-index toggle [app-mitm:2026-06-17]: Lawn-Care write differed
-       from the Efficient write ONLY at [19] (1 vs 0). Appended by the
-       0550→0625 OTA; the UI ("Turning Method Settings" sub-page of Mowing
-       Settings) shipped in app 2.5.8.1.
-  [20] NEW post-0625 (appended by the 0550→0625 OTA) — default 30 (resembles a
-       minutes/percent value). [UNKNOWN — to capture]
+  [17] Edge/OA param, no UI on the mowing screen (=2). The OTHER of the value-2
+       pair {edgeMowingNum, obstacleAvoidanceSensitivity} (with [11]).
+       [partial — SETTINGS alignment 2026-06-17]
+  [18] EdgeMaster-fixed edge param, no user UI (=0). The OTHER of the value-0
+       set {cutterPosition, edgeMowingWalkMode, edgeCuttingAttachment} (with [8]).
+       [partial — SETTINGS alignment 2026-06-17]
+  [19] Turning Method: 0=Efficient, 1=Lawn-Care (= SETTINGS steeringMode).
+       Confirmed by an isolated single-index toggle [app-mitm:2026-06-17]:
+       Lawn-Care write differed from Efficient ONLY at [19] (1 vs 0); SETTINGS
+       dual-write alignment cross-confirms steeringMode. Appended by the
+       0550→0625 OTA; UI ("Turning Method Settings" sub-page) shipped in app 2.5.8.1.
+  [20] cutterPositionHeight — EdgeMaster edge-pass CUTTING HEIGHT, cm×10
+       (30 = 3.0 cm, matching the fixed EdgeMaster "3 cm" edge passes). Resolved
+       via SETTINGS dual-write alignment 2026-06-17 (PRE[20]=30 ↔ SETTINGS
+       cutterPositionHeight=3); appended by the 0550→0625 OTA. [confirmed —
+       value+encoding match].
+  NOTE [8/11/17/18/20] resolved 2026-06-17 by aligning the named SETTINGS.0
+       zone object (dual-written with PRE on every save) to the positional PRE
+       array: every known PRE index matches its SETTINGS field by value, and the
+       leftover SETTINGS fields account for these 5. Field NAMES are wire-truth
+       — literal keys in the device SETTINGS blob (getDeviceData), NOT upstream/
+       vacuum lineage (obstacleAvoidanceSensitivity ×60, edgeMowingNum, etc.).
+       NO MATCHING APP TOGGLE FOUND for any of them (user searched the 2.5.8.1
+       app 2026-06-17 — there is no obstacle-avoidance sensitivity / edge-pass-
+       count / cutter-position control exposed). So they are wire-present but
+       UI-less on g2408 — future-use or deliberately omitted — which is why they
+       never moved in any single-toggle sweep, and why the [11]/[17] and [8]/[18]
+       value-tied assignments cannot be pinned by UI isolation (likely permanent
+       unless a future app/firmware exposes a control).
 
 Per-zone (Custom Mode) writes use the same int array with [2] set to the
 zone index. Enable custom-mode per zone via PREP first
@@ -4654,6 +4733,7 @@ slot semantics (4 from MSG_ALERT + 4 from VOICE) wire-confirmed
 | s2p2_67 | RESTRICTED_3 |  | WIRED |  |
 | s2p2_70 | MOWING |  | WIRED |  |
 | s2p2_71 | POSITIONING_FAILED_OR_AUTO_RECOVER |  | WIRED |  |
+| s2p2_72 | RETURN_AFTER_PAUSE_TIMEOUT |  | WIRED |  |
 | s2p2_73 | TOP_COVER_OPEN |  | WIRED |  |
 | s2p2_74 | PATROL_ENDED |  | WIRED |  |
 | s2p2_75 | ARRIVED_AT_MAINTENANCE_POINT |  | WIRED |  |
@@ -5083,6 +5163,20 @@ recovery requires a TASK_SLAM_RELOCATE pass. Confirmed 2026-04-20
 mower self-navigated home. The two contexts are distinguished by
 what follows: 33→31 means stuck (user help needed); 5→telemetry→6
 means self-recovery succeeded.
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
+### s2p2_72 — `RETURN_AFTER_PAUSE_TIMEOUT`
+
+Return after pause timeout. When the mower sits PAUSED for ~1 hour it
+fires s2p2=72 and auto-returns to the dock (firmware-initiated; no app
+command on the wire). Fires from BOTH pause states: s2p1=3 (deliberate
+pause button) and s2p1=4 (PAUSED_HOLD = auto/hold/stranded). Wire-confirmed
+2026-06-17 with a clean deliberate-pause capture: s2p1 1→3 @11:38:22, then
+s2p2 50→72 + s2p1 3→2→5 (RETURNING) at EXACTLY +1 h (@12:38:22). Earlier
+corroboration 2026-06-13 from the s2p1=4 auto-hold case (72 ~1 h after the
+4). Name matches dreame-mower PAUSE_TIMEOUT_RETURNING. Distinct from s2p2=71
+(STANDBY-idle-too-long return) — 71 is from s2p1=2, 72 from a pause state.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
 

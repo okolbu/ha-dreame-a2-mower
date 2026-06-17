@@ -661,7 +661,7 @@ properties:
       - {value: 63, status: confirmed}
       - {value: 70, status: confirmed}
       - {value: 71, status: confirmed}
-      - {value: 72, status: partial}
+      - {value: 72, status: confirmed}
       - {value: 73, status: confirmed}
       - {value: 74, status: confirmed}
       - {value: 75, status: confirmed}
@@ -694,6 +694,7 @@ properties:
       - 60 Frost-protection-suppressed
       - 63 Scheduled task cancelled — robot working (busy)
       - 71 Standby outside station too long — auto-return
+      - 72 Task paused too long — auto-returning to station to wait (cloud-labelled 2026-06-17)
       - 74 Patrol ended / cancelled
       - 75 Arrived at maintenance point
       - 76 Cannot reach maintenance point — task ended (give-up + return)
@@ -708,17 +709,6 @@ properties:
       g2408-wire-LABELLED, so kept OUT of error_codes.py per the confidence gate:
       - 20 — "Sensor error" (dreame-mower name SENSOR, type ERROR). [presumed]
         Corpus: x3 in probe_log_20260520, in a maintenance/mow sequence before 33/36/63.
-      - 72 — "Returning to dock after pause timeout" (dreame-mower PAUSE_TIMEOUT_RETURNING,
-        type INFO). [CONFIRMED 2026-06-17 — see § state_codes s2p2_72: clean deliberate-pause
-        capture fired 72 at exactly +1h then RETURNING] — sibling of confirmed 71
-        (idle-timeout-returning); fires from both s2p1=3 (deliberate pause) and s2p1=4 (auto-hold).
-        Earlier corroborated 2026-06-13 by the pause-timeout
-        TIMING: s2p1=4 (auto/hold pause) fired at 21:45:19 and s2p2=72 fired at
-        22:45:18 — exactly ~1 h later — i.e. the pause hit its 1-hour timeout and
-        the mower began returning, matching PAUSE_TIMEOUT_RETURNING. (That return
-        ultimately failed — mower stuck on lawn → battery 5% → s2p57 firmware
-        self-shutdown 2026-06-14; see § s2p57.) Still kept OUT of error_codes.py
-        until a cloud-LABELLED fire is captured (the slug name is still borrowed).
 
       Watch out — corrected vs earlier / vacuum readings (evidence in verifications):
       - 28 is the cloud wear%-gated BLADE-WEAR push, NOT an off-dock-relocate
@@ -743,36 +733,34 @@ properties:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
       apk: "ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:2"
     verifications:
-      - date: "2026-06-15"
-        status: partial
+      - date: "2026-06-17"
+        status: verified
         claim: |
-          s2p2=72 "Returning to dock after pause timeout" behaviourally
-          corroborated by pause-timeout TIMING on the g2408 wire: s2p1=4
-          (auto/hold pause) fired 2026-06-13 21:45:19 and s2p2=72 fired
-          22:45:18 — exactly ~1 h later — i.e. the 1-hour pause timeout elapsed
-          and the mower started returning, matching the borrowed
-          PAUSE_TIMEOUT_RETURNING slug. The return failed (mower stuck on lawn,
-          could not reach dock) → battery drained to 5% → s2p57=1 firmware
-          self-shutdown 2026-06-14 (see § s2p57). observed_values[72] bumped
-          unknown→partial. Still kept OUT of error_codes.py / S2P2_EVENT_TYPES
-          per the confidence gate until a CLOUD-LABELLED 72 fire is captured —
-          the timing corroborates the meaning but the user-facing text is still
-          borrowed from the sibling integration.
-        evidence: "user-flagged NOVEL wire fires 2026-06-13 (s2p1 STATE=4 @21:45:19; s2p2=72 @22:45:18) + user-observation of the stuck-on-lawn / 5%-shutdown sequence"
+          s2p2=72 is CLOUD-LABELLED on g2408 (wire-verified): the cloud
+          notification "Task paused for too long. Automatically returning to the
+          station to wait." fired correlated to-the-second with the MQTT s2p2=72
+          transition (s2p1 3 PAUSED→2→5 RETURNING @ 2026-06-17 12:38:22, exactly
+          +1 h after the deliberate pause). This supersedes the earlier borrowed
+          dreame-mower slug "Returning to dock after pause timeout": 72's
+          authoritative g2408 description is now the cloud text and its event slug
+          is `paused_too_long_returning`. Sibling code 71 is the standby-outside-
+          station case, cloud-labelled "The robot is on standby outside the station
+          for too long. Automatically returning to the station." (@ 11:28:49, same
+          run). observed_values[72] promoted partial→confirmed; 72 admitted to
+          error_codes.py per the confidence gate.
+        evidence: "probe/logs/probe_log_20260612_174439.jsonl@2026-06-17T12:38:22 (s2p2=72 ↔ cloud 'Task paused for too long…') + @2026-06-17T11:28:49 (s2p2=71 ↔ cloud 'standby outside the station…'); integration-stored cloud notifications [app-mitm:2026-06-17-s2p2-notifications]"
       - date: "2026-06-05"
         status: partial
         claim: |
-          s2p2=20 and s2p2=72 decode CROSS-REFERENCED from the sibling dreame-mower
+          s2p2=20 decode CROSS-REFERENCED from the sibling dreame-mower
           integration (custom_components/dreame_mower/dreame/property/device_code.py,
-          explicitly siid:2 piid:2): 20 = "Sensor error" (SENSOR, ERROR); 72 =
-          "Returning to dock after pause timeout" (PAUSE_TIMEOUT_RETURNING, INFO). That
+          explicitly siid:2 piid:2): 20 = "Sensor error" (SENSOR, ERROR). That
           table matches ALL our independently-confirmed g2408 codes (24/28/30/43/51/54/71
           — e.g. 51 "Cruise task started", 54 "Low battery returning", 71 "idle-timeout
-          returning"), so it is a high-trust reference. 72 is also corpus-corroborated
-          (fires near s2p1 state=5 returning) and is the sibling of confirmed 71. Kept
+          returning"), so it is a high-trust reference. Kept
           OUT of error_codes.py until g2408-wire-LABELLED (a deliberate capture: trigger
-          a pause-timeout return / a sensor fault and confirm the code).
-        evidence: "OLD/alternatives_archive_2026-05-05/alternatives/dreame-mower/custom_components/dreame_mower/dreame/property/device_code.py:338 (code 20), :650 (code 72); probe_log_20260520_131350.jsonl s2p2=20 x3 / s2p2=72 x3 near state=5"
+          a sensor fault and confirm the code).
+        evidence: "OLD/alternatives_archive_2026-05-05/alternatives/dreame-mower/custom_components/dreame_mower/dreame/property/device_code.py:338 (code 20); probe_log_20260520_131350.jsonl s2p2=20 x3"
       - date: "2026-05-15"
         status: verified
         claim: |

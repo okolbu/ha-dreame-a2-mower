@@ -98,3 +98,15 @@ def test_fault_codes_are_all_described():
 def test_is_fault_handles_none_and_unknown():
     assert is_fault(None) is False
     assert is_fault(999) is False
+
+
+def test_s2p2_72_authoritative_text_and_slug():
+    from custom_components.dreame_a2_mower.mower.error_codes import ERROR_CODE_DESCRIPTIONS, S2P2_EVENT_TYPES
+    assert ERROR_CODE_DESCRIPTIONS[72] == "Task paused for too long. Automatically returning to the station to wait."
+    assert S2P2_EVENT_TYPES[72] == "paused_too_long_returning"
+
+
+def test_s2p2_71_unchanged():
+    from custom_components.dreame_a2_mower.mower.error_codes import ERROR_CODE_DESCRIPTIONS, S2P2_EVENT_TYPES
+    assert S2P2_EVENT_TYPES[71] == "standby_outside_station_too_long"
+    assert "standby outside station" in ERROR_CODE_DESCRIPTIONS[71].lower()
