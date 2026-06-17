@@ -945,6 +945,14 @@ class _WritesMixin:
                 }
             except Exception:  # noqa: BLE001 — cloud_state may be unset early
                 pass
+            # Push to the frontend NOW. Entities (patrol-points sensor + map
+            # camera editable_objects) read cloud_state lazily on coordinator
+            # update, so without this notify the optimistic value would not
+            # surface until the next ~2-min poll — the exact symptom: the app
+            # reflects the edit instantly while HA lags minutes.
+            notify = getattr(self, "async_update_listeners", None)
+            if callable(notify):
+                notify()
         return ok
 
     async def split_zone(self, map_id, zone_id, line_start, line_end) -> bool:

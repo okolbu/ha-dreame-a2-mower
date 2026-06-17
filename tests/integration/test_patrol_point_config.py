@@ -88,12 +88,16 @@ async def test_write_patrol_point_config_builds_cruised():
     # so the laggy CRUISE.0 poll can't revert the UI.
     c._pending_cruise_writes = {}
     c.cloud_state = SimpleNamespace(cruise_config_by_map={})
+    # Frontend push: entities read cloud_state lazily, so the write must notify
+    # listeners or the optimistic value lags until the next poll.
+    c.async_update_listeners = MagicMock()
     async def _exec(fn, *a): return fn(*a)
     c.hass = SimpleNamespace(async_add_executor_job=AsyncMock(side_effect=_exec))
     ok = await c.write_patrol_point_config(
         map_id=0, point_id=3, cycles=3, auto_capture=True
     )
     assert ok is True
+    c.async_update_listeners.assert_called_once()
     # Leg 1: o=111 carries [point_id, cycles] only.
     c._cloud.routed_action.assert_called_once_with(111, {"point": [3, 3]})
     # Leg 2: CRUISED carries [-1, point_id, auto(0/1), cycles].
