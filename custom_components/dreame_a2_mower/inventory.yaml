@@ -4282,7 +4282,7 @@ opcodes:
         evidence: "app-mitm:2026-06-16 (FINDING-patrol-photos-session-summary-2026-06-16.md)"
       - date: "2026-06-16"
         status: verified
-        claim: "o=111 is the per-point cycles write at CONFIG time too, not just run-start: the app dual-writes o=111 {point:[id,cycles]} (device-applied) THEN CRUISED (cloud record) for every per-point cycles change. o=111 is REQUIRED — CRUISED alone does not push cycles to the device. Integration now sends both (coordinator/_writes.py:write_patrol_point_config)."
+        claim: "o=111 is sent at CONFIG time too, not just run-start: the app dual-writes o=111 {point:[id,cycles]} THEN CRUISED for every per-point change (o=111 first seen 06-09, NOT net-new on 06-16). It is part of the pattern but NOT sufficient: a 2026-06-17 integration trace sent byte-identical o=111+CRUISED, both r=0, yet CRUISE.0 did not change. See § CRUISED 2026-06-17 verification (leading suspect: target map must be ACTIVE; fw-0625 persistence unconfirmed)."
         evidence: "app-mitm:2026-06-16 (miio-13267.jsonl 12:26-12:31; every CRUISED set preceded by o=111 {point:[id,cycles]})"
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
@@ -5687,12 +5687,12 @@ cfg_keys:
           until the app's CRUISED write context is captured (MITM). The READ half
           (CRUISE.0 -> sensor/editor) works.
         evidence: "live set_cfg('CRUISED',...) probe 2026-06-16 (create point 4 + update point 3 cycles 3->2; both r=0/True; CRUISE.0 + version unchanged after 10s; settings keys observed '3' + '1,0')"
-      - date: "2026-06-16"
-        status: verified
-        claim: "RESOLVED why a CRUISED-only write does not stick: the write is DUAL. The app always sends routed_action o=111 {point:[id,cycles]} (device-applied) IMMEDIATELY BEFORE the CRUISED set, for EVERY per-point change (config time, not just run-start). CRUISED-alone is accepted (r=0) but the device does NOT commit it to CRUISE.0 — see the CRUISED-only probe above (r=0 yet CRUISE.0 unchanged). o=111 is the required precursor that makes BOTH cycles AND auto_capture persist (auto_capture rides only in CRUISED, but only commits once o=111 establishes the point). Integration fixed to send o=111 then CRUISED."
-        evidence: "app-mitm:2026-06-16 (miio-13267.jsonl 12:26-12:31 window — every CRUISED set preceded by o=111 {point:[id,cycles]}); cross-ref the CRUISED-only probe above"
+      - date: "2026-06-17"
+        status: partial
+        claim: "o=111 + CRUISED dual-write is part of the app pattern (o=111 precedes EVERY CRUISED set; first seen 06-09, not net-new on 06-16) but is NOT sufficient on its own. 2026-06-17 integration wire-trace: the integration sent BYTE-IDENTICAL o=111 {point:[3,3]} then CRUISED {idx:0,value:[-1,3,0,3]}, both r=0, yet CRUISE.0 stayed unchanged (auto-off AND a separate cycles 3->2 both no-effect). Payloads match the app exactly -> opcode/transport/envelope are CORRECT (the 'transport must be wrong' hypothesis is disproven). Remaining delta: every app write that STUCK was on the ACTIVE map (o=200 {idx} set first; 06-09 idx0, 06-16 idx1); the integration wrote cold. Also: the only CONFIRMED persistence is fw-0550 era (06-09 write -> 06-15 readback, CRUISE.0 version 2->3) — NO write (app or integration) is yet confirmed to stick on fw-0625. Integration now activates the map first (_ensure_active_map) before the dual-write; whether the path persists at all on 0625 needs a fresh app-on-0625 capture."
+        evidence: "integration wire-trace 2026-06-17 (probe/logs/wire_trace_patrol_2026-06-17.jsonl; WIRE-TRACE-patrol-config-2026-06-17.md) vs app-mitm miio-13267.jsonl (o=200/o=111/CRUISED timeline)"
     references:
-      integration_code: "WRITE (DUAL — BOTH legs required): coordinator/_writes.py:write_patrol_point_config sends (1) routed_action(111, {point:[id,cycles]}) THEN (2) set_cfg('CRUISED', {idx, value:[-1, point_id, auto, cycles]}). CRUISED-alone is accepted (r=0) but does NOT update CRUISE.0; the o=111 precursor is what commits it. Exposed as service set_patrol_point_config + the map-editor card inline panel. READ: protocol/cruise_config.py:parse_cruise_config -> CloudState.cruise_config_by_map -> patrol-points sensor + camera editable_objects."
+      integration_code: "WRITE: coordinator/_writes.py:write_patrol_point_config — _ensure_active_map(map_id) [o=200], THEN routed_action(111, {point:[id,cycles]}), THEN set_cfg('CRUISED', {idx, value:[-1, point_id, auto, cycles]}). All three mirror the app; all return r=0. STILL not persisting on fw-0625 as of 2026-06-17 (see the 2026-06-17 verification) — under investigation. Exposed as service set_patrol_point_config + map-editor card inline panel. READ: protocol/cruise_config.py:parse_cruise_config -> CloudState.cruise_config_by_map -> patrol-points sensor + camera editable_objects (READ half works)."
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     open_questions:
       - "value[0]=-1 sentinel meaning (type/marker?) — not mirrored in CRUISE.0; likely a device-assign/version placeholder [UNKNOWN — to capture]."

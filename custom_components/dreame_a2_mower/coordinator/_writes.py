@@ -900,9 +900,19 @@ class _WritesMixin:
         map index (== map_id, same convention as PRE). value[0]=-1 is a constant
         sentinel. See inventory.yaml § CRUISED. Returns True only when BOTH legs
         are accepted (out[0].r==0).
+
+        MAP MUST BE ACTIVE: in every app-MITM session where the config WROTE
+        through, the edited map was the active map (o=200 {idx} set first) — the
+        app only edits cruise points inside the active map's editor. The o=111 /
+        CRUISED writes are accepted (r=0) but silently no-op against a non-active
+        map (matches the 2026-06-17 integration wire-trace: byte-identical writes,
+        r=0, CRUISE.0 unchanged — sent WITHOUT activating the map). So activate
+        first, exactly like start_point_patrol / start_go_to_point.
         """
         if int(cycles) not in (1, 2, 3):
             raise ValueError(f"cycles must be 1, 2 or 3, got {cycles!r}")
+        # The cruise-config writes only persist against the ACTIVE map.
+        await self._ensure_active_map(int(map_id))
         # Leg 1: o=111 applies the cycles to the device (the missing half).
         cycles_ok = await self.hass.async_add_executor_job(
             lambda: self._cloud.routed_action(
