@@ -1504,9 +1504,9 @@ properties:
         claim: "s2p57 fires on the g2408 wire as a standalone properties_changed push with bare scalar value=1 (single occurrence captured)"
         evidence: "probe_log_20260612_174439.jsonl@2026-06-14T04:42:16"
       - date: "2026-06-17"
-        status: verified
-        claim: "Integration now maps s2p57 → MowerState.robot_shutdown_trigger (property_mapping (2,57), bare-int extract) and fires the lifecycle event_type self_shutdown on event.dreame_a2_mower_lifecycle when the value rises to 1 (coordinator._fire_self_shutdown_if_edge, primed-on-first-observation edge guard mirroring the charging/rain edges)."
-        evidence: "probe_log_20260612_174439.jsonl@2026-06-14T04:42:16 (wire), tests/integration/test_self_shutdown_event.py + tests/mower/test_property_mapping.py::test_s2p57_maps_to_robot_shutdown_trigger (integration handling)"
+        status: partial
+        claim: "Integration now maps s2p57 → MowerState.robot_shutdown_trigger (property_mapping (2,57), bare-int extract) and fires the lifecycle event_type self_shutdown on event.dreame_a2_mower_lifecycle when the value rises to 1 (coordinator._fire_self_shutdown_if_edge, primed-on-first-observation edge guard mirroring the charging/rain edges). The mapping + edge-fire logic are unit-test-proven (deterministic); the end-to-end HA emission is code-read, NOT yet live-fired (no s2p57=1 has fired since the integration handling was added) — upgrade to `verified` on the next live self-shutdown."
+        evidence: "probe_log_20260612_174439.jsonl@2026-06-14T04:42:16 (wire shape only — value=1 push); tests/integration/test_self_shutdown_event.py + tests/mower/test_property_mapping.py::test_s2p57_maps_to_robot_shutdown_trigger (mapping + edge logic, not live emission)"
       - date: "2026-06-14"
         status: partial
         claim: |
