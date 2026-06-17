@@ -70,9 +70,8 @@ async def test_write_schedule_uses_device_plane_not_kv(monkeypatch):
     assert len(captured["row_writes"]) == 1  # only the changed slot 0
     w = captured["row_writes"][0]
     assert w["slot"] == 0
-    assert w["enabled"] == 1  # preserved from the authoritative row
+    assert w["enabled_array"] == [1, 0]  # slot0=1 (preserved), slot1=0 (preserved)
     assert w["version"] == 6  # base 5 + 1
-    assert w["flag"] == 0
     assert w["name"] == "Spr"
     assert isinstance(w["txn_id"], int) and w["txn_id"] > 0
     c._refresh_cloud_state.assert_awaited()
@@ -159,3 +158,34 @@ async def test_write_schedule_skips_unchanged_slot(monkeypatch):
     assert ok is True
     assert captured["row_writes"] == []  # unchanged — no write, no version churn
     c._refresh_cloud_state.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_write_schedule_preserves_other_season_enabled(monkeypatch):
+    """Editing slot 1's plans while slot 1 is the active season must NOT flip
+    the active season: SCHDSV3 s must be [slot0_enabled, slot1_enabled], not
+    [thisslot_enabled, 0]."""
+    import custom_components.dreame_a2_mower.coordinator._writes as W
+    from custom_components.dreame_a2_mower.protocol.schedule_encode import (
+        encode_schedule_blob,
+    )
+
+    # Live rows: slot0 OFF, slot1 ON.
+    rows = [[0, 0, "Spr", "OLDSPR"], [1, 1, "Win", "OLDWIN"]]
+    new_plan = SchedulePlan(
+        time_min=600, weekday_mask=0b1, action_type=0, zone_id=None, extra_bytes=b""
+    )
+    new_slots = [
+        ScheduleSlot(slot_id=1, name="Win", raw_blob_b64="", plans=(new_plan,), mode=1)
+    ]
+    c, captured, write_row, read_live = _make_coord(rows, version=7)
+    monkeypatch.setattr(W, "write_schedule_row", write_row, raising=False)
+    monkeypatch.setattr(W, "read_live_schedule", read_live, raising=False)
+    c.cloud_state = SimpleNamespace(schedule=ScheduleData(version=7, slots=()))
+
+    ok = await c.write_schedule(new_slots)
+
+    assert ok is True
+    assert len(captured["row_writes"]) == 1
+    assert captured["row_writes"][0]["slot"] == 1
+    assert captured["row_writes"][0]["enabled_array"] == [0, 1]  # both seasons preserved

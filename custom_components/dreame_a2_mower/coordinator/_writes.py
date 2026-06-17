@@ -131,6 +131,12 @@ class _WritesMixin:
         by_slot = {
             r[0]: r for r in rows if isinstance(r, list) and len(r) == 4
         }
+        # SCHDSV3 `s` is the FULL per-slot enabled array; build it once from the
+        # live rows so editing one season's plans preserves the OTHER season's
+        # on/off (sending [thisslot, 0] would flip the active season).
+        enabled_array = [
+            int(by_slot[i][1]) if i in by_slot else 0 for i in (0, 1)
+        ]
 
         ok = True
         async with self._chunked_write_lock:
@@ -151,19 +157,16 @@ class _WritesMixin:
                     and wire_name == prev_name
                 ):
                     continue  # unchanged — skip (idempotent, no version churn)
-                enabled = int(prev[1]) if prev else 1
-                flag = 0  # SCHDSV3 second state element; 0 in every capture
                 txn_id = self._next_schedule_txn_id()
                 try:
                     await self.hass.async_add_executor_job(
-                        lambda s=slot, b=blob_b64, e=enabled, t=txn_id, n=wire_name: write_schedule_row(
+                        lambda s=slot, b=blob_b64, t=txn_id, n=wire_name, ea=enabled_array: write_schedule_row(
                             self._cloud.action,
                             slot=s.slot_id,
-                            enabled=e,
+                            enabled_array=ea,
                             name=n,
                             blob_b64=b,
                             version=new_version,
-                            flag=flag,
                             txn_id=t,
                         )
                     )
