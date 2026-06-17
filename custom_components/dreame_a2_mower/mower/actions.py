@@ -49,6 +49,7 @@ class MowerAction(Enum):
     STOP = auto()
     RESUME = auto()  # op=5 continue a paused mow
     CANCEL_DOCK_RETURN = auto()  # op=13 cancel an in-progress dock-return (distinct from STOP)
+    UPDATE_STATION_LOCATION = auto()  # o=19 re-localize dock (app 2.5.8.1 "Update station location")
     FIND_BOT = auto()
     LOCK_BOT_TOGGLE = auto()
     LOCK_BOT = auto()  # Distinct from LOCK_BOT_TOGGLE — direct lockBot opcode (apk op=12)
@@ -268,6 +269,12 @@ ACTION_TABLE: dict[MowerAction, ActionEntry] = {
     # CANCEL_DOCK_RETURN — op=13 cancel an in-progress dock-return; distinct
     # from STOP (op=3). App capture 2026-06-09, no payload.
     MowerAction.CANCEL_DOCK_RETURN: {"siid": 5, "aiid": 1, "routed_o": 13},
+    # UPDATE_STATION_LOCATION — o=19 parameterless re-localize-dock action; the
+    # mower undocks, does a LiDAR reorient spin, and re-stores its dock pose.
+    # No coordinates sent; result reads back via m:g DOCK (x/y/yaw). App 2.5.8.1
+    # "Update station location" capture 2026-06-17, no payload. Routes through
+    # routed_action(19) (siid=2 aiid=50 internally).
+    MowerAction.UPDATE_STATION_LOCATION: {"siid": 2, "aiid": 50, "routed_o": 19},
     # FIND_BOT → legacy DreameMowerAction.LOCATE: {siid: 7, aiid: 1}
     # routed_o=9 per cfg_action.py:182 (findBot opcode)
     MowerAction.FIND_BOT: {"siid": 7, "aiid": 1, "routed_o": 9},

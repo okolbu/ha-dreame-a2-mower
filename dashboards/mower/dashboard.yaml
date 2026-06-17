@@ -1723,6 +1723,8 @@ views:
                     name: Find robot
                   - entity: button.dreame_a2_mower_generate_3d_map
                     name: Generate 3D map
+                  - entity: button.dreame_a2_mower_update_station_location
+                    name: Update station location
 
               - type: markdown
                 content: |

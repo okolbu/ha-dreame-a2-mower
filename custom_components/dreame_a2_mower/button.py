@@ -48,6 +48,7 @@ async def async_setup_entry(
         DreameA2RechargeButton(coordinator),
         DreameA2ResumeMowingButton(coordinator),
         DreameA2CancelDockReturnButton(coordinator),
+        DreameA2UpdateStationLocationButton(coordinator),
         DreameA2FindBotButton(coordinator),
         DreameA2LockBotButton(coordinator),
         DreameA2Generate3DMapButton(coordinator),
@@ -177,6 +178,19 @@ class DreameA2CancelDockReturnButton(_DreameA2ActionButton):
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         super().__init__(coordinator, "cancel_dock_return", "Cancel dock return", "mdi:home-export-outline")
         self._action = MowerAction.CANCEL_DOCK_RETURN
+
+
+class DreameA2UpdateStationLocationButton(_DreameA2ActionButton):
+    """Re-localize the charging dock (o=19). The mower undocks, does a LiDAR
+    reorient spin, and re-stores its dock pose; the dock_x/y/yaw sensors refresh
+    on the next DOCK poll. inventory § o=19 (verified 2026-06-17)."""
+
+    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
+        super().__init__(
+            coordinator, "update_station_location",
+            "Update station location", "mdi:map-marker-radius",
+        )
+        self._action = MowerAction.UPDATE_STATION_LOCATION
 
 
 class DreameA2RechargeButton(_DreameA2ActionButton):

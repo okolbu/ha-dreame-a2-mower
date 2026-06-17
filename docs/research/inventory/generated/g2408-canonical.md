@@ -1435,7 +1435,7 @@ never reached.
 | o12 | lock_bot | {m:'a', o:12, d:{lock: 0|1}} | APK-KNOWN |  |
 | o13 | cancel_dock_return | SEND {m:'a', o:13} (app); no echo observed | APK-KNOWN |  |
 | o15 | remote_setting | {m:'a', p:0, o:15, d:{c: 0|1} | {h: height*10}} | SEEN-UNDECODED |  |
-| o19 | update_station_location | SEND {m:'a', p:0, o:19} — NO payload (empty d) | DECODED-UNWIRED |  |
+| o19 | update_station_location | SEND {m:'a', p:0, o:19} — NO payload (empty d) | WIRED |  |
 | o100 | global_mower | SEND {m:'a', o:100, d:{need_bp}} (app); ECHO {area_id:N, exe:T, o:100, region_id:[1], time:N, t:'TASK'} (flat-field, not wrapped in d:{}) | WIRED |  |
 | o101 | edge_mower | SEND {m:'a', o:101, d:{edge:[[map_id, contour_id], ...]}} (app and integration) | WIRED |  |
 | o102 | zone_mower | SEND {m:'a', o:102, d:{region:[zone_id, ...]}} (app and integration) | WIRED |  |
@@ -1730,7 +1730,7 @@ changes, prompting the DOCK re-fetch. The integration already reads DOCK
 (coordinator _refresh_dock / cloud_client.fetch_dock); only the o=19 WRITE
 trigger is new.
 
-**See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`
+**See also:** `custom_components/dreame_a2_mower/button.py`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`
 
 ### o100 — `global_mower`
 

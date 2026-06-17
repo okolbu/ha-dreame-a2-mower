@@ -3698,8 +3698,13 @@ opcodes:
         status: verified
         claim: "o=19 = update-station-location: parameterless routed action {m:'a',p:0,o:19} (r=0) that makes the mower re-localize its dock (undock + LiDAR reorient spin, no coordinates sent). New in app 2.5.8.1. Result is read via m:g DOCK (x/y/yaw + near approach point); s1p51 signals the pose change."
         evidence: "app-mitm:2026-06-17 (miio-13267.jsonl 10:28:46 o=19 r=0; DOCK before 10:26 x149/y10/yaw79 -> after 10:29:33 x150/y9/yaw89)"
+      - date: "2026-06-17"
+        status: partial
+        claim: "Surfaced as button.dreame_a2_mower_update_station_location (DreameA2UpdateStationLocationButton) dispatching MowerAction.UPDATE_STATION_LOCATION -> routed_action(op=19); parameterless. dock_x/y/yaw sensors pick up the new pose on the next DOCK poll (existing read path). Code fact; o=19 wire verified separately above."
+        evidence: "integration_code: custom_components/dreame_a2_mower/button.py (DreameA2UpdateStationLocationButton); mower/actions.py ACTION_TABLE[UPDATE_STATION_LOCATION].routed_o=19"
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+      integration_code: "custom_components/dreame_a2_mower/button.py"
 
   - id: "o100"
     op: 100

@@ -120,6 +120,7 @@ CONTROL_MODES: dict[str, ControlMode | dict[str, ControlMode]] = {
     "button.dreame_a2_mower_recharge": _W,
     "button.dreame_a2_mower_resume_mowing": _W,
     "button.dreame_a2_mower_cancel_dock_return": _W,
+    "button.dreame_a2_mower_update_station_location": _W,
     "button.dreame_a2_mower_find_bot": _W,
     "button.dreame_a2_mower_lock_bot": _N,
     "button.dreame_a2_mower_generate_3dmap": _N,

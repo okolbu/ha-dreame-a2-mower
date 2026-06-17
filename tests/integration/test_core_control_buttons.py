@@ -65,3 +65,18 @@ async def test_action_button_raises_on_not_delivered():
 def test_new_buttons_writable():
     assert resolve_control_mode(platform="button", key="resume_mowing") == ControlMode.DEVICE_WRITABLE
     assert resolve_control_mode(platform="button", key="cancel_dock_return") == ControlMode.DEVICE_WRITABLE
+
+
+@pytest.mark.asyncio
+async def test_update_station_button_dispatches_action():
+    b = btn.DreameA2UpdateStationLocationButton(_coord())
+    await b.async_press()
+    b.coordinator.dispatch_action.assert_awaited_once()
+    assert b.coordinator.dispatch_action.call_args[0][0] == MowerAction.UPDATE_STATION_LOCATION
+
+
+def test_update_station_button_writable():
+    assert (
+        resolve_control_mode(platform="button", key="update_station_location")
+        == ControlMode.DEVICE_WRITABLE
+    )

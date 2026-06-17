@@ -44,6 +44,11 @@ def test_action_table_has_siid_aiid_for_cloud_actions():
         assert "aiid" in entry, f"{action} missing aiid"
 
 
+def test_update_station_action_table_routed_o_19():
+    """UPDATE_STATION_LOCATION (o=19) re-localizes the dock (app 2.5.8.1)."""
+    assert ACTION_TABLE[MowerAction.UPDATE_STATION_LOCATION]["routed_o"] == 19
+
+
 def test_finalize_session_is_local_only():
     """FINALIZE_SESSION has no (siid, aiid) — it's integration-local."""
     entry = ACTION_TABLE.get(MowerAction.FINALIZE_SESSION, {})

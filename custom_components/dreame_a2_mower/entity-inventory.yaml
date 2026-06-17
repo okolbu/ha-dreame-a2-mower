@@ -3986,6 +3986,34 @@ entities:
       works during RETURNING). Wire: s2a50 routed_o=13. No availability
       guard. Fire-and-forget: no state echo.
 
+  - id: "button.dreame_a2_mower_update_station_location"
+    platform: button
+    control_mode: device_writable
+    class: "DreameA2UpdateStationLocationButton"
+    class_file: "custom_components/dreame_a2_mower/button.py"
+    device: parent
+    source:
+      wire: "none (fire-and-forget action)"
+      state_path: "n/a — button entity has no state"
+    write_path: "coordinator.dispatch_action(MowerAction.UPDATE_STATION_LOCATION, {}) — wire: s2a50 routed_o=19 (re-localize dock; parameterless)"
+    status:
+      seen_working: false
+      last_verified: "2026-06-17"
+    verifications:
+      - date: "2026-06-17"
+        status: partial
+        claim: "wired via dispatch_action → routed_action op=19 (parameterless re-localize-dock; app 2.5.8.1 'Update station location'). o=19 wire app-mitm-verified; integration code fact (button surface) is the partial part."
+        evidence: "app-mitm:2026-06-17"
+    references:
+      wire_entry: "o19"
+      code: "custom_components/dreame_a2_mower/button.py"
+    notes: |
+      Re-localizes the charging dock. The mower undocks, does a LiDAR
+      reorient spin, and re-stores its dock pose; no coordinates sent.
+      Result reads back via m:g DOCK — the dock_x/dock_y/dock_yaw sensors
+      pick up the new pose on the next DOCK poll. Wire: s2a50 routed_o=19.
+      No availability guard. Fire-and-forget: no state echo.
+
   - id: "button.dreame_a2_mower_recharge"
     platform: button
     control_mode: device_writable
