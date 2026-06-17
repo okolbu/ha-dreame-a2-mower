@@ -161,6 +161,23 @@ def _make_ha_stub() -> None:
         return [value]
 
     cv_mod.ensure_list = _ensure_list  # type: ignore[attr-defined]
+
+    def _boolean(value) -> bool:
+        """Stub for cv.boolean — mirrors HA's string-bool parsing."""
+        import voluptuous as _vol
+        if isinstance(value, bool):
+            return value
+        if isinstance(value, int):
+            return bool(value)
+        if isinstance(value, str):
+            lower = value.lower()
+            if lower in ("true", "yes", "on", "1", "enable", "enabled"):
+                return True
+            if lower in ("false", "no", "off", "0", "disable", "disabled"):
+                return False
+        raise _vol.Invalid(f"invalid boolean value {value!r}")
+
+    cv_mod.boolean = _boolean  # type: ignore[attr-defined]
     sys.modules["homeassistant.helpers.config_validation"] = cv_mod
 
     # homeassistant.components.sensor

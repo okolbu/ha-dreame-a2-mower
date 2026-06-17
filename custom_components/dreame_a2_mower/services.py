@@ -129,7 +129,7 @@ SCHEMA_SET_SCHEDULE_PLANS = vol.Schema({
 
 SCHEMA_SET_SCHEDULE_ENABLED = vol.Schema({
     vol.Required("slot_id"): vol.All(vol.Coerce(int), vol.In([0, 1])),
-    vol.Required("enabled"): vol.Coerce(bool),
+    vol.Required("enabled"): cv.boolean,
 })
 
 

@@ -1,6 +1,4 @@
-"""Task 6: the set_schedule_plans service still reaches coordinator.write_schedule.
-Task 5: the set_schedule_enabled service with active-task guard.
-"""
+"""Tests for the set_schedule_plans and set_schedule_enabled services."""
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
