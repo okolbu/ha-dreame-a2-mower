@@ -32,8 +32,14 @@ HANDOVER) surfaced wire facts that need a live app-MITM / probe capture to confi
    the app's PRE write slots + `code:0` (EdgeMaster=PRE[10], Efficiency=PRE[3]), but whether the
    g2408 firmware actually *applies* an integration-originated PRE write is still `[UNVERIFIED]`.
    Verify a single-toggle PRE write changes observed mower behaviour.
-2. **[s2p2=72]** capture a cloud-labelled pause-timeout-return fire → promote 72 to wire-confirmed +
-   admit to `error_codes.py` (per the confidence gate).
+2. **[s2p2=72]** = "return after pause-timeout" — fires from `s2p1=4` (PAUSED_HOLD = the AUTO/HOLD
+   variant: stranded/stuck mid-task, e.g. low-battery hold; **NOT** a deliberate pause-button press).
+   The only sighting (2026-06-13) was a stuck/low-batt auto-hold → ~1 h → 72. Capture a cloud-labelled
+   72 fire to promote it to wire-confirmed + admit to `error_codes.py`. Realistic trigger: mower
+   auto-held mid-task left ~1 h — do NOT just press pause expecting 72. Distinct from `s2p2=71`
+   (already verified) which is the STANDBY-idle-too-long return. **Open sub-question:** does a
+   DELIBERATE pause-button press also land in `s2p1=4` (and thus 72-timeout), or a separate state? —
+   capture a deliberate pause to settle it.
 3. **[s2p2=20 / 33]** capture cloud-labelled fires to pin the real g2408 text (vs borrowed
    dreame-mower names).
 4. **[s2p55]** app-MITM during a real AI-obstacle detection to capture the photo list/URL backend call.
