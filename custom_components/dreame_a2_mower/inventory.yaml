@@ -5633,9 +5633,16 @@ cfg_keys:
         NOTE [8/11/17/18/20] resolved 2026-06-17 by aligning the named SETTINGS.0
              zone object (dual-written with PRE on every save) to the positional PRE
              array: every known PRE index matches its SETTINGS field by value, and the
-             leftover SETTINGS fields (the EdgeMaster-fixed edge params + OA sensitivity,
-             none with a mowing-screen UI) account for these 5 — which is why they were
-             constant across all single-toggle sweeps.
+             leftover SETTINGS fields account for these 5. Field NAMES are wire-truth
+             — literal keys in the device SETTINGS blob (getDeviceData), NOT upstream/
+             vacuum lineage (obstacleAvoidanceSensitivity ×60, edgeMowingNum, etc.).
+             NO MATCHING APP TOGGLE FOUND for any of them (user searched the 2.5.8.1
+             app 2026-06-17 — there is no obstacle-avoidance sensitivity / edge-pass-
+             count / cutter-position control exposed). So they are wire-present but
+             UI-less on g2408 — future-use or deliberately omitted — which is why they
+             never moved in any single-toggle sweep, and why the [11]/[17] and [8]/[18]
+             value-tied assignments cannot be pinned by UI isolation (likely permanent
+             unless a future app/firmware exposes a control).
 
       Per-zone (Custom Mode) writes use the same int array with [2] set to the
       zone index. Enable custom-mode per zone via PREP first
