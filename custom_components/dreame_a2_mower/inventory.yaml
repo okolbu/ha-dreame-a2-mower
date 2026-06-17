@@ -5334,12 +5334,41 @@ cfg_keys:
       Setting.LANGUAGE. Surfaced as sensor.robot_voice (state = voice language
       name where known, raw indices as attrs). Sample: [2, 7].
       Write payload: typed key {type:"voice"|"text", value:idx}. Only type:voice
-      writes are wire-confirmed (En=0, No=7, Da=9); the type:text write is
-      apk-derived and NOT triggered by the app Languages picker — text_idx is set
-      from a separate device-settings control drawing on the firmware-supported
-      list (smaller than the app's i18n set). [app-mitm:2026-06-09-settings-sweep;
-      2026-06-17 app-language test] Changing voice language triggers NO download
-      on g2408 — voice packs are device-side firmware.
+      writes are wire-confirmed; the type:text write is apk-derived and NOT
+      triggered by the app Languages picker.
+
+      THREE DISTINCT LISTS (do not conflate; all enumerated in
+      entities/select/global_.py):
+        - voice_idx = CFG.LANG[1] = robot voice, 16 langs in app voice-picker
+          order (map below). VOICE_LANGUAGE_NAMES.
+        - text_idx  = CFG.LANG[0] = the mower's physical LCD screen language — a
+          SEPARATE, DIFFERENT list: 13 langs ALPHABETICAL by native name
+          (Danish=0, German=1, English=2, Spanish=3, French=4, Italian=5,
+          Dutch=6, Norwegian=7, Polish=8, Finnish=9, Swedish=10, Simplified
+          Chinese=11, Traditional Chinese=12). Captured 2026-05-09 by reading the
+          mower LCD picker (Danish picked -> cloud read text=0). TEXT_LANGUAGE_NAMES.
+          It is NOT the voice list and NOT the app picker — fewer langs (no
+          Portuguese/Turkish/Russian/Lithuanian), different order.
+        - app UI language = the app-config "Languages" picker, 33 i18n locales,
+          1-indexed, NOT in CFG (app-local; the 2.5.8.1 new langs live only here).
+          APP_TEXT_LANGUAGE_NAMES.
+
+      VOICE LANGUAGE ORDINAL MAP (CFG.LANG[1] = app Robot Voice list order,
+      0-indexed). Wire-confirmed anchors marked ✓ (the rest inferred from the app
+      list order, which the anchors validate perfectly):
+        0 English ✓  1 Chinese ✓  2 German ✓  3 French  4 Italian  5 Spanish
+        6 Portuguese  7 Norwegian ✓  8 Swedish  9 Danish ✓  10 Finnish  11 Dutch
+        12 Turkish  13 Polish  14 Russian  15 Lithuanian
+      [app-mitm:2026-06-17 — voice writes value 0/1/2 captured; 7/9 from 06-09].
+      The 2.5.8.1 app-UI languages NOT in this device list: Czech, Hungarian,
+      Slovak, Romanian, Latvian (app-i18n only). Lithuanian (15) IS a device lang.
+
+      CORRECTION 2026-06-17: changing the voice language to a not-yet-installed
+      pack DOES trigger a download on the mower (observed live — Chinese/German
+      fetched their packs). The prior "NO download — packs are device-side
+      firmware" was only true for already-installed packs (En/No/Da). Avoid
+      cycling all 16 in testing — each new pick downloads a pack to the device.
+      [app-mitm:2026-06-09-settings-sweep; 2026-06-17 voice-list capture]
     status:
       seen_on_wire: true
       first_seen: "2026-04-24"
@@ -5350,6 +5379,10 @@ cfg_keys:
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     verifications:
+      - date: "2026-06-17"
+        status: verified
+        claim: "Voice-language ordinal map resolved (= app Robot Voice list order, 0-indexed): 0 English, 1 Chinese, 2 German, 3 French, 4 Italian, 5 Spanish, 6 Portuguese, 7 Norwegian, 8 Swedish, 9 Danish, 10 Finnish, 11 Dutch, 12 Turkish, 13 Polish, 14 Russian, 15 Lithuanian. Wire-confirmed anchors: 0/1/2 (today), 7/9 (06-09); rest inferred from the validated app order. Also: selecting a not-yet-installed voice language DOES download the pack to the mower (Chinese/German observed) — corrects the prior 'no download' claim (true only for pre-installed En/No/Da)."
+        evidence: "app-mitm:2026-06-17 (miio-13267.jsonl LANG voice writes 11:18:36 v0=English, 11:19:36 v1=Chinese, 11:19:45 v2=German; app 2.5.8.1)"
       - date: "2026-06-17"
         status: verified
         claim: "The app-config 'Languages' picker is app-local i18n, NOT the mower text language: changing it to Romanian then Spanish (a device-supported language) sent ZERO writes to the mower (only routine TIME/OTA housekeeping); the app soft-restarts in the new locale on Save. So text_idx is a separate DEVICE text/LCD setting, and the 2.5.8.1 changelog's new languages are app-UI-only (no text_idx/voice_idx). Corrects the prior 'text_idx = app/UI language' wording, which conflated the two."
