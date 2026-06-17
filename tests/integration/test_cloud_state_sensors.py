@@ -143,26 +143,15 @@ def test_schedule_count_surfaces_zone_id_and_action_label():
 def test_schedule_count_sensor_exposes_enabled_per_slot():
     """Each slot dict carries `enabled` (bool of ScheduleSlot.mode) so the
     card can render the on/off toggle."""
-    from custom_components.dreame_a2_mower.entities.sensor.device import (
-        DreameA2ScheduleCountSensor,
+    sched = ScheduleData(
+        version=5,
+        slots=(
+            ScheduleSlot(slot_id=0, name="Spr & Sum", raw_blob_b64="", plans=(), mode=1),
+            ScheduleSlot(slot_id=1, name="", raw_blob_b64="", plans=(), mode=0),
+        ),
     )
-    from custom_components.dreame_a2_mower.cloud_state import (
-        ScheduleData, ScheduleSlot,
-    )
-    from types import SimpleNamespace
-
-    sensor = object.__new__(DreameA2ScheduleCountSensor)
-    sensor.coordinator = SimpleNamespace(
-        cloud_state=SimpleNamespace(
-            schedule=ScheduleData(
-                version=5,
-                slots=(
-                    ScheduleSlot(slot_id=0, name="Spr & Sum", raw_blob_b64="", plans=(), mode=1),
-                    ScheduleSlot(slot_id=1, name="", raw_blob_b64="", plans=(), mode=0),
-                ),
-            )
-        )
-    )
-    attrs = sensor.extra_state_attributes
+    coord = _make_coord(schedule=sched)
+    ent = DreameA2ScheduleCountSensor(coord)
+    attrs = ent.extra_state_attributes
     assert attrs["slots"][0]["enabled"] is True
     assert attrs["slots"][1]["enabled"] is False
