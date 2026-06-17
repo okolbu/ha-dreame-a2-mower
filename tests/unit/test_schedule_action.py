@@ -37,8 +37,8 @@ def test_write_schedule_row_envelope():
     row = "[0,1,\"Spr\",\"qghRIBIAAu0=\"]"  # arbitrary but realistic
     sa.write_schedule_row(
         _fake_send_action(calls),
-        slot=0, enabled=1, name="Spr", blob_b64="qghRIBIAAu0=",
-        version=5, flag=0, txn_id=1781118711306,
+        slot=0, enabled_array=[1, 0], name="Spr", blob_b64="qghRIBIAAu0=",
+        version=5, txn_id=1781118711306,
     )
     # All on siid:2 aiid:50.
     assert all(c[0] == 2 and c[1] == 50 for c in calls)
@@ -64,8 +64,28 @@ def test_write_schedule_row_raises_on_error():
     with pytest.raises(sa.CfgActionError):
         sa.write_schedule_row(
             _fake_send_action([], fail_on="SCHDSV3"),
-            slot=0, enabled=1, name="Spr", blob_b64="qghRIBIAAu0=",
-            version=5, flag=0, txn_id=1,
+            slot=0, enabled_array=[1, 0], name="Spr", blob_b64="qghRIBIAAu0=",
+            version=5, txn_id=1,
+        )
+
+
+def test_write_schedule_enabled_state_envelope():
+    calls = []
+    sa.write_schedule_enabled_state(
+        _fake_send_action(calls), version=58177, enabled=[0, 1]
+    )
+    assert len(calls) == 1
+    siid, aiid, payload = calls[0]
+    assert (siid, aiid) == (2, 50)
+    assert payload["t"] == "SCHDSV3"
+    assert payload["d"] == {"i": 0, "v": 58177, "s": [0, 1]}
+
+
+def test_write_schedule_enabled_state_raises_on_error():
+    import pytest
+    with pytest.raises(sa.CfgActionError):
+        sa.write_schedule_enabled_state(
+            _fake_send_action([], fail_on="SCHDSV3"), version=1, enabled=[1, 0]
         )
 
 

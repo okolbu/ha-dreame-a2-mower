@@ -47,26 +47,42 @@ def write_schedule_row(
     send_action,
     *,
     slot: int,
-    enabled: int,
+    enabled_array: list[int],
     name: str,
     blob_b64: str,
     version: int,
-    flag: int,
     txn_id: int,
 ) -> None:
     """Write one schedule slot row via the chunked SCHD*V3 transaction.
 
     Order: SCHDIV3 header -> N SCHDDV3 chunks (shared txn_id) -> SCHDSV3 state.
     `version` is the schedule version (SCHDSV3 `v`); `txn_id` is the shared
-    header/chunk `v`. Raises CfgActionError if any leg returns r!=0.
+    header/chunk `v`. `enabled_array` is the FULL [slot0_enabled, slot1_enabled]
+    array — SCHDSV3 `s` is the whole per-slot enabled array, NOT [thisslot, flag]
+    (sending [enabled, 0] would wrongly disable the OTHER season on an edit).
+    Raises CfgActionError if any leg returns r!=0.
     """
-    row_json = json.dumps([slot, enabled, name, blob_b64], separators=(",", ":"))
+    row_json = json.dumps([slot, enabled_array[slot], name, blob_b64], separators=(",", ":"))
     total_len = len(row_json.encode("utf-8"))
     _send(send_action, "SCHDIV3", {"i": slot, "l": total_len, "v": txn_id})
     for off, chunk in chunk_row_json(row_json):
         _send(send_action, "SCHDDV3",
               {"s": off, "l": len(chunk.encode("utf-8")), "d": chunk, "v": txn_id})
-    _send(send_action, "SCHDSV3", {"i": slot, "v": version, "s": [enabled, flag]})
+    _send(send_action, "SCHDSV3", {"i": slot, "v": version, "s": list(enabled_array)})
+
+
+def write_schedule_enabled_state(send_action, *, version: int, enabled: list[int]) -> None:
+    """Standalone schedule enable/disable write (the "season switch").
+
+    Issues a single SCHDSV3 setter `{i:0, v:version, s:[slot0, slot1]}`. The
+    full enabled array is written atomically; the device enforces mutual
+    exclusion ([1,1] never occurs, [0,0] = both off). `version` MUST be the
+    current schedule version read immediately before this write (it is a
+    regenerated optimistic-concurrency token, not a counter). Raises
+    CfgActionError on r!=0. [app-mitm:2026-06-17]
+    """
+    _send(send_action, "SCHDSV3",
+          {"i": 0, "v": int(version), "s": [int(enabled[0]), int(enabled[1])]})
 
 
 # Max bytes requested per SCHDDV3 read chunk (matches the app's request size).
