@@ -559,6 +559,12 @@ sensor.task_state_code:
   reboot: required
   note: "Snapshot-backed (StateSnapshot.task_state_code). Last-known persists across HA restart via the snapshot Store; writer is coordinator.handle_property_push → state_machine.handle_misc_persisted on s2p56."
 
+sensor.zone_progress:
+  holder: mower_state
+  idle: "Idle"
+  reboot: unavailable_ok
+  note: "Reads coord.data.zone_progress (s2p56 per-target array). Empty tuple outside a multi-zone mow -> 'Idle'. Volatile; not persisted across reboot (live mow state)."
+
 sensor.total_lawn_area_m2:
   holder: mower_state
   idle: unavailable

@@ -155,6 +155,9 @@
       "task_state_code": {
         "name": "Task state (raw)"
       },
+      "zone_progress": {
+        "name": "Zone progress"
+      },
       "weather_forecast_reference": {
         "name": "Weather forecast reference"
       },

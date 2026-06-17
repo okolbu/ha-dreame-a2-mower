@@ -211,6 +211,15 @@ views:
                     name: Session area mowed (m²)
                   - entity: number.dreame_a2_mower_trail_render_width
                     name: Trail width (px)
+              # Per-zone mow progress (s2p56 zone_progress) — shows each
+              # target's stage on a multi-zone mow with wire zone names.
+              - type: markdown
+                title: Zone progress
+                content: >
+                  {% set z = state_attr('sensor.dreame_a2_mower_zone_progress','zones') %}
+                  {% if z %}{% for zone in z %}
+                  {{ '✅' if zone.status=='done' else ('🟢' if zone.status=='active' else '⚪') }} {{ zone.name }}
+                  {% endfor %}{% else %}Idle{% endif %}
               # Hero: animated live map for the active map. The custom
               # dreame-mower-map-card draws the base PNG + a client-side
               # accumulated trail + a directional mower icon animated

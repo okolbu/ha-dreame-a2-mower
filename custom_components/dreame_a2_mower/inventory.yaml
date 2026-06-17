@@ -1359,9 +1359,22 @@ properties:
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-06-16"
+      last_seen: "2026-06-17"
       decoded: confirmed
     verifications:
+      - date: "2026-06-17"
+        status: verified
+        claim: |
+          Integration now extracts the FULL per-target array (not just
+          status[0][-1]) into MowerState.zone_progress via property_mapping
+          multi_field — ((target_id, stage), …) — alongside the unchanged
+          task_state_code (still status[0][-1]). Surfaced via the parent-device
+          sensor.dreame_a2_mower_zone_progress: state "Mowing zone N of M" /
+          "Idle", attributes {current_zone_id, current_zone_name, zones:[{id,
+          name, status}]} with names joined to the active map's mowing_zones
+          (MowingZone.name; synthetic "Zone N" fallback). Builds on the verified
+          2026-06-16 per-zone finding below.
+        evidence: "mower/property_mapping.py (2,56) multi_field zone_progress; entities/sensor/device.py DreameA2ZoneProgressSensor; probe/logs/probe_log_20260612_174439.jsonl @ 2026-06-16"
       - date: "2026-06-16"
         status: verified
         claim: |

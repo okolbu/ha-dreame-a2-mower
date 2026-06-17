@@ -283,6 +283,9 @@
       "task_state_code": {
         "name": "Task state (raw)"
       },
+      "zone_progress": {
+        "name": "Zone progress"
+      },
       "charging_status": {
         "state": {
           "charging": "Charging",

@@ -85,7 +85,13 @@ def test_slam_label_maps_to_s2p65():
 
 
 def test_task_state_maps_to_s2p56():
-    assert PROPERTY_MAPPING[(2, 56)].field_name == "task_state_code"
+    """s2.56 is now a multi_field entry feeding task_state_code AND
+    zone_progress; task_state_code is still the first multi_field tuple."""
+    entry = PROPERTY_MAPPING[(2, 56)]
+    assert entry.multi_field is not None
+    extractors = dict(entry.multi_field)
+    assert "task_state_code" in extractors
+    assert "zone_progress" in extractors
 
 
 def test_task_state_reads_last_element_stage():
@@ -93,7 +99,7 @@ def test_task_state_reads_last_element_stage():
     entries (corpus-verified 2026-05-30: [1,0,2]=done, [1,0,4]=paused). The
     older middle-read (status[0][1]) saw a constant 0 for 3-element runs and
     missed done/paused."""
-    extract = PROPERTY_MAPPING[(2, 56)].extract_value
+    extract = dict(PROPERTY_MAPPING[(2, 56)].multi_field)["task_state_code"]
     # 2-element: stage is element 1 (== last)
     assert extract({"status": [[1, 0]]}) == 0       # running
     assert extract({"status": [[1, 4]]}) == 4       # paused
@@ -105,6 +111,30 @@ def test_task_state_reads_last_element_stage():
     # empty / malformed -> None
     assert extract({"status": []}) is None
     assert extract({}) is None
+
+
+def test_s2p56_multi_field_sets_task_state_and_zone_progress():
+    from custom_components.dreame_a2_mower.coordinator import apply_property_to_state
+    from custom_components.dreame_a2_mower.mower.state import MowerState
+    st = apply_property_to_state(MowerState(), 2, 56, {"status": [[1, 2], [2, 0]]})
+    assert st.task_state_code == 2
+    assert st.zone_progress == ((1, 2), (2, 0))
+
+
+def test_s2p56_empty_status_clears_zone_progress():
+    from custom_components.dreame_a2_mower.coordinator import apply_property_to_state
+    from custom_components.dreame_a2_mower.mower.state import MowerState
+    st = apply_property_to_state(MowerState(), 2, 56, {"status": []})
+    assert st.task_state_code is None
+    assert st.zone_progress == ()
+
+
+def test_s2p56_three_element_entry_tolerated():
+    from custom_components.dreame_a2_mower.coordinator import apply_property_to_state
+    from custom_components.dreame_a2_mower.mower.state import MowerState
+    st = apply_property_to_state(MowerState(), 2, 56, {"status": [[1, 0, 4]]})
+    assert st.task_state_code == 4
+    assert st.zone_progress == ((1, 4),)
 
 
 def test_s6p2_extracts_mowing_height_efficiency_edgemaster():

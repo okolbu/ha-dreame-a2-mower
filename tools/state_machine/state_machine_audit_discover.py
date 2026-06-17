@@ -166,6 +166,11 @@ _STANDALONE_CLASS_REGISTRY: dict[str, tuple[str, str, str]] = {
         "sensor", "schedule_count",
         "lambda coord: len(coord.cloud_state.schedule.slots)",
     ),
+    "DreameA2ZoneProgressSensor": (
+        "sensor", "zone_progress",
+        # Reads coord.data.zone_progress; empty tuple at cold-start -> 'Idle'.
+        "lambda coord: 'Idle' if not coord.data.zone_progress else 'Mowing'",
+    ),
     "DreameA2WifiRefreshStatusSensor": (
         "sensor", "wifi_refresh_status",
         "lambda coord: coord._wifi_archive_last_refresh.get('last_attempt_unix') if coord._wifi_archive_last_refresh else None",

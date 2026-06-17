@@ -1284,6 +1284,72 @@ class DreameA2ScheduleCountSensor(
         }
 
 
+_ZONE_STAGE_LABEL = {-1: "queued", 0: "active", 2: "done"}
+
+
+class DreameA2ZoneProgressSensor(
+    _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
+):
+    """Per-zone mow progress derived from s2p56. Zone names come from the active
+    map's MowingZone.name (the app-assigned wire names); synthetic 'Zone N' only
+    as fallback. inventory § s2p56 (verified 2026-06-16)."""
+
+    _attr_has_entity_name = True
+    _attr_translation_key = "zone_progress"
+    _attr_name = "Zone progress"
+    _attr_icon = "mdi:format-list-numbered"
+    _attr_should_poll = False
+    _MOWER_KEY = "zone_progress"
+
+    def _zone_name(self, zone_id: int) -> str:
+        """Resolve a zone id to its app-assigned name via the active map's
+        mowing_zones; fall back to a synthetic 'Zone N'."""
+        cs = getattr(self.coordinator, "cloud_state", None)
+        active = getattr(self.coordinator, "_active_map_id", None)
+        if cs is not None and active is not None:
+            m = cs.maps_by_id.get(active)
+            if m is not None:
+                for z in getattr(m, "mowing_zones", ()) or ():
+                    if getattr(z, "zone_id", None) == zone_id:
+                        name = getattr(z, "name", None)
+                        if name:
+                            return name
+        return f"Zone {zone_id}"
+
+    @property
+    def _zones(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "id": zid,
+                "name": self._zone_name(zid),
+                "status": _ZONE_STAGE_LABEL.get(stage, "unknown"),
+            }
+            for zid, stage in (getattr(self.coordinator.data, "zone_progress", ()) or ())
+        ]
+
+    @property
+    def native_value(self) -> str:
+        zones = self._zones
+        if not zones:
+            return "Idle"
+        active_idx = next(
+            (i for i, z in enumerate(zones) if z["status"] == "active"), None
+        )
+        if active_idx is None:
+            return "Idle"
+        return f"Mowing zone {active_idx + 1} of {len(zones)}"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        zones = self._zones
+        active = next((z for z in zones if z["status"] == "active"), None)
+        return {
+            "current_zone_id": active["id"] if active else None,
+            "current_zone_name": active["name"] if active else None,
+            "zones": zones,
+        }
+
+
 class DreameA2WifiRefreshStatusSensor(
     _MowerScopedEntity, CoordinatorEntity[DreameA2MowerCoordinator], SensorEntity
 ):

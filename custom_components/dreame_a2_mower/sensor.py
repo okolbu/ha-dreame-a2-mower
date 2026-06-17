@@ -41,6 +41,7 @@ from .entities.sensor.device import (
     DreameA2SharedMessagesSensor,
     DreameA2WifiHeatmapAgeSensor,
     DreameA2WifiRefreshStatusSensor,
+    DreameA2ZoneProgressSensor,
     _active_fault_text,
     _api_endpoints_value,
     _describe_error_or_none,
@@ -86,6 +87,7 @@ async def async_setup_entry(
         + [
             DreameA2OtaStatusSensor(coordinator),
             DreameA2ScheduleCountSensor(coordinator),
+            DreameA2ZoneProgressSensor(coordinator),
             DreameA2RainResumeSensor(coordinator),
             DreameA2WifiRefreshStatusSensor(coordinator),
             DreameA2WifiHeatmapAgeSensor(coordinator),

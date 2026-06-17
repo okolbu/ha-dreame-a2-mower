@@ -320,6 +320,12 @@ class MowerState:
     # Source: s2.56 (confirmed task-state codes 1..5). Persistence: volatile.
     task_state_code: int | None = None
 
+    # Source: s2p56 status array via property_mapping multi_field — per-zone/
+    # per-target progress as (target_id, stage) pairs. stage: -1 queued,
+    # 0 active, 2 done. Active target = the pair whose stage == 0. target_id
+    # joins MAP.*.mowingAreas ids. inventory § s2p56 (verified 2026-06-16).
+    zone_progress: tuple[tuple[int, int], ...] = ()
+
     # Source: CFG.CMS (confirmed). Persistence: persistent.
     # Also derivable live from s2.51 CONSUMABLES counters using per-slot
     # thresholds (Blades 6000 min ≈ 100 h, Cleaning Brush 30000 min ≈ 500 h,

@@ -50,6 +50,26 @@ class PropertyMappingEntry:
     multi_field: tuple[tuple[str, Callable[[Any], Any]], ...] | None = None
 
 
+def _s2p56_stage(v):
+    """The overall STAGE = last element of status[0]. See the (2, 56) comment."""
+    if (isinstance(v, dict) and isinstance(v.get("status"), list)
+            and v["status"] and isinstance(v["status"][0], list)
+            and len(v["status"][0]) >= 2):
+        return int(v["status"][0][-1])
+    return None
+
+
+def _s2p56_zone_progress(v):
+    """The FULL per-target array as ((target_id, stage), …) tuples."""
+    if not (isinstance(v, dict) and isinstance(v.get("status"), list)):
+        return ()
+    out = []
+    for entry in v["status"]:
+        if isinstance(entry, list) and len(entry) >= 2:
+            out.append((int(entry[0]), int(entry[-1])))
+    return tuple(out)
+
+
 # F1-minimal table. F2..F7 add entries.
 # Each entry's primary citation is in docs/research/g2408-protocol.md §2.1.
 PROPERTY_MAPPING: dict[tuple[int, int], PropertyMappingEntry] = {
@@ -96,16 +116,16 @@ PROPERTY_MAPPING: dict[tuple[int, int], PropertyMappingEntry] = {
     # and more correct (it also surfaces the 3-element PAUSE [1,0,4], previously
     # invisible — e.g. a stuck patrol). Treat the older docs that said otherwise
     # as untrustworthy (guesswork). See inventory.yaml § s2p56.
+    #
+    # zone_progress (2026-06-17) carries the FULL per-target array — one
+    # (target_id, stage) pair per zone/target on a multi-zone mow. stage:
+    # -1 queued, 0 active, 2 done. task_state_code keeps the overall stage
+    # (status[0][-1]); zone_progress drives sensor.zone_progress (wire zone-
+    # name join via the active map's mowing_zones). inventory § s2p56.
     (2, 56): PropertyMappingEntry(
-        field_name="task_state_code",
-        extract_value=lambda v: (
-            int(v["status"][0][-1])
-            if isinstance(v, dict)
-            and isinstance(v.get("status"), list)
-            and v["status"]
-            and isinstance(v["status"][0], list)
-            and len(v["status"][0]) >= 2
-            else None
+        multi_field=(
+            ("task_state_code", _s2p56_stage),
+            ("zone_progress", _s2p56_zone_progress),
         ),
     ),
     # s2.57 robot_shutdown_trigger — bare scalar int (NOT the apk-hypothesized

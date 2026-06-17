@@ -2896,6 +2896,32 @@ entities:
       extra_state_attributes exposes the full slot list for dashboard templates.
       Returns None when cloud_state is None; 0 when no schedules are configured.
 
+  - id: "sensor.dreame_a2_mower_zone_progress"
+    platform: sensor
+    class: "DreameA2ZoneProgressSensor"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py:1290"
+    device: parent
+    source:
+      wire: "s2p56 task_state status array (per-target [id, stage] pairs)"
+      state_path: "coordinator.data.zone_progress; zone names joined from coordinator.cloud_state.maps_by_id[coordinator._active_map_id].mowing_zones (MowingZone.name)"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-17"
+    verifications:
+      - date: "2026-06-17"
+        status: presumed
+        claim: "Added 2026-06-17: native_value = 'Mowing zone N of M' (N = 1-based index of the stage==0 active target) or 'Idle' when no active target; extra_state_attributes = {current_zone_id, current_zone_name, zones:[{id, name, status}]}. Zone names resolved from the active map's mowing_zones (app-assigned wire names), synthetic 'Zone N' fallback. Stage map: -1 queued, 0 active, 2 done. Read from code; not re-confirmed live."
+        evidence: "entities/sensor/device.py DreameA2ZoneProgressSensor; s2p56 multi_field zone_progress in mower/property_mapping.py"
+    references:
+      wire_entry: "inventory.yaml § s2p56"
+      code: "custom_components/dreame_a2_mower/entities/sensor/device.py"
+    notes: |
+      Per-zone/per-target mow progress derived from s2p56 zone_progress
+      (a multi_field extract added alongside task_state_code). Read-only
+      diagnostic; multi-zone mows show each target's stage. Idle outside a
+      multi-zone run. inventory § s2p56 (verified 2026-06-16).
+
   - id: "sensor.dreame_a2_mower_wifi_refresh_status"
     platform: sensor
     class: "DreameA2WifiRefreshStatusSensor"
