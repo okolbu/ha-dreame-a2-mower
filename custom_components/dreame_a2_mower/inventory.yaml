@@ -5552,7 +5552,11 @@ cfg_keys:
         [16] Safe Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
         [17] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
         [18] reserved / unknown — unchanged across all 28 writes. [UNKNOWN — to capture]
-        [19] NEW post-0625 (appended by the 0550→0625 OTA) — default 0. [UNKNOWN — to capture]
+        [19] Turning Method: 0=Efficient, 1=Lawn-Care. Confirmed by an isolated
+             single-index toggle [app-mitm:2026-06-17]: Lawn-Care write differed
+             from the Efficient write ONLY at [19] (1 vs 0). Appended by the
+             0550→0625 OTA; the UI ("Turning Method Settings" sub-page of Mowing
+             Settings) shipped in app 2.5.8.1.
         [20] NEW post-0625 (appended by the 0550→0625 OTA) — default 30 (resembles a
              minutes/percent value). [UNKNOWN — to capture]
 
@@ -5579,6 +5583,10 @@ cfg_keys:
       last_seen: "2026-06-16"
       decoded: confirmed
     verifications:
+      - date: "2026-06-17"
+        status: verified
+        claim: "PRE[19] = Turning Method (0=Efficient, 1=Lawn-Care), resolving the post-0625 'NEW/UNKNOWN' [19] field. Isolated single-index toggle in app 2.5.8.1 (new 'Turning Method Settings' sub-page of Mowing Settings): the two map-0 PRE saves differed ONLY at [19] — Lawn-Care vs Efficient."
+        evidence: "app-mitm:2026-06-17 (miio-13267.jsonl PRE writes 10:47:59 [19]=1 Lawn-Care vs 10:51:11 [19]=0 Efficient; all other indices identical)"
       - date: "2026-06-16"
         status: verified
         claim: "EdgeMaster = PRE[10] (0=off/1=on) re-confirmed by a clean single-index ON↔OFF toggle on fw 4.3.6_0625 (only index 10 changed); resolves the 'AutoEdge/SafeEdge/EdgeMaster/OA-on-Edges order TBD'. Separately, the 0550→0625 OTA extended PRE from 19 → 21 ints — two fields APPENDED at [19]=0,[20]=30; indices 0–18 did NOT shift. General caveat: re-validate array-CFG layouts after a firmware update. The integration's RMW builder (cfg_payloads.apply_pre) copies the full fetched array, so the 21-int fetch round-trips intact without code change."
