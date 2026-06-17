@@ -7201,39 +7201,67 @@ cfg_individual:
   - id: "SCHDSV3"
     name: "schedule_slot_enable_v3"
     category: "cfg_individual"
-    payload_shape: "{i:<slot 0|1>, v:<packed int>, s:[enabled, flag]}"
+    payload_shape: "{i:<schedule-set idx>, v:<schedule version>, s:[slot0_enabled, slot1_enabled]}"
     semantic: |
-      Per-seasonal-slot enable/summary write. Part of the 3-key write
-      transaction with SCHDDV3 and SCHDIV3 (shared v = ms txn-id). Transport:
-      action(siid:2, aiid:50) {m:'s', t:'SCHDSV3', d:{i, v, s:[enabled, flag]}}.
-      [app-mitm:2026-06-09-settings-sweep]
-      i = schedule slot: 0 = Spring/Summer, 1 = Autumn/Winter.
-      s[0] = slot enabled (0=disabled, 1=enabled; confirmed by live toggle
-      Spring/Summer disabled→enabled = s[0] 0→1). [app-mitm:2026-06-09-settings-sweep]
-      s[1] = second flag, seen as 0; semantics [UNKNOWN — to capture].
-      v = packed integer encoding schedule days/times. Seen values: 18696,
-      32923, 65535 (0xFFFF). Bit layout [UNKNOWN — to capture]: needs
-      per-day/per-time isolated edits to decode. [app-mitm:2026-06-09-settings-sweep]
-      Also emitted standalone (without full SCHDDV3/SCHDIV3) when toggling
-      slot enabled/disabled only. [app-mitm:2026-06-09-settings-sweep]
+      Schedule enable/disable setter — the "season switch". Issued either
+      standalone (a pure on/off toggle, no SCHDIV3/SCHDDV3) or as the final leg
+      of an edit transaction. Transport: action(siid:2, aiid:50)
+      {m:'s', t:'SCHDSV3', d:{i, v, s:[slot0_enabled, slot1_enabled]}}.
+
+      s = FULL per-slot enabled array [slot0=Spr&Sum, slot1=Aut&Win], written
+      ATOMICALLY (NOT [enabled, flag] — that interpretation is superseded; see
+      OLD/.../inventory-history/cfg_individual.md). Verified by cross-ref: live
+      read rows [[0,1,..],[1,0,..]] ⇔ s:[1,0]. To change a slot's enabled state,
+      write the whole desired array. [app-mitm:2026-06-17]
+
+      Seasons are MUTUALLY EXCLUSIVE, device-enforced via the atomic array:
+      enabling Win writes s:[0,1] which auto-disables Spr in the same write;
+      s:[0,0] = both off (no schedule runs); s:[1,1] never occurs. Full state
+      machine captured [1,0]↔[0,1]↔[0,0], each one atomic SCHDSV3.
+      [app-mitm:2026-06-17 22:09-22:12]
+
+      v = the CURRENT schedule version, regenerated on EVERY write (optimistic-
+      concurrency token, NOT monotonic — one write changed v 58177→42074, and
+      decreasing values are accepted). Read SCHDIV3 {i:0} for the current v
+      immediately before each SCHDSV3 write. (The 06-09 values 18696/65535/32923
+      were that era's schedule versions, not a packed days/times encoding.)
+      [app-mitm:2026-06-17]
+
+      i = schedule-set index (0 on 06-17 matching the SCHDIV3 {i:0} read; was 1
+      on 06-09). Does NOT map to the changed slot; not load-bearing. [partial]
+
+      APP-SIDE GATE: the app BLOCKS enable/disable while a task is running ("end
+      task before…") — a client-side guard. It never sends the write mid-task
+      (zero SCHD writes captured during the blocked attempt), so this is not a
+      mower rejection. Whether the mower itself would accept a mid-task toggle is
+      untested. The integration should replicate the guard.
+      [app-mitm:2026-06-17 20:31-20:34]
+
+      The enabled state also appears as element[1] of each SCHDDV3 read row; the
+      SCHDSV3 setter and that read surface stay in sync.
     status:
-      seen_on_wire: false
+      seen_on_wire: true
       first_seen: "2026-06-09"
-      last_seen: "2026-06-09"
-      decoded: partial
+      last_seen: "2026-06-17"
+      decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
-      - "SCHDSV3.v packed-int bit layout: which bits encode day-of-week and which encode time? Decode by editing one day then one time in isolation."
-      - "SCHDSV3.s[1] semantics: always 0? Or set in some schedule states?"
+      - "Does the mower itself accept a mid-task SCHDSV3 toggle? The app gates it client-side and never sends one, so device behavior is untested."
+      - "SCHDSV3.i exact semantics (schedule-set index): why 1 on 06-09 vs 0 on 06-17? Not load-bearing for the toggle."
     verifications:
       - date: "2026-06-09"
         status: verified
-        claim: "SCHDSV3 {i:<slot 0/1>, v:<packed int>, s:[enabled,flag]} is the slot enable/summary key; i=0=Spring/Summer, i=1=Autumn/Winter; s[0]=enabled confirmed by live toggle."
+        claim: "SCHDSV3 is the schedule enable/disable setter on siid:2/aiid:50 {m:'s'}; emitted standalone for a pure toggle and as the final leg of an edit transaction."
         evidence: "app-mitm:2026-06-09-settings-sweep"
-      - date: "2026-06-09"
-        status: partial
-        claim: "SCHDSV3.v packed integer (seen 18696, 32923, 65535) encodes schedule days/times; bit layout is unknown — needs isolated per-day/per-time edits to decode."
+      - date: "2026-06-17"
+        status: verified
+        claim: "SCHDSV3 s = full atomic per-slot enabled array [slot0=Spr&Sum, slot1=Aut&Win], NOT [enabled,flag]. Seasons mutually exclusive (device-enforced): [1,0]↔[0,1]↔[0,0] each one atomic write, [1,1] never occurs; enabling one auto-disables the other. v = current schedule version regenerated each write (non-monotonic token; 58177→42074 observed) — read SCHDIV3 {i:0} for v before each write. i = schedule-set index, not the changed slot."
+        evidence: "miio-13267.jsonl@2026-06-17 22:09-22:12 (idle full-cycle capture); FINDING-schedule-toggle-block-2026-06-17.md"
+      - date: "2026-06-17"
+        status: verified
+        claim: "The app blocks schedule enable/disable while a task is running ('end task before…') — client-side gate, zero SCHD writes sent mid-task. Integration should replicate the guard. Mower-side mid-task behavior untested."
+        evidence: "miio-13267.jsonl@2026-06-17 20:31-20:34; owner-confirmed UI toast"
 
   - id: "MAP_cache"
     name: "decoded_map_cache"
