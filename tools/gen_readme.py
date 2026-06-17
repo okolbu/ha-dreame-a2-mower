@@ -65,7 +65,7 @@ def _extract_sh_meta(path: Path) -> dict | None:
 def scan_tools(tools_dir: Path) -> list[dict]:
     out: list[dict] = []
     for path in sorted(tools_dir.rglob("*.py")):
-        if path.name in ("gen_readme.py", "_toolmeta.py") or "__pycache__" in path.parts:
+        if path.name in ("gen_readme.py", "_toolmeta.py") or "__pycache__" in path.parts or path.name.startswith("._"):
             continue
         meta = _extract_py_meta(path)
         if meta:

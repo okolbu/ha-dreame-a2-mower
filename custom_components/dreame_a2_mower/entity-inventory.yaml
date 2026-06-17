@@ -2909,19 +2909,57 @@ entities:
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-06-18"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: native_value = len(coordinator.cloud_state.schedule.slots); extra_state_attributes exposes full slot list with slot_id, name, plans (time/days/action/zone_id) and schedule version. Read from sensor_device.py:884-913; not re-confirmed live."
         evidence: "sensor_device.py:884-913 (native_value + extra_state_attributes)"
+      - date: "2026-06-18"
+        status: presumed
+        claim: "Each per-slot dict in extra_state_attributes now includes an 'enabled' key (bool, derived from bool(ScheduleSlot.mode)) in addition to slot_id, name, plans. Added by the set_schedule_enabled feature. entities/sensor/device.py:1262-1285; not re-confirmed live."
+        evidence: "entities/sensor/device.py:1262-1285 (extra_state_attributes → enabled=bool(s.mode))"
     references:
       wire_entry: "inventory.yaml id=scheduled_clean (s4p47)"
       code: "custom_components/dreame_a2_mower/sensor_device.py:868"
     notes: |
       Count of active schedule slots from cloud_state.schedule.slots.
       extra_state_attributes exposes the full slot list for dashboard templates.
+      Per-slot dict keys: slot_id, name, enabled (bool), plans list.
       Returns None when cloud_state is None; 0 when no schedules are configured.
+
+  # ------------------------------------------------------------------
+  # Schedule services
+  # ------------------------------------------------------------------
+
+  - id: "service.dreame_a2_mower.set_schedule_enabled"
+    platform: service
+    class: "(service — no entity class)"
+    class_file: "custom_components/dreame_a2_mower/services.py:484"
+    device: parent
+    source:
+      wire: "cloud SETTINGS scheduled_clean (s4p47) via SCHDSV3 chunked write"
+      state_path: "n/a (service; write-only)"
+    write_path: "coordinator.write_schedule_enabled(slot_id, enabled) → protocol.schedule_action.write_schedule_enabled_state → SCHDSV3 standalone state toggle (does NOT resend plans)"
+    status:
+      seen_working: false
+      last_verified: "2026-06-18"
+    verifications:
+      - date: "2026-06-18"
+        status: presumed
+        claim: "Service handler _handle_set_schedule_enabled: slot_id (0=Spr&Sum, 1=Aut&Win), enabled (bool). Seasons are mutually exclusive — enabling one disables the other; disabling leaves no schedule running. Blocked while state_machine.snapshot().mow_session == MowSession.IN_SESSION (raises ServiceValidationError). On success calls coordinator.write_schedule_enabled which sends a standalone SCHDSV3 state blob (does NOT include plan data). Write path confirmed in inventory.yaml § SCHDSV3. Not yet live-verified end-to-end."
+        evidence: "services.py:484-507 (_handle_set_schedule_enabled); coordinator/_writes.py write_schedule_enabled; protocol/schedule_action.py write_schedule_enabled_state"
+    references:
+      wire_entry: "inventory.yaml § SCHDSV3"
+      code: "custom_components/dreame_a2_mower/services.py:484"
+    notes: |
+      Enable or disable a mowing schedule season (slot 0 = Spr & Sum,
+      slot 1 = Aut & Win). Seasons are mutually exclusive; enabling one
+      disables the other automatically. Disabling the active slot leaves
+      no schedule running. Blocked during an active mow session
+      (ServiceValidationError). Writes via a standalone SCHDSV3 state
+      blob — does NOT resend plan data. Registered in services.py alongside
+      set_schedule_plans.
 
   - id: "sensor.dreame_a2_mower_zone_progress"
     platform: sensor

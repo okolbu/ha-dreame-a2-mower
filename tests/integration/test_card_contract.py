@@ -341,6 +341,6 @@ def test_schedule_count_slot_and_plan_element_shapes():
     attrs = DreameA2ScheduleCountSensor(coord).extra_state_attributes
     assert {"slots", "version"} <= set(attrs)
     for slot in attrs["slots"]:
-        assert set(slot) == {"slot_id", "name", "plans"}
+        assert set(slot) == {"slot_id", "name", "enabled", "plans"}
         for plan in slot["plans"]:
             assert set(plan) == {"time", "days", "action", "zone_id"}

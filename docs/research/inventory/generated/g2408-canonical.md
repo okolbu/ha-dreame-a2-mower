@@ -2929,8 +2929,8 @@ in HOURS (e.g. 4→5 confirmed); sen=sensitivity level.
 | RPET | rain_protection_end_time | {endTime: int} | APK-KNOWN |  |
 | SCHDDV3 | schedule_data_v3_write | {s:<offset>, l:<len>, d:"<base64 chunk>", v:<txn_ms>} | WIRED |  |
 | SCHDIV3 | schedule_index_v3_write | {i:<index>, l:<total_len>, v:<txn_ms>} | UNCLASSIFIED |  |
-| SCHDSV3 | schedule_slot_enable_v3 | {i:<slot 0|1>, v:<packed int>, s:[enabled, flag]} | UNCLASSIFIED |  |
-| SCHDTV3 | schedule_v3 | int (scalar — likely schedule version or active-plan count; semantics unknown) | SEEN-UNDECODED |  |
+| SCHDSV3 | schedule_slot_enable_v3 | {i:<schedule-set idx>, v:<schedule version>, s:[slot0_enabled, slot1_enabled]} | DECODED-UNWIRED |  |
+| SCHDTV3 | schedule_v3 | SCHDTV3 {t:N} -> scalar int (type/flag, NOT the schedule). LIVE read uses SCHDIV3+SCHDDV3 chunked GET (see semantic). | DECODED-UNWIRED |  |
 | WINFO | app_weather_info | {m:'s', t:'WINFO', d:{appWeather}} | APK-KNOWN |  |
 
 ### AIOBS — `ai_obstacle_data`
@@ -3466,6 +3466,15 @@ Protobuf field layout: diff known-schedule edits to map fields —
 [UNKNOWN — to capture]. [app-mitm:2026-06-09-settings-sweep]
 See also: SCHDIV3 (length descriptor), SCHDSV3 (slot enable/summary).
 
+READ direction (same key, m:'g'): {m:'g', t:'SCHDDV3', d:{s:<offset>,
+l:<req len>, v:<version from SCHDIV3 header>}} -> {d:"<chunk>", l:<actual
+bytes>, s:<offset>, v}. Loop advancing s by the response l until s reaches
+the header's total l; reassemble chunk `d` strings → the live schedule
+JSON {"d":[[slot,enabled,name,b64blob],...],"v":<ver>}. This is the
+authoritative schedule READ (the SCHEDULE.* KV is a stale cache). Verified
+end-to-end over the cloud relay [probe @2026-06-17]. See SCHDTV3 entry for
+the full read flow. [app-mitm:2026-06-17]
+
 **Open questions:**
 - Protobuf field layout of the base64 blob: diff one-day, one-time, one-task edits to map each wire field to its semantic.
 
@@ -3483,6 +3492,13 @@ reassembly is complete. [app-mitm:2026-06-09-settings-sweep]
 i semantics [UNKNOWN — to capture]: likely the schedule slot index or
 chunk sequence number. [app-mitm:2026-06-09-settings-sweep]
 
+READ direction (same key, m:'g'): {m:'g', t:'SCHDIV3', d:{i:0}} ->
+{i:0, l:<total bytes>, v:<schedule version>}. i=0 selects the whole
+schedule; l is the total reassembled length to read via SCHDDV3 chunks;
+v is the live schedule version (e.g. 58177). Header step of the
+authoritative schedule READ. Verified over the cloud relay
+[probe @2026-06-17]. See SCHDTV3 for the full flow. [app-mitm:2026-06-17]
+
 **Open questions:**
 - SCHDIV3.i semantics: slot index, chunk count, or sequence number?
 
@@ -3490,43 +3506,78 @@ chunk sequence number. [app-mitm:2026-06-09-settings-sweep]
 
 ### SCHDSV3 — `schedule_slot_enable_v3`
 
-Per-seasonal-slot enable/summary write. Part of the 3-key write
-transaction with SCHDDV3 and SCHDIV3 (shared v = ms txn-id). Transport:
-action(siid:2, aiid:50) {m:'s', t:'SCHDSV3', d:{i, v, s:[enabled, flag]}}.
-[app-mitm:2026-06-09-settings-sweep]
-i = schedule slot: 0 = Spring/Summer, 1 = Autumn/Winter.
-s[0] = slot enabled (0=disabled, 1=enabled; confirmed by live toggle
-Spring/Summer disabled→enabled = s[0] 0→1). [app-mitm:2026-06-09-settings-sweep]
-s[1] = second flag, seen as 0; semantics [UNKNOWN — to capture].
-v = packed integer encoding schedule days/times. Seen values: 18696,
-32923, 65535 (0xFFFF). Bit layout [UNKNOWN — to capture]: needs
-per-day/per-time isolated edits to decode. [app-mitm:2026-06-09-settings-sweep]
-Also emitted standalone (without full SCHDDV3/SCHDIV3) when toggling
-slot enabled/disabled only. [app-mitm:2026-06-09-settings-sweep]
+Schedule enable/disable setter — the "season switch". Issued either
+standalone (a pure on/off toggle, no SCHDIV3/SCHDDV3) or as the final leg
+of an edit transaction. Transport: action(siid:2, aiid:50)
+{m:'s', t:'SCHDSV3', d:{i, v, s:[slot0_enabled, slot1_enabled]}}.
+
+s = FULL per-slot enabled array [slot0=Spr&Sum, slot1=Aut&Win], written
+ATOMICALLY (NOT [enabled, flag] — that interpretation is superseded; see
+OLD/.../inventory-history/cfg_individual.md). Verified by cross-ref: live
+read rows [[0,1,..],[1,0,..]] ⇔ s:[1,0]. To change a slot's enabled state,
+write the whole desired array. [app-mitm:2026-06-17]
+
+Seasons are MUTUALLY EXCLUSIVE, device-enforced via the atomic array:
+enabling Win writes s:[0,1] which auto-disables Spr in the same write;
+s:[0,0] = both off (no schedule runs); s:[1,1] never occurs. Full state
+machine captured [1,0]↔[0,1]↔[0,0], each one atomic SCHDSV3.
+[app-mitm:2026-06-17 22:09-22:12]
+
+v = the CURRENT schedule version, regenerated on EVERY write (optimistic-
+concurrency token, NOT monotonic — one write changed v 58177→42074, and
+decreasing values are accepted). Read SCHDIV3 {i:0} for the current v
+immediately before each SCHDSV3 write. (The 06-09 values 18696/65535/32923
+were that era's schedule versions, not a packed days/times encoding.)
+[app-mitm:2026-06-17]
+
+i = schedule-set index (0 on 06-17 matching the SCHDIV3 {i:0} read; was 1
+on 06-09). Does NOT map to the changed slot; not load-bearing. [partial]
+
+APP-SIDE GATE: the app BLOCKS enable/disable while a task is running ("end
+task before…") — a client-side guard. It never sends the write mid-task
+(zero SCHD writes captured during the blocked attempt), so this is not a
+mower rejection. Whether the mower itself would accept a mid-task toggle is
+untested. The integration should replicate the guard.
+[app-mitm:2026-06-17 20:31-20:34]
+
+The enabled state also appears as element[1] of each SCHDDV3 read row; the
+SCHDSV3 setter and that read surface stay in sync.
 
 **Open questions:**
-- SCHDSV3.v packed-int bit layout: which bits encode day-of-week and which encode time? Decode by editing one day then one time in isolation.
-- SCHDSV3.s[1] semantics: always 0? Or set in some schedule states?
+- Does the mower itself accept a mid-task SCHDSV3 toggle? The app gates it client-side and never sends one, so device behavior is untested.
+- SCHDSV3.i exact semantics (schedule-set index): why 1 on 06-09 vs 0 on 06-17? Not load-bearing for the toggle.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 
 ### SCHDTV3 — `schedule_v3`
 
-Schedule v3 endpoint. Live routed-get confirmed 2026-06-09: r=0, d=2
-(scalar integer). Semantics unknown — could be the schedule-config
-version counter, the number of active schedule entries, or a feature-
-flag. Full schedule structure is NOT returned by bare GET [UNKNOWN —
-the app may send args to retrieve the full list, or GET returns only
-a version/count scalar and the schedule list is pushed separately].
-App-MITM 2026-06-09 confirms the app issues action(siid:2,aiid:50)
-{m:'g', t:'SCHDTV3'} [app-mitm:2026-06-09-settings-sweep].
-The WRITE transport is a 3-key transaction using SCHDDV3/SCHDIV3/SCHDSV3
-(see those cfg_individual entries); this key is the read-side scalar only.
-[app-mitm:2026-06-09-settings-sweep]
+Schedule v3 read surface. RESOLVED 2026-06-17 (app-mitm app 2.5.8.1 +
+live cloud-relay run): the schedule is read with m:'g' over siid:2/aiid:50
+as a TWO-KEY chunked GET — the inverse of the SCHD*V3 write transaction:
+
+  1. SCHDIV3 {i:0}            -> {i:0, l:<total bytes>, v:<version>}
+  2. SCHDDV3 {s, l, v} (loop) -> {d:<chunk str>, l:<bytes>, s:<offset>, v}
+     request s=offset, l=requested len (app uses min(100, remaining)),
+     v=version from the header; advance s by the response's l until
+     s == header l. Reassemble the chunk `d` strings in `s` order:
+  => {"d":[[slot,enabled,name,b64blob],...], "v":<version>}
+
+Row shape = [slot, enabled, name, b64blob] — the SAME rows the SCHD*V3
+WRITE uses; b64blob is the 7/8/9-byte run-record blob schedule_decode.py
+already decodes. Synchronous over the cloud relay: the reply is
+out[0].d (m:'g' required — m:'r' returns None, m:'a' returns r=-3).
+
+The bare SCHDTV3 {t:N} GET returns only a scalar int (a type/flag, e.g. 0
+or 2) — it is NOT the schedule and read_schedule_rows must NOT use it.
+The cloud iotuserdata SCHEDULE.* KV is a STALE cache (lags like CRUISE.0)
+and is NOT written back by app SCHD*V3 edits — do not read schedule from
+it (cold-start fallback only). Evidence: app-mitm 2026-06-17 18:49:38-42
+miio-13267.jsonl (v=58177, l=119, chunks @0/@76) + live cloud-relay run
+[probe @2026-06-17]. App-MITM source: FINDING-schedule-stale-read-2026-06-17.md.
 
 **Open questions:**
-- Decode SCHDTV3 scalar d=2 — is it the schedule-config version, the count of active entries, or a feature flag? Correlate with add/delete schedule operations.
-- Does the app pass args to SCHDTV3 GET to retrieve the full schedule list, or is the full list pushed separately?
+- Does the SCHDIV3->SCHDDV3 chunked GET return fresh rows when the device is DOCKED/asleep, or only when it is awake/online? (live verification used a moving device; fix falls back to the stale KV on any failure.)
+- Decode the bare SCHDTV3 {t:N} scalar — type/flag vs version vs active-entry count. Not load-bearing now that the chunked GET is the schedule read.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 
