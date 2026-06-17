@@ -520,6 +520,18 @@ properties:
           recurring false-NOVEL. (This pause→timeout→return ended in the mower
           stuck on the lawn → 5% → s2p57 firmware self-shutdown; see § s2p57.)
         evidence: "user-flagged NOVEL wire fire 2026-06-13 21:45:19 (s2p1 STATE=4) correlated with s2p2=72 @22:45:18 + user observation of the stuck/low-battery sequence"
+      - date: "2026-06-17"
+        status: verified
+        claim: |
+          DELIBERATE pause-button press = s2p1=3 (PAUSED), wire-confirmed by an
+          isolated capture: user pressed pause mid-mow and s2p1 went 1 (WORKING)
+          → 3 (PAUSED). This CONFIRMS the 3-vs-4 split (previously partial): the
+          pause button lands in 3, NOT 4 (PAUSED_HOLD = the auto/hold/stranded
+          variant). Therefore the s2p2=72 "return after pause timeout" path is
+          NOT triggered by the pause button — 72 is the s2p1=4 (auto-held mid-task)
+          case only. (Open: whether a deliberate s2p1=3 pause has its own ~1h
+          timeout/return, and what code — distinct from 72.)
+        evidence: "integration MQTT log 2026-06-17 11:38:22 (s2p1 1→3 on deliberate pause, app 2.5.8.1, fw 0625)"
       - date: "2026-05-31"
         status: verified
         claim: |
