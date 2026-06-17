@@ -166,13 +166,19 @@ class DreameA2ScheduleCard extends HTMLElement {
       toggleBtn.addEventListener("click", () => {
         const slot = slots[this._activeSlot];
         const next = !this._effectiveEnabled(slot);
-        this._hass.callService("dreame_a2_mower", "set_schedule_enabled", {
-          slot_id: slot.slot_id,
-          enabled: next,
-        });
-        // Optimistic overlay only — never mutate the hass state object.
+        // Optimistic overlay first (instant feedback); revert if the service rejects.
         this._optimisticEnabled[slot.slot_id] = next;
         this._render(this._stateRef);
+        Promise.resolve(
+          this._hass.callService("dreame_a2_mower", "set_schedule_enabled", {
+            slot_id: slot.slot_id,
+            enabled: next,
+          })
+        ).catch(() => {
+          // Service rejected (e.g. active-task guard, or device reject) — undo.
+          delete this._optimisticEnabled[slot.slot_id];
+          this._render(this._stateRef);
+        });
       });
     }
     this.shadowRoot.querySelectorAll(".delete").forEach((btn) =>
