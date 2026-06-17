@@ -284,7 +284,7 @@ async def test_seen_ids_fifo_cap():
 def test_s2p2_event_types_keys_cover_expected_codes():
     """Sanity: known codes (apk-sourced or empirically verified) are in the map."""
     expected = {
-        0, 2, 4, 5, 23, 27, 28, 30, 31, 33, 36, 43, 47, 48, 50, 51, 53, 54, 56, 63, 70, 71, 73, 74, 75, 76,
+        0, 2, 4, 5, 23, 27, 28, 30, 31, 33, 36, 43, 47, 48, 50, 51, 53, 54, 56, 63, 70, 71, 72, 73, 74, 75, 76,
     }
     assert set(S2P2_EVENT_TYPES.keys()) == expected
 

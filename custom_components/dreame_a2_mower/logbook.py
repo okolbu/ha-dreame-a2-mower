@@ -68,6 +68,7 @@ _NOTIFICATION_MESSAGES: dict[str, str] = {
     "schedule_cancelled_busy": "schedule cancelled — mower busy",
     "continue_unfinished_task": "continuing unfinished task",
     "standby_outside_station_too_long": "on standby outside the station too long — auto-returning",
+    "paused_too_long_returning": "task paused too long — returning to the station",
     "cannot_reach_maintenance_point": "couldn't reach the maintenance point — task ended",
     "top_cover_open": "top cover is open",
     "patrol_ended": "patrol ended",

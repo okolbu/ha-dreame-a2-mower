@@ -86,6 +86,7 @@ _EXPOSED_NOTIFICATION_EVENT_TYPES: tuple[str, ...] = (
     "low_battery_return",
     "rain_protection",
     "standby_outside_station_too_long",
+    "paused_too_long_returning",
     "top_cover_open",
     "arrived_at_maintenance_point",
     "cannot_reach_maintenance_point",

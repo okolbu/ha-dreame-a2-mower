@@ -83,6 +83,7 @@ NOTIFICATION_EVENT_TYPES: Final[tuple[str, ...]] = (
     "schedule_cancelled_busy",
     "continue_unfinished_task",
     "standby_outside_station_too_long",  # s2p2=71 (was "positioning_failure"; corrected 2026-05-30)
+    "paused_too_long_returning",         # s2p2=72 (cloud-labelled 2026-06-17)
     "top_cover_open",
     "patrol_ended",                     # s2p2=74 (verified 2026-05-30)
     "arrived_at_maintenance_point",

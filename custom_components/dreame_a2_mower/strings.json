@@ -261,6 +261,7 @@
       "low_battery_return": "Returning to dock (low battery)",
       "rain_protection": "Rain protection triggered",
       "standby_outside_station_too_long": "Standing by outside dock too long",
+      "paused_too_long_returning": "Task paused too long — returning",
       "top_cover_open": "Top cover open",
       "arrived_at_maintenance_point": "Arrived at maintenance point",
       "cannot_reach_maintenance_point": "Cannot reach maintenance point"
