@@ -11,6 +11,12 @@ const SLOT_DEFAULTS = {
 };
 
 const ACTION_LABELS = { 0: "All-area", 1: "Zone", 2: "Edge" };
+
+function _esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) => (
+    { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+  ));
+}
 const ACTION_COLORS = { 0: "#a3d977", 1: "#7fb3ff", 2: "#ff8a8a" };
 const ACTION_FROM_LABEL = { all_area: 0, zone: 1, edge: 2 };
 const WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -28,6 +34,7 @@ class DreameA2ScheduleCard extends HTMLElement {
     this._activeSlot = 0;
     this._stateRef = null;
     this._editingPlan = null; // { slotIdx, planIdx } | null
+    this._optimisticEnabled = {};  // slot_id -> bool, cleared when the server state catches up
   }
 
   setConfig(config) {
@@ -42,6 +49,12 @@ class DreameA2ScheduleCard extends HTMLElement {
       this.shadowRoot.innerHTML = `<ha-card><div style="padding:16px;">Sensor ${this._sensor} not available</div></ha-card>`;
       return;
     }
+    // Drop optimistic entries the server has now confirmed.
+    for (const s of state.attributes.slots || []) {
+      if (this._optimisticEnabled[s.slot_id] === !!s.enabled) {
+        delete this._optimisticEnabled[s.slot_id];
+      }
+    }
     if (this._stateRef === state && !this._modal) return;
     this._stateRef = state;
     this._render(state);
@@ -52,13 +65,13 @@ class DreameA2ScheduleCard extends HTMLElement {
     const tabs = slots
       .map(
         (s, i) =>
-          `<button class="tab ${i === this._activeSlot ? "active" : ""} ${s.enabled ? "" : "tab-off"}" data-slot="${i}">${
-            s.name || SLOT_DEFAULTS[s.slot_id] || `Schedule ${s.slot_id + 1}`
+          `<button class="tab ${i === this._activeSlot ? "active" : ""} ${this._effectiveEnabled(s) ? "" : "tab-off"}" data-slot="${i}">${
+            _esc(s.name || SLOT_DEFAULTS[s.slot_id] || `Schedule ${s.slot_id + 1}`)
           }</button>`,
       )
       .join("");
     const active = slots[this._activeSlot] || { plans: [], slot_id: this._activeSlot };
-    const activeEnabled = !!active.enabled;
+    const activeEnabled = this._effectiveEnabled(active);
     const mowerState = (this._hass.states[this._mowerEntity] || {}).state;
     const taskActive = ["mowing", "returning", "paused"].includes(mowerState);
     const toggleTitle = taskActive
@@ -67,7 +80,7 @@ class DreameA2ScheduleCard extends HTMLElement {
                        : "Schedule is OFF — click to turn on");
     const header = `
       <div class="sched-header">
-        <span class="sched-name">${active.name || SLOT_DEFAULTS[active.slot_id] || `Schedule ${active.slot_id + 1}`}</span>
+        <span class="sched-name">${_esc(active.name || SLOT_DEFAULTS[active.slot_id] || `Schedule ${active.slot_id + 1}`)}</span>
         <button class="toggle ${activeEnabled ? "on" : "off"}" ${taskActive ? "disabled" : ""} title="${toggleTitle}">
           ${activeEnabled ? "ON" : "OFF"}
         </button>
@@ -152,12 +165,13 @@ class DreameA2ScheduleCard extends HTMLElement {
     if (toggleBtn && !toggleBtn.disabled) {
       toggleBtn.addEventListener("click", () => {
         const slot = slots[this._activeSlot];
+        const next = !this._effectiveEnabled(slot);
         this._hass.callService("dreame_a2_mower", "set_schedule_enabled", {
           slot_id: slot.slot_id,
-          enabled: !slot.enabled,
+          enabled: next,
         });
-        // Optimistic: reflect immediately; the next cloud refresh confirms.
-        slot.enabled = !slot.enabled;
+        // Optimistic overlay only — never mutate the hass state object.
+        this._optimisticEnabled[slot.slot_id] = next;
         this._render(this._stateRef);
       });
     }
@@ -379,6 +393,11 @@ class DreameA2ScheduleCard extends HTMLElement {
       if (idx >= 0) mask |= 1 << idx;
     }
     return mask;
+  }
+
+  _effectiveEnabled(slot) {
+    const o = this._optimisticEnabled[slot.slot_id];
+    return o !== undefined ? o : !!slot.enabled;
   }
 
   getCardSize() {
