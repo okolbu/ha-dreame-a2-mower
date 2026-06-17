@@ -4591,17 +4591,17 @@ opcodes:
       Shapes picker). Stencil shapes carry type + a 2-point bounding box
       (radius=0); Circle (11) is the lone parametric one (center + radius).
       [app-mitm:2026-06-17]
-      Type 10 PROBED 2026-06-17 (tools/probes/probe_draw_shape.py): a crafted
-      o:215 {type:10, points:[[cx,cy]], radius:R} replayed at a real circle's
-      exact valid center+radius is protocol-ACCEPTED (r=0 on o:200/204/215/201)
-      but rendered NO shape — the app dropped out of edit mode, reloaded, and the
-      zone was discarded on the next map load. INDETERMINATE: this does NOT prove
-      10 is empty — it may be a real shape that wants a DIFFERENT param shape
-      (e.g. no radius, or a 2-pt bbox, or N outline points) and the firmware
-      accepted-then-discarded the malformed payload. With type/points/radius/count
-      all variable there are too many combinations to brute-force, so 10 (and 12)
-      stay best-labelled "no picker UI; not renderable with the circle-style
-      params tried" rather than definitively empty.
+      Types 10 AND 12 PROBED 2026-06-17 (tools/probes/probe_draw_shape.py) → both
+      are EMPTY/unused (no firmware stencil). Each was sent via the o:200/204/215/
+      201 txn in BOTH param formats: parametric (1 center point + radius, the
+      Circle style) AND the stencil format (2-point bounding box + radius:0). The
+      stencil format is the EXACT shape a real Teardrop(15) sends
+      (points=[[x1,y1],[x2,y2]], radius:0 — captured same session), so wrong-params
+      is ruled out. Every leg returned r=0 (protocol-accepted) but NOTHING
+      rendered: the app jumped out of map-edit mode, showed "Loading" for several
+      seconds, and the zone was discarded on the next map load — identical for 10
+      and 12, in both formats. Conclusion: 10 and 12 are valid type ids the
+      firmware ACKs but has no shape for; the novelty set genuinely skips them.
 
       Glyph descriptions — first screen 9-18 from OLD/IMG_4615.png (picker order
       Square,Circle,Heart,Triangle,Teardrop,Mushroom,Cloud,Rainbow — visually
