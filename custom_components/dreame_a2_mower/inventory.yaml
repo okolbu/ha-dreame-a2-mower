@@ -5323,15 +5323,22 @@ cfg_keys:
     payload_shape: "list[int(2)] [text_idx, voice_idx]"
     semantic: |
       Language. Confirmed 2026-04-24. Shape [text_idx, voice_idx].
-      text_idx = app/UI language; voice_idx = robot voice language.
-      Observed indices: voice_idx=7 → Norwegian. Transported via s2p51
-      shape {"text": N, "voice": M} — decoded as Setting.LANGUAGE.
-      Surfaced as sensor.robot_voice (state = voice language name where
-      known, raw indices as attrs). Sample: [2, 7].
-      Write payload: typed key {type:"voice"|"text", value:idx}.
-      [app-mitm:2026-06-09-settings-sweep] voice and text are set
-      separately via the type discriminator. Confirmed indices: English=0,
-      Norwegian=7, Danish=9. Changing voice language triggers NO download
+      text_idx = the DEVICE text/LCD language (a mower CFG); voice_idx = robot
+      voice language. NOTE: text_idx is NOT the app's display language — the
+      app-config "Languages" picker is app-local Flutter i18n (the app
+      soft-restarts in the new locale and sends NOTHING to the mower; verified
+      2026-06-17 with Romanian + Spanish, both zero mower writes). So the
+      2.5.8.1 changelog's new languages (Czech/Hungarian/Lithuanian/Slovak/
+      Romanian/Latvian) are APP-UI-ONLY; they do NOT reach text_idx or voice_idx.
+      Transported via s2p51 shape {"text": N, "voice": M} — decoded as
+      Setting.LANGUAGE. Surfaced as sensor.robot_voice (state = voice language
+      name where known, raw indices as attrs). Sample: [2, 7].
+      Write payload: typed key {type:"voice"|"text", value:idx}. Only type:voice
+      writes are wire-confirmed (En=0, No=7, Da=9); the type:text write is
+      apk-derived and NOT triggered by the app Languages picker — text_idx is set
+      from a separate device-settings control drawing on the firmware-supported
+      list (smaller than the app's i18n set). [app-mitm:2026-06-09-settings-sweep;
+      2026-06-17 app-language test] Changing voice language triggers NO download
       on g2408 — voice packs are device-side firmware.
     status:
       seen_on_wire: true
@@ -5343,6 +5350,10 @@ cfg_keys:
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     verifications:
+      - date: "2026-06-17"
+        status: verified
+        claim: "The app-config 'Languages' picker is app-local i18n, NOT the mower text language: changing it to Romanian then Spanish (a device-supported language) sent ZERO writes to the mower (only routine TIME/OTA housekeeping); the app soft-restarts in the new locale on Save. So text_idx is a separate DEVICE text/LCD setting, and the 2.5.8.1 changelog's new languages are app-UI-only (no text_idx/voice_idx). Corrects the prior 'text_idx = app/UI language' wording, which conflated the two."
+        evidence: "app-mitm:2026-06-17 (miio-13267.jsonl — app language set Romanian @~11:08 and Spanish @~11:1x produced no LANG/CFG write; app 2.5.8.1)"
       - date: "2026-06-09"
         status: verified
         claim: "Write is typed: {type:'voice'|'text', value:idx}. voice and text
