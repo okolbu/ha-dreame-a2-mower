@@ -27,45 +27,24 @@ For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 **Why:** the purge sweep (`OLD/ha-dreame-a2-mower-docs/inventory-history/2026-06-16-purge.md`
 HANDOVER) surfaced wire facts that need a live app-MITM / probe capture to confirm or pin.
-**Tasks (each = one capture):**
-1. **[s6p2 / PRE] device-side EXECUTION of accepted PRE writes** (highest value): app-MITM proved
-   the app's PRE write slots + `code:0` (EdgeMaster=PRE[10], Efficiency=PRE[3]), but whether the
-   g2408 firmware actually *applies* an integration-originated PRE write is still `[UNVERIFIED]`.
-   Verify a single-toggle PRE write changes observed mower behaviour.
-2. ~~**[s2p2=72]** = "return after pause-timeout"~~ — **CLOSED 2026-06-17.** Wire-confirmed: a
-   deliberate pause (`s2p1=3`) timed out at **exactly +1 h** → `s2p2=72` → auto-return (`s2p1=5`),
-   firmware-initiated (no app command). Fires from **both** pause states — `s2p1=3` (deliberate) AND
-   `s2p1=4` (PAUSED_HOLD/auto-hold) — so the earlier "pause button doesn't 72-timeout" guess was wrong
-   (retracted). Promoted to `state_codes s2p2_72` (decoded: confirmed) and admitted to `error_codes.py`
-   (`return_after_pause_timeout`). Distinct from `s2p2=71` (STANDBY-idle return, from `s2p1=2`).
-3. **[s2p2=20 / 33]** capture cloud-labelled fires to pin the real g2408 text (vs borrowed
-   dreame-mower names).
-4. **[s2p55]** app-MITM during a real AI-obstacle detection to capture the photo list/URL backend call.
-5. ~~**[s4p22 / s4p44 / s4p59]** direct GET probes~~ — **CLOSED 2026-06-16.** Note: a "direct GET"
-   can't work — `get_properties` is dead on g2408 (returns 80001). The correct test is a property-PUSH
-   census: across 211,880 `properties_changed` records (probe logs + app-MITM captures) the device
-   reports **siid 1/2/3/5/6/99 only — siid 4 never appears for any piid.** So s4p22/s4p44/s4p59 (and
-   every other siid-4 mapping: s4p23/47/49) are vacuum-fork artifacts with **no g2408 surface**.
-   Inventory updated to `decoded: verified` (absent), evidence `app-mitm-census:2026-06-16`;
-   `capabilities.py` already gates them off. **Tidy-up DONE 2026-06-16:** the same census closure was
-   applied to all ordinary siid-4 stubs — s4p21/23/26/27/47/49 are now `decoded: verified` (absent)
-   too (9 of 11 siid-4 entries closed). Two left `hypothesized` ON PURPOSE: **s4p68** (a real working
-   cloud-RPC `get_properties(4,68)` device-snapshot bundle, captured 2026-05-06) and **s4p83**
-   (capability bitmask — plausibly GET-readable like s4p68; legit open question, not push-closeable).
-6. **[CRUISED] decode the app's write CONTEXT** (confirmed-blocking, related to #1): the integration's
-   bare routed-action CRUISED write (`set_cfg('CRUISED', {idx, value})`) is **accepted-but-no-effect** on
-   g2408 — live 2026-06-16 it returned r=0 but `CRUISE.0` did not change, for both CREATE (new point)
-   and UPDATE (existing point). The APP's CRUISED write DOES take effect, so capture EXACTLY what the
-   app does around it (candidate: an `o=200` select / `o=204`→`o=201` edit-txn wrapper, or a different
-   transport / extra field). This unblocks the patrol cycles/auto-capture WRITE (the
-   `set_patrol_point_config` service + map-editor panel — read works, write is a no-op until this lands).
-   Likely the SAME root cause as #1 (PRE device-effect): integration routed CFG writes may all need the
-   app's write context. Also pins the `'1,0'` settings key + the `value[0]=-1` sentinel.
+**Tasks (each = one capture). Closed items removed to `OLD/ha-dreame-a2-mower-docs/DONE.md`
+(#2 s2p2=72, #5 s4 properties, #6 CRUISED — all closed 2026-06-16/17).**
+1. **[s6p2 / PRE] device-side EXECUTION of accepted PRE writes**: verify a single-toggle PRE write
+   changes observed mower behaviour. NOTE 2026-06-17: the now-closed #6 (CRUISED) showed integration
+   routed-CFG writes DO apply — the apparent "accepted-but-no-effect" was `CRUISE.0` cache LAG, not a
+   write failure — so PRE writes very likely apply too; this is now just a behavioural mow-and-observe
+   confirmation, no longer a suspected blocker.
+2. **[s2p2=20 / 33]** capture cloud-labelled fires to pin the real g2408 text (vs borrowed
+   dreame-mower names). Scenario-dependent (need the faults to fire).
+3. **[s2p55]** app-MITM during a real AI-obstacle detection to capture the photo list/URL backend call.
+   Scenario-dependent (need a real person/animal/obstacle mid-mow).
 **Already tracked separately (not duplicated here):** type-3 ephemeral obstacle photos (Photo/video
 archive item) and the lazy patrol-photo upload (session_summary_download open-question).
-**Status:** open — 2 of 5 closed (#5 s4 properties via corpus census 2026-06-16; #2 s2p2=72 via live pause-timeout capture 2026-06-17). Remainder need the MITM rig / live device.
-**Cross-refs:** `OLD/ha-dreame-a2-mower-docs/inventory-history/2026-06-16-purge.md`; memory
-`dreame-mitm-toolkit`; `inventory.yaml` §§ PRE / s2p2 / s2p55 / s4p22 / s4p44 / s4p59.
+**Status:** open — 3 of 6 closed (moved to DONE.md). The 3 remaining all need a specific live
+condition (a behavioural mow, or a real fault / AI detection).
+**Cross-refs:** `OLD/ha-dreame-a2-mower-docs/DONE.md` (closed items);
+`OLD/ha-dreame-a2-mower-docs/inventory-history/2026-06-16-purge.md`; memory `dreame-mitm-toolkit`;
+`inventory.yaml` §§ PRE / s2p2 / s2p55.
 
 ### Time-window photo→session match for AI-obstacle photos (follow-up to todo6 #3/#4)
 
