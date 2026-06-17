@@ -175,6 +175,15 @@ class _CoreMixin:
         # _seed_session_type_from_pending can stamp live_map.saw_patrol_start at
         # begin (the op-echo path covers edge patrols, which DO emit op=108).
         self._pending_saw_patrol_start: bool = False
+        # Optimistic patrol-config writes. CRUISE.0 (the cloud device-data the
+        # cruise config is read from) propagates with significant lag after a
+        # CRUISED write, so a poll right after a successful write returns the
+        # STALE value and would revert the user's change in the UI. Keyed by
+        # (map_id, point_id) -> {"cycles", "auto_capture", "ts"}; overlaid onto
+        # cruise_config_by_map at each cloud_state apply until the poll confirms
+        # the new value (cleared) or _PENDING_CRUISE_TTL elapses (give up).
+        # See coordinator/_cloud_state.py:_apply_pending_cruise_overlay.
+        self._pending_cruise_writes: dict[tuple[int, int], dict] = {}
         # Single finalize latch (P3e.4). Serializes ALL finalize entries
         # (gate path, new-command boundary, non-mow immediate, manual button)
         # and de-dupes by the session's start_ts. Both terminal archive writers

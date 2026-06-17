@@ -901,19 +901,20 @@ class _WritesMixin:
         sentinel. See inventory.yaml § CRUISED. Returns True only when BOTH legs
         are accepted (out[0].r==0).
 
-        MAP MUST BE ACTIVE: in every app-MITM session where the config WROTE
-        through, the edited map was the active map (o=200 {idx} set first) — the
-        app only edits cruise points inside the active map's editor. The o=111 /
-        CRUISED writes are accepted (r=0) but silently no-op against a non-active
-        map (matches the 2026-06-17 integration wire-trace: byte-identical writes,
-        r=0, CRUISE.0 unchanged — sent WITHOUT activating the map). So activate
-        first, exactly like start_point_patrol / start_go_to_point.
+        THE WRITE WORKS — it just reads back with lag. Confirmed 2026-06-17: a
+        write through this path IS applied (an independent app client reflected
+        x1 after an integration write), but CRUISE.0 (the cloud device-data the
+        read path uses) propagates slowly, so a poll right after the write
+        returns the STALE value. We do NOT need to activate the map (the
+        earlier _ensure_active_map was a red herring — writes propagated on the
+        build without it; it also had the side-effect of switching the active
+        map on a config save). Instead we record an OPTIMISTIC pending write so
+        the stale poll cannot revert the user's change — see
+        _pending_cruise_writes + _apply_pending_cruise_overlay.
         """
         if int(cycles) not in (1, 2, 3):
             raise ValueError(f"cycles must be 1, 2 or 3, got {cycles!r}")
-        # The cruise-config writes only persist against the ACTIVE map.
-        await self._ensure_active_map(int(map_id))
-        # Leg 1: o=111 applies the cycles to the device (the missing half).
+        # Leg 1: o=111 applies the cycles to the device.
         cycles_ok = await self.hass.async_add_executor_job(
             lambda: self._cloud.routed_action(
                 111, {"point": [int(point_id), int(cycles)]}
@@ -924,7 +925,27 @@ class _WritesMixin:
         cruised_ok = await self.hass.async_add_executor_job(
             self._cloud.set_cfg, "CRUISED", {"idx": int(map_id), "value": value}
         )
-        return bool(cycles_ok) and bool(cruised_ok)
+        ok = bool(cycles_ok) and bool(cruised_ok)
+        if ok:
+            # Optimistic: hold the just-written value over the laggy CRUISE.0
+            # cache until a poll confirms it (or the TTL expires).
+            import time as _time
+            self._pending_cruise_writes[(int(map_id), int(point_id))] = {
+                "cycles": int(cycles),
+                "auto_capture": bool(auto_capture),
+                "ts": _time.time(),
+            }
+            # Reflect it immediately on the live cloud_state so the UI updates
+            # now (the next refresh re-applies the overlay).
+            try:
+                cfg = self.cloud_state.cruise_config_by_map.setdefault(int(map_id), {})
+                cfg[int(point_id)] = {
+                    "cycles": int(cycles),
+                    "auto_capture": bool(auto_capture),
+                }
+            except Exception:  # noqa: BLE001 — cloud_state may be unset early
+                pass
+        return ok
 
     async def split_zone(self, map_id, zone_id, line_start, line_end) -> bool:
         """Split a zone by a line (o=220). DESTRUCTIVE: clears that zone's schedule/prefs."""

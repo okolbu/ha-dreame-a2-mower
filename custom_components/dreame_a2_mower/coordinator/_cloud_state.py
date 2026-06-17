@@ -74,6 +74,12 @@ if TYPE_CHECKING:
     pass  # cross-mixin type imports added as needed
 
 
+# How long an optimistic patrol-config write is held over the laggy CRUISE.0
+# cloud cache before we give up and trust the poll (the cache normally catches
+# up well inside this; the ceiling just prevents a stuck-wrong optimistic value).
+_PENDING_CRUISE_TTL = 600.0
+
+
 class _CloudStateMixin:
     """Methods extracted from coordinator.py — see spec for groupings."""
 
@@ -111,6 +117,10 @@ class _CloudStateMixin:
             self._note_cloud_fetch(ok=False)
             return
         self._note_cloud_fetch(ok=True)
+        # Overlay optimistic patrol-config writes over the (laggy) CRUISE.0 poll
+        # so a freshly-written cycles/auto_capture value isn't reverted while the
+        # cloud device-data cache catches up. See _apply_pending_cruise_overlay.
+        self._apply_pending_cruise_overlay(new_state.cruise_config_by_map)
         self.cloud_state = new_state
         # Active-map detection from the unified fetch (replaces the former
         # _refresh_cfg trailing MAPL poll). Ordered before the MowerState
@@ -133,6 +143,38 @@ class _CloudStateMixin:
         update_listeners = getattr(self, "async_update_listeners", None)
         if callable(update_listeners):
             update_listeners()
+
+    def _apply_pending_cruise_overlay(self, cruise_by_map: dict) -> None:
+        """Overlay optimistic patrol-config writes onto a fresh CRUISE.0 poll.
+
+        CRUISE.0 propagates slowly after a CRUISED write, so a poll taken
+        before the cache catches up returns the OLD value and would revert the
+        user's change. For each still-pending (map_id, point_id) write:
+          - poll already shows the written value -> confirmed, drop the pending;
+          - past _PENDING_CRUISE_TTL -> give up (trust the poll), drop it;
+          - otherwise -> keep the optimistic value in cruise_by_map.
+        Mutates cruise_by_map in place. No-op when nothing is pending.
+        """
+        pending = getattr(self, "_pending_cruise_writes", None)
+        if not pending:
+            return
+        now = time.time()
+        for key in list(pending):
+            map_id, point_id = key
+            want = pending[key]
+            got = (cruise_by_map.get(map_id) or {}).get(point_id)
+            confirmed = (
+                isinstance(got, dict)
+                and got.get("cycles") == want["cycles"]
+                and bool(got.get("auto_capture")) == bool(want["auto_capture"])
+            )
+            if confirmed or (now - want["ts"]) > _PENDING_CRUISE_TTL:
+                del pending[key]
+                continue
+            cruise_by_map.setdefault(map_id, {})[point_id] = {
+                "cycles": want["cycles"],
+                "auto_capture": want["auto_capture"],
+            }
 
     async def _render_maps_from_cloud_state(self) -> None:
         """Render CLEAN base PNGs for each map in cloud_state.maps_by_id.
