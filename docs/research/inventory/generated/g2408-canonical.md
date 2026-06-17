@@ -732,12 +732,11 @@ unreliable.
 
 Obstacle-avoidance mode selector. Upstream mower forks define OBSTACLE_AVOIDANCE
 at (4, 21) in DreameMowerPropertyMapping. The legacy integration reads and writes
-this property to control AI-obstacle avoidance sensitivity. On g2408 obstacle
-behaviour is governed by s2p1 and s2p2, but this property slot may co-exist.
-
-**Open questions:**
-- Is s4p21 present on g2408 firmware? Probe with a direct SIID 4 PIID 21 GET to confirm.
-- If present, does the enum match the legacy ObstacleAvoidance values (0=disabled, 1=enabled, 2=intensive)?
+this property to control AI-obstacle avoidance sensitivity.
+RESOLVED 2026-06-16: NOT a g2408 property slot — siid 4 never appears in the
+211,880-record property-PUSH census (device reports siid 1/2/3/5/6/99 only).
+g2408 obstacle behaviour is governed by s2p1/s2p2 plus the CFG.PRE obstacle-
+avoidance fields, not this slot. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
 
 **See also:** `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:687)`, `github.com/nicolasglg/dreame-mova-mower (types.py:740)`
 
@@ -750,16 +749,14 @@ detection is active during mowing.
 CORRECTION: the g2408 DOES have a camera (feature:"video_tx", Tencent IoT
 Video / XP2P — see api_endpoints § tencent_video). The earlier "no camera
 module has been confirmed on g2408" note here was stale and is retracted.
-[app-mitm:2026-06-12-live-video] What remains UNVERIFIED is whether THIS
-property slot (s4p22) is the control surface for camera AI detection on g2408:
-the camera is driven via the o=400 live-view toggle plus the
-dreame-third-video/tx credential chain, and AI-obstacle capture is gated by
-CFG.AOP (not by any observed s4p22 write). s4p22 has never been seen on the
-g2408 wire; it may be a no-op, a read-back, or absent. [UNVERIFIED]
-
-**Open questions:**
-- Is s4p22 the g2408's camera-AI control surface, or is AI capture wholly gated by CFG.AOP + o=400? s4p22 unseen on the wire.
-- Does s4p22 interact with s4p59 (PET_DETECTIVE)?
+[app-mitm:2026-06-12-live-video] RESOLVED 2026-06-16: s4p22 is NOT a g2408
+property. A full-corpus push census (211,880 properties_changed records across
+the probe logs + app-MITM captures) shows the device reports siid 1/2/3/5/6/99
+only — siid 4 never appears for any piid; and get_properties is dead on g2408
+(80001), so there is no GET read path either. AI_DETECTION (s4p22) is a
+vacuum-fork mapping with no g2408 surface — camera AI is driven via o=400 +
+dreame-third-video/tx + CFG.AOP, not this slot. The integration already gates
+it off (mower/capabilities.py: ai_detection=False). [app-mitm-census:2026-06-16]
 
 **See also:** `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:688)`, `github.com/nicolasglg/dreame-mova-mower (types.py:741)`
 
@@ -767,12 +764,10 @@ g2408 wire; it may be a no-op, a read-back, or absent. [UNVERIFIED]
 
 Mowing / cleaning mode selector. Upstream mower forks define CLEANING_MODE
 at (4, 23). Controls the active mowing behaviour (e.g. edge-only, zone, spot).
-On g2408 the equivalent is the task-type sent via the s5a1 action envelope;
-this property slot may be a read-back or may not be used.
-
-**Open questions:**
-- Is s4p23 present on g2408 firmware? Probe with direct GET to confirm.
-- If present, does the enum match the legacy CleaningMode (0=standard, 1=quiet, 2=boost)?
+On g2408 the equivalent is the task-type sent via the s5a1 action envelope.
+RESOLVED 2026-06-16: NOT a g2408 property slot — siid 4 never appears in the
+211,880-record property-PUSH census. Vacuum-fork mapping; mode is the s5a1
+task-type, not this slot. [app-mitm-census:2026-06-16]
 
 **See also:** `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:689)`, `github.com/nicolasglg/dreame-mova-mower (types.py:742)`
 
@@ -781,12 +776,9 @@ this property slot may be a read-back or may not be used.
 Per-zone customised cleaning settings. Upstream mower forks define
 CUSTOMIZED_CLEANING at (4, 26) — carries a JSON blob with per-zone
 pass-count and cutting-height overrides. On g2408 these settings are
-embedded in the s5a1 task envelope; this property may carry a persisted
-read-back of the last settings.
-
-**Open questions:**
-- Is s4p26 present on g2408 firmware? Probe with direct GET.
-- If present, does the JSON schema match the legacy CustomizedCleaning format?
+embedded in the s5a1 task envelope.
+RESOLVED 2026-06-16: NOT a g2408 property slot — siid 4 never appears in the
+211,880-record property-PUSH census. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
 
 **See also:** `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:691)`, `github.com/nicolasglg/dreame-mova-mower (types.py:744)`
 
@@ -795,11 +787,10 @@ read-back of the last settings.
 Child-lock / panel-lock property. Upstream mower forks define CHILD_LOCK
 at (4, 27). On g2408 child-lock is toggled via the cfg_toggle mechanism
 (setting key 'CLS') which writes through s2a50 o:8, NOT by directly
-writing s4p27. The property slot may still exist as a read-back surface.
-
-**Open questions:**
-- Is s4p27 present on g2408 firmware? The greenfield uses cfg CLS not a direct property write.
-- If present, does writing s4p27=1 work on g2408, or must the cfg_toggle path be used?
+writing s4p27.
+RESOLVED 2026-06-16: NOT a g2408 property slot — siid 4 never appears in the
+211,880-record property-PUSH census. Child-lock is CFG.CLS via s2a50 o:8, not
+this slot. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
 
 **See also:** `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:692)`, `github.com/nicolasglg/dreame-mova-mower (types.py:745)`
 
@@ -813,14 +804,13 @@ CORRECTION: the g2408 DOES expose cruise/patrol behaviour — point patrol
 from the MAP blob's cruisePoints array (type=8), and a patrol auto-enables the
 camera (o=400) for auto-capture. So the earlier "does not expose cruise-point
 behaviour in current captures" note was stale. [app-mitm:2026-06-12-live-video]
-What remains UNVERIFIED is whether THIS property slot (s4p44) carries the
-patrol mode-type on g2408: patrol is driven via the s2.50 o107/o108 routed
-actions, not an observed s4p44 write; s4p44 has never been seen on the g2408
-wire. [UNVERIFIED]
-
-**Open questions:**
-- Does s4p44 carry the patrol mode-type on g2408, or is patrol wholly driven by the o107/o108 routed actions? s4p44 unseen on the wire.
-- Does cruisePoints in the OSS map blob connect to s4p44?
+RESOLVED 2026-06-16: s4p44 is NOT a g2408 property. The full-corpus push
+census (211,880 properties_changed records) shows the device reports siid
+1/2/3/5/6/99 only — siid 4 never appears for any piid; get_properties is dead
+on g2408 (80001) so no GET path either. CRUISE_TYPE (s4p44) is a vacuum-fork
+mapping with no g2408 surface — patrol is driven entirely via the s2.50
+o107/o108 routed actions and the MAP-blob cruisePoints array, not this slot.
+[app-mitm-census:2026-06-16]
 
 **See also:** `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:699)`, `github.com/nicolasglg/dreame-mova-mower (types.py:752)`
 
@@ -828,13 +818,10 @@ wire. [UNVERIFIED]
 
 Schedule configuration property. Upstream mower forks define SCHEDULED_CLEAN
 at (4, 47). Carries a JSON blob describing the active mowing schedule(s).
-On g2408 scheduling is managed through the s2p50 / cfg mechanism (fields SCH,
-SNS, etc.); this s4p47 slot may carry a read-back or may be the canonical
-schedule store.
-
-**Open questions:**
-- Is s4p47 present on g2408 firmware? Probe with direct GET.
-- If present, is this the canonical schedule store or a read-back of what went through s2p50?
+On g2408 scheduling is managed through the s2p50 / cfg mechanism (SCHDDV3 etc.).
+RESOLVED 2026-06-16: NOT a g2408 property slot — siid 4 never appears in the
+211,880-record property-PUSH census. Schedules are the s2p50/cfg SCHDDV3
+transaction, not this slot. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
 
 **See also:** `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:700)`, `github.com/nicolasglg/dreame-mova-mower (types.py:753)`
 
@@ -843,11 +830,10 @@ schedule store.
 Intelligent multi-map recognition flag. Upstream mower forks define
 INTELLIGENT_RECOGNITION at (4, 49). In the legacy integration this is
 exposed as the 'multi_map' attribute; when enabled the device can maintain
-separate maps for different lawn areas. Status on g2408 is unknown.
-
-**Open questions:**
-- Is s4p49 present on g2408 firmware? Probe with direct GET.
-- Does multi-map capability affect the s6p8 MAP_LIST behaviour on g2408?
+separate maps for different lawn areas.
+RESOLVED 2026-06-16: NOT a g2408 property slot — siid 4 never appears in the
+211,880-record property-PUSH census. Multi-map is handled by the g2408 map
+mechanism (MAPL/MAP), not this slot. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
 
 **See also:** `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:702)`, `github.com/nicolasglg/dreame-mova-mower (types.py:755)`
 
@@ -860,16 +846,13 @@ Requires camera AI (s4p22).
 CORRECTION: the g2408 DOES have a camera (feature:"video_tx", Tencent XP2P —
 see api_endpoints § tencent_video), so the earlier "no camera module confirmed
 → likely absent" reasoning here was stale and is retracted.
-[app-mitm:2026-06-12-live-video] The presence of a camera does NOT establish
-that pet-detection is a g2408 feature: s4p59 has never been seen on the g2408
-wire, the app exposes a Human-Presence detection surface (REC settings) but no
-observed "pet" toggle, and AI-obstacle classes captured so far are person /
-patrol / obstacle. Whether s4p59 exists / does anything on g2408 stays
-UNVERIFIED. [UNVERIFIED]
-
-**Open questions:**
-- Does the g2408 firmware implement a pet-detection mode at all? Camera exists, but no 'pet' toggle observed (the app surfaces Human-Presence, not pet).
-- If present, does it interact with s4p22 (AI_DETECTION)?
+[app-mitm:2026-06-12-live-video] RESOLVED 2026-06-16: s4p59 is NOT a g2408
+property. The full-corpus push census (211,880 properties_changed records)
+shows the device reports siid 1/2/3/5/6/99 only — siid 4 never appears for any
+piid; get_properties is dead on g2408 (80001) so no GET path either. The app
+exposes a Human-Presence surface (REC settings) but no "pet" toggle, and the
+captured AI-obstacle classes are person/patrol/obstacle. PET_DETECTIVE (s4p59)
+is a vacuum-fork mapping with no g2408 surface. [app-mitm-census:2026-06-16]
 
 **See also:** `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:706)`, `github.com/nicolasglg/dreame-mova-mower (types.py:759)`
 
@@ -1902,13 +1885,14 @@ corpus; the integration does not currently wire this action.
 
 Per-point patrol CYCLES setter (net-new, app-MITM 2026-06-16). At patrol
 run-start the app sends o=111 {point:[id, cycles]} alongside o=107 (run) and
-o=400 {on:true} (camera). The authored per-point cycles + auto-capture are
-ALSO persisted via the `CRUISED` CFG key (see cfg key CRUISED); the
-relationship between the o=111 run-time send and the CRUISED stored value
-(which is authoritative) is not yet established. [app-mitm:2026-06-16]
-
-**Open questions:**
-- o=111 vs CRUISED[3] cycles — which is authoritative, and is o=111 required or redundant at run time? [UNKNOWN — to capture].
+o=400 {on:true} (camera). RESOLVED 2026-06-16: o=111 is ALSO sent at
+CONFIG time — the app dual-writes o=111 (device-applied cycles) THEN
+`CRUISED` (cloud record, see cfg key CRUISED) for every per-point change.
+o=111 is the authoritative DEVICE cycles path and is REQUIRED — a
+CRUISED-only write updates the cloud CRUISE.0 record but the cycles never
+reach the device. auto_capture is NOT carried by o=111 (CRUISED-only).
+[app-mitm:2026-06-16 (miio-13267.jsonl 12:26-12:31: each CRUISED set
+preceded by o=111 {point:[id,cycles]})]
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`
 
@@ -2466,9 +2450,8 @@ sits in is derived from its coordinates.
 **Open questions:**
 - value[0]=-1 sentinel meaning (type/marker?) — not mirrored in CRUISE.0; likely a device-assign/version placeholder [UNKNOWN — to capture].
 - CRUISE.0 settings comma-joined key '1,0' (vs the bare '3') — point id 1 with a sub-index, or a grouped pair? Set one distinct point and diff which settings key changes [partial — to capture].
-- Relationship between CRUISED cycles and the o=111 {point:[id,cycles]} per-point cycles setter seen at run start — which is authoritative? [UNKNOWN — to capture].
 
-**See also:** `WRITE: coordinator/_writes.py:write_patrol_point_config -> cloud_client.set_cfg('CRUISED', {idx, value:[-1, point_id, auto, cycles]}), exposed as service set_patrol_point_config + the map-editor card inline panel. READ: protocol/cruise_config.py:parse_cruise_config -> CloudState.cruise_config_by_map -> patrol-points sensor + camera editable_objects.`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`
+**See also:** `WRITE: coordinator/_writes.py:write_patrol_point_config — routed_action(111, {point:[id,cycles]}) THEN set_cfg('CRUISED', {idx, value:[-1, point_id, auto, cycles]}); both mirror the app, both r=0, the write IS applied on fw-0625. CRUISE.0 read-back lags, so the write also records an OPTIMISTIC pending value (_pending_cruise_writes) overlaid onto each CRUISE.0 poll (_apply_pending_cruise_overlay, TTL 600s) so the stale cache can't revert the UI. (_ensure_active_map was tried then reverted — red herring.) Exposed as service set_patrol_point_config + map-editor card inline panel. READ: protocol/cruise_config.py:parse_cruise_config -> CloudState.cruise_config_by_map -> patrol-points sensor + camera editable_objects.`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`
 
 ### DLS — `daylight_savings`
 

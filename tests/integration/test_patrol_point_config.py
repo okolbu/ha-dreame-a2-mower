@@ -83,6 +83,11 @@ async def test_write_patrol_point_config_builds_cruised():
         routed_action=MagicMock(return_value={"out": [{"r": 0}]}),
         set_cfg=MagicMock(return_value=True),
     )
+    # Optimistic-overlay state normally set in _CoreMixin.__init__ (the bare
+    # __new__ instance skips it): the write records the just-written value here
+    # so the laggy CRUISE.0 poll can't revert the UI.
+    c._pending_cruise_writes = {}
+    c.cloud_state = SimpleNamespace(cruise_config_by_map={})
     async def _exec(fn, *a): return fn(*a)
     c.hass = SimpleNamespace(async_add_executor_job=AsyncMock(side_effect=_exec))
     ok = await c.write_patrol_point_config(

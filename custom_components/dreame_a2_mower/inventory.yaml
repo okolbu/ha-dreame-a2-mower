@@ -2415,7 +2415,7 @@ properties:
       avoidance fields, not this slot. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: verified
+      decoded: confirmed
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:687)"
@@ -2450,7 +2450,7 @@ properties:
       it off (mower/capabilities.py: ai_detection=False). [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: verified
+      decoded: confirmed
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:688)"
@@ -2476,7 +2476,7 @@ properties:
       task-type, not this slot. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: verified
+      decoded: confirmed
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:689)"
@@ -2502,7 +2502,7 @@ properties:
       211,880-record property-PUSH census. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: verified
+      decoded: confirmed
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:691)"
@@ -2529,7 +2529,7 @@ properties:
       this slot. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: verified
+      decoded: confirmed
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:692)"
@@ -2564,7 +2564,7 @@ properties:
       [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: verified
+      decoded: confirmed
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:699)"
@@ -2590,7 +2590,7 @@ properties:
       transaction, not this slot. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: verified
+      decoded: confirmed
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:700)"
@@ -2617,7 +2617,7 @@ properties:
       mechanism (MAPL/MAP), not this slot. Vacuum-fork mapping. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: verified
+      decoded: confirmed
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:702)"
@@ -2651,7 +2651,7 @@ properties:
       is a vacuum-fork mapping with no g2408 surface. [app-mitm-census:2026-06-16]
     status:
       seen_on_wire: false
-      decoded: verified
+      decoded: confirmed
     references:
       alt_repos:
         - "github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:706)"
