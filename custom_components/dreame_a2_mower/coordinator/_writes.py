@@ -103,7 +103,7 @@ class _WritesMixin:
         new_slots is a sequence of ScheduleSlot dataclasses (.plans is the
         source of truth; .raw_blob_b64 is ignored — re-encoded). Reads the
         authoritative rows, writes only slots whose re-encoded blob or name
-        changed, preserving each slot's enabled/flag, bumping the schedule
+        changed, preserving each slot's enabled state, bumping the schedule
         version. The SCHEDULE.* KV is intentionally NOT written (the device
         ignores it; see dreame-app-schedule-write-2026-06-10.md).
         """
@@ -134,6 +134,8 @@ class _WritesMixin:
         # SCHDSV3 `s` is the FULL per-slot enabled array; build it once from the
         # live rows so editing one season's plans preserves the OTHER season's
         # on/off (sending [thisslot, 0] would flip the active season).
+        # Absent slot → 0 (disabled): a never-configured slot is off on the
+        # device, and defaulting to 1 would wrongly enable it.
         enabled_array = [
             int(by_slot[i][1]) if i in by_slot else 0 for i in (0, 1)
         ]
