@@ -32,6 +32,7 @@ class DreameA2ScheduleCard extends HTMLElement {
 
   setConfig(config) {
     this._sensor = config.sensor || "sensor.dreame_a2_mower_schedule_count";
+    this._mowerEntity = config.mower_entity || "lawn_mower.dreame_a2_mower";
   }
 
   set hass(hass) {
@@ -51,12 +52,26 @@ class DreameA2ScheduleCard extends HTMLElement {
     const tabs = slots
       .map(
         (s, i) =>
-          `<button class="tab ${i === this._activeSlot ? "active" : ""}" data-slot="${i}">${
+          `<button class="tab ${i === this._activeSlot ? "active" : ""} ${s.enabled ? "" : "tab-off"}" data-slot="${i}">${
             s.name || SLOT_DEFAULTS[s.slot_id] || `Schedule ${s.slot_id + 1}`
           }</button>`,
       )
       .join("");
     const active = slots[this._activeSlot] || { plans: [], slot_id: this._activeSlot };
+    const activeEnabled = !!active.enabled;
+    const mowerState = (this._hass.states[this._mowerEntity] || {}).state;
+    const taskActive = ["mowing", "returning", "paused"].includes(mowerState);
+    const toggleTitle = taskActive
+      ? "End the current task to change schedules"
+      : (activeEnabled ? "Schedule is ON — click to turn off"
+                       : "Schedule is OFF — click to turn on");
+    const header = `
+      <div class="sched-header">
+        <span class="sched-name">${active.name || SLOT_DEFAULTS[active.slot_id] || `Schedule ${active.slot_id + 1}`}</span>
+        <button class="toggle ${activeEnabled ? "on" : "off"}" ${taskActive ? "disabled" : ""} title="${toggleTitle}">
+          ${activeEnabled ? "ON" : "OFF"}
+        </button>
+      </div>`;
     const grid = this._renderGrid(active.plans);
     const list = active.plans
       .map((p, idx) => {
@@ -83,6 +98,13 @@ class DreameA2ScheduleCard extends HTMLElement {
         .tabs { display: flex; gap: 4px; margin-bottom: 12px; }
         .tab { padding: 6px 12px; border: 1px solid var(--divider-color); background: transparent; cursor: pointer; }
         .tab.active { background: var(--primary-color); color: var(--text-primary-color); }
+        .tab.tab-off { opacity: 0.5; }
+        .sched-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+        .sched-name { font-weight: bold; }
+        .toggle { padding: 4px 14px; border-radius: 12px; border: 1px solid var(--divider-color); cursor: pointer; }
+        .toggle.on { background: var(--primary-color); color: var(--text-primary-color); }
+        .toggle.off { background: transparent; color: var(--secondary-text-color); }
+        .toggle:disabled { opacity: 0.5; cursor: not-allowed; }
         .grid { display: grid; grid-template-columns: 40px repeat(7, 1fr); gap: 1px; background: var(--divider-color); margin-bottom: 12px; font-size: 0.75em; }
         .grid > div { background: var(--card-background-color); padding: 2px 4px; height: 18px; box-sizing: border-box; position: relative; }
         .grid .header { background: var(--secondary-background-color); text-align: center; font-weight: bold; }
@@ -110,6 +132,7 @@ class DreameA2ScheduleCard extends HTMLElement {
       </style>
       <ha-card>
         <div class="tabs">${tabs}</div>
+        ${header}
         ${grid}
         <div class="plans">
           ${list || '<div class="empty">No plans configured.</div>'}
@@ -125,6 +148,19 @@ class DreameA2ScheduleCard extends HTMLElement {
         this._render(this._stateRef);
       }),
     );
+    const toggleBtn = this.shadowRoot.querySelector(".toggle");
+    if (toggleBtn && !toggleBtn.disabled) {
+      toggleBtn.addEventListener("click", () => {
+        const slot = slots[this._activeSlot];
+        this._hass.callService("dreame_a2_mower", "set_schedule_enabled", {
+          slot_id: slot.slot_id,
+          enabled: !slot.enabled,
+        });
+        // Optimistic: reflect immediately; the next cloud refresh confirms.
+        slot.enabled = !slot.enabled;
+        this._render(this._stateRef);
+      });
+    }
     this.shadowRoot.querySelectorAll(".delete").forEach((btn) =>
       btn.addEventListener("click", () =>
         this._deletePlan(parseInt(btn.dataset.slot, 10), parseInt(btn.dataset.plan, 10)),
@@ -357,4 +393,4 @@ window.customCards.push({
   name: "Dreame A2 Schedule",
   description: "Edit Spr & Sum / Aut & Win mowing schedules",
 });
-console.info("dreame-a2-schedule-card v1.0.2a1 (full UX) loaded");
+console.info("dreame-a2-schedule-card v1.0.2a2 (full UX + on/off toggle) loaded");
