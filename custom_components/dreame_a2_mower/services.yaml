@@ -448,6 +448,12 @@ create_mow_shape:
             - mushroom
             - cloud
             - rainbow
+            - moon
+            - star
+            - butterfly
+            - blob
+            - tree
+            - carrot
     points:
       name: Points
       description: List of [x, y] metre pairs. square=4 points, others=2-point bbox.

@@ -1,7 +1,7 @@
 """Pure shape→type maps + point validation for the map-edit create ops.
 
-Wire facts: dreame-app-capture-2026-06-09 (o=215/o=234) + IMG_4615.PNG (the
-"Shapes" screen: Square/Circle/Heart/Triangle/Teardrop/Mushroom/Cloud/Rainbow).
+Wire facts: dreame-app-capture-2026-06-09 (o=215/o=234) + the full o=215
+shape-type map wire-confirmed [app-mitm:2026-06-17] (Square..Carrot, 14 shapes).
 No HA / cloud imports — keeps the coordinator wrappers thin and fast to test.
 """
 from __future__ import annotations
@@ -9,15 +9,14 @@ from __future__ import annotations
 from typing import Any
 
 NOGO_TYPE = {"line": 1, "polygon": 2, "circle": 3}
-# Wire-confirmed type ids (seen in o:215 capture payloads): 9, 13, 17, 18.
-# circle/triangle/teardrop/mushroom (12/14/15/16) are [UNVERIFIED] — inferred
-# from the Shapes-screen (IMG_4615.PNG) left→right ordering filling the 9,12-18
-# sequence, not seen on the wire. If the firmware numbers them differently, the
-# corresponding service call draws the wrong shape (still a valid payload).
-# Capture each to confirm — see docs/research/knowledge-gaps.md.
+# Full o=215 shape-type map, wire-confirmed across the board [app-mitm:2026-06-17].
+# circle is 11 (NOT 12 — the old 12 was an [UNVERIFIED] Shapes-screen-ordering
+# guess that drew a no-render type); type ids 10 & 12 are firmware-UNUSED.
 MOW_SHAPE_TYPE = {
-    "square": 9, "circle": 12, "heart": 13, "triangle": 14,
+    "square": 9, "circle": 11, "heart": 13, "triangle": 14,
     "teardrop": 15, "mushroom": 16, "cloud": 17, "rainbow": 18,
+    "moon": 19, "star": 20, "butterfly": 21, "blob": 22,
+    "tree": 23, "carrot": 24,
 }
 
 

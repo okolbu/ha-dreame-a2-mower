@@ -163,6 +163,7 @@ SCHEMA_CREATE_MOW_SHAPE = vol.Schema({
     vol.Required("shape"): vol.In([
         "square", "circle", "heart", "triangle",
         "teardrop", "mushroom", "cloud", "rainbow",
+        "moon", "star", "butterfly", "blob", "tree", "carrot",
     ]),
     vol.Required("points"): list,
     vol.Optional("object_id", default=-1): vol.Coerce(int),

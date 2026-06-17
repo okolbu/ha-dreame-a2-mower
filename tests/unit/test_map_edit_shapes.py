@@ -42,3 +42,24 @@ def test_mow_shape_type_and_validation():
         mes.validate_mow_shape("square", [[0, 0], [1, 1]])              # need 4
     with pytest.raises(ValueError):
         mes.validate_mow_shape("cloud", [[0, 0], [1, 1], [2, 2]])       # need 2
+
+
+def test_mow_shape_type_full_wire_confirmed_map():
+    """Wire-confirmed 2026-06-17 [app-mitm:2026-06-17]: circle is 11 (not 12),
+    and moon/star/butterfly/blob/tree/carrot (19-24) exist. 10 & 12 unused."""
+    expected = {
+        "square": 9, "circle": 11, "heart": 13, "triangle": 14,
+        "teardrop": 15, "mushroom": 16, "cloud": 17, "rainbow": 18,
+        "moon": 19, "star": 20, "butterfly": 21, "blob": 22,
+        "tree": 23, "carrot": 24,
+    }
+    for name, type_id in expected.items():
+        assert mes.mow_shape_type(name) == type_id, name
+    # the full map is exactly this set
+    assert mes.MOW_SHAPE_TYPE == expected
+    # 10 and 12 are firmware-UNUSED — must not be reachable type ids
+    assert 10 not in mes.MOW_SHAPE_TYPE.values()
+    assert 12 not in mes.MOW_SHAPE_TYPE.values()
+    # unknown name still raises ValueError
+    with pytest.raises(ValueError):
+        mes.mow_shape_type("octagon")
