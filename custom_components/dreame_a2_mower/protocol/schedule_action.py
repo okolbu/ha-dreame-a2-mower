@@ -71,18 +71,22 @@ def write_schedule_row(
     _send(send_action, "SCHDSV3", {"i": slot, "v": version, "s": list(enabled_array)})
 
 
-def write_schedule_enabled_state(send_action, *, version: int, enabled: list[int]) -> None:
+def write_schedule_enabled_state(send_action, *, version: int, enabled_array: list[int]) -> None:
     """Standalone schedule enable/disable write (the "season switch").
 
     Issues a single SCHDSV3 setter `{i:0, v:version, s:[slot0, slot1]}`. The
     full enabled array is written atomically; the device enforces mutual
     exclusion ([1,1] never occurs, [0,0] = both off). `version` MUST be the
     current schedule version read immediately before this write (it is a
-    regenerated optimistic-concurrency token, not a counter). Raises
-    CfgActionError on r!=0. [app-mitm:2026-06-17]
+    regenerated optimistic-concurrency token, not a counter). `enabled_array`
+    is the full [slot0_enabled, slot1_enabled] pair. Raises CfgActionError on
+    r!=0. [app-mitm:2026-06-17]
     """
+    # i:0 is the fixed schedule-set index for the toggle (NOT the slot being
+    # toggled — which slot changes is encoded by which element of enabled_array
+    # differs from the prior state).
     _send(send_action, "SCHDSV3",
-          {"i": 0, "v": int(version), "s": [int(enabled[0]), int(enabled[1])]})
+          {"i": 0, "v": int(version), "s": [int(enabled_array[0]), int(enabled_array[1])]})
 
 
 # Max bytes requested per SCHDDV3 read chunk (matches the app's request size).

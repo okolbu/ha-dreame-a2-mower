@@ -1,3 +1,5 @@
+import pytest
+
 from custom_components.dreame_a2_mower.protocol import schedule_action as sa
 
 
@@ -60,7 +62,6 @@ def test_write_schedule_row_envelope():
 
 
 def test_write_schedule_row_raises_on_error():
-    import pytest
     with pytest.raises(sa.CfgActionError):
         sa.write_schedule_row(
             _fake_send_action([], fail_on="SCHDSV3"),
@@ -72,7 +73,7 @@ def test_write_schedule_row_raises_on_error():
 def test_write_schedule_enabled_state_envelope():
     calls = []
     sa.write_schedule_enabled_state(
-        _fake_send_action(calls), version=58177, enabled=[0, 1]
+        _fake_send_action(calls), version=58177, enabled_array=[0, 1]
     )
     assert len(calls) == 1
     siid, aiid, payload = calls[0]
@@ -82,10 +83,9 @@ def test_write_schedule_enabled_state_envelope():
 
 
 def test_write_schedule_enabled_state_raises_on_error():
-    import pytest
     with pytest.raises(sa.CfgActionError):
         sa.write_schedule_enabled_state(
-            _fake_send_action([], fail_on="SCHDSV3"), version=1, enabled=[1, 0]
+            _fake_send_action([], fail_on="SCHDSV3"), version=1, enabled_array=[1, 0]
         )
 
 
