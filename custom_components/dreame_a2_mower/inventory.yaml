@@ -3637,6 +3637,47 @@ opcodes:
       - "Are c and h the only sub-parameters, or can other fields be passed?"
       - "Does op=15 reliably echo for every manual-drive start, or only sometimes (like other app-triggered ops)?"
 
+  - id: "o19"
+    op: 19
+    name: "update_station_location"
+    category: "opcode"
+    payload_shape: "SEND {m:'a', p:0, o:19} — NO payload (empty d)"
+    semantic: |
+      Update station (dock) location — net-new in app 2.5.8.1 ("Update station
+      location" button). PARAMETERLESS: the app sends only {m:'a',p:0,o:19} and
+      the MOWER measures its own dock pose (no coordinates are sent). On receipt
+      the robot undocks, does its usual LiDAR reorient spin while pointing at the
+      dock to re-sense it, and writes a fresh dock pose. Wire-verified 2026-06-17
+      (app 2.5.8.1, fw 4.3.6_0625): one send, out[0].r=0; app then polls the dock
+      via m:g DOCK. [app-mitm:2026-06-17]
+
+      USE: move the physical dock, put the mower in it, press the button — the
+      mower re-localizes the new dock position. Almost certainly the same routine
+      run at first install. No camera/light involvement (an apparent "lights on"
+      was sunlight off the charging contacts).
+
+      RESULT read-back: routed m:g DOCK returns
+      {dock:{x,y,yaw, near_x,near_y,near_yaw, connect_status, in_region,
+      path_connect}} (mm + yaw in 0.1deg-ish units). Before->after this capture
+      (dock NOT physically moved, so a small re-measurement delta):
+      x149,y10,yaw79,near(15,-7,1879) -> x150,y9,yaw89,near(17,-11,1889). The
+      device also fires s1p51 (dock_position_update_trigger) when the pose
+      changes, prompting the DOCK re-fetch. The integration already reads DOCK
+      (coordinator _refresh_dock / cloud_client.fetch_dock); only the o=19 WRITE
+      trigger is new.
+    status:
+      seen_on_wire: true
+      first_seen: "2026-06-17"
+      last_seen: "2026-06-17"
+      decoded: confirmed
+    verifications:
+      - date: "2026-06-17"
+        status: verified
+        claim: "o=19 = update-station-location: parameterless routed action {m:'a',p:0,o:19} (r=0) that makes the mower re-localize its dock (undock + LiDAR reorient spin, no coordinates sent). New in app 2.5.8.1. Result is read via m:g DOCK (x/y/yaw + near approach point); s1p51 signals the pose change."
+        evidence: "app-mitm:2026-06-17 (miio-13267.jsonl 10:28:46 o=19 r=0; DOCK before 10:26 x149/y10/yaw79 -> after 10:29:33 x150/y9/yaw89)"
+    references:
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes"
+
   - id: "o100"
     op: 100
     name: "global_mower"
