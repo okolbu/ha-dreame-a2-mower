@@ -10,7 +10,7 @@ from typing import Any
 
 import requests
 
-from ._helpers import _LOGGER, _http_retry, WriteResult
+from ._helpers import _LOGGER, _http_retry, WriteResult, wire_trace
 
 
 class _RpcMixin:
@@ -247,7 +247,7 @@ class _RpcMixin:
         if parameters is None:
             parameters = []
         _LOGGER.debug("Send Action: %s.%s %s", siid, aiid, parameters)
-        return self.send(
+        result = self.send(
             "action",
             parameters={
                 "did": str(self._did),
@@ -257,6 +257,17 @@ class _RpcMixin:
             },
             retry_count=retry_count,
         )
+        # Gated wire-trace: capture the exact on-wire payload + device verdict
+        # for off-box diffing against the app↔mower MITM captures. No-op unless
+        # the trace sentinel file is present (see _helpers.wire_trace).
+        wire_trace({
+            "ts": time.time(),
+            "siid": siid,
+            "aiid": aiid,
+            "in": parameters,
+            "result": result,
+        })
+        return result
 
     def request(
         self,

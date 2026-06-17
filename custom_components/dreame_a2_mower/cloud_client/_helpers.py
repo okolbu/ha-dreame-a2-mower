@@ -1,15 +1,61 @@
 """Shared module-level helpers for the cloud_client package (B1d split)."""
 from __future__ import annotations
 
+import json
 import logging
+import os
 import random
 import time
 from dataclasses import dataclass
-from typing import Callable, TypeVar
+from typing import Any, Callable, TypeVar
 
 _LOGGER = logging.getLogger("custom_components.dreame_a2_mower.cloud_client")
 
 T = TypeVar("T")
+
+# --- Wire-send trace (debugging instrument; ships OFF) ----------------------
+# When the sentinel file exists, every siid=2/aiid=50 action send (every
+# routed_action and set_cfg) is appended as one JSONL record to the trace file.
+# This captures the EXACT on-wire `in[0]` payload + the device's response so it
+# can be diffed against the app↔mower MITM captures (the app does an operation
+# that sticks; we do one that doesn't — the diff is in the bytes).
+#
+# Enable on the live box without a code change or restart: `touch` the sentinel
+# (the check is per-call). Ships safe: no sentinel → zero overhead beyond one
+# stat per action, and actions are low-volume (writes only).
+_WIRE_TRACE_SENTINEL = "/config/dreame_a2_wire_trace.enabled"
+_WIRE_TRACE_PATH = "/config/dreame_a2_wire_trace.jsonl"
+_WIRE_TRACE_MAX_BYTES = 4_000_000  # rotate to .1 past this, so it can't fill disk
+
+
+def wire_trace_enabled() -> bool:
+    """True when the operator has dropped the trace sentinel file."""
+    try:
+        return os.path.exists(_WIRE_TRACE_SENTINEL)
+    except OSError:
+        return False
+
+
+def wire_trace(record: dict[str, Any]) -> None:
+    """Best-effort append one JSONL trace record. NEVER raises into a write.
+
+    No-op unless the sentinel exists. ``default=repr`` keeps non-JSON values
+    (e.g. an exception object) from breaking the line; a single oversized file
+    is rotated to ``<path>.1`` rather than growing without bound.
+    """
+    if not wire_trace_enabled():
+        return
+    try:
+        try:
+            if os.path.getsize(_WIRE_TRACE_PATH) > _WIRE_TRACE_MAX_BYTES:
+                os.replace(_WIRE_TRACE_PATH, _WIRE_TRACE_PATH + ".1")
+        except OSError:
+            pass  # file absent / not yet created — nothing to rotate
+        line = json.dumps(record, separators=(",", ":"), default=repr)
+        with open(_WIRE_TRACE_PATH, "a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+    except Exception:  # noqa: BLE001 — tracing must never break a real write
+        pass
 
 
 @dataclass(frozen=True)
