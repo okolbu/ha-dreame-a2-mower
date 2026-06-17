@@ -4578,11 +4578,19 @@ opcodes:
         type 2 = polygon (corner points, radius=0)
         type 3 = circle (center point + radius)
 
-      Mowing-shape preset types (decorative/preset shapes):
-        type 9  = Square (4 points)
-        type 13 = Heart
-        type 17 = Cloud
-        type 18 = Rainbow
+      Mowing-shape preset/decorative ("novelty") types — FULL set wire-confirmed
+      2026-06-17 by drawing each in app 2.5.8.1 and reading the o:215 type
+      (supersedes the prior "9,12-18" guess, which was wrong on three counts):
+        9 = Square            11 = Circle (parametric: 1 center point + radius)
+        13 = Heart            14 = Triangle         15 = Teardrop
+        16 = Mushroom         17 = Cloud            18 = Rainbow
+        19 = Moon             20 = Star             21 = Butterfly
+        22 = Blob/clownface(?) 23 = Tree            24 = Carrot/amphora(?)
+      Gaps: 10 and 12 are UNUSED (no shape occupies them). Circle is 11, NOT 12
+      as previously inferred; the list runs to 24, NOT 18 (six shapes — 19-24 —
+      were hidden off-screen in the Shapes picker). Stencil shapes carry type +
+      a 2-point bounding box (radius=0); Circle (11) is the lone parametric one
+      (center + radius). [app-mitm:2026-06-17]
 
       Sequence: o:204 (begin) → o:215 (add zone) → o:201 (commit) → o:-1 (teardown).
       The integration triggers a MAP rebuild on o:215 OR o:201 with status:true
@@ -4596,8 +4604,11 @@ opcodes:
       first_seen: "2026-04-20"
       last_seen: "2026-06-09"
       decoded: confirmed
-    open_questions:
-      - "Shape type ids 9 (Square), 13 (Heart), 15 (Teardrop), 17 (Cloud), 18 (Rainbow) are WIRE-CONFIRMED (appear in o:215 capture payloads; 15 confirmed 2026-06-12 [app-mitm:2026-06-12-mapedit-rotate-edit]). Type ids 12 (Circle), 14 (Triangle), 16 (Mushroom) are [UNVERIFIED] — INFERRED from the Shapes-screen (IMG_4615.PNG) left→right ordering filling the 9,12-18 sequence, NOT seen on the wire. Capture: draw each in app-MITM and read its type in o:215 to confirm/correct. Type ids 10 and 11 (the gap between square=9 and circle=12) are [UNKNOWN — to capture] — no shape occupies them in this app's Shapes screen, so they appear unused on g2408."
+    verifications:
+      - date: "2026-06-17"
+        status: verified
+        claim: "Full novelty-shape type map wire-confirmed by drawing each in app 2.5.8.1 + reading o:215 type: 9=Square, 11=Circle(parametric center+radius), 13=Heart, 14=Triangle, 15=Teardrop, 16=Mushroom, 17=Cloud, 18=Rainbow, 19=Moon, 20=Star, 21=Butterfly, 22=Blob/clownface(?), 23=Tree, 24=Carrot/amphora(?). 10 & 12 UNUSED. Corrects the prior inference: Circle is 11 not 12; 19-24 (six off-screen shapes) were unknown — the old 'fills 9,12-18' guess was wrong."
+        evidence: "app-mitm:2026-06-17 (miio-13267.jsonl o=215 draws 13:47-14:01: Circle→11, Triangle→14, Mushroom→16, Moon→19, Star→20, Butterfly→21, Blob→22, Tree→23, Carrot→24; shapes2.png picker screenshot)"
     references:
       integration_code: "coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Properties"
