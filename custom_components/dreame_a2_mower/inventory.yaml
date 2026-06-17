@@ -4584,13 +4584,27 @@ opcodes:
         9 = Square            11 = Circle (parametric: 1 center point + radius)
         13 = Heart            14 = Triangle         15 = Teardrop
         16 = Mushroom         17 = Cloud            18 = Rainbow
-        19 = Moon             20 = Star             21 = Butterfly
-        22 = Blob/clownface(?) 23 = Tree            24 = Carrot/amphora(?)
+        19 = Moon             20 = Star             21 = winged insect
+        22 = Blob(?)          23 = Tree             24 = Carrot/amphora/leaf(?)
       Gaps: 10 and 12 are UNUSED (no shape occupies them). Circle is 11, NOT 12
       as previously inferred; the list runs to 24, NOT 18 (six shapes — 19-24 —
       were hidden off-screen in the Shapes picker). Stencil shapes carry type +
       a 2-point bounding box (radius=0); Circle (11) is the lone parametric one
       (center + radius). [app-mitm:2026-06-17]
+
+      Glyph descriptions (from the picker screenshot shapes2.png, second screen =
+      types 17-24; first screen 9-16 not screenshotted): 17=puffy Cloud,
+      18=Rainbow/arch, 19=crescent Moon, 20=5-point Star, 21=symmetric WINGED
+      INSECT (butterfly / 4-winged moth / bumblebee — exact glyph uncertain),
+      22=amorphous Blob (uncertain), 23=conifer/pine Tree, 24=pointed
+      teardrop/leaf (could be a stylized carrot or an amphora/urn — uncertain).
+
+      RENDERING NOTE: the placed stencil fills only ~0.5-0.6 of its (squareish)
+      o:215 bounding box — the actual cut shape is inset, not edge-to-edge. This
+      shape-to-bbox ratio is what drives the integration's ~0.5-0.6 scaling factor
+      when drawing these so the rendered shape matches what the firmware actually
+      cuts. [user observation 2026-06-17; visible in shapes2.png — the placed
+      Cloud sits well inside its dashed bbox]
 
       Sequence: o:204 (begin) → o:215 (add zone) → o:201 (commit) → o:-1 (teardown).
       The integration triggers a MAP rebuild on o:215 OR o:201 with status:true
