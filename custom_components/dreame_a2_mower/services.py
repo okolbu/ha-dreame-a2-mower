@@ -56,6 +56,7 @@ SERVICE_CREATE_PATROL_POINT = "create_patrol_point"
 SERVICE_SET_PATROL_POINT_CONFIG = "set_patrol_point_config"
 SERVICE_SPLIT_ZONE = "split_zone"
 SERVICE_MERGE_ZONES = "merge_zones"
+SERVICE_SET_SCHEDULE_ENABLED = "set_schedule_enabled"
 
 
 # Schemas
@@ -124,6 +125,11 @@ SCHEMA_SET_SCHEDULE_PLANS = vol.Schema({
         vol.Optional("zone_id"): vol.Any(None, vol.Coerce(int)),
         vol.Optional("extra_bytes_hex"): str,
     })]),
+})
+
+SCHEMA_SET_SCHEDULE_ENABLED = vol.Schema({
+    vol.Required("slot_id"): vol.All(vol.Coerce(int), vol.In([0, 1])),
+    vol.Required("enabled"): vol.Coerce(bool),
 })
 
 
@@ -471,6 +477,33 @@ async def _handle_set_schedule_plans(
     if not ok:
         raise ServiceValidationError(
             f"Set schedule plans: device rejected the write for slot {target_slot_id}"
+        )
+
+
+@service_handler
+async def _handle_set_schedule_enabled(
+    coordinator: DreameA2MowerCoordinator, call: ServiceCall
+) -> None:
+    """Enable/disable one schedule season (mutually exclusive). Blocked while a
+    mow session is active — the Dreame app forbids this mid-task; we replicate
+    the guard (the mower's mid-task behavior is untested)."""
+    from .mower.state_snapshot import MowSession
+
+    sm = getattr(coordinator, "state_machine", None)
+    if sm is not None and sm.snapshot().mow_session == MowSession.IN_SESSION:
+        raise ServiceValidationError(
+            "End the current mowing task before changing a schedule's on/off state."
+        )
+    slot_id = int(call.data["slot_id"])
+    enabled = bool(call.data["enabled"])
+    ok = await coordinator.write_schedule_enabled(slot_id=slot_id, enabled=enabled)
+    LOGGER.info(
+        "set_schedule_enabled: slot %d -> %s, accepted=%s",
+        slot_id, "on" if enabled else "off", ok,
+    )
+    if not ok:
+        raise ServiceValidationError(
+            f"Set schedule enabled: device rejected the write for slot {slot_id}"
         )
 
 
@@ -1032,6 +1065,8 @@ async def async_register_services(hass: HomeAssistant, entry: Any | None = None)
                                   _handle_replay_session, schema=SCHEMA_REPLAY_SESSION)
     hass.services.async_register(DOMAIN, SERVICE_SET_SCHEDULE_PLANS,
                                   _handle_set_schedule_plans, schema=SCHEMA_SET_SCHEDULE_PLANS)
+    hass.services.async_register(DOMAIN, SERVICE_SET_SCHEDULE_ENABLED,
+                                  _handle_set_schedule_enabled, schema=SCHEMA_SET_SCHEDULE_ENABLED)
     hass.services.async_register(DOMAIN, SERVICE_SHOW_LIDAR_FULLSCREEN,
                                   _handle_show_lidar_fullscreen, schema=SCHEMA_EMPTY)
     # Debug-only services: registered ONLY when the debug_services option is on.
@@ -1105,6 +1140,7 @@ def async_unregister_services(hass: HomeAssistant) -> None:
         SERVICE_SET_ACTIVE_SELECTION, SERVICE_MOW_ZONE, SERVICE_MOW_EDGE, SERVICE_MOW_SPOT,
         SERVICE_RECHARGE, SERVICE_FIND_BOT, SERVICE_SET_CHILD_LOCK, SERVICE_SUPPRESS_FAULT,
         SERVICE_FINALIZE_SESSION, SERVICE_REPLAY_SESSION, SERVICE_SET_SCHEDULE_PLANS,
+        SERVICE_SET_SCHEDULE_ENABLED,
         SERVICE_SHOW_LIDAR_FULLSCREEN, SERVICE_DUMP_MAP_DIAGNOSTICS, SERVICE_DISCOVER_CLOUD_API,
         SERVICE_REFRESH_CLOUD_STATE, SERVICE_SHOW_PHOTO_PRIVACY_POLICY,
         SERVICE_MOVE_LIDAR_SCAN,

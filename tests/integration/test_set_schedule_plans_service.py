@@ -1,4 +1,6 @@
-"""Task 6: the set_schedule_plans service still reaches coordinator.write_schedule."""
+"""Task 6: the set_schedule_plans service still reaches coordinator.write_schedule.
+Task 5: the set_schedule_enabled service with active-task guard.
+"""
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -9,6 +11,54 @@ from custom_components.dreame_a2_mower.cloud_state import (
     ScheduleData,
     ScheduleSlot,
 )
+
+
+@pytest.mark.asyncio
+async def test_set_schedule_enabled_blocks_during_active_task(monkeypatch):
+    """Handler must raise ServiceValidationError and NOT call write_schedule_enabled
+    when a mow session is currently IN_SESSION."""
+    from custom_components.dreame_a2_mower.mower.state_snapshot import MowSession
+    from homeassistant.exceptions import ServiceValidationError
+
+    coordinator = SimpleNamespace(
+        state_machine=SimpleNamespace(
+            snapshot=lambda: SimpleNamespace(mow_session=MowSession.IN_SESSION)
+        ),
+        write_schedule_enabled=AsyncMock(return_value=True),
+    )
+    monkeypatch.setattr(
+        services, "_coordinator_from_call", lambda hass, call: coordinator
+    )
+    call = SimpleNamespace(
+        hass=SimpleNamespace(),
+        data={"slot_id": 0, "enabled": False},
+    )
+    with pytest.raises(ServiceValidationError):
+        await services._handle_set_schedule_enabled(call)
+    coordinator.write_schedule_enabled.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_set_schedule_enabled_dispatches_when_idle(monkeypatch):
+    """Handler must call write_schedule_enabled with the correct kwargs when
+    the mower is BETWEEN_SESSIONS (no active task)."""
+    from custom_components.dreame_a2_mower.mower.state_snapshot import MowSession
+
+    coordinator = SimpleNamespace(
+        state_machine=SimpleNamespace(
+            snapshot=lambda: SimpleNamespace(mow_session=MowSession.BETWEEN_SESSIONS)
+        ),
+        write_schedule_enabled=AsyncMock(return_value=True),
+    )
+    monkeypatch.setattr(
+        services, "_coordinator_from_call", lambda hass, call: coordinator
+    )
+    call = SimpleNamespace(
+        hass=SimpleNamespace(),
+        data={"slot_id": 1, "enabled": True},
+    )
+    await services._handle_set_schedule_enabled(call)
+    coordinator.write_schedule_enabled.assert_awaited_once_with(slot_id=1, enabled=True)
 
 
 @pytest.mark.asyncio

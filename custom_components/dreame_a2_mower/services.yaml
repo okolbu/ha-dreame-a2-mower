@@ -731,3 +731,27 @@ merge_zones:
       selector:
         object: {}
 
+set_schedule_enabled:
+  name: Set schedule enabled
+  description: >-
+    Enable or disable a mowing schedule season (Spr & Sum = slot 0,
+    Aut & Win = slot 1). Seasons are mutually exclusive: enabling one disables
+    the other; disabling the active one leaves no schedule running. Blocked
+    while the mower is in an active task.
+  fields:
+    slot_id:
+      name: Slot
+      description: 0 = Spr & Sum, 1 = Aut & Win.
+      required: true
+      selector:
+        number:
+          min: 0
+          max: 1
+          mode: box
+    enabled:
+      name: Enabled
+      description: Turn this schedule on (and the other off) or off.
+      required: true
+      selector:
+        boolean:
+
