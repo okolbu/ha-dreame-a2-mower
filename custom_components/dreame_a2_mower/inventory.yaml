@@ -4592,8 +4592,12 @@ opcodes:
       a 2-point bounding box (radius=0); Circle (11) is the lone parametric one
       (center + radius). [app-mitm:2026-06-17]
 
-      Glyph descriptions (from the picker screenshot shapes2.png, second screen =
-      types 17-24; first screen 9-16 not screenshotted): 17=puffy Cloud,
+      Glyph descriptions — first screen 9-18 from OLD/IMG_4615.png (picker order
+      Square,Circle,Heart,Triangle,Teardrop,Mushroom,Cloud,Rainbow — visually
+      confirms the 10/12 gaps: Square→Circle skips 10, Circle→Heart skips 12):
+      9=rounded Square, 11=Circle, 13=Heart, 14=rounded Triangle (point up),
+      15=Teardrop (water-drop, pointed top), 16=Mushroom. Second screen 17-24
+      from shapes2.png: 17=puffy Cloud,
       18=Rainbow/arch, 19=crescent Moon, 20=5-point Star, 21=symmetric WINGED
       INSECT (butterfly / 4-winged moth / bumblebee — exact glyph uncertain),
       22=amorphous Blob (uncertain), 23=conifer/pine Tree, 24=pointed
