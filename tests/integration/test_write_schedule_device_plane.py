@@ -241,3 +241,44 @@ async def test_write_schedule_enabled_disable_zeroes_slot(monkeypatch):
 
     assert ok is True
     assert captured["enabled_writes"] == [{"version": 42, "enabled": [0, 0]}]  # both off
+
+
+@pytest.mark.asyncio
+async def test_write_schedule_enabled_falls_back_to_cloud_state_when_live_none(monkeypatch):
+    """When the live read is unavailable, the toggle uses cloud_state.schedule
+    (version + per-slot mode). Disabling slot 0 while slot 1 is on must preserve
+    slot 1 (proves the fallback reads each slot's mode, not [0,0])."""
+    import custom_components.dreame_a2_mower.coordinator._writes as W
+    from custom_components.dreame_a2_mower.coordinator._writes import _WritesMixin
+
+    captured = {"enabled_writes": []}
+
+    def _write_enabled(send_action, *, version, enabled_array):
+        captured["enabled_writes"].append({"version": version, "enabled": enabled_array})
+
+    monkeypatch.setattr(W, "write_schedule_enabled_state", _write_enabled, raising=False)
+    monkeypatch.setattr(W, "read_live_schedule", lambda send_action: None, raising=False)
+
+    c = _WritesMixin()
+    c._cloud = SimpleNamespace(action=lambda *a, **k: None)
+    c._chunked_write_lock = asyncio.Lock()
+    c._refresh_cloud_state = AsyncMock()
+    c.cloud_state = SimpleNamespace(
+        schedule=ScheduleData(
+            version=31,
+            slots=(
+                ScheduleSlot(slot_id=0, name="Spr", raw_blob_b64="", plans=(), mode=0),
+                ScheduleSlot(slot_id=1, name="Win", raw_blob_b64="", plans=(), mode=1),
+            ),
+        )
+    )
+
+    async def _exec(fn, *a, **k):
+        return fn(*a, **k)
+    c.hass = SimpleNamespace(async_add_executor_job=AsyncMock(side_effect=_exec))
+
+    ok = await c.write_schedule_enabled(slot_id=0, enabled=False)
+
+    assert ok is True
+    # slot1 stays on (mode=1 read from cloud_state), slot0 forced off.
+    assert captured["enabled_writes"] == [{"version": 31, "enabled": [0, 1]}]

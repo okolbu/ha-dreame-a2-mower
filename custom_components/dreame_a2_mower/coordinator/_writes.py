@@ -219,6 +219,7 @@ class _WritesMixin:
             if cs is not None:
                 for s in cs.schedule.slots:
                     if s.slot_id in (0, 1):
+                        # s.mode / wire element[1] is the per-slot enabled flag (confirmed app-mitm 2026-06-17).
                         current[s.slot_id] = int(s.mode)
 
         if enabled:
@@ -237,7 +238,7 @@ class _WritesMixin:
                     )
                 )
                 LOGGER.info(
-                    "[schedule-enable] slot %d -> %s, s=%s, v=%d",
+                    "[schedule-enable] slot %d → %s, s=%s, v=%d",
                     slot_id, "on" if enabled else "off", new_array, version,
                 )
             except Exception as exc:  # noqa: BLE001 — surface, keep going
