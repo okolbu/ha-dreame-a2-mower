@@ -549,6 +549,88 @@ class DreameA2PerMapMowingDirectionModeSelect(
         )
 
 
+class DreameA2PerMapTurningMethodSelect(
+    _FreshnessAvailableMixin,
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    SelectEntity,
+):
+    """Per-map turning method — Efficient / Lawn-Care.
+
+    Device enum (PRE[19] / SETTINGS.steeringMode):
+      0 = Efficient, 1 = Lawn-Care.
+
+    PRE[19] appeared on the 0550→0625 firmware OTA (the PRE array grew
+    from 19 to 21 ints; indices 0-18 unchanged). The app 2.5.8.1 added a
+    "Turning Method Settings" sub-page. (inventory.yaml § PRE[19], wire
+    PRE[19] verified 2026-06-17.) On fw 0550 there is no ``steeringMode``
+    key in SETTINGS and the PRE array is only 19 ints, so
+    ``current_option`` returns None and the entity is unavailable — the
+    write path can never IndexError (``cfg_payloads.apply_pre`` refuses an
+    out-of-range index by returning None).
+    """
+
+    _OPTIONS = ("Efficient", "Lawn-Care")
+
+    _attr_has_entity_name = True
+    _availability_source = "cloud"
+    _attr_translation_key = "settings_turning_method"
+    _attr_options: ClassVar[list[str]] = list(_OPTIONS)
+    _attr_should_poll = False
+
+    def __init__(
+        self, coordinator: DreameA2MowerCoordinator, *, map_id: int
+    ) -> None:
+        super().__init__(coordinator)
+        self._map_id = map_id
+        self._attr_unique_id = map_unique_id(
+            coordinator, map_id, "settings_turning_method"
+        )
+        self._control_mode = resolve_control_mode(
+            platform="select", key="map_N_settings_turning_method"
+        )
+        map_obj = coordinator.cloud_state.maps_by_id.get(map_id)
+        # has_entity_name=True; device_name is prepended automatically.
+        self._attr_name = "Turning Method"
+        self._attr_device_info = map_device_info(
+            coordinator, map_id, name=getattr(map_obj, "name", None),
+        )
+
+    @property
+    def current_option(self) -> str | None:
+        cs = getattr(self.coordinator, "cloud_state", None)
+        if cs is None:
+            return None
+        v = cs.settings.by_map_id_canonical.get(self._map_id, {}).get(
+            "steeringMode"
+        )
+        if v is None:
+            return None
+        try:
+            iv = int(v)
+        except (TypeError, ValueError):
+            return None
+        return self._OPTIONS[iv] if 0 <= iv < len(self._OPTIONS) else None
+
+    @property
+    def available(self) -> bool:
+        if self.current_option is None:
+            return False
+        return super().available
+
+    async def async_select_option(self, option: str) -> None:
+        if self.read_only:
+            return await self._reject_readonly_write()
+        if option not in self._OPTIONS:
+            return
+        idx = self._OPTIONS.index(option)
+        await pre_settings_optimistic_write(
+            self, state_field="settings_turning_method", new_value=idx,
+            map_id=self._map_id, pre_index=19, pre_value=idx,
+            settings_field="steeringMode", settings_value=idx,
+        )
+
+
 class DreameA2MapMowingEfficiencySelect(
     _FreshnessAvailableMixin,
     _ControlHonestyMixin,

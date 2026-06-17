@@ -678,6 +678,7 @@ class MowerState:
     settings_mowing_height: int | None = None
     settings_mowing_direction: int | None = None
     settings_mowing_direction_mode: int | None = None
+    settings_turning_method: int | None = None  # PRE[19]/SETTINGS.steeringMode; fw-0625 OTA
     settings_cutter_position: int | None = None
     settings_cutter_position_height: int | None = None
     settings_edge_mowing_num: int | None = None

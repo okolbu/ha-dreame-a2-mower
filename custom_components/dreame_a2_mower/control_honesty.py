@@ -71,6 +71,7 @@ CONTROL_MODES: dict[str, ControlMode | dict[str, ControlMode]] = {
     "select.dreame_a2_mower_map_N_mowing_mode": _L,
     "select.dreame_a2_mower_map_N_settings_mowing_direction": _W,
     "select.dreame_a2_mower_map_N_settings_mowing_direction_mode": _W,
+    "select.dreame_a2_mower_map_N_settings_turning_method": _W,
     "select.dreame_a2_mower_map_N_edge_walk_mode": _C,
     "select.dreame_a2_mower_map_N_maintenance_point": _L,
     "select.dreame_a2_mower_map_N_mowing_efficiency": _W,

@@ -61,6 +61,7 @@ from .entities.select.map_settings import (
     DreameA2MowingModeSelect,
     DreameA2PerMapMowingDirectionSelect,
     DreameA2PerMapMowingDirectionModeSelect,
+    DreameA2PerMapTurningMethodSelect,
     DreameA2MapMowingEfficiencySelect,
     DreameA2PerMapEdgeMowingWalkModeSelect,
     DreameA2MaintenancePointSelect,
@@ -104,6 +105,7 @@ async def async_setup_entry(
         entities.extend([
             DreameA2PerMapMowingDirectionSelect(coordinator, map_id=map_id),
             DreameA2PerMapMowingDirectionModeSelect(coordinator, map_id=map_id),
+            DreameA2PerMapTurningMethodSelect(coordinator, map_id=map_id),
             DreameA2PerMapEdgeMowingWalkModeSelect(coordinator, map_id=map_id),
             DreameA2MapMowingEfficiencySelect(coordinator, map_id=map_id),
         ])

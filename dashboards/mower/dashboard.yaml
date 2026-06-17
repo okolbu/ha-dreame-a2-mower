@@ -771,6 +771,7 @@ views:
                         - entity: select.dreame_a2_mower_map_1_mowing_efficiency
                         - entity: number.dreame_a2_mower_map_1_mowing_height
                         - entity: select.dreame_a2_mower_map_1_mowing_direction
+                        - entity: select.dreame_a2_mower_map_1_turning_method
                         - entity: switch.dreame_a2_mower_map_1_automatic_edge_mowing
                         - entity: switch.dreame_a2_mower_map_1_safe_edge_mowing
                         - entity: switch.dreame_a2_mower_map_1_edgemaster
@@ -792,6 +793,7 @@ views:
                         - entity: select.dreame_a2_mower_map_2_mowing_efficiency
                         - entity: number.dreame_a2_mower_map_2_mowing_height
                         - entity: select.dreame_a2_mower_map_2_mowing_direction
+                        - entity: select.dreame_a2_mower_map_2_turning_method
                         - entity: switch.dreame_a2_mower_map_2_automatic_edge_mowing
                         - entity: switch.dreame_a2_mower_map_2_safe_edge_mowing
                         - entity: switch.dreame_a2_mower_map_2_edgemaster

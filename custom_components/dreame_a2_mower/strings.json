@@ -45,6 +45,11 @@
         "name": "Firmware"
       }
     },
+    "select": {
+      "settings_turning_method": {
+        "name": "Turning Method"
+      }
+    },
     "number": {
       "station_bearing_deg": {
         "name": "Dock compass bearing"

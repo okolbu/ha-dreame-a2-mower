@@ -133,6 +133,9 @@
       },
       "wifi_archive": {
         "name": "WiFi archive"
+      },
+      "settings_turning_method": {
+        "name": "Turning Method"
       }
     },
     "number": {

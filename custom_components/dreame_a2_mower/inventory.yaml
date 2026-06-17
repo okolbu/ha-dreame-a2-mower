@@ -5712,7 +5712,7 @@ cfg_keys:
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
-      last_seen: "2026-06-16"
+      last_seen: "2026-06-17"
       decoded: confirmed
     verifications:
       - date: "2026-06-17"
@@ -5723,6 +5723,10 @@ cfg_keys:
         status: verified
         claim: "PRE[19] = Turning Method (0=Efficient, 1=Lawn-Care), resolving the post-0625 'NEW/UNKNOWN' [19] field. Isolated single-index toggle in app 2.5.8.1 (new 'Turning Method Settings' sub-page of Mowing Settings): the two map-0 PRE saves differed ONLY at [19] — Lawn-Care vs Efficient."
         evidence: "app-mitm:2026-06-17 (miio-13267.jsonl PRE writes 10:47:59 [19]=1 Lawn-Care vs 10:51:11 [19]=0 Efficient; all other indices identical)"
+      - date: "2026-06-17"
+        status: partial
+        claim: "Integration surface added (code fact; the wire PRE[19] is already verified above): per-map select.dreame_a2_mower_map_N_turning_method (DreameA2PerMapTurningMethodSelect) reads SETTINGS.steeringMode from cloud_state.settings.by_map_id_canonical[map_id] (0=Efficient/1=Lawn-Care) and writes PRE[19] + SETTINGS.steeringMode via pre_settings_optimistic_write → write_map_general_setting (apply_pre RMW). Unavailable on fw 0550 (no steeringMode key; apply_pre refuses index 19 on a 19-int array). Not yet live-verified on-device."
+        evidence: "custom_components/dreame_a2_mower/entities/select/map_settings.py (DreameA2PerMapTurningMethodSelect); cloud_state population custom_components/dreame_a2_mower/coordinator/_cloud_state.py (steeringMode→settings_turning_method)"
       - date: "2026-06-16"
         status: verified
         claim: "EdgeMaster = PRE[10] (0=off/1=on) re-confirmed by a clean single-index ON↔OFF toggle on fw 4.3.6_0625 (only index 10 changed); resolves the 'AutoEdge/SafeEdge/EdgeMaster/OA-on-Edges order TBD'. Separately, the 0550→0625 OTA extended PRE from 19 → 21 ints — two fields APPENDED at [19]=0,[20]=30; indices 0–18 did NOT shift. General caveat: re-validate array-CFG layouts after a firmware update. The integration's RMW builder (cfg_payloads.apply_pre) copies the full fetched array, so the 21-int fetch round-trips intact without code change."

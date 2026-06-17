@@ -234,6 +234,7 @@ class _CloudStateMixin:
                 ("mowingHeight", "settings_mowing_height"),
                 ("mowingDirection", "settings_mowing_direction"),
                 ("mowingDirectionMode", "settings_mowing_direction_mode"),
+                ("steeringMode", "settings_turning_method"),
                 ("cutterPosition", "settings_cutter_position"),
                 ("cutterPositionHeight", "settings_cutter_position_height"),
                 ("edgeMowingNum", "settings_edge_mowing_num"),

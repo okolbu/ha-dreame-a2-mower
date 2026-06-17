@@ -2622,6 +2622,33 @@ entities:
       translation_key: "mowing_pattern". Customize mode enables the per-map
       mowing_direction angle select (PRE[6]).
 
+  - id: "select.dreame_a2_mower_map_N_settings_turning_method"
+    platform: select
+    control_mode: device_writable
+    class: "DreameA2PerMapTurningMethodSelect"
+    class_file: "custom_components/dreame_a2_mower/entities/select/map_settings.py"
+    device: per-map
+    source:
+      wire: "cloud SETTINGS.entryN.<map>.steeringMode / PRE[19]"
+      state_path: "coordinator.cloud_state.settings.by_map_id_canonical[map_id]['steeringMode'] → OPTIONS[int(v)]"
+    write_path: "coordinator.write_map_general_setting(map_id, pre_index=19, pre_value=idx, settings_field='steeringMode', settings_value=idx) via pre_settings_optimistic_write"
+    status:
+      seen_working: false
+      last_verified: "2026-06-17"
+    verifications:
+      - date: "2026-06-17"
+        status: presumed
+        claim: "Per-map Turning Method select (Efficient=0 / Lawn-Care=1). Mirrors DreameA2PerMapMowingDirectionModeSelect: reads SETTINGS.steeringMode from cloud_state.settings.by_map_id_canonical[map_id], writes PRE[19] + SETTINGS.steeringMode via pre_settings_optimistic_write. Unavailable on fw 0550 (no steeringMode key / 19-int PRE; apply_pre refuses index 19). Code-read, not live-verified."
+    references:
+      code: "custom_components/dreame_a2_mower/entities/select/map_settings.py"
+    notes: |
+      Options: Efficient (0) / Lawn-Care (1). PRE[19]/SETTINGS.steeringMode appeared
+      on the 0550→0625 firmware OTA (PRE grew 19→21 ints; indices 0-18 unchanged); app
+      2.5.8.1 added a "Turning Method Settings" sub-page. The wire PRE[19] is verified;
+      the integration surface is presumed (code fact). Entity is unavailable until
+      steeringMode appears in the SETTINGS blob (fw 0550 has none). translation_key:
+      "settings_turning_method".
+
   # ------------------------------------------------------------------
   # Device sensors — cloud-state + integration-local (sensor_device.py)
   # ------------------------------------------------------------------
