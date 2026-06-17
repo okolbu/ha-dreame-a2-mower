@@ -24,7 +24,7 @@
 | s2p54 | lidar_upload_progress | int 0..100 | WIRED | % (×1.0) |
 | s2p55 | ai_obstacle_report | list | WIRED |  |
 | s2p56 | task_state | {status: list of [task_type, ...] tuples} | WIRED |  |
-| s2p57 | robot_shutdown_trigger | scalar int — observed value 1 [probe_log_20260612_174439.jsonl@2026-06-14T04:42:16]; NOT the apk-hypothesized dict | SEEN-UNDECODED |  |
+| s2p57 | robot_shutdown_trigger | scalar int — observed value 1 [probe_log_20260612_174439.jsonl@2026-06-14T04:42:16]; NOT the apk-hypothesized dict | WIRED |  |
 | s2p58 | self_check_result | dict {d: {mode, id, result}} | APK-KNOWN |  |
 | s2p61 | map_update_trigger | dict (map update signal) | APK-KNOWN |  |
 | s2p62 | task_progress_flag | int | SEEN-UNDECODED |  |
@@ -600,7 +600,7 @@ a correlated marker.
 - Are there other s2p57 values (e.g. distinguishing reboot vs shutdown), or is it always 1?
 - Is this a command echo or a push the device sends spontaneously?
 
-**See also:** `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:57`
+**See also:** `mower/property_mapping.py (2,57)→robot_shutdown_trigger; mower/state.py MowerState.robot_shutdown_trigger; coordinator/_mqtt_handlers.py:_fire_self_shutdown_if_edge (wired in _on_state_update); const.py EVENT_TYPE_SELF_SHUTDOWN`, `apk: ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:57`
 
 ### s2p58 — `self_check_result`
 

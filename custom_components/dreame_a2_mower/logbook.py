@@ -40,6 +40,7 @@ _LIFECYCLE_MESSAGES: dict[str, str] = {
     "charging_started": "started charging",
     "charging_complete": "finished charging",
     "rain_delay_started": "paused for rain — waiting out the delay",
+    "self_shutdown": "shut itself down (low battery)",
 }
 
 # event_type → human message for the notification entity. Used as a

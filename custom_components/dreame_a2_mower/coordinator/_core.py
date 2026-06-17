@@ -145,6 +145,10 @@ class _CoreMixin:
         # _on_state_update mean the first push doesn't fire spuriously.
         self._prev_in_dock: bool | None = None
         self._prev_charging_status: int | None = None
+        # Tracks the previous s2p57 robot_shutdown_trigger value for the
+        # self_shutdown lifecycle edge-fire. None at startup so a value
+        # already 1 at boot only primes and doesn't fire spuriously.
+        self._prev_shutdown_trigger: int | None = None
         # Unix timestamp when the rain-protection delay started (s2p2→56
         # rising edge). None when no rain delay is active. Cleared on dock
         # departure (mower retried after the rain wait) and on session end.

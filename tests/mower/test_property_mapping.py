@@ -140,3 +140,10 @@ def test_s1p3_maps_to_ota_progress():
     assert resolve_field((1, 3), 47) == "ota_progress"
     assert PROPERTY_MAPPING[(1, 3)].extract_value(47) == 47
     assert PROPERTY_MAPPING[(1, 3)].extract_value("bad") is None
+
+
+def test_s2p57_maps_to_robot_shutdown_trigger():
+    from custom_components.dreame_a2_mower.coordinator import apply_property_to_state
+    from custom_components.dreame_a2_mower.mower.state import MowerState
+    st = apply_property_to_state(MowerState(), 2, 57, 1)
+    assert st.robot_shutdown_trigger == 1

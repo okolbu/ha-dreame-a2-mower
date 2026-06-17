@@ -2157,15 +2157,20 @@ entities:
         status: verified
         claim: "charging_started, charging_complete, rain_delay_started added to LIFECYCLE_EVENT_TYPES and fired from coordinator edges (s3.2 / s2p2=56)."
         evidence: "coordinator/_mqtt_handlers.py:_maybe_fire_charging_events; coordinator/_device_sync.py:_fire_lifecycle"
+      - date: "2026-06-17"
+        status: presumed
+        claim: "self_shutdown added to LIFECYCLE_EVENT_TYPES; fired from the s2p57 robot_shutdown_trigger rising edge into 1 (coordinator._fire_self_shutdown_if_edge in _on_state_update). Wire shape verified; integration fire path is code-read, not yet live-fired."
     references:
-      wire_entry: "s3p2, s2p2"
+      wire_entry: "s3p2, s2p2, s2p57"
       code: "custom_components/dreame_a2_mower/event.py"
     notes: |
-      9 event_types: mowing_started, mowing_paused, mowing_resumed, mowing_ended,
+      12 event_types: mowing_started, mowing_paused, mowing_resumed, mowing_ended,
       dock_arrived, dock_departed, charging_started, charging_complete,
-      rain_delay_started. logbook.py renders friendly text for each. There is
-      deliberately no rain_delay_ended event — firmware sends only a rain-start
-      signal; mower resuming surfaces via dock_departed + mowing_resumed/mowing_started.
+      rain_delay_started, fault_detected, fault_cleared, self_shutdown. logbook.py
+      renders friendly text for each. There is deliberately no rain_delay_ended
+      event — firmware sends only a rain-start signal; mower resuming surfaces via
+      dock_departed + mowing_resumed/mowing_started. self_shutdown is the s2p57
+      low-battery protective firmware cutoff (rising edge into 1).
 
   # ------------------------------------------------------------------
   # Select entities — global (parent device)

@@ -270,6 +270,11 @@ class MowerState:
     # (install % is app-local, not wired). None until first push. Volatile.
     ota_progress: int | None = None
 
+    # Source: s2p57 robot_shutdown_trigger via property_mapping. Bare int;
+    # value 1 = firmware self-shutdown (confirmed low-battery protective
+    # cutoff 2026-06-14; other triggers unconfirmed). inventory § s2p57.
+    robot_shutdown_trigger: int | None = None
+
     # Source: checkDeviceVersion.newVersion (cloud, _refresh_dev 6 h loop).
     # Latest firmware string e.g. "4.3.6_0625"; None until first poll.
     firmware_latest: str | None = None

@@ -1497,11 +1497,16 @@ properties:
       last_seen: "2026-06-14"
     references:
       apk: "ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 2 piid:57"
+      integration_code: "mower/property_mapping.py (2,57)→robot_shutdown_trigger; mower/state.py MowerState.robot_shutdown_trigger; coordinator/_mqtt_handlers.py:_fire_self_shutdown_if_edge (wired in _on_state_update); const.py EVENT_TYPE_SELF_SHUTDOWN"
     verifications:
       - date: "2026-06-14"
         status: partial
         claim: "s2p57 fires on the g2408 wire as a standalone properties_changed push with bare scalar value=1 (single occurrence captured)"
         evidence: "probe_log_20260612_174439.jsonl@2026-06-14T04:42:16"
+      - date: "2026-06-17"
+        status: verified
+        claim: "Integration now maps s2p57 → MowerState.robot_shutdown_trigger (property_mapping (2,57), bare-int extract) and fires the lifecycle event_type self_shutdown on event.dreame_a2_mower_lifecycle when the value rises to 1 (coordinator._fire_self_shutdown_if_edge, primed-on-first-observation edge guard mirroring the charging/rain edges)."
+        evidence: "probe_log_20260612_174439.jsonl@2026-06-14T04:42:16 (wire), tests/integration/test_self_shutdown_event.py + tests/mower/test_property_mapping.py::test_s2p57_maps_to_robot_shutdown_trigger (integration handling)"
       - date: "2026-06-14"
         status: partial
         claim: |

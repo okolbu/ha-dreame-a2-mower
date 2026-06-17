@@ -108,6 +108,13 @@ PROPERTY_MAPPING: dict[tuple[int, int], PropertyMappingEntry] = {
             else None
         ),
     ),
+    # s2.57 robot_shutdown_trigger — bare scalar int (NOT the apk-hypothesized
+    # dict). value 1 = firmware self-shutdown (low-battery, confirmed 2026-06-14).
+    # inventory § s2p57.
+    (2, 57): PropertyMappingEntry(
+        field_name="robot_shutdown_trigger",
+        extract_value=lambda v: int(v) if isinstance(v, (int, float, bool)) else None,
+    ),
     (2, 65): PropertyMappingEntry(field_name="slam_task_label"),     # string
 
     # s2.66 is [area_m², ?]; we only consume [0] in F2.

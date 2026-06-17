@@ -227,7 +227,8 @@
               "charging_complete": "Finished charging",
               "rain_delay_started": "Rain delay started",
               "fault_detected": "Fault detected",
-              "fault_cleared": "Fault cleared"
+              "fault_cleared": "Fault cleared",
+              "self_shutdown": "Self-shutdown (low battery)"
             }
           }
         }
@@ -247,6 +248,7 @@
       "rain_delay_started": "Rain delay started",
       "fault_detected": "Fault detected",
       "fault_cleared": "Fault cleared",
+      "self_shutdown": "Self-shutdown (low battery)",
       "human_detected": "Person detected",
       "robot_trapped": "Mower trapped",
       "emergency_stop": "Emergency stop activated",

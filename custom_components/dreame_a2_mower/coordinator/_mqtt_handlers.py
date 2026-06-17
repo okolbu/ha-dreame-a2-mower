@@ -44,6 +44,7 @@ from ..const import (
     EVENT_TYPE_MOWING_RESUMED,
     EVENT_TYPE_MOWING_STARTED,
     EVENT_TYPE_RAIN_DELAY_STARTED,
+    EVENT_TYPE_SELF_SHUTDOWN,
     LOG_NOVEL_KEY_SESSION_SUMMARY,
     LOG_NOVEL_PROPERTY,
     LOG_NOVEL_VALUE,
@@ -368,6 +369,21 @@ class _MqttHandlersMixin:
             self._rain_delay_started_at = int(now_unix)
             self._fire_lifecycle(
                 EVENT_TYPE_RAIN_DELAY_STARTED, {"at_unix": int(now_unix)}
+            )
+
+    def _fire_self_shutdown_if_edge(
+        self, *, old: int | None, new: int | None, now_unix: int
+    ) -> None:
+        """Fire self_shutdown on the s2p57 rising edge into 1 (firmware
+        self-shutdown — confirmed low-battery protective cutoff 2026-06-14).
+        First observation only primes _prev so a value already 1 at boot
+        doesn't fire spuriously."""
+        if old is None:
+            return  # first observation primes _prev (caller sets it)
+        if new == 1 and old != 1:
+            self._fire_lifecycle(
+                EVENT_TYPE_SELF_SHUTDOWN,
+                {"at_unix": int(now_unix), "reason": "low_battery", "value": int(new)},
             )
 
     def _latch_task_op(self, op: int) -> None:
@@ -696,6 +712,17 @@ class _MqttHandlersMixin:
         self._maybe_fire_charging_events(
             new_state.charging_status, now_unix, new_state.battery_level
         )
+
+        # s2p57 self-shutdown lifecycle edge. First observation only primes
+        # _prev_shutdown_trigger so a value already 1 at boot doesn't fire.
+        _new_shutdown = new_state.robot_shutdown_trigger
+        if _new_shutdown is not None:
+            self._fire_self_shutdown_if_edge(
+                old=self._prev_shutdown_trigger,
+                new=_new_shutdown,
+                now_unix=now_unix,
+            )
+            self._prev_shutdown_trigger = _new_shutdown
 
         # F13 — s2p2 notification synthesis. Fire dreame_a2_mower_alert on
         # transitions to known notification codes. The first push on HA boot
