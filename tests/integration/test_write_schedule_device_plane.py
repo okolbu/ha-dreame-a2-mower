@@ -189,3 +189,55 @@ async def test_write_schedule_preserves_other_season_enabled(monkeypatch):
     assert len(captured["row_writes"]) == 1
     assert captured["row_writes"][0]["slot"] == 1
     assert captured["row_writes"][0]["enabled_array"] == [0, 1]  # both seasons preserved
+
+
+def _make_toggle_coord(rows, version):
+    """Bare _WritesMixin with a captured SCHDSV3-only send path."""
+    from custom_components.dreame_a2_mower.coordinator._writes import _WritesMixin
+    c = _WritesMixin()
+    captured = {"enabled_writes": []}
+
+    def _write_enabled(send_action, *, version, enabled_array):
+        captured["enabled_writes"].append({"version": version, "enabled": enabled_array})
+
+    def _read_live(send_action):
+        return {"d": rows, "v": version}
+
+    c._cloud = SimpleNamespace(action=lambda *a, **k: None)
+    c._chunked_write_lock = asyncio.Lock()
+    c._refresh_cloud_state = AsyncMock()
+
+    async def _exec(fn, *a, **k):
+        return fn(*a, **k)
+
+    c.hass = SimpleNamespace(async_add_executor_job=AsyncMock(side_effect=_exec))
+    return c, captured, _write_enabled, _read_live
+
+
+@pytest.mark.asyncio
+async def test_write_schedule_enabled_enable_makes_sole_active(monkeypatch):
+    import custom_components.dreame_a2_mower.coordinator._writes as W
+    rows = [[0, 1, "Spr", "B"], [1, 0, "Win", "B"]]  # Spr on
+    c, captured, write_enabled, read_live = _make_toggle_coord(rows, version=99)
+    monkeypatch.setattr(W, "write_schedule_enabled_state", write_enabled, raising=False)
+    monkeypatch.setattr(W, "read_live_schedule", read_live, raising=False)
+
+    ok = await c.write_schedule_enabled(slot_id=1, enabled=True)
+
+    assert ok is True
+    assert captured["enabled_writes"] == [{"version": 99, "enabled": [0, 1]}]  # Win on, Spr off
+    c._refresh_cloud_state.assert_awaited()
+
+
+@pytest.mark.asyncio
+async def test_write_schedule_enabled_disable_zeroes_slot(monkeypatch):
+    import custom_components.dreame_a2_mower.coordinator._writes as W
+    rows = [[0, 0, "Spr", "B"], [1, 1, "Win", "B"]]  # Win on
+    c, captured, write_enabled, read_live = _make_toggle_coord(rows, version=42)
+    monkeypatch.setattr(W, "write_schedule_enabled_state", write_enabled, raising=False)
+    monkeypatch.setattr(W, "read_live_schedule", read_live, raising=False)
+
+    ok = await c.write_schedule_enabled(slot_id=1, enabled=False)
+
+    assert ok is True
+    assert captured["enabled_writes"] == [{"version": 42, "enabled": [0, 0]}]  # both off

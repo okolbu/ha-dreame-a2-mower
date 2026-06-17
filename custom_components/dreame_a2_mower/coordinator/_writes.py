@@ -56,7 +56,11 @@ from ..mower.state import ChargingStatus, MowerState
 from ..mower.state_machine import MowerStateMachine
 from ..mqtt_client import DreameA2MqttClient
 from ..observability.schemas import SCHEMA_SESSION_SUMMARY, SchemaCheck
-from ..protocol.schedule_action import read_live_schedule, write_schedule_row
+from ..protocol.schedule_action import (
+    read_live_schedule,
+    write_schedule_enabled_state,
+    write_schedule_row,
+)
 from ..protocol.schedule_encode import encode_schedule_blob
 from ._property_apply import (
     _BLOB_SLOTS,
@@ -181,6 +185,64 @@ class _WritesMixin:
                     LOGGER.warning(
                         "[schedule-write] slot %d rejected: %r", slot.slot_id, exc
                     )
+
+        await self._refresh_cloud_state()
+        return ok
+
+    async def write_schedule_enabled(self, slot_id: int, enabled: bool) -> bool:
+        """Enable or disable one schedule season via a standalone SCHDSV3 write.
+
+        Seasons are mutually exclusive (device-enforced): enabling a slot makes
+        it the sole active one; disabling a slot sets it off (and, since only one
+        is ever on, leaves no schedule running). Reads the live schedule for the
+        fresh version + current enabled states, then writes the full array.
+
+        Does NOT guard against an active task — the service layer does (it owns
+        the user-facing ServiceValidationError).
+        """
+        if not hasattr(self, "_cloud") or self._cloud is None:
+            LOGGER.warning("write_schedule_enabled: cloud client not ready")
+            return False
+
+        live = await self.hass.async_add_executor_job(
+            read_live_schedule, self._cloud.action
+        )
+        if live is not None:
+            rows = live.get("d") or []
+            version = int(live.get("v") or 0)
+            by_slot = {r[0]: r for r in rows if isinstance(r, list) and len(r) == 4}
+            current = [int(by_slot[i][1]) if i in by_slot else 0 for i in (0, 1)]
+        else:
+            cs = self.cloud_state
+            version = cs.schedule.version if cs is not None else 0
+            current = [0, 0]
+            if cs is not None:
+                for s in cs.schedule.slots:
+                    if s.slot_id in (0, 1):
+                        current[s.slot_id] = int(s.mode)
+
+        if enabled:
+            new_array = [1 if i == slot_id else 0 for i in (0, 1)]  # sole active
+        else:
+            new_array = list(current)
+            if slot_id in (0, 1):
+                new_array[slot_id] = 0
+
+        ok = True
+        async with self._chunked_write_lock:
+            try:
+                await self.hass.async_add_executor_job(
+                    lambda v=version, a=new_array: write_schedule_enabled_state(
+                        self._cloud.action, version=v, enabled_array=a
+                    )
+                )
+                LOGGER.info(
+                    "[schedule-enable] slot %d -> %s, s=%s, v=%d",
+                    slot_id, "on" if enabled else "off", new_array, version,
+                )
+            except Exception as exc:  # noqa: BLE001 — surface, keep going
+                ok = False
+                LOGGER.warning("[schedule-enable] slot %d rejected: %r", slot_id, exc)
 
         await self._refresh_cloud_state()
         return ok
