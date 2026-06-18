@@ -9,37 +9,42 @@ app-derived tier classification (from the catalog's `category` + `severity`),
 and make the `lawn_mower` ERROR latch faithful to the app. No carryover.
 
 ## The classification (app-derived, two axes from the catalog)
+Tier names track the app vocabulary: `alert`/`info` mirror the app `category`
+words; `error`/`attention` are the `FAULT` category split by `severity`.
+
 | Tier | Rule (catalog `category` + `severity`) | count (iot) |
 |---|---|---|
 | **error** | `FAULT` & (`anomaly`\|`malfunction`) | 26 |
-| **maintenance** | `FAULT` & (`work_message`\|`consumable`) | 8 |
-| **warning** | `ALERT` (any severity) | 11 |
+| **attention** | `FAULT` & (`work_message`\|`consumable`) | 8 |
+| **alert** | `ALERT` (any severity) | 11 |
 | **info** | `INFO` (any severity) | 24 |
 | (none) | code not in catalog | — |
 
-Only the **error** tier latches the HA error state in P2. The maintenance/
-warning/info *surfacing* is P3; the heartbeat channel is P4.
+Only the **error** tier latches the HA error state in P2. The attention/
+alert/info *surfacing* is P3; the heartbeat channel is P4.
 
 ## Components
 
 ### A. `fault_tier` — `mower/fault_catalog.py` (pure)
 ```python
 def fault_tier(code: int, channel: str = "iot") -> str | None:
-    """App-derived surfacing tier for a code, or None if unknown.
+    """App-derived surfacing tier for a code, or None if unknown. Tier names
+    track the app vocabulary (alert/info = category words; error/attention =
+    the FAULT category split by severity).
 
-    error       = FAULT + (anomaly|malfunction)  — mower can't continue / needs help
-    maintenance = FAULT + (work_message|consumable) — attention, not broken
-    warning     = ALERT (any severity) — recoverable operation failure
-    info        = INFO  (any severity) — lifecycle/status
+    error     = FAULT + (anomaly|malfunction)    — mower can't continue / needs help
+    attention = FAULT + (work_message|consumable) — attention, not broken
+    alert     = ALERT (any severity)              — recoverable operation failure
+    info      = INFO  (any severity)              — lifecycle/status
     """
     cat = fault_category(code, channel)
     if cat is None:
         return None
     sev = fault_severity(code, channel)
     if cat == "FAULT":
-        return "error" if sev in ("anomaly", "malfunction") else "maintenance"
+        return "error" if sev in ("anomaly", "malfunction") else "attention"
     if cat == "ALERT":
-        return "warning"
+        return "alert"
     if cat == "INFO":
         return "info"
     return None
@@ -73,7 +78,7 @@ the Error sensor / `fault_detected`/`cleared` events follow automatically.
   `{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,20,21,22,23,24,26,37,59,73}`.
 - **Adds** ~22 genuine hardware/stuck/thermal faults currently missed.
 - **Drops** 31 (back-charge-failed) and 36 (task-start-failed) — the app
-  classifies them `ALERT` → **warning** tier (no longer hard errors). Faithful
+  classifies them `ALERT` → **alert** tier (no longer hard errors). Faithful
   to the app.
 
 ### D. Inventory reconciliation
@@ -85,10 +90,10 @@ hand-curated `FAULT_CODES` is retired. Per the retraction rule, append the prior
 `FAULT_CODES={2,4,5,23,31,36}` claim (verbatim) + reason to
 `OLD/ha-dreame-a2-mower-docs/inventory-history/s2p2.md`. Add a 2026-06-18
 `verified` row recording the tier rule + the new 26-code error set. Note the
-31/36 move to warning.
+31/36 move to alert.
 
 ## Out of scope (later phases)
-- Per-tier surfacing for maintenance/warning/info (persistent vs transient
+- Per-tier surfacing for attention/alert/info (persistent vs transient
   notices, device-triggers per tier) — **P3**.
 - Correcting catalog-revealed wrong `S2P2_EVENT_TYPES` slugs (e.g. 31
   `positioning_failed_stuck` → it's `ALERT_BACK_CHARGE_FAILED`) — **P3** (slugs
@@ -97,8 +102,8 @@ hand-curated `FAULT_CODES` is retired. Per the retraction rule, append the prior
 - Exposing `fault_tier` as a sensor attribute — **P3** (surfacing).
 
 ## Testing
-- `fault_tier`: 27→error? NO (27 is FAULT/work_message → maintenance); 4→error
-  (FAULT/malfunction); 31→warning (ALERT); 48→info (INFO); 9999→None.
+- `fault_tier`: 27→attention (FAULT/work_message, NOT error); 4→error
+  (FAULT/malfunction); 31→alert (ALERT); 48→info (INFO); 9999→None.
 - `error_tier_codes("iot")` == the pinned 26-code set.
 - `is_fault`: true for 4/0/73 (error tier), false for 27/31/36/48, false for None.
 - State machine: an s2p2 error-tier code (e.g. 7 cutter) latches `snapshot.errors`
@@ -112,5 +117,5 @@ hand-curated `FAULT_CODES` is retired. Per the retraction rule, append the prior
 ## Verification (live, after release)
 P2 changes behavior, so it releases. On live HA: confirm the mower entity goes
 ERROR for an error-tier fault (the next time one occurs) and that
-back-charge-failed/task-start-failed no longer force ERROR (warning tier). Until
+back-charge-failed/task-start-failed no longer force ERROR (alert tier). Until
 a live fault occurs, the expanded latch is verified by the test suite.
