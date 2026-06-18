@@ -112,9 +112,23 @@ def test_is_fault_handles_none_and_unknown():
 
 
 def test_s2p2_72_authoritative_text_and_slug():
+    """Catalog EN for 72 = "Automatically return to the station after prolonged pause."
+    (apk:g2408-plugin-ext1423). The cloud push wording ("Task paused for too long.
+    Automatically returning to the station to wait.") is a wire observation, not the
+    display string — display is catalog-sourced (describe_error delegates to fault_catalog).
+    """
     from custom_components.dreame_a2_mower.mower.error_codes import S2P2_EVENT_TYPES
-    assert describe_error(72, "en") == _fc.fault_text(72, "en")
+    # Semantic check: catalog EN must mention "station" (stable keyword from apk text).
+    assert "station" in _fc.fault_text(72, "en").lower(), (
+        f"catalog EN for 72 changed unexpectedly: {_fc.fault_text(72, 'en')!r}"
+    )
+    # Catalog EN must also mention "pause" (the distinguishing word from code 71's "standby").
+    assert "pause" in _fc.fault_text(72, "en").lower(), (
+        f"catalog EN for 72 missing 'pause': {_fc.fault_text(72, 'en')!r}"
+    )
+    # Localization must differ (proves describe_error uses the multi-language catalog).
     assert describe_error(72, "nb") != describe_error(72, "en")
+    # Event slug must be the wire-confirmed value.
     assert S2P2_EVENT_TYPES[72] == "paused_too_long_returning"
 
 
