@@ -48,8 +48,23 @@ S2P2_EVENT_TYPES: dict[int, str] = {
     **_SLUG_SUPPLEMENT,
 }
 ```
-This expands coverage from 27 → ~70 codes (every catalog code gets a proper slug;
-fewer `unknown_s2p2`) and corrects the wrong slugs. `S2P2_UNKNOWN_EVENT_TYPE` stays.
+This expands coverage from 27 → 69 catalog codes (every catalog code has a
+`fault_name` → slug) + the `47` supplement = 70 mapped codes, correcting the wrong
+slugs. `S2P2_UNKNOWN_EVENT_TYPE` stays.
+
+**Slug collisions (intentional, two pairs).** Stripping the prefix makes two
+FAULT/ALERT variant-pairs of the same physical condition share a slug:
+`battery_overheat` ← 11 (`FAULT_BATTERY_OVERHEAT`, error tier) + 42
+(`ALERT_BATTERY_OVERHEAT`, alert tier); `battery_temp_low` ← 43
+(`ALERT_BATTERY_TEMP_LOW`, alert tier) + 59 (`FAULT_BATTERY_TEMP_LOW`, error tier).
+This is fine and kept: the slug is a *grouping* `event_type`; the per-fire payload
+carries the distinguishing `code` + `tier`, and per-tier surfacing (P3b) keys off
+that payload `tier`, never the slug. So a shared slug still routes its FAULT fire
+to a persistent notice and its ALERT fire to a transient one. Consequences the code
+must respect: `S2P2_EVENT_TYPES` has 70 keys but ~68 distinct values — **no consumer
+may reverse-map slug→code**, and tests must NOT assert value-uniqueness. (No current
+consumer reverse-maps: the resolver is forward code→slug; the logbook reads payload
+`text`+`code`; device-triggers map trigger-type→entity.)
 
 ### C. `NOTIFICATION_EVENT_TYPES` derived — `mower/error_codes.py`
 Define it next to `S2P2_EVENT_TYPES` (catalog-authoritative home) and remove the
@@ -90,12 +105,34 @@ None-valued keys, so unknown codes (tier None) simply omit those keys.
 
 ### F. device-trigger slugs — `device_trigger.py`
 `_EXPOSED_NOTIFICATION_EVENT_TYPES` lists OLD slugs that change under B. Update it
-to the SAME curated codes' NEW slugs (mechanical rename so triggers keep working):
-e.g. `positioning_failed_stuck` → `back_charge_failed`, `arrived_at_maintenance_point`
-→ `go_to_cleanpoint_success`, etc. (The full **tier-driven** exposure rule is P3c —
-P3a only keeps the existing curated set valid under the new vocabulary.) Derive the
-new names by `event_slug(code)` for each currently-exposed code; list them
-explicitly with an inline `# <code>` comment.
+to the SAME 18 curated codes' NEW slugs (mechanical rename so triggers keep working).
+The exact new vocabulary (verified via `event_slug`):
+
+| code | old slug | new slug |
+|---|---|---|
+| 27 | human_detected | `human_detected` |
+| 2 | robot_trapped | `trapped` |
+| 23 | emergency_stop | `emergency_stop` |
+| 28 | blades_worn | `blade_loss` |
+| 4 | left_wheel_error | `left_wheel` |
+| 5 | right_wheel_error | `right_wheel` |
+| 0 | hanging | `hanging` |
+| 31 | positioning_failed_stuck | `back_charge_failed` |
+| 33 | positioning_failed_transient | `locating_failed_with_map` |
+| 36 | failed_to_start_task | `task_start_failed` |
+| 43 | battery_temp_low_charging_paused | `battery_temp_low` |
+| 54 | low_battery_return | `battery_low_returning` |
+| 56 | rain_protection | `bad_weather_protecting` |
+| 71 | standby_outside_station_too_long | `idle_timeout_returning` |
+| 72 | paused_too_long_returning | `pause_timeout_returning` |
+| 73 | top_cover_open | `top_cover_open` |
+| 75 | arrived_at_maintenance_point | `go_to_cleanpoint_success` |
+| 76 | cannot_reach_maintenance_point | `go_to_cleanpoint_failed` |
+
+List them explicitly with an inline `# <code>` comment. (The full **tier-driven**
+exposure rule is P3c — P3a only keeps the existing curated set valid under the new
+vocabulary.) Also update the module docstring's "28 NOTIFICATION_EVENT_TYPES" /
+"11+18" counts to the derived numbers.
 
 ### G. confidence gate → slug-integrity — `tests/inventory/test_error_codes_confidence_gate.py`
 The gate currently checks `S2P2_EVENT_TYPES` codes against inventory `decoded`
@@ -122,10 +159,12 @@ enumerates the old slugs.
 - `event_slug`: 27→"human_detected"; 31→"back_charge_failed"; 75→"go_to_cleanpoint_success";
   9999→None.
 - `S2P2_EVENT_TYPES`: 31=="back_charge_failed" (corrected); 47=="task_cancelled"
-  (supplement); contains a slug for every iot catalog code; every value == the
-  derived/supplement slug.
-- `NOTIFICATION_EVENT_TYPES`: == sorted unique slugs + "unknown_s2p2"; the
-  notification event entity advertises them.
+  (supplement); has a slug for every iot catalog code (70 keys); every value ==
+  `event_slug(code)` (or the supplement value for 47). Do NOT assert value-uniqueness
+  (11/42 and 43/59 intentionally collide).
+- `NOTIFICATION_EVENT_TYPES`: == `tuple(sorted(set(S2P2_EVENT_TYPES.values())) +
+  ["unknown_s2p2"])`; contains "battery_overheat" exactly once; the notification
+  event entity advertises them.
 - payload: a fired notification for code 27 carries tier=="attention",
   category=="FAULT", severity=="work_message"; unknown code omits those keys.
 - logbook: a notification bus event with no `text` but a catalog code renders the
