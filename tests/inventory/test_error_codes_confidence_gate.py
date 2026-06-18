@@ -60,9 +60,10 @@ def test_described_s2p2_codes_are_confirmed_or_partial():
 
 
 def test_gate_parses_full_s2p2_event_types_table():
-    # Guards the parser anchor: code 33 lives ONLY in S2P2_EVENT_TYPES (not in
-    # ERROR_CODE_DESCRIPTIONS). If the slice anchored on a comment mention it
-    # would miss it. These must be present in the parsed table.
-    codes = _described_codes("S2P2_EVENT_TYPES")
+    # S2P2_EVENT_TYPES is now catalog-derived (no hand dict to parse). Guard that
+    # the well-known codes the old hand dict had are still present in the computed
+    # dict — cross-checking the catalog covers them. (Task 7 will replace the
+    # _described_codes regex gate with a slug-integrity check.)
+    from custom_components.dreame_a2_mower.mower.error_codes import S2P2_EVENT_TYPES
     for c in (0, 5, 33, 50):
-        assert c in codes, f"parser missed S2P2_EVENT_TYPES code {c}: {codes}"
+        assert c in S2P2_EVENT_TYPES, f"S2P2_EVENT_TYPES missing well-known code {c}"
