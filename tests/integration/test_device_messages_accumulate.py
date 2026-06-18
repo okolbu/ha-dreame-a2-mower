@@ -77,7 +77,7 @@ def test_merge_device_messages_schedules_store_save():
 from custom_components.dreame_a2_mower.coordinator._core import _CoreMixin
 
 
-class _FakeStore:
+class _AsyncLoadStore:
     def __init__(self, data):
         self._data = data
     async def async_load(self):
@@ -91,7 +91,7 @@ def test_restore_device_messages_seeds_state():
     c.hass = SimpleNamespace()
     stored = [{"id": "a", "title": "a", "date": "2026-06-18T09:00:00+00:00",
                "body": None, "link": None, "unread": True}]
-    c._device_messages_store = _FakeStore(stored)
+    c._device_messages_store = _AsyncLoadStore(stored)
     asyncio.run(c._restore_device_messages())
     assert [m["id"] for m in c.data.device_messages] == ["a"]
 
@@ -101,11 +101,11 @@ def test_restore_device_messages_caps_and_tolerates_bad_store():
     c.data = MowerState()
     c.entry = SimpleNamespace(entry_id="e1", options={"messages_keep": 1})
     c.hass = SimpleNamespace()
-    stored = [{"id": "a", "date": "2026-06-18T08:00:00+00:00"},
-              {"id": "b", "date": "2026-06-18T09:00:00+00:00"}]
-    c._device_messages_store = _FakeStore(stored)
+    stored = [{"id": "b", "date": "2026-06-18T09:00:00+00:00"},
+              {"id": "a", "date": "2026-06-18T08:00:00+00:00"}]
+    c._device_messages_store = _AsyncLoadStore(stored)
     asyncio.run(c._restore_device_messages())
-    assert len(c.data.device_messages) == 1
+    assert [m["id"] for m in c.data.device_messages] == ["b"]  # newest retained, oldest dropped
 
     class _BadStore:
         async def async_load(self):
