@@ -242,6 +242,7 @@
         }
       },
       "notification": {
+        "name": "Notification",
         "state_attributes": {
           "event_type": {
             "state": {
