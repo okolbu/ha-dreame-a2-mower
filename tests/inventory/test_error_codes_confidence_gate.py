@@ -1,7 +1,9 @@
-"""CI gate: every s2p2 code that error_codes.py describes must be backed by an
-inventory state_codes row with decoded ∈ {confirmed, partial}. A code that is
-hypothesized/unknown/missing in the inventory must NOT carry a confident name
-in the code. This stops apk/vacuum-lineage names from creeping back."""
+"""CI gate: every s2p2 code in S2P2_EVENT_TYPES must be backed by an inventory
+state_codes row with decoded ∈ {confirmed, partial}. Display strings for error
+codes come from the authoritative bundled app catalog (mower/fault_catalog.py),
+not from a hand-curated dict — so only S2P2_EVENT_TYPES slugs are gated here.
+A code that is hypothesized/unknown/missing in the inventory must NOT carry a
+slug in S2P2_EVENT_TYPES. This stops apk/vacuum-lineage names from creeping back."""
 import re
 from pathlib import Path
 
@@ -45,7 +47,7 @@ def _described_codes(var: str) -> list[int]:
 def test_described_s2p2_codes_are_confirmed_or_partial():
     conf = _state_code_confidence()
     offenders: dict[int, str | None] = {}
-    for var in ("ERROR_CODE_DESCRIPTIONS", "S2P2_EVENT_TYPES"):
+    for var in ("S2P2_EVENT_TYPES",):
         for code in _described_codes(var):
             if conf.get(code) not in ("confirmed", "partial"):
                 offenders.setdefault(code, conf.get(code))
