@@ -39,10 +39,11 @@ def test_notification_entity_declares_s2p2_event_types():
     coord.entry.entry_id = "fake_entry"
     ent = DreameA2NotificationEventEntity(coord)
     assert tuple(ent._attr_event_types) == NOTIFICATION_EVENT_TYPES
-    assert "mowing_complete" in ent._attr_event_types
-    assert "scheduled_mowing_started" in ent._attr_event_types
+    # Catalog-derived slugs (old hand-table names in comments for reference):
+    assert "task_finish" in ent._attr_event_types          # was: mowing_complete
+    assert "schedule_start" in ent._attr_event_types       # was: scheduled_mowing_started
     assert "hanging" in ent._attr_event_types
-    assert "cannot_reach_maintenance_point" in ent._attr_event_types
+    assert "go_to_cleanpoint_failed" in ent._attr_event_types  # was: cannot_reach_maintenance_point
     assert "unknown_s2p2" in ent._attr_event_types
 
 

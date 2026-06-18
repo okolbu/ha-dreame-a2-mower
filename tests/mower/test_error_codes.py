@@ -174,3 +174,11 @@ def test_notification_event_types_derived_and_deduped():
     )
     assert NOTIFICATION_EVENT_TYPES.count("battery_overheat") == 1
     assert NOTIFICATION_EVENT_TYPES[-1] == "unknown_s2p2"
+
+
+def test_const_reexports_same_notification_event_types():
+    from custom_components.dreame_a2_mower import const
+    from custom_components.dreame_a2_mower.mower.error_codes import (
+        NOTIFICATION_EVENT_TYPES as SRC,
+    )
+    assert const.NOTIFICATION_EVENT_TYPES is SRC
