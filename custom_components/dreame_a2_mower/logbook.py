@@ -43,40 +43,6 @@ _LIFECYCLE_MESSAGES: dict[str, str] = {
     "self_shutdown": "shut itself down (low battery)",
 }
 
-# event_type → human message for the notification entity. Used as a
-# fallback when the bus event doesn't carry a 'text' field (which is
-# the cloud's authoritative localised string — preferred when present).
-_NOTIFICATION_MESSAGES: dict[str, str] = {
-    "hanging": "is hanging (lifted off the ground)",
-    "robot_trapped": "is trapped — tap to view the solution",
-    "left_wheel_error": "left drive wheel error",
-    "right_wheel_error": "right drive wheel error",
-    "emergency_stop": "emergency stop activated",
-    "human_detected": "detected a person nearby",
-    "blades_worn": "blades severely worn — replace soon",
-    "maintenance_reminder": "maintenance reminder",
-    "positioning_failed_stuck": "stuck — positioning failed",
-    "positioning_failed_transient": "brief positioning glitch",
-    "failed_to_start_task": "failed to start task — please retry",
-    "battery_temp_low_charging_paused": "stopped charging — battery too cold",
-    "task_cancelled": "task cancelled",
-    "mowing_complete": "mowing complete",
-    "mowing_started": "started mowing",
-    "patrol_started": "started a patrol",
-    "scheduled_mowing_started": "scheduled mow started",
-    "low_battery_return": "returning to dock for low battery",
-    "rain_protection": "rain protection activated",
-    "schedule_cancelled_busy": "schedule cancelled — mower busy",
-    "continue_unfinished_task": "continuing unfinished task",
-    "standby_outside_station_too_long": "on standby outside the station too long — auto-returning",
-    "paused_too_long_returning": "task paused too long — returning to the station",
-    "cannot_reach_maintenance_point": "couldn't reach the maintenance point — task ended",
-    "top_cover_open": "top cover is open",
-    "patrol_ended": "patrol ended",
-    "arrived_at_maintenance_point": "arrived at maintenance point",
-    "unknown_s2p2": "notification (novel code)",
-}
-
 
 def _format(entity_id: str, event_type: str, attrs: dict[str, Any]) -> str | None:
     """Return the human message for one of our event entities."""
@@ -91,15 +57,13 @@ def _format(entity_id: str, event_type: str, attrs: dict[str, Any]) -> str | Non
     if entity_id.endswith("_notification"):
         # The notification entity carries the cloud's authoritative
         # localised `text` in the payload; prefer it so context-rich
-        # messages survive in the logbook. Fallback to the per-slug
-        # message table below when 'text' is absent (cloud unreachable
-        # at fire time, or a future code path that doesn't fetch text).
+        # messages survive in the logbook. Fall back to humanising the
+        # slug when 'text' is absent (the resolver always populates it
+        # from cloud push or the bundled catalog).
         text = attrs.get("text")
         if text:
             return str(text)
-        return _NOTIFICATION_MESSAGES.get(
-            event_type, event_type.replace("_", " ")
-        )
+        return event_type.replace("_", " ")
     return None
 
 

@@ -13,7 +13,6 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from custom_components.dreame_a2_mower.const import NOTIFICATION_EVENT_TYPES
 from custom_components.dreame_a2_mower.coordinator import (
     S2P2_EVENT_TYPES,
     DreameA2MowerCoordinator,
@@ -122,7 +121,10 @@ async def test_resolver_fires_when_cloud_record_matches():
 
     coord._fire_notification.assert_called_once()
     kwargs = coord._fire_notification.call_args.kwargs
-    assert kwargs["event_type"] == "mowing_complete"
+    # slug for code 48 is catalog-derived (was "mowing_complete" in hand dict;
+    # catalog slug is "task_finish" from INFO_TASK_FINISH).
+    from custom_components.dreame_a2_mower.mower.error_codes import S2P2_EVENT_TYPES as _et
+    assert kwargs["event_type"] == _et[48]
     assert kwargs["text"] == "Mowing task complete."
     assert kwargs["code"] == 48
     assert kwargs["siid"] == 2 and kwargs["piid"] == 2
@@ -282,35 +284,58 @@ async def test_seen_ids_fifo_cap():
 
 
 def test_s2p2_event_types_keys_cover_expected_codes():
-    """Sanity: known codes (apk-sourced or empirically verified) are in the map."""
-    expected = {
+    """Sanity: the wire-verified codes are present in the catalog-derived map.
+    S2P2_EVENT_TYPES is now derived from the full app catalog (70 codes), so the
+    key set is a superset of the old hand-dict. We assert the verified codes are
+    present rather than asserting an exact set (T2 catalog derivation)."""
+    # Codes from the hand dict that we KNOW are wire-verified.
+    expected_subset = {
         0, 2, 4, 5, 23, 27, 28, 30, 31, 33, 36, 43, 47, 48, 50, 51, 53, 54, 56, 63, 70, 71, 72, 73, 74, 75, 76,
     }
-    assert set(S2P2_EVENT_TYPES.keys()) == expected
+    assert expected_subset <= set(S2P2_EVENT_TYPES.keys()), (
+        f"Missing codes: {expected_subset - set(S2P2_EVENT_TYPES.keys())}"
+    )
+    assert len(S2P2_EVENT_TYPES) == 70
 
 
 def test_s2p2_71_slug_reflects_standby_return_not_positioning_failure():
     """s2p2=71 = 'standby outside station too long → auto-return' (verified
     2026-05-30 vs user-confirmed app text + corpus 5/5 return-context), NOT the
-    apk's 'positioning failed'."""
-    assert S2P2_EVENT_TYPES[71] == "standby_outside_station_too_long"
+    apk's 'positioning failed'. Slug is catalog-derived: ALERT_IDLE_TIMEOUT_RETURNING
+    → 'idle_timeout_returning' (was 'standby_outside_station_too_long' in hand dict)."""
+    from custom_components.dreame_a2_mower.mower import fault_catalog as fc
+    assert S2P2_EVENT_TYPES[71] == fc.event_slug(71)
     assert "positioning_failure" not in S2P2_EVENT_TYPES.values()
 
 
-def test_s2p2_event_types_values_are_unique():
-    """Every slug in S2P2_EVENT_TYPES is unique."""
+def test_s2p2_event_types_values_two_intentional_collisions():
+    """S2P2_EVENT_TYPES has exactly two intentional slug collisions between FAULT
+    and ALERT variant pairs (battery_overheat: 11/42; battery_temp_low: 43/59).
+    The per-fire payload carries the distinguishing code+tier; slug alone does
+    not uniquely identify the code. NEVER reverse-map slug→code."""
     slugs = list(S2P2_EVENT_TYPES.values())
-    assert len(slugs) == len(set(slugs)), "duplicate slug in S2P2_EVENT_TYPES"
+    unique_slugs = set(slugs)
+    # Exactly 2 duplicates (4 codes, 2 unique slugs → 70 total, 68 distinct).
+    assert len(slugs) - len(unique_slugs) == 2, (
+        f"Expected exactly 2 slug collisions; got {len(slugs) - len(unique_slugs)}"
+    )
+    assert S2P2_EVENT_TYPES[11] == S2P2_EVENT_TYPES[42] == "battery_overheat"
+    assert S2P2_EVENT_TYPES[43] == S2P2_EVENT_TYPES[59] == "battery_temp_low"
 
 
 def test_every_slug_is_in_notification_event_types():
     """The notification entity must declare every slug we can emit, including
-    the fallback `unknown_s2p2`."""
+    the fallback `unknown_s2p2`. Uses the error_codes-derived NOTIFICATION_EVENT_TYPES
+    (catalog-authoritative home). const.NOTIFICATION_EVENT_TYPES will be updated
+    to re-export from error_codes in Task 3."""
+    from custom_components.dreame_a2_mower.mower.error_codes import (
+        NOTIFICATION_EVENT_TYPES as EC_NOTIFICATION_EVENT_TYPES,
+    )
     for code, slug in S2P2_EVENT_TYPES.items():
-        assert slug in NOTIFICATION_EVENT_TYPES, (
+        assert slug in EC_NOTIFICATION_EVENT_TYPES, (
             f"s2p2={code} slug={slug!r} not declared in NOTIFICATION_EVENT_TYPES"
         )
-    assert "unknown_s2p2" in NOTIFICATION_EVENT_TYPES
+    assert "unknown_s2p2" in EC_NOTIFICATION_EVENT_TYPES
 
 
 def test_notification_event_types_cover_all_s2p2_slugs():
@@ -319,37 +344,18 @@ def test_notification_event_types_cover_all_s2p2_slugs():
     The notification EventEntity drops any event_type not in its declared
     _attr_event_types (= NOTIFICATION_EVENT_TYPES). If a slug is added to
     S2P2_EVENT_TYPES without updating const, that notification silently
-    never fires. This pins the comment-only lockstep.
+    never fires. Uses the error_codes-derived NOTIFICATION_EVENT_TYPES
+    (catalog-authoritative home). const.NOTIFICATION_EVENT_TYPES will be updated
+    to re-export from error_codes in Task 3.
     """
     from custom_components.dreame_a2_mower.mower.error_codes import (
+        NOTIFICATION_EVENT_TYPES as EC_NOTIFICATION_EVENT_TYPES,
         S2P2_UNKNOWN_EVENT_TYPE,
     )
 
-    declared = set(NOTIFICATION_EVENT_TYPES)
+    declared = set(EC_NOTIFICATION_EVENT_TYPES)
     for slug in set(S2P2_EVENT_TYPES.values()):
         assert slug in declared, f"{slug!r} fired but not declared on the entity"
     assert S2P2_UNKNOWN_EVENT_TYPE in declared
 
 
-def test_logbook_message_tables_cover_all_event_types():
-    """logbook.py holds the 3rd/4th hand-kept slug copies. Every declared
-    event_type should have an explicit human message (the underscore-replace
-    fallback works but is ugly).
-
-    fault_detected / fault_cleared are excluded from the _LIFECYCLE_MESSAGES
-    dict because _format() handles them via a dedicated branch that renders the
-    fault description from the payload (not a static label).
-    """
-    from custom_components.dreame_a2_mower import logbook as lb
-    from custom_components.dreame_a2_mower.const import LIFECYCLE_EVENT_TYPES
-
-    # These lifecycle event types use a dynamic branch in _format() rather than
-    # a static entry in _LIFECYCLE_MESSAGES.
-    _DYNAMIC_LIFECYCLE = {"fault_detected", "fault_cleared"}
-
-    for slug in NOTIFICATION_EVENT_TYPES:
-        assert slug in lb._NOTIFICATION_MESSAGES, f"logbook missing notif {slug!r}"
-    for slug in LIFECYCLE_EVENT_TYPES:
-        if slug in _DYNAMIC_LIFECYCLE:
-            continue
-        assert slug in lb._LIFECYCLE_MESSAGES, f"logbook missing lifecycle {slug!r}"

@@ -1869,8 +1869,9 @@ REJECTED (status:false), so the key matters, not just the opcode.
 
 Lifecycle on accept (per 2026-05-12 app capture + 2026-05-31 live):
 s2p50 {o:109, exe:true, status:true, error:0, estimate_time:N} → s2p56=[[id,0]]
-(started) → [[id,2]] (arrived) → s2p1=2 → s2p2=75 arrived_at_maintenance_point
-→ s1p52={}. Failure to reach → s2p2=76 "Cannot reach the maintenance point."
+(started) → [[id,2]] (arrived) → s2p1=2 → s2p2=75 go_to_cleanpoint_success
+→ s1p52={}. Failure to reach → s2p2=76 go_to_cleanpoint_failed
+"Cannot reach the maintenance point."
 
 Echo can also be status:false = task rejected (mower in a bad state, e.g.
 Positioning Failed s2p2=71, or a wrong d-shape). First seen 2026-04-20

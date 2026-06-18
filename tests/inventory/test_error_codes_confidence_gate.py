@@ -1,68 +1,29 @@
-"""CI gate: every s2p2 code in S2P2_EVENT_TYPES must be backed by an inventory
-state_codes row with decoded ∈ {confirmed, partial}. Display strings for error
-codes come from the authoritative bundled app catalog (mower/fault_catalog.py),
-not from a hand-curated dict — so only S2P2_EVENT_TYPES slugs are gated here.
-A code that is hypothesized/unknown/missing in the inventory must NOT carry a
-slug in S2P2_EVENT_TYPES. This stops apk/vacuum-lineage names from creeping back."""
-import re
-from pathlib import Path
-
-import yaml
-
-ROOT = Path(__file__).resolve().parents[2] / "custom_components" / "dreame_a2_mower"
+"""CI gate: S2P2_EVENT_TYPES is DERIVED from the authoritative app catalog
+[apk:g2408-plugin-ext1423], not hand-curated. This gate guards the derivation
+integrity: every mapped code must be a catalog code (slug == event_slug) or an
+explicit wire supplement, so apk/vacuum-lineage names can't creep back in."""
+from custom_components.dreame_a2_mower.mower import fault_catalog as fc
+from custom_components.dreame_a2_mower.mower.error_codes import (
+    _SLUG_SUPPLEMENT,
+    S2P2_EVENT_TYPES,
+)
 
 
-def _state_code_confidence() -> dict[int, str]:
-    inv = yaml.safe_load((ROOT / "inventory.yaml").read_text())
-    out: dict[int, str] = {}
-
-    def walk(o):
-        if isinstance(o, dict):
-            rid = o.get("id")
-            if isinstance(rid, str):
-                m = re.fullmatch(r"s2p2_(\d+)", rid)
-                if m:
-                    dec = o.get("decoded") or (o.get("status") or {}).get("decoded")
-                    out[int(m.group(1))] = dec
-            for v in o.values():
-                walk(v)
-        elif isinstance(o, list):
-            for v in o:
-                walk(v)
-
-    walk(inv)
-    return out
+def test_every_mapped_code_is_catalog_or_supplement():
+    catalog = fc.known_codes("iot")
+    for code, slug in S2P2_EVENT_TYPES.items():
+        if code in _SLUG_SUPPLEMENT:
+            assert slug == _SLUG_SUPPLEMENT[code]
+            assert code not in catalog, (
+                f"code {code} is now in the catalog — drop it from _SLUG_SUPPLEMENT"
+            )
+        else:
+            assert code in catalog, f"mapped code {code} not in catalog and not supplemented"
+            assert slug == fc.event_slug(code), (
+                f"slug for {code} ({slug!r}) != event_slug ({fc.event_slug(code)!r})"
+            )
 
 
-def _described_codes(var: str) -> list[int]:
-    src = (ROOT / "mower" / "error_codes.py").read_text()
-    # Anchor on the dict ASSIGNMENT (`<VAR>: dict[int, str] = {`), not any
-    # earlier comment/docstring mention of the name (e.g. a comment inside
-    # ERROR_CODE_DESCRIPTIONS references S2P2_EVENT_TYPES).
-    body = src.split(f"\n{var}: dict", 1)[1]
-    body = re.split(r"\ndef |\nS2P2_UNKNOWN_EVENT_TYPE", body)[0]
-    return sorted(int(x) for x in re.findall(r"^\s+(\d+):", body, re.M))
-
-
-def test_described_s2p2_codes_are_confirmed_or_partial():
-    conf = _state_code_confidence()
-    offenders: dict[int, str | None] = {}
-    for var in ("S2P2_EVENT_TYPES",):
-        for code in _described_codes(var):
-            if conf.get(code) not in ("confirmed", "partial"):
-                offenders.setdefault(code, conf.get(code))
-    assert not offenders, (
-        "error_codes.py describes s2p2 codes that the inventory does NOT back "
-        "as confirmed/partial — either add wire/cloud evidence to "
-        "inventory.yaml state_codes (s2p2_<code>) or remove the description. "
-        f"Offenders {{code: inventory_status}}: {offenders}"
-    )
-
-
-def test_gate_parses_full_s2p2_event_types_table():
-    # Guards the parser anchor: code 33 lives ONLY in S2P2_EVENT_TYPES (not in
-    # ERROR_CODE_DESCRIPTIONS). If the slice anchored on a comment mention it
-    # would miss it. These must be present in the parsed table.
-    codes = _described_codes("S2P2_EVENT_TYPES")
-    for c in (0, 5, 33, 50):
-        assert c in codes, f"parser missed S2P2_EVENT_TYPES code {c}: {codes}"
+def test_every_catalog_code_is_mapped():
+    for code in fc.known_codes("iot"):
+        assert code in S2P2_EVENT_TYPES, f"catalog code {code} missing a slug"

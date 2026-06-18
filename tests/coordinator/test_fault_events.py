@@ -240,3 +240,95 @@ def test_s2p2_event_types_gate_semantics():
     known = next(iter(S2P2_EVENT_TYPES))
     assert S2P2_EVENT_TYPES.get(known) is not None  # known code → gate does NOT fire local entry
     assert S2P2_EVENT_TYPES.get(9999) is None       # unknown code → gate fires local entry
+
+
+# ---------------------------------------------------------------------------
+# Task 4 (P3a): _fire_notification carries tier/category/severity
+# ---------------------------------------------------------------------------
+
+
+def _make_coord_with_fire_notification() -> tuple[types.SimpleNamespace, _RecordingNotification]:
+    """Build the minimal namespace that _fire_notification needs.
+
+    Extends _make_coord_with_notification() by also binding _fire_notification
+    (which is the method under test in Task 4).  Returns (coord, notif_recorder).
+    """
+    coord = types.SimpleNamespace()
+    coord._lifecycle_event = None
+    coord._notification_event = None
+    # _last_notification is set by _fire_notification; pre-seed to None.
+    coord._last_notification = None
+
+    for name in (
+        "_fire_lifecycle",
+        "_fire_fault_delta",
+        "_fire_local_novel_s2p2",
+        "_fire_notification",
+        "register_event_entities",
+    ):
+        setattr(
+            coord,
+            name,
+            types.MethodType(getattr(_DeviceSyncMixin, name), coord),
+        )
+
+    lc = _RecordingLifecycle()
+    notif = _RecordingNotification()
+    coord.register_event_entities(lifecycle=lc, notification=notif)
+    return coord, notif
+
+
+def test_fire_notification_payload_carries_tier_category_severity_for_known_code():
+    """code=27 → tier/category/severity populated in fired payload.
+
+    NOTE: _RecordingNotification.trigger does NOT strip None-valued keys —
+    it stores data as-is.  So for a known code (27 → tier="attention") we
+    assert the values are the catalog-derived strings, not absent.
+    """
+    coord, notif = _make_coord_with_fire_notification()
+
+    coord._fire_notification(
+        event_type="human_detected",
+        text="A person was detected",
+        code=27,
+        siid=2,
+        piid=2,
+        send_time=None,
+        message_id="m1",
+        now_unix=0,
+    )
+
+    assert len(notif.fired) == 1
+    event_type_fired, payload = notif.fired[0]
+    assert event_type_fired == "human_detected"
+    assert payload["tier"] == "attention"
+    assert payload["category"] == "FAULT"
+    assert payload["severity"] == "work_message"
+
+
+def test_fire_notification_payload_tier_is_none_for_unknown_code():
+    """code=9999 → catalog returns None for tier/category/severity.
+
+    NOTE: _RecordingNotification.trigger does NOT strip None-valued keys —
+    it stores data as-is (unlike the real EventEntity which drops None keys).
+    So we assert payload.get("tier") is None rather than "tier" not in payload.
+    """
+    coord, notif = _make_coord_with_fire_notification()
+
+    coord._fire_notification(
+        event_type="unknown_s2p2",
+        text="x",
+        code=9999,
+        siid=2,
+        piid=2,
+        send_time=None,
+        message_id=None,
+        now_unix=0,
+    )
+
+    assert len(notif.fired) == 1
+    _, payload = notif.fired[0]
+    # The recording entity does NOT strip None keys; assert None not absent.
+    assert payload.get("tier") is None
+    assert payload.get("category") is None
+    assert payload.get("severity") is None

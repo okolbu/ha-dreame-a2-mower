@@ -21,8 +21,10 @@ HA's trigger framework:
 """
 from __future__ import annotations
 
+import json
 import sys
 import types
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -268,9 +270,9 @@ async def test_get_triggers_returns_one_per_supported_type(hass_with_mower):
 
     # High-value notification types are exposed; pure-noise ones are not.
     assert "human_detected" in types_returned
-    assert "robot_trapped" in types_returned
+    assert "trapped" in types_returned          # was robot_trapped (code 2)
     assert "emergency_stop" in types_returned
-    assert "blades_worn" in types_returned
+    assert "blade_loss" in types_returned       # was blades_worn (code 28)
     assert "fault_detected" in types_returned  # lifecycle fault
     assert "unknown_s2p2" not in types_returned
     assert "maintenance_reminder" not in types_returned
@@ -397,3 +399,63 @@ def test_source_entity_resolution_picks_right_entity(hass_with_mower):
         device_trigger._source_entity_id_for_type(hass, device_id, "human_detected")
         == "event.dreame_a2_mower_notification"
     )
+
+
+def test_exposed_triggers_use_corrected_catalog_slugs():
+    from custom_components.dreame_a2_mower.device_trigger import (
+        _EXPOSED_NOTIFICATION_EVENT_TYPES as EXP, TRIGGER_TYPES,
+    )
+    from custom_components.dreame_a2_mower.mower.error_codes import S2P2_EVENT_TYPES
+    assert "back_charge_failed" in EXP            # was positioning_failed_stuck (31)
+    assert "go_to_cleanpoint_success" in EXP       # was arrived_at_maintenance_point (75)
+    assert "trapped" in EXP                        # was robot_trapped (2)
+    for stale in ("positioning_failed_stuck", "robot_trapped", "arrived_at_maintenance_point"):
+        assert stale not in EXP
+    valid = set(S2P2_EVENT_TYPES.values())
+    for slug in EXP:
+        assert slug in valid, f"exposed trigger {slug!r} not a derived slug"
+    assert set(EXP) <= set(TRIGGER_TYPES)
+
+
+def _trigger_labels(rel: str) -> dict:
+    root = Path(__file__).resolve().parents[2] / "custom_components" / "dreame_a2_mower"
+    data = json.loads((root / rel).read_text(encoding="utf-8"))
+    return data["device_automation"]["trigger_type"]
+
+
+def test_every_trigger_type_has_a_label_in_both_files():
+    for rel in ("strings.json", "translations/en.json"):
+        labels = _trigger_labels(rel)
+        missing = [t for t in device_trigger.TRIGGER_TYPES if t not in labels]
+        assert not missing, f"{rel} trigger_type missing labels for: {missing}"
+
+
+def test_no_stale_old_trigger_slugs_remain():
+    stale = {
+        "robot_trapped", "blades_worn", "left_wheel_error", "right_wheel_error",
+        "positioning_failed_stuck", "positioning_failed_transient",
+        "failed_to_start_task", "battery_temp_low_charging_paused",
+        "low_battery_return", "rain_protection",
+        "standby_outside_station_too_long", "paused_too_long_returning",
+        "arrived_at_maintenance_point", "cannot_reach_maintenance_point",
+    }
+    for rel in ("strings.json", "translations/en.json"):
+        labels = set(_trigger_labels(rel))
+        leftover = stale & labels
+        assert not leftover, f"{rel} still has stale trigger_type keys: {leftover}"
+
+
+def _notif_event_labels(rel: str) -> dict:
+    root = Path(__file__).resolve().parents[2] / "custom_components" / "dreame_a2_mower"
+    data = json.loads((root / rel).read_text(encoding="utf-8"))
+    return data["entity"]["event"]["notification"]["state_attributes"]["event_type"]["state"]
+
+
+def test_notification_event_type_labels_cover_all_slugs_in_both_files():
+    from custom_components.dreame_a2_mower.mower.error_codes import NOTIFICATION_EVENT_TYPES
+    for rel in ("strings.json", "translations/en.json"):
+        labels = _notif_event_labels(rel)
+        missing = [s for s in NOTIFICATION_EVENT_TYPES if s not in labels]
+        extra = [k for k in labels if k not in set(NOTIFICATION_EVENT_TYPES)]
+        assert not missing, f"{rel} missing event_type labels for: {missing}"
+        assert not extra, f"{rel} has stale/extra event_type labels: {extra}"

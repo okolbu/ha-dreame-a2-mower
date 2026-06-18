@@ -126,14 +126,17 @@ def test_s2p2_72_authoritative_text_and_slug():
     )
     # Localization must differ (proves describe_error uses the multi-language catalog).
     assert describe_error(72, "nb") != describe_error(72, "en")
-    # Event slug must be the wire-confirmed value.
-    assert S2P2_EVENT_TYPES[72] == "paused_too_long_returning"
+    # Event slug must match the catalog-derived value (was "paused_too_long_returning"
+    # before the hand dict was replaced with the catalog-derived table in T2).
+    assert S2P2_EVENT_TYPES[72] == _fc.event_slug(72)
 
 
 def test_s2p2_71_unchanged():
     # code 71: "Automatically return to the station after prolonged standby."
     from custom_components.dreame_a2_mower.mower.error_codes import S2P2_EVENT_TYPES
-    assert S2P2_EVENT_TYPES[71] == "standby_outside_station_too_long"
+    # Slug is now catalog-derived (was "standby_outside_station_too_long" in hand dict;
+    # catalog slug is "idle_timeout_returning" from ALERT_IDLE_TIMEOUT_RETURNING).
+    assert S2P2_EVENT_TYPES[71] == _fc.event_slug(71)
     assert "standby" in _fc.fault_text(71, "en").lower()
     # Debunked mislabel must not appear (was once called "positioning failed").
     assert "positioning failed" not in _fc.fault_text(71, "en").lower()
@@ -146,3 +149,36 @@ def test_describe_error_localizes_and_falls_back():
     assert describe_error(27, "nb") == fc.fault_text(27, "nb")
     assert describe_error(27, "nb") != describe_error(27, "en")
     assert describe_error(123456) == "Unknown error 123456"
+
+
+def test_s2p2_event_types_derived_from_catalog():
+    from custom_components.dreame_a2_mower.mower.error_codes import S2P2_EVENT_TYPES
+    from custom_components.dreame_a2_mower.mower import fault_catalog as fc
+    assert S2P2_EVENT_TYPES[31] == "back_charge_failed"
+    assert S2P2_EVENT_TYPES[33] == "locating_failed_with_map"
+    assert S2P2_EVENT_TYPES[50] == "task_start"
+    assert S2P2_EVENT_TYPES[47] == "task_cancelled"   # supplement (catalog-absent)
+    for c in fc.known_codes("iot"):
+        assert S2P2_EVENT_TYPES[c] == fc.event_slug(c)
+    assert len(S2P2_EVENT_TYPES) == 70
+    assert S2P2_EVENT_TYPES[11] == S2P2_EVENT_TYPES[42] == "battery_overheat"
+    assert S2P2_EVENT_TYPES[43] == S2P2_EVENT_TYPES[59] == "battery_temp_low"
+
+
+def test_notification_event_types_derived_and_deduped():
+    from custom_components.dreame_a2_mower.mower.error_codes import (
+        NOTIFICATION_EVENT_TYPES, S2P2_EVENT_TYPES, S2P2_UNKNOWN_EVENT_TYPE,
+    )
+    assert NOTIFICATION_EVENT_TYPES == tuple(
+        sorted(set(S2P2_EVENT_TYPES.values())) + [S2P2_UNKNOWN_EVENT_TYPE]
+    )
+    assert NOTIFICATION_EVENT_TYPES.count("battery_overheat") == 1
+    assert NOTIFICATION_EVENT_TYPES[-1] == "unknown_s2p2"
+
+
+def test_const_reexports_same_notification_event_types():
+    from custom_components.dreame_a2_mower import const
+    from custom_components.dreame_a2_mower.mower.error_codes import (
+        NOTIFICATION_EVENT_TYPES as SRC,
+    )
+    assert const.NOTIFICATION_EVENT_TYPES is SRC

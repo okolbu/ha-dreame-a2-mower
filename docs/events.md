@@ -9,7 +9,7 @@ event entities so automations and push notifications can react to
 | entity_id | Purpose |
 |---|---|
 | `event.dreame_a2_mower_lifecycle` | Mowing start/pause/resume/end + dock arrive/depart + charging state + rain delay |
-| `event.dreame_a2_mower_notification` | Cloud-sourced s2p2 notifications (emergency_stop, human_detected, rain_protection, low_battery_return, etc.) with localised text fetched from the cloud per fire |
+| `event.dreame_a2_mower_notification` | Cloud-sourced s2p2 notifications (catalog-derived slugs: `emergency_stop`, `human_detected`, `bad_weather_protecting`, `battery_low_returning`, etc.) with localised text fetched from the cloud per fire |
 
 When an event fires, the entity's `state` attribute is set to the
 event_type (e.g. `mowing_started`) and the event payload is exposed as
@@ -26,9 +26,9 @@ triggers are keyed to your specific mower, so multiple mowers don't
 cross-fire.
 
 The integration exposes all 11 lifecycle moments plus the high-value,
-actionable notifications (faults, `human_detected`, `robot_trapped`,
-`emergency_stop`, `blades_worn`, wheel errors, positioning/maintenance
-issues, rain protection, …). The few pure-status notifications that just
+actionable notifications (faults, `human_detected`, `trapped`,
+`emergency_stop`, `blade_loss`, wheel errors, positioning/maintenance
+issues, `bad_weather_protecting`, …). The few pure-status notifications that just
 mirror a lifecycle event or a sensor reading are intentionally not listed
 as device triggers (they remain available as raw event triggers and in the
 Logbook). See `device_trigger.py`'s module docstring for the exact exposed
@@ -112,11 +112,14 @@ service delivers a notification text for an s2p2 code. The integration
 fetches the localised text from the cloud `/dreame-messaging/device-messages/v2`
 endpoint and exposes it on the event payload.
 
-Known event_type slugs (from `S2P2_EVENT_TYPES`): `emergency_stop`,
-`human_detected`, `rain_protection`, `low_battery_return`,
-`maintenance_reminder`, `mowing_started`, `mowing_complete`,
-`scheduled_task_cancelled`, `continue_task`, `blade_worn`, `task_failed`.
-Codes not in the catalog surface as `unknown_s2p2`.
+Event_type slugs are derived from the authoritative app fault catalog
+`[apk:g2408-plugin-ext1423]` — see `mower/error_codes.py:S2P2_EVENT_TYPES`
+(70 keys: 69 catalog codes + supplement `task_cancelled`). The slug is the
+catalog `fault_name` with its FAULT_/ALERT_/INFO_ prefix stripped and
+lowercased (e.g. `INFO_TASK_START` → `task_start`, `ALERT_BACK_CHARGE_FAILED`
+→ `back_charge_failed`). Two intentional collisions: `battery_overheat`
+← codes 11/42; `battery_temp_low` ← codes 43/59. Codes not in the
+catalog surface as `unknown_s2p2`.
 
 Each firing exposes:
 - `event_type` — slug from the list above

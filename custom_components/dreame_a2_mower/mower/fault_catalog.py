@@ -86,6 +86,22 @@ def fault_name(code: int, channel: str = "iot") -> str | None:
     return e.get("fault_name") if e else None
 
 
+def event_slug(code: int, channel: str = "iot") -> str | None:
+    """HA event_type slug for a code: the fault_name minus its tier prefix,
+    lowercased (FAULT_HUMAN_DETECTED -> "human_detected",
+    ALERT_BACK_CHARGE_FAILED -> "back_charge_failed"). None if the code is not
+    in the catalog. Two FAULT/ALERT variant-pairs intentionally collide on one
+    slug (battery_overheat: 11/42; battery_temp_low: 43/59) — callers must NOT
+    reverse-map slug->code."""
+    fn = fault_name(code, channel)
+    if not fn:
+        return None
+    for p in ("FAULT_", "ALERT_", "INFO_"):
+        if fn.startswith(p):
+            return fn[len(p):].lower()
+    return fn.lower()
+
+
 def fault_category(code: int, channel: str = "iot") -> str | None:
     e = _entry(code, channel)
     return e.get("category") if e else None

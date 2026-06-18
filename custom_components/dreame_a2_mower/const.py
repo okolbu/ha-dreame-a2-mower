@@ -57,50 +57,15 @@ LIFECYCLE_EVENT_TYPES: Final[tuple[str, ...]] = (
     EVENT_TYPE_SELF_SHUTDOWN,
 )
 
-NOTIFICATION_EVENT_TYPES: Final[tuple[str, ...]] = (
-    # Slugs are stable HA event_type identifiers fired by
-    # `event.dreame_a2_mower_notification`. Each one is the per-code slug from
-    # `coordinator._property_apply.S2P2_EVENT_TYPES`, plus `unknown_s2p2` for
-    # novel codes (the cloud still provides authoritative text in the payload).
-    # Keep this in lockstep with `S2P2_EVENT_TYPES.values()`.
-    "hanging",
-    "robot_trapped",                    # s2p2=2 (verified 2026-05-30)
-    "left_wheel_error",                 # s2p2=4 (verified 2026-05-30)
-    "right_wheel_error",                # s2p2=5 (verified 2026-06-01)
-    "emergency_stop",
-    "human_detected",
-    "blades_worn",                      # s2p2=28
-    "maintenance_reminder",
-    "positioning_failed_stuck",
-    "positioning_failed_transient",
-    "failed_to_start_task",             # s2p2=36 (cloud-verified 2026-05-26)
-    "battery_temp_low_charging_paused",
-    "task_cancelled",                   # s2p2=47 (mova [MOWER])
-    "mowing_complete",
-    "mowing_started",
-    "patrol_started",                   # s2p2=51 (verified 2026-05-30)
-    "scheduled_mowing_started",
-    "low_battery_return",
-    "rain_protection",
-    "schedule_cancelled_busy",
-    "continue_unfinished_task",
-    "standby_outside_station_too_long",  # s2p2=71 (was "positioning_failure"; corrected 2026-05-30)
-    "paused_too_long_returning",         # s2p2=72 (cloud-labelled 2026-06-17)
-    "top_cover_open",
-    "patrol_ended",                     # s2p2=74 (verified 2026-05-30)
-    "arrived_at_maintenance_point",
-    "cannot_reach_maintenance_point",   # s2p2=76 (user-confirmed app text 2026-05-30)
-    "unknown_s2p2",                     # novel codes — text from cloud
+# HA event_type slugs fired by event.dreame_a2_mower_notification, DERIVED from
+# the app catalog (see mower/error_codes.py). Re-exported here for the consumers
+# that import event-type lists from const (event.py, device_trigger.py). The
+# per-notification user-visible text is the cloud/catalog string in the event
+# payload's `text`; the slug is only a stable HA identifier.
+# Source: [apk:g2408-plugin-ext1423].
+from .mower.error_codes import (  # noqa: E402 — re-export
+    NOTIFICATION_EVENT_TYPES as NOTIFICATION_EVENT_TYPES,
 )
-"""HA event_type slugs fired by `event.dreame_a2_mower_notification`.
-
-The per-notification user-visible text is NOT hardcoded — the
-`_NotificationsMixin` fetches it from `/dreame-messaging/user/device-messages/v2`
-on every MQTT s2p2 transition and surfaces the cloud's authoritative,
-account-language-localised string in the event payload's `text` field. The
-slug only serves as a stable identifier for HA automations.
-
-Source: docs/research/app-notification-history-2026-05-16.md § Empirical s2p2 mapping."""
 
 LOGGER: Final = logging.getLogger(__package__)
 """Module-level logger. Per spec §3, every layer-3 file uses this."""

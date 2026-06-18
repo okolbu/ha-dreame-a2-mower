@@ -34,6 +34,7 @@ import dataclasses
 from typing import Any
 
 from ..const import CONF_MESSAGES_KEEP, DEFAULT_MESSAGES_KEEP, LOGGER
+from ..mower import fault_catalog
 from ..protocol import message_record
 from ._property_apply import S2P2_EVENT_TYPES, S2P2_UNKNOWN_EVENT_TYPE
 
@@ -206,7 +207,10 @@ class _NotificationsMixin:
             )
             return
 
-        text = _english_text(matching) or ""
+        # Prefer the cloud's authoritative English push text; fall back to the
+        # bundled app catalog so the payload (and logbook) still get a real
+        # string when the cloud push briefly lacks one.
+        text = _english_text(matching) or fault_catalog.fault_text(value, "en") or ""
         message_id = matching["messageId"]
         send_time = matching.get("sendTime")
 

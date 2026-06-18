@@ -742,7 +742,9 @@ properties:
           transition (s2p1 3 PAUSED→2→5 RETURNING @ 2026-06-17 12:38:22, exactly
           +1 h after the deliberate pause). This supersedes the earlier borrowed
           dreame-mower slug "Returning to dock after pause timeout": event slug is
-          `paused_too_long_returning`. The cloud notification wording ("Task paused
+          `pause_timeout_returning` (derived from INFO_PAUSE_TIMEOUT_RETURNING;
+          earlier named `paused_too_long_returning`, superseded 2026-06-18 by
+          the catalog-derived slug). The cloud notification wording ("Task paused
           for too long. Automatically returning to the station to wait.") is the
           live account-language push text — a valid wire observation; the
           integration's display string is sourced from the multi-language app fault
@@ -851,8 +853,9 @@ properties:
           since 2026-05-26 / v1.0.18a8).
 
           Also: s2p2=30 text empirically pinned to "Robot maintenance time
-          reached. Maintain the robot soon." (slug `maintenance_reminder`,
-          best-guess pre-experiment, semantically correct). Fires at
+          reached. Maintain the robot soon." (slug `maintain_loss`, derived
+          from FAULT_MAINTAIN_LOSS [apk:g2408-plugin-ext1423]; earlier
+          hand-named `maintenance_reminder`, superseded 2026-06-18). Fires at
           task-start same-second as s2p2=50 when robot-maintenance% is at
           ~10% remaining (user observation). Same pattern as 28+50: a
           "maintenance flag at start" the cloud gates on the relevant
@@ -920,9 +923,10 @@ properties:
           (it tripped at 18:26:50); it now reads the state machine's
           positioning_health==STUCK, and 71 carries NO positioning side effect.
           The S2P2_EVENT_TYPES[71] slug was renamed "positioning_failure" →
-          "standby_outside_station_too_long" across all 4 sync points
-          (error_codes.py, const.NOTIFICATION_EVENT_TYPES, en.json, logbook.py),
-          and the error_codes description corrected. FOLLOW-UP (also 2026-05-30):
+          "standby_outside_station_too_long" at the time, then further
+          superseded 2026-06-18 by the catalog-derived slug
+          `idle_timeout_returning` (from INFO_IDLE_TIMEOUT_RETURNING
+          [apk:g2408-plugin-ext1423]). FOLLOW-UP (also 2026-05-30):
           the state machine's positioning model was decoupled — STUCK is now
           derived synchronously from the orthogonal failure code s2p2=33 (and
           cleared on a mowing resume), NOT from a 71+31 buffered combination
@@ -949,7 +953,9 @@ properties:
           arrival of the right-wheel counterpart corroborates the 4/5 = drive-
           wheel-fault pair reading. apk FaultIndex had 5 unmapped/vacuum-derived.
           Synced to error_codes.py ERROR_CODE_DESCRIPTIONS (5 → "Right drive
-          wheel error") + S2P2_EVENT_TYPES (5 → "right_wheel_error") and added to
+          wheel error") + S2P2_EVENT_TYPES (5 → "right_wheel_error" at the
+          time; superseded 2026-06-18 by catalog-derived `right_wheel` from
+          FAULT_RIGHT_WHEEL [apk:g2408-plugin-ext1423]) and added to
           the state_codes table (s2p2_5).
           (Note 2026-06-18: ERROR_CODE_DESCRIPTIONS was subsequently retired;
           display strings now source from mower/fault_catalog.py via
@@ -959,6 +965,45 @@ properties:
         status: verified
         claim: "HA error latch is the app-derived error tier = FAULT category & (anomaly|malfunction) severity, giving 26 codes {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,20,21,22,23,24,26,37,59,73}. is_fault(code) == (fault_catalog.fault_tier(code) == 'error'). FAULT_CODES is retired. 31 (back-charge-failed) and 36 (task-start-failed) are now the alert tier — no longer latching ERROR. Latches snapshot.errors → lawn_mower ERROR + Error sensor + fault_detected/fault_cleared events."
         evidence: "apk:g2408-plugin-ext1423 (fault_catalog.fault_tier)"
+      - date: "2026-06-18"
+        status: verified
+        claim: |
+          s2p2 notification event slugs are now DERIVED from the authoritative
+          app catalog fault_name [apk:g2408-plugin-ext1423] via
+          fault_catalog.event_slug (strips the FAULT_/ALERT_/INFO_ prefix +
+          lowercases). The prior hand-curated S2P2_EVENT_TYPES slug table is
+          retired — it contained several wrong entries inherited from the
+          vacuum lineage or from early g2408 guesses. S2P2_EVENT_TYPES now has
+          70 keys: 69 catalog codes + supplement code 47 (`task_cancelled`;
+          absent from the catalog, community-confirmed from the mova mower
+          lineage). Two intentional slug collisions: codes 11 and 42 both
+          derive to `battery_overheat` (FAULT_BATTERY_OVERHEAT vs
+          ALERT_BATTERY_OVERHEAT); codes 43 and 59 both derive to
+          `battery_temp_low` (ALERT_BATTERY_TEMP_LOW vs
+          FAULT_BATTERY_TEMP_LOW). The per-fire payload carries the
+          distinguishing code and tier; slugs must NOT be reverse-mapped to a
+          single code. Supersedes all prior inline slug-name claims in this
+          entry's verifications; the now-incorrect old slug strings are
+          archived in OLD/ha-dreame-a2-mower-docs/inventory-history/s2p2.md §
+          2026-06-18.
+          Key catalog-to-slug corrections vs the old hand-curated table:
+            31  ALERT_BACK_CHARGE_FAILED     → back_charge_failed  (was positioning_failed_stuck)
+            33  ALERT_LOCATING_FAILED_WITH_MAP → locating_failed_with_map  (was positioning_failed_transient)
+            36  ALERT_TASK_START_FAILED      → task_start_failed   (was failed_to_start_task)
+            50  INFO_TASK_START              → task_start          (was mowing_started)
+            48  INFO_TASK_FINISH             → task_finish         (was mowing_complete)
+            75  FAULT_GO_TO_CLEANPOINT_SUCCESS → go_to_cleanpoint_success  (was arrived_at_maintenance_point)
+            76  FAULT_GO_TO_CLEANPOINT_FAILED  → go_to_cleanpoint_failed
+            2   FAULT_TRAPPED                → trapped             (was robot_trapped)
+            4   FAULT_LEFT_WHEEL             → left_wheel          (was left_wheel_error)
+            5   FAULT_RIGHT_WHEEL            → right_wheel         (was right_wheel_error)
+            28  FAULT_BLADE_LOSS             → blade_loss          (was blades_worn / blade_worn)
+            54  INFO_BATTERY_LOW_RETURNING   → battery_low_returning (was low_battery_return)
+            56  INFO_BAD_WEATHER_PROTECTING  → bad_weather_protecting (was rain_protection)
+            71  INFO_IDLE_TIMEOUT_RETURNING  → idle_timeout_returning (was standby_outside_station_too_long)
+            72  INFO_PAUSE_TIMEOUT_RETURNING → pause_timeout_returning (was paused_too_long_returning)
+            30  FAULT_MAINTAIN_LOSS          → maintain_loss       (was maintenance_reminder)
+        evidence: "apk:g2408-plugin-ext1423 (fault_catalog.event_slug, S2P2_EVENT_TYPES derive in mower/error_codes.py)"
     open_questions:
       - "What wire surface carries the user's 'Continue' tap that clears rain-protection early? Candidate: an s2p50 op-code or an s2p2 transition out of the suppressed window. Capture during a live Continue press."
       - "g2408 meaning of s2p2 20 and 33 — both fired in the 2026-05-25 12:32 off-dock-failure burst alongside 'Sensor error' / 'positioning failed' app notifications, but neither is in the cloud's recent-history window (likely pruned). Need either a controlled repro within the cloud's retention window, the apk full 78-entry FaultIndex (bundle L94618-94697, not in apk.md), or text via an API-on-demand fetch the next time these codes fire."
@@ -2122,12 +2167,12 @@ properties:
           Cross-corpus correlation (50 events across April-May 2026) shows
           clean co-occurrence with specific s2p2 notification codes:
 
-            value 300: ALWAYS within ±60s of s2p2=54 (low_battery_return).
+            value 300: ALWAYS within ±60s of s2p2=54 (battery_low_returning).
               5/5 cases; s6p1 leads by 0-1s. Map-snapshot-at-low-battery-
               interrupt — partial trail uploaded so the cloud has the
               session state before the mower returns to dock.
 
-            value 201: ALWAYS within ±60s of s2p2=56 (rain_protection).
+            value 201: ALWAYS within ±60s of s2p2=56 (bad_weather_protecting).
               4/4 cases; s2p2 leads by 0-31s. Map-snapshot-at-rain-
               interrupt. Previously undocumented value.
 
@@ -4210,8 +4255,9 @@ opcodes:
 
       Lifecycle on accept (per 2026-05-12 app capture + 2026-05-31 live):
       s2p50 {o:109, exe:true, status:true, error:0, estimate_time:N} → s2p56=[[id,0]]
-      (started) → [[id,2]] (arrived) → s2p1=2 → s2p2=75 arrived_at_maintenance_point
-      → s1p52={}. Failure to reach → s2p2=76 "Cannot reach the maintenance point."
+      (started) → [[id,2]] (arrived) → s2p1=2 → s2p2=75 go_to_cleanpoint_success
+      → s1p52={}. Failure to reach → s2p2=76 go_to_cleanpoint_failed
+      "Cannot reach the maintenance point."
 
       Echo can also be status:false = task rejected (mower in a bad state, e.g.
       Positioning Failed s2p2=71, or a wrong d-shape). First seen 2026-04-20
