@@ -232,31 +232,25 @@ journal for the shipped detail. What ACTUALLY remains open:
 cfg-write-regression}-2026-05-09.md`, `pre-write-r3-2026-06-03.md`; the Phase-3 app-RPC TODO
 below; auto-memory `project_control_honesty_markers`, `feedback_no_migration_overengineering`.
 
-### s2p2 fault-surfacing — follow-ups after the FAULT_CODES partition
+### s2p2 fault-surfacing — per-tier surfacing (P3 follow-up)
 
-**Why:** The fault-partition feature shipped on branch `fix/s2p2-fault-partition`
-(2026-06-01): `FAULT_CODES={2,4,5,23,31,36}` (verified, intervention-only) latches
-into `snapshot.errors`, clears on movement/undock/mow-start, drives the Error
-sensor + `lawn_mower` ERROR (+ `pin_required`), and fires `fault_detected` /
-`fault_cleared` lifecycle events (plus a local entry for unknown codes). These
-loose ends remain:
-- **Deferred borderline codes:** revisit `9` (lifted — s1p1 bit too), `24`/`43`
-  (battery — now Lifecycle), `33` (positioning — owned by `positioning_health`),
-  `46`/`59`/`64-67`/`78` (navigational/self-recover) for FAULT_CODES membership if
-  a live app-fault correlation shows the app surfacing them as faults.
+**Why:** P2 (2026-06-18) replaced the hand-curated `FAULT_CODES={2,4,5,23,31,36}`
+with the app-derived error tier from `fault_catalog.fault_tier`
+`[apk:g2408-plugin-ext1423]`. The error latch is now `is_fault(code) ==
+(fault_tier(code) == "error")`, covering 26 codes
+`{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,20,21,22,23,24,26,37,59,73}`. 31
+(back-charge-failed) and 36 (task-start-failed) are in the **alert** tier and no
+longer latch ERROR. The remaining open work is per-tier surfacing:
+- **Attention / alert / info tiers** (P3): surface non-error tiers
+  (attention = consumable; alert = transient; info = lifecycle) beyond the current
+  binary fault/non-fault split.
 - **24 vs 54 rename:** `24 "Battery low"` is vague vs `54 "Low battery — returning
   to station"`. Hypothesis: 24 = warning threshold, 54 = the return trigger.
   (Recorded as an `inventory.yaml § s2p2` open_question; needs a capture of both
   firing in one session, then rename 24.)
-- **Vacuum-lineage descriptions** for the excluded codes (37/38/39/40/41/45/49/
-  57/58/61/62/117) still sit in `ERROR_CODE_DESCRIPTIONS` and read as authoritative
-  — fold into the existing cleanup TODO below ("audit hypothesized vacuum-lineage
-  state_codes / error_codes").
-**Done when:** borderline codes are decided against live evidence, 24 renamed,
-and the vacuum descriptions are pruned/marked.
-**Status:** open (feature shipped; these are refinements)
-**Cross-refs:** `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/2026-06-01-s2p2-fault-partition.md`;
-`inventory.yaml § s2p2`; `mower/error_codes.py FAULT_CODES`.
+**Done when:** per-tier surfacing is wired up and 24 renamed against live evidence.
+**Status:** open (P3 deferred)
+**Cross-refs:** `inventory.yaml § s2p2`; `mower/fault_catalog.py`; `mower/error_codes.py`.
 
 ### Confirm the share-messages record shape (live capture)
 

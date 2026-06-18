@@ -16,7 +16,7 @@ def test_non_fault_code_does_not_latch():
 def test_non_fault_does_not_evict_latched_fault():
     m = MowerStateMachine()
     m.handle_mqtt_property(siid=2, piid=2, value=5, now_unix=1000)
-    m.handle_mqtt_property(siid=2, piid=2, value=47, now_unix=1001)  # 47 = task cancelled (alert), not a fault; 50 clears errors via mow-start path
+    m.handle_mqtt_property(siid=2, piid=2, value=47, now_unix=1001)  # 47 is not in the fault catalog (tier=None), not a fault; 50 clears errors via mow-start path
     # A non-fault code must not disturb the already-latched fault 5.
     assert m.snapshot().errors == frozenset({5})
 

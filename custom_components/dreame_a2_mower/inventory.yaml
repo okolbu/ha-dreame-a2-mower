@@ -726,7 +726,7 @@ properties:
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-06-13"
+      last_seen: "2026-06-18"
       decoded: confirmed
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:62"
@@ -955,11 +955,10 @@ properties:
           display strings now source from mower/fault_catalog.py via
           describe_error(code, lang) [apk:g2408-plugin-ext1423].)
         evidence: "probe_log_20260520_131350.jsonl @ 2026-06-01 (s2p2=5, first occurrence in the corpus, ×3 republish); user-confirmed app text 'Right drive wheel error'; cloud device-messages/v2 exact-text download pending"
-      - date: "2026-06-01"
-        status: partial
-        claim: "Integration partitions s2p2 into FAULT_CODES={2,4,5,23,31,36} (verified, intervention-required) that latch snapshot.errors → lawn_mower ERROR + Error sensor + fault_detected/fault_cleared events; all other codes are non-latching. 24/43 reclassified Faults→Lifecycle (battery, not stuck). 33 stays positioning_health-owned; 76 is lifecycle (auto-returns) vs 31 fault (stranded)."
-        evidence: "code:mower/error_codes.py FAULT_CODES"
-        reason: "only inventory-verified intervention faults latch ERROR; unverified vacuum-lineage codes (37/38/39/40/41/45/49/57/58/61/62/117) deliberately excluded pending g2408 confirmation"
+      - date: "2026-06-18"
+        status: verified
+        claim: "HA error latch is the app-derived error tier = FAULT category & (anomaly|malfunction) severity, giving 26 codes {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,20,21,22,23,24,26,37,59,73}. is_fault(code) == (fault_catalog.fault_tier(code) == 'error'). FAULT_CODES is retired. 31 (back-charge-failed) and 36 (task-start-failed) are now the alert tier — no longer latching ERROR. Latches snapshot.errors → lawn_mower ERROR + Error sensor + fault_detected/fault_cleared events."
+        evidence: "apk:g2408-plugin-ext1423 (fault_catalog.fault_tier)"
     open_questions:
       - "What wire surface carries the user's 'Continue' tap that clears rain-protection early? Candidate: an s2p50 op-code or an s2p2 transition out of the suppressed window. Capture during a live Continue press."
       - "g2408 meaning of s2p2 20 and 33 — both fired in the 2026-05-25 12:32 off-dock-failure burst alongside 'Sensor error' / 'positioning failed' app notifications, but neither is in the cloud's recent-history window (likely pruned). Need either a controlled repro within the cloud's retention window, the apk full 78-entry FaultIndex (bundle L94618-94697, not in apk.md), or text via an API-on-demand fetch the next time these codes fire."
