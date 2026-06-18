@@ -340,16 +340,20 @@ class _DeviceSyncMixin:
         cloud notification resolver) so faults always reach the activity list.
         """
         from ..mower.error_codes import describe_error
+        from ..mower import fault_catalog
+        hass = getattr(self, "hass", None)
+        cfg = getattr(hass, "config", None)
+        lang = fault_catalog.resolve_lang(getattr(cfg, "language", None))
         for code in sorted(new_errors - prev_errors):
             self._fire_lifecycle(
                 EVENT_TYPE_FAULT_DETECTED,
-                {"code": int(code), "description": describe_error(int(code)),
+                {"code": int(code), "description": describe_error(int(code), lang),
                  "at_unix": int(now_unix)},
             )
         for code in sorted(prev_errors - new_errors):
             self._fire_lifecycle(
                 EVENT_TYPE_FAULT_CLEARED,
-                {"code": int(code), "description": describe_error(int(code)),
+                {"code": int(code), "description": describe_error(int(code), lang),
                  "at_unix": int(now_unix)},
             )
 
