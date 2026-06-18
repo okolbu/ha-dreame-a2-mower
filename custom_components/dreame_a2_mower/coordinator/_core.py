@@ -30,6 +30,7 @@ from ..const import (
     CONF_COUNTRY,
     CONF_LIDAR_ARCHIVE_KEEP,
     CONF_LIDAR_ARCHIVE_MAX_MB,
+    CONF_MESSAGES_KEEP,
     CONF_PHOTO_ARCHIVE_KEEP,
     CONF_PHOTO_ARCHIVE_MAX_MB,
     CONF_PASSWORD,
@@ -41,6 +42,7 @@ from ..const import (
     CONF_WIFI_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_MAX_MB,
+    DEFAULT_MESSAGES_KEEP,
     DEFAULT_PHOTO_ARCHIVE_KEEP,
     DEFAULT_PHOTO_ARCHIVE_MAX_MB,
     DEFAULT_PHOTO_ARCHIVE_PER_CATEGORY,
@@ -529,6 +531,27 @@ class _CoreMixin:
                 getattr(self, "_consecutive_cloud_failures", 0) + 1
             )
 
+    async def _restore_device_messages(self) -> None:
+        """Seed MowerState.device_messages from the persisted store on boot so
+        the sensor shows retained history immediately and it becomes the merge
+        base for the first fetch. Tolerates a missing/corrupt store."""
+        if self._device_messages_store is None:
+            self._device_messages_store = Store(
+                self.hass,
+                version=1,
+                key=f"dreame_a2_mower_device_messages_{self.entry.entry_id}",
+            )
+        try:
+            stored = await self._device_messages_store.async_load()
+        except Exception:
+            LOGGER.exception("device_messages restore failed; continuing empty")
+            return
+        if isinstance(stored, list) and stored:
+            cap = int(
+                self.entry.options.get(CONF_MESSAGES_KEEP, DEFAULT_MESSAGES_KEEP)
+            )
+            self.data.device_messages = stored[:cap]
+
     async def _async_update_data(self) -> MowerState:
         """First-refresh path — auth, device discovery, MQTT subscribe.
 
@@ -550,6 +573,8 @@ class _CoreMixin:
                 LOGGER.exception(
                     "state_machine.load_persisted failed; continuing with initial snapshot"
                 )
+
+            await self._restore_device_messages()
 
             self._cloud = await self.hass.async_add_executor_job(
                 self._init_cloud
