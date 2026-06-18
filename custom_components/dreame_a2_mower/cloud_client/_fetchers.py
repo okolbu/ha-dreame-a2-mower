@@ -555,7 +555,8 @@ class _FetchersMixin:
         """Fetch the per-device cloud notification store (the app's A2 tab).
 
         GET ``/dreame-messaging/user/device-messages/v2?did=<did>&pageNum=1&pageSize=N``.
-        Server caps `page_size` at 10 and ignores pagination — this is a
+        Server caps `page_size` at 10 and ignores pagination (pageNum 2+ returns
+        the same latest-10) [probe@2026-06-18] — this is a
         moving window of the latest N pushes for `did`. Each record carries
         `source={siid,piid,value,eiid,aiid}` (values as STRING), multilingual
         `localizationContents`, `sendTime` (str "YYYY-MM-DD HH:MM:SS"),

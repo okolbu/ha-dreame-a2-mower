@@ -170,7 +170,7 @@ DEFAULT_SESSION_ARCHIVE_KEEP: Final = 50
 # (see WifiArchiveStore.enforce_retention), so this is 20 *per map*, matching
 # DEFAULT_LIDAR_ARCHIVE_KEEP.
 DEFAULT_WIFI_ARCHIVE_KEEP: Final = 20
-DEFAULT_MESSAGES_KEEP: Final = 100
+DEFAULT_MESSAGES_KEEP: Final = 200
 
 # UI strings
 WORK_LOG_PLACEHOLDER: Final = "(pick a session)"
