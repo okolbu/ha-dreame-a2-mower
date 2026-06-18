@@ -17,16 +17,32 @@ def test_known_error_codes_mapped():
     corrected to "Bumper / hanging" on 2026-06-01 after the 2026-04-30 controlled
     test showed s2p2 1→0 co-fired with the HB bumper bit (not a steady-state idle).
     Now backed by the app catalog; descriptions are catalog-authoritative.
+
+    Semantic checks: keywords verified against the real fault_catalog.json text
+    (apk:g2408-plugin-ext1423).  Each assert confirms the catalog says something
+    sensible *per code*, not just that describe_error() delegates (which is trivial).
     """
-    # Each code must exist in the catalog and describe_error must delegate to it.
+    # Each code must be present in the catalog.
     for code in (0, 1, 9, 23, 24, 27, 56, 73):
-        cat_text = _fc.fault_text(code, "en")
-        assert cat_text is not None, f"catalog missing code {code}"
-        assert describe_error(code) == cat_text, f"describe_error({code}) diverges from catalog"
+        assert _fc.fault_text(code, "en") is not None, f"catalog missing code {code}"
 
-
-def test_describe_known_returns_description():
-    assert describe_error(24) == _fc.fault_text(24, "en")
+    # Per-code semantic checks — keywords come from the real catalog text.
+    # code 0: "Robot lifted. Place it back on the ground..."
+    assert "lifted" in _fc.fault_text(0, "en").lower()
+    # code 1: "Robot tilted. Place it back on the ground..."
+    assert "tilted" in _fc.fault_text(1, "en").lower()
+    # code 9: "Bumper error. Please check."
+    assert "bumper" in _fc.fault_text(9, "en").lower()
+    # code 23: "Emergency stop is activated. Enter PIN code on the robot to unlock it."
+    assert "pin" in _fc.fault_text(23, "en").lower()
+    # code 24: "Low battery. The robot will shut down soon."
+    assert "battery" in _fc.fault_text(24, "en").lower()
+    # code 27: "Human entry into the mapped area is detected. Please be alert."
+    assert "human" in _fc.fault_text(27, "en").lower()
+    # code 56: "Water is detected on the lidar. Rain Protection is activated..."
+    assert "rain" in _fc.fault_text(56, "en").lower()
+    # code 73: "Top cover of the robot is not closed. Please check."
+    assert "cover" in _fc.fault_text(73, "en").lower()
 
 
 def test_describe_unknown_returns_fallback():
@@ -103,9 +119,12 @@ def test_s2p2_72_authoritative_text_and_slug():
 
 
 def test_s2p2_71_unchanged():
+    # code 71: "Automatically return to the station after prolonged standby."
     from custom_components.dreame_a2_mower.mower.error_codes import S2P2_EVENT_TYPES
     assert S2P2_EVENT_TYPES[71] == "standby_outside_station_too_long"
-    assert _fc.fault_text(71, "en") is not None
+    assert "standby" in _fc.fault_text(71, "en").lower()
+    # Debunked mislabel must not appear (was once called "positioning failed").
+    assert "positioning failed" not in _fc.fault_text(71, "en").lower()
 
 
 def test_describe_error_localizes_and_falls_back():

@@ -107,10 +107,11 @@ S2P2_UNKNOWN_EVENT_TYPE = "unknown_s2p2"
 #     snapshot.pin_required), NOT s2p2. The terminal "can't continue" state
 #     is s2p2=23 (PIN lockout), which IS included.
 #   - 37/38/39/40/41/44/45/46/49/57/58/59/61/62/64/65/66/67/78/117 →
-#     apk/vacuum-lineage codes; ZERO probe-corpus occurrences on g2408;
-#     removed from ERROR_CODE_DESCRIPTIONS (2026-06-01). They fall back to
-#     "Unknown error N". Latching the lawn_mower entity to ERROR on a guessed
-#     vacuum semantic violates fact-discipline. Add here ONLY once confirmed.
+#     apk/vacuum-lineage codes; ZERO probe-corpus occurrences on g2408.
+#     These codes are not surfaced as faults; they fall back to the catalog
+#     text (mower/fault_catalog.py) or "Unknown error N" when absent. Latching
+#     the lawn_mower entity to ERROR on a guessed vacuum semantic violates
+#     fact-discipline. Add here ONLY once confirmed on g2408.
 FAULT_CODES: frozenset[int] = frozenset({
     2,    # Robot trapped (verified 2026-05-30)
     4,    # Left drive wheel error (verified 2026-05-30)
