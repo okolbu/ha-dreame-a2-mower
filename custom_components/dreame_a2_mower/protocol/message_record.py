@@ -187,6 +187,12 @@ def merge_device_messages(
     text); only ids new to ``existing`` are taken from ``fresh``. Result is
     sorted newest-first by ``date`` (ISO-8601 str; missing/non-str dates sort
     last) and truncated to ``cap``. Entries with a falsy ``id`` are dropped.
+
+    The ``date`` field in both ``existing`` and ``fresh`` dicts is expected to be
+    the normalized ISO-8601 string produced by ``Message.as_dict()`` / ``_iso()``
+    (e.g. ``"2026-06-18T10:00:00+00:00"``).  Because both sources use this
+    consistent format, lexicographic string comparison orders the dates correctly
+    without further parsing.
     """
     by_id: dict[str, dict] = {}
     for m in existing:
