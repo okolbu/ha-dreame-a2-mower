@@ -173,3 +173,36 @@ def normalize_share(records: list[dict] | None) -> list[Message]:
 
 def unread_count(messages: list[Message]) -> int:
     return sum(1 for m in messages if m.unread)
+
+
+def merge_device_messages(
+    existing: list[dict], fresh: list[dict], cap: int
+) -> list[dict]:
+    """Merge a freshly-fetched device-message page into the accumulated list.
+
+    device-messages/v2 is a fixed window of the latest ~10 (server-capped,
+    pagination ignored — [probe@2026-06-18]), so the only way to retain more is
+    to accumulate. Union by ``id`` with EXISTING-PRIORITY: an id already present
+    keeps its stored dict (preserving a linked ``photos`` key and the immutable
+    text); only ids new to ``existing`` are taken from ``fresh``. Result is
+    sorted newest-first by ``date`` (ISO-8601 str; missing/non-str dates sort
+    last) and truncated to ``cap``. Entries with a falsy ``id`` are dropped.
+    """
+    by_id: dict[str, dict] = {}
+    for m in existing:
+        mid = m.get("id")
+        if mid:
+            by_id[mid] = m
+    for m in fresh:
+        mid = m.get("id")
+        if mid and mid not in by_id:
+            by_id[mid] = m
+
+    def _key(m: dict) -> tuple[int, str]:
+        d = m.get("date")
+        # Present dates → (1, date) sort FIRST (newest) under reverse=True;
+        # missing/non-str dates → (0, "") sort LAST.
+        return (1, d) if isinstance(d, str) and d else (0, "")
+
+    ordered = sorted(by_id.values(), key=_key, reverse=True)
+    return ordered[:cap] if cap >= 0 else ordered
