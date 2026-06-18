@@ -22,6 +22,12 @@ Verify entity-inventory.yaml covers every integration entity class.
 
 *When:* Every CI build; after adding or changing an entity.
 
+### `python tools/inventory/gen_fault_catalog.py`  —  👤 owner
+
+Generate mower/data/fault_catalog.json (21-lang fault/notification strings) from the app extract.
+
+*When:* When the g2408 plugin extract updates; regenerates the bundled fault catalog.
+
 ### `python tools/inventory/inventory_audit.py`  —  🤖 ci
 
 Cross-check inventory.yaml for internal contradictions and value-catalog gaps.
