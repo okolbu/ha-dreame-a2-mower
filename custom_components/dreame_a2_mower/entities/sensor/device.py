@@ -1596,12 +1596,21 @@ class _DreameA2MessageListSensor(
 
 
 class DreameA2DeviceMessagesSensor(_DreameA2MessageListSensor):
-    """Device-targeted messages (device_messages list)."""
+    """Device-targeted messages (device_messages list).
+
+    State is the TOTAL retained count (not the unread subset): device-messages/v2
+    gives no read flag, so every message is 'unread' — an unread-count state
+    would just climb to the cap. The newest-first history stays in `items`.
+    """
 
     _attr_name = "Device messages"
     _attr_icon = "mdi:robot"
     _MOWER_KEY = "device_messages"
     _FIELD = "device_messages"
+
+    @property
+    def native_value(self) -> int:
+        return len(self._items())
 
 
 class DreameA2ServiceMessagesSensor(_DreameA2MessageListSensor):

@@ -155,3 +155,21 @@ def test_schedule_count_sensor_exposes_enabled_per_slot():
     attrs = ent.extra_state_attributes
     assert attrs["slots"][0]["enabled"] is True
     assert attrs["slots"][1]["enabled"] is False
+
+
+def test_device_messages_sensor_state_is_total_not_unread():
+    from custom_components.dreame_a2_mower.entities.sensor.device import (
+        DreameA2DeviceMessagesSensor,
+    )
+    from types import SimpleNamespace
+
+    s = object.__new__(DreameA2DeviceMessagesSensor)
+    s.coordinator = SimpleNamespace(
+        data=SimpleNamespace(device_messages=[
+            {"id": "a", "unread": True}, {"id": "b", "unread": True},
+            {"id": "c", "unread": True}, {"id": "d", "unread": False},
+        ])
+    )
+    # Total count (4) even though one is 'read' — base unread-count would give 3.
+    assert s.native_value == 4
+    assert s.extra_state_attributes["items"] == s._items()
