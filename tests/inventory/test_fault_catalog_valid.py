@@ -30,3 +30,20 @@ def test_covers_wire_confirmed_codes():
     for c in (0, 4, 5, 27, 72):
         assert c in iot, f"iot code {c} missing from catalog"
         assert fc.fault_text(c, "en"), f"iot code {c} has no en display text"
+
+
+def test_event_slug_strips_prefix_and_lowercases():
+    assert fc.event_slug(27) == "human_detected"   # FAULT_HUMAN_DETECTED
+    assert fc.event_slug(31) == "back_charge_failed"  # ALERT_BACK_CHARGE_FAILED (was wrong)
+    assert fc.event_slug(48) == "task_finish"      # INFO_TASK_FINISH
+    assert fc.event_slug(75) == "go_to_cleanpoint_success"  # FAULT_GO_TO_CLEANPOINT_SUCCESS
+
+
+def test_event_slug_none_for_absent_code():
+    assert fc.event_slug(47) is None   # not in the catalog
+    assert fc.event_slug(9999) is None
+
+
+def test_event_slug_covers_every_iot_code():
+    for c in fc.known_codes("iot"):
+        assert fc.event_slug(c), f"code {c} has no slug"
