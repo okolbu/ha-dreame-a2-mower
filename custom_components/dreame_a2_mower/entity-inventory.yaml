@@ -2664,7 +2664,7 @@ entities:
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-06-01"
+      last_verified: "2026-06-18"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -2673,15 +2673,18 @@ entities:
       - date: "2026-06-01"
         status: presumed
         claim: "sensor.error reads latched snapshot.errors (fault partition) via _active_fault_text, not raw MowerState.error_code; shows None when no active fault, persists a fault until recovery (movement/undock/mow-start)"
+      - date: "2026-06-18"
+        status: presumed
+        claim: "P1 (fault-catalog localization): sensor.dreame_a2_mower_error value is now localized via describe_error(code, hass.config.language) backed by mower/fault_catalog.py / mower/data/fault_catalog.json [apk:g2408-plugin-ext1423]. Hand-curated ERROR_CODE_DESCRIPTIONS retired. extra_state_attributes adds three new language-aware/language-neutral attrs: error_detail (localized solution text from fault_catalog.fault_detail), fault_names (language-neutral list of fault_name strings), fault_categories (sorted deduplicated list from fault_category). All via _error_attrs(coord) in entities/sensor/device.py. device-sync fault banner also localized via describe_error(code, lang) (coordinator/_device_sync.py). Code-read; live-verified after release."
     references:
       wire_entry: "varies — see notes for per-key wire surfaces"
-      code: "custom_components/dreame_a2_mower/sensor_device.py:795"
+      code: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     notes: |
       Config-driven base class. One HA entity instantiated per entry in the
-      DIAGNOSTIC_SENSORS tuple (sensor_device.py:486). Descriptor keys backed
-      as of 2026-06-01:
+      DIAGNOSTIC_SENSORS tuple (entities/sensor/device.py). Descriptor keys backed
+      as of 2026-06-18:
         battery_level          — coord.state_machine.snapshot().battery_percent (s3p1)
-        error_description      — _active_fault_text(coord.state_machine.snapshot()) — latched fault set (snapshot.errors), NOT raw MowerState.error_code; no entity_category (primary entity)
+        error_description      — _active_fault_text(coord.state_machine.snapshot(), coord) → describe_error(code, lang) via mower/fault_catalog.py [apk:g2408-plugin-ext1423]; lang=fault_catalog.resolve_lang(hass.config.language); extra_state_attributes: error_detail (localized solution text), fault_names (language-neutral list), fault_categories (FAULT/ALERT/INFO list); latched snapshot.errors, NOT raw MowerState.error_code; no entity_category (primary entity)
         wifi_rssi_dbm          — coord.state_machine.snapshot().wifi_rssi_dbm (s1p1)
         position_x_m           — coord.state_machine.snapshot().position_x_m (s1p4)
         position_y_m           — coord.state_machine.snapshot().position_y_m (s1p4)
