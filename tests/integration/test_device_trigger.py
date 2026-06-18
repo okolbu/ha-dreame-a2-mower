@@ -268,9 +268,9 @@ async def test_get_triggers_returns_one_per_supported_type(hass_with_mower):
 
     # High-value notification types are exposed; pure-noise ones are not.
     assert "human_detected" in types_returned
-    assert "robot_trapped" in types_returned
+    assert "trapped" in types_returned          # was robot_trapped (code 2)
     assert "emergency_stop" in types_returned
-    assert "blades_worn" in types_returned
+    assert "blade_loss" in types_returned       # was blades_worn (code 28)
     assert "fault_detected" in types_returned  # lifecycle fault
     assert "unknown_s2p2" not in types_returned
     assert "maintenance_reminder" not in types_returned
@@ -397,3 +397,19 @@ def test_source_entity_resolution_picks_right_entity(hass_with_mower):
         device_trigger._source_entity_id_for_type(hass, device_id, "human_detected")
         == "event.dreame_a2_mower_notification"
     )
+
+
+def test_exposed_triggers_use_corrected_catalog_slugs():
+    from custom_components.dreame_a2_mower.device_trigger import (
+        _EXPOSED_NOTIFICATION_EVENT_TYPES as EXP, TRIGGER_TYPES,
+    )
+    from custom_components.dreame_a2_mower.mower.error_codes import S2P2_EVENT_TYPES
+    assert "back_charge_failed" in EXP            # was positioning_failed_stuck (31)
+    assert "go_to_cleanpoint_success" in EXP       # was arrived_at_maintenance_point (75)
+    assert "trapped" in EXP                        # was robot_trapped (2)
+    for stale in ("positioning_failed_stuck", "robot_trapped", "arrived_at_maintenance_point"):
+        assert stale not in EXP
+    valid = set(S2P2_EVENT_TYPES.values())
+    for slug in EXP:
+        assert slug in valid, f"exposed trigger {slug!r} not a derived slug"
+    assert set(EXP) <= set(TRIGGER_TYPES)

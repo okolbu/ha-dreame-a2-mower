@@ -13,16 +13,16 @@ This file adds NO new event infrastructure. It re-uses:
 
 - the `dreame_a2_mower_event` bus event already fired with the payload
   `{entity_id, event_type, data}`;
-- `LIFECYCLE_EVENT_TYPES` (11 types) and `NOTIFICATION_EVENT_TYPES`
-  (28 types) from `const.py`.
+- `LIFECYCLE_EVENT_TYPES` (11 types) and the catalog-derived
+  `NOTIFICATION_EVENT_TYPES` from `const.py`.
 
 Curated exposed set
 -------------------
 All 11 ``LIFECYCLE_EVENT_TYPES`` are exposed (each is an unambiguous,
 automatable moment).
 
-From the 28 ``NOTIFICATION_EVENT_TYPES`` we expose the high-value,
-actionable subset — the ones a user would plausibly automate on
+From the catalog-derived ``NOTIFICATION_EVENT_TYPES`` we expose a curated
+high-value subset of 18 — the ones a user would plausibly automate on
 (safety, fault, attention-needed). The pure status-mirror notifications
 that merely duplicate a lifecycle event or a sensor state are omitted to
 keep the trigger picker readable (they remain fully available as raw
@@ -72,24 +72,24 @@ _BUS_EVENT_TYPE = f"{DOMAIN}_event"
 # Curated, high-value notification triggers (see module docstring for the
 # rationale on what's exposed vs omitted).
 _EXPOSED_NOTIFICATION_EVENT_TYPES: tuple[str, ...] = (
-    "human_detected",
-    "robot_trapped",
-    "emergency_stop",
-    "blades_worn",
-    "left_wheel_error",
-    "right_wheel_error",
-    "hanging",
-    "positioning_failed_stuck",
-    "positioning_failed_transient",
-    "failed_to_start_task",
-    "battery_temp_low_charging_paused",
-    "low_battery_return",
-    "rain_protection",
-    "standby_outside_station_too_long",
-    "paused_too_long_returning",
-    "top_cover_open",
-    "arrived_at_maintenance_point",
-    "cannot_reach_maintenance_point",
+    "human_detected",           # 27
+    "trapped",                  # 2
+    "emergency_stop",           # 23
+    "blade_loss",               # 28
+    "left_wheel",               # 4
+    "right_wheel",              # 5
+    "hanging",                  # 0
+    "back_charge_failed",       # 31
+    "locating_failed_with_map", # 33
+    "task_start_failed",        # 36
+    "battery_temp_low",         # 43 (shared slug with 59 FAULT variant)
+    "battery_low_returning",    # 54
+    "bad_weather_protecting",   # 56
+    "idle_timeout_returning",   # 71
+    "pause_timeout_returning",  # 72
+    "top_cover_open",           # 73
+    "go_to_cleanpoint_success", # 75
+    "go_to_cleanpoint_failed",  # 76
 )
 
 # The full set of `type`s this device-trigger platform supports.
