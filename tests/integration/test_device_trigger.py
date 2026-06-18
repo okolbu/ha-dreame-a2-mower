@@ -443,3 +443,19 @@ def test_no_stale_old_trigger_slugs_remain():
         labels = set(_trigger_labels(rel))
         leftover = stale & labels
         assert not leftover, f"{rel} still has stale trigger_type keys: {leftover}"
+
+
+def _notif_event_labels(rel: str) -> dict:
+    root = Path(__file__).resolve().parents[2] / "custom_components" / "dreame_a2_mower"
+    data = json.loads((root / rel).read_text(encoding="utf-8"))
+    return data["entity"]["event"]["notification"]["state_attributes"]["event_type"]["state"]
+
+
+def test_notification_event_type_labels_cover_all_slugs_in_both_files():
+    from custom_components.dreame_a2_mower.mower.error_codes import NOTIFICATION_EVENT_TYPES
+    for rel in ("strings.json", "translations/en.json"):
+        labels = _notif_event_labels(rel)
+        missing = [s for s in NOTIFICATION_EVENT_TYPES if s not in labels]
+        extra = [k for k in labels if k not in set(NOTIFICATION_EVENT_TYPES)]
+        assert not missing, f"{rel} missing event_type labels for: {missing}"
+        assert not extra, f"{rel} has stale/extra event_type labels: {extra}"
