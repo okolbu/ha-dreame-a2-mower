@@ -38,3 +38,22 @@ def test_resolve_lang():
     assert fc.resolve_lang("ja") == "en"
     assert fc.resolve_lang(None) == "en"
     assert "en" in fc.SUPPORTED_LANGS and len(fc.SUPPORTED_LANGS) == 21
+
+
+def test_fault_tier_maps_category_and_severity():
+    assert fc.fault_tier(4) == "error"        # FAULT + malfunction
+    assert fc.fault_tier(0) == "error"        # FAULT + anomaly
+    assert fc.fault_tier(73) == "error"       # FAULT + malfunction (top cover)
+    assert fc.fault_tier(27) == "attention"   # FAULT + work_message (human)
+    assert fc.fault_tier(28) == "attention"   # FAULT + consumable (blade worn)
+    assert fc.fault_tier(31) == "alert"       # ALERT
+    assert fc.fault_tier(48) == "info"        # INFO
+    assert fc.fault_tier(99999) is None       # unknown
+
+
+def test_error_tier_codes_is_the_pinned_26():
+    assert fc.error_tier_codes("iot") == frozenset(
+        {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17,
+         20, 21, 22, 23, 24, 26, 37, 59, 73}
+    )
+    assert 31 not in fc.error_tier_codes("iot")  # ALERT, not error

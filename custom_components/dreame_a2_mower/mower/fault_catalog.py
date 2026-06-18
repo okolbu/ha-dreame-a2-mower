@@ -109,3 +109,33 @@ def known_codes(channel: str = "iot") -> frozenset[int]:
         except (TypeError, ValueError):
             continue
     return frozenset(out)
+
+
+def fault_tier(code: int, channel: str = "iot") -> str | None:
+    """App-derived surfacing tier for a code, or None if unknown. Tier names
+    track the app vocabulary (alert/info = category words; error/attention =
+    the FAULT category split by severity).
+
+      error     = FAULT + (anomaly|malfunction)     — mower can't continue / needs help
+      attention = FAULT + (work_message|consumable) — attention, not broken
+      alert     = ALERT (any severity)              — recoverable operation failure
+      info      = INFO  (any severity)              — lifecycle/status
+    """
+    cat = fault_category(code, channel)
+    if cat is None:
+        return None
+    sev = fault_severity(code, channel)
+    if cat == "FAULT":
+        return "error" if sev in ("anomaly", "malfunction") else "attention"
+    if cat == "ALERT":
+        return "alert"
+    if cat == "INFO":
+        return "info"
+    return None
+
+
+def error_tier_codes(channel: str = "iot") -> frozenset[int]:
+    """The codes whose tier is 'error' (the HA error-latch set)."""
+    return frozenset(
+        c for c in known_codes(channel) if fault_tier(c, channel) == "error"
+    )
