@@ -26,6 +26,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from ..._availability import _FreshnessAvailableMixin
 from ..._devices import _MowerScopedEntity, mower_device_info, mower_unique_id
 from ...coordinator import DreameA2MowerCoordinator
+from ...mower import fault_catalog
 from ...mower.error_codes import describe_error
 from ...mower.state import ChargingStatus, MowerState
 from .base import (
@@ -66,20 +67,48 @@ def _describe_error_or_none(code: int | None) -> str | None:
     return describe_error(code) if code is not None else None
 
 
-def _active_fault_text(snapshot) -> str | None:
-    """Human text for the currently-latched fault(s), or None.
+def _coord_lang(coord) -> str:
+    """Resolved catalog language from a coordinator's HA config (defensive)."""
+    hass = getattr(coord, "hass", None)
+    cfg = getattr(hass, "config", None)
+    return fault_catalog.resolve_lang(getattr(cfg, "language", None))
 
-    Reads the state machine's latched fault set (snapshot.errors) rather than
-    the last raw s2p2 (MowerState.error_code). s2p2 multiplexes faults with
-    status codes, so the raw value is usually a non-fault and a real fault is
-    overwritten within seconds — the latch is the actionable signal. Multiple
-    simultaneous faults are joined with '; '. Sorted for stable output.
+
+def _active_fault_text(snapshot, coord=None) -> str | None:
+    """Localized human text for the currently-latched fault(s), or None.
+
+    Reads snapshot.errors (the latched fault set, not the raw s2p2). Prefers the
+    user's HA language via coord.hass.config.language; falls back to English when
+    no coord is supplied (audit eval-path). Multiple faults joined with '; '.
     """
     # getattr (not snapshot.errors) keeps the audit eval-path robust to partial fakes.
     errors = getattr(snapshot, "errors", None)
     if not errors:
         return None
-    return "; ".join(describe_error(c) for c in sorted(errors))
+    lang = _coord_lang(coord) if coord is not None else "en"
+    return "; ".join(describe_error(c, lang) for c in sorted(errors))
+
+
+def _error_attrs(coord) -> dict:
+    """Localized detail + language-neutral fault_names/categories for the latched
+    faults. Empty dict when there are no faults."""
+    snap = coord.state_machine.snapshot()
+    errors = getattr(snap, "errors", None)
+    if not errors:
+        return {}
+    lang = _coord_lang(coord)
+    codes = sorted(errors)
+    details = [d for d in (fault_catalog.fault_detail(c, lang) for c in codes) if d]
+    names = [n for n in (fault_catalog.fault_name(c) for c in codes) if n]
+    cats = sorted({c2 for c2 in (fault_catalog.fault_category(c) for c in codes) if c2})
+    out: dict = {}
+    if details:
+        out["error_detail"] = "; ".join(details)
+    if names:
+        out["fault_names"] = names
+    if cats:
+        out["categories"] = cats
+    return out
 
 
 def _format_active_selection(state: MowerState) -> str | None:
@@ -667,7 +696,8 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         key="error_description",
         name="Error",
         availability_source="mqtt",
-        value_fn=lambda coord: _active_fault_text(coord.state_machine.snapshot()),
+        value_fn=lambda coord: _active_fault_text(coord.state_machine.snapshot(), coord),
+        extra_state_attributes_fn=lambda coord: _error_attrs(coord),
     ),
     # WiFi RSSI — reads the persisted snapshot value so it survives HA
     # restarts. The snapshot is loaded from disk via state_machine

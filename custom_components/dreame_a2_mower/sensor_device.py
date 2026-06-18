@@ -7,14 +7,15 @@ re-export preserves the old import path (``from .sensor_device import …`` and
 import from ``.entities.sensor.device`` directly.
 
 Explicit re-export of the underscore helpers (``_active_fault_text``,
-``_mpos_value``, ``_mpos_attrs``): ``import *`` would not carry them, and the
-test suite imports them by name.
+``_error_attrs``, ``_mpos_value``, ``_mpos_attrs``): ``import *`` would not
+carry them, and the test suite imports them by name.
 """
 from __future__ import annotations
 
 from .entities.sensor.device import *  # noqa: F401,F403
 from .entities.sensor.device import (  # noqa: F401
     _active_fault_text,
+    _error_attrs,
     _mpos_attrs,
     _mpos_value,
 )

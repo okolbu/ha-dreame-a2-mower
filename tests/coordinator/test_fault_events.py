@@ -14,6 +14,7 @@ from custom_components.dreame_a2_mower.const import (
     EVENT_TYPE_FAULT_DETECTED,
     EVENT_TYPE_FAULT_CLEARED,
 )
+from custom_components.dreame_a2_mower.mower import fault_catalog as fc
 
 
 class _RecordingLifecycle:
@@ -78,7 +79,7 @@ def test_fault_delta_fires_detected_and_cleared():
 
     detected = next(d for t, d in lc.fired if t == EVENT_TYPE_FAULT_DETECTED)
     assert detected["code"] == 5
-    assert detected["description"] == "Right drive wheel error"
+    assert detected["description"] == fc.fault_text(5, "en")
     assert detected["at_unix"] == 1000
 
     cleared = next(d for t, d in lc.fired if t == EVENT_TYPE_FAULT_CLEARED)
