@@ -1,0 +1,51 @@
+import dataclasses
+from types import SimpleNamespace
+
+from custom_components.dreame_a2_mower.coordinator._notifications import (
+    _NotificationsMixin,
+)
+from custom_components.dreame_a2_mower.mower.state import MowerState
+
+
+def _rec(mid, send_time, text="hello"):
+    return {
+        "messageId": mid,
+        "sendTime": send_time,
+        "localizationContents": {"en": text},
+        "source": {"siid": "2", "piid": "2", "value": "0"},
+    }
+
+
+def _bare_coord(existing_msgs, *, cap=200):
+    c = _NotificationsMixin()
+    c.data = MowerState(device_messages=list(existing_msgs))
+    c.entry = SimpleNamespace(options={"messages_keep": cap})
+    c.link_message_snapshot_photos = lambda lst: None  # no-op stub
+    c._device_messages_store = None  # no store in this test
+    captured = {}
+
+    def _set(state):
+        captured["state"] = state
+    c.async_set_updated_data = _set
+    return c, captured
+
+
+def test_apply_device_messages_accumulates_not_replaces():
+    existing = [{"id": "old", "title": "old", "date": "2026-06-18T08:00:00+00:00",
+                 "body": None, "link": None, "unread": True}]
+    c, captured = _bare_coord(existing)
+    c._apply_device_messages([_rec("new", "2026-06-18 10:00:00")])
+    ids = [m["id"] for m in captured["state"].device_messages]
+    assert "old" in ids and "new" in ids
+    assert ids[0] == "new"
+
+
+def test_merge_device_messages_returns_capped_union():
+    existing = [{"id": f"e{i}", "title": "x", "date": f"2026-06-18T0{i}:00:00+00:00",
+                 "body": None, "link": None, "unread": True} for i in range(3)]
+    c, _ = _bare_coord(existing, cap=4)
+    fresh = [{"id": "z", "title": "z", "date": "2026-06-18T09:00:00+00:00",
+              "body": None, "link": None, "unread": True}]
+    merged = c._merge_device_messages(fresh)
+    assert merged[0]["id"] == "z"
+    assert len(merged) == 4

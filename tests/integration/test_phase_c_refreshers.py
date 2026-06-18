@@ -27,6 +27,9 @@ def _coord(gps=None, remote=None, msg=None, dev=None, ota=None):
     c._update_device_registry_serial = MagicMock()
     # Cross-mixin call provided by _LidarOssMixin via MRO in the real coordinator.
     c.link_message_snapshot_photos = lambda messages: None
+    # Cross-mixin call: _merge_device_messages lives on _NotificationsMixin; stub
+    # it here to return fresh_dicts unchanged (no accumulation in this isolated test).
+    c._merge_device_messages = lambda fresh_dicts: fresh_dicts
     return c
 
 

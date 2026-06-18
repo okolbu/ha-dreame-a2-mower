@@ -15,8 +15,9 @@ def _flow():
     return flow
 
 
-def test_default_messages_keep_is_100():
-    assert DEFAULT_MESSAGES_KEEP == 100
+def test_default_messages_keep_is_200():
+    # Default raised from 100 to 200 when accumulation was added (M2).
+    assert DEFAULT_MESSAGES_KEEP == 200
 
 
 def test_schema_includes_messages_keep_with_default():

@@ -41,6 +41,9 @@ from ._property_apply import S2P2_EVENT_TYPES, S2P2_UNKNOWN_EVENT_TYPE
 # so we delay before fetching. 10s is comfortable; if it's too short we'll
 # miss the record and fire nothing (which is correct).
 _FETCH_DELAY_S: float = 10.0
+
+# Debounce window for persisting the accumulated device-message list.
+DEVICE_MESSAGES_SAVE_DELAY_S = 5
 _FETCH_PAGE_SIZE: int = 10
 _SEEN_IDS_CAP: int = 100
 
@@ -110,28 +113,40 @@ class _NotificationsMixin:
 
     def _apply_device_messages(self, records: list | None) -> None:
         """Reactively refresh ``MowerState.device_messages`` from a freshly
-        fetched device-messages/v2 page (called by the s2p2 resolver) so the
-        list sensor reflects a new notification immediately, instead of waiting
-        for the hourly ``_refresh_messages``. Device-only: service/shared have
-        no MQTT trigger and stay interval-refreshed. No-op on an empty page (a
-        true empty is reconciled by the hourly refresh, not the reactive path)."""
+        fetched device-messages/v2 page (called by the s2p2 resolver), merging
+        it into the accumulated list so the sensor reflects new notifications
+        immediately. No-op on an empty page."""
         if not records:
             return
+        fresh = [m.as_dict() for m in message_record.normalize_device(records)]
+        merged = self._merge_device_messages(fresh)
+        new = dataclasses.replace(self.data, device_messages=merged)
+        if new != self.data:
+            self.async_set_updated_data(new)
+
+    def _merge_device_messages(self, fresh_dicts: list[dict]) -> list[dict]:
+        """Merge a freshly-fetched device-message page into the accumulated list.
+
+        Unions by id with the persisted list (existing wins → keeps linked
+        `photos` + immutable text), newest-first, capped at CONF_MESSAGES_KEEP,
+        links snapshot photos, and schedules a debounced persist. Returns the
+        merged list. The cloud windows device-messages/v2 to the latest ~10, so
+        accumulation is the only way to retain more.
+        """
+        from ..protocol.message_record import merge_device_messages
+
         entry = getattr(self, "entry", None)
         cap = int(
             entry.options.get(CONF_MESSAGES_KEEP, DEFAULT_MESSAGES_KEEP)
-            if entry is not None
-            else DEFAULT_MESSAGES_KEEP
+            if entry is not None else DEFAULT_MESSAGES_KEEP
         )
-        new_list = [
-            m.as_dict() for m in message_record.normalize_device(records)[:cap]
-        ]
-        # Link "View snapshots in the app." notifications to their AI-detection
-        # photos (timestamp-window match), in place.
-        self.link_message_snapshot_photos(new_list)
-        new = dataclasses.replace(self.data, device_messages=new_list)
-        if new != self.data:
-            self.async_set_updated_data(new)
+        existing = list(getattr(self.data, "device_messages", None) or [])
+        merged = merge_device_messages(existing, fresh_dicts, cap)
+        self.link_message_snapshot_photos(merged)
+        store = getattr(self, "_device_messages_store", None)
+        if store is not None:
+            store.async_delay_save(lambda: merged, DEVICE_MESSAGES_SAVE_DELAY_S)
+        return merged
 
     async def _resolve_s2p2_notification(
         self, *, siid: int, piid: int, value: int, now_unix: int,

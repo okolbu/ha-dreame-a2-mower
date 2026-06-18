@@ -417,6 +417,7 @@ class _CoreMixin:
         # state_machine.snapshot().
         self.state_machine = MowerStateMachine()
         self._state_store: Store | None = None  # initialised in _async_update_data
+        self._device_messages_store: Store | None = None  # initialised in _async_update_data
         # Pending-finalize wait (dock-return capture).
         # Set to an asyncio.Event by _wait_for_dock_return; cleared in its
         # finally block so stale signals from subsequent MQTT pushes are
