@@ -1707,23 +1707,23 @@ entities:
   - id: "sensor.dreame_a2_mower_device_messages"
     platform: sensor
     class: "DreameA2DeviceMessagesSensor"
-    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py:1512"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py:1598"
     device: parent
     source:
-      wire: "device-messages/v2 (Phase messages _refresh_messages)"
+      wire: "device-messages/v2 (Phase messages _refresh_messages); server window ~10 latest [probe@2026-06-18]"
       state_path: "MowerState.device_messages"
     write_path: read-only
     status:
       seen_working: true
-      last_verified: "2026-06-15"
+      last_verified: "2026-06-18"
     verifications:
       - date: "2026-06-15"
         status: verified
         claim: "Live-confirmed on HA (v1.0.28a2): state=10 with 10 real device-messages/v2 records (titles e.g. 'Right drive wheel error', 'Low battery. Returning to station.', 'Bumper error' + correct ISO dates + unread). normalize_device localizationContents/string-sendTime mapping renders correctly. NOTE: HA registered the entity with a stray area prefix (sensor.floor_0_outside_dreame_a2_mower_device_messages) — renamed to the canonical id via entity-registry; see [[feedback_entity_id_name_derived]]."
         evidence: "live HA ha_get_state 2026-06-15 (MCP); 10 items returned"
-      - date: "2026-06-15"
+      - date: "2026-06-18"
         status: presumed
-        claim: "Code-read: DreameA2DeviceMessagesSensor reads MowerState.device_messages; state=unread count, items attr=full list; EntityCategory.DIAGNOSTIC"
+        claim: "Code-read: list ACCUMULATES (merge-by-id, existing-priority, newest-first) across fetches via coordinator._merge_device_messages, capped at CONF_MESSAGES_KEEP (default 200); PERSISTED across restarts via HA Store key dreame_a2_mower_device_messages_<entry_id>, seeded on boot; state = TOTAL retained count (not unread — device-messages/v2 carries no read flag so unread-count would just grow to the cap); items attr = full list; EntityCategory.DIAGNOSTIC. Accumulation is required because cloud windows device-messages/v2 to the latest ~10."
 
   - id: "sensor.dreame_a2_mower_service_messages"
     platform: sensor

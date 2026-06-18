@@ -5,7 +5,10 @@ Three read-only sensors on the PARENT device:
   - DreameA2ServiceMessagesSensor — service_messages field
   - DreameA2SharedMessagesSensor  — shared_messages field
 
-State = unread count; items attr = the full list; recorder-excluded.
+DreameA2DeviceMessagesSensor state = TOTAL retained count (device-messages/v2
+carries no read flag, so total is the useful signal).
+DreameA2ServiceMessagesSensor / DreameA2SharedMessagesSensor state = unread count.
+items attr = the full list; recorder-excluded.
 """
 from custom_components.dreame_a2_mower.entities.sensor.device import (
     DreameA2DeviceMessagesSensor,
@@ -45,6 +48,11 @@ def test_message_sensors_exclude_recorder():
 
 
 def test_device_messages_sensor_state_and_items():
+    """State is the TOTAL retained count, not the unread subset.
+
+    device-messages/v2 carries no reliable read flag (all arrive as unread),
+    so the sensor reports total count and accumulates indefinitely up to the cap.
+    """
     data = MowerState()
     data = data.__class__(**{**{f: getattr(data, f) for f in data.__dataclass_fields__}, "device_messages": [
         {"id": "10", "title": "x", "unread": True},
@@ -52,7 +60,8 @@ def test_device_messages_sensor_state_and_items():
         {"id": "12", "title": "z", "unread": False},
     ]})
     s = _sensor(DreameA2DeviceMessagesSensor, data)
-    assert s.native_value == 2
+    # state = TOTAL count (3), not unread count (2)
+    assert s.native_value == 3
     assert len(s.extra_state_attributes["items"]) == 3
 
 
