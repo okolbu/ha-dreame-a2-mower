@@ -21,8 +21,10 @@ HA's trigger framework:
 """
 from __future__ import annotations
 
+import json
 import sys
 import types
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -413,3 +415,31 @@ def test_exposed_triggers_use_corrected_catalog_slugs():
     for slug in EXP:
         assert slug in valid, f"exposed trigger {slug!r} not a derived slug"
     assert set(EXP) <= set(TRIGGER_TYPES)
+
+
+def _trigger_labels(rel: str) -> dict:
+    root = Path(__file__).resolve().parents[2] / "custom_components" / "dreame_a2_mower"
+    data = json.loads((root / rel).read_text(encoding="utf-8"))
+    return data["device_automation"]["trigger_type"]
+
+
+def test_every_trigger_type_has_a_label_in_both_files():
+    for rel in ("strings.json", "translations/en.json"):
+        labels = _trigger_labels(rel)
+        missing = [t for t in device_trigger.TRIGGER_TYPES if t not in labels]
+        assert not missing, f"{rel} trigger_type missing labels for: {missing}"
+
+
+def test_no_stale_old_trigger_slugs_remain():
+    stale = {
+        "robot_trapped", "blades_worn", "left_wheel_error", "right_wheel_error",
+        "positioning_failed_stuck", "positioning_failed_transient",
+        "failed_to_start_task", "battery_temp_low_charging_paused",
+        "low_battery_return", "rain_protection",
+        "standby_outside_station_too_long", "paused_too_long_returning",
+        "arrived_at_maintenance_point", "cannot_reach_maintenance_point",
+    }
+    for rel in ("strings.json", "translations/en.json"):
+        labels = set(_trigger_labels(rel))
+        leftover = stale & labels
+        assert not leftover, f"{rel} still has stale trigger_type keys: {leftover}"
