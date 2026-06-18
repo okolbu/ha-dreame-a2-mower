@@ -44,6 +44,7 @@ from ..const import (
     LOG_NOVEL_VALUE,
     LOGGER,
 )
+from ..mower import fault_catalog
 from ..mower.state import ChargingStatus, MowerState
 from ._property_apply import (
     _BLOB_SLOTS,
@@ -462,6 +463,9 @@ class _DeviceSyncMixin:
             "send_time": send_time,
             "message_id": message_id,
             "source": "cloud",
+            "tier": fault_catalog.fault_tier(code),
+            "category": fault_catalog.fault_category(code),
+            "severity": fault_catalog.fault_severity(code),
         }
         ent.trigger(event_type, payload)
 
