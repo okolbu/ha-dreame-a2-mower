@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 from custom_components.dreame_a2_mower.mower.error_codes import (
-    FAULT_CODES,
     S2P2_EVENT_TYPES,
     describe_error,
     is_fault,
@@ -81,29 +80,28 @@ def test_descriptions_do_not_contradict_event_slugs():
         assert kw in _fc.fault_text(code, "en").lower(), (code, _fc.fault_text(code, "en"))
 
 
-# Adding a code to FAULT_CODES requires g2408 evidence + an inventory.yaml
-# § s2p2 verification entry (CLAUDE.md fact-discipline). The positive +
-# negative tests below together pin the exact membership.
-def test_genuine_faults_are_faults():
-    # Wire/cloud-VERIFIED s2p2 faults that require user intervention.
-    for code in (2, 4, 5, 23, 31, 36):
-        assert is_fault(code), f"expected {code} to be a fault"
+def test_genuine_faults_are_error_tier():
+    # error-tier (FAULT + anomaly|malfunction) → latches
+    for code in (0, 1, 2, 4, 5, 7, 23, 73):
+        assert is_fault(code), f"expected {code} to be an error-tier fault"
+    # 31/36 are ALERT in the app → NO LONGER error-tier
+    assert not is_fault(31)
+    assert not is_fault(36)
 
 
-def test_status_lifecycle_and_unverified_codes_are_not_faults():
-    # Lifecycle / "(not an error)" / self-recovering / maintenance codes...
-    # ...plus 24/43 (battery lifecycle), 33 (owned by positioning_health),
-    # 76 (auto-returns home), and the unverified vacuum-lineage codes that
-    # MUST NOT latch ERROR until confirmed on g2408.
-    for code in (0, 24, 28, 30, 33, 43, 47, 48, 50, 51, 53, 54, 56, 63, 70,
-                 71, 74, 75, 76,
-                 37, 38, 39, 40, 41, 45, 49, 57, 58, 61, 62, 73, 117):
-        assert not is_fault(code), f"expected {code} to NOT be a fault"
+def test_non_error_tier_codes_do_not_latch():
+    from custom_components.dreame_a2_mower.mower import fault_catalog as fc
+    for code in (27, 28, 30, 31, 36, 47, 48, 50, 51, 54, 56, 70, 71, 74, 75, 76):
+        assert fc.fault_tier(code) != "error"
+        assert not is_fault(code), f"{code} (tier={fc.fault_tier(code)}) must not latch"
 
 
-def test_fault_codes_are_all_described():
-    for code in FAULT_CODES:
-        assert _fc.fault_text(code, "en") is not None, f"fault {code} missing catalog entry"
+def test_error_tier_codes_all_have_catalog_text():
+    from custom_components.dreame_a2_mower.mower import fault_catalog as fc
+    codes = fc.error_tier_codes("iot")
+    assert len(codes) == 26
+    for code in codes:
+        assert fc.fault_text(code, "en"), f"error code {code} missing catalog text"
 
 
 def test_is_fault_handles_none_and_unknown():

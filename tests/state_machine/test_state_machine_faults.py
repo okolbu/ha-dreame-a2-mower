@@ -16,7 +16,7 @@ def test_non_fault_code_does_not_latch():
 def test_non_fault_does_not_evict_latched_fault():
     m = MowerStateMachine()
     m.handle_mqtt_property(siid=2, piid=2, value=5, now_unix=1000)
-    m.handle_mqtt_property(siid=2, piid=2, value=73, now_unix=1001)  # 73 is NOT in FAULT_CODES
+    m.handle_mqtt_property(siid=2, piid=2, value=47, now_unix=1001)  # 47 = task cancelled (alert), not a fault; 50 clears errors via mow-start path
     # A non-fault code must not disturb the already-latched fault 5.
     assert m.snapshot().errors == frozenset({5})
 
@@ -68,8 +68,8 @@ def test_undock_clears_faults():
     m = MowerStateMachine()
     # Seed a docked prior state (s2p1=6 charging) then latch a fault.
     m.handle_mqtt_property(siid=2, piid=1, value=6, now_unix=1000)
-    m.handle_mqtt_property(siid=2, piid=2, value=31, now_unix=1001)  # failed-to-return
-    assert 31 in m.snapshot().errors
+    m.handle_mqtt_property(siid=2, piid=2, value=5, now_unix=1001)  # right wheel error (error-tier)
+    assert 5 in m.snapshot().errors
     # Undock: s2p1 → 1 (working) from docked while BETWEEN_SESSIONS.
     m.handle_mqtt_property(siid=2, piid=1, value=1, now_unix=1002)
     assert m.snapshot().errors == frozenset()
@@ -79,4 +79,19 @@ def test_mow_start_clears_faults():
     m = MowerStateMachine()
     m.handle_mqtt_property(siid=2, piid=2, value=5, now_unix=1000)
     m.handle_mqtt_property(siid=2, piid=2, value=50, now_unix=1001)  # mowing_started
+    assert m.snapshot().errors == frozenset()
+
+
+def test_newly_classified_error_code_latches():
+    # 73 (top-cover-open, FAULT/malfunction) was NOT in the old FAULT_CODES;
+    # the app-derived error tier now latches it.
+    m = MowerStateMachine()
+    m.handle_mqtt_property(siid=2, piid=2, value=73, now_unix=1000)
+    assert 73 in m.snapshot().errors
+
+
+def test_alert_code_does_not_latch():
+    # 31 (back-charge-failed) is ALERT in the app -> alert tier, not error.
+    m = MowerStateMachine()
+    m.handle_mqtt_property(siid=2, piid=2, value=31, now_unix=1000)
     assert m.snapshot().errors == frozenset()
