@@ -36,3 +36,20 @@ def test_fault_detected_falls_back_to_code_when_no_description():
         {"code": 5},  # no description
     )
     assert msg == "fault: error 5"
+
+
+def test_logbook_notification_prefers_payload_text():
+    from custom_components.dreame_a2_mower.logbook import _format
+    msg = _format("event.x_notification", "human_detected", {"text": "A person was detected"})
+    assert msg == "A person was detected"
+
+
+def test_logbook_notification_no_text_falls_back_to_slug_words():
+    from custom_components.dreame_a2_mower.logbook import _format
+    msg = _format("event.x_notification", "back_charge_failed", {})
+    assert msg == "back charge failed"
+
+
+def test_logbook_notification_messages_table_removed():
+    import custom_components.dreame_a2_mower.logbook as lb
+    assert not hasattr(lb, "_NOTIFICATION_MESSAGES")
