@@ -31,7 +31,7 @@ def test_error_attrs_detail_names_categories():
     c = _coord("en", {27, 4})
     a = _error_attrs(c)
     assert "FAULT_HUMAN_DETECTED" in a["fault_names"]
-    assert "FAULT" in a["categories"]
+    assert "FAULT" in a["fault_categories"]
     assert a["error_detail"]
 
 

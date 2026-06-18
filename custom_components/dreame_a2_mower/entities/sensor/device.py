@@ -107,7 +107,7 @@ def _error_attrs(coord) -> dict:
     if names:
         out["fault_names"] = names
     if cats:
-        out["categories"] = cats
+        out["fault_categories"] = cats
     return out
 
 
