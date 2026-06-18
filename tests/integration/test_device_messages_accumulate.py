@@ -49,3 +49,25 @@ def test_merge_device_messages_returns_capped_union():
     merged = c._merge_device_messages(fresh)
     assert merged[0]["id"] == "z"
     assert len(merged) == 4
+
+
+def test_merge_device_messages_schedules_store_save():
+    """When a store is present, the merged list is scheduled for a debounced
+    persist via async_delay_save (the callable returns the merged list)."""
+    calls = []
+
+    class _FakeStore:
+        def async_delay_save(self, data_func, delay):
+            calls.append((data_func(), delay))
+
+    existing = [{"id": "old", "title": "old", "date": "2026-06-18T08:00:00+00:00",
+                 "body": None, "link": None, "unread": True}]
+    c, _ = _bare_coord(existing)
+    c._device_messages_store = _FakeStore()
+    fresh = [{"id": "new", "title": "new", "date": "2026-06-18T10:00:00+00:00",
+              "body": None, "link": None, "unread": True}]
+    merged = c._merge_device_messages(fresh)
+    assert len(calls) == 1
+    saved, delay = calls[0]
+    assert [m["id"] for m in saved] == [m["id"] for m in merged]  # saves the merged list
+    assert delay == 5  # DEVICE_MESSAGES_SAVE_DELAY_S

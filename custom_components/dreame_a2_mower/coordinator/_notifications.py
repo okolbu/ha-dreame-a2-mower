@@ -133,15 +133,13 @@ class _NotificationsMixin:
         merged list. The cloud windows device-messages/v2 to the latest ~10, so
         accumulation is the only way to retain more.
         """
-        from ..protocol.message_record import merge_device_messages
-
         entry = getattr(self, "entry", None)
         cap = int(
             entry.options.get(CONF_MESSAGES_KEEP, DEFAULT_MESSAGES_KEEP)
             if entry is not None else DEFAULT_MESSAGES_KEEP
         )
         existing = list(getattr(self.data, "device_messages", None) or [])
-        merged = merge_device_messages(existing, fresh_dicts, cap)
+        merged = message_record.merge_device_messages(existing, fresh_dicts, cap)
         self.link_message_snapshot_photos(merged)
         store = getattr(self, "_device_messages_store", None)
         if store is not None:
