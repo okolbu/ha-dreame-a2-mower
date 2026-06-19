@@ -39,6 +39,18 @@ _DEFAULT_PALETTE: dict[str, tuple[int, int, int, int]] = {
         (184, 217, 141, 200),   # zone 3: muted green
     ],
     "zone_outline": (100, 160, 70, 255),
+    # Per-zone pre-start stripe colour pairs (dark band, light band), indexed by
+    # mowing-zone order so adjacent zones are visually distinct in the STRIPES
+    # preview. The light band reuses each zone's `zone_fills` identity hue (at
+    # α255 for solid stripes); the dark band is a darker shade of the same hue.
+    # Maps with more zones than pairs cycle (index % len) — kept aligned with
+    # zone_fills (green / sand / blue / olive) so a 5th+ zone repeats green.
+    "stripe_pairs": [
+        ((100, 160, 70, 255), (178, 223, 138, 255)),   # zone 0: green / light green
+        ((200, 165, 70, 255), (249, 224, 125, 255)),   # zone 1: sand / light sand
+        ((90, 150, 205, 255), (184, 227, 255, 255)),   # zone 2: blue / light blue
+        ((120, 155, 85, 255), (184, 217, 141, 255)),   # zone 3: olive / muted green
+    ],
     # Exclusion zones (forbiddenAreas) — semi-transparent red.
     # Legacy: no_go=(177, 0, 0, 50), no_go_outline=(199, 0, 0, 200).
     "excl_fill": (177, 0, 0, 50),

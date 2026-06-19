@@ -139,20 +139,24 @@ def _render_pre_start_with_stripes(
     width_px = int(map_data.width_px)
     height_px = int(map_data.height_px)
     stripe_width_px = STRIPE_WIDTH_MM / map_data.pixel_size_mm
+    # Per-zone stripe colours so adjacent zones are distinguishable (zone 0
+    # green, zone 1 sand, …); cycle if a map has more zones than pairs.
+    stripe_pairs = p.get("stripe_pairs") or [(p["dark_green"], p["zone_fills"][0])]
     overlay = Image.new("RGBA", (width_px, height_px), (0, 0, 0, 0))
-    for zone in map_data.mowing_zones:
+    for i, zone in enumerate(map_data.mowing_zones):
         poly_px = [
             _cloud_to_px(x, y, map_data.bx2, map_data.by2, map_data.pixel_size_mm)
             for x, y in zone.path
         ]
+        dark_color, light_color = stripe_pairs[i % len(stripe_pairs)]
         zone_overlay = compute_stripe_overlay_fn(
             width=width_px,
             height=height_px,
             lawn_polygon_px=poly_px,
             angle_deg=angle,
             stripe_width_px=stripe_width_px,
-            dark_color=p["dark_green"],
-            light_color=p["zone_fills"][0],
+            dark_color=dark_color,
+            light_color=light_color,
         )
         overlay = Image.alpha_composite(overlay, zone_overlay)
 

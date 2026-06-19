@@ -183,6 +183,27 @@ def test_stripes_cover_every_mowing_zone():
     assert len(calls) == 2  # one overlay per mowing zone
 
 
+def test_stripes_use_distinct_colors_per_zone():
+    """Each mowing zone gets its own stripe colour pair so adjacent zones are
+    visually distinguishable (zone 0 green, zone 1 sand, …)."""
+    md = make_map_data()
+    z = md.mowing_zones[0]
+    z2 = MowingZone(zone_id=2, name="z2", path=z.path, area_m2=z.area_m2)
+    md2 = dataclasses.replace(md, mowing_zones=(z, z2))
+    pairs: list = []
+
+    def _spy(**kwargs):
+        pairs.append((kwargs["dark_color"], kwargs["light_color"]))
+        return Image.new("RGBA", (md2.width_px, md2.height_px), (0, 0, 0, 0))
+
+    _render_pre_start_with_stripes(
+        md2, state=_FakeState(direction=26), palette=None,
+        compute_stripe_overlay_fn=_spy,
+    )
+    assert len(pairs) == 2
+    assert pairs[0] != pairs[1], "adjacent zones must use different stripe colours"
+
+
 def test_stripes_none_direction_falls_back_to_dark_base():
     """No stored angle yet (cloud not polled) → plain dark base, no guessed stripes."""
     md = make_map_data()
