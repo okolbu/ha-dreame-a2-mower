@@ -1022,6 +1022,23 @@ properties:
           _post_fault_notice / _dismiss_fault_notice / _fault_notification_id,
           hooked into _fire_fault_delta.
         evidence: "apk:g2408-plugin-ext1423 (fault_catalog tier/text/detail surface used for notice content); coordinator/_device_sync.py (implementation)"
+      - date: "2026-06-19"
+        status: verified
+        claim: |
+          HA device-trigger exposure is now DERIVED from tier via
+          error_codes.triggerable_notification_slugs(): every notification
+          slug whose fault_tier ∈ {error, attention, alert} is exposed as
+          an HA device trigger (43 distinct slugs). INFO-tier slugs are
+          excluded — they overlap the 12 LIFECYCLE_EVENT_TYPES triggers
+          and are lifecycle-ish in nature (battery_low_returning,
+          bad_weather_protecting, idle_timeout_returning,
+          pause_timeout_returning). The prior hand-curated 18-slug
+          trigger list is retired; those 4 INFO slugs still fire as raw
+          notification events but are no longer offered in the
+          device-trigger picker. device_automation.trigger_type UI labels
+          are unified to the notification event_type.state labels
+          (single wording source).
+        evidence: "apk:g2408-plugin-ext1423 (fault_catalog tier used as the derivation source for triggerable_notification_slugs)"
     open_questions:
       - "What wire surface carries the user's 'Continue' tap that clears rain-protection early? Candidate: an s2p50 op-code or an s2p2 transition out of the suppressed window. Capture during a live Continue press."
       - "g2408 meaning of s2p2 20 and 33 — both fired in the 2026-05-25 12:32 off-dock-failure burst alongside 'Sensor error' / 'positioning failed' app notifications, but neither is in the cloud's recent-history window (likely pruned). Need either a controlled repro within the cloud's retention window, the apk full 78-entry FaultIndex (bundle L94618-94697, not in apk.md), or text via an API-on-demand fetch the next time these codes fire."
