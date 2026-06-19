@@ -254,3 +254,13 @@ def test_render_base_no_trail_or_mower_icon():
     for mode in BackgroundMode:
         png = render_base(md, background_mode=mode)
         assert png[:8] == _PNG_SIG
+
+
+def test_obstacles_change_the_rendered_png():
+    md = _map_with_exclusion()
+    # one triangle obstacle inside the lawn, cloud-frame metres
+    obs = [[(2.0, 2.0), (4.0, 2.0), (3.0, 4.0)]]
+    from custom_components.dreame_a2_mower.map_render import render_base_map
+    without = render_base_map(md)
+    with_obs = render_base_map(md, obstacles=obs)
+    assert without != with_obs, "obstacle polygon did not alter the PNG"
