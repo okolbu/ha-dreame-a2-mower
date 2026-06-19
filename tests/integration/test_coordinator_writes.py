@@ -52,7 +52,7 @@ def _make_coord_for_settings_write():
             raw=raw,
             by_map_id_canonical={
                 0: raw[0]["settings"]["0"],
-                1: raw[0]["settings"]["1"],
+                1: raw[1]["settings"]["0"],
             },
         ),
         schedule=ScheduleData(version=0, slots=()),
@@ -66,9 +66,10 @@ def _make_coord_for_settings_write():
     return coord
 
 
-def test_write_settings_modifies_both_entries_and_chunks():
-    """write_settings RMWs target map on BOTH entries (firmware reads
-    from entry 1 — confirmed live 2026-05-09)."""
+def test_write_settings_targets_only_the_target_maps_general_slot():
+    """write_settings RMWs ONLY the target map's general ('0') slot — top-level
+    index is per-map (2026-06-19), so writing map 0 must NOT touch map 1's
+    entry. Writing every entry (the old behaviour) clobbered other maps."""
     coord = _make_coord_for_settings_write()
     ok = asyncio.run(coord.write_settings(map_id=0, field="mowingHeight", value=7))
     assert ok is True
@@ -77,12 +78,12 @@ def test_write_settings_modifies_both_entries_and_chunks():
     assert key_prefix == "SETTINGS"
     import json
     parsed = json.loads(value)
-    # Both entries' map 0 mutated.
+    # Target map (entry 0) general slot mutated.
     assert parsed[0]["settings"]["0"]["mowingHeight"] == 7
-    assert parsed[1]["settings"]["0"]["mowingHeight"] == 7
-    # Other map preserved on both entries.
+    # The OTHER map (entry 1) is untouched.
+    assert parsed[1]["settings"]["0"]["mowingHeight"] == 5
+    # Target map's own per-zone slot untouched.
     assert parsed[0]["settings"]["1"]["mowingHeight"] == 6
-    assert parsed[1]["settings"]["1"]["mowingHeight"] == 6
 
 
 def test_write_settings_returns_false_on_cloud_rejection():

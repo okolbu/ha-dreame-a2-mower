@@ -80,3 +80,25 @@ no-migration rule). Net: removes one orphan MowerState field.
 ### 5. Live verification + ship
 Deploy to HA, idle in all-areas, compare the live-map stripe angle to the app.
 Fix the formula if off by 90/180; then cut a release.
+
+### 6. Follow-ons from live verification (a7→a9)
+Live eyeball surfaced two more defects, fixed in the same line of work:
+
+- **a8 — frame:** the `180−value` convention shipped in a7 was mirrored; the
+  render frame is `0°=left/90°=up/180°=right` on the pixel-map axes, so the
+  overlay input is the stored value directly. (§1 updated.)
+- **a9 — two bugs:**
+  1. **All zones striped.** `_render_pre_start_with_stripes` only striped
+     `mowing_zones[0]`; a map's other zones rendered solid. Now builds one
+     overlay per zone (same angle + canvas-origin band phase) and composites.
+  2. **SETTINGS model misread (root cause of "map2 shows horizontal").** A live
+     `[probe:settings_dump@2026-06-19]` showed the SETTINGS batch is
+     **top-level index = map**, inner `"0"` = the map's general setting — NOT
+     the documented "entry0=user-saved / entry1=firmware-mirror, inner=map id".
+     The integration read map2's direction from map1's zone-1 slot (180→
+     horizontal) instead of map2's general (118→62°). Fixed `parse_settings_batch`
+     (reads) + `write_setting` (writes target only the map's `"0"` slot; the old
+     write-every-entry clobbered other maps). Fixes ALL per-map settings for
+     map 2+, not just stripes. Old claim archived to
+     `OLD/.../inventory-history/cfg_individual.md`. Read-back verified live
+     (`by_map_id_canonical[1].mowingDirection == 118`).

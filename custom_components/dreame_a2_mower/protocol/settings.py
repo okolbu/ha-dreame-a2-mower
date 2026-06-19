@@ -1,35 +1,33 @@
 """SETTINGS.* batch decoder + read-modify-write helper.
 
-Verified shape (g2408 fw 4.3.6_0550, 2026-05-08):
+Structure (g2408, re-derived 2026-06-19 from a live 2-map device —
+``[probe:settings_dump@2026-06-19]``):
+
     [
-      {"mode": 0, "settings": {"0": {<19 fields>}, "1": {<19 fields>}}},
-      {"mode": 0, "settings": {"0": {...}, "1": {...}}}
+      # raw[0] = MAP 0
+      {"mode": 0, "settings": {"0": {<general/map-level>}, "1": {<zone1>}}},
+      # raw[1] = MAP 1
+      {"mode": 0, "settings": {"0": {<general>}, "1": {<zone1>}, "2": {<zone2>}}},
     ]
 
-Two top-level entries, both `mode: 0`, each keyed by the same map ids
-but holding DIFFERENT values. Roles confirmed 2026-05-09 via a
-controlled cloud diff against the user's two-device app setup:
+**The top-level index IS the map index**, and within each map the inner
+``settings`` dict is keyed by ZONE index, where ``"0"`` is the map's
+**general (map-level)** settings — the slot that direction / height /
+AI / obstacle etc. read and write (those fields are per-map). Inner
+``"1"+`` are per-zone slots: present on multi-zone maps (their count is
+``#zones``), currently default/unused for the per-map fields. So a map
+with N zones has ``1 + N`` inner keys.
 
-- **Entry 0** = user-saved settings. `version` increments on every save.
-  This is what the Dreame app reads, what every cloud writer updates,
-  and what the integration must read.
-- **Entry 1** = firmware-applied mirror. `version` stays at 0; only the
-  device firmware updates this entry (after it actually applies a
-  setting). Lags entry 0 by however long the device takes to apply
-  the change — sometimes hours, sometimes never.
+``by_map_id_canonical`` maps ``map_index -> that map's general ("0")
+settings dict``.
 
-An earlier hypothesis (commit `db507c9`) had entry 1 marked as
-"firmware-authoritative" based on the app appearing to ignore an HA
-write that only touched entry 0 — that turned out to be the app's
-cached UI not refreshing while the settings screen was open. Once
-the app forces a refresh (Save tap, cold start of a second device),
-it reads entry 0. Reading entry 1 gives stale "applied" state that
-may not match what the user just configured — exactly the symptom
-that v1.0.2a2 introduced for AI obstacle bits / walk mode / direction.
-
-Writes still propagate to BOTH entries (defensive — keeps the two in
-sync until the firmware-side update of entry 1 arrives). Reads come
-from entry 0 only.
+**Supersedes** the earlier "entry 0 = user-saved / entry 1 =
+firmware-applied mirror, inner key = map id" reading (2026-05-09). That
+held on a single-map device where the lone map's two-entry shape looked
+like user-vs-mirror; on a 2-map device it is decisively wrong — entry 1's
+``"0"`` carries map 2's OWN value (e.g. 118), not a stale mirror of map 1's
+(26), and the inner-key counts differ per map (2 vs 3) = ``1 + #zones``.
+Archived to ``OLD/.../inventory-history/cfg_individual.md``.
 
 Cloud-side propagation note: writes via setDeviceData take ~5 minutes
 to be reflected in a follow-up `get_batch_device_datas` read. The
@@ -46,24 +44,22 @@ from ..cloud_state import SettingsRoot
 def parse_settings_batch(raw: list[dict[str, Any]]) -> SettingsRoot:
     """Parse a SETTINGS.* JSON-decoded payload into a SettingsRoot.
 
-    Reads entry 0's `settings` dict (string-keyed by map_id) into
-    `by_map_id_canonical` — that's the entry the Dreame app reads and
-    where every cloud-side writer (app and HA) lands its updates
-    (live-confirmed 2026-05-09 on g2408 fw 4.3.6_0550).
+    Top-level index = map index; each map's general (map-level) settings
+    live in its inner ``"0"`` (zone-0) slot. ``by_map_id_canonical`` maps
+    ``map_index -> raw[map_index].settings["0"]`` (see module docstring for
+    the full structure + the 2026-06-19 supersession).
     """
     by_map_id_canonical: dict[int, dict[str, Any]] = {}
-    if isinstance(raw, list) and raw:
-        canonical_entry = raw[0]
-        if isinstance(canonical_entry, dict):
-            settings_dict = canonical_entry.get("settings")
-            if isinstance(settings_dict, dict):
-                for k, v in settings_dict.items():
-                    try:
-                        map_id = int(k)
-                    except (TypeError, ValueError):
-                        continue
-                    if isinstance(v, dict):
-                        by_map_id_canonical[map_id] = v
+    if isinstance(raw, list):
+        for map_idx, entry in enumerate(raw):
+            if not isinstance(entry, dict):
+                continue
+            settings_dict = entry.get("settings")
+            if not isinstance(settings_dict, dict):
+                continue
+            general = settings_dict.get("0")
+            if isinstance(general, dict):
+                by_map_id_canonical[map_idx] = general
     return SettingsRoot(
         raw=raw if isinstance(raw, list) else [],
         by_map_id_canonical=by_map_id_canonical,
@@ -77,41 +73,28 @@ def write_setting(
     field: str,
     value: Any,
 ) -> list[dict[str, Any]]:
-    """Read-modify-write: produce a new SETTINGS list with `field` set
-    on EVERY entry's map_id sub-dict. Input is NOT mutated.
+    """Read-modify-write: set `field` on map `map_id`'s general settings
+    slot — ``raw[map_id].settings["0"]``. Input is NOT mutated; returns a
+    new list.
 
-    Cloud SETTINGS has a dual-level structure (verified 2026-05-09 on
-    g2408 fw 4.3.6_0550). Entry 0 is the canonical user-saved-settings
-    entry that apps/HA read; entry 1 is a firmware-applied mirror that
-    the device updates on its own schedule. Writing entry 0 is enough
-    for any reader to see the new value; we still mutate entry 1 too
-    (defensive — avoids stale-mirror reads in the rare cases where
-    a downstream tool or test fixture reads it).
+    Under the map-indexed model (2026-06-19, see module docstring) each
+    top-level entry IS a distinct map, so we write ONLY that map's general
+    ("0") slot. The pre-2026-06-19 behaviour wrote the field into every
+    top-level entry's same-key sub-dict — which, now that the top level is
+    per-map, would clobber OTHER maps' settings.
 
-    Raises KeyError if map_id is not present in any entry.
+    Raises KeyError if `map_id` has no top-level entry, or that entry has no
+    general ("0") settings slot.
     """
     new_raw = copy.deepcopy(raw)
     if not new_raw:
         raise KeyError(f"SETTINGS list empty; cannot set {field}")
-    map_key = str(map_id)
-    # Validate map_id exists in at least one entry.
-    found = False
-    for entry in new_raw:
-        if isinstance(entry, dict):
-            sd = entry.get("settings")
-            if isinstance(sd, dict) and map_key in sd:
-                found = True
-                break
-    if not found:
-        raise KeyError(map_key)
-    # Mutate the field in every entry that has this map_id. Entries that
-    # don't carry the map_id (unlikely but defensive) are left alone.
-    for entry in new_raw:
-        if not isinstance(entry, dict):
-            continue
-        sd = entry.get("settings")
-        if not isinstance(sd, dict):
-            continue
-        if map_key in sd and isinstance(sd[map_key], dict):
-            sd[map_key][field] = value
+    if not isinstance(map_id, int) or map_id < 0 or map_id >= len(new_raw):
+        raise KeyError(str(map_id))
+    entry = new_raw[map_id]
+    sd = entry.get("settings") if isinstance(entry, dict) else None
+    general = sd.get("0") if isinstance(sd, dict) else None
+    if not isinstance(general, dict):
+        raise KeyError(f"map {map_id} has no general ('0') settings slot")
+    general[field] = value
     return new_raw

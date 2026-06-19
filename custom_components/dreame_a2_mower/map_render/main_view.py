@@ -125,33 +125,36 @@ def _render_pre_start_with_stripes(
     # 180-flips cancel: feed the stored value directly (in pixel-map axes).
     angle = int(stored) % 180
 
-    # Project the first mowing-zone polygon from cloud-frame mm to PRE-FLIP
-    # pixel coordinates.  These match the canvas at composite-time inside
-    # render_base_map (the final FLIP_TOP_BOTTOM hasn't happened yet).
-    zone = map_data.mowing_zones[0]
-    poly_px = [
-        _cloud_to_px(x, y, map_data.bx2, map_data.by2, map_data.pixel_size_mm)
-        for x, y in zone.path
-    ]
-
     # Resolve effective palette for colour lookup.
     p: dict = dict(_DEFAULT_PALETTE)
     if palette:
         p.update(palette)
 
-    # Build the stripe overlay at canvas dimensions (pre-flip).
+    # Build one stripe overlay PER mowing zone and composite them, so a map
+    # with multiple zones gets every zone striped (not just the first — that
+    # left second/third zones rendering as solid fill). All zones use the same
+    # angle and the same canvas-origin band phase, so the bands stay aligned
+    # across zone boundaries. Polygons are PRE-FLIP pixel coords (matching the
+    # canvas at composite-time inside render_base_map).
     width_px = int(map_data.width_px)
     height_px = int(map_data.height_px)
     stripe_width_px = STRIPE_WIDTH_MM / map_data.pixel_size_mm
-    overlay = compute_stripe_overlay_fn(
-        width=width_px,
-        height=height_px,
-        lawn_polygon_px=poly_px,
-        angle_deg=angle,
-        stripe_width_px=stripe_width_px,
-        dark_color=p["dark_green"],
-        light_color=p["zone_fills"][0],
-    )
+    overlay = Image.new("RGBA", (width_px, height_px), (0, 0, 0, 0))
+    for zone in map_data.mowing_zones:
+        poly_px = [
+            _cloud_to_px(x, y, map_data.bx2, map_data.by2, map_data.pixel_size_mm)
+            for x, y in zone.path
+        ]
+        zone_overlay = compute_stripe_overlay_fn(
+            width=width_px,
+            height=height_px,
+            lawn_polygon_px=poly_px,
+            angle_deg=angle,
+            stripe_width_px=stripe_width_px,
+            dark_color=p["dark_green"],
+            light_color=p["zone_fills"][0],
+        )
+        overlay = Image.alpha_composite(overlay, zone_overlay)
 
     # Pass the overlay into render_base_map to be composited at the correct
     # z-order (layer 2.5 — after mowing zones, before exclusion/spot/nav/dock).
