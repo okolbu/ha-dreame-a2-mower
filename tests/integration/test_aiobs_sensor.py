@@ -46,3 +46,19 @@ def test_refresh_aiobs_collects_and_logs_when_in_session(tmp_path):
     asyncio.run(coord._refresh_aiobs())
     assert [m.id for m in coord._obstacle_markers] == [_MARK.id]
     assert [r.id for r in coord._obstacle_marker_log.all()] == [_MARK.id]
+
+
+def test_marker_sensor_value_and_attrs(tmp_path):
+    coord = _make_coord(tmp_path, mow_session="IN_SESSION", markers=[_MARK])
+    asyncio.run(coord._refresh_aiobs())
+
+    from custom_components.dreame_a2_mower.entities.sensor.device import (
+        _obstacle_marker_value,
+        _obstacle_marker_attrs,
+    )
+    assert _obstacle_marker_value(coord) == 1
+    attrs = _obstacle_marker_attrs(coord)
+    assert attrs["markers"][0]["id"] == _MARK.id
+    assert attrs["markers"][0]["confidence"] == 78
+    assert attrs["markers"][0]["image_status"] == "pending"
+    assert attrs["archived_count"] == 1

@@ -227,6 +227,35 @@ def _mpos_attrs(coord) -> dict:
     }
 
 
+def _obstacle_marker_value(coord) -> int:
+    """Count of live AIOBS obstacle markers in the current session."""
+    return len(getattr(coord, "_obstacle_markers", []) or [])
+
+
+def _obstacle_marker_attrs(coord) -> dict:
+    """Per-marker detail + archived total. Confidence/class are the obstacle
+    AI's guess, NOT a reliable person signal (see inventory § obstacle)."""
+    markers = getattr(coord, "_obstacle_markers", []) or []
+    log = getattr(coord, "_obstacle_marker_log", None)
+    status_by_id = (
+        {r.id: r.image_status for r in log.all()} if log is not None else {}
+    )
+    return {
+        "markers": [
+            {
+                "id": m.id,
+                "filename": m.filename,
+                "confidence": m.confidence,
+                "obstacle_class": m.obstacle_class,
+                "detection_epoch": m.detection_epoch,
+                "image_status": status_by_id.get(m.id, "pending"),
+            }
+            for m in markers
+        ],
+        "archived_count": len(log.all()) if log is not None else 0,
+    }
+
+
 def _mqtt_age_value(coord) -> int | None:
     """Seconds since the last MQTT heartbeat from the device, or None if
     none has arrived yet. Reads the canonical `snapshot.last_heartbeat_unix`
@@ -1065,6 +1094,21 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         # Distinct from sensor.firmware_version (which tracks the OTA firmware
         # version from device.info.version, not this CFG-write counter).
         value_fn=lambda coord: getattr(coord.data, "cfg_version", None),
+    ),
+
+    # ------ AIOBS: live obstacle markers (Task 5) ------
+    # Reads coordinator._obstacle_markers (populated by _refresh_aiobs every
+    # 2 min while a mow session is active). Confidence/class are the obstacle
+    # AI's guess, NOT a reliable person signal — see inventory § obstacle.
+    DreameA2DiagnosticSensorEntityDescription(
+        key="obstacle_markers",
+        name="Obstacle markers",
+        icon="mdi:image-search-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        state_class=SensorStateClass.MEASUREMENT,
+        value_fn=_obstacle_marker_value,
+        extra_state_attributes_fn=_obstacle_marker_attrs,
+        availability_source=None,
     ),
 )
 

@@ -439,6 +439,12 @@ sensor.novel_observations:
   reboot: required
   note: "Novel-registry count; structurally zero at cold-start."
 
+sensor.obstacle_markers:
+  holder: other
+  idle: 0
+  reboot: required
+  note: "Live AIOBS marker count; 0 when no live detections / not mowing."
+
 sensor.ota_capable_raw:
   holder: other
   idle: unavailable

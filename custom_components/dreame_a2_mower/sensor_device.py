@@ -18,4 +18,5 @@ from .entities.sensor.device import (  # noqa: F401
     _error_attrs,
     _mpos_attrs,
     _mpos_value,
+    _obstacle_marker_value,
 )

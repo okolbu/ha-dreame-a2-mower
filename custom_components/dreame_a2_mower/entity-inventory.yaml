@@ -2136,6 +2136,23 @@ entities:
         status: presumed
         claim: "DreameA2DiagnosticSensor descriptor key=mpos; value_fn=_mpos_value (coord) -> 'x, y, yaw' string; extra_state_attributes_fn=_mpos_attrs exposes raw x/y/yaw/last_updated/last_result + honesty note; entity_category=DIAGNOSTIC; entity_registry_enabled_default=False. RAW cloud values, untransformed — surfaced for physical-match characterization; MPOS frame/units [UNVERIFIED]."
 
+  - id: "sensor.dreame_a2_mower_obstacle_markers"
+    platform: sensor
+    class: "DreameA2DiagnosticSensor"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
+    device: parent
+    source:
+      wire: "AIOBS routed-action (routed_action('aiobs', 'get_markers') — see inventory.yaml § aiobs); coordinator._obstacle_markers is refreshed by _refresh_aiobs every 2 min while a mow session is active"
+      state_path: "coordinator._obstacle_markers (list[ObstacleMarker]) — count is native_value; per-marker detail + archived_count in extra_state_attributes"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-20"
+    verifications:
+      - date: "2026-06-20"
+        status: presumed
+        claim: "DreameA2DiagnosticSensor descriptor key=obstacle_markers; name='Obstacle markers'; value_fn=_obstacle_marker_value(coord) -> int count of live markers; extra_state_attributes_fn=_obstacle_marker_attrs(coord) -> {markers: [{id,filename,confidence,obstacle_class,detection_epoch,image_status},...], archived_count: int}; entity_category=DIAGNOSTIC; state_class=MEASUREMENT; availability_source=None. Confidence/class are obstacle AI's guess, NOT a reliable person signal. Code-read only — not live-verified."
+
   - id: "sensor.dreame_a2_mower_person_photos"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
