@@ -21,6 +21,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from ..archive.lidar import LidarArchive
+from ..archive.obstacle_markers_log import ObstacleMarkerLog
 from ..archive.photos import PhotoArchive
 from ..archive.session import ArchivedSession, SessionArchive
 from ..archive.videos import VideoArchive
@@ -281,6 +282,14 @@ class _CoreMixin:
         # media URLs) — rebuilt by _refresh_oss_gallery and read by the
         # sensor.dreame_a2_mower_photo_gallery / the gallery dashboard card.
         self._photo_gallery: list[dict] = []
+
+        # AIOBS live obstacle markers (volatile — current session only).
+        # Layout: <config>/dreame_a2_mower/obstacle_markers/  (sibling of photos/).
+        self._obstacle_markers: list = []
+        obstacle_markers_dir = Path(hass.config.path(DOMAIN, "obstacle_markers"))
+        self._obstacle_marker_log: ObstacleMarkerLog = ObstacleMarkerLog(
+            obstacle_markers_dir
+        )
 
         # Video archive — persists patrol/AI-obstacle MP4 clips + thumbs.
         # Layout: <config>/dreame_a2_mower/videos/  (flat — not per-map).
@@ -659,6 +668,18 @@ class _CoreMixin:
             )
             await self._refresh_gps()
 
+            # AIOBS live obstacle markers: poll every 2 min, but _refresh_aiobs
+            # itself early-returns unless a mow session is active (mow-gated,
+            # NOT background). No immediate fire — no session active at boot.
+            async def _periodic_aiobs(_now: Any) -> None:
+                await self._refresh_aiobs()
+
+            self.entry.async_on_unload(
+                async_track_time_interval(
+                    self.hass, _periodic_aiobs, timedelta(minutes=2)
+                )
+            )
+
             # Schedule REMOTE refresh every 6 hours; also fire one immediately
             # so 4G SIM status (left_days, card_id, etc.) is populated at startup.
             async def _periodic_remote(_now: Any) -> None:
@@ -780,6 +801,9 @@ class _CoreMixin:
             # redundant with heartbeat-fresh wifi_rssi_dbm + MQTT-up; s1.5
             # serial is owned by DEV. See coordinator/_refreshers.py for the
             # full rationale and docs/research/app-api-surface-2026-05-25.md.
+
+            # Load obstacle-marker log from disk (non-blocking via executor).
+            await self.hass.async_add_executor_job(self._obstacle_marker_log.load)
 
             # Load session archive index from disk (non-blocking via executor).
             await self.hass.async_add_executor_job(self.session_archive.load_index)
