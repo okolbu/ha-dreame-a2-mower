@@ -28,10 +28,12 @@ class ObstacleMarker:
 
 def _epoch_from_filename(name: str) -> float | None:
     """``"1781714586.078000_0"`` → 1781714586.078 (the `_<idx>` suffix dropped)."""
+    if not isinstance(name, str):
+        return None
     base = name.split("_", 1)[0]
     try:
         return float(base)
-    except (TypeError, ValueError):
+    except ValueError:
         return None
 
 
