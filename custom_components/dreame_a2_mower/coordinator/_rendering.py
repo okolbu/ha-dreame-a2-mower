@@ -197,7 +197,7 @@ class _RenderingMixin:
             obstacles = live or None
         else:
             obstacles = live or await self._load_last_session_obstacles(active_id)
-        marker_fp = len(live)
+        marker_fp = hash(tuple(tuple(poly) for poly in live))
         if (
             self._base_png is not None
             and self._base_png_mode == mode

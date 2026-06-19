@@ -6,14 +6,8 @@ from custom_components.dreame_a2_mower.coordinator._rendering import _RenderingM
 from custom_components.dreame_a2_mower.protocol.obstacle_markers import ObstacleMarker
 
 
-def test_live_markers_supply_render_obstacles(monkeypatch):
-    captured = {}
-
-    def fake_render_base(map_data, **kw):
-        captured["obstacles"] = kw.get("obstacle_polygons_m")
-        return b"PNG"
-
-    # _live_obstacle_polygons is the new pure selector under test.
+def test_live_marker_polygons_returned():
+    # _live_obstacle_polygons is the pure selector under test.
     class _C(_RenderingMixin):
         _obstacle_markers = [
             ObstacleMarker("a", "a", ((-6.6, 4.1), (-6.7, 4.1), (-6.7, 4.0)),
