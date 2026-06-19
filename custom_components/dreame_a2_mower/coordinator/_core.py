@@ -594,7 +594,11 @@ class _CoreMixin:
             # snapshot.errors is restored above, but _fire_fault_delta won't
             # re-fire them across a restart (no delta vs the restored set), so the
             # banner would be lost. Re-post directly (no spurious fault_detected).
-            self._repost_active_fault_notices()
+            # Guarded so a notice failure can never abort coordinator setup.
+            try:
+                self._repost_active_fault_notices()
+            except Exception:
+                LOGGER.exception("_repost_active_fault_notices failed during restore")
 
             await self.hass.async_add_executor_job(self._init_mqtt)
 
