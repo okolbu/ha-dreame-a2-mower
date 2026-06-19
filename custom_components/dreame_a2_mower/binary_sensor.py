@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
@@ -41,6 +42,12 @@ class DreameA2BinarySensorEntityDescription(BinarySensorEntityDescription):
     #: per-row availability source ("mqtt" | "cloud" | None) — read by the
     #: DreameA2BinarySensor bridge property to gate freshness per row.
     availability_source: str | None = None
+    #: optional per-row attribute provider — receives the coordinator, returns a
+    #: dict of extra_state_attributes (None-valued keys are dropped). Used by the
+    #: s1p1 flag sensors to carry catalog fault_text/tier/detail (P4).
+    extra_state_attributes_fn: Callable[
+        [DreameA2MowerCoordinator], dict[str, Any]
+    ] | None = None
 
 
 def _cloud_connected_value(coord) -> bool | None:
@@ -56,6 +63,34 @@ def _cloud_connected_value(coord) -> bool | None:
     if snap.last_heartbeat_unix is None:
         return None
     return snap.mqtt_connectivity == Connectivity.ONLINE
+
+
+# s1p1 heartbeat flags that map to a catalog fault concept. The catalog's
+# `heartbeat` channel is a non-firing artifact (a subset of the iot fault_names;
+# s1p1 carries boolean flags, not numeric codes), so we read the iot channel for
+# text/tier. safety_alert_active has no catalog code and is intentionally absent.
+_S1P1_FLAG_FAULT_CODE: dict[str, int] = {
+    "bumper": 9,            # FAULT_CRASH_PLATE  (sole signal — not mirrored to s2p2)
+    "drop_tilt": 1,         # FAULT_TILTED
+    "lift": 0,              # FAULT_HANGING
+    "emergency_stop": 23,   # FAULT_EMERGENCY_STOP (also has the P3b PIN notice)
+    "battery_temp_low": 43, # ALERT_BATTERY_TEMP_LOW (charging-paused condition)
+}
+
+
+def _flag_fault_attrs(coord: DreameA2MowerCoordinator, code: int) -> dict[str, Any]:
+    """Localized catalog context for an s1p1 flag's mapped iot fault code:
+    fault_text + tier + fault_detail + fault_code. Lang resolved from the HA
+    config (defaults to English when unavailable, e.g. test stubs)."""
+    from .mower import fault_catalog
+    cfg = getattr(getattr(coord, "hass", None), "config", None)
+    lang = fault_catalog.resolve_lang(getattr(cfg, "language", None))
+    return {
+        "fault_text": fault_catalog.fault_text(code, lang),
+        "tier": fault_catalog.fault_tier(code),
+        "fault_detail": fault_catalog.fault_detail(code, lang),
+        "fault_code": code,
+    }
 
 
 BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
@@ -120,6 +155,9 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         availability_source="mqtt",
         value_fn=lambda coord: bool(coord.data.battery_temp_low),
+        extra_state_attributes_fn=lambda coord: _flag_fault_attrs(
+            coord, _S1P1_FLAG_FAULT_CODE["battery_temp_low"]
+        ),
     ),
     DreameA2BinarySensorEntityDescription(
         key="mowing_session_active",
@@ -146,6 +184,9 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         device_class=BinarySensorDeviceClass.PROBLEM,
         availability_source="mqtt",
         value_fn=lambda coord: bool(coord.data.drop_tilt),
+        extra_state_attributes_fn=lambda coord: _flag_fault_attrs(
+            coord, _S1P1_FLAG_FAULT_CODE["drop_tilt"]
+        ),
     ),
     DreameA2BinarySensorEntityDescription(
         key="bumper",
@@ -154,6 +195,9 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         device_class=BinarySensorDeviceClass.PROBLEM,
         availability_source="mqtt",
         value_fn=lambda coord: bool(coord.data.bumper),
+        extra_state_attributes_fn=lambda coord: _flag_fault_attrs(
+            coord, _S1P1_FLAG_FAULT_CODE["bumper"]
+        ),
     ),
     DreameA2BinarySensorEntityDescription(
         key="lift",
@@ -162,6 +206,9 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         device_class=BinarySensorDeviceClass.PROBLEM,
         availability_source="mqtt",
         value_fn=lambda coord: bool(coord.data.lift),
+        extra_state_attributes_fn=lambda coord: _flag_fault_attrs(
+            coord, _S1P1_FLAG_FAULT_CODE["lift"]
+        ),
     ),
     DreameA2BinarySensorEntityDescription(
         key="emergency_stop",
@@ -170,6 +217,9 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         device_class=BinarySensorDeviceClass.PROBLEM,
         availability_source="mqtt",
         value_fn=lambda coord: bool(coord.data.emergency_stop),
+        extra_state_attributes_fn=lambda coord: _flag_fault_attrs(
+            coord, _S1P1_FLAG_FAULT_CODE["emergency_stop"]
+        ),
     ),
     DreameA2BinarySensorEntityDescription(
         # byte[10] bit 1 — one-shot active-alert flag confirmed during
@@ -351,3 +401,11 @@ class DreameA2BinarySensor(
     @property
     def is_on(self) -> bool | None:
         return self.entity_description.value_fn(self.coordinator)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        fn = self.entity_description.extra_state_attributes_fn
+        if fn is None:
+            return None
+        attrs = {k: v for k, v in fn(self.coordinator).items() if v is not None}
+        return attrs or None
