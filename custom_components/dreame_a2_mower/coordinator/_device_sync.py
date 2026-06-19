@@ -193,6 +193,57 @@ class _DeviceSyncMixin:
         except Exception as ex:
             LOGGER.warning("emergency_stop notification create failed: %s", ex)
 
+    # Codes the generic fault-notice path must NOT touch: emergency-stop (23)
+    # has its own PIN-entry persistent notice via _handle_emergency_stop_transition.
+    _EMERGENCY_STOP_CODE = 23
+
+    def _fault_notification_id(self, code: int) -> str:
+        return f"{DOMAIN}_fault_{int(code)}_{self.entry.entry_id}"
+
+    def _post_fault_notice(self, code: int, lang: str) -> None:
+        """Post a persistent_notification for a newly-detected error-tier fault.
+
+        Title = the catalog fault_text; body = the catalog detail (solution
+        steps) when present, else the fault_text. Skips emergency-stop (its
+        dedicated PIN notice owns code 23). Wrapped in try/except so a UI-notice
+        failure never breaks fault handling (mirrors _handle_emergency_stop_transition).
+        No-ops if hass or entry are not yet available (e.g. test stubs)."""
+        if getattr(self, "hass", None) is None or getattr(self, "entry", None) is None:
+            return
+        if int(code) == self._EMERGENCY_STOP_CODE:
+            return
+        from ..mower import fault_catalog
+        title = fault_catalog.fault_text(int(code), lang) or f"Fault {int(code)}"
+        body = fault_catalog.fault_detail(int(code), lang) or title
+        try:
+            from homeassistant.components import persistent_notification as _pn
+            _pn.async_create(
+                self.hass,
+                message=body,
+                title=f"Dreame A2 Mower — {title}",
+                notification_id=self._fault_notification_id(code),
+            )
+            LOGGER.info("fault %d active — persistent_notification posted", int(code))
+        except Exception as ex:
+            LOGGER.warning("fault %d notice create failed: %s", int(code), ex)
+
+    def _dismiss_fault_notice(self, code: int) -> None:
+        """Dismiss the persistent_notification for a cleared error-tier fault.
+
+        No-ops if hass or entry are not yet available (e.g. test stubs)."""
+        if getattr(self, "hass", None) is None or getattr(self, "entry", None) is None:
+            return
+        if int(code) == self._EMERGENCY_STOP_CODE:
+            return
+        try:
+            from homeassistant.components import persistent_notification as _pn
+            _pn.async_dismiss(
+                self.hass, notification_id=self._fault_notification_id(code)
+            )
+            LOGGER.info("fault %d cleared — persistent_notification dismissed", int(code))
+        except Exception as ex:
+            LOGGER.warning("fault %d notice dismiss failed: %s", int(code), ex)
+
     def _update_device_registry_serial(self, serial: str) -> None:
         """Reflect the real hardware serial onto the device record."""
         try:
@@ -351,12 +402,14 @@ class _DeviceSyncMixin:
                 {"code": int(code), "description": describe_error(int(code), lang),
                  "at_unix": int(now_unix)},
             )
+            self._post_fault_notice(int(code), lang)
         for code in sorted(prev_errors - new_errors):
             self._fire_lifecycle(
                 EVENT_TYPE_FAULT_CLEARED,
                 {"code": int(code), "description": describe_error(int(code), lang),
                  "at_unix": int(now_unix)},
             )
+            self._dismiss_fault_notice(int(code))
 
     def _fire_local_novel_s2p2(self, *, code: int, now_unix: int) -> None:
         """Fire a local (NOT cloud-gated) notification for a truly-unknown

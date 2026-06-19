@@ -1004,6 +1004,24 @@ properties:
             72  INFO_PAUSE_TIMEOUT_RETURNING → pause_timeout_returning (was paused_too_long_returning)
             30  FAULT_MAINTAIN_LOSS          → maintain_loss       (was maintenance_reminder)
         evidence: "apk:g2408-plugin-ext1423 (fault_catalog.event_slug, S2P2_EVENT_TYPES derive in mower/error_codes.py)"
+      - date: "2026-06-19"
+        status: verified
+        claim: |
+          Error-tier faults (fault_tier(code)=="error", i.e. the latched
+          snapshot.errors set) now surface a Home Assistant
+          persistent_notification: id dreame_a2_mower_fault_<code>_<entry_id>,
+          title = catalog fault_text for the HA language, body = catalog
+          fault_detail (solution steps) falling back to fault_text when
+          fault_detail is absent. The notice is created on fault_detected and
+          dismissed on fault_cleared (latch clears on undock / mow-start /
+          0.3 m movement). Emergency-stop code 23 is EXCLUDED — its dedicated
+          PIN banner owns that notice. Attention/alert/info tiers stay
+          transient (notification event + logbook only, no
+          persistent_notification) — app-faithful behaviour: attention popups
+          self-dismiss and repeat. Implementation: coordinator/_device_sync.py
+          _post_fault_notice / _dismiss_fault_notice / _fault_notification_id,
+          hooked into _fire_fault_delta.
+        evidence: "apk:g2408-plugin-ext1423 (fault_catalog tier/text/detail surface used for notice content); coordinator/_device_sync.py (implementation)"
     open_questions:
       - "What wire surface carries the user's 'Continue' tap that clears rain-protection early? Candidate: an s2p50 op-code or an s2p2 transition out of the suppressed window. Capture during a live Continue press."
       - "g2408 meaning of s2p2 20 and 33 — both fired in the 2026-05-25 12:32 off-dock-failure burst alongside 'Sensor error' / 'positioning failed' app notifications, but neither is in the cloud's recent-history window (likely pruned). Need either a controlled repro within the cloud's retention window, the apk full 78-entry FaultIndex (bundle L94618-94697, not in apk.md), or text via an API-on-demand fetch the next time these codes fire."

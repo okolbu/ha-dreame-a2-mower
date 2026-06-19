@@ -36,17 +36,23 @@ def _make_coord() -> types.SimpleNamespace:
 
     Required by _fire_lifecycle:
       - self._lifecycle_event  (set by register_event_entities)
-    _fire_fault_delta itself only calls _fire_lifecycle internally.
+    _fire_fault_delta also calls _post_fault_notice / _dismiss_fault_notice;
+    these are bound here so they no-op gracefully when hass/entry are absent.
     """
     coord = types.SimpleNamespace()
     coord._lifecycle_event = None  # pre-set so _fire_lifecycle guard works
     coord._notification_event = None
+    coord.hass = None
+    coord.entry = None
 
     # Bind the methods from the mixin.
     for name in (
         "_fire_lifecycle",
         "_fire_fault_delta",
         "_fire_local_novel_s2p2",
+        "_fault_notification_id",
+        "_post_fault_notice",
+        "_dismiss_fault_notice",
         "register_event_entities",
     ):
         setattr(
@@ -332,3 +338,131 @@ def test_fire_notification_payload_tier_is_none_for_unknown_code():
     assert payload.get("tier") is None
     assert payload.get("category") is None
     assert payload.get("severity") is None
+
+
+# ---------------------------------------------------------------------------
+# P3b Task 1: persistent_notification for error-tier faults
+# ---------------------------------------------------------------------------
+
+import sys
+
+
+class _FakePN:
+    """Records persistent_notification.async_create/async_dismiss calls."""
+    def __init__(self):
+        self.created: list[dict] = []
+        self.dismissed: list[str] = []
+
+    def async_create(self, hass, *, message, title, notification_id):
+        self.created.append(
+            {"message": message, "title": title, "notification_id": notification_id}
+        )
+
+    def async_dismiss(self, hass, *, notification_id):
+        self.dismissed.append(notification_id)
+
+
+def _install_fake_pn(monkeypatch) -> _FakePN:
+    fake = _FakePN()
+    ha = sys.modules.get("homeassistant") or types.ModuleType("homeassistant")
+    comp = sys.modules.get("homeassistant.components") or types.ModuleType(
+        "homeassistant.components"
+    )
+    monkeypatch.setitem(sys.modules, "homeassistant", ha)
+    monkeypatch.setitem(sys.modules, "homeassistant.components", comp)
+    monkeypatch.setitem(
+        sys.modules, "homeassistant.components.persistent_notification", fake
+    )
+    monkeypatch.setattr(comp, "persistent_notification", fake, raising=False)
+    return fake
+
+
+def _make_coord_with_notice() -> types.SimpleNamespace:
+    coord = _make_coord()
+    coord.entry = types.SimpleNamespace(entry_id="e1")
+    coord.hass = types.SimpleNamespace(config=types.SimpleNamespace(language="en"))
+    # The notice helpers read self._EMERGENCY_STOP_CODE (a class attr on the real
+    # coordinator); the SimpleNamespace stub must carry it explicitly.
+    coord._EMERGENCY_STOP_CODE = _DeviceSyncMixin._EMERGENCY_STOP_CODE
+    for name in ("_fault_notification_id", "_post_fault_notice", "_dismiss_fault_notice"):
+        setattr(coord, name, types.MethodType(getattr(_DeviceSyncMixin, name), coord))
+    return coord
+
+
+def test_error_fault_posts_persistent_notice_on_detect(monkeypatch):
+    fake = _install_fake_pn(monkeypatch)
+    coord = _make_coord_with_notice()
+    coord._fire_fault_delta(frozenset(), frozenset({7}), now_unix=1000)  # 7 = cutter (error)
+    assert len(fake.created) == 1
+    n = fake.created[0]
+    assert n["notification_id"] == "dreame_a2_mower_fault_7_e1"
+    assert fc.fault_text(7, "en") in n["title"]
+    assert n["message"] == (fc.fault_detail(7, "en") or fc.fault_text(7, "en"))
+    assert fake.dismissed == []
+
+
+def test_error_fault_dismisses_persistent_notice_on_clear(monkeypatch):
+    fake = _install_fake_pn(monkeypatch)
+    coord = _make_coord_with_notice()
+    coord._fire_fault_delta(frozenset({7}), frozenset(), now_unix=1100)
+    assert fake.dismissed == ["dreame_a2_mower_fault_7_e1"]
+    assert fake.created == []
+
+
+def test_emergency_stop_code_excluded_from_fault_notice(monkeypatch):
+    fake = _install_fake_pn(monkeypatch)
+    coord = _make_coord_with_notice()
+    coord._fire_fault_delta(frozenset(), frozenset({23}), now_unix=1000)
+    coord._fire_fault_delta(frozenset({23}), frozenset(), now_unix=1100)
+    assert fake.created == [] and fake.dismissed == []  # PIN handler owns code 23
+
+
+def test_fault_notice_body_non_empty_for_every_error_code(monkeypatch):
+    fake = _install_fake_pn(monkeypatch)
+    coord = _make_coord_with_notice()
+    for code in sorted(fc.error_tier_codes("iot")):
+        if code == 23:
+            continue
+        fake.created.clear()
+        coord._fire_fault_delta(frozenset(), frozenset({code}), now_unix=1)
+        assert fake.created, f"no notice for error code {code}"
+        assert fake.created[0]["message"], f"empty notice body for code {code}"
+
+
+def test_fault_notice_localized(monkeypatch):
+    fake = _install_fake_pn(monkeypatch)
+    coord = _make_coord_with_notice()
+    coord.hass.config.language = "nb"
+    code = 7  # nb != en for code 7 (verified via fault_catalog)
+    coord._fire_fault_delta(frozenset(), frozenset({code}), now_unix=1)
+    assert fc.fault_text(code, "nb") in fake.created[0]["title"]
+    assert fc.fault_text(code, "nb") != fc.fault_text(code, "en")  # guards meaningfulness
+
+
+def test_fault_notice_failure_does_not_break_delta(monkeypatch):
+    fake = _install_fake_pn(monkeypatch)
+    def _boom(*a, **k):
+        raise RuntimeError("pn down")
+    fake.async_create = _boom
+    coord = _make_coord_with_notice()
+    lc = _RecordingLifecycle()
+    coord._lifecycle_event = lc  # harness pre-sets this; assign our recorder
+    coord._fire_fault_delta(frozenset(), frozenset({7}), now_unix=1)
+    assert any(et == EVENT_TYPE_FAULT_DETECTED for et, _ in lc.fired)
+
+
+def test_only_error_tier_latches_so_only_error_tier_persists():
+    """Persistent notices ride snapshot.errors, which latches ONLY error-tier
+    codes (is_fault ⟺ fault_tier=='error'). This pins the invariant so a future
+    change that latches attention/alert codes can't silently start persisting them."""
+    from custom_components.dreame_a2_mower.mower.error_codes import is_fault
+    for code in fc.known_codes("iot"):
+        tier = fc.fault_tier(code)
+        assert is_fault(code) == (tier == "error"), (
+            f"code {code} tier={tier} but is_fault={is_fault(code)}"
+        )
+    # attention exemplars are NOT error-tier (so never latched/persisted):
+    for attn in (28, 30):  # blade_loss, maintain_loss
+        if attn in fc.known_codes("iot"):
+            assert fc.fault_tier(attn) == "attention"
+            assert not is_fault(attn)
