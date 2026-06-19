@@ -6358,8 +6358,8 @@ cfg_individual:
       Each obs row layout (7 elements):
         [0]  [x_verts_mm]   — list of X polygon vertices in mm (map frame)
         [1]  [y_verts_mm]   — list of Y polygon vertices in mm (map frame)
-        [2]  confidence     — float ≈ f*100 (cross-validated vs JPEG-COM "f" field)
-        [3]  class          — obstacle class string; cross-validated == JPEG-COM "s" field
+        [2]  confidence     — integer ≈ f*100 as int (cross-validated vs JPEG-COM "f" field; observed class=5, confidence=78 on g2408)
+        [3]  class          — integer obstacle class; cross-validated == JPEG-COM "s" field (also an int, e.g. class=5)
         [4]  filename       — string, scheme "<epoch.frac>_<idx>" (distinct from OSS
                                gallery "<epoch>_person.jpg" naming)
         [5]  flag           — integer; meaning [UNVERIFIED] — not decoded
@@ -6391,7 +6391,7 @@ cfg_individual:
         evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
       - date: "2026-06-19"
         status: verified
-        claim: "AIOBS routed-action read {m:g,t:AIOBS,d:{idx:0}} returns obs[] rows [ [x_mm...],[y_mm...],confidence,class,filename,flag,id ]; confidence≈f*100 and class==JPEG-COM s (cross-validated)."
+        claim: "AIOBS routed-action read {m:g,t:AIOBS,d:{idx:0}} returns obs[] rows [ [x_mm...],[y_mm...],confidence,class,filename,flag,id ]; confidence and class are INTEGERS on the wire (observed confidence=78, class=5); confidence≈f*100 and class==JPEG-COM s int value (cross-validated)."
         evidence: "cloud/captures/mitm_session_20260619/miio-13267.jsonl@2026-06-17_19:50"
 
   - id: "CFG"

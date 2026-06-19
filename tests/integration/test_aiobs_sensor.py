@@ -48,6 +48,15 @@ def test_refresh_aiobs_collects_and_logs_when_in_session(tmp_path):
     assert [r.id for r in coord._obstacle_marker_log.all()] == [_MARK.id]
 
 
+def test_refresh_aiobs_clears_stale_markers_when_session_ends(tmp_path):
+    # Session ended: gate inactive, but markers were left from the prior tick.
+    coord = _make_coord(tmp_path, mow_session="BETWEEN_SESSIONS", markers=[_MARK])
+    coord._obstacle_markers = [_MARK]          # simulate stale set from a prior in-session tick
+    import asyncio
+    asyncio.run(coord._refresh_aiobs())
+    assert coord._obstacle_markers == []        # cleared on session end
+
+
 def test_marker_sensor_value_and_attrs(tmp_path):
     coord = _make_coord(tmp_path, mow_session="IN_SESSION", markers=[_MARK])
     asyncio.run(coord._refresh_aiobs())

@@ -22,6 +22,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from ..archive.lidar import LidarArchive
 from ..archive.obstacle_markers_log import ObstacleMarkerLog
+from ..protocol.obstacle_markers import ObstacleMarker
 from ..archive.photos import PhotoArchive
 from ..archive.session import ArchivedSession, SessionArchive
 from ..archive.videos import VideoArchive
@@ -285,7 +286,7 @@ class _CoreMixin:
 
         # AIOBS live obstacle markers (volatile — current session only).
         # Layout: <config>/dreame_a2_mower/obstacle_markers/  (sibling of photos/).
-        self._obstacle_markers: list = []
+        self._obstacle_markers: list[ObstacleMarker] = []
         obstacle_markers_dir = Path(hass.config.path(DOMAIN, "obstacle_markers"))
         self._obstacle_marker_log: ObstacleMarkerLog = ObstacleMarkerLog(
             obstacle_markers_dir

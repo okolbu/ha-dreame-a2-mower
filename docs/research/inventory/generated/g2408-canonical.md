@@ -2967,8 +2967,8 @@ the full call shape and response (single capture; row layout not yet validated a
 Each obs row layout (7 elements):
   [0]  [x_verts_mm]   — list of X polygon vertices in mm (map frame)
   [1]  [y_verts_mm]   — list of Y polygon vertices in mm (map frame)
-  [2]  confidence     — float ≈ f*100 (cross-validated vs JPEG-COM "f" field)
-  [3]  class          — obstacle class string; cross-validated == JPEG-COM "s" field
+  [2]  confidence     — integer ≈ f*100 as int (cross-validated vs JPEG-COM "f" field; observed class=5, confidence=78 on g2408)
+  [3]  class          — integer obstacle class; cross-validated == JPEG-COM "s" field (also an int, e.g. class=5)
   [4]  filename       — string, scheme "<epoch.frac>_<idx>" (distinct from OSS
                          gallery "<epoch>_person.jpg" naming)
   [5]  flag           — integer; meaning [UNVERIFIED] — not decoded

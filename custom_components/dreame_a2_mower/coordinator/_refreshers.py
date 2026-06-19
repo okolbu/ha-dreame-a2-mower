@@ -400,6 +400,10 @@ class _RefreshersMixin:
                 and mow_session in (MowSession.IN_SESSION.name, MowSession.IN_SESSION.value))
         )
         if not is_active:
+            if self._obstacle_markers:
+                self._obstacle_markers = []
+                if getattr(self, "hass", None) is not None:
+                    self._schedule_render_base()
             return
         hass = getattr(self, "hass", None)
         markers = (
