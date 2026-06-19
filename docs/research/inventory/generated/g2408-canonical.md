@@ -2960,7 +2960,7 @@ the required args were unknown at that time.
 Live probe 2026-06-09 bare GET returned r=-3 (mower docked, idle) —
 confirmed that bare GET requires args.
 MITM capture 2026-06-17 (during an active mowing session) confirmed
-the full call shape and response:
+the full call shape and response (single capture; row layout not yet validated across multiple sessions):
 [cloud/captures/mitm_session_20260619/miio-13267.jsonl@2026-06-17_19:50]
   READ: {m:"g", t:"AIOBS", d:{idx:0}}
   RESPONSE: d dict carrying obs key — list of obstacle rows.
@@ -2979,6 +2979,7 @@ The idx:0 arg likely selects the map index; other idx values
 [UNKNOWN — to capture].
 
 **Open questions:**
+- obs[] row layout confirmed from a single capture — validate across more mowing sessions.
 - flag (obs index 5) meaning — undecoded [UNKNOWN — to capture].
 - idx arg: does idx>0 select a different map's obstacle markers? [UNKNOWN — to capture].
 - Are obs rows stable across repeated calls mid-mow, or do they update per-frame? [UNKNOWN — to capture].
