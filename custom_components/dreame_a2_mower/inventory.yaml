@@ -112,6 +112,20 @@ properties:
           not off-dock either. The single-run off-dock hypothesis was an
           unrepresentative ~7% sample; the original semantic labels stand.
         evidence: "_corpus.py cross-tab over probe_log_*.jsonl (9 logs, 2026-04-17..05-30); single-run trigger was probe_log_20260520_131350.jsonl @ 2026-05-30 15:17:40"
+      - date: "2026-06-19"
+        status: verified
+        claim: |
+          The catalog `heartbeat` channel (45 codes) is a non-firing app
+          artifact — a subset of the iot fault_names that never appears as
+          numeric codes on g2408 s1p1. s1p1 carries a 20-byte boolean-flag
+          blob; 93,888 corpus samples confirm zero numeric codes on this
+          property. The real s1p1 faults are the decoded boolean flags
+          (bumper/drop_tilt/lift/emergency_stop/battery_temp_low/safety_alert_active).
+          Catalog-quality fault_text/tier/fault_detail is now surfaced as
+          binary_sensor extra_state_attributes via a flag→iot-code map
+          (bumper→9, drop_tilt→1, lift→0, emergency_stop→23,
+          battery_temp_low→43); safety_alert_active has no catalog code.
+        evidence: "apk:g2408-plugin-ext1423; corpus: probe_log_*.jsonl 9 logs 93,888 s1p1 frames"
 
   - id: "s1p2"
     siid: 1
