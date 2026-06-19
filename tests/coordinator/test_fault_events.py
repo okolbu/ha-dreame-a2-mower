@@ -381,6 +381,9 @@ def _make_coord_with_notice() -> types.SimpleNamespace:
     coord = _make_coord()
     coord.entry = types.SimpleNamespace(entry_id="e1")
     coord.hass = types.SimpleNamespace(config=types.SimpleNamespace(language="en"))
+    # The notice helpers read self._EMERGENCY_STOP_CODE (a class attr on the real
+    # coordinator); the SimpleNamespace stub must carry it explicitly.
+    coord._EMERGENCY_STOP_CODE = _DeviceSyncMixin._EMERGENCY_STOP_CODE
     for name in ("_fault_notification_id", "_post_fault_notice", "_dismiss_fault_notice"):
         setattr(coord, name, types.MethodType(getattr(_DeviceSyncMixin, name), coord))
     return coord

@@ -210,7 +210,7 @@ class _DeviceSyncMixin:
         No-ops if hass or entry are not yet available (e.g. test stubs)."""
         if getattr(self, "hass", None) is None or getattr(self, "entry", None) is None:
             return
-        if int(code) == _DeviceSyncMixin._EMERGENCY_STOP_CODE:
+        if int(code) == self._EMERGENCY_STOP_CODE:
             return
         from ..mower import fault_catalog
         title = fault_catalog.fault_text(int(code), lang) or f"Fault {int(code)}"
@@ -233,7 +233,7 @@ class _DeviceSyncMixin:
         No-ops if hass or entry are not yet available (e.g. test stubs)."""
         if getattr(self, "hass", None) is None or getattr(self, "entry", None) is None:
             return
-        if int(code) == _DeviceSyncMixin._EMERGENCY_STOP_CODE:
+        if int(code) == self._EMERGENCY_STOP_CODE:
             return
         try:
             from homeassistant.components import persistent_notification as _pn
