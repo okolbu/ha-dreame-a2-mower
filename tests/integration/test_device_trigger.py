@@ -264,20 +264,28 @@ async def test_get_triggers_returns_one_per_supported_type(hass_with_mower):
         assert t["domain"] == DOMAIN
         assert t["device_id"] == device_id
 
-    # All 11 lifecycle types are exposed.
+    # All 12 lifecycle types are exposed.
     for et in LIFECYCLE_EVENT_TYPES:
         assert et in types_returned
 
-    # High-value notification types are exposed; pure-noise ones are not.
+    # Non-info notification types are exposed (tier-derived, 43 slugs).
     assert "human_detected" in types_returned
-    assert "trapped" in types_returned          # was robot_trapped (code 2)
+    assert "trapped" in types_returned
     assert "emergency_stop" in types_returned
-    assert "blade_loss" in types_returned       # was blades_worn (code 28)
-    assert "fault_detected" in types_returned  # lifecycle fault
+    assert "blade_loss" in types_returned
+    assert "cutter" in types_returned           # tier=error, newly included
+    assert "tilted" in types_returned           # tier=error, newly included
+    assert "lidar_abnormal" in types_returned   # tier=error, newly included
+    # Info-tier slugs are excluded:
     assert "unknown_s2p2" not in types_returned
-    assert "maintenance_reminder" not in types_returned
-    # notification mowing_started would collide with the lifecycle one
+    assert "battery_low_returning" not in types_returned   # tier=info
+    assert "bad_weather_protecting" not in types_returned  # tier=info
+    assert "idle_timeout_returning" not in types_returned  # tier=info
+    assert "pause_timeout_returning" not in types_returned # tier=info
+    # mowing_started only comes from lifecycle (no notification slug collides)
     assert types_returned.count("mowing_started") == 1
+    # Total count = 12 lifecycle + 43 notification
+    assert len(types_returned) == 12 + 43
 
 
 @pytest.mark.asyncio
@@ -401,20 +409,45 @@ def test_source_entity_resolution_picks_right_entity(hass_with_mower):
     )
 
 
-def test_exposed_triggers_use_corrected_catalog_slugs():
+def test_exposed_triggers_are_tier_derived():
     from custom_components.dreame_a2_mower.device_trigger import (
         _EXPOSED_NOTIFICATION_EVENT_TYPES as EXP, TRIGGER_TYPES,
     )
-    from custom_components.dreame_a2_mower.mower.error_codes import S2P2_EVENT_TYPES
-    assert "back_charge_failed" in EXP            # was positioning_failed_stuck (31)
-    assert "go_to_cleanpoint_success" in EXP       # was arrived_at_maintenance_point (75)
-    assert "trapped" in EXP                        # was robot_trapped (2)
-    for stale in ("positioning_failed_stuck", "robot_trapped", "arrived_at_maintenance_point"):
-        assert stale not in EXP
-    valid = set(S2P2_EVENT_TYPES.values())
-    for slug in EXP:
-        assert slug in valid, f"exposed trigger {slug!r} not a derived slug"
+    from custom_components.dreame_a2_mower.mower.error_codes import (
+        triggerable_notification_slugs,
+    )
+    from custom_components.dreame_a2_mower.const import LIFECYCLE_EVENT_TYPES
+    assert set(EXP) == set(triggerable_notification_slugs())
+    assert len(EXP) == 43
+    for dropped in ("battery_low_returning", "bad_weather_protecting",
+                    "idle_timeout_returning", "pause_timeout_returning"):
+        assert dropped not in EXP
+    for added in ("cutter", "tilted", "lidar_abnormal", "docking_failed", "maintain_loss"):
+        assert added in EXP
+    assert set(EXP).isdisjoint(set(LIFECYCLE_EVENT_TYPES))
     assert set(EXP) <= set(TRIGGER_TYPES)
+
+
+def test_trigger_type_labels_match_notification_event_labels():
+    from custom_components.dreame_a2_mower.device_trigger import (
+        _EXPOSED_NOTIFICATION_EVENT_TYPES as EXP,
+    )
+    for rel in ("strings.json", "translations/en.json"):
+        tt = _trigger_labels(rel)
+        st = _notif_event_labels(rel)
+        for slug in EXP:
+            assert tt.get(slug) == st.get(slug), (
+                f"{rel}: trigger_type[{slug}]={tt.get(slug)!r} != event[{slug}]={st.get(slug)!r}"
+            )
+
+
+def test_trigger_type_keys_are_exactly_trigger_types():
+    from custom_components.dreame_a2_mower.device_trigger import TRIGGER_TYPES
+    for rel in ("strings.json", "translations/en.json"):
+        labels = set(_trigger_labels(rel))
+        assert labels == set(TRIGGER_TYPES), (
+            f"{rel}: {labels ^ set(TRIGGER_TYPES)} differ from TRIGGER_TYPES"
+        )
 
 
 def _trigger_labels(rel: str) -> dict:

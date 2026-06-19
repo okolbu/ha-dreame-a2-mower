@@ -182,3 +182,25 @@ def test_const_reexports_same_notification_event_types():
         NOTIFICATION_EVENT_TYPES as SRC,
     )
     assert const.NOTIFICATION_EVENT_TYPES is SRC
+
+
+def test_triggerable_notification_slugs_is_non_info():
+    from custom_components.dreame_a2_mower.mower.error_codes import (
+        triggerable_notification_slugs, S2P2_EVENT_TYPES,
+    )
+    from custom_components.dreame_a2_mower.mower import fault_catalog as fc
+    slugs = triggerable_notification_slugs()
+    assert list(slugs) == sorted(set(slugs))
+    for s in slugs:
+        codes = [c for c, sl in S2P2_EVENT_TYPES.items() if sl == s]
+        tiers = {fc.fault_tier(c) for c in codes}
+        assert tiers & {"error", "attention", "alert"}, f"{s} has no non-info tier"
+    expected = {
+        sl for c, sl in S2P2_EVENT_TYPES.items()
+        if fc.fault_tier(c) in ("error", "attention", "alert")
+    }
+    assert set(slugs) == expected
+    assert len(slugs) == 43
+    for dropped in ("battery_low_returning", "bad_weather_protecting",
+                    "idle_timeout_returning", "pause_timeout_returning"):
+        assert dropped not in slugs

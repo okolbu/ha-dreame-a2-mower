@@ -80,6 +80,18 @@ NOTIFICATION_EVENT_TYPES: tuple[str, ...] = tuple(
     sorted(set(S2P2_EVENT_TYPES.values())) + [S2P2_UNKNOWN_EVENT_TYPE]
 )
 
+def triggerable_notification_slugs() -> tuple[str, ...]:
+    """Notification slugs worth exposing as HA device-triggers: every slug whose
+    tier is error/attention/alert. Info is excluded — it's lifecycle/status that
+    overlaps the LIFECYCLE_EVENT_TYPES triggers. Derived from the app catalog
+    [apk:g2408-plugin-ext1423]; a slug is included if ANY of its codes is non-info
+    (the two error/alert collision slugs qualify). Sorted for stable output."""
+    return tuple(sorted({
+        slug for code, slug in S2P2_EVENT_TYPES.items()
+        if fault_catalog.fault_tier(code) in ("error", "attention", "alert")
+    }))
+
+
 def is_fault(code: int | None) -> bool:
     """True if a code is the app's 'error' tier (FAULT + anomaly|malfunction):
     the mower can't continue without intervention. Drives the latched error
