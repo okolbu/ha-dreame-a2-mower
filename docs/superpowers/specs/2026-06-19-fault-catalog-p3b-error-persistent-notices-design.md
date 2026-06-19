@@ -92,11 +92,19 @@ with `lang` already resolved. Add the notice calls inside those loops:
 `lang` is already computed at the top of `_fire_fault_delta`
 (`fault_catalog.resolve_lang(hass.config.language)`). No new import there.
 
-### C. Restart behavior (idempotent)
-`snapshot.errors` is persisted/restored. After a restart with a still-active
-fault, the first delta treats restored codes as newly-detected and re-posts the
-banner — desirable (the fault is still active). `async_create` with the same
-`notification_id` updates in place, so no duplicate accumulates.
+### C. Restart behavior (known limitation — under-notifies, never spams)
+`snapshot.errors` is persisted/restored. The two `_fire_fault_delta` call sites
+in `coordinator/_mqtt_handlers.py` read `_prev_errors` from the *restored*
+snapshot before applying each push and only fire when `new != prev`. So after a
+restart with a still-active fault, the re-pushed code equals the restored set →
+no delta → **the banner is NOT re-posted** (HA `persistent_notification`s are
+in-memory and don't survive a restart). The fault is still surfaced via the Error
+sensor / `lawn_mower` ERROR state (those read `snapshot.errors` directly), just
+without the banner until the fault clears and a later code re-fires it. This is
+the *safe* direction (under-notify, never duplicate) and matches the existing
+`_handle_emergency_stop_transition` banner's identical limitation. A startup
+re-post of banners for the restored `snapshot.errors` is a possible follow-up
+(deferred — would add a first-refresh hook; out of scope for P3b).
 
 ## Out of scope (later)
 - Per-tier **device-trigger exposure** (which tiers get triggers) — **P3c**.
