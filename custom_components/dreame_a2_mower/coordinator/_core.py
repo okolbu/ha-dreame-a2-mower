@@ -590,6 +590,12 @@ class _CoreMixin:
             # guard in _on_state_update is the trail-loss-on-restart fix.
             await self._restore_in_progress()
 
+            # Re-post error-tier persistent notices for faults latched on disk:
+            # snapshot.errors is restored above, but _fire_fault_delta won't
+            # re-fire them across a restart (no delta vs the restored set), so the
+            # banner would be lost. Re-post directly (no spurious fault_detected).
+            self._repost_active_fault_notices()
+
             await self.hass.async_add_executor_job(self._init_mqtt)
 
             # Ensure the debounce handle from _device_sync (set by tripwire

@@ -244,6 +244,34 @@ class _DeviceSyncMixin:
         except Exception as ex:
             LOGGER.warning("fault %d notice dismiss failed: %s", int(code), ex)
 
+    def _repost_active_fault_notices(self) -> None:
+        """Re-post error-tier persistent notices for faults restored from disk.
+
+        On HA restart with a still-latched fault, snapshot.errors is restored but
+        _fire_fault_delta won't re-fire (no delta when the first MQTT push equals
+        the restored set), so the banner is lost. This one-shot startup call
+        re-posts it directly — WITHOUT firing fault_detected (no _fire_fault_delta).
+        Idempotent: _post_fault_notice uses a per-code notification_id. emergency-stop
+        (23) is skipped by _post_fault_notice (its own notice re-posts via
+        _handle_emergency_stop_transition on the first heartbeat). No-ops if hass/
+        entry/state_machine are unavailable (test stubs / early boot)."""
+        if getattr(self, "hass", None) is None or getattr(self, "entry", None) is None:
+            return
+        sm = getattr(self, "state_machine", None)
+        if sm is None:
+            return
+        try:
+            errors = sm.snapshot().errors
+        except Exception:
+            return
+        if not errors:
+            return
+        from ..mower import fault_catalog
+        cfg = getattr(self.hass, "config", None)
+        lang = fault_catalog.resolve_lang(getattr(cfg, "language", None))
+        for code in sorted(errors):
+            self._post_fault_notice(int(code), lang)
+
     def _update_device_registry_serial(self, serial: str) -> None:
         """Reflect the real hardware serial onto the device record."""
         try:
