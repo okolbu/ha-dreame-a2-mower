@@ -2,6 +2,7 @@
 [cloud/captures/mitm_session_20260619/miio-13267.jsonl@2026-06-17_19:50:15]."""
 import math
 
+from custom_components.dreame_a2_mower.protocol import cfg_action
 from custom_components.dreame_a2_mower.protocol.obstacle_markers import (
     ObstacleMarker,
     parse_aiobs_markers,
@@ -53,3 +54,16 @@ def test_degenerate_polygon_is_kept_but_flagged_short():
     markers = parse_aiobs_markers(d)
     assert len(markers) == 1
     assert markers[0].polygon_m == ((1.0, 2.0),)
+
+
+def test_get_aiobs_markers_sends_idx_payload_and_unwraps():
+    calls = []
+
+    def fake_send(siid, aiid, params):
+        calls.append((siid, aiid, params))
+        # Mirror the wire `out` envelope cfg_action._unwrap expects.
+        return {"result": {"out": [{"m": "r", "r": 0, "d": {"idx": 0, "obs": []}}]}}
+
+    d = cfg_action.get_aiobs_markers(fake_send, idx=0)
+    assert calls == [(2, 50, [{"m": "g", "t": "AIOBS", "d": {"idx": 0}}])]
+    assert d == {"idx": 0, "obs": []}
