@@ -1543,7 +1543,7 @@ entities:
   # s1p1 boolean-flag binary_sensors (bumper/tilt/lift/PIN/temp/safety)
   # Confirmed 2026-04-30 against app notifications. P4 adds catalog attrs.
 
-  - id: "binary_sensor.dreame_a2_mower_bumper"
+  - id: "binary_sensor.dreame_a2_mower_bumper_error"
     platform: binary_sensor
     class: "DreameA2BinarySensor"
     class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
