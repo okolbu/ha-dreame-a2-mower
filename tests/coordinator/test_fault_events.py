@@ -466,3 +466,54 @@ def test_only_error_tier_latches_so_only_error_tier_persists():
         if attn in fc.known_codes("iot"):
             assert fc.fault_tier(attn) == "attention"
             assert not is_fault(attn)
+
+
+# ---------------------------------------------------------------------------
+# P3b restart re-post: _repost_active_fault_notices
+# ---------------------------------------------------------------------------
+
+
+def _make_coord_with_repost(errors) -> types.SimpleNamespace:
+    coord = _make_coord_with_notice()  # has hass, entry, _EMERGENCY_STOP_CODE, notice methods
+    coord.state_machine = types.SimpleNamespace(
+        snapshot=lambda: types.SimpleNamespace(errors=frozenset(errors))
+    )
+    coord._repost_active_fault_notices = types.MethodType(
+        _DeviceSyncMixin._repost_active_fault_notices, coord
+    )
+    return coord
+
+
+def test_repost_active_fault_notices_reposts_each_error(monkeypatch):
+    fake = _install_fake_pn(monkeypatch)
+    coord = _make_coord_with_repost({7, 9})
+    lc = _RecordingLifecycle()
+    coord._lifecycle_event = lc
+    coord._repost_active_fault_notices()
+    ids = {n["notification_id"] for n in fake.created}
+    assert ids == {"dreame_a2_mower_fault_7_e1", "dreame_a2_mower_fault_9_e1"}
+    # NO spurious fault_detected lifecycle events
+    assert lc.fired == []
+
+
+def test_repost_skips_emergency_stop_code_23(monkeypatch):
+    fake = _install_fake_pn(monkeypatch)
+    coord = _make_coord_with_repost({23, 7})
+    coord._repost_active_fault_notices()
+    ids = {n["notification_id"] for n in fake.created}
+    assert ids == {"dreame_a2_mower_fault_7_e1"}  # 23 skipped by _post_fault_notice
+
+
+def test_repost_empty_errors_is_noop(monkeypatch):
+    fake = _install_fake_pn(monkeypatch)
+    coord = _make_coord_with_repost(set())
+    coord._repost_active_fault_notices()
+    assert fake.created == []
+
+
+def test_repost_noop_without_hass_or_entry(monkeypatch):
+    fake = _install_fake_pn(monkeypatch)
+    coord = _make_coord_with_repost({7})
+    coord.hass = None  # missing hass → no-op, no crash
+    coord._repost_active_fault_notices()
+    assert fake.created == []
