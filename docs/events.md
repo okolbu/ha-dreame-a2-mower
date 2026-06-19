@@ -25,14 +25,16 @@ then choose a trigger like *Mowing started*, *Person detected*, or
 triggers are keyed to your specific mower, so multiple mowers don't
 cross-fire.
 
-The integration exposes all 11 lifecycle moments plus the high-value,
-actionable notifications (faults, `human_detected`, `trapped`,
-`emergency_stop`, `blade_loss`, wheel errors, positioning/maintenance
-issues, `bad_weather_protecting`, …). The few pure-status notifications that just
-mirror a lifecycle event or a sensor reading are intentionally not listed
-as device triggers (they remain available as raw event triggers and in the
-Logbook). See `device_trigger.py`'s module docstring for the exact exposed
-set and the omit rationale.
+The integration exposes all 12 lifecycle moments plus every notification
+whose tier is error/attention/alert — derived from the app fault catalog
+(e.g. `trapped`, `cutter`, `tilted`, wheel/LiDAR errors, `human_detected`,
+`blade_loss`, `maintain_loss`, `docking_failed`, `back_charge_failed`). The
+INFO-tier notifications (lifecycle-ish status that overlaps the lifecycle
+triggers — e.g. `bad_weather_protecting`, `battery_low_returning`,
+`*_schedule_suspend`) are intentionally not listed as device triggers; they
+remain available as raw notification events and in the Logbook. The exposed
+set is computed by `error_codes.triggerable_notification_slugs()`; see
+`device_trigger.py`'s module docstring.
 
 A device trigger fires on the same payload as the underlying event entity,
 so `trigger.to_state.attributes.<key>` (and the recipes below) work
