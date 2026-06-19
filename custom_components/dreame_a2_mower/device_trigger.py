@@ -13,30 +13,25 @@ This file adds NO new event infrastructure. It re-uses:
 
 - the `dreame_a2_mower_event` bus event already fired with the payload
   `{entity_id, event_type, data}`;
-- `LIFECYCLE_EVENT_TYPES` (11 types) and the catalog-derived
+- `LIFECYCLE_EVENT_TYPES` (12 types) and the catalog-derived
   `NOTIFICATION_EVENT_TYPES` from `const.py`.
 
-Curated exposed set
--------------------
-All 11 ``LIFECYCLE_EVENT_TYPES`` are exposed (each is an unambiguous,
+Tier-derived exposed set
+------------------------
+All 12 ``LIFECYCLE_EVENT_TYPES`` are exposed (each is an unambiguous,
 automatable moment).
 
-From the catalog-derived ``NOTIFICATION_EVENT_TYPES`` we expose a curated
-high-value subset of 18 — the ones a user would plausibly automate on
-(safety, fault, attention-needed). The pure status-mirror notifications
-that merely duplicate a lifecycle event or a sensor state are omitted to
-keep the trigger picker readable (they remain fully available as raw
-event triggers / via the logbook). Omitted-and-why:
+From the catalog-derived ``NOTIFICATION_EVENT_TYPES`` we expose every slug
+whose ``fault_tier(code)`` is ``error``, ``attention``, or ``alert`` (43
+slugs from the app catalog ``[apk:g2408-plugin-ext1423]``). Info-tier
+notifications are excluded — they are lifecycle/status-mirror events that
+overlap the ``LIFECYCLE_EVENT_TYPES`` triggers or have low automation value.
+The ``unknown_s2p2`` sentinel is also excluded (no stable meaning).
 
-- ``mowing_started`` / ``mowing_complete`` / ``scheduled_mowing_started``
-  — duplicate the ``mowing_started`` / ``mowing_ended`` lifecycle triggers.
-- ``patrol_started`` / ``patrol_ended`` — mirror lifecycle/state already
-  surfaced; low automation value.
-- ``maintenance_reminder`` / ``continue_unfinished_task`` /
-  ``schedule_cancelled_busy`` / ``task_cancelled`` — informational status,
-  not an actionable transition.
-- ``unknown_s2p2`` — a catch-all for novel codes with no stable meaning;
-  exposing it as a labelled trigger would be misleading.
+The derivation is fully automatic: ``_EXPOSED_NOTIFICATION_EVENT_TYPES``
+is set to ``triggerable_notification_slugs()`` from ``mower/error_codes.py``.
+No hand-curated list — adding a new code to the catalog with a non-info
+tier automatically includes its slug here.
 
 Everything in ``_EXPOSED_NOTIFICATION_EVENT_TYPES`` below is exposed.
 """
@@ -64,33 +59,17 @@ from .const import (
     DOMAIN,
     LIFECYCLE_EVENT_TYPES,
 )
+from .mower.error_codes import triggerable_notification_slugs
 
 # The bus event device triggers listen on. Must match the event fired by
 # event.py:_DreameA2EventEntityBase.trigger().
 _BUS_EVENT_TYPE = f"{DOMAIN}_event"
 
-# Curated, high-value notification triggers (see module docstring for the
-# rationale on what's exposed vs omitted).
-_EXPOSED_NOTIFICATION_EVENT_TYPES: tuple[str, ...] = (
-    "human_detected",           # 27
-    "trapped",                  # 2
-    "emergency_stop",           # 23
-    "blade_loss",               # 28
-    "left_wheel",               # 4
-    "right_wheel",              # 5
-    "hanging",                  # 0
-    "back_charge_failed",       # 31
-    "locating_failed_with_map", # 33
-    "task_start_failed",        # 36
-    "battery_temp_low",         # 43 (shared slug with 59 FAULT variant)
-    "battery_low_returning",    # 54
-    "bad_weather_protecting",   # 56
-    "idle_timeout_returning",   # 71
-    "pause_timeout_returning",  # 72
-    "top_cover_open",           # 73
-    "go_to_cleanpoint_success", # 75
-    "go_to_cleanpoint_failed",  # 76
-)
+# Notification slugs exposed as device-triggers — DERIVED from tier
+# (error/attention/alert; info excluded as lifecycle-ish, overlapping the
+# LIFECYCLE_EVENT_TYPES triggers). No hand-curated list; see
+# error_codes.triggerable_notification_slugs.
+_EXPOSED_NOTIFICATION_EVENT_TYPES: tuple[str, ...] = triggerable_notification_slugs()
 
 # The full set of `type`s this device-trigger platform supports.
 TRIGGER_TYPES: tuple[str, ...] = (
