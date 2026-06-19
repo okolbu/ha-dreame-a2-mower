@@ -698,14 +698,6 @@ class MowerState:
 
     # ------ P3 render-styling fields (pre-start stripe overlay) ------
 
-    # P3 of render-styling refresh: tracks the dominant mow direction
-    # (degrees, 0..179) of the most recent ALL_AREAS or ZONE session per
-    # map. Used by render_base (STRIPES background) to draw the pre-start
-    # stripe overlay at the angle the next mow will use (per mowing_direction_mode).
-    # Missing-key = no prior mow recorded yet; renderer falls back to 0°.
-    # Persistence: persistent (restored from session archive on HA restart).
-    last_all_area_mow_direction_deg: dict[int, int] = field(default_factory=dict)
-
     # P4 of render-styling refresh: user-controllable trail stroke width in
     # pixels. Applies to the work-log archived trail render (static work_log.png)
     # AND the replay-card SVG overlay. The live camera trail is now client-side.

@@ -836,8 +836,8 @@ class _SessionMixin:
         write has already happened in the caller), matching prior behaviour.
 
         ``extra_updates`` carries the cloud path's extra MowerState fields
-        (latest_session_*, total_lawn_area_m2, last_all_area_mow_direction_deg);
-        the caller computes them and passes the dict. The local path passes None.
+        (latest_session_*, total_lawn_area_m2); the caller computes them and
+        passes the dict. The local path passes None.
 
         ``delete_log_tag`` only varies the delete_in_progress warning prefix so
         the two callers stay distinguishable in the log.
@@ -1168,15 +1168,7 @@ class _SessionMixin:
         # idle-while-off case wouldn't trigger FINALIZE_INCOMPLETE.
         self._prev_task_state = 0
 
-        # Restore last_all_area_mow_direction_deg from merged payload.
-        # JSON round-trips int keys as strings — normalise back to int.
-        raw_dir_map = merged.get("last_all_area_mow_direction_deg") or {}
-        restored_dir_map: dict[int, int] = {
-            int(k): int(v) for k, v in raw_dir_map.items() if v is not None
-        }
-
-        # Sync MowerState (fold both fields into one replace to avoid
-        # firing two consecutive update signals).
+        # Sync MowerState.
         new_state = dataclasses.replace(
             self.data,
             session_started_unix=merged_start,
@@ -1186,7 +1178,6 @@ class _SessionMixin:
                 (tuple((p.x_m, p.y_m) for p in self.live_map.track),)
                 if self.live_map.track else ()
             ),
-            last_all_area_mow_direction_deg=restored_dir_map,
         )
         self.async_set_updated_data(new_state)
         LOGGER.info("[F5.7.1] _restore_in_progress: MowerState updated (session restored from disk)")
@@ -1215,11 +1206,6 @@ class _SessionMixin:
         payload: dict[str, Any] = self.live_map.dump_to_payload()
         payload["area_mowed_m2"] = self.data.area_mowed_m2 or 0.0
         payload["map_area_m2"] = 0
-        # Per-map last all-area mow direction — shallow copy guards
-        # against post-write mutation bleeding into the persisted payload.
-        payload["last_all_area_mow_direction_deg"] = dict(
-            self.data.last_all_area_mow_direction_deg
-        )
         # Rain-delay context is COORDINATOR state (not live_map state), so it
         # is injected here rather than via dump_to_payload(). Persisting it lets
         # _restore_in_progress rehydrate rain_delay_active across a reboot so the

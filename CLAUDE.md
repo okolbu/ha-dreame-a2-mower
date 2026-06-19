@@ -426,17 +426,18 @@ platform is a thin entry file with domain-grouped siblings.
 | `main_view.py` | `render_base` + pre-start previews (`_render_pre_start_*`, `STRIPE_WIDTH_MM`) |
 | `work_log.py` | `render_work_log` (archived-session render) + `_render_archived_trail` + `_TRAIL_LINE_WIDTH` |
 | `stripes.py` | `compute_stripe_overlay` — pre-start stripe overlay (pure pixel-space; P3a) |
-| `direction.py` | `infer_mow_direction`, `next_direction`, `MIN_SEGMENT_M`, `MOWING_PATTERN_*` — pure direction math (P3a) |
 | `dotted.py` | `draw_dotted_polygon` — dotted-line polygon helper (pure pixel-space; P3a) |
 
-- `stripes.py` / `direction.py` / `dotted.py` are **pure** (no internal import,
-  like `_geometry`), folded in from the old root `_render_stripes.py` /
-  `_render_direction.py` / `_render_dotted.py` (P3a frame untangle, 2026-06-14).
-  Those root files are now 1-line re-export **shims** preserving the old import
-  paths (`from .._render_direction import infer_mow_direction`, used by
-  `coordinator/_lidar_oss.py` + 3 test files). Keep the shims.
-- **Acyclic imports:** `{_geometry, stripes, direction, dotted}` ← `base_map` ←
-  {`main_view`, `work_log`} ← `__init__`. The four leaf modules import nothing
+- `stripes.py` / `dotted.py` are **pure** (no internal import, like
+  `_geometry`), folded in from the old root `_render_stripes.py` /
+  `_render_dotted.py` (P3a frame untangle, 2026-06-14). Those root files are now
+  1-line re-export **shims** preserving the old import paths. Keep the shims.
+  (The former `direction.py` / `_render_direction.py` track-inference module was
+  removed 2026-06-19 — the next-mow stripe angle is read from the authoritative
+  cloud field `settings_mowing_direction`, not inferred from the track. See
+  `docs/superpowers/specs/2026-06-19-next-direction-stripes-design.md`.)
+- **Acyclic imports:** `{_geometry, stripes, dotted}` ← `base_map` ←
+  {`main_view`, `work_log`} ← `__init__`. The leaf modules import nothing
   internal; never add a back-edge.
 - A module-level constant used by functions landing in ≥2 modules lives in
   `_geometry.py` (e.g. `_OBSTACLE_FILL`/`_OBSTACLE_OUTLINE`, used by both

@@ -2688,8 +2688,21 @@ Index map (all confirmed [app-mitm:2026-06-09-settings-sweep] unless noted):
   [4]  Mowing Height: cm×10 (range 30–70; e.g. 55=5.5 cm). Multi-value confirmed.
   [5]  Mowing Direction mode: 0=Crisscross, 1=Customize (uses [6] angle),
        2=Chequerboard. 3-value confirmed by isolating each mode.
-  [6]  Mowing Direction angle (degrees, used when [5]=1 Customize only).
-       Confirmed: 8↔64 via isolated write.
+       [DISCREPANCY — apk:g2408-plugin-ext1423 names the enum
+       {0:NONE, 1:ROTATION, 2:CHEESSBOARD}, conflicting on modes 0/1
+       (agrees on 2=checkerboard). The 2026-06-09 app-MITM behavioural
+       isolation outranks apk-derived names per the provenance rule, so
+       the labels above stand; the 0/1 naming is an OPEN question.]
+  [6]  Mowing Direction angle (degrees). cvtMowingDirection: PRE[6] = 180 − d
+       where d = SETTINGS.mowingDirection; map stripe pixel angle = 180 − d
+       (app's cvtMowingDirection). User-write only takes effect in [5]=1
+       Customize (confirmed 8↔64 via isolated write), BUT the value is the
+       device-maintained NEXT-RUN angle: in rotation/checkerboard the
+       firmware REWRITES it after each mow (~90° step observed in
+       checkerboard), and the official app draws the next-mow stripes at
+       this stored angle with no client parity/rotation math. So [6] /
+       SETTINGS.mowingDirection is read-meaningful in all modes.
+       [app-observed 2026-06-19 + cloud SETTINGS pull 2026-06-19]
   [7]  Automatic Edge Mowing: 0=off, 1=on. Confirmed by isolated toggle.
   [8]  EdgeMaster-fixed edge param, no user UI (=0). Aligns to one of the
        SETTINGS 0-fields {cutterPosition, edgeMowingWalkMode, edgeCuttingAttachment}

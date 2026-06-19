@@ -12,7 +12,10 @@ import io
 from PIL import Image
 
 from custom_components.dreame_a2_mower.map_decoder import ExclusionZone, MapData, MowingZone
-from custom_components.dreame_a2_mower.map_render.main_view import render_base
+from custom_components.dreame_a2_mower.map_render.main_view import (
+    render_base,
+    _render_pre_start_with_stripes,
+)
 from custom_components.dreame_a2_mower.map_render.background import BackgroundMode
 from custom_components.dreame_a2_mower.mower.state import ActionMode
 from tests.map_render.conftest import make_map_data
@@ -126,14 +129,42 @@ def test_render_base_clean_variant_same_size_fewer_exclusion_pixels():
 
 
 class _FakeState:
-    """Minimal state stub accepted by _render_pre_start_with_stripes."""
+    """Minimal state stub accepted by _render_pre_start_with_stripes.
 
-    def __init__(self) -> None:
+    The stripe angle now comes from the authoritative cloud field
+    ``settings_mowing_direction`` (the device-maintained next-run angle),
+    drawn at pixel angle ``180 - value`` — NOT inferred from the track.
+    """
+
+    def __init__(self, direction: int | None = 26) -> None:
         self.action_mode = ActionMode.ALL_AREAS
-        # Provide a non-zero direction so the stripe overlay differs from
-        # the plain dark base (e.g. 45 degrees).
-        self.last_all_area_mow_direction_deg: dict = {0: 45}
-        self.settings_mowing_direction_mode: int = 0  # fixed-angle mode
+        self.settings_mowing_direction = direction
+        self.settings_mowing_direction_mode = 2  # metadata only; unused by render
+
+
+def test_stripes_use_settings_mowing_direction_angle():
+    """The overlay angle is 180 - settings_mowing_direction (cvtMowingDirection),
+    read straight from the stored cloud field — no track inference."""
+    md = make_map_data()
+    captured: dict = {}
+
+    def _spy(**kwargs):
+        captured["angle"] = kwargs["angle_deg"]
+        return Image.new("RGBA", (md.width_px, md.height_px), (0, 0, 0, 0))
+
+    _render_pre_start_with_stripes(
+        md, state=_FakeState(direction=26), palette=None,
+        compute_stripe_overlay_fn=_spy,
+    )
+    assert captured["angle"] == (180 - 26) % 180  # 154
+
+
+def test_stripes_none_direction_falls_back_to_dark_base():
+    """No stored angle yet (cloud not polled) → plain dark base, no guessed stripes."""
+    md = make_map_data()
+    striped = render_base(md, background_mode=BackgroundMode.STRIPES, state=_FakeState(direction=None))
+    dark = render_base(md, background_mode=BackgroundMode.GREEN)
+    assert striped == dark
 
 
 def test_render_base_returns_png_for_each_mode():

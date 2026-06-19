@@ -48,14 +48,12 @@ def render_base(
     EDGE   -> light lawn + dotted boundary.
     SPOT   -> light lawn + dotted spot rectangles.
     """
-    from .direction import next_direction
     from .stripes import compute_stripe_overlay
     from .background import BackgroundMode
 
     if background_mode == BackgroundMode.STRIPES and state is not None:
         return _render_pre_start_with_stripes(
-            map_data, state=state, map_id=int(map_id), palette=palette,
-            next_direction_fn=next_direction,
+            map_data, state=state, palette=palette,
             compute_stripe_overlay_fn=compute_stripe_overlay,
         )
     if background_mode == BackgroundMode.EDGE:
@@ -74,14 +72,23 @@ def _render_pre_start_with_stripes(
     map_data: MapData,
     *,
     state: object,
-    map_id: int,
     palette: dict | None,
-    next_direction_fn,
     compute_stripe_overlay_fn,
 ) -> bytes:
     """Dark-green base + stripe overlay at the next-mow angle.
 
     Used by the STRIPES background mode in ``render_base``.
+
+    The angle is the device-maintained **next-run** direction stored in the
+    cloud field ``settings_mowing_direction`` (the active map's value), drawn at
+    pixel angle ``180 - value`` (the app's ``cvtMowingDirection`` convention).
+    This is NOT inferred from the track — the device rewrites the field after
+    each mow (checkerboard rotation is device-side), and the official app draws
+    stripes at the stored angle with no client parity/rotation math.
+    ``settings_mowing_direction_mode`` is metadata only and does not change the
+    render. When the field is unset (cloud not yet polled) we draw the plain
+    dark base rather than guess.
+    ``[app-observed 2026-06-19 + cloud SETTINGS pull 2026-06-19; apk:g2408-plugin-ext1423]``
 
     The stripe overlay is composited INSIDE ``render_base_map`` at the correct
     z-order (right after mowing-zone fills, before any other zone shapes) by
@@ -101,10 +108,13 @@ def _render_pre_start_with_stripes(
         # No zone to stripe; fall back to plain dark base.
         return render_base_map(map_data, palette=palette, lawn_mode="dark")
 
-    # Compute next-mow angle using per-map direction history + pattern mode.
-    last_dir = getattr(state, "last_all_area_mow_direction_deg", {}).get(map_id)
-    mode = getattr(state, "settings_mowing_direction_mode", None)
-    angle = next_direction_fn(last_direction_deg=last_dir, mode=mode)
+    # Next-mow angle = the stored cloud field (device-maintained next-run
+    # direction). No track inference. Pixel angle = 180 - mowingDirection.
+    stored = getattr(state, "settings_mowing_direction", None)
+    if stored is None:
+        # Cloud not yet polled — no authoritative angle, so don't guess.
+        return render_base_map(map_data, palette=palette, lawn_mode="dark")
+    angle = (180 - int(stored)) % 180
 
     # Project the first mowing-zone polygon from cloud-frame mm to PRE-FLIP
     # pixel coordinates.  These match the canvas at composite-time inside

@@ -51,8 +51,7 @@ from ..live_map.finalize import decide as _finalize_decide
 from ..live_map.state import LiveMapState
 from ..mower.actions import ACTION_TABLE, MowerAction
 from ..mower.property_mapping import PROPERTY_MAPPING, resolve_field
-from ..mower.state import ActionMode, ChargingStatus, MowerState
-from .._render_direction import infer_mow_direction
+from ..mower.state import ChargingStatus, MowerState
 from ..mower.state_machine import MowerStateMachine
 from ..mqtt_client import DreameA2MqttClient
 from ..observability.schemas import SCHEMA_SESSION_SUMMARY, SchemaCheck
@@ -736,27 +735,6 @@ class _LidarOssMixin:
         # picker keeps synthesizing a phantom "in progress" entry from disk
         # alongside the freshly-archived row (same bug v1.0.0a25 fixed for
         # the manual Finalize path; v1.0.0a42 closes the auto-finalize hole).
-        #
-        # P3 render-styling: infer dominant mow-stripe direction and record
-        # it per-map. Only for ALL_AREAS / ZONE (edge/spot have no stripes).
-        # summary.track_segments is in metres; infer_mow_direction expects mm.
-        new_direction_map: dict[int, int] = dict(self.data.last_all_area_mow_direction_deg)
-        if (
-            self.data.action_mode in (ActionMode.ALL_AREAS, ActionMode.ZONE)
-            and self._active_map_id is not None
-        ):
-            track_segs_mm = [
-                [(x * 1000.0, y * 1000.0) for x, y in seg]
-                for seg in summary.track_segments
-            ]
-            angle = infer_mow_direction(track_segs_mm)
-            if angle is not None:
-                new_direction_map[int(self._active_map_id)] = angle
-                LOGGER.debug(
-                    "[F5.6.1] _do_oss_fetch: inferred mow direction=%d° "
-                    "for map_id=%r (action_mode=%s)",
-                    angle, self._active_map_id, self.data.action_mode,
-                )
 
         # Shared post-archive teardown (delete_in_progress, clear pending op,
         # fire mowing-ended, end live_map, publish MowerState). The cloud path
@@ -782,7 +760,6 @@ class _LidarOssMixin:
                     float(summary.map_area_m2)
                     if summary.map_area_m2 else self.data.total_lawn_area_m2
                 ),
-                "last_all_area_mow_direction_deg": new_direction_map,
             },
         )
 
