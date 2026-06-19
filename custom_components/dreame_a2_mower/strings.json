@@ -154,6 +154,12 @@
           "off": "Declined",
           "on": "Accepted"
         }
+      },
+      "sim_out_of_warranty": {
+        "state": {
+          "off": "No",
+          "on": "Yes"
+        }
       }
     },
     "sensor": {
@@ -172,8 +178,12 @@
       "cfg_version": {
         "name": "CFG version"
       },
-      "ota_state": { "name": "OTA state" },
-      "ota_progress": { "name": "OTA progress" },
+      "ota_state": {
+        "name": "OTA state"
+      },
+      "ota_progress": {
+        "name": "OTA progress"
+      },
       "charging_status": {
         "state": {
           "charging": "Charging",

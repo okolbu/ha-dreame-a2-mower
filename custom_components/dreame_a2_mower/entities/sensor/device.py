@@ -140,6 +140,23 @@ def _format_active_selection(state: MowerState) -> str | None:
     return None
 
 
+def _parse_sim_expiry(value: str | None) -> datetime | None:
+    """Parse biz_4g_remain's ISO-8601 UTC exp_time into a tz-aware datetime.
+
+    Returns None for empty/garbage input, and for a naive datetime (the
+    SensorDeviceClass.TIMESTAMP contract requires tz-aware) — which is why we
+    feed this from biz_4g_remain's ``...Z`` value rather than REMOTE's
+    TZ-ambiguous ``expiredTime`` space-format string.
+    """
+    if not value:
+        return None
+    try:
+        dt = datetime.fromisoformat(value)
+    except (ValueError, TypeError):
+        return None
+    return dt if dt.tzinfo is not None else None
+
+
 def _api_endpoints_value(coord) -> int:
     cloud = getattr(coord, "_cloud", None)
     if cloud is None:
@@ -652,8 +669,23 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         key="sim_expired_time",
         name="SIM expires",
         icon="mdi:sim-off",
+        device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda s: s.sim_expired_time,
+        availability_source="cloud",
+        # Fed from biz_4g_remain's ISO exp_time (tz-aware); HA renders the
+        # relative "expires in N" countdown.
+        value_fn=lambda s: _parse_sim_expiry(s.sim_expired_time),
+    ),
+    DreameA2SensorEntityDescription(
+        key="sim_data_remaining_mb",
+        name="SIM data remaining",
+        icon="mdi:sim",
+        native_unit_of_measurement="MB",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=1,
+        entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
+        value_fn=lambda s: s.sim_data_remaining_mb,
     ),
     DreameA2SensorEntityDescription(
         key="service_messages_unread",

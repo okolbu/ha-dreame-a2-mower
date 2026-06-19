@@ -7150,6 +7150,10 @@ cfg_individual:
         status: verified
         claim: "REMOTE now WIRED + surfaced: 4 diagnostic SIM sensors (cardId/activeTime/expiredTime/leftDays) in the integration."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-19"
+        status: verified
+        claim: "REMOTE's cardId(ICCID) keys a follow-up biz_4g_remain poll (see api_endpoint sim_4g_remain) that adds the quantitative SIM fields REMOTE omits — surfaced as sim_data_remaining_mb sensor + sim_out_of_warranty binary_sensor. _refresh_remote chains it. REMOTE still owns the cardId/activeTime/leftDays sensors; the sim_expired_time sensor now feeds from biz_4g_remain exp_time (ISO-8601 UTC, TIMESTAMP device_class) instead of REMOTE's TZ-ambiguous expiredTime string."
+        evidence: "api-calls.jsonl@2026-06-08 (mitm_session_20260616)"
 
   - id: "AI_HUMAN"
     name: "ai_human_photo_consent"
@@ -12437,6 +12441,47 @@ api_endpoints:
         status: verified
         claim: "NOW WIRED + SURFACED: _refresh_oss polls checkDevOssStorage; stores bytes in MowerState.oss_storage_used / oss_storage_total (int|None); surfaced as oss_storage_used (MB), oss_storage_total (MB), oss_storage_pct (%) diagnostic sensors."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+
+  - id: "sim_4g_remain"
+    name: "biz_4g_remain"
+    category: "api_endpoint"
+    payload_shape: "GET https://api-4g.tsingting.tech/api/v1/biz_4g_remain/{did}?sn=&iccid=&region=&isProd=true → {code,msg,data:{rem_time(days),rem_flow(MB str),act_time,exp_time,pred_del_time,iccid,type,out_of_warranty(bool)}}"
+    semantic: |
+      Quantitative 4G-SIM data the app's SIM page shows. Served off the SIM
+      MVNO's third-party host api-4g.tsingting.tech (NOT a Dreame IoT host) and
+      is UNAUTHENTICATED — the request carries only content-type/Host/Connection/
+      Accept-Encoding/User-Agent(okhttp); no Dreame-Auth bearer or key header.
+      Keyed by path {did} + query {sn(serial), iccid, region(country code),
+      isProd:true}. [api-calls.jsonl@2026-06-08 (mitm_session_20260616)]
+      Live sample: {rem_time:894, rem_flow:"1683.05", act_time/mower_act_time:
+      "2025-11-19T16:00:00Z", exp_time:"2028-11-19T16:00:00Z", pred_del_time:
+      "2029-05-19T16:00:00Z", iccid:"8900…0000", type:3, out_of_warranty:false}.
+      rem_time(days)/exp_time/iccid overlap with REMOTE's leftDays/expiredTime/
+      cardId; only rem_flow (remaining data MB) and out_of_warranty are NOT in
+      REMOTE. Integration surfaces those two (sim_data_remaining_mb sensor (MB,
+      float(rem_flow)) + sim_out_of_warranty binary_sensor) AND feeds the
+      sim_expired_time sensor from exp_time here — preferred over REMOTE's
+      expiredTime because exp_time is ISO-8601 UTC (tz-aware → TIMESTAMP
+      device_class) whereas REMOTE's is a TZ-ambiguous space-format string.
+      cardId/activeTime/leftDays still come from REMOTE. _refresh_remote chains
+      this poll keyed by REMOTE's cardId.
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-08"
+      last_seen: "2026-06-19"
+      decoded: confirmed
+    references:
+      integration_code: "custom_components/dreame_a2_mower/cloud_client/_fetchers.py (fetch_4g_remain); coordinator/_refreshers.py (_refresh_remote chain); MowerState.sim_data_remaining_mb / sim_out_of_warranty / sim_expired_time; entities/sensor/device.py keys sim_data_remaining_mb + sim_expired_time (TIMESTAMP, _parse_sim_expiry); binary_sensor.py key sim_out_of_warranty"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    verifications:
+      - date: "2026-06-19"
+        status: verified
+        claim: "GET api-4g.tsingting.tech/api/v1/biz_4g_remain/{did}?sn&iccid&region&isProd=true → data{rem_time,rem_flow(MB),exp_time,iccid,out_of_warranty}; UNAUTHENTICATED (no auth header); host is the third-party SIM MVNO, not a Dreame IoT host."
+        evidence: "api-calls.jsonl@2026-06-08 (mitm_session_20260616)"
+      - date: "2026-06-19"
+        status: verified
+        claim: "WIRED + SURFACED: fetch_4g_remain chained off _refresh_remote (keyed by REMOTE cardId); rem_flow→sim_data_remaining_mb sensor (MB), out_of_warranty→sim_out_of_warranty binary_sensor, exp_time→sim_expired_time TIMESTAMP sensor (parsed tz-aware via _parse_sim_expiry; replaces REMOTE expiredTime feed)."
+        evidence: "api-calls.jsonl@2026-06-08 (mitm_session_20260616)"
 
   - id: "oss_manual_upload"
     name: "iotoss_addOssNew_ossUploaded"

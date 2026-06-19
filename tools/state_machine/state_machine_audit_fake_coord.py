@@ -150,6 +150,7 @@ def _eval_globals() -> dict[str, Any]:
         _freshness_value,
         _mpos_value,
         _mqtt_age_value,
+        _parse_sim_expiry,
     )
     from custom_components.dreame_a2_mower.binary_sensor import (
         _cloud_connected_value,
@@ -169,5 +170,6 @@ def _eval_globals() -> dict[str, Any]:
         "_freshness_value": _freshness_value,
         "_mpos_value": _mpos_value,
         "_mqtt_age_value": _mqtt_age_value,
+        "_parse_sim_expiry": _parse_sim_expiry,
         "_cloud_connected_value": _cloud_connected_value,
     }

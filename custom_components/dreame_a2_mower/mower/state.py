@@ -177,6 +177,10 @@ class MowerState:
     sim_card_id: str | None = None
     sim_expired_time: str | None = None
     sim_left_days: int | None = None
+    # Source: biz_4g_remain (tsingting SIM-provider host) — quantitative SIM data
+    # the REMOTE key doesn't carry. Persistence: volatile.
+    sim_data_remaining_mb: float | None = None
+    sim_out_of_warranty: bool | None = None
 
     # Source: OSS gallery sync (_refresh_oss_gallery, Phase D). Persistence: volatile.
     oss_storage_used: int | None = None

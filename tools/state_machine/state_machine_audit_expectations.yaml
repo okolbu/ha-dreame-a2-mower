@@ -639,6 +639,18 @@ sensor.sim_expired_time:
   reboot: unavailable_ok
   note: "SIM expiry date string from cloud NET/getRecords; None at cold-start until first cloud poll."
 
+sensor.sim_data_remaining_mb:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "Remaining 4G data (MB) from biz_4g_remain (tsingting SIM host), chained off the 6 h REMOTE refresh; None until first poll."
+
+binary_sensor.sim_out_of_warranty:
+  holder: mower_state
+  idle: unavailable
+  reboot: unavailable_ok
+  note: "SIM warranty flag from biz_4g_remain (tsingting SIM host), chained off the 6 h REMOTE refresh; None until first poll."
+
 sensor.service_messages_unread:
   holder: mower_state
   idle: unavailable

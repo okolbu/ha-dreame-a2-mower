@@ -7,11 +7,12 @@ from custom_components.dreame_a2_mower.coordinator._refreshers import _Refresher
 from custom_components.dreame_a2_mower.mower.state import MowerState
 
 
-def _coord(gps=None, remote=None, msg=None, dev=None, ota=None):
+def _coord(gps=None, remote=None, msg=None, dev=None, ota=None, g4=None):
     c = _RefreshersMixin()
     c._cloud = SimpleNamespace(
         fetch_gps=MagicMock(return_value=gps),
         fetch_remote=MagicMock(return_value=remote),
+        fetch_4g_remain=MagicMock(return_value=g4),
         fetch_message_record=MagicMock(return_value=msg),
         fetch_device_messages=MagicMock(return_value=[]),
         fetch_share_messages=MagicMock(return_value=[]),
@@ -57,6 +58,34 @@ async def test_refresh_remote_sets_sim():
     c = _coord(remote={"active_time": "a", "card_id": "FAKE", "expired_time": "e", "left_days": 895})
     await c._refresh_remote()
     assert c.data.sim_left_days == 895 and c.data.sim_card_id == "FAKE"
+
+
+@pytest.mark.asyncio
+async def test_refresh_remote_folds_4g_data():
+    """The REMOTE refresh chains a biz_4g_remain fetch (keyed by the ICCID it
+    just learned) and folds the quantitative SIM fields."""
+    c = _coord(
+        remote={"active_time": "a", "card_id": "ICCID1", "expired_time": "e", "left_days": 895},
+        g4={"data_remaining_mb": 1683.05, "out_of_warranty": False,
+            "expiry": "2028-11-19T16:00:00Z"},
+    )
+    await c._refresh_remote()
+    assert c.data.sim_data_remaining_mb == 1683.05
+    assert c.data.sim_out_of_warranty is False
+    # expiry now comes from biz_4g_remain's ISO exp_time (not REMOTE's TZ-ambiguous string)
+    assert c.data.sim_expired_time == "2028-11-19T16:00:00Z"
+    # the 4G fetch is keyed by the ICCID from REMOTE's card_id
+    assert c._cloud.fetch_4g_remain.call_args.args[0] == "ICCID1"
+
+
+@pytest.mark.asyncio
+async def test_refresh_remote_no_4g_method_does_not_crash():
+    """Stub clouds lacking fetch_4g_remain must not break _refresh_remote."""
+    c = _coord(remote={"active_time": "a", "card_id": "ICCID1", "expired_time": "e", "left_days": 895})
+    del c._cloud.fetch_4g_remain
+    await c._refresh_remote()
+    assert c.data.sim_card_id == "ICCID1"
+    assert c.data.sim_data_remaining_mb is None
 
 
 @pytest.mark.asyncio

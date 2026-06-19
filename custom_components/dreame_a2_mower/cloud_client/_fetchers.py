@@ -915,6 +915,57 @@ class _FetchersMixin:
             "left_days": d.get("leftDays"),
         }
 
+    def fetch_4g_remain(self, iccid: str | None = None) -> dict | None:
+        """Quantitative 4G-SIM data via the SIM provider's public endpoint.
+
+        ``GET https://api-4g.tsingting.tech/api/v1/biz_4g_remain/{did}`` with
+        query params ``sn``, ``iccid``, ``region``, ``isProd``. This is the
+        third-party Tsingting (SIM MVNO) host the app polls for its SIM page —
+        NOT the Dreame IoT host, and it is **unauthenticated** (no Dreame-Auth /
+        key header; keyed by did+sn+iccid).
+        ``[api-calls.jsonl@2026-06-08 (mitm_session_20260616)]``
+
+        Returns ``{data_remaining_mb, out_of_warranty, expiry}``. The first two
+        are unique to this endpoint; ``expiry`` is the ISO-8601 UTC ``exp_time``
+        — preferred over REMOTE's ``expiredTime`` (a TZ-ambiguous space-format
+        string) so the integration can surface a proper timestamp sensor.
+        ``rem_time``/``iccid`` overlap with REMOTE's leftDays/cardId and are
+        surfaced from there. Returns ``None`` when the ICCID is unknown (REMOTE
+        not yet polled), on a non-200, or on a transport/parse error. Never raises.
+        """
+        if not iccid:
+            return None
+        did = getattr(self, "_did", None)
+        url = f"https://api-4g.tsingting.tech/api/v1/biz_4g_remain/{did}"
+        params = {
+            "sn": getattr(self, "_sn", None) or "",
+            "iccid": iccid,
+            "region": getattr(self, "_country", None) or "",
+            "isProd": "true",
+        }
+        try:
+            resp = self._session.get(url, params=params, timeout=10)
+            if resp.status_code != 200:
+                _LOGGER.warning("fetch_4g_remain: HTTP %d (body: %s)", resp.status_code, resp.text[:200])
+                return None
+            data = (resp.json() or {}).get("data") or {}
+        except Exception as ex:  # pragma: no cover
+            _LOGGER.warning("fetch_4g_remain: %s", ex)
+            return None
+        out: dict = {}
+        flow = data.get("rem_flow")
+        if flow is not None:
+            try:
+                out["data_remaining_mb"] = float(flow)
+            except (TypeError, ValueError):
+                pass
+        if "out_of_warranty" in data:
+            out["out_of_warranty"] = bool(data["out_of_warranty"])
+        exp = data.get("exp_time")
+        if exp:
+            out["expiry"] = exp
+        return out or None
+
     def fetch_mpos(self) -> dict:
         """Live mower position via routed-get m:g t:MPOS (DIAGNOSTIC, RAW).
 

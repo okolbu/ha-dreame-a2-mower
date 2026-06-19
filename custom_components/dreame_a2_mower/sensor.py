@@ -49,6 +49,7 @@ from .entities.sensor.device import (
     _freshness_value,
     _mpos_value,
     _mqtt_age_value,
+    _parse_sim_expiry,
 )
 from .entities.sensor.map import (
     DreameA2ExclusionZonesSensor,

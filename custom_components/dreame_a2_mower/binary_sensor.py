@@ -308,6 +308,16 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
         availability_source="cloud",
         value_fn=lambda coord: coord.data.photo_consent,
     ),
+    # 4G-SIM warranty flag from the SIM-provider biz_4g_remain poll
+    # (_refresh_remote chains it after REMOTE). on = SIM out of warranty.
+    DreameA2BinarySensorEntityDescription(
+        key="sim_out_of_warranty",
+        translation_key="sim_out_of_warranty",
+        name="SIM out of warranty",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        availability_source="cloud",
+        value_fn=lambda coord: coord.data.sim_out_of_warranty,
+    ),
     # ───── Human Presence sub-page diagnostics (REC[2..6]) ─────
     # All read-only on g2408 firmware (REC writes return r=-3 — same
     # surface as photo_consent). Decoded from REC complex CFG payload

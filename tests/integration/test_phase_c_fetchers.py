@@ -55,3 +55,58 @@ def test_fetch_remote_parses_sim():
     out = c.fetch_remote()
     assert out == {"active_time": "2025-11-20 15:45:29", "card_id": "FAKEICCID",
                    "expired_time": "2028-11-20 15:45:29", "left_days": 895}
+
+
+def _4g_client(body):
+    """Isolated client for fetch_4g_remain (tsingting host, no get_api_url)."""
+    c = _fetchers._FetchersMixin()
+    resp = SimpleNamespace(status_code=200, json=lambda: body, text="")
+    c._session = SimpleNamespace(get=MagicMock(return_value=resp))
+    c._did = 123
+    c._sn = "G2408SN"
+    c._country = "no"
+    return c
+
+
+# wire-verified shape [api-calls.jsonl @ 2026-06-08 (mitm_session_20260616)]
+_4G_BODY = {"code": 200, "msg": "ok", "data": {
+    "rem_time": 894, "rem_flow": "1683.05", "act_time": "2025-11-19T16:00:00Z",
+    "exp_time": "2028-11-19T16:00:00Z", "pred_del_time": "2029-05-19T16:00:00Z",
+    "iccid": "89000000000000000000", "type": 3, "out_of_warranty": False}}
+
+
+def test_fetch_4g_remain_parses_data_and_warranty():
+    out = _4g_client(_4G_BODY).fetch_4g_remain(iccid="89000000000000000000")
+    assert out == {
+        "data_remaining_mb": 1683.05,
+        "out_of_warranty": False,
+        "expiry": "2028-11-19T16:00:00Z",
+    }
+
+
+def test_fetch_4g_remain_targets_tsingting_host_with_query():
+    c = _4g_client(_4G_BODY)
+    c.fetch_4g_remain(iccid="89000000000000000000")
+    call = c._session.get.call_args
+    url = call.args[0] if call.args else call.kwargs["url"]
+    assert url == "https://api-4g.tsingting.tech/api/v1/biz_4g_remain/123"
+    params = call.kwargs["params"]
+    assert params["sn"] == "G2408SN"
+    assert params["iccid"] == "89000000000000000000"
+    assert params["region"] == "no"
+    assert params["isProd"] == "true"
+    # Unauthenticated endpoint — no Dreame-Auth key header is sent.
+    assert "headers" not in call.kwargs or not call.kwargs["headers"]
+
+
+def test_fetch_4g_remain_non_200_returns_none():
+    c = _4g_client(_4G_BODY)
+    c._session.get = MagicMock(return_value=SimpleNamespace(status_code=500, json=lambda: {}, text=""))
+    assert c.fetch_4g_remain(iccid="X") is None
+
+
+def test_fetch_4g_remain_missing_iccid_returns_none():
+    """No ICCID known yet (REMOTE not polled) → skip the call entirely."""
+    c = _4g_client(_4G_BODY)
+    assert c.fetch_4g_remain(iccid=None) is None
+    c._session.get.assert_not_called()

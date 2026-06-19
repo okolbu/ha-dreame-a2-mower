@@ -1791,7 +1791,8 @@ entities:
         sim_card_id               — MowerState.sim_card_id (REMOTE/SIM)
         sim_left_days             — MowerState.sim_left_days (REMOTE/SIM, unit=d)
         sim_active_time           — MowerState.sim_active_time (REMOTE/SIM)
-        sim_expired_time          — MowerState.sim_expired_time (REMOTE/SIM)
+        sim_expired_time          — MowerState.sim_expired_time (biz_4g_remain exp_time; TIMESTAMP device_class)
+        sim_data_remaining_mb     — MowerState.sim_data_remaining_mb (biz_4g_remain rem_flow, MB)
         service_messages_unread   — MowerState.service_messages_unread (message-record-v1)
         oss_storage_used          — MowerState.oss_storage_used (checkDevOssStorage, MB)
         oss_storage_total         — MowerState.oss_storage_total (checkDevOssStorage, MB)
@@ -1859,20 +1860,56 @@ entities:
   - id: "sensor.dreame_a2_mower_sim_expired_time"
     platform: sensor
     class: "DreameA2Sensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
-      wire: "REMOTE/SIM (Phase C getRecords refresh)"
-      state_path: "MowerState.sim_expired_time"
+      wire: "biz_4g_remain exp_time (ISO-8601 UTC; chained off REMOTE refresh)"
+      state_path: "MowerState.sim_expired_time (ISO string; parsed to tz-aware datetime by the sensor)"
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-06-10"
+      last_verified: "2026-06-19"
     verifications:
-      - date: "2026-06-10"
+      - date: "2026-06-19"
         status: verified
-        claim: "DreameA2Sensor descriptor key=sim_expired_time; value_fn=lambda s: s.sim_expired_time; entity_category=DIAGNOSTIC"
-        evidence: "app-mitm:2026-06-09-settings-sweep"
+        claim: "DreameA2Sensor key=sim_expired_time; device_class=TIMESTAMP; value_fn=_parse_sim_expiry(s.sim_expired_time) → tz-aware datetime; availability_source=cloud. Fed from biz_4g_remain exp_time (ISO-8601 UTC), NOT REMOTE's TZ-ambiguous expiredTime. Supersedes the 2026-06-10 string-sensor claim (archived OLD/.../inventory-history/entity-inventory.md §Supersession 11)."
+        evidence: "api-calls.jsonl@2026-06-08 (mitm_session_20260616)"
+
+  - id: "sensor.dreame_a2_mower_sim_data_remaining_mb"
+    platform: sensor
+    class: "DreameA2Sensor"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
+    device: parent
+    source:
+      wire: "biz_4g_remain rem_flow (tsingting SIM host; chained off REMOTE refresh)"
+      state_path: "MowerState.sim_data_remaining_mb"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-19"
+    verifications:
+      - date: "2026-06-19"
+        status: verified
+        claim: "DreameA2Sensor key=sim_data_remaining_mb; value_fn=lambda s: s.sim_data_remaining_mb; unit=MB; entity_category=DIAGNOSTIC; availability_source=cloud. Source = float(biz_4g_remain.data.rem_flow)."
+        evidence: "api-calls.jsonl@2026-06-08 (mitm_session_20260616)"
+
+  - id: "binary_sensor.dreame_a2_mower_sim_out_of_warranty"
+    platform: binary_sensor
+    class: "DreameA2BinarySensor"
+    class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
+    device: parent
+    source:
+      wire: "biz_4g_remain out_of_warranty (tsingting SIM host; chained off REMOTE refresh)"
+      state_path: "MowerState.sim_out_of_warranty"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-19"
+    verifications:
+      - date: "2026-06-19"
+        status: verified
+        claim: "DreameA2BinarySensor key=sim_out_of_warranty; value_fn=lambda coord: coord.data.sim_out_of_warranty; entity_category=DIAGNOSTIC; availability_source=cloud; on=out of warranty. Source = bool(biz_4g_remain.data.out_of_warranty)."
+        evidence: "api-calls.jsonl@2026-06-08 (mitm_session_20260616)"
 
   - id: "sensor.dreame_a2_mower_service_messages_unread"
     platform: sensor

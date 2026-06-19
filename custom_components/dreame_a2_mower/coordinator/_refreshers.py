@@ -242,9 +242,23 @@ class _RefreshersMixin:
         r = await self.hass.async_add_executor_job(self._cloud.fetch_remote)
         if not r:
             return
-        new = dataclasses.replace(
-            self.data, sim_active_time=r.get("active_time"), sim_card_id=r.get("card_id"),
-            sim_expired_time=r.get("expired_time"), sim_left_days=r.get("left_days"))
+        # sim_expired_time is fed from biz_4g_remain's ISO exp_time below (not
+        # REMOTE's TZ-ambiguous expiredTime string) so the sensor can be a
+        # proper timestamp; REMOTE still owns card_id/active_time/left_days.
+        fields = dict(
+            sim_active_time=r.get("active_time"), sim_card_id=r.get("card_id"),
+            sim_left_days=r.get("left_days"))
+        # Chain the SIM-provider quantitative poll, keyed by the ICCID we just
+        # learned (REMOTE's card_id). Resilient to stub clouds lacking it.
+        fetch_4g = getattr(self._cloud, "fetch_4g_remain", None)
+        if fetch_4g is not None and r.get("card_id"):
+            g4 = await self.hass.async_add_executor_job(fetch_4g, r.get("card_id"))
+            if g4:
+                fields["sim_data_remaining_mb"] = g4.get("data_remaining_mb")
+                fields["sim_out_of_warranty"] = g4.get("out_of_warranty")
+                if g4.get("expiry"):
+                    fields["sim_expired_time"] = g4.get("expiry")
+        new = dataclasses.replace(self.data, **fields)
         if new != self.data:
             self.async_set_updated_data(new)
 
