@@ -449,3 +449,20 @@ def test_fault_notice_failure_does_not_break_delta(monkeypatch):
     coord._lifecycle_event = lc  # harness pre-sets this; assign our recorder
     coord._fire_fault_delta(frozenset(), frozenset({7}), now_unix=1)
     assert any(et == EVENT_TYPE_FAULT_DETECTED for et, _ in lc.fired)
+
+
+def test_only_error_tier_latches_so_only_error_tier_persists():
+    """Persistent notices ride snapshot.errors, which latches ONLY error-tier
+    codes (is_fault ⟺ fault_tier=='error'). This pins the invariant so a future
+    change that latches attention/alert codes can't silently start persisting them."""
+    from custom_components.dreame_a2_mower.mower.error_codes import is_fault
+    for code in fc.known_codes("iot"):
+        tier = fc.fault_tier(code)
+        assert is_fault(code) == (tier == "error"), (
+            f"code {code} tier={tier} but is_fault={is_fault(code)}"
+        )
+    # attention exemplars are NOT error-tier (so never latched/persisted):
+    for attn in (28, 30):  # blade_loss, maintain_loss
+        if attn in fc.known_codes("iot"):
+            assert fc.fault_tier(attn) == "attention"
+            assert not is_fault(attn)
