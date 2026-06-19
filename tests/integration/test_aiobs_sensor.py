@@ -61,4 +61,7 @@ def test_marker_sensor_value_and_attrs(tmp_path):
     assert attrs["markers"][0]["id"] == _MARK.id
     assert attrs["markers"][0]["confidence"] == 78
     assert attrs["markers"][0]["image_status"] == "pending"
+    assert attrs["markers"][0]["filename"] == _MARK.filename
+    assert attrs["markers"][0]["obstacle_class"] == _MARK.obstacle_class
+    assert attrs["markers"][0]["detection_epoch"] == _MARK.detection_epoch
     assert attrs["archived_count"] == 1

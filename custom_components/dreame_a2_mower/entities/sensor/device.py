@@ -237,9 +237,8 @@ def _obstacle_marker_attrs(coord) -> dict:
     AI's guess, NOT a reliable person signal (see inventory § obstacle)."""
     markers = getattr(coord, "_obstacle_markers", []) or []
     log = getattr(coord, "_obstacle_marker_log", None)
-    status_by_id = (
-        {r.id: r.image_status for r in log.all()} if log is not None else {}
-    )
+    log_entries = log.all() if log is not None else []
+    status_by_id = {r.id: r.image_status for r in log_entries}
     return {
         "markers": [
             {
@@ -252,7 +251,7 @@ def _obstacle_marker_attrs(coord) -> dict:
             }
             for m in markers
         ],
-        "archived_count": len(log.all()) if log is not None else 0,
+        "archived_count": len(log_entries),
     }
 
 
