@@ -411,6 +411,9 @@ class _RefreshersMixin:
         self._obstacle_markers = markers
         for m in markers:
             self._obstacle_marker_log.note(m)
+        # Trigger a re-render so new markers paint on the live map immediately.
+        if getattr(self, "hass", None) is not None:
+            self._schedule_render_base()
 
     # _poll_slow_properties REMOVED 2026-05-26.
     # It only fetched s6.3 ([cloud_connected, rssi_dbm]) and s1.5 (serial) via

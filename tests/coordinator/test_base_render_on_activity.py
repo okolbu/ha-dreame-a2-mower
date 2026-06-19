@@ -61,11 +61,13 @@ def _make_coord(*, action_mode=ActionMode.ALL_AREAS, md5="md5-aaa"):
     coord._base_png = None
     coord._base_png_mode = None
     coord._base_png_md5 = None
+    coord._base_png_marker_fp = None
+    coord._obstacle_markers = []
     coord._editor_base_png = None
     coord._active_map_base_png = None
     coord._active_map_base_md5 = None
 
-    for name in ("_render_base", "_compute_background_mode"):
+    for name in ("_render_base", "_compute_background_mode", "_live_obstacle_polygons"):
         setattr(coord, name, types.MethodType(getattr(_RenderingMixin, name), coord))
 
     # _render_base only loads obstacles for non-GREEN modes; stub to "none".
