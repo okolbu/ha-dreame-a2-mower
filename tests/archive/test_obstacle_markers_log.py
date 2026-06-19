@@ -43,3 +43,19 @@ def test_survives_reload_from_disk(tmp_path):
     reloaded.load()
     assert len(reloaded.all()) == 1
     assert reloaded.all()[0].filename == _M.filename
+
+
+def test_load_tolerates_non_list_json(tmp_path):
+    (tmp_path / "markers.json").write_text("{}")   # object, not a list
+    log = ObstacleMarkerLog(tmp_path)
+    log.load()                                       # must not raise
+    assert log.all() == []
+
+
+def test_set_status_rejects_invalid(tmp_path):
+    import pytest
+    log = ObstacleMarkerLog(tmp_path)
+    log.load()
+    log.note(_M)
+    with pytest.raises(ValueError):
+        log.set_status(_M.id, "bogus")

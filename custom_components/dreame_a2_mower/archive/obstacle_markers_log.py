@@ -9,7 +9,7 @@ JSON-index-on-disk shape.
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from pathlib import Path
 
 from ..protocol.obstacle_markers import ObstacleMarker
@@ -42,6 +42,8 @@ class ObstacleMarkerLog:
         try:
             raw = json.loads(self._path.read_text())
         except (OSError, ValueError):
+            return
+        if not isinstance(raw, list):
             return
         for rec in raw:
             try:
