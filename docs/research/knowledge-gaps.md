@@ -63,6 +63,15 @@ Validation-process shorthands are defined in [§Validation playbook](#validation
 Solidly known: `[0]`/`[19]`=0xCE delims, `[16]`=128 const, `[7]` state marker,
 `[9]` mow_start_pulse, `[11-12]` counter, `[17]` RSSI.
 
+**CLOSED 2026-06-19 — catalog `heartbeat` channel (45 codes):** This is a
+non-firing app artifact — a subset of iot fault_names that never appears as
+numeric codes on g2408 s1p1. Confirmed via 93,888 corpus frames (9 probe logs):
+s1p1 carries a 20-byte boolean-flag blob, not numeric fault codes. The real
+s1p1 faults are the decoded boolean flags; catalog-quality fault_text/tier/detail
+is now surfaced via binary_sensor extra_state_attributes using a flag→iot-code
+map (bumper→9, drop_tilt→1, lift→0, emergency_stop→23, battery_temp_low→43).
+Not a gap to chase. Source: `[apk:g2408-plugin-ext1423]`.
+
 ---
 
 ## 2. s1p4 telemetry — byte gaps (33-byte push, 68,801 frames; +449 8-byte, +4 10-byte)

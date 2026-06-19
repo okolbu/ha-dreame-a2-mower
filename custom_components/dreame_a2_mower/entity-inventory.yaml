@@ -1540,6 +1540,196 @@ entities:
       sensor (removed branch fix/location-single-authority — it lagged 5–10 min
       and caused the sensor to read True throughout a mow during reorientation).
 
+  # s1p1 boolean-flag binary_sensors (bumper/tilt/lift/PIN/temp/safety)
+  # Confirmed 2026-04-30 against app notifications. P4 adds catalog attrs.
+
+  - id: "binary_sensor.dreame_a2_mower_bumper_error"
+    platform: binary_sensor
+    class: "DreameA2BinarySensor"
+    class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
+    device: parent
+    source:
+      wire: "s1p1 byte[1] & 0x01 (MQTT heartbeat push)"
+      state_path: "MowerState.bumper"
+    write_path: read-only
+    status:
+      seen_working: true
+      last_verified: "2026-04-30"
+    verifications:
+      - date: "2026-04-30"
+        status: verified
+        claim: "bumper flag confirmed against app notification 2026-04-30 19:37–19:39 controlled test."
+        evidence: "probe_log_*.jsonl controlled-test 2026-04-30 19:37-19:39"
+      - date: "2026-06-19"
+        status: verified
+        claim: |
+          extra_state_attributes now exposes fault_text/tier/fault_detail/fault_code
+          via _flag_fault_attrs(coord, iot_code=9) (FAULT_CRASH_PLATE). Bumper is
+          not mirrored to s2p2 — s1p1 is the sole signal.
+        evidence: "apk:g2408-plugin-ext1423; binary_sensor.py _S1P1_FLAG_FAULT_CODE + _flag_fault_attrs (P4)"
+    references:
+      wire_entry: "inventory.yaml id=s1p1"
+      code: "custom_components/dreame_a2_mower/binary_sensor.py"
+    notes: |
+      Sole signal for bumper hit (not echoed in s2p2). extra_state_attributes:
+        fault_text   — localized app string for iot code 9 (FAULT_CRASH_PLATE)
+        tier         — "error" (from fault_catalog.fault_tier)
+        fault_detail — extended description
+        fault_code   — 9
+
+  - id: "binary_sensor.dreame_a2_mower_robot_tilted"
+    platform: binary_sensor
+    class: "DreameA2BinarySensor"
+    class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
+    device: parent
+    source:
+      wire: "s1p1 byte[1] & 0x02 (MQTT heartbeat push)"
+      state_path: "MowerState.drop_tilt"
+    write_path: read-only
+    status:
+      seen_working: true
+      last_verified: "2026-04-30"
+    verifications:
+      - date: "2026-04-30"
+        status: verified
+        claim: "drop_tilt flag (s1p1 byte[1]&0x02) confirmed against app notification 2026-04-30 controlled test."
+        evidence: "probe_log_*.jsonl controlled-test 2026-04-30 19:37-19:39"
+      - date: "2026-06-19"
+        status: verified
+        claim: "extra_state_attributes exposes fault_text/tier/fault_detail/fault_code via iot code 1 (FAULT_TILTED)."
+        evidence: "apk:g2408-plugin-ext1423; binary_sensor.py _S1P1_FLAG_FAULT_CODE (P4)"
+    references:
+      wire_entry: "inventory.yaml id=s1p1"
+      code: "custom_components/dreame_a2_mower/binary_sensor.py"
+    notes: |
+      Entity key: drop_tilt; HA name: "Robot tilted". extra_state_attributes:
+        fault_text   — localized string for iot code 1 (FAULT_TILTED)
+        tier         — "error"
+        fault_detail — extended description
+        fault_code   — 1
+
+  - id: "binary_sensor.dreame_a2_mower_robot_lifted"
+    platform: binary_sensor
+    class: "DreameA2BinarySensor"
+    class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
+    device: parent
+    source:
+      wire: "s1p1 byte[2] & 0x02 (MQTT heartbeat push)"
+      state_path: "MowerState.lift"
+    write_path: read-only
+    status:
+      seen_working: true
+      last_verified: "2026-05-04"
+    verifications:
+      - date: "2026-05-04"
+        status: verified
+        claim: "lift flag (s1p1 byte[2]&0x02) confirmed in 2026-05-04 controlled-lift test series."
+        evidence: "probe_log_*.jsonl controlled-lift series 2026-05-04"
+      - date: "2026-06-19"
+        status: verified
+        claim: "extra_state_attributes exposes fault_text/tier/fault_detail/fault_code via iot code 0 (FAULT_HANGING)."
+        evidence: "apk:g2408-plugin-ext1423; binary_sensor.py _S1P1_FLAG_FAULT_CODE (P4)"
+    references:
+      wire_entry: "inventory.yaml id=s1p1"
+      code: "custom_components/dreame_a2_mower/binary_sensor.py"
+    notes: |
+      Entity key: lift; HA name: "Robot lifted". extra_state_attributes:
+        fault_text   — localized string for iot code 0 (FAULT_HANGING)
+        tier         — "error"
+        fault_detail — extended description
+        fault_code   — 0
+
+  - id: "binary_sensor.dreame_a2_mower_emergency_stop_activated"
+    platform: binary_sensor
+    class: "DreameA2BinarySensor"
+    class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
+    device: parent
+    source:
+      wire: "s1p1 byte[3] & 0x80 (MQTT heartbeat push — PIN-required latch)"
+      state_path: "MowerState.emergency_stop"
+    write_path: read-only
+    status:
+      seen_working: true
+      last_verified: "2026-05-04"
+    verifications:
+      - date: "2026-05-04"
+        status: verified
+        claim: "emergency_stop flag (s1p1 byte[3]&0x80, PIN-required latch) confirmed in 2026-05-04 controlled-lift test series. Only clears on PIN entry."
+        evidence: "probe_log_*.jsonl controlled-lift series 2026-05-04"
+      - date: "2026-06-19"
+        status: verified
+        claim: "extra_state_attributes exposes fault_text/tier/fault_detail/fault_code via iot code 23 (FAULT_EMERGENCY_STOP)."
+        evidence: "apk:g2408-plugin-ext1423; binary_sensor.py _S1P1_FLAG_FAULT_CODE (P4)"
+    references:
+      wire_entry: "inventory.yaml id=s1p1"
+      code: "custom_components/dreame_a2_mower/binary_sensor.py"
+    notes: |
+      Entity key: emergency_stop; HA name: "Emergency stop activated". Persistent
+      PIN-required latch (byte[3]&0x80). The one-shot transient alert is
+      safety_alert_active (byte[10]&0x02). extra_state_attributes:
+        fault_text   — localized string for iot code 23 (FAULT_EMERGENCY_STOP)
+        tier         — "error"
+        fault_detail — extended description
+        fault_code   — 23
+
+  - id: "binary_sensor.dreame_a2_mower_battery_temperature_low"
+    platform: binary_sensor
+    class: "DreameA2BinarySensor"
+    class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
+    device: parent
+    source:
+      wire: "s1p1 byte[6] & 0x08 (MQTT heartbeat push — charging-paused condition)"
+      state_path: "MowerState.battery_temp_low"
+    write_path: read-only
+    status:
+      seen_working: true
+      last_verified: "2026-04-30"
+    verifications:
+      - date: "2026-04-30"
+        status: verified
+        claim: "battery_temp_low flag (s1p1 byte[6]&0x08) confirmed; fires when charging is paused due to low ambient temperature."
+        evidence: "probe_log_*.jsonl corpus; s2p2=43 co-occurrence"
+      - date: "2026-06-19"
+        status: verified
+        claim: "extra_state_attributes exposes fault_text/tier/fault_detail/fault_code via iot code 43 (ALERT_BATTERY_TEMP_LOW)."
+        evidence: "apk:g2408-plugin-ext1423; binary_sensor.py _S1P1_FLAG_FAULT_CODE (P4)"
+    references:
+      wire_entry: "inventory.yaml id=s1p1"
+      code: "custom_components/dreame_a2_mower/binary_sensor.py"
+    notes: |
+      Entity key: battery_temp_low; HA name: "Battery temperature low".
+      entity_category: DIAGNOSTIC. extra_state_attributes:
+        fault_text   — localized string for iot code 43 (ALERT_BATTERY_TEMP_LOW)
+        tier         — "attention"
+        fault_detail — extended description
+        fault_code   — 43
+
+  - id: "binary_sensor.dreame_a2_mower_safety_alert_active"
+    platform: binary_sensor
+    class: "DreameA2BinarySensor"
+    class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
+    device: parent
+    source:
+      wire: "s1p1 byte[10] & 0x02 (MQTT heartbeat push — one-shot active-alert flag)"
+      state_path: "MowerState.safety_alert_active"
+    write_path: read-only
+    status:
+      seen_working: true
+      last_verified: "2026-05-04"
+    verifications:
+      - date: "2026-05-04"
+        status: verified
+        claim: "safety_alert_active (s1p1 byte[10]&0x02) confirmed in 2026-05-04 controlled-lift test. Sets ~1s after safety event, self-clears 30–90s regardless of PIN entry."
+        evidence: "probe_log_*.jsonl controlled-lift series 2026-05-04"
+    references:
+      wire_entry: "inventory.yaml id=s1p1"
+      code: "custom_components/dreame_a2_mower/binary_sensor.py"
+    notes: |
+      One-shot transient alert flag. No catalog code — safety_alert_active is
+      intentionally absent from _S1P1_FLAG_FAULT_CODE because the catalog's
+      heartbeat channel is a non-firing artifact. No extra_state_attributes.
+      The persistent PIN-required latch is emergency_stop (byte[3]&0x80).
+
   - id: "sensor.dreame_a2_mower_<key>"
     platform: sensor
     class: "DreameA2Sensor"
