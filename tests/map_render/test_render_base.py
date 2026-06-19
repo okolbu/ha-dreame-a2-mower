@@ -143,8 +143,12 @@ class _FakeState:
 
 
 def test_stripes_use_settings_mowing_direction_angle():
-    """The overlay angle is 180 - settings_mowing_direction (cvtMowingDirection),
-    read straight from the stored cloud field — no track inference."""
+    """The overlay angle is settings_mowing_direction itself (in pixel-map axes),
+    read straight from the stored cloud field — no track inference.
+
+    Frame: our rendered map reads 0°=left/90°=up/180°=right; that's the L↔R
+    mirror of the app's cvtMowingDirection (180-value) frame, so the two 180s
+    cancel and we feed the stored value directly (owner-observed 2026-06-19)."""
     md = make_map_data()
     captured: dict = {}
 
@@ -156,7 +160,7 @@ def test_stripes_use_settings_mowing_direction_angle():
         md, state=_FakeState(direction=26), palette=None,
         compute_stripe_overlay_fn=_spy,
     )
-    assert captured["angle"] == (180 - 26) % 180  # 154
+    assert captured["angle"] == 26 % 180  # stored value, pixel-map frame
 
 
 def test_stripes_none_direction_falls_back_to_dark_base():

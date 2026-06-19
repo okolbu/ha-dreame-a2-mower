@@ -39,10 +39,13 @@ does NOT change rendering (the app draws single-direction stripes at the stored
 angle regardless). Drop the `next_direction_fn` / `last_all_area_mow_direction_deg`
 parameters.
 
-**Frame convention:** `180 − value` is the first cut at the device→renderer
-mapping. No calibration knob. If a live A/B against the Dreame app shows a
-90°/180° offset, adjust the formula constant and re-release. `[UNVERIFIED until
-live A/B]`
+**Frame convention (owner-observed 2026-06-19, post-release a7):** our rendered
+map's display angle reads **0°=left, 90°=up, 180°=right** on the pixel-map axes
+(NOT dock/mower axes). That is the left↔right mirror of the app's
+`cvtMowingDirection` (`180−value`) frame, so the overlay input is
+`180 − (180 − value) = value` — the two flips cancel and the renderer feeds the
+stored `settings_mowing_direction` **directly** (in pixel-map axes). The initial
+`180−value` shipped in a7 looked wrong on the lawn; corrected to `value` for a8.
 
 ### 2. Retire the inference chain (full removal)
 It exists solely to feed the removed `next_direction`:

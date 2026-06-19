@@ -109,12 +109,21 @@ def _render_pre_start_with_stripes(
         return render_base_map(map_data, palette=palette, lawn_mode="dark")
 
     # Next-mow angle = the stored cloud field (device-maintained next-run
-    # direction). No track inference. Pixel angle = 180 - mowingDirection.
+    # direction). No track inference.
     stored = getattr(state, "settings_mowing_direction", None)
     if stored is None:
         # Cloud not yet polled — no authoritative angle, so don't guess.
         return render_base_map(map_data, palette=palette, lawn_mode="dark")
-    angle = (180 - int(stored)) % 180
+    # Frame (owner-observed on the lawn image, 2026-06-19): our rendered map's
+    # display angle reads 0°=left, 90°=up, 180°=right — measured on the
+    # pixel-map axes, NOT the dock/mower axes. The app's cvtMowingDirection
+    # display value is (180 - mowingDirection) in that frame. But
+    # compute_stripe_overlay measures from +x (right) CCW and render_base_map's
+    # final FLIP_TOP_BOTTOM preserves that input as the on-screen angle, while
+    # our display frame is the left↔right mirror of screen-standard — so the
+    # overlay input is 180 - (180 - mowingDirection) = mowingDirection. The two
+    # 180-flips cancel: feed the stored value directly (in pixel-map axes).
+    angle = int(stored) % 180
 
     # Project the first mowing-zone polygon from cloud-frame mm to PRE-FLIP
     # pixel coordinates.  These match the canvas at composite-time inside
