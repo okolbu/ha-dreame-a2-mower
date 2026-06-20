@@ -56,6 +56,12 @@ Regenerate docs/research/wire-census.json and report wire values missing from in
 
 Device & cloud probes for owner fact-finding. Some WRITE to the live mower.
 
+### `python tools/probes/getdevicefile_probe.py`  —  👤 owner
+
+Offline: checks hypothesis sign formula against the captured golden (will print MISMATCH until the formula is corrected). Live (--live --filename): POST to file-bridge endpoint and print full response.
+
+*When:* When testing the [UNVERIFIED] file-bridge signer or capturing the live getDeiviceFile response shape. Offline mode needs no credentials.
+
 ### `python tools/probes/inventory_probe.py`  —  👤 owner
 
 Read-only Dreame-cloud probe that dumps device properties for inventory verification.

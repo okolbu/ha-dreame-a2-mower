@@ -8,6 +8,7 @@ from __future__ import annotations
 from .camera.photos import (  # noqa: F401
     DreameA2AlbumPhotoCamera,
     DreameA2LatestVideoThumbCamera,
+    DreameA2ObstaclePhotoCamera,
     DreameA2PersonPhotoCamera,
     _photo_detection_attrs,
 )
@@ -15,6 +16,7 @@ from .camera.photos import (  # noqa: F401
 __all__ = [
     "DreameA2AlbumPhotoCamera",
     "DreameA2LatestVideoThumbCamera",
+    "DreameA2ObstaclePhotoCamera",
     "DreameA2PersonPhotoCamera",
     "_photo_detection_attrs",
 ]

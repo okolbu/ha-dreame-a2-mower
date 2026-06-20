@@ -36,6 +36,7 @@ from .wifi import (
 )
 from .photos import (
     DreameA2AlbumPhotoCamera,
+    DreameA2ObstaclePhotoCamera,
     DreameA2PersonPhotoCamera,
     DreameA2LatestVideoThumbCamera,
 )
@@ -92,6 +93,9 @@ async def async_setup_entry(
     # Album photo cameras — latest overall photo + latest person detection.
     entities.append(DreameA2AlbumPhotoCamera(coordinator))
     entities.append(DreameA2PersonPhotoCamera(coordinator))
+    # Ephemeral obstacle-photo camera — latest obstacle_ephemeral photo
+    # (Track B download path; archive populated by obstacle fetch [UNVERIFIED]).
+    entities.append(DreameA2ObstaclePhotoCamera(coordinator))
     # Video thumbnail camera — latest video clip's thumbnail JPEG.
     entities.append(DreameA2LatestVideoThumbCamera(coordinator))
 

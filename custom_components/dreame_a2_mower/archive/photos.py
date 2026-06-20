@@ -178,6 +178,13 @@ class PhotoArchive:
         persons = [p for p in self._index if p.is_person]
         return max(persons, key=lambda p: p.unix_ts) if persons else None
 
+    def latest_by_category(self, category: str) -> ArchivedPhoto | None:
+        """Return the most-recently-archived photo with the given ``category``,
+        or ``None`` if no photos of that category have been stored."""
+        self.load_index()
+        matching = [p for p in self._index if p.category == category]
+        return max(matching, key=lambda p: p.unix_ts) if matching else None
+
     def list_photos(self) -> list[ArchivedPhoto]:
         """Return all archived photos newest-first."""
         self.load_index()

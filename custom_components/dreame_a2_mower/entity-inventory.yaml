@@ -340,6 +340,31 @@ entities:
       [UNVERIFIED — photo naming pattern observed in app but not confirmed
       from a live g2408 photo_list payload].
 
+  - id: "camera.dreame_a2_mower_obstacle_photo"
+    platform: camera
+    class: "DreameA2ObstaclePhotoCamera"
+    class_file: "custom_components/dreame_a2_mower/camera/photos.py:137"
+    device: parent
+    source:
+      wire: "local PhotoArchive populated by Track B obstacle-photo download [UNVERIFIED — Track B download not yet live-confirmed]"
+      state_path: "coordinator.photo_archive.latest_by_category('obstacle_ephemeral') → read_bytes(filename)"
+    write_path: read-only
+    status:
+      seen_working: false
+      last_verified: "2026-06-20"
+    verifications:
+      - date: "2026-06-20"
+        status: presumed
+        claim: "Serves JPEG bytes for the most-recently-archived photo with category='obstacle_ephemeral' from coordinator.photo_archive.latest_by_category('obstacle_ephemeral'). Returns None (unavailable) when no obstacle_ephemeral photos have been archived. Pull-only — no coordinator listener; archive grows monotonically."
+    references:
+      code: "custom_components/dreame_a2_mower/camera/photos.py:137"
+    notes: |
+      Parent-device camera. entity_id: camera.dreame_a2_mower_obstacle_photo.
+      unique_id suffix: obstacle_photo (via mower_unique_id).
+      Only available when at least one category='obstacle_ephemeral' photo is archived.
+      Populated by the Track B ephemeral obstacle-photo download path [UNVERIFIED].
+      Read-only; pull-only, no access_token rotation needed.
+
   - id: "camera.dreame_a2_mower_latest_video"
     platform: camera
     class: "DreameA2LatestVideoThumbCamera"
