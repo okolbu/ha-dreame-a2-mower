@@ -519,18 +519,30 @@ class _CoreMixin:
 
     @property
     def mqtt_is_fresh(self) -> bool:
-        """True while the device MQTT link is live — a heartbeat has been seen
-        and it isn't stale (state machine flips connectivity to STALE after
-        HB_STALENESS_S=90s without a heartbeat)."""
-        from ..mower.state_snapshot import Connectivity
+        """Whether the MQTT-sourced entities should report *available* (todo8 #1).
 
-        sm = getattr(self, "state_machine", None)
-        if sm is None:
-            return False
-        snap = sm.snapshot()
-        if snap.last_heartbeat_unix is None:
-            return False
-        return snap.mqtt_connectivity == Connectivity.ONLINE
+        This is a TRANSPORT check, not a device-liveness inference. The entity is
+        available whenever we can still receive data — i.e. our MQTT client holds
+        a live broker connection (so any push WILL reach us) OR the cloud poll is
+        succeeding. It is deliberately NOT gated on heartbeat freshness: the
+        device backs its whole telemetry radio off to a multi-minute (docked:
+        multi-hour) cadence whenever it is not actively mowing, so heartbeat
+        silence is normal and must not flap the entity. Like the Dreame app, we
+        then keep showing last-known state — including error states, which the
+        firmware reports as data before a battery-dead shutdown.
+
+        Genuine unavailable = we have lost BOTH links (broker disconnected AND
+        cloud failing) and truly cannot get this entity's data. The 90s
+        connectivity STALE flip survives only as the informational
+        ``mqtt_connectivity`` sensor; it no longer gates availability."""
+        mqtt = getattr(self, "_mqtt", None)
+        if mqtt is not None:
+            try:
+                if mqtt.is_connected():
+                    return True
+            except Exception:  # pragma: no cover - defensive
+                pass
+        return self.cloud_is_fresh
 
     def _note_cloud_fetch(self, *, ok: bool) -> None:
         """Record the outcome of a full-state cloud poll for the availability

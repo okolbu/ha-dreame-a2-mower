@@ -95,40 +95,50 @@ def test_refresh_cloud_state_exception_counts_as_failure():
 
 
 # ---------------------------------------------------------------------------
-# mqtt_is_fresh mirrors the state-machine connectivity signal
+# mqtt_is_fresh is a TRANSPORT check (todo8 #1): available while the broker
+# link is up OR the cloud poll succeeds — NOT gated on heartbeat freshness.
+# The device backs its radio off to a multi-minute/-hour cadence whenever it is
+# not actively mowing (docked OR erroring on the lawn at full battery), so
+# heartbeat silence must never flip the entity to unavailable.
 # ---------------------------------------------------------------------------
 
-def _hb():
-    """Minimal decoded-heartbeat stand-in (handle_heartbeat reads these)."""
-    from types import SimpleNamespace
+class _FakeMqtt:
+    def __init__(self, connected: bool):
+        self._c = connected
 
-    return SimpleNamespace(emergency_stop=False, wifi_rssi_dbm=-50)
+    def is_connected(self) -> bool:
+        return self._c
 
 
-def _coord_with_sm():
-    from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
-
+def _coord(*, mqtt_connected=None, cloud_failures=0):
+    """Build a bare coordinator exposing just the availability inputs."""
     coord = object.__new__(DreameA2MowerCoordinator)
-    coord.state_machine = MowerStateMachine()
+    if mqtt_connected is not None:
+        coord._mqtt = _FakeMqtt(mqtt_connected)
+    coord._consecutive_cloud_failures = cloud_failures
     return coord
 
 
-def test_mqtt_is_fresh_false_before_any_heartbeat():
-    assert _coord_with_sm().mqtt_is_fresh is False
+def test_mqtt_is_fresh_true_when_broker_connected():
+    # Connected broker → available regardless of heartbeat silence.
+    assert _coord(mqtt_connected=True, cloud_failures=99).mqtt_is_fresh is True
 
 
-def test_mqtt_is_fresh_true_after_heartbeat():
-    coord = _coord_with_sm()
-    coord.state_machine.handle_heartbeat(hb=_hb(), now_unix=1000)
-    assert coord.mqtt_is_fresh is True
+def test_mqtt_is_fresh_true_when_broker_down_but_cloud_ok():
+    # Broker dropped but the cloud poll still succeeds → still available
+    # (we can still receive state); avoids flapping on a paho reconnect blip.
+    assert _coord(mqtt_connected=False, cloud_failures=0).mqtt_is_fresh is True
 
 
-def test_mqtt_is_fresh_false_when_heartbeat_stale():
-    coord = _coord_with_sm()
-    coord.state_machine.handle_heartbeat(hb=_hb(), now_unix=1000)
-    # Drive the staleness check well past HB_STALENESS_S (90s).
-    coord.state_machine.tick(now_unix=1000 + 200)
-    assert coord.mqtt_is_fresh is False
+def test_mqtt_is_fresh_false_when_both_links_down():
+    # Genuine total outage: broker disconnected AND cloud failing → unavailable.
+    assert _coord(mqtt_connected=False, cloud_failures=5).mqtt_is_fresh is False
+
+
+def test_mqtt_is_fresh_handles_missing_mqtt_client():
+    # Before the MQTT client is wired (early setup), fall back to cloud freshness.
+    assert _coord(mqtt_connected=None, cloud_failures=0).mqtt_is_fresh is True
+    assert _coord(mqtt_connected=None, cloud_failures=5).mqtt_is_fresh is False
 
 
 # ---------------------------------------------------------------------------

@@ -56,8 +56,13 @@
 
 ### s1p1 — `heartbeat`
 
-Mower-alive ping sent every ~45 seconds regardless of state, plus extra
-emissions during state transitions. 0xCE delimiters at bytes [0] and [19].
+Mower-alive ping whose cadence is STATE-DEPENDENT (not fixed): ~10 s
+median while actively mowing, backing off to a multi-minute cadence when
+idle/erroring off-dock (gaps up to ~10 min measured at full battery) and
+to a multi-hour cadence while docked (gaps up to ~3 h). All device
+telemetry (battery s3p1, status reports) backs off in lockstep — there is
+no other traffic filling the heartbeat gaps. 0xCE delimiters at bytes [0]
+and [19].
 
 Key decoded bytes (partial — full catalog in heartbeat_bytes section, Task 9):
 - [1] & 0x01: Bumper hit (no corresponding s2p2 transition)

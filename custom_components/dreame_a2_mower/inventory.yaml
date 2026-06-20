@@ -57,8 +57,13 @@ properties:
     value_kind: blob
     payload_shape: "20-byte blob"
     semantic: |
-      Mower-alive ping sent every ~45 seconds regardless of state, plus extra
-      emissions during state transitions. 0xCE delimiters at bytes [0] and [19].
+      Mower-alive ping whose cadence is STATE-DEPENDENT (not fixed): ~10 s
+      median while actively mowing, backing off to a multi-minute cadence when
+      idle/erroring off-dock (gaps up to ~10 min measured at full battery) and
+      to a multi-hour cadence while docked (gaps up to ~3 h). All device
+      telemetry (battery s3p1, status reports) backs off in lockstep — there is
+      no other traffic filling the heartbeat gaps. 0xCE delimiters at bytes [0]
+      and [19].
 
       Key decoded bytes (partial — full catalog in heartbeat_bytes section, Task 9):
       - [1] & 0x01: Bumper hit (no corresponding s2p2 transition)
@@ -84,7 +89,7 @@ properties:
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-30"
+      last_seen: "2026-06-20"
       decoded: confirmed
     references:
       integration_code: "custom_components/dreame_a2_mower/protocol/heartbeat.py"
@@ -126,6 +131,22 @@ properties:
           (bumper→9, drop_tilt→1, lift→0, emergency_stop→23,
           battery_temp_low→43); safety_alert_active has no catalog code.
         evidence: "apk:g2408-plugin-ext1423; corpus: probe_log_*.jsonl 9 logs 93,888 s1p1 frames"
+      - date: "2026-06-20"
+        status: verified
+        claim: |
+          s1p1 cadence is STATE-DEPENDENT, not the fixed ~45 s previously
+          documented. Measured over 9,396 heartbeats: median gap 11 s during
+          active mowing; while idle/erroring OFF-dock at full battery the whole
+          telemetry radio backs off to a multi-minute cadence (gaps 360/543/602 s
+          observed during a live error-on-lawn event at 93–97% battery); while
+          docked it backs off to multi-hour silence (max gap ~3 h excluding
+          overnight). All telemetry (s3p1 battery, status reports) backs off in
+          lockstep — no other traffic fills the heartbeat gaps. Consequence for
+          the integration: heartbeat freshness is NOT a usable device-online
+          signal; the lawn_mower availability gate was changed to a transport
+          check (MQTT broker connected OR cloud poll fresh), so heartbeat silence
+          no longer flaps the entity to unavailable (todo8 #1).
+        evidence: "probe_log_20260612_174439.jsonl @ 2026-06-20 19:40-20:13 (error-on-lawn backoff) + full-file gap histogram"
 
   - id: "s1p2"
     siid: 1
