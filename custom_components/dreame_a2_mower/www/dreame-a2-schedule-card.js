@@ -55,7 +55,19 @@ class DreameA2ScheduleCard extends HTMLElement {
         delete this._optimisticEnabled[s.slot_id];
       }
     }
-    if (this._stateRef === state && !this._modal) return;
+    // While the add/edit modal is open, NEVER re-render from a hass update.
+    // `set hass` fires on every HA entity change (Lovelace reassigns `hass` to
+    // every card), and the mower pushes telemetry constantly — re-rendering
+    // would rebuild the whole shadow DOM from a static snapshot and wipe the
+    // modal's live state: the <input type=time> value, the day-toggle `.on`
+    // state + `mask` accumulator, and focus. (That was why time edits wouldn't
+    // stick and the day/Cancel buttons felt "deselected right away".) Keep the
+    // latest state so the eventual Save validates against fresh data.
+    if (this._modal) {
+      this._stateRef = state;
+      return;
+    }
+    if (this._stateRef === state) return;
     this._stateRef = state;
     this._render(state);
   }
@@ -418,4 +430,4 @@ window.customCards.push({
   name: "Dreame A2 Schedule",
   description: "Edit Spr & Sum / Aut & Win mowing schedules",
 });
-console.info("dreame-a2-schedule-card v1.0.2a2 (full UX + on/off toggle) loaded");
+console.info("dreame-a2-schedule-card v1.0.2a3 (modal survives hass updates) loaded");
