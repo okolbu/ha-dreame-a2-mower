@@ -57,6 +57,7 @@ def _make_coord(tmp_path, *, get_device_file_fn):
         def __init__(self):
             self._obstacle_marker_log = ObstacleMarkerLog(tmp_path)
             self._obstacle_marker_log.load()
+            self._obstacle_markers = []  # live session markers (loop drives off this)
             self._cloud = types.SimpleNamespace(
                 get_device_file=get_device_file_fn
             )
@@ -75,8 +76,9 @@ def test_pending_photo_fetched_and_marked_ready(tmp_path):
     log.note(_M)
 
     coord = _make_coord(tmp_path, get_device_file_fn=lambda fn, **k: jpeg)
-    # replace log with the pre-populated one
+    # replace log with the pre-populated one; add _M to the live set
     coord._obstacle_marker_log = log
+    coord._obstacle_markers = [_M]
 
     asyncio.run(coord._fetch_pending_obstacle_photos())
 
@@ -97,6 +99,7 @@ def test_fetch_failure_marks_backend_unavailable(tmp_path):
 
     coord = _make_coord(tmp_path, get_device_file_fn=lambda fn, **k: None)
     coord._obstacle_marker_log = log
+    coord._obstacle_markers = [_M]
 
     asyncio.run(coord._fetch_pending_obstacle_photos())
 
@@ -122,6 +125,7 @@ def test_loop_continues_past_one_marker_error(tmp_path):
 
     coord = _make_coord(tmp_path, get_device_file_fn=_flaky_fetch)
     coord._obstacle_marker_log = log
+    coord._obstacle_markers = [_M, _M2]
 
     # Must not raise
     asyncio.run(coord._fetch_pending_obstacle_photos())
@@ -130,3 +134,42 @@ def test_loop_continues_past_one_marker_error(tmp_path):
     # second marker succeeded → archived
     assert len(coord._photo_archive.calls) == 1
     assert coord._photo_archive.calls[0]["category"] == "obstacle_ephemeral"
+
+
+def test_backend_unavailable_marker_retried_on_recovery(tmp_path):
+    """Retry logic: a marker marked backend_unavailable is retried on the next tick
+    when the backend recovers, and flips to ready.
+
+    This is the core bug fix: previously pending() excluded backend_unavailable
+    markers so they were permanently lost.  Now the loop drives off _obstacle_markers
+    (the live set) and skips only ready/gone — so backend_unavailable markers are
+    retried on every tick while still in the active session.
+    """
+    jpeg = b"\xff\xd8\xff\xe0JFIF"
+
+    # ── Tick 1: backend returns None → backend_unavailable ──────────────────
+    log = ObstacleMarkerLog(tmp_path)
+    log.load()
+    log.note(_M)
+
+    coord = _make_coord(tmp_path, get_device_file_fn=lambda fn, **k: None)
+    coord._obstacle_marker_log = log
+    coord._obstacle_markers = [_M]
+
+    asyncio.run(coord._fetch_pending_obstacle_photos())
+
+    assert coord._photo_archive.calls == []
+    assert log.all()[0].image_status == "backend_unavailable"
+
+    # ── Tick 2: backend recovers, same live marker still in _obstacle_markers ─
+    # Swap the stub to return JPEG bytes this time.
+    coord._cloud = types.SimpleNamespace(get_device_file=lambda fn, **k: jpeg)
+
+    asyncio.run(coord._fetch_pending_obstacle_photos())
+
+    assert len(coord._photo_archive.calls) == 1, "archive must be called on recovery"
+    call = coord._photo_archive.calls[0]
+    assert call["category"] == "obstacle_ephemeral"
+    assert call["data"] == jpeg
+    assert log.all()[0].image_status == "ready", "marker must flip to ready after recovery"
+    assert log.all()[0].image_md5 is not None

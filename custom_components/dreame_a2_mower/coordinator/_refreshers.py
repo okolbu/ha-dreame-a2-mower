@@ -7,6 +7,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import dataclasses
+import hashlib
 import json
 import math
 import time
@@ -425,46 +426,59 @@ class _RefreshersMixin:
             LOGGER.debug("[aiobs] _fetch_pending_obstacle_photos raised: %s", exc)
 
     async def _fetch_pending_obstacle_photos(self) -> None:
-        """Download photos for pending AIOBS markers via the file-bridge client.
+        """Download photos for live-session AIOBS markers via the file-bridge client.
 
-        Bounded: one pass per AIOBS tick; no tight retry.
+        Bounded: iterates self._obstacle_markers (the CURRENT live-session set),
+        which is volatile and cleared at session end — so this naturally does NOT
+        retry ancient cross-session failures.  Within the current mow we attempt
+        every marker whose stored status is not yet ready/gone on each 2-min tick.
+        This retries backend_unavailable markers mid-session so photos are captured
+        as soon as the backend recovers.  One attempt per marker per tick — not a
+        tight inner retry.
+
         On backend failure → mark backend_unavailable; on success → store bytes
         in PhotoArchive (category obstacle_ephemeral) and flip to ready.
         Per-marker failures are isolated so one bad marker doesn't abort the loop.
-        Guard against missing get_device_file (Track B not yet deployed) is
-        defensive — the attribute IS present after Task 11.
-        [UNVERIFIED signer — backend currently down; loop marks all pending as
+        [UNVERIFIED signer — backend currently down; loop marks all attempts
         backend_unavailable until the backend is verified and returns bytes]
         """
-        import hashlib
-
         log = self._obstacle_marker_log
-        for rec in log.pending():
+        # Build a quick status-by-id map from the durable log so we can skip
+        # markers that are already captured or confirmed gone.
+        status_by_id = {r.id: r.image_status for r in log.all()}
+
+        get_file = getattr(self._cloud, "get_device_file", None)
+        hass = getattr(self, "hass", None)
+
+        for marker in list(self._obstacle_markers):
+            # Skip already-captured or gone markers; default to "pending" if the
+            # marker hasn't been noted yet (note() is called earlier in _refresh_aiobs
+            # so this is a defensive fallback only).
+            if status_by_id.get(marker.id, "pending") in {"ready", "gone"}:
+                continue
             try:
-                fn = f"{rec.filename}.jpg"
-                hass = getattr(self, "hass", None)
-                get_file = getattr(self._cloud, "get_device_file", None)
+                fn = f"{marker.filename}.jpg"
                 if get_file is None:
-                    log.set_status(rec.id, "backend_unavailable")
+                    log.set_status(marker.id, "backend_unavailable")
                     continue
                 data = (
                     await hass.async_add_executor_job(get_file, fn)
                     if hass is not None else get_file(fn)
                 )
                 if not data:
-                    log.set_status(rec.id, "backend_unavailable")
+                    log.set_status(marker.id, "backend_unavailable")
                     continue
                 md5 = hashlib.md5(data).hexdigest()
                 self._photo_archive.archive(
                     name=fn,
-                    unix_ts=int(rec.detection_epoch or 0),
+                    unix_ts=int(marker.detection_epoch or 0),
                     data=data,
                     is_person=False,
                     category="obstacle_ephemeral",
                 )
-                log.set_status(rec.id, "ready", image_md5=md5)
+                log.set_status(marker.id, "ready", image_md5=md5)
             except Exception as exc:  # noqa: BLE001
-                LOGGER.debug("[aiobs] photo fetch failed for %s: %s", rec.id, exc)
+                LOGGER.debug("[aiobs] photo fetch failed for %s: %s", marker.id, exc)
 
     # _poll_slow_properties REMOVED 2026-05-26.
     # It only fetched s6.3 ([cloud_connected, rssi_dbm]) and s1.5 (serial) via
