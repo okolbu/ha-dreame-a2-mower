@@ -2913,7 +2913,7 @@ in HOURS (e.g. 4→5 confirmed); sen=sensitivity level.
 
 | id | name | shape | status | unit |
 |----|------|-------|--------|------|
-| AIOBS | ai_obstacle_data | (observed: r=-3 in all 3 cloud dumps and live probe 2026-06-09; payload-on-success unknown) | APK-KNOWN |  |
+| AIOBS | ai_obstacle_data | {d: {obs: [[x_verts_mm], [y_verts_mm], confidence, class, filename, flag, id]}} | SEEN-UNDECODED |  |
 | AI_HUMAN | ai_human_photo_consent | iotuserdata KV: AI_HUMAN.0=JSON-string-encoded bool; AI_HUMAN.info=counter int | UNCLASSIFIED |  |
 | ARM | arm_alarm | {m:'s', t:'ARM', d:{value}} | APK-KNOWN |  |
 | CFG | all_keys_cfg | {d: {AOP, ATA, BAT, BP, CLS, CMS, DLS, DND, FDP, LANG, LIT, LOW, MSG_ALERT, PATH, PRE, PROT, REC, STUN, TIME, VER, VOICE, VOL, WRF, WRP}} | WIRED |  |
@@ -2949,23 +2949,40 @@ in HOURS (e.g. 4→5 confirmed); sen=sensitivity level.
 
 ### AIOBS — `ai_obstacle_data`
 
-APK-documented endpoint. The 3 cloud dumps so far all returned
-r=-3. Was once suspected absent on g2408, but MISTA reversed that
-when it flipped from r=-3/r=-1 to a successful payload between
-dump 2 and dump 3 — establishing that error responses are stateful
-or transient, not negative proof of firmware support. With only 3
-data points this row is kept at `decoded: hypothesized`.
+AI obstacle marker list endpoint (siid:2 aiid:50, routed-action).
+The 3 cloud dumps so far all returned r=-3. Was once suspected
+absent on g2408, but MISTA reversed that when it flipped from
+r=-3/r=-1 to a successful payload between dump 2 and dump 3 —
+establishing that error responses are stateful or transient, not
+negative proof of firmware support.
 App-MITM 2026-06-09 confirms the app issues routed-get t=AIOBS;
-response shape is [UNKNOWN — to capture] — likely the photo index
-call (see tools/probes/read_key_probe.py).
+the required args were unknown at that time.
 Live probe 2026-06-09 bare GET returned r=-3 (mower docked, idle) —
-bare GET requires args; the app likely sends additional arguments.
+confirmed that bare GET requires args.
+MITM capture 2026-06-17 (during an active mowing session) confirmed
+the full call shape and response (single capture; row layout not yet validated across multiple sessions):
+[cloud/captures/mitm_session_20260619/miio-13267.jsonl@2026-06-17_19:50]
+  READ: {m:"g", t:"AIOBS", d:{idx:0}}
+  RESPONSE: d dict carrying obs key — list of obstacle rows.
+Each obs row layout (7 elements):
+  [0]  [x_verts_mm]   — list of X polygon vertices in mm (map frame)
+  [1]  [y_verts_mm]   — list of Y polygon vertices in mm (map frame)
+  [2]  confidence     — integer ≈ f*100 as int (cross-validated vs JPEG-COM "f" field; observed class=5, confidence=78 on g2408)
+  [3]  class          — integer obstacle class; cross-validated == JPEG-COM "s" field (also an int, e.g. class=5)
+  [4]  filename       — string, scheme "<epoch.frac>_<idx>" (distinct from OSS
+                         gallery "<epoch>_person.jpg" naming)
+  [5]  flag           — integer; meaning [UNVERIFIED] — not decoded
+  [6]  id             — integer obstacle id
+confidence≈f*100 and class==JPEG-COM "s" are CROSS-VALIDATED against
+the JPEG COM metadata on the corresponding photo files.
+The idx:0 arg likely selects the map index; other idx values
+[UNKNOWN — to capture].
 
 **Open questions:**
-- Capture this endpoint during an AI-obstacle detection event (cloud-side trigger; s1p53 is the BLE-connection flag, NOT an obstacle signal).
-- Test whether more cloud dumps over time produce a successful response (cf. MISTA).
-- Does AIOBS response carry the photo index (photo_list)? App-MITM suggests this is the AI-obstacle photo-index call [UNKNOWN — to capture].
-- Bare GET returns r=-3 — capture the args the app sends with AIOBS to get a successful response.
+- obs[] row layout confirmed from a single capture — validate across more mowing sessions.
+- flag (obs index 5) meaning — undecoded [UNKNOWN — to capture].
+- idx arg: does idx>0 select a different map's obstacle markers? [UNKNOWN — to capture].
+- Are obs rows stable across repeated calls mid-mow, or do they update per-frame? [UNKNOWN — to capture].
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX AIOBS`
 

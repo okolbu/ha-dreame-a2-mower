@@ -136,6 +136,25 @@ def get_aiobs(send_action) -> dict:
     return d
 
 
+def get_aiobs_markers(send_action, idx: int = 0) -> dict:
+    """Fetch the live AIOBS obstacle-marker list (polygons + photo filenames).
+
+    Distinct from get_aiobs() (settings read, no `d`): this sends the
+    `d:{idx:N}` payload that returns the marker `obs[]` array.
+    [cloud/captures/mitm_session_20260619/miio-13267.jsonl@2026-06-17_19:49:51]
+    """
+    raw = send_action(
+        ROUTED_ACTION_SIID,
+        ROUTED_ACTION_AIID,
+        [{"m": "g", "t": "AIOBS", "d": {"idx": idx}}],
+    )
+    payload = _unwrap(raw)
+    d = payload.get("d") if isinstance(payload, dict) else None
+    if not isinstance(d, dict):
+        raise CfgActionError(f"getAIOBS(markers) returned no `d` dict: {payload!r}")
+    return d
+
+
 # All GET endpoints listed in apk.md §"GET-Befehle" that we have NOT
 # yet wired explicitly. The probe call below tries each at startup so
 # we learn empirically which ones g2408 supports.

@@ -163,14 +163,25 @@ class _RenderingMixin:
             lambda: hass.async_create_task(self._render_base())
         )
 
-    async def _render_base(self) -> None:
-        """Render the active map's base PNG, keyed on (background_mode, md5).
+    def _live_obstacle_polygons(self) -> "list[list[tuple[float, float]]]":
+        """Current live AIOBS markers as render-ready polygons (metres, ≥3 pts)."""
+        out = []
+        for m in getattr(self, "_obstacle_markers", []) or []:
+            pts = [(float(x), float(y)) for x, y in m.polygon_m]
+            if len(pts) >= 3:
+                out.append(pts)
+        return out
 
-        No-ops when neither the mode nor the map md5 changed since the last
-        render. This is the ONLY server-side live-map render; trail + icon are
-        client-side. Fires on every activity transition (cheap because of the
-        dedup) so the stripes->green flip lands within one tick of the state
-        machine entering an active activity — ~41s before the first move.
+    async def _render_base(self) -> None:
+        """Render the active map's base PNG, keyed on (background_mode, md5, marker_fp).
+
+        No-ops when neither the mode, the map md5, nor the live-marker count
+        changed since the last render. This is the ONLY server-side live-map
+        render; trail + icon are client-side. Fires on every activity
+        transition (cheap because of the dedup) so the stripes->green flip
+        lands within one tick of the state machine entering an active activity
+        — ~41s before the first move. A new AIOBS marker also triggers a
+        re-render because marker_fp changes.
         """
         active_id = self._active_map_id
         if active_id is None:
@@ -180,17 +191,20 @@ class _RenderingMixin:
             return
         mode = self._compute_background_mode()
         md5 = getattr(map_data, "md5", None)
+        from ..map_render import BackgroundMode
+        live = self._live_obstacle_polygons()
+        if mode == BackgroundMode.GREEN:
+            obstacles = live or None
+        else:
+            obstacles = await self._load_last_session_obstacles(active_id)
+        marker_fp = hash(tuple(tuple(poly) for poly in live))
         if (
             self._base_png is not None
             and self._base_png_mode == mode
             and self._base_png_md5 == md5
+            and getattr(self, "_base_png_marker_fp", None) == marker_fp
         ):
             return  # fresh render already cached
-        from ..map_render import BackgroundMode
-        obstacles = (
-            None if mode == BackgroundMode.GREEN
-            else await self._load_last_session_obstacles(active_id)
-        )
         from functools import partial
         from ..map_render import render_base
         png = await self.hass.async_add_executor_job(
@@ -204,6 +218,7 @@ class _RenderingMixin:
             self._base_png = png
             self._base_png_mode = mode
             self._base_png_md5 = md5
+            self._base_png_marker_fp = marker_fp
             LOGGER.debug(
                 "[MAP] base render: bg=%s map=%s md5=%s",
                 mode.value, active_id, md5,

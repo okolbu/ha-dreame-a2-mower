@@ -36,6 +36,23 @@ class _FetchersMixin:
         _LOGGER.debug("[CFG] payload: %r", cfg)
         return cfg
 
+    def fetch_aiobs_markers(self):
+        """Fetch + parse the live AIOBS obstacle markers, or None on error."""
+        from ..protocol.cfg_action import CfgActionError, get_aiobs_markers  # type: ignore[import]
+        from ..protocol.obstacle_markers import parse_aiobs_markers  # type: ignore[import]
+
+        try:
+            d = get_aiobs_markers(self.action)
+        except CfgActionError as ex:
+            _LOGGER.debug("fetch_aiobs_markers: routed-action error: %s", ex)
+            return None
+        except Exception as ex:  # pragma: no cover — defensive
+            _LOGGER.warning("fetch_aiobs_markers: unexpected error: %s", ex)
+            return None
+        markers = parse_aiobs_markers(d)
+        _LOGGER.info("[AIOBS] fetched %d marker(s)", len(markers))
+        return markers
+
     def fetch_locn(self) -> dict[str, Any] | None:
         """Fetch LOCN via the routed-action s2 aiid=50 {m:'g', t:'LOCN'} path.
 

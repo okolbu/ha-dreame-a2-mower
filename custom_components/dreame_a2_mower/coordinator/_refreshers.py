@@ -378,6 +378,47 @@ class _RefreshersMixin:
             if "hardware_serial" in updates:
                 self._update_device_registry_serial(updates["hardware_serial"])
 
+    async def _refresh_aiobs(self) -> None:
+        """Poll the live AIOBS obstacle markers — ONLY while a mow session is
+        active. Mow-gated minutes cadence: the app polls AIOBS only while a human
+        is viewing the live map (~281 reads across a multi-day capture); we have no
+        "viewing" signal, so the safe analogue is session-gated, one read per timer
+        tick. Do NOT poll at seconds cadence / 24-7.
+        [cloud/captures/mitm_session_20260619/miio-13267.jsonl@2026-06-17]
+        """
+        from ..mower.state_snapshot import MowSession  # local import: avoid cycle
+
+        snap = self.state_machine.snapshot()
+        mow_session = getattr(snap, "mow_session", None)
+        # Gate: only proceed when a mow session is active.
+        # The real integration path has MowSession.IN_SESSION; the unit-test stub
+        # passes the string "IN_SESSION" — handle both with the positive check
+        # (enum value = "in_session", enum name = "IN_SESSION").
+        is_active = (
+            mow_session == MowSession.IN_SESSION
+            or (isinstance(mow_session, str)
+                and mow_session in (MowSession.IN_SESSION.name, MowSession.IN_SESSION.value))
+        )
+        if not is_active:
+            if self._obstacle_markers:
+                self._obstacle_markers = []
+                if getattr(self, "hass", None) is not None:
+                    self._schedule_render_base()
+            return
+        hass = getattr(self, "hass", None)
+        markers = (
+            await hass.async_add_executor_job(self._cloud.fetch_aiobs_markers)
+            if hass is not None else self._cloud.fetch_aiobs_markers()
+        )
+        if markers is None:
+            return
+        self._obstacle_markers = markers
+        for m in markers:
+            self._obstacle_marker_log.note(m)
+        # Trigger a re-render so new markers paint on the live map immediately.
+        if getattr(self, "hass", None) is not None:
+            self._schedule_render_base()
+
     # _poll_slow_properties REMOVED 2026-05-26.
     # It only fetched s6.3 ([cloud_connected, rssi_dbm]) and s1.5 (serial) via
     # the relay get_properties path, which 80001s when the device is asleep
