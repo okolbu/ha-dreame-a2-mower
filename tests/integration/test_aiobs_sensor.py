@@ -26,10 +26,15 @@ def _make_coord(tmp_path, *, mow_session, markers):
             self._obstacle_marker_log = ObstacleMarkerLog(tmp_path)
             self._obstacle_marker_log.load()
             self._cloud = types.SimpleNamespace(
-                fetch_aiobs_markers=lambda: list(markers)
+                fetch_aiobs_markers=lambda: list(markers),
+                # get_device_file returns None — backend unavailable (signer unverified).
+                # _fetch_pending_obstacle_photos is called at end of _refresh_aiobs.
+                get_device_file=lambda fn, **k: None,
             )
             snap = types.SimpleNamespace(mow_session=mow_session)
             self.state_machine = types.SimpleNamespace(snapshot=lambda: snap)
+            # Minimal photo archive stub (archive never called when get_device_file→None)
+            self._photo_archive = types.SimpleNamespace(archive=lambda **k: None)
 
     return _Coord()
 
@@ -69,7 +74,9 @@ def test_marker_sensor_value_and_attrs(tmp_path):
     attrs = _obstacle_marker_attrs(coord)
     assert attrs["markers"][0]["id"] == _MARK.id
     assert attrs["markers"][0]["confidence"] == 78
-    assert attrs["markers"][0]["image_status"] == "pending"
+    # After _refresh_aiobs the fetch loop runs; stub get_device_file returns None
+    # → status flips to backend_unavailable (expected: backend currently down).
+    assert attrs["markers"][0]["image_status"] == "backend_unavailable"
     assert attrs["markers"][0]["filename"] == _MARK.filename
     assert attrs["markers"][0]["obstacle_class"] == _MARK.obstacle_class
     assert attrs["markers"][0]["detection_epoch"] == _MARK.detection_epoch

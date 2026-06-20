@@ -418,6 +418,53 @@ class _RefreshersMixin:
         # Trigger a re-render so new markers paint on the live map immediately.
         if getattr(self, "hass", None) is not None:
             self._schedule_render_base()
+        # Download photos for any pending markers (bounded: one pass per tick).
+        try:
+            await self._fetch_pending_obstacle_photos()
+        except Exception as exc:  # noqa: BLE001
+            LOGGER.debug("[aiobs] _fetch_pending_obstacle_photos raised: %s", exc)
+
+    async def _fetch_pending_obstacle_photos(self) -> None:
+        """Download photos for pending AIOBS markers via the file-bridge client.
+
+        Bounded: one pass per AIOBS tick; no tight retry.
+        On backend failure → mark backend_unavailable; on success → store bytes
+        in PhotoArchive (category obstacle_ephemeral) and flip to ready.
+        Per-marker failures are isolated so one bad marker doesn't abort the loop.
+        Guard against missing get_device_file (Track B not yet deployed) is
+        defensive — the attribute IS present after Task 11.
+        [UNVERIFIED signer — backend currently down; loop marks all pending as
+        backend_unavailable until the backend is verified and returns bytes]
+        """
+        import hashlib
+
+        log = self._obstacle_marker_log
+        for rec in log.pending():
+            try:
+                fn = f"{rec.filename}.jpg"
+                hass = getattr(self, "hass", None)
+                get_file = getattr(self._cloud, "get_device_file", None)
+                if get_file is None:
+                    log.set_status(rec.id, "backend_unavailable")
+                    continue
+                data = (
+                    await hass.async_add_executor_job(get_file, fn)
+                    if hass is not None else get_file(fn)
+                )
+                if not data:
+                    log.set_status(rec.id, "backend_unavailable")
+                    continue
+                md5 = hashlib.md5(data).hexdigest()
+                self._photo_archive.archive(
+                    name=fn,
+                    unix_ts=int(rec.detection_epoch or 0),
+                    data=data,
+                    is_person=False,
+                    category="obstacle_ephemeral",
+                )
+                log.set_status(rec.id, "ready", image_md5=md5)
+            except Exception as exc:  # noqa: BLE001
+                LOGGER.debug("[aiobs] photo fetch failed for %s: %s", rec.id, exc)
 
     # _poll_slow_properties REMOVED 2026-05-26.
     # It only fetched s6.3 ([cloud_connected, rssi_dbm]) and s1.5 (serial) via
