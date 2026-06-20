@@ -134,6 +134,30 @@ class DreameA2PersonPhotoCamera(_BasePhotoCamera):
         return _photo_detection_attrs(self._latest_entry())
 
 
+class DreameA2ObstaclePhotoCamera(_BasePhotoCamera):
+    """Serves the most-recently-archived ephemeral obstacle photo.
+
+    Reads ``PhotoArchive`` filtered to ``category == "obstacle_ephemeral"``,
+    latest by ``unix_ts``.  Populated by the Track B obstacle-photo download
+    path [UNVERIFIED — Track B download not yet live-confirmed].
+
+    entity_id: ``camera.dreame_a2_mower_obstacle_photo``
+    """
+
+    _attr_name = "Obstacle photo"
+
+    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
+        super().__init__(coordinator)
+        self._attr_unique_id = mower_unique_id(coordinator, "obstacle_photo")
+
+    def _latest_entry(self) -> ArchivedPhoto | None:
+        return self.coordinator.photo_archive.latest_by_category("obstacle_ephemeral")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return _photo_detection_attrs(self._latest_entry())
+
+
 class DreameA2LatestVideoThumbCamera(CoordinatorEntity[DreameA2MowerCoordinator], Camera):
     """Serves the thumbnail JPEG of the most-recently-archived video clip.
 
