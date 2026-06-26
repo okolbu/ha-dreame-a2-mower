@@ -769,9 +769,12 @@ views:
                       title: General Mode (Map 1)
                       entities:
                         - entity: select.dreame_a2_mower_map_1_mowing_efficiency
+                        - entity: select.dreame_a2_mower_map_1_mowing_mode
                         - entity: number.dreame_a2_mower_map_1_mowing_height
                         - entity: select.dreame_a2_mower_map_1_mowing_direction
+                        - entity: select.dreame_a2_mower_map_1_mowing_pattern
                         - entity: select.dreame_a2_mower_map_1_turning_method
+                        - entity: select.dreame_a2_mower_map_1_edge_walk_mode
                         - entity: switch.dreame_a2_mower_map_1_automatic_edge_mowing
                         - entity: switch.dreame_a2_mower_map_1_safe_edge_mowing
                         - entity: switch.dreame_a2_mower_map_1_edgemaster
@@ -791,9 +794,12 @@ views:
                       title: General Mode (Map 2)
                       entities:
                         - entity: select.dreame_a2_mower_map_2_mowing_efficiency
+                        - entity: select.dreame_a2_mower_map_2_mowing_mode
                         - entity: number.dreame_a2_mower_map_2_mowing_height
                         - entity: select.dreame_a2_mower_map_2_mowing_direction
+                        - entity: select.dreame_a2_mower_map_2_mowing_pattern
                         - entity: select.dreame_a2_mower_map_2_turning_method
+                        - entity: select.dreame_a2_mower_map_2_edge_walk_mode
                         - entity: switch.dreame_a2_mower_map_2_automatic_edge_mowing
                         - entity: switch.dreame_a2_mower_map_2_safe_edge_mowing
                         - entity: switch.dreame_a2_mower_map_2_edgemaster
@@ -1602,6 +1608,30 @@ views:
                     name: LCD language
                   - entity: number.dreame_a2_mower_voice_volume
                     name: Volume
+                  - type: section
+                    label: Voice prompts
+                  - entity: switch.dreame_a2_mower_voice_regular_notification_prompt
+                    name: Regular notification prompt
+                  - entity: switch.dreame_a2_mower_voice_work_status_prompt
+                    name: Work status prompt
+                  - entity: switch.dreame_a2_mower_voice_special_status_prompt
+                    name: Special status prompt
+                  - entity: switch.dreame_a2_mower_voice_error_status_prompt
+                    name: Error status prompt
+
+              # ───── Notification messages (app push categories) ─────
+              - type: entities
+                title: Notification messages
+                show_header_toggle: false
+                entities:
+                  - entity: switch.dreame_a2_mower_notification_anomaly_messages
+                    name: Anomaly messages
+                  - entity: switch.dreame_a2_mower_notification_error_messages
+                    name: Error messages
+                  - entity: switch.dreame_a2_mower_notification_task_messages
+                    name: Task messages
+                  - entity: switch.dreame_a2_mower_notification_consumables_messages
+                    name: Consumables messages
 
   - title: Diagnostics & Tools
     path: diagnostics
@@ -1628,6 +1658,10 @@ views:
                         name: Firmware version
                       - entity: update.dreame_a2_mower_firmware
                         name: Firmware update
+                      - entity: sensor.dreame_a2_mower_ota_state
+                        name: OTA state
+                      - entity: sensor.dreame_a2_mower_ota_progress
+                        name: OTA progress
                       - entity: sensor.dreame_a2_mower_cloud_device_id
                         name: Cloud device id
                       - entity: sensor.dreame_a2_mower_api_endpoint
@@ -1643,7 +1677,9 @@ views:
                       (installed vs latest from the Dreame cloud). When an
                       update is available the row exposes an **Install** action;
                       the mower gates it on WiFi signal + charge, so a refusal
-                      means move it closer to the dock/AP and retry.
+                      means move it closer to the dock/AP and retry. **OTA
+                      state / progress** track a download in flight (idle / 0%
+                      when none is running).
 
               - type: vertical-stack
                 cards:
@@ -1772,12 +1808,53 @@ views:
               - entity: sensor.dreame_a2_mower_oss_storage_used_percent
                 name: Storage %
 
+          # Per-type "latest" cameras — newest item of each kind, for an
+          # at-a-glance row above the full gallery. These follow the cloud
+          # OSS sync (hourly) and may be empty until the first item lands.
+          - type: horizontal-stack
+            cards:
+              - type: picture-entity
+                entity: camera.dreame_a2_mower_latest_photo
+                name: Latest photo
+                show_state: false
+                camera_view: auto
+              - type: picture-entity
+                entity: camera.dreame_a2_mower_latest_person_detection
+                name: Latest person detection
+                show_state: false
+                camera_view: auto
+              - type: picture-entity
+                entity: camera.dreame_a2_mower_latest_video
+                name: Latest video (thumbnail)
+                show_state: false
+                camera_view: auto
+
           # Thumbnail gallery (bundled card). REQUIRES the Lovelace resource
           # (type: module): /dreame_a2_mower/dreame-a2-photo-gallery-card.js
           # Reads sensor.dreame_a2_mower_photo_gallery's `items` attribute
           # (signed media URLs); tap a thumbnail to open the large pop-out.
           - type: custom:dreame-a2-photo-gallery-card
             entity: sensor.dreame_a2_mower_photo_gallery
+
+          # Live "latest AI-obstacle capture" (Track B). Distinct from the
+          # archive gallery above: this follows the most recent transient
+          # obstacle photo the coordinator downloaded mid-mow. It may stay
+          # EMPTY — the getDeiviceFile download fails closed while the signer
+          # is unverified, so the card only fills once the backend returns a
+          # photo. Sits beside the diagnostic obstacle-marker count.
+          - type: horizontal-stack
+            cards:
+              - type: picture-entity
+                entity: camera.dreame_a2_mower_obstacle_photo
+                name: Latest AI-obstacle photo
+                show_state: false
+                camera_view: auto
+              - type: entities
+                title: Live obstacle markers
+                show_header_toggle: false
+                entities:
+                  - entity: sensor.dreame_a2_mower_obstacle_markers
+                    name: Markers this mow
 
           - *tab_header_photo_privacy
 

@@ -54,6 +54,8 @@ docstrings in `custom_components/dreame_a2_mower/mower/state.py`.
 - `battery_temp_low` — s1.1 byte[6] bit
 - `slam_task_label` — s2.65
 - `task_state_code` — s2.56
+- `ota_state`, `ota_progress` — firmware-OTA status + percent (cloud
+  `ota_status`); idle/0 when no update is running
 - `manual_mode` — computed (15s no-s1.4 detector, wired in F5)
 - `session_active` — derived from s2p56 in {1, 2, 4}; synced from LiveMapState each tick
 - `session_started_unix` — unix ts when current session started; set on s2p56=1
@@ -65,6 +67,14 @@ The mower has a camera (`feature: video_tx`). Album photos (Patrol + AI-obstacle
 including `_person` person-detection shots) are fetched to a LOCAL on-disk
 archive (`archive/photos.py`) and never committed. They contain images of the
 property and people — treat the bucket paths and any saved frames as sensitive.
+
+The same applies to the **ephemeral AI-obstacle photo** (Track B): when a live
+AIOBS marker carries an image, the coordinator attempts a `getDeiviceFile`
+download and serves the latest via `camera.dreame_a2_mower_obstacle_photo`
+(plus the per-type "latest" cameras and the video-thumbnail camera). These are
+property/people imagery held in the same local archive and carry the same
+sensitivity. The download currently fails closed (signer `[UNVERIFIED]`), so
+the camera stays empty until the backend returns a photo.
 
 ## Computed fields (inherits source's policy)
 

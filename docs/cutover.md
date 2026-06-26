@@ -42,8 +42,8 @@ first; cut over only after every item passes.
    config entry, not on disk in a portable form).
 
 6. Set the same options as the legacy snapshot via Configure → Options:
-   archive retention caps. (Station bearing is not yet exposed in
-   greenfield's options flow; it will be added in a future release.)
+   archive retention caps and **station bearing** (the dock-orientation
+   degrees used to rotate the local-frame position projection).
 
 7. Verify on the dashboard:
    - Live map renders with the archived dock pin and exclusion zones.

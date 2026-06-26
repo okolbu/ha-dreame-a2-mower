@@ -6,7 +6,7 @@ fork** of any upstream vacuum or mower project.
 
 ## Status
 
-🟢 **Alpha pre-release (`v1.0.27a2`).** Feature-complete for a single
+🟢 **Alpha pre-release (`v1.0.31a5`).** Feature-complete for a single
 `dreame.mower.g2408` on one Dreame cloud account, and in daily use against
 a live mower. Distributed as a HACS pre-release while protocol coverage and
 live validation continue. Built greenfield for the A2 — the original F1–F7
@@ -19,11 +19,19 @@ been decomposed into focused packages and multi-map support was added.
 ### Live state
 - **Lawn mower entity** with `start_mowing` / `pause` / `dock` actions.
 - **Live map camera** rendered server-side from the cloud's map JSON
-  + s1.4 telemetry trail. Lawn boundary, mowing zones (translucent),
+  + s1.4 telemetry trail. Lawn boundary, mowing zones (translucent,
+  per-zone stripe colours so adjacent zones are distinguishable),
   exclusion / no-obstacle / spot zones, dock pin, GPS-anchored.
 - **Battery, charging status, error code, obstacle flag, rain
   protection, positioning failed, battery temp low** as native HA
   entities.
+- **Localized fault text** — the error-code sensor resolves its active
+  fault to human-readable text in your HA language, sourced from the
+  Dreame app's own fault catalog (`mower/data/fault_catalog.json`,
+  `[apk:g2408-plugin-ext1423]`). Extra attributes carry `error_detail`
+  (localized), `fault_names`, and `fault_categories`; the s1.1
+  heartbeat flag sensors carry the same catalog `fault_text` / `tier` /
+  `detail` attributes.
 - **Position** as `device_tracker` — absolute GPS lat/lon read from the
   cloud `location/getRecords` history (`_refresh_gps`, 60 s) — plus
   `sensor.position_x_m` / `_y_m` / `_north_m` / `_east_m` derived
@@ -35,17 +43,62 @@ been decomposed into focused packages and multi-map support was added.
 - **Resume** and **Cancel dock return** buttons (in addition to the
   mower entity's `start_mowing` / `pause` / `dock`).
 - Services: `set_active_selection`, `mow_zone`, `mow_edge`, `mow_spot`,
-  `recharge`, `find_bot`, `suppress_fault`, `set_schedule_plans`,
-  `finalize_session`, `replay_session`, `refresh_cloud_state`,
-  `show_lidar_fullscreen`, `start_point_patrol`, `start_edge_patrol`.
+  `recharge`, `find_bot`, `suppress_fault`, `set_child_lock`,
+  `set_schedule_plans`, `set_schedule_enabled`, `finalize_session`,
+  `replay_session`, `refresh_cloud_state`, `show_lidar_fullscreen`,
+  `start_point_patrol`, `start_edge_patrol`, `set_patrol_point_config`.
 - All routed through the cloud RPC `s2.50 aiid=50` envelope (the only
   command path that works on g2408 — direct `action()` returns 80001).
+
+### Firmware updates
+- **Device-firmware `update` entity** ("Mower firmware") — surfaces the
+  installed vs latest firmware version and an Install button. The install
+  path is build-correct but `[UNVERIFIED]` against a real pending update
+  (the device was already on the latest build when the entity shipped);
+  it stays available for the next firmware drop.
+- **`sensor.dreame_a2_mower_ota_state`** /
+  **`sensor.dreame_a2_mower_ota_progress`** — live OTA status + percent
+  during an update (diagnostic).
+- **Update Station Location** button (routed `o=19`) re-syncs the charging
+  station's stored position.
+
+### AI obstacle capture
+
+When the mower's AI obstacle recognition flags something mid-mow, the
+integration captures it on two independent tracks:
+
+- **Track A — live markers (shipped, render-verified).** A mow-gated
+  poller (`_refresh_aiobs`, every 2 min while a session is active) fetches
+  the cloud's live AIOBS obstacle-marker list, writes a durable
+  marker-metadata log, and paints the markers as translucent blue polygons
+  on the live map during the mow. A diagnostic
+  **`sensor.dreame_a2_mower_obstacle_markers`** exposes the current count
+  plus per-marker metadata (confidence, class, detection epoch). The
+  marker class/confidence are the AI's own guess — **not** a reliable
+  person signal.
+- **Track B — obstacle photos (shipped fail-closed, signer `[UNVERIFIED]`).**
+  When a marker has an associated photo, the coordinator attempts to
+  download it via the cloud `getDeiviceFile` bridge and archives it as an
+  ephemeral obstacle photo;
+  **`camera.dreame_a2_mower_obstacle_photo`** serves the most recent one.
+  The request signer was reconstructed from the native library but does
+  **not** yet reproduce a golden signature, so the download **fails
+  closed** — the camera stays empty until the backend returns a photo, at
+  which point the path self-verifies. Capture retries while a marker is
+  live so a transient `backend_unavailable` doesn't drop the photo.
 
 ### Schedule editing
 - Edit mowing schedules from HA — the bundled
   **schedule card** (`dreame-a2-schedule-card.js`) drives the
   `set_schedule_plans` service, which writes the schedule back to the
   mower over the chunked `SCHD*V3` transport (decoded + byte-verified).
+- **Enable / disable the active schedule season** via the
+  `set_schedule_enabled` service (`slot_id` + `enabled`). The two slots are
+  the mutually-exclusive seasons the app exposes — slot 0 = *Spr & Sum*,
+  slot 1 = *Aut & Win* — so enabling one disables the other; disabling the
+  active one leaves no schedule running. The per-slot enabled state is
+  exposed on the `schedule_count` sensor's attributes. Blocked while a task
+  is active.
 
 ### Map editor
 - Draw and manage map objects from HA via services:
@@ -54,6 +107,10 @@ been decomposed into focused packages and multi-map support was added.
   all routed as map-edit transactions (`o=200` select → `o=204` begin →
   mutations → `o=201` commit). A bundled map-editor card
   (`dreame-map-editor-card.js`) surfaces them on the dashboard.
+- Place and move named points: `create_spot` (spot-mow area, `o=214`),
+  `create_maintenance_point` (`o=224`), and `create_patrol_point`
+  (cruise point, `o=223`). `set_patrol_point_config` sets a patrol
+  point's cycle count + auto-capture (live-verified write).
 
 ### Photo & video gallery
 - **`sensor.dreame_a2_mower_photo_gallery`** — categorized cloud media
@@ -62,6 +119,17 @@ been decomposed into focused packages and multi-map support was added.
   carries the newest-first photo + video list (each with a signed media
   URL) for the bundled gallery card. Surfaced on the dashboard's
   Photos view.
+- Per-type "latest" camera entities for picture cards:
+  `camera.dreame_a2_mower_latest_photo`,
+  `…_latest_person_detection`, `…_obstacle_photo` (the live AI-obstacle
+  capture — see *AI obstacle capture*), and `…_latest_video` (video
+  thumbnail).
+- Per-type count sensors (`obstacle_photos`, `patrol_photos`,
+  `person_photos`, `videos`) plus OSS storage-used % feed the Photos-view
+  glance.
+- The `show_photo_privacy_policy` service surfaces the Dreame AI photo-capture
+  privacy policy as a persistent notification (the consent text behind the
+  cloud's people/obstacle imagery).
 
 ### Settings (cloud + s2.51)
 - Switches: rain protection, DnD, low-speed-at-night, custom charging
@@ -139,6 +207,8 @@ session totals). The replay picker spans all maps. See `docs/multi-map.md`.
   serves the most recent archived blob for desktop tools (Open3D,
   CloudCompare, MeshLab).
 - **Per-map LiDAR cameras** — a top-down camera per known map.
+- `move_lidar_scan` service re-tags an archived LiDAR PCD from one map's
+  archive to another (fixes a scan filed under the wrong map).
 
 ### WiFi heatmap
 
@@ -175,10 +245,17 @@ the mower device. See `docs/events.md` for the full event reference
 and recipes. The follow-up alert tier (emergency_stop, lifted,
 stuck, ...) lands in a later release.
 
+The integration also mirrors the Dreame app's notification inbox:
+**`sensor.dreame_a2_mower_device_messages`** accumulates device messages
+(state = total retained count, capped at 200; `items` attribute carries
+the merged-by-id, newest-first list), fed from the cloud
+`device-messages` list. Companion `last_notification` and per-scope
+(device / service / shared) message-list sensors surface the same feed.
+
 ### Showcase dashboard
-A 7-view Lovelace dashboard at `dashboards/mower/dashboard.yaml`:
+An 8-view Lovelace dashboard at `dashboards/mower/dashboard.yaml`:
 Overview, Maps & Zones, Schedule, Sessions & History, Settings,
-Diagnostics & Tools, and Photos. Uses standard HA cards plus the
+Diagnostics & Tools, Photos, and Info (device-message inbox). Uses standard HA cards plus the
 bundled custom cards (LiDAR / schedule / map-editor / live-map /
 replay) and a few common HACS cards (apexcharts, button-card, card-mod,
 plotly).

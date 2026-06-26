@@ -31,9 +31,11 @@ After creating one:
 
 1. Wait for the next CFG poll (or restart HA) so the integration
    sees `MAPL` with the new entry.
-2. The per-map camera entity for the new map (`camera.map_<id>`) is
-   created on the next HA restart. (Phase 1 doesn't auto-register
-   entities at runtime — restart is required.)
+2. The new map's per-map *device* (SN-keyed sub-device) appears on the
+   next cloud refresh, but its per-map *entities* are built once at
+   integration setup — reload the config entry (or restart HA) to surface
+   them. (This is intentional: maps rarely change, so there is no dynamic
+   per-map entity registration.)
 3. The Maps dashboard view shows a hard-coded slot for the first 2
    maps; edit `dashboards/mower/dashboard.yaml` to add more.
 
