@@ -22,6 +22,12 @@ Verify entity-inventory.yaml covers every integration entity class.
 
 *When:* Every CI build; after adding or changing an entity.
 
+### `python tools/inventory/findings_fold_check.py`  —  👤 owner
+
+Flag ACTIVE finding docs whose wire identifiers (endpoints/opcodes/t-keys/sNpM) are not yet in inventory (the OTA/getDeiviceFile drift guard).
+
+*When:* When processing FINDING docs from a new capture/MITM session, before archiving them to OLD/ — verifies their wire facts reached inventory.yaml.
+
 ### `python tools/inventory/gen_fault_catalog.py`  —  👤 owner
 
 Generate mower/data/fault_catalog.json (21-lang fault/notification strings) from the app extract.

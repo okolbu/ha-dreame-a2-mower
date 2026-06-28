@@ -670,6 +670,21 @@ incident). The fix is *location*, not editing stale docs to agree.
   spec+plan to `OLD/…` as part of finishing the branch (the *finishing-a-
   development-branch* wrap-up). Target state: **zero `docs/superpowers/` in-tree.**
 - **Completed logs / retired docs** — move to `OLD/…` once superseded.
+- **Capture `FINDING-*.md` docs (often from the MITM rig / another server) —
+  FOLD-then-ARCHIVE.** Fully incorporate each finding's wire facts into
+  `inventory.yaml` / `entity-inventory.yaml` (and the integration), THEN move the
+  doc out of the live tree (to `OLD/` or leave in the capture dir). The reason the
+  findings live out-of-tree is deliberate: earlier findings got debunked by later
+  ones, and stale claims resurfaced through grep/sed over in-tree history. So the
+  tree must hold only current truth, never old-effort docs that will never be
+  updated even after they're debunked. **Before archiving a capture's findings,
+  run `tools/inventory/findings_fold_check.py`** — it flags any ACTIVE finding
+  whose wire identifiers (endpoints / `o=N` / `t=KEY` / `sNpM`) are not yet in the
+  inventory SoT (the getDeiviceFile/OTA drift guard: code shipped ahead of the
+  SoT). It never scans `OLD/`. Mark an intentionally-unfolded finding with a
+  `FOLD-CHECK: exempt` or `Status: open`/`[UNVERIFIED]` line. (CI's
+  inventory-touch-gate also now watches the endpoint-defining `cloud_client/_fetchers.py`
+  + `_file_bridge.py`, so a new endpoint can't ship without an inventory row.)
 - **The journal & wire-captures STAY** in-tree (Tier 3) — they are cited
   evidence — but their facts must be promoted into `inventory.yaml` (the SoT),
   and they keep their non-authoritative banner. Don't grow a NEW in-tree

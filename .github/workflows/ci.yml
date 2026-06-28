@@ -47,6 +47,12 @@ jobs:
             'custom_components/dreame_a2_mower/mower/property_mapping.py'
             'custom_components/dreame_a2_mower/mower/error_codes.py'
             'custom_components/dreame_a2_mower/protocol/'
+            # Endpoint-DEFINING cloud_client files (new API endpoints must reach
+            # inventory.yaml § api_endpoints). Generic transport (_rpc/_auth/_batch)
+            # is intentionally excluded. Added after the getDeiviceFile drift, where
+            # a new endpoint shipped in _file_bridge.py with no inventory entry.
+            'custom_components/dreame_a2_mower/cloud_client/_fetchers.py'
+            'custom_components/dreame_a2_mower/cloud_client/_file_bridge.py'
           )
           # Entity platform files. coordinator.py intentionally absent.
           ENTITY_GLOBS=(
