@@ -3474,7 +3474,8 @@ Sample: {endTime: 0}.
 
 ### SCHDDV3 — `schedule_data_v3_write`
 
-Schedule data write — chunked base64 protobuf blob. Part of a 3-key
+Schedule data write — chunked base64 record blob (fixed variable-length
+records, NOT protobuf; layout decoded below). Part of a 3-key
 write transaction (SCHDDV3 + SCHDIV3 + SCHDSV3) tied by shared v =
 millisecond timestamp txn-id. Transport: action(siid:2, aiid:50)
 {m:'s', t:'SCHDDV3', d:{s:<offset>, l:<len>, d:"<chunk>", v:<txn>}}.

@@ -7376,7 +7376,8 @@ cfg_individual:
     category: "cfg_individual"
     payload_shape: "{s:<offset>, l:<len>, d:\"<base64 chunk>\", v:<txn_ms>}"
     semantic: |
-      Schedule data write — chunked base64 protobuf blob. Part of a 3-key
+      Schedule data write — chunked base64 record blob (fixed variable-length
+      records, NOT protobuf; layout decoded below). Part of a 3-key
       write transaction (SCHDDV3 + SCHDIV3 + SCHDSV3) tied by shared v =
       millisecond timestamp txn-id. Transport: action(siid:2, aiid:50)
       {m:'s', t:'SCHDDV3', d:{s:<offset>, l:<len>, d:"<chunk>", v:<txn>}}.
