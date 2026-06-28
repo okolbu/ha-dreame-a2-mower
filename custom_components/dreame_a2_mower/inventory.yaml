@@ -359,6 +359,16 @@ properties:
           [[2,0]] while working" brackets the reorient — that empty-then-active
           pattern held in only 2/66 undocks; s2p56 simply goes active at +42 s.
         evidence: "_reorient.py corpus bracket over probe_log_*.jsonl (9 logs, 66 undocks, 2026-04-17..05-30)"
+      - date: "2026-06-28"
+        status: verified
+        claim: |
+          Wider bracket (s2p1→mowing-active transition → first s1p4 movement
+          frame, distinct from the _reorient.py undock→s1p50 bracket above):
+          median 41s, max 263s across the 9-log corpus. Confirms the
+          background / stripe overlay must be lifecycle-driven, not
+          position-driven — stripes persisting through this window was the
+          live-map rehaul's bug #1.
+        evidence: "analyze_move_corpus.py over all 9 probe_log_*.jsonl (s2p1-active→first-move gap distribution)"
     open_questions:
       - "The app's 'Reorienting' popup is NOT driven by the MQTT /status/ stream. A clean popup-timed capture 2026-05-30 (move @ 17:25): user-noted popup START 17:25:42, STOP 17:26:17 — BOTH land inside the 41 s MQTT-silent reorient window (undock 17:25:37-38 → s1p50/s1p51 17:26:19), i.e. popup START ≈ undock+5 s, popup STOP ≈ s1p50/s1p51−2 s. The only wire traffic at those two instants is a routine s1p1 heartbeat whose 20 bytes are identical to neighbours except the counter (byte[11-12]) and a non-binary byte[14] (0 docked→64 undock→4→5→7→135) — NO clean popup on/off flag. So the popup driver is off the sniffed wire (cloud poll/push suspected); the integration cannot reproduce its exact timing from MQTT — best proxy is the bracket [undock transition → s1p50/s1p51]. LEAD for a future capture: popup START and STOP each coincided with an s1p1 emission (s1p1 fires extra heartbeats on state transitions) — check whether popup edges ALWAYS coincide with a heartbeat across captures before trusting it."
       - "Housekeeping slots seen DURING the silence (candidates for what the firmware does while it spins): s6p1 map_data_signal {200,201,300} at ~+20 s (5/66; likely the LiDAR-map load), s5p107 energy_index at ~+13 s (53/66), and the UNDER-DECODED s5p106 (purpose unknown, values 1-8; 7/66 at ~+12 s) and s5p105 (enum {1,2,4}; 3/66 at ~+13 s). The clean 360 relocate does NOT emit the SLAM counter (s5p104/s2p65 fire only on the failed-relocate case, 1/66)."
@@ -2976,8 +2986,6 @@ actions:
       seen_on_wire: false
       decoded: confirmed
     open_questions:
-      - "Direct action(5,1) consistently returns 80001; routed path via s2a50
-         o:100 is the confirmed working path."
       - "task-variant-params: Capture app TASK starts (all-areas o=100 / edge o=101 / zone o=102 / pause / resume / dock o=6 / stop) to confirm params vs our builders [UNKNOWN — to capture]."
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)"]
@@ -3702,8 +3710,12 @@ opcodes:
       seen_on_wire: false
       decoded: hypothesized
     open_questions:
-      - "Does o:12 work in parallel with CFG.CLS write, or is one canonical?"
       - "[UNKNOWN — to capture] No lock/unlock button exists in the current Dreame app UI for this device; the backend MAY add support later. On current g2408 firmware op=12 is ACCEPTED-BUT-NO-EFFECT (same class as op=10; no panel-lock observed, no echo on s2p50). Integration lock_bot entity stays DEVICE_WRITE_UNPROVEN. Capture step: watch for a future app lock control or backend flag that enables it."
+    verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "CFG CLS is the canonical child-lock path; op=12 is accepted-but-no-effect on g2408"
+        evidence: "lock_robot-op12-incident 2026-06; o12 semantic"
     references:
       apk: "ioBroker.dreame/apk.md §m=a opcodes"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
@@ -4048,7 +4060,7 @@ opcodes:
       last_seen: "2026-06-09"
       decoded: confirmed
     open_questions:
-      - "RESOLVED 2026-06-16: per-point cycles + auto-capture are NOT in the o=107 payload — they live in a separate `CRUISED` CFG write (see cfg key `CRUISED`). The o=107 send remains the bare point-id list {point:[...]}; whether it carries per-point cycles inline is still UNVERIFIED (the app's o=111 setter is the per-point cycles path)."
+      - "Whether the o=107 send carries per-point cycles inline is still UNVERIFIED (the app's o=111 setter is the per-point cycles path); per-point cycles + auto-capture themselves are resolved (separate CRUISED CFG write — see the 2026-06-16 verification and cfg key CRUISED)."
       - "s2p56 [[3,0],[4,-1]]: confirm point_id vs state field order and state vocab (0=active? -1=pending? 2=arrived as in o=109?) across more captures."
     verifications:
       - date: "2026-06-16"
@@ -4343,20 +4355,11 @@ opcodes:
       first_seen: "2026-04-20"
       last_seen: "2026-05-31"
       decoded: confirmed
-    open_questions:
-      - "TRANSPORT is solved (2026-05-31, see verifications): routed_action →
-        /device/sendCommand works; 80001 is a wake-up timeout fixable by retry. The
-        ONLY remaining unknown is the op=109 d-SHAPE. Re-probe with
-        probe_cruise_to_point.py --routed-byid --retries 5 from a clean idle dock and
-        read the cloud reply: r:0 = shape accepted (mower should head to the point +
-        echo s2p56=[[id,0]]); r<0 or an o:109 status:false echo = shape wrong."
-      - "d-shape LEAD: the s2p56 selector-id finding (2026-05-30) shows point-runs
-        carry a stable per-target id as status[0][0] (corpus ids 2,1,1,2 == the map's
-        two cleanPoints ids 1,2), so op=109's `d` likely references the point BY ID —
-        `{point:[id]}` / `{area:[id]}`, same family as spot (o103 `{area:[id]}`) — not
-        by coordinate. See docs/TODO.md 'Cruise-to-Point / Head-to-Maintenance-Point
-        trigger (op=109)'."
     verifications:
+      - date: "2026-05-31"
+        status: verified
+        claim: "op=109 d-shape is {m:'a',p:0,o:109,d:{point:[point_id]}} — live-confirmed; {area:[id]} was rejected"
+        evidence: "probe_cruise_to_point.py routed run 2026-05-31"
       - date: "2026-05-31"
         status: verified
         claim: |
@@ -4470,7 +4473,7 @@ opcodes:
       seen_on_wire: true
       first_seen: "2026-06-16"
       last_seen: "2026-06-16"
-      decoded: partial
+      decoded: confirmed
     verifications:
       - date: "2026-06-16"
         status: partial
@@ -5259,12 +5262,6 @@ cfg_keys:
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     open_questions:
-      - "unknown_flag [2] always=1 — purpose unknown. App charging-settings
-        page exposes a control for every OTHER BAT index and has no
-        unaccounted-for setting, so [2] has no user-facing mapping — likely
-        firmware-reserved or not applicable to the g2408. Not worth wiring a
-        write path; see TODO.md 'BAT[2] hardcoded 1' (left open as defensive
-        cleanup only)."
       - "BAT typed-write value[2]/flag: purpose still unknown — NOT STUN (auto-recharge-after-standby has its own STUN key). [UNKNOWN — to capture]"
     verifications:
       - date: "2026-06-08"
@@ -5422,9 +5419,12 @@ cfg_keys:
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     open_questions:
-      - "CRUISED field order — which element of value[] is cycles, which is auto-capture? No read captured."
       - "CRUISED value[-1,3,1,3]: is -1 a sentinel for 'applies to all points'? Undecoded."
     verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "CRUISED value[] field order is [-1, point_id, auto_capture(0/1), cycles(1/2/3)] — resolved by the sibling CRUISED (patrol_point_settings) entry."
+        evidence: "sibling CRUISED patrol_point_settings entry (verified 2026-06-16); app-mitm:2026-06-16-firmware-ota"
       - date: "2026-06-16"
         status: partial
         claim: "CRUISED CFG write {idx,value:[-1,3,1,3]} carries per-point cycles + auto-capture; field order undecoded, no read."
@@ -5905,8 +5905,6 @@ cfg_keys:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
       wire_capture: "docs/research/wire-captures/pre-write-r3-2026-06-03.md"
     open_questions:
-      - "cfg-write-path: Confirm the app uses the same device/sendCommand path (code:0) for CFG writes (height/RGBPSTA/notifications/rain/DND), a cleaner route than our 80001-prone path [UNKNOWN — to capture]."
-      - "pre-reserved: Confirm indices 8,11,17,18 are truly reserved (no-op) or locate their settings via Custom Mode or other pages [UNKNOWN — to capture]."
       - "settings-only-fields: SETTINGS-only fields cutterPosition/cutterPositionHeight/edgeMowingNum/edgeMowingWalkMode/obstacleAvoidanceSensitivity/edgeCuttingAttachment have NO PRE index; whether a SETTINGS-only write changes the mower is unverified. Capture: toggle each in app-MITM and diff PRE vs SETTINGS to see which store carries it [UNKNOWN — to capture]."
 
   - id: "CRUISED"
@@ -6725,8 +6723,6 @@ cfg_individual:
       apk: "ioBroker.dreame/apk.md §getX MISTA"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
       cross_reference: "s1p4_33b_total_area_centiares, s1p4_33b_area_mowed_centiares, s2p56"
-    open_questions:
-      - "Worth wiring as axis-4 sensor when MQTT unavailable? Otherwise redundant with s1p4 + s2p56."
     verifications:
       - date: "2026-06-09"
         status: partial
@@ -6928,9 +6924,12 @@ cfg_individual:
       apk: "ioBroker.dreame/apk.md §getX PRE"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
-      - "Reconcile with cfg_keys.PRE: same name, different access paths. Same data via different paths, or different endpoints with shared name?"
       - "Test whether the individual-fetch starts working in later dumps (cf. MISTA flip)."
     verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "Same data, not a distinct endpoint: the individual-fetch r=-3 is a dead access path; PRE data is read via the all-keys CFG fetch (cfg_keys.PRE)."
+        evidence: "cfg_keys.PRE decode; app-mitm 2026-06-09"
       - date: "2026-06-09"
         status: presumed
         claim: "PRE bare GET (no args) returns r=-3 at idle — individual-fetch form is consistently rejected; data is accessible via all-keys CFG fetch instead."
@@ -7359,9 +7358,11 @@ cfg_individual:
       decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
-    open_questions:
-      - "SCHDIV3.i semantics: slot index, chunk count, or sequence number?"
     verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "SCHDIV3.i is a schedule index; i=0 = the whole schedule"
+        evidence: "SCHDTV3 sibling verification; app-mitm schedule-write 2026-06-10"
       - date: "2026-06-09"
         status: verified
         claim: "SCHDIV3 {i, l:<total_len>, v:<txn>} is the length/index descriptor; transport confirmed by app-MITM."
@@ -7486,12 +7487,15 @@ heartbeat_bytes:
       captures.
     status:
       seen_on_wire: true
-      decoded: hypothesized
+      decoded: confirmed
     references:
       integration_code: "custom_components/dreame_a2_mower/protocol/heartbeat.py:70"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes"
-    open_questions:
-      - "Cross-check b[0] = 0xCE against probe-log heartbeat captures."
+    verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "b[0]=0xCE confirmed: decode_s1p1 guard at protocol/heartbeat.py:70 requires data[0]==0xCE and all corpus heartbeats decode"
+        evidence: "protocol/heartbeat.py:70"
 
   - id: "s1p1_b1_bit1"
     byte: 1
@@ -8103,12 +8107,15 @@ heartbeat_bytes:
       which checks data[-1] == FRAME_DELIMITER (0xCE).
     status:
       seen_on_wire: true
-      decoded: hypothesized
+      decoded: confirmed
     references:
       integration_code: "custom_components/dreame_a2_mower/protocol/heartbeat.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes"
-    open_questions:
-      - "Cross-check b[19] = 0xCE against probe-log heartbeat captures."
+    verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "b[19]=0xCE confirmed by the decode_s1p1 trailing-delimiter guard (data[-1]==0xCE)"
+        evidence: "protocol/heartbeat.py:70"
 telemetry_fields:
 
   # ── 33-byte frame (s1p4 §3.1) ──────────────────────────────────────────────
@@ -8710,6 +8717,10 @@ telemetry_fields:
         status: verified
         claim: "Corpus-wide validation across all 9 probe logs (71,936 s1p4 position frames): 99.2% are 33-byte FULL frames that carry the heading byte[6]; only 0.8% are 8-byte beacons (position-only, NO heading). byte[6]/255*360 vs motion-vector atan2(dy_cloud,dx_cloud) agrees at median 2.5° over 69,639 consecutive-frame pairs (median 1.35°, p90 7.23° when restricted to straight-line travel — the larger 13° figure was unfiltered and dominated by pivot-turn frames where the two-point chord is not the instantaneous heading). The heading byte is reliable; the live-map icon trusts it (rotation A=(270-H)%360, screen-frame) and only falls back to motion-vector for the 0.8% headingless beacons."
         evidence: "analyze_move_corpus.py over probe_log_*.jsonl (9 logs); tests/protocol/test_icon_direction_corpus.py (median 1.35°/p90 7.23° on 43,182 straight-line pairs)"
+      - date: "2026-06-28"
+        status: verified
+        claim: "s1p4 position-frame emission cadence is median 5.0s for BOTH the 33-byte full frames and the 8-byte beacons during active mowing (NOT the ~3s previously assumed). Consequence: the client live-map's 1.0s render throttle and 0.5s/20cm dedup can never fire on this stream, so apparent icon stutter is client/camera-refresh, not server throttling — the live-map rehaul moves trail+icon client-side and interpolates over the ~5s cadence."
+        evidence: "analyze_move_corpus.py over all 9 probe_log_*.jsonl (71,936 s1p4 position frames; same corpus pass as the 99.2%-carry-heading validation above)"
     references:
       apk: "ioBroker.dreame/apk.md §parseRobotPose (angle field)"
       integration_code: "custom_components/dreame_a2_mower/protocol/telemetry.py"
@@ -10146,11 +10157,12 @@ state_codes:
 
   - id: "s2p2_37"
     code: 37
-    name: "RIGHT_MAGNET"
+    name: "FAULT_PATH_IMPASSABLE"
     category: "state_code"
     semantic: |
-      Right magnet hardware fault. Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Path obstructed. Please check.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10163,11 +10175,12 @@ state_codes:
 
   - id: "s2p2_38"
     code: 38
-    name: "FLOW_ERROR"
+    name: "ALERT_LIDAR_DIRTY"
     category: "state_code"
     semantic: |
-      Flow error hardware fault. Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Lidar is dirty. Clean in time.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10197,11 +10210,12 @@ state_codes:
 
   - id: "s2p2_40"
     code: 40
-    name: "CAMERA_FAULT"
+    name: "ALERT_CAM_ABNORMAL"
     category: "state_code"
     semantic: |
-      Camera sensor fault. Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Front Camera Error.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10214,11 +10228,12 @@ state_codes:
 
   - id: "s2p2_41"
     code: 41
-    name: "STRONG_MAGNET"
+    name: "ALERT_CAM_COVER"
     category: "state_code"
     semantic: |
-      Strong magnet hardware fault. Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Front camera blocked. Check.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10231,12 +10246,12 @@ state_codes:
 
   - id: "s2p2_44"
     code: 44
-    name: "AUTO_KEY_TRIG"
+    name: "ALERT_AUTOBUILD_STOP"
     category: "state_code"
     semantic: |
-      Unintentional key press (auto key triggered). Lifted from
-      apk-decompiled DreameMowerErrorCode catalog. Not observed in our
-      probe corpus.
+      Auto Boundary Detection is stopped.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10306,13 +10321,12 @@ state_codes:
 
   - id: "s2p2_49"
     code: 49
-    name: "LDS_BUMPER"
+    name: "INFO_DESTINATION_NOT_REACHABLE"
     category: "state_code"
     semantic: |
-      Bumper / LDS event. Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus
-      (bumper hits on the g2408 surface via s1p1 heartbeat byte[1]&0x01
-      with no corresponding s2p2 transition — see §5.3).
+      Unable to reach certain zones during the task.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10350,11 +10364,12 @@ state_codes:
 
   - id: "s2p2_57"
     code: 57
-    name: "EDGE_2"
+    name: "INFO_RAIN_SCHEDULE_INTERUPTED"
     category: "state_code"
     semantic: |
-      Alternative edge-mow fault. Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Rain protection activated. The scheduled task was interrupted.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10367,11 +10382,12 @@ state_codes:
 
   - id: "s2p2_58"
     code: 58
-    name: "ULTRASONIC_FAULT"
+    name: "INFO_RAIN_SCHEDULE_SUSPEND"
     category: "state_code"
     semantic: |
-      Ultrasonic sensor fault. Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Rain Protection is activated. The scheduled task is suspended.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10384,11 +10400,12 @@ state_codes:
 
   - id: "s2p2_59"
     code: 59
-    name: "NO_GO_ZONE"
+    name: "FAULT_BATTERY_TEMP_LOW"
     category: "state_code"
     semantic: |
-      Reached a no-go / exclusion zone. Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Battery temperature is too low. Returning to the station.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10401,11 +10418,12 @@ state_codes:
 
   - id: "s2p2_61"
     code: 61
-    name: "ROUTE_FAULT"
+    name: "INFO_NOT_DISTURB_RETURNING"
     category: "state_code"
     semantic: |
-      Navigation route fault. Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Do Not Disturb is on. Returning to the station.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10418,11 +10436,12 @@ state_codes:
 
   - id: "s2p2_62"
     code: 62
-    name: "ROUTE_2"
+    name: "INFO_NOT_DISTURB_SCHEDULE_SUSPEND"
     category: "state_code"
     semantic: |
-      Alternative navigation route fault. Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Do Not Disturb is on. The scheduled task is suspended.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10462,11 +10481,12 @@ state_codes:
 
   - id: "s2p2_64"
     code: 64
-    name: "BLOCKED_3"
+    name: "INFO_REMOTE_CONTROLING_SCHEDULE_SUSPEND"
     category: "state_code"
     semantic: |
-      Obstacle blocking (variant 3). Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Robot is under remote control. Scheduled task suspended.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10479,11 +10499,12 @@ state_codes:
 
   - id: "s2p2_65"
     code: 65
-    name: "RESTRICTED"
+    name: "INFO_EMERGENCY_STOPPED_SCHEDULE_SUSPEND"
     category: "state_code"
     semantic: |
-      Restricted area. Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      PIN verification failed. The scheduled task was cancelled.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10496,11 +10517,12 @@ state_codes:
 
   - id: "s2p2_66"
     code: 66
-    name: "RESTRICTED_2"
+    name: "INFO_TOP_COVER_OPEN_SCHEDULE_SUSPEND"
     category: "state_code"
     semantic: |
-      Restricted area (alternative variant). Lifted from apk-decompiled
-      DreameMowerErrorCode catalog. Not observed in our probe corpus.
+      Top cover is not closed. Scheduled task cancelled.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10513,12 +10535,12 @@ state_codes:
 
   - id: "s2p2_67"
     code: 67
-    name: "RESTRICTED_3"
+    name: "INFO_FAULT_MODE_SCHEDULE_SUSPEND"
     category: "state_code"
     semantic: |
-      Restricted area (second alternative variant). Lifted from
-      apk-decompiled DreameMowerErrorCode catalog. Not observed in our
-      probe corpus.
+      Robot status error. Scheduled task cancelled.
+      Name/meaning from the authoritative g2408 app fault catalog
+      [apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
     status:
       seen_on_wire: false
       first_seen: null
@@ -10888,15 +10910,20 @@ oss_map_keys:
     category: "oss_map_key"
     payload_shape: "{dataType:'Map', value:[]}"
     semantic: |
-      Patrol / cruise points the mower visits in sequence. Empty on all g2408
-      captures (value=[]). Purpose confirmed by apk; the container is present even
-      when empty.
+      Patrol / cruise points the mower visits in sequence. Purpose CONFIRMED: this
+      is the patrol-point store — cross-ref opcode o107 (start_cruise_point) and
+      s4p44; patrol points are type=8 (vs maintenance cleanPoints type=6) and the
+      store is cloud-relayed. Live fetch_map 2026-06-04 (see o107 verification)
+      showed it populated with type=8 entries once the user defined patrol points.
+      The container is present even when empty. Only non-empty g2408 population on
+      this oss-map-blob fetch path remains to re-confirm.
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      decoded: partial
     references:
       apk: "ioBroker.dreame/apk.md §cruisePoints"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
+      cross_reference: "o107 (start_cruise_point), s4p44"
 
   - id: "map_key_cut"
     name: "cut"

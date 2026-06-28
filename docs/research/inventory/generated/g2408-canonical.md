@@ -1235,7 +1235,6 @@ differ only in the routed_o opcode and the payload. See opcodes o100,
 o101, o102, o103 for the respective TASK envelope shapes.
 
 **Open questions:**
-- Direct action(5,1) consistently returns 80001; routed path via s2a50 o:100 is the confirmed working path.
 - task-variant-params: Capture app TASK starts (all-areas o=100 / edge o=101 / zone o=102 / pause / resume / dock o=6 / stop) to confirm params vs our builders [UNKNOWN — to capture].
 
 **See also:** `custom_components/dreame_a2_mower/mower/actions.py:195`, `apk: ioBroker.dreame/apk.md §Actions o:100 globalMower`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)`
@@ -1451,7 +1450,7 @@ never reached.
 | o108 | start_cruise_side | SEND {m:'a', o:108, d:{edge:[[m,c]]}} (contour pairs, CONFIRMED LIVE 2026-06-04); ECHO s2p50 {o:108, exe:true, status:true, t:'TASK'} | DECODED-UNWIRED |  |
 | o109 | start_clean_point | SEND {m:'a', p:0, o:109, d:{point:[point_id]}} via routed_action; ECHO s2p50 {o:109, exe:true, status:true|false, [estimate_time, time]} | WIRED |  |
 | o110 | start_learning_map | {m:'a', o:110} | APK-KNOWN |  |
-| o111 | set_cruise_point_cycles | SEND {m:'a', o:111, d:{point:[point_id, cycles]}} | SEEN-UNDECODED |  |
+| o111 | set_cruise_point_cycles | SEND {m:'a', o:111, d:{point:[point_id, cycles]}} | DECODED-UNWIRED |  |
 | o200 | select_map | SEND {m:'a', o:200, d:{idx:N}} (app — confirmed 2026-06-09); ECHO {d:{exe:true, o:200, status:true}, t:'TASK'} | DECODED-UNWIRED |  |
 | o201 | map_edit_commit | SEND {m:'a', o:201} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:201, status:true, error:0}, t:'TASK'} (device → cloud) | WIRED |  |
 | o204 | map_edit_begin | SEND {m:'a', o:204} (app — confirmed 2026-06-09); ECHO {m:'a', d:{o:204, exe:T, status:T, ...}, t:'TASK'} (device → cloud) | WIRED |  |
@@ -1665,7 +1664,6 @@ integration dispatches child-lock via CFG write ("CLS") rather than
 this opcode; this opcode may be an alternative channel or app-only path.
 
 **Open questions:**
-- Does o:12 work in parallel with CFG.CLS write, or is one canonical?
 - [UNKNOWN — to capture] No lock/unlock button exists in the current Dreame app UI for this device; the backend MAY add support later. On current g2408 firmware op=12 is ACCEPTED-BUT-NO-EFFECT (same class as op=10; no panel-lock observed, no echo on s2p50). Integration lock_bot entity stays DEVICE_WRITE_UNPROVEN. Capture step: watch for a future app lock control or backend flag that enables it.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
@@ -1843,7 +1841,7 @@ current capture path, patrol settings are unobservable on the wire. Next
 candidate is the s4 eiid1 session-summary OSS object at patrol end.
 
 **Open questions:**
-- RESOLVED 2026-06-16: per-point cycles + auto-capture are NOT in the o=107 payload — they live in a separate `CRUISED` CFG write (see cfg key `CRUISED`). The o=107 send remains the bare point-id list {point:[...]}; whether it carries per-point cycles inline is still UNVERIFIED (the app's o=111 setter is the per-point cycles path).
+- Whether the o=107 send carries per-point cycles inline is still UNVERIFIED (the app's o=111 setter is the per-point cycles path); per-point cycles + auto-capture themselves are resolved (separate CRUISED CFG write — see the 2026-06-16 verification and cfg key CRUISED).
 - s2p56 [[3,0],[4,-1]]: confirm point_id vs state field order and state vocab (0=active? -1=pending? 2=arrived as in o=109?) across more captures.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
@@ -1887,10 +1885,6 @@ cleanPoints are PER-MAP (id is per-map; map 0 had ids 1,2 with type=6
 shapeType=5 path=[{x,y}], map 1 had none), so a per-map button must target
 the right map — set it active (op=200) first if it isn't, OR test whether
 {point:[[map_id, id]]} also works (untested; bare id sufficed on the active map).
-
-**Open questions:**
-- TRANSPORT is solved (2026-05-31, see verifications): routed_action → /device/sendCommand works; 80001 is a wake-up timeout fixable by retry. The ONLY remaining unknown is the op=109 d-SHAPE. Re-probe with probe_cruise_to_point.py --routed-byid --retries 5 from a clean idle dock and read the cloud reply: r:0 = shape accepted (mower should head to the point + echo s2p56=[[id,0]]); r<0 or an o:109 status:false echo = shape wrong.
-- d-shape LEAD: the s2p56 selector-id finding (2026-05-30) shows point-runs carry a stable per-target id as status[0][0] (corpus ids 2,1,1,2 == the map's two cleanPoints ids 1,2), so op=109's `d` likely references the point BY ID — `{point:[id]}` / `{area:[id]}`, same family as spot (o103 `{area:[id]}`) — not by coordinate. See docs/TODO.md 'Cruise-to-Point / Head-to-Maintenance-Point trigger (op=109)'.
 
 **See also:** `coordinator/ (see _property_apply.py § _SUPPRESSED_SLOTS + _mqtt_handlers.py § handle_property_push)`, `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
@@ -2386,7 +2380,6 @@ WRITE payloads — BAT is a typed key (write only):
   that toggle writes STUN separately). [UNKNOWN — to capture]
 
 **Open questions:**
-- unknown_flag [2] always=1 — purpose unknown. App charging-settings page exposes a control for every OTHER BAT index and has no unaccounted-for setting, so [2] has no user-facing mapping — likely firmware-reserved or not applicable to the g2408. Not worth wiring a write path; see TODO.md 'BAT[2] hardcoded 1' (left open as defensive cleanup only).
 - BAT typed-write value[2]/flag: purpose still unknown — NOT STUN (auto-recharge-after-standby has its own STUN key). [UNKNOWN — to capture]
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX BAT`
@@ -2449,7 +2442,6 @@ cruise-point (o=223 create/edit) for the geometry opcode.
 [app-mitm:2026-06-16-firmware-ota]
 
 **Open questions:**
-- CRUISED field order — which element of value[] is cycles, which is auto-capture? No read captured.
 - CRUISED value[-1,3,1,3]: is -1 a sentinel for 'applies to all points'? Undecoded.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § CFG keys`
@@ -2778,8 +2770,6 @@ Whether the g2408 firmware actually executes each PRE write is not yet
 observed — device-side effect is `[UNVERIFIED]` pending live verification.
 
 **Open questions:**
-- cfg-write-path: Confirm the app uses the same device/sendCommand path (code:0) for CFG writes (height/RGBPSTA/notifications/rain/DND), a cleaner route than our 80001-prone path [UNKNOWN — to capture].
-- pre-reserved: Confirm indices 8,11,17,18 are truly reserved (no-op) or locate their settings via Custom Mode or other pages [UNKNOWN — to capture].
 - settings-only-fields: SETTINGS-only fields cutterPosition/cutterPositionHeight/edgeMowingNum/edgeMowingWalkMode/obstacleAvoidanceSensitivity/edgeCuttingAttachment have NO PRE index; whether a SETTINGS-only write changes the mower is unverified. Capture: toggle each in app-MITM and diff PRE vs SETTINGS to see which store carries it [UNKNOWN — to capture].
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX PRE`
@@ -3292,9 +3282,6 @@ only when actively mowing. Use as a "mower running?" probe.
 Envelope: m:"r" (response method), q (link/RSSI proxy 70-80
 observed during run), r:0 (OK code).
 
-**Open questions:**
-- Worth wiring as axis-4 sensor when MQTT unavailable? Otherwise redundant with s1p4 + s2p56.
-
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX MISTA`
 
 ### MITRC — `mission_track`
@@ -3403,7 +3390,6 @@ Live probe 2026-06-09 bare GET confirmed r=-3 at idle — consistent
 with cloud dumps; individual-fetch form still not working.
 
 **Open questions:**
-- Reconcile with cfg_keys.PRE: same name, different access paths. Same data via different paths, or different endpoints with shared name?
 - Test whether the individual-fetch starts working in later dumps (cf. MISTA flip).
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX PRE`
@@ -3535,9 +3521,6 @@ v is the live schedule version (e.g. 58177). Header step of the
 authoritative schedule READ. Verified over the cloud relay
 [probe @2026-06-17]. See SCHDTV3 for the full flow. [app-mitm:2026-06-17]
 
-**Open questions:**
-- SCHDIV3.i semantics: slot index, chunk count, or sequence number?
-
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 
 ### SCHDSV3 — `schedule_slot_enable_v3`
@@ -3668,9 +3651,6 @@ it detects rain conditions or on a periodic sync interval.
 Start-of-frame delimiter. Hypothesised 0xCE by analogy with
 s1p4 telemetry framing; verify against probe-log heartbeat
 captures.
-
-**Open questions:**
-- Cross-check b[0] = 0xCE against probe-log heartbeat captures.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/heartbeat.py:70`, `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
@@ -4002,9 +3982,6 @@ End-of-frame delimiter. Hypothesised 0xCE by analogy with
 s1p4 telemetry framing; verify against probe-log heartbeat
 captures. Confirmed by the decode_s1p1 guard in heartbeat.py
 which checks data[-1] == FRAME_DELIMITER (0xCE).
-
-**Open questions:**
-- Cross-check b[19] = 0xCE against probe-log heartbeat captures.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/heartbeat.py`, `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
@@ -4790,34 +4767,34 @@ slot semantics (4 from MSG_ALERT + 4 from VOICE) wire-confirmed
 | s2p2_31 | FAILED_TO_RETURN_TO_STATION |  | WIRED |  |
 | s2p2_33 | FAILURE_TRANSITION |  | WIRED |  |
 | s2p2_36 | FAILED_TO_START_TASK |  | WIRED |  |
-| s2p2_37 | RIGHT_MAGNET |  | WIRED |  |
-| s2p2_38 | FLOW_ERROR |  | WIRED |  |
+| s2p2_37 | FAULT_PATH_IMPASSABLE |  | WIRED |  |
+| s2p2_38 | ALERT_LIDAR_DIRTY |  | WIRED |  |
 | s2p2_39 | INFRARED_FAULT |  | WIRED |  |
-| s2p2_40 | CAMERA_FAULT |  | WIRED |  |
-| s2p2_41 | STRONG_MAGNET |  | WIRED |  |
+| s2p2_40 | ALERT_CAM_ABNORMAL |  | WIRED |  |
+| s2p2_41 | ALERT_CAM_COVER |  | WIRED |  |
 | s2p2_43 | BATT_TEMP_LOW |  | WIRED |  |
-| s2p2_44 | AUTO_KEY_TRIG |  | WIRED |  |
+| s2p2_44 | ALERT_AUTOBUILD_STOP |  | WIRED |  |
 | s2p2_45 | P3V3_FAULT |  | WIRED |  |
 | s2p2_46 | CAMERA_IDLE |  | WIRED |  |
 | s2p2_47 | TASK_CANCELLED |  | WIRED |  |
 | s2p2_48 | MOWING_COMPLETE |  | WIRED |  |
-| s2p2_49 | LDS_BUMPER |  | WIRED |  |
+| s2p2_49 | INFO_DESTINATION_NOT_REACHABLE |  | WIRED |  |
 | s2p2_50 | SESSION_STARTING_MANUAL |  | WIRED |  |
 | s2p2_51 | PATROL_STARTED |  | WIRED |  |
 | s2p2_53 | SESSION_STARTING_SCHEDULED |  | WIRED |  |
 | s2p2_54 | RETURNING |  | WIRED |  |
 | s2p2_56 | RAIN_PROTECTION |  | WIRED |  |
-| s2p2_57 | EDGE_2 |  | WIRED |  |
-| s2p2_58 | ULTRASONIC_FAULT |  | WIRED |  |
-| s2p2_59 | NO_GO_ZONE |  | WIRED |  |
+| s2p2_57 | INFO_RAIN_SCHEDULE_INTERUPTED |  | WIRED |  |
+| s2p2_58 | INFO_RAIN_SCHEDULE_SUSPEND |  | WIRED |  |
+| s2p2_59 | FAULT_BATTERY_TEMP_LOW |  | WIRED |  |
 | s2p2_60 | FROST_SUPPRESSED_SCHEDULED |  | WIRED |  |
-| s2p2_61 | ROUTE_FAULT |  | WIRED |  |
-| s2p2_62 | ROUTE_2 |  | WIRED |  |
+| s2p2_61 | INFO_NOT_DISTURB_RETURNING |  | WIRED |  |
+| s2p2_62 | INFO_NOT_DISTURB_SCHEDULE_SUSPEND |  | WIRED |  |
 | s2p2_63 | SCHEDULED_TASK_CANCELLED_BUSY |  | WIRED |  |
-| s2p2_64 | BLOCKED_3 |  | WIRED |  |
-| s2p2_65 | RESTRICTED |  | WIRED |  |
-| s2p2_66 | RESTRICTED_2 |  | WIRED |  |
-| s2p2_67 | RESTRICTED_3 |  | WIRED |  |
+| s2p2_64 | INFO_REMOTE_CONTROLING_SCHEDULE_SUSPEND |  | WIRED |  |
+| s2p2_65 | INFO_EMERGENCY_STOPPED_SCHEDULE_SUSPEND |  | WIRED |  |
+| s2p2_66 | INFO_TOP_COVER_OPEN_SCHEDULE_SUSPEND |  | WIRED |  |
+| s2p2_67 | INFO_FAULT_MODE_SCHEDULE_SUSPEND |  | WIRED |  |
 | s2p2_70 | MOWING |  | WIRED |  |
 | s2p2_71 | POSITIONING_FAILED_OR_AUTO_RECOVER |  | WIRED |  |
 | s2p2_72 | RETURN_AFTER_PAUSE_TIMEOUT |  | WIRED |  |
@@ -4991,17 +4968,19 @@ Also probe corpus (probe_log_20260419_130434.jsonl).
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
 
-### s2p2_37 — `RIGHT_MAGNET`
+### s2p2_37 — `FAULT_PATH_IMPASSABLE`
 
-Right magnet hardware fault. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+Path obstructed. Please check.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
-### s2p2_38 — `FLOW_ERROR`
+### s2p2_38 — `ALERT_LIDAR_DIRTY`
 
-Flow error hardware fault. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+Lidar is dirty. Clean in time.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
@@ -5012,17 +4991,19 @@ DreameMowerErrorCode catalog. Not observed in our probe corpus.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
-### s2p2_40 — `CAMERA_FAULT`
+### s2p2_40 — `ALERT_CAM_ABNORMAL`
 
-Camera sensor fault. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+Front Camera Error.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
-### s2p2_41 — `STRONG_MAGNET`
+### s2p2_41 — `ALERT_CAM_COVER`
 
-Strong magnet hardware fault. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+Front camera blocked. Check.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
@@ -5042,11 +5023,11 @@ firmware variant.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
 
-### s2p2_44 — `AUTO_KEY_TRIG`
+### s2p2_44 — `ALERT_AUTOBUILD_STOP`
 
-Unintentional key press (auto key triggered). Lifted from
-apk-decompiled DreameMowerErrorCode catalog. Not observed in our
-probe corpus.
+Auto Boundary Detection is stopped.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
@@ -5083,12 +5064,11 @@ fails to return).
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
 
-### s2p2_49 — `LDS_BUMPER`
+### s2p2_49 — `INFO_DESTINATION_NOT_REACHABLE`
 
-Bumper / LDS event. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus
-(bumper hits on the g2408 surface via s1p1 heartbeat byte[1]&0x01
-with no corresponding s2p2 transition — see §5.3).
+Unable to reach certain zones during the task.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
@@ -5141,24 +5121,27 @@ starts). Listed in §8.3 as "LASER (rain protection)".
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
 
-### s2p2_57 — `EDGE_2`
+### s2p2_57 — `INFO_RAIN_SCHEDULE_INTERUPTED`
 
-Alternative edge-mow fault. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
-
-**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
-
-### s2p2_58 — `ULTRASONIC_FAULT`
-
-Ultrasonic sensor fault. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+Rain protection activated. The scheduled task was interrupted.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
-### s2p2_59 — `NO_GO_ZONE`
+### s2p2_58 — `INFO_RAIN_SCHEDULE_SUSPEND`
 
-Reached a no-go / exclusion zone. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+Rain Protection is activated. The scheduled task is suspended.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
+
+### s2p2_59 — `FAULT_BATTERY_TEMP_LOW`
+
+Battery temperature is too low. Returning to the station.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
@@ -5175,17 +5158,19 @@ briefly, fires this code, then settles back to s2p1=13
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
 
-### s2p2_61 — `ROUTE_FAULT`
+### s2p2_61 — `INFO_NOT_DISTURB_RETURNING`
 
-Navigation route fault. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+Do Not Disturb is on. Returning to the station.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
-### s2p2_62 — `ROUTE_2`
+### s2p2_62 — `INFO_NOT_DISTURB_SCHEDULE_SUSPEND`
 
-Alternative navigation route fault. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+Do Not Disturb is on. The scheduled task is suspended.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
@@ -5201,32 +5186,35 @@ cloud confirm the real meaning.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
-### s2p2_64 — `BLOCKED_3`
+### s2p2_64 — `INFO_REMOTE_CONTROLING_SCHEDULE_SUSPEND`
 
-Obstacle blocking (variant 3). Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
-
-**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
-
-### s2p2_65 — `RESTRICTED`
-
-Restricted area. Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+Robot is under remote control. Scheduled task suspended.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
-### s2p2_66 — `RESTRICTED_2`
+### s2p2_65 — `INFO_EMERGENCY_STOPPED_SCHEDULE_SUSPEND`
 
-Restricted area (alternative variant). Lifted from apk-decompiled
-DreameMowerErrorCode catalog. Not observed in our probe corpus.
+PIN verification failed. The scheduled task was cancelled.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
-### s2p2_67 — `RESTRICTED_3`
+### s2p2_66 — `INFO_TOP_COVER_OPEN_SCHEDULE_SUSPEND`
 
-Restricted area (second alternative variant). Lifted from
-apk-decompiled DreameMowerErrorCode catalog. Not observed in our
-probe corpus.
+Top cover is not closed. Scheduled task cancelled.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
+
+### s2p2_67 — `INFO_FAULT_MODE_SCHEDULE_SUSPEND`
+
+Robot status error. Scheduled task cancelled.
+Name/meaning from the authoritative g2408 app fault catalog
+[apk:g2408-plugin-ext1423] (mower/data/fault_catalog.json). NOT yet observed on the g2408 wire — decoded:hypothesized reflects the missing wire observation, not the name.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 
@@ -5499,9 +5487,13 @@ so the real grass perimeter is visible over zone fills.
 
 ### map_key_cruisePoints — `cruisePoints`
 
-Patrol / cruise points the mower visits in sequence. Empty on all g2408
-captures (value=[]). Purpose confirmed by apk; the container is present even
-when empty.
+Patrol / cruise points the mower visits in sequence. Purpose CONFIRMED: this
+is the patrol-point store — cross-ref opcode o107 (start_cruise_point) and
+s4p44; patrol points are type=8 (vs maintenance cleanPoints type=6) and the
+store is cloud-relayed. Live fetch_map 2026-06-04 (see o107 verification)
+showed it populated with type=8 entries once the user defined patrol points.
+The container is present even when empty. Only non-empty g2408 population on
+this oss-map-blob fetch path remains to re-confirm.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `apk: ioBroker.dreame/apk.md §cruisePoints`
 

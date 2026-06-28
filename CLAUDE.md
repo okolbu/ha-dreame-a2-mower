@@ -31,6 +31,23 @@ step. Absence of evidence must be structurally visible in the sentence itself.
 When you only have a guess, prefer producing the capture plan (what to grep /
 trigger / diff) over volunteering an "analysis" that reads as fact.
 
+### Don't restate decoded values — cite the inventory id (anti-drift)
+
+`inventory.yaml` is the SINGLE place a decoded wire value lives. Prose
+elsewhere — `README.md`, the Tier-2 docs, `knowledge-gaps.md`, code
+comments, commit messages, AND the agent's own auto-memory — may **cite**
+an inventory id/section but must **not restate the decoded value**. A
+restated value (an s2p2 code→meaning table, a byte-layout, a threshold, a
+"the Save path is X" claim) becomes a SECOND copy that drifts the moment
+inventory is corrected, and the next session greps the stale copy and
+regenerates it as truth. This is the exact failure the 2026-06-28 wire-truth
+audit found: a debunked README "Save path is an open work item" resurrected
+as open, 6 memory files contradicting inventory, ~19 wrong vacuum s2p2 names
+duplicated across inventory + knowledge-gaps. Rule: when you would write a
+wire value into a doc, write **"see `inventory.yaml` § \<section\> `<id>`"**
+instead. If the value genuinely is not yet in inventory, that is the signal
+to add it there FIRST (per the recording rule below), then cite it.
+
 ### When the rule fires
 
 You MUST update an inventory file in the same response as any of:

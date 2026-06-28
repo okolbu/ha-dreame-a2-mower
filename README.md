@@ -145,28 +145,38 @@ A subset of g2408 settings is on the Dreame app's "Mowing settings" page
 (the one with the explicit Save button). All of these settings DO
 propagate through the cloud — verified by toggling in one app instance
 and observing the change in a second app instance on a different
-device, with zero Bluetooth involvement. But for some of them it's
-not yet verified whether the device firmware applies HA-initiated
-writes vs only the writes initiated by the Dreame app itself:
+device, with zero Bluetooth involvement. The remaining open question is
+narrower: whether the device firmware applies an **HA-initiated** write
+the same way it applies the Dreame app's own write `[UNVERIFIED]`.
 
 - AI Obstacle Recognition: Humans / Animals / Objects
-- Mowing Direction, Mowing Pattern, Edge Walk Mode
+- Mowing Direction
 - Edge Mowing: Auto / Safe / Obstacle Avoidance
-- LiDAR Obstacle Recognition + Obstacle Avoidance Distance / Height / Sensitivity
-- Mowing Height, Cutter Position, Cutter Height, Edge Passes
+- LiDAR Obstacle Recognition + Obstacle Avoidance Distance / Height
+- Mowing Height
 
-For these, the safe pattern today is: **toggle them in the Dreame app**.
-HA picks up the change automatically within ≤2 min (cloud poll cadence;
-some changes also fire MQTT and surface within seconds). Force an
-immediate sync via **`button.dreame_a2_mower_refresh_from_cloud`** /
+(The Mowing-settings page also exposes value-tied fields — Mowing
+Pattern, Edge Walk Mode, Obstacle-Avoidance Sensitivity, Cutter
+Position, Cutter Height, Edge Passes — that have **no toggle in the
+g2408 app** as of 2.5.8.1: they are wire-present but UI-less on this
+model, so the integration does not surface them as user settings.)
+
+For the settings above, the safe pattern today is: **toggle them in the
+Dreame app**. HA picks up the change automatically within ≤2 min (cloud
+poll cadence; some changes also fire MQTT and surface within seconds).
+Force an immediate sync via
+**`button.dreame_a2_mower_refresh_from_cloud`** /
 `dreame_a2_mower.refresh_cloud_state` if you don't want to wait.
 
-If you toggle one of these in HA: the cloud accepts the write (other
-app instances on cold-start will see it) but the original Dreame app
-session may keep showing the pre-write value due to UI cache, and it's
-not yet established whether the device firmware applies HA-side writes.
-The path the Dreame app uses on Save is likely a cloud routed-action
-target we haven't enumerated yet; capturing it is the open work item.
+If you toggle one of these in HA the cloud accepts the write and other
+app instances pick it up on cold-start: the integration issues the same
+Save path the Dreame app uses — the confirmed PRE bare-array
+`action s2.a50 {m:s, t:PRE, d:[…]}`, dual-written to the SETTINGS cloud
+record `[app-mitm:2026-06-09]`. Two caveats remain: the original Dreame
+app session may keep showing the pre-write value until its UI cache
+refreshes `[UNVERIFIED]`, and whether g2408 firmware *executes* an
+HA-initiated PRE write identically to the app's is not yet observed
+`[UNVERIFIED]`.
 
 Full per-entity reference — read source and verification status for every
 switch / select / number / sensor / button / service — in

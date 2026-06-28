@@ -34,13 +34,17 @@ for id_, name, dec, oq in walk(d):
 
 Corpus numbers below are from `probe_log_*.jsonl` (9 logs, 2026-04-17…05-30;
 66,149 s1p1 + 69,254 s1p4 frames) via the census snippet at the end. Baseline
-inventory tally at time of writing (2026-05-30, post fault-code + s4-eiid1 decode):
-**195 confirmed / 116 hypothesized / 10 unknown / 6 partial / 4 verified**
-across 331 entries. Last updated 2026-06-09 (app-MITM sweep: resolved
+inventory tally (refreshed 2026-06-28, post wire-truth audit):
+**266 confirmed / 27 partial / 89 hypothesized / 7 unknown** across **389
+entries**; **126** carry `open_questions`. The audit classified the 177
+not-confirmed-or-open rows: 104 genuinely-open (need live capture), 36
+resolvable-from-corpus (answer already in the 9 logs/dumps), 18
+resolvable-from-code, 19 stale-framing (since closed). Earlier prior
+sweeps (2026-06-09 app-MITM) resolved
 SCHDTV3/GPS/PATH/PIN/REMOTE/photo-metadata/map-edit/message-record gaps;
 added SCHDSV3 v-layout, BAT[2], LIT.fill, draw-by-driving, OTA flow,
 XP2P stream, per-pathway, shape ids 12/14/15/16, MAP.* freshness, Tencent
-getIdentity).
+getIdentity.
 
 Validation-process shorthands are defined in [§Validation playbook](#validation-playbook).
 
@@ -92,7 +96,7 @@ Not a gap to chase. Source: `[apk:g2408-plugin-ext1423]`.
 |---|---|---|---|---|
 | s2p2 codes 20, 33 | hypothesized | fired only in the 2026-05-25 12:32 failure burst | text cloud-pruned; meaning unknown | repro within cloud retention, then device-messages/v2 fetch; or apk FaultIndex L94618-94697 |
 | s2p2 conflicts 23/43/75 | mixed | seen | apk fault-label vs event-slug disagree | controlled trigger per code |
-| s2p2 catalog 37-78 (RIGHT_MAGNET, FLOW_ERROR, …) | hypothesized | mostly **never observed** | vacuum/apk-derived; may not exist on g2408. EXCEPTIONS now observed+decoded (2026-05-30, real g2408 meanings, apk labels were wrong): 51=patrol-start, 71=standby-too-long-return, 74=patrol-ended, 76=cannot-reach-maint-point. Codes 2=robot-trapped, 4=left-drive-wheel-error also decoded (single obs, `partial`). The rest of 37-78 remains unobserved. | wait-for-event; treat unobserved as unconfirmed |
+| s2p2 catalog 37-78 (FAULT_PATH_IMPASSABLE, ALERT_LIDAR_DIRTY, …) | hypothesized | mostly **never observed** | 2026-06-28: 15 codes (37/38/40/41/44/49/57/58/59/61/62/64/65/66/67) had their old vacuum/apk names (RIGHT_MAGNET etc.) CORRECTED to the authoritative g2408 app fault catalog (`fault_catalog.json` [apk:g2408-plugin-ext1423]); the names are now correct but the codes remain **unobserved on the g2408 wire** (decoded:hypothesized = missing wire observation, not a missing name). Codes 39/45/46/47/78/117 are absent from the catalog — still speculative. EXCEPTIONS observed+decoded earlier (2026-05-30): 51=patrol-start, 71=standby-too-long-return, 74=patrol-ended, 76=cannot-reach-maint-point; 2=robot-trapped, 4=left-drive-wheel-error (single obs, `partial`). | wait-for-event; treat unobserved as unconfirmed |
 | s2p53 voice_download_progress | hypothesized | 5 occ {0,50,100} | shape presumed | LABEL: trigger a voice-pack download |
 | s2p55 ai_obstacle_report | hypothesized | 23 dict | wire shape unknown (no AI-obstacle capture) | wait-for-event (AI obstacle w/ photo) |
 | s2p57 / s2p58 / s2p61 / s2p62 | hypothesized | s2p62 always `0`; others sparse | shutdown/self-check/map-update/progress semantics presumed | LABEL respective triggers |
