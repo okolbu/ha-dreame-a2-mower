@@ -13058,13 +13058,20 @@ api_endpoints:
       connected to a closer AP (RSSI improved -80 to -60 dBm), acting on a queued command;
       no new data.success:true call was captured -- the cloud queues or retries internally.
       [app-mitm:2026-06-16-firmware-ota]
-      Still uncaptured on a good link: the data.success:true path, blob URL/manifest,
-      and the s1p2/s1p3 install-state/progress transitions. [UNKNOWN -- to capture]
+      The COMPLETE OTA flow is now captured end-to-end (live 0550→0625,
+      [app-mitm:2026-06-16-firmware-ota-complete-flow]): checkDeviceVersion
+      (availability) → this trigger → install transitions on s1p2 (1→2→3→1, see
+      s1p2 entry) and s1p3 download% (0→100, see s1p3 entry) → reboot → completion.
+      No separate data.success:true call is observed on acceptance — the cloud acts
+      on the queued command device-side once link quality recovers. The firmware
+      blob/manifest is NOT on the app wire: the mower downloads it directly from the
+      CDN device-side (only state + download-% return via the property channel).
+      The sole residual is the 'sign' request-field algorithm (above).
     status:
       seen_on_wire: false
       first_seen: "2026-06-16"
       last_seen: "2026-06-16"
-      decoded: partial
+      decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
     verifications:
@@ -13072,3 +13079,7 @@ api_endpoints:
         status: verified
         claim: "POST …/manualFirmwareUpdate {did,uid,sign,ts} → {data:{success,code}}; outer success:true = received; data.success:false = refused; refusal is cloud/device-side (RSSI gate), not an app guard."
         evidence: "app-mitm:2026-06-16-firmware-ota cloud/captures/mitm_session_20260616/api-calls.jsonl"
+      - date: "2026-06-28"
+        status: verified
+        claim: "Supersedes the stale 'install transitions uncaptured' note: the COMPLETE 0550→0625 OTA flow was captured end-to-end — checkDeviceVersion + this trigger + s1p2 (1→2→3→1) + s1p3 (0→100 download%) are all wire-verified (see those entries). No data.success:true call on acceptance (cloud queues device-side); firmware blob is device-side CDN, not on the app wire. Only the 'sign' algorithm remains open."
+        evidence: "cloud/captures/mitm_session_20260616/findings/FINDING-firmware-OTA-complete-flow-2026-06-16.md; s1p2/s1p3 entries (decoded:confirmed)"
