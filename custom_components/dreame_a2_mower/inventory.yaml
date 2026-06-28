@@ -6783,8 +6783,13 @@ cfg_individual:
       count)}; response {idx, track} where track is a base64-packed binary
       trail segment ('' when that page is empty). Non-empty page captured
       mid-mow (idx:45,size:4). Replaces r=-1=idle framing — it does return
-      data, the empty '' pages just mean no track at that offset. Internal
-      byte layout of the base64 not yet decoded.
+      data, the empty '' pages just mean no track at that offset.
+      Base64 layout DECODED (2026-06-28, from the 06-19 capture): the track is a
+      sequence of 5-byte records [X:int16_le, Y:int16_le, flag:u8]. A leg-break
+      sentinel record is (X=0x7fff, Y=0, flag=0xf8). flag takes {0x00, 0xf8(break),
+      0xff}; flag=0x00 records carry sane map-frame coordinates (X≈-1092..2089).
+      Residual: the 0x00-vs-0xff point-type meaning and the coordinate units
+      (cm vs mm) / frame parity vs the s1p4 path.
     status:
       seen_on_wire: false
       last_seen: "2026-06-09"
@@ -6794,8 +6799,12 @@ cfg_individual:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
       - "Paged {idx, size} args confirmed by app-MITM [dreame-app-implementation-guide-2026-06-09.md] — what is the page size and total page count for a typical session?"
-      - "Decode the base64 track-segment byte layout (point encoding)."
+      - "Byte layout RESOLVED 2026-06-28 (5-byte records [X,Y,flag], sentinel (0x7fff,0,0xf8)). Residual: flag 0x00 vs 0xff point-type meaning; confirm coordinate units/frame against a known s1p4 track."
     verifications:
+      - date: "2026-06-28"
+        status: partial
+        claim: "MITRC track base64 = 5-byte records [X int16_le, Y int16_le, flag u8]; leg-break sentinel (X=0x7fff, Y=0, flag=0xf8). All 374 non-empty blobs in the 06-19 capture are exact 5-byte multiples (5342 records: 2662 flag=0x00, 1918 flag=0xff, 762 sentinels); flag=0x00 X-range -1092..2089 = sane map-frame coords."
+        evidence: "cloud/captures/mitm_session_20260619/miio-13267.jsonl MITRC track blobs (374 non-empty), decoded scratchpad/verify"
       - date: "2026-06-09"
         status: partial
         claim: "App issues routed-get t=MITRC with paged {idx, size} arguments (history/track paging); response shape not yet captured on our client"

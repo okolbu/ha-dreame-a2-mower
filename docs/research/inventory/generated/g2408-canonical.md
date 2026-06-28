@@ -3293,12 +3293,17 @@ Mission-track paging. App requests {idx (page offset), size (point
 count)}; response {idx, track} where track is a base64-packed binary
 trail segment ('' when that page is empty). Non-empty page captured
 mid-mow (idx:45,size:4). Replaces r=-1=idle framing — it does return
-data, the empty '' pages just mean no track at that offset. Internal
-byte layout of the base64 not yet decoded.
+data, the empty '' pages just mean no track at that offset.
+Base64 layout DECODED (2026-06-28, from the 06-19 capture): the track is a
+sequence of 5-byte records [X:int16_le, Y:int16_le, flag:u8]. A leg-break
+sentinel record is (X=0x7fff, Y=0, flag=0xf8). flag takes {0x00, 0xf8(break),
+0xff}; flag=0x00 records carry sane map-frame coordinates (X≈-1092..2089).
+Residual: the 0x00-vs-0xff point-type meaning and the coordinate units
+(cm vs mm) / frame parity vs the s1p4 path.
 
 **Open questions:**
 - Paged {idx, size} args confirmed by app-MITM [dreame-app-implementation-guide-2026-06-09.md] — what is the page size and total page count for a typical session?
-- Decode the base64 track-segment byte layout (point encoding).
+- Byte layout RESOLVED 2026-06-28 (5-byte records [X,Y,flag], sentinel (0x7fff,0,0xf8)). Residual: flag 0x00 vs 0xff point-type meaning; confirm coordinate units/frame against a known s1p4 track.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX MITRC`
 
