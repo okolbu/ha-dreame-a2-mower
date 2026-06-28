@@ -3481,13 +3481,20 @@ millisecond timestamp txn-id. Transport: action(siid:2, aiid:50)
 [app-mitm:2026-06-09-settings-sweep]
 Chunked by offset s; reassemble all chunks → JSON array
 [seasonIdx, enabled, "<name>", "<base64 blob>"]. The base64 blob is
-the protobuf that protocol/schedule_decode.py already decodes for the
+the record blob that protocol/schedule_decode.py already decodes for the
 read path — the encode direction + this transport is what Phase E adds.
 [app-mitm:2026-06-09-settings-sweep]
 Example (Spring/Summer, Thu 12:04 edge entry): 54-byte blob with
-repeating edaa07*/edaa09* groups = per-entry records (day/time/task).
-Protobuf field layout: diff known-schedule edits to map fields —
-[UNKNOWN — to capture]. [app-mitm:2026-06-09-settings-sweep]
+repeating aa07*/aa09* groups = per-entry records.
+Record layout DECODED + byte-exact in protocol/schedule_decode.py +
+schedule_encode.py (NOT protobuf — fixed variable-length records):
+[0xAA start, rec_len, day_byte=(tm_wday<<4 | action), time_lo,
+byte4=(action<<4 | time_hi), 0x00 reserved, zone_id (zone/edge only),
+reserved2 (edge byte 7 only)]. rec_len 7=All-area / 8=Zone / 9=Edge;
+weekday nibble = tm_wday (0=Sun..6=Sat); time_min 0..1439. Round-trips
+encode↔decode, verified byte-exact against live records. Sole residual:
+the Edge-record byte-7 ("reserved2"/extra_bytes) is preserved but
+uninterpreted. [app-mitm:2026-06-09-settings-sweep]
 See also: SCHDIV3 (length descriptor), SCHDSV3 (slot enable/summary).
 
 READ direction (same key, m:'g'): {m:'g', t:'SCHDDV3', d:{s:<offset>,
@@ -3500,7 +3507,7 @@ end-to-end over the cloud relay [probe @2026-06-17]. See SCHDTV3 entry for
 the full read flow. [app-mitm:2026-06-17]
 
 **Open questions:**
-- Protobuf field layout of the base64 blob: diff one-day, one-time, one-task edits to map each wire field to its semantic.
+- Edge-record byte-7 ('reserved2'/extra_bytes, schedule_decode.py:61) is preserved/round-tripped but its meaning is uninterpreted — the only unresolved field in the otherwise byte-exact record layout.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/schedule_decode.py`, `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 

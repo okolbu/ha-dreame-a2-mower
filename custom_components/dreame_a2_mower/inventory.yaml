@@ -7383,13 +7383,20 @@ cfg_individual:
       [app-mitm:2026-06-09-settings-sweep]
       Chunked by offset s; reassemble all chunks → JSON array
       [seasonIdx, enabled, "<name>", "<base64 blob>"]. The base64 blob is
-      the protobuf that protocol/schedule_decode.py already decodes for the
+      the record blob that protocol/schedule_decode.py already decodes for the
       read path — the encode direction + this transport is what Phase E adds.
       [app-mitm:2026-06-09-settings-sweep]
       Example (Spring/Summer, Thu 12:04 edge entry): 54-byte blob with
-      repeating edaa07*/edaa09* groups = per-entry records (day/time/task).
-      Protobuf field layout: diff known-schedule edits to map fields —
-      [UNKNOWN — to capture]. [app-mitm:2026-06-09-settings-sweep]
+      repeating aa07*/aa09* groups = per-entry records.
+      Record layout DECODED + byte-exact in protocol/schedule_decode.py +
+      schedule_encode.py (NOT protobuf — fixed variable-length records):
+      [0xAA start, rec_len, day_byte=(tm_wday<<4 | action), time_lo,
+      byte4=(action<<4 | time_hi), 0x00 reserved, zone_id (zone/edge only),
+      reserved2 (edge byte 7 only)]. rec_len 7=All-area / 8=Zone / 9=Edge;
+      weekday nibble = tm_wday (0=Sun..6=Sat); time_min 0..1439. Round-trips
+      encode↔decode, verified byte-exact against live records. Sole residual:
+      the Edge-record byte-7 ("reserved2"/extra_bytes) is preserved but
+      uninterpreted. [app-mitm:2026-06-09-settings-sweep]
       See also: SCHDIV3 (length descriptor), SCHDSV3 (slot enable/summary).
 
       READ direction (same key, m:'g'): {m:'g', t:'SCHDDV3', d:{s:<offset>,
@@ -7409,8 +7416,12 @@ cfg_individual:
       integration_code: "custom_components/dreame_a2_mower/protocol/schedule_decode.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
-      - "Protobuf field layout of the base64 blob: diff one-day, one-time, one-task edits to map each wire field to its semantic."
+      - "Edge-record byte-7 ('reserved2'/extra_bytes, schedule_decode.py:61) is preserved/round-tripped but its meaning is uninterpreted — the only unresolved field in the otherwise byte-exact record layout."
     verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "Schedule blob field layout is NOT open and NOT protobuf — it is a fixed variable-length record format, fully decoded AND encoded byte-exact in protocol/schedule_decode.py + schedule_encode.py: [0xAA, rec_len(7/8/9), day_byte=(tm_wday<<4|action), time_lo, byte4=(action<<4|time_hi), 0x00, zone_id(zone/edge), reserved2(edge)]. Round-trips encode↔decode and verified against live records. Supersedes the stale 'protobuf field layout [UNKNOWN]' open_question (code/inventory drift)."
+        evidence: "protocol/schedule_decode.py:22-62 (_ACTION_LEN, _decode_one_record) + schedule_encode.py:54-68 (encode_schedule_blob); byte-exact vs live Sunday record aa08010a150001ed"
       - date: "2026-06-09"
         status: verified
         claim: "SCHDDV3 {s,l,d,v} is the chunked schedule-write key; blob format is same protobuf as schedule_decode.py read path; transport confirmed by app-MITM."
