@@ -4750,6 +4750,7 @@ slot semantics (4 from MSG_ALERT + 4 from VOICE) wire-confirmed
 | s2p2_4 | LEFT_DRIVE_WHEEL_ERROR |  | WIRED |  |
 | s2p2_5 | RIGHT_DRIVE_WHEEL_ERROR |  | WIRED |  |
 | s2p2_9 | ROBOT_LIFTED |  | WIRED |  |
+| s2p2_20 | SENSOR_ERROR |  | WIRED |  |
 | s2p2_23 | LIFT_LOCKOUT_PIN_REQUIRED |  | WIRED |  |
 | s2p2_24 | BATTERY_LOW |  | WIRED |  |
 | s2p2_27 | IDLE |  | WIRED |  |
@@ -4863,6 +4864,15 @@ corpus (probe_log_20260419_130434.jsonl).
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
 
+### s2p2_20 — `SENSOR_ERROR`
+
+Sensor error — g2408 app catalog FAULT_SENSOR ("Sensor error. Please
+check."). Observed once on the g2408 wire (2026-05-25 12:32:25). Which
+sensor and the recovery flow are not yet characterised (single
+observation); the code itself is real on g2408.
+
+**See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`
+
 ### s2p2_23 — `LIFT_LOCKOUT_PIN_REQUIRED`
 
 Lift lockout / PIN required (emergency stop) — s2p2 echo of the s1p1
@@ -4875,13 +4885,11 @@ required bit was SET. Also present in the probe corpus
 
 ### s2p2_24 — `BATTERY_LOW`
 
-Battery low — apk FaultIndex BATTERY_LOW. NOT observed on the g2408
-wire (0 corpus hits across all 9 probe logs). Kept pending resolution
-of the 24-vs-54 relationship: s2p2=54 is the confirmed low-battery
-returning code; it is unclear whether 24 is a distinct low-battery
-WARNING threshold (distinct from 54 = low-battery RETURNING) or
-simply the vacuum FaultIndex label for the same event on a different
-device model.
+Battery low — g2408 app catalog FAULT_BATTERY_LOW ("Low battery. The
+robot will shut down soon."). OBSERVED on the g2408 wire: 2 hits in the
+full 15-log corpus (2026-06-14, 2026-06-25). Distinct from s2p2=54
+(low-battery RETURNING) — 24 is the low-battery WARNING/shutdown code,
+confirming it is a real g2408 state, not just a vacuum FaultIndex label.
 
 **See also:** `custom_components/dreame_a2_mower/mower/error_codes.py`, `docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes`, `apk: ioBroker.dreame/apk.md §FaultIndex`
 

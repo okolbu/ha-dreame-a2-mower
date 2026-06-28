@@ -9710,6 +9710,29 @@ state_codes:
       integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
 
+  - id: "s2p2_20"
+    code: 20
+    name: "SENSOR_ERROR"
+    category: "state_code"
+    semantic: |
+      Sensor error — g2408 app catalog FAULT_SENSOR ("Sensor error. Please
+      check."). Observed once on the g2408 wire (2026-05-25 12:32:25). Which
+      sensor and the recovery flow are not yet characterised (single
+      observation); the code itself is real on g2408.
+    status:
+      seen_on_wire: true
+      first_seen: "2026-05-25"
+      last_seen: "2026-05-25"
+      decoded: partial
+    verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "s2p2=20 observed firing once on g2408 (2026-05-25 12:32:25); name FAULT_SENSOR per app catalog. First inventory entry for this code — previously absent (only noted as an open question on the s2p2 property)."
+        evidence: "probe_log_20260520_131350.jsonl @ 2026-05-25 12:32:25; fault_catalog.json [apk:g2408-plugin-ext1423]"
+    references:
+      integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
+
   - id: "s2p2_23"
     code: 23
     name: "LIFT_LOCKOUT_PIN_REQUIRED"
@@ -9739,22 +9762,21 @@ state_codes:
     name: "BATTERY_LOW"
     category: "state_code"
     semantic: |
-      Battery low — apk FaultIndex BATTERY_LOW. NOT observed on the g2408
-      wire (0 corpus hits across all 9 probe logs). Kept pending resolution
-      of the 24-vs-54 relationship: s2p2=54 is the confirmed low-battery
-      returning code; it is unclear whether 24 is a distinct low-battery
-      WARNING threshold (distinct from 54 = low-battery RETURNING) or
-      simply the vacuum FaultIndex label for the same event on a different
-      device model.
+      Battery low — g2408 app catalog FAULT_BATTERY_LOW ("Low battery. The
+      robot will shut down soon."). OBSERVED on the g2408 wire: 2 hits in the
+      full 15-log corpus (2026-06-14, 2026-06-25). Distinct from s2p2=54
+      (low-battery RETURNING) — 24 is the low-battery WARNING/shutdown code,
+      confirming it is a real g2408 state, not just a vacuum FaultIndex label.
     status:
-      seen_on_wire: false
-      first_seen: null
-      last_seen: null
-      decoded: partial
+      seen_on_wire: true
+      first_seen: "2026-06-14"
+      last_seen: "2026-06-25"
+      decoded: confirmed
     verifications:
-      - date: "2026-06-01"
-        status: partial
-        claim: "s2p2=24 has 0 corpus hits across all 9 probe logs. apk FaultIndex BATTERY_LOW. Kept pending 24-vs-54 disambiguation."
+      - date: "2026-06-28"
+        status: verified
+        claim: "s2p2=24 IS observed on g2408: fired 2026-06-14 04:33:02 and 2026-06-25 19:52:00. Supersedes the 2026-06-01 '0 corpus hits across 9 probe logs' claim — those firings are in the 06-12..06-28 log that the 9-log scan predated. Name FAULT_BATTERY_LOW per app catalog; distinct from 54 (RETURNING)."
+        evidence: "probe_log_20260612_174439.jsonl @ 2026-06-14 04:33:02 + 2026-06-25 19:52:00; fault_catalog.json [apk:g2408-plugin-ext1423]"
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/error_codes.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § s2p2 state codes"
