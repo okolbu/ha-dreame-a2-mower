@@ -6698,6 +6698,10 @@ cfg_individual:
         status: partial
         claim: "MAPL routed-get returns r=0, d=[[0,1,1,1,0],[1,0,1,1,0]] — 2 map rows, 5 ints each; indices 2–4 semantics unknown."
         evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
+      - date: "2026-06-28"
+        status: partial
+        claim: "Live read 2026-06-28: MAPL=[[0,1,1,1,0],[1,0,1,1,0]] (2 maps). MAPL[i][2..4]=[1,1,0] identical across both maps and unchanged vs the 06-09 read, so [2..4] still can't be discriminated without a labelled map-edit."
+        evidence: "live read-only probe 2026-06-28 (read_key_probe.py, action s2.a50 m:g); raw in OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/probe-tier1-2026-06-28.txt"
 
   - id: "MIHIS"
     name: "lifetime_mowing_aggregates"
@@ -6884,17 +6888,18 @@ cfg_individual:
   - id: "OBS"
     name: "obstacle_data"
     category: "cfg_individual"
-    payload_shape: "args {idx:<page>}; response {idx:<int>, obstacle:[...]} r=0 (obstacle array empty in all captures — no obstacles present)"
+    payload_shape: "args {idx:<page>}; response {idx:<int>, obstacle:[{id:<int>, type:<int>, data:[[x,y],...]}]} r=0 — each row is an obstacle polygon (id, type, point list in map-frame mm)"
     semantic: |
-      Obstacle list, paged by {idx}. Response envelope {idx, obstacle:[]}
-      confirmed r=0; the obstacle array was empty in every capture (no
-      obstacles logged during this session), so the per-row layout is still
-      uncaptured. Replaces the r=-3 framing — bare GET failed only for lack
-      of {idx}.
+      Obstacle list, paged by {idx}. Response envelope {idx, obstacle:[...]}
+      confirmed r=0. Each row = {id (int), type (int; 0 seen), data:[[x,y],...]
+      polygon in map-frame mm}. Live read 2026-06-28 returned a non-empty row
+      {id:1, type:0, data:[[-205,18],[-145,133],[-170,78],[-180,28]]}, decoding
+      the per-row layout. Replaces the r=-3 framing — bare GET failed only for
+      lack of {idx}.
     status:
       seen_on_wire: false
-      last_seen: "2026-06-09"
-      decoded: partial
+      last_seen: "2026-06-28"
+      decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §getX OBS"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
@@ -6914,6 +6919,10 @@ cfg_individual:
         status: partial
         claim: "OBS {idx} → {idx,obstacle:[]} r=0 envelope; rows empty"
         evidence: "cloud/captures/mitm_session_20260619/miio-13267.jsonl id:3236/3240"
+      - date: "2026-06-28"
+        status: verified
+        claim: "OBS row layout decoded from a live non-empty read: obstacle=[{id,type,data:[[x,y],...] polygon}] (live {id:1,type:0,4-point polygon})."
+        evidence: "live read-only probe 2026-06-28 (read_key_probe.py, action s2.a50 m:g); raw in OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/probe-tier1-2026-06-28.txt"
 
   - id: "PIN"
     name: "pin_status"
@@ -6983,6 +6992,10 @@ cfg_individual:
         status: presumed
         claim: "PRE bare GET (no args) returns r=-3 at idle — individual-fetch form is consistently rejected; data is accessible via all-keys CFG fetch instead."
         evidence: "tools/probes/read_key_probe.py live run 2026-06-09"
+      - date: "2026-06-28"
+        status: verified
+        claim: "Live-confirmed 2026-06-28: individual routed-get {m:g,t:PRE} returns r=-3 (no individual getter); PRE data reads via the getCFG bundle (multi-path) — the r=-3 is a dead access path, not non-existence."
+        evidence: "live read-only probe 2026-06-28 (read_key_probe.py, action s2.a50 m:g); raw in OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/probe-tier1-2026-06-28.txt"
 
   - id: "PREI"
     name: "preference_info"
@@ -7024,6 +7037,10 @@ cfg_individual:
         status: partial
         claim: "PREI {idx} → {type:0,ver:[[id,ver],...]} r=0 on real wire; ver counter observed incrementing 115→123 mid-session"
         evidence: "cloud/captures/mitm_session_20260619/miio-13267.jsonl id:3235/3237/3286"
+      - date: "2026-06-28"
+        status: partial
+        claim: "Live read 2026-06-28: idx:0 → {type:0, ver:[[0,182],[1,4]]}; idx:1 → {type:0, ver:[[0,16],[1,6],[2,4]]}. Confirms idx is a category selector (distinct ver arrays per idx; idx:1 carries a 3rd pair [2,4]). map0 ver[0][1] is now 182 (was 115→123 in June) — confirms the counter increments over time."
+        evidence: "live read-only probe 2026-06-28 (read_key_probe.py, action s2.a50 m:g); raw in OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/probe-tier1-2026-06-28.txt"
 
   - id: "PREP"
     name: "zone_preference_mode"
@@ -7049,6 +7066,7 @@ cfg_individual:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
     open_questions:
       - "PREP.idx with multiple zones: is idx 0-based zone index or zone id from MAPL? With 1 zone observed, idx=0 is unambiguous; confirm with 2+ zones. [UNKNOWN — to capture]"
+      - "Live probe 2026-06-28: individual routed-get {m:g,t:PREP} returns null (no response) on g2408 fw — not reachable on this path (CHECK is a command/trigger not a read; ARM/WINFO/PREP may use a different method or not exist on g2408). Try an alternate path before assuming the key exists."
     verifications:
       - date: "2026-06-09"
         status: verified
@@ -7090,23 +7108,33 @@ cfg_individual:
         status: partial
         claim: "RGBPSTA {idx} → list of {bp_ts,bp_ts_utc,pro,rg_id} r=0 — region-progress records, NOT RGB LED"
         evidence: "cloud/captures/mitm_session_20260619/miio-13267.jsonl id:3233/3238"
+      - date: "2026-06-28"
+        status: partial
+        claim: "Live read 2026-06-28: idx:0 → 2 region-progress rows [{bp_ts:2026.06.22,bp_ts_utc:1782165600,pro:0,rg_id:1},{...rg_id:2}]; idx:1 → []. Reconfirms region-progress (NOT RGB-LED), now multi-region; pro:0 = 0% (docked, no active mow)."
+        evidence: "live read-only probe 2026-06-28 (read_key_probe.py, action s2.a50 m:g); raw in OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/probe-tier1-2026-06-28.txt"
 
   - id: "RPET"
     name: "rain_protection_end_time"
     category: "cfg_individual"
-    payload_shape: "{endTime: int}"
+    payload_shape: "{endTime: <unix>} — confirmed via live read 2026-06-28 (value 0 = no rain protection active)"
     semantic: |
-      Possibly schedule repeat-end timestamp or rain-protection-end
-      timestamp (0 = no end / not active). Not wired.
+      Rain-protection-end / schedule repeat-end timestamp (the exact semantic is
+      still ambiguous — see open question). Shape {endTime:<unix>} confirmed via
+      live read 2026-06-28; value 0 = no end / not active. Not wired.
       Sample: {endTime: 0}.
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      decoded: partial
     references:
       apk: "ioBroker.dreame/apk.md §getX RPET"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
     open_questions:
       - "RPET.endTime — rain-protection-end unix timestamp or schedule repeat-end? Needs non-zero capture."
+    verifications:
+      - date: "2026-06-28"
+        status: partial
+        claim: "Live read 2026-06-28: RPET → {endTime:0}. Shape {endTime:<unix-ts>} confirmed; value 0 (no rain protection active). A non-zero endTime still needs capture during an active rain-protection window."
+        evidence: "live read-only probe 2026-06-28 (read_key_probe.py, action s2.a50 m:g); raw in OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/probe-tier1-2026-06-28.txt"
 
   - id: "SCHDTV3"
     name: "schedule_v3"
@@ -7188,6 +7216,7 @@ cfg_individual:
     open_questions:
       - "What values does mode take for each subsystem check on g2408?"
       - "Trigger from Maintenance → Self-Diagnosis in Dreame app and capture s2p58 result."
+      - "Live probe 2026-06-28: individual routed-get {m:g,t:CHECK} returns null (no response) on g2408 fw — not reachable on this path (CHECK is a command/trigger not a read; ARM/WINFO/PREP may use a different method or not exist on g2408). Try an alternate path before assuming the key exists."
 
   - id: "WINFO"
     name: "app_weather_info"
@@ -7213,6 +7242,7 @@ cfg_individual:
     open_questions:
       - "What is the appWeather payload shape? Temperature, precipitation, forecast array?"
       - "How does firmware use appWeather vs internal rain sensor?"
+      - "Live probe 2026-06-28: individual routed-get {m:g,t:WINFO} returns null (no response) on g2408 fw — not reachable on this path (CHECK is a command/trigger not a read; ARM/WINFO/PREP may use a different method or not exist on g2408). Try an alternate path before assuming the key exists."
 
   - id: "ARM"
     name: "arm_alarm"
@@ -7235,6 +7265,7 @@ cfg_individual:
     open_questions:
       - "value enum: 0=disarm, 1=arm? Or is there a third state (e.g., partial-arm)?"
       - "How does ARM interact with ATA and PIN? Are they layered or mutually exclusive?"
+      - "Live probe 2026-06-28: individual routed-get {m:g,t:ARM} returns null (no response) on g2408 fw — not reachable on this path (CHECK is a command/trigger not a read; ARM/WINFO/PREP may use a different method or not exist on g2408). Try an alternate path before assuming the key exists."
 
   - id: "REMOTE"
     name: "sim_4g_status"

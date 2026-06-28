@@ -2940,14 +2940,14 @@ in HOURS (e.g. 4→5 confirmed); sen=sensitivity level.
 | MITRC | mission_track | args {idx:<page>,size:<count>}; response {idx:<int>, track:"<base64>"} r=0 — paged mission-track blob (empty string = no data for that page) | APK-KNOWN |  |
 | MPOS | live_position | {x: int, y: int, yaw: int} — map-frame position; units/frame not yet cross-checked | SEEN-UNDECODED |  |
 | NET | wifi_info | {current: ssid, list: [{ip, rssi, ssid}, ...]} | WIRED |  |
-| OBS | obstacle_data | args {idx:<page>}; response {idx:<int>, obstacle:[...]} r=0 (obstacle array empty in all captures — no obstacles present) | APK-KNOWN |  |
+| OBS | obstacle_data | args {idx:<page>}; response {idx:<int>, obstacle:[{id:<int>, type:<int>, data:[[x,y],...]}]} r=0 — each row is an obstacle polygon (id, type, point list in map-frame mm) | APK-KNOWN |  |
 | PIN | pin_status | write: {type:'auth'|'update', value:<int>}; read (m:g): {result, time} | DECODED-UNWIRED |  |
 | PRE | preference_endpoint | (observed: r=-3 on individual fetch in all 3 cloud dumps + live probe 2026-06-09; SAME-NAMED key in cfg_keys IS readable via all-keys CFG) | APK-KNOWN |  |
 | PREI | preference_info | args {idx:<int>}; response {type:0, ver:[[id,version],...]} r=0 — idx selects a preference category (idx:0 and idx:1 return different ver arrays) | SEEN-UNDECODED |  |
 | PREP | zone_preference_mode | {idx:<zone0based>, value:0|1} | WIRED |  |
 | REMOTE | sim_4g_status | {activeTime, cardId(ICCID), expiredTime, leftDays} | UNCLASSIFIED |  |
 | RGBPSTA | region_progress | args {idx:<group>}; response d=[{bp_ts:"YYYY.MM.DD", bp_ts_utc:<unix>, pro:<basis-points 0-10000>, rg_id:<int>}, ...] r=0 (idx out of range → []) | UNCLASSIFIED |  |
-| RPET | rain_protection_end_time | {endTime: int} | APK-KNOWN |  |
+| RPET | rain_protection_end_time | {endTime: <unix>} — confirmed via live read 2026-06-28 (value 0 = no rain protection active) | APK-KNOWN |  |
 | SCHDDV3 | schedule_data_v3_write | {s:<offset>, l:<len>, d:"<base64 chunk>", v:<txn_ms>} | WIRED |  |
 | SCHDIV3 | schedule_index_v3_write | {i:<index>, l:<total_len>, v:<txn_ms>} | UNCLASSIFIED |  |
 | SCHDSV3 | schedule_slot_enable_v3 | {i:<schedule-set idx>, v:<schedule version>, s:[slot0_enabled, slot1_enabled]} | DECODED-UNWIRED |  |
@@ -3030,6 +3030,7 @@ The payload value enum is unknown (0=disarm, 1=arm is the likely mapping).
 **Open questions:**
 - value enum: 0=disarm, 1=arm? Or is there a third state (e.g., partial-arm)?
 - How does ARM interact with ATA and PIN? Are they layered or mutually exclusive?
+- Live probe 2026-06-28: individual routed-get {m:g,t:ARM} returns null (no response) on g2408 fw — not reachable on this path (CHECK is a command/trigger not a read; ARM/WINFO/PREP may use a different method or not exist on g2408). Try an alternate path before assuming the key exists.
 
 **See also:** `apk: ioBroker.dreame/apk.md §SET-Befehle ARM setArm`
 
@@ -3061,6 +3062,7 @@ and status starts or cancels the check.
 **Open questions:**
 - What values does mode take for each subsystem check on g2408?
 - Trigger from Maintenance → Self-Diagnosis in Dreame app and capture s2p58 result.
+- Live probe 2026-06-28: individual routed-get {m:g,t:CHECK} returns null (no response) on g2408 fw — not reachable on this path (CHECK is a command/trigger not a read; ARM/WINFO/PREP may use a different method or not exist on g2408). Try an alternate path before assuming the key exists.
 
 **See also:** `apk: ioBroker.dreame/apk.md §SET-Befehle CHECK setSelfCheck`
 
@@ -3338,11 +3340,12 @@ list:[{ip, rssi(dBm), ssid}]}; rssi in dBm (e.g. -64 ≈ 70-80% signal).
 
 ### OBS — `obstacle_data`
 
-Obstacle list, paged by {idx}. Response envelope {idx, obstacle:[]}
-confirmed r=0; the obstacle array was empty in every capture (no
-obstacles logged during this session), so the per-row layout is still
-uncaptured. Replaces the r=-3 framing — bare GET failed only for lack
-of {idx}.
+Obstacle list, paged by {idx}. Response envelope {idx, obstacle:[...]}
+confirmed r=0. Each row = {id (int), type (int; 0 seen), data:[[x,y],...]
+polygon in map-frame mm}. Live read 2026-06-28 returned a non-empty row
+{id:1, type:0, data:[[-205,18],[-145,133],[-170,78],[-180,28]]}, decoding
+the per-row layout. Replaces the r=-3 framing — bare GET failed only for
+lack of {idx}.
 
 **Open questions:**
 - Capture immediately after an AI-obstacle event (cloud-side; s1p53 is BLE-connection, NOT obstacle — find the real on-wire trigger).
@@ -3423,6 +3426,7 @@ Per zone; not a global flag. [app-mitm:2026-06-09-settings-sweep]
 
 **Open questions:**
 - PREP.idx with multiple zones: is idx 0-based zone index or zone id from MAPL? With 1 zone observed, idx=0 is unambiguous; confirm with 2+ zones. [UNKNOWN — to capture]
+- Live probe 2026-06-28: individual routed-get {m:g,t:PREP} returns null (no response) on g2408 fw — not reachable on this path (CHECK is a command/trigger not a read; ARM/WINFO/PREP may use a different method or not exist on g2408). Try an alternate path before assuming the key exists.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX PRE`
 
@@ -3458,8 +3462,9 @@ shape and that it is NOT {r,g,b} is confirmed.
 
 ### RPET — `rain_protection_end_time`
 
-Possibly schedule repeat-end timestamp or rain-protection-end
-timestamp (0 = no end / not active). Not wired.
+Rain-protection-end / schedule repeat-end timestamp (the exact semantic is
+still ambiguous — see open question). Shape {endTime:<unix>} confirmed via
+live read 2026-06-28; value 0 = no end / not active. Not wired.
 Sample: {endTime: 0}.
 
 **Open questions:**
@@ -3614,6 +3619,7 @@ it detects rain conditions or on a periodic sync interval.
 **Open questions:**
 - What is the appWeather payload shape? Temperature, precipitation, forecast array?
 - How does firmware use appWeather vs internal rain sensor?
+- Live probe 2026-06-28: individual routed-get {m:g,t:WINFO} returns null (no response) on g2408 fw — not reachable on this path (CHECK is a command/trigger not a read; ARM/WINFO/PREP may use a different method or not exist on g2408). Try an alternate path before assuming the key exists.
 
 **See also:** `apk: ioBroker.dreame/apk.md §SET-Befehle WINFO setAppWeather`
 
