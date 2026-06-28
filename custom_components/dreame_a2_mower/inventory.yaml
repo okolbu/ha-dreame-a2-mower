@@ -10988,7 +10988,7 @@ oss_map_keys:
       last_seen: "2026-06-15"
       decoded: confirmed
     references:
-      integration_code: "custom_components/dreame_a2_mower/dreame/map.py"
+      integration_code: "custom_components/dreame_a2_mower/map_decoder.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
       alt_repos:
         - "github.com/antondaubert/dreame-mower (map_data_parser.py:211)"
@@ -11016,7 +11016,7 @@ oss_map_keys:
       seen_on_wire: false
       decoded: confirmed
     references:
-      integration_code: "custom_components/dreame_a2_mower/dreame/map.py"
+      integration_code: "custom_components/dreame_a2_mower/map_decoder.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
 
   - id: "map_key_spotAreas"
@@ -11032,7 +11032,7 @@ oss_map_keys:
       seen_on_wire: false
       decoded: confirmed
     references:
-      integration_code: "custom_components/dreame_a2_mower/dreame/map.py"
+      integration_code: "custom_components/dreame_a2_mower/map_decoder.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
       alt_repos:
         - "github.com/antondaubert/dreame-mower (map_data_parser.py:200)"
@@ -11050,7 +11050,7 @@ oss_map_keys:
       seen_on_wire: false
       decoded: confirmed
     references:
-      integration_code: "custom_components/dreame_a2_mower/dreame/map.py"
+      integration_code: "custom_components/dreame_a2_mower/map_decoder.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
       alt_repos:
         - "github.com/antondaubert/dreame-mower (map_data_parser.py:230)"
@@ -11070,7 +11070,7 @@ oss_map_keys:
       seen_on_wire: false
       decoded: confirmed
     references:
-      integration_code: "custom_components/dreame_a2_mower/dreame/map.py"
+      integration_code: "custom_components/dreame_a2_mower/map_decoder.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
 
   - id: "map_key_cruisePoints"
@@ -11155,7 +11155,7 @@ oss_map_keys:
       seen_on_wire: false
       decoded: confirmed
     references:
-      integration_code: "custom_components/dreame_a2_mower/dreame/map.py"
+      integration_code: "custom_components/dreame_a2_mower/map_decoder.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
       alt_repos:
         - "github.com/antondaubert/dreame-mower (map_data_parser.py:186)"
@@ -11172,7 +11172,7 @@ oss_map_keys:
       seen_on_wire: false
       decoded: confirmed
     references:
-      integration_code: "custom_components/dreame_a2_mower/dreame/map.py"
+      integration_code: "custom_components/dreame_a2_mower/map_decoder.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
       alt_repos:
         - "github.com/antondaubert/dreame-mower (map_data_parser.py:240)"
@@ -11188,7 +11188,7 @@ oss_map_keys:
       seen_on_wire: false
       decoded: confirmed
     references:
-      integration_code: "custom_components/dreame_a2_mower/dreame/map.py"
+      integration_code: "custom_components/dreame_a2_mower/map_decoder.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
       alt_repos:
         - "github.com/antondaubert/dreame-mower (map_data_parser.py:249)"
@@ -11239,7 +11239,7 @@ oss_map_keys:
       seen_on_wire: false
       decoded: hypothesized
     references:
-      integration_code: "custom_components/dreame_a2_mower/dreame/map.py"
+      integration_code: "custom_components/dreame_a2_mower/map_decoder.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
     open_questions:
       - "What does hasBack=true trigger in the app? Multi-level map? Reverse traversal?"
@@ -11255,7 +11255,7 @@ oss_map_keys:
       seen_on_wire: false
       decoded: hypothesized
     references:
-      integration_code: "custom_components/dreame_a2_mower/dreame/map.py"
+      integration_code: "custom_components/dreame_a2_mower/map_decoder.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
     open_questions:
       - "Is merged ever true on g2408? Does it relate to the Expand Lawn workflow?"
@@ -11272,7 +11272,7 @@ oss_map_keys:
       seen_on_wire: false
       decoded: confirmed
     references:
-      integration_code: "custom_components/dreame_a2_mower/dreame/map.py"
+      integration_code: "custom_components/dreame_a2_mower/map_decoder.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys"
 
 session_summary_fields:

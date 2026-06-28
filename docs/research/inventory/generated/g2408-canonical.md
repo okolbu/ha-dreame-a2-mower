@@ -5468,7 +5468,7 @@ Axis-aligned bounding rectangle of the entire map area. Used by the integration
 as the viewport extent when rendering the camera overlay image. Less detailed
 than the contours polygon.
 
-**See also:** `custom_components/dreame_a2_mower/dreame/map.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:240)`
+**See also:** `custom_components/dreame_a2_mower/map_decoder.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:240)`
 
 ### map_key_cleanPoints — `cleanPoints`
 
@@ -5479,7 +5479,7 @@ sensor.maintenance_points_count carries the full list; the
 dreame_a2_mower.mower_go_to_maintenance_point service selects by optional
 point_id or defaults to the first point.
 
-**See also:** `custom_components/dreame_a2_mower/dreame/map.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`
+**See also:** `custom_components/dreame_a2_mower/map_decoder.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`
 
 ### map_key_contours — `contours`
 
@@ -5488,7 +5488,7 @@ detailed than the axis-aligned boundary rectangle). Consumed since alpha.91:
 drawn on the base-map PNG as a 2-px WALL outline in _build_map_from_cloud_data
 so the real grass perimeter is visible over zone fills.
 
-**See also:** `custom_components/dreame_a2_mower/dreame/map.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:230)`
+**See also:** `custom_components/dreame_a2_mower/map_decoder.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:230)`
 
 ### map_key_cruisePoints — `cruisePoints`
 
@@ -5529,7 +5529,7 @@ id matches the s2p50 entity id from create / delete events. Distinct from
 notObsAreas despite sharing the same shape. Surfaced as
 sensor.exclusion_zones (state=zone count, attrs.zones=per-zone geometry).
 
-**See also:** `custom_components/dreame_a2_mower/dreame/map.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:211)`
+**See also:** `custom_components/dreame_a2_mower/map_decoder.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:211)`
 
 ### map_key_hasBack — `hasBack`
 
@@ -5540,14 +5540,14 @@ effect on rendering is not surfaced to the user.
 **Open questions:**
 - What does hasBack=true trigger in the app? Multi-level map? Reverse traversal?
 
-**See also:** `custom_components/dreame_a2_mower/dreame/map.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`
+**See also:** `custom_components/dreame_a2_mower/map_decoder.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`
 
 ### map_key_mapIndex — `mapIndex`
 
 Map index — identifies which saved map this blob represents. The integration
 uses mapIndex when selecting the active map for rendering.
 
-**See also:** `custom_components/dreame_a2_mower/dreame/map.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:249)`
+**See also:** `custom_components/dreame_a2_mower/map_decoder.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:249)`
 
 ### map_key_md5sum — `md5sum`
 
@@ -5555,7 +5555,7 @@ MD5 checksum of the map blob, used for deduplication in the integration's
 map cache. A fresh fetch returns the same md5sum if the map has not changed
 since the last pull.
 
-**See also:** `custom_components/dreame_a2_mower/dreame/map.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`
+**See also:** `custom_components/dreame_a2_mower/map_decoder.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`
 
 ### map_key_merged — `merged`
 
@@ -5565,7 +5565,7 @@ the integration; exact semantics not verified on g2408.
 **Open questions:**
 - Is merged ever true on g2408? Does it relate to the Expand Lawn workflow?
 
-**See also:** `custom_components/dreame_a2_mower/dreame/map.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`
+**See also:** `custom_components/dreame_a2_mower/map_decoder.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`
 
 ### map_key_mowingAreas — `mowingAreas`
 
@@ -5574,7 +5574,7 @@ id (used in o:102 zone-mow command), a name, and a path of {x,y} vertices in
 cloud frame. The integration uses these for the zone-mow service and to
 annotate the camera map overlay.
 
-**See also:** `custom_components/dreame_a2_mower/dreame/map.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:186)`
+**See also:** `custom_components/dreame_a2_mower/map_decoder.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:186)`
 
 ### map_key_name — `name`
 
@@ -5590,7 +5590,7 @@ Sample: id=101, type=10, shapeType=2 (axis-aligned, angle=0).
 Rendered in green via Area.subtype="ignore" in _build_map_from_cloud_data.
 Surfaced as sensor.designated_ignore_zones.
 
-**See also:** `custom_components/dreame_a2_mower/dreame/map.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`
+**See also:** `custom_components/dreame_a2_mower/map_decoder.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`
 
 ### map_key_obstacles — `obstacles`
 
@@ -5618,7 +5618,7 @@ rectangle, no angle field). Populated lazily — may take hours to sync after a
 spot mow runs. Sample: 4-corner rectangle (-360,-5320)..(-3560,-2840).
 Surfaced as sensor.spot_zones.
 
-**See also:** `custom_components/dreame_a2_mower/dreame/map.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:200)`
+**See also:** `custom_components/dreame_a2_mower/map_decoder.py`, `docs/research/inventory/generated/g2408-canonical.md § OSS map blob keys`, `github.com/antondaubert/dreame-mower (map_data_parser.py:200)`
 
 ### map_key_totalArea — `totalArea`
 
