@@ -5851,7 +5851,8 @@ to within recharge-leg-transit overhead.
 
 ### summary_complete_count — `completed_target_count`
 
-Number of targets completed in the session. =2 on the double-point patrol
+Number of targets completed in the session. Observed values {1 (9 sessions),
+2 (2 sessions)} = count of completed targets. =2 on the double-point patrol
 (2 points), None/absent on a single-target all-area mow. It counts POINTS
 (targets), NOT cycles — the user set 2+1 cycles but complete_count=2. Maps
 to s4 eiid1 piid2 (=2 same run).
@@ -5905,9 +5906,13 @@ space as s2p2 / error_samples.
 
 ### summary_human_detected — `human_detected_count`
 
-Count/flag of human detections during the session (=0 on the patrol). Likely
-the AI human-detection counter; may align with s4 eiid1 piid11 (=0 same run).
-Single sample — semantics presumed, not confirmed.
+Count/flag of human detections during the session. Constant 0 across all 11
+sessions that carry it. Likely the AI human-detection counter; may align with
+s4 eiid1 piid11 (=0 same run). A non-zero (human-present) value has not yet
+been observed.
+
+**Open questions:**
+- human_detected is 0 in all 11 sessions carrying it; a non-zero (human-present) value not yet observed.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
@@ -6020,9 +6025,9 @@ the camera map overlay as obstacle polygons via LiveMapState.
 
 ### summary_photo_detected — `photo_detected_flag`
 
-Whether the session captured any auto-capture photo. =1 on the patrol that
-took 3 photos. Aligns with s4 eiid1 piid10 (=1 same run) — partial cross-walk
-(single sample; needs a photo_detected=0 session to confirm piid10 mapping).
+Whether the session captured any auto-capture photo. Binary {0,1}: 0 = no
+photo (2 sessions), 1 = photo detected (9 sessions). Both values now observed.
+Aligns with s4 eiid1 piid10.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
@@ -6052,8 +6057,9 @@ verification below and dreame-app-implementation-guide-2026-06-09.md §4.
 
 PATROL point route (present on mode=107 point-patrol summaries). One entry
 per user-placed patrol point, in route order. Fields: id = per-map point id
-(matches the s2p56 queue ids and point_status); point = [x_cm, y_cm, k] map
-coords (k=2 observed; third element undecoded); time = the per-point dwell
+(matches the s2p56 queue ids and the sibling point_status = [[point_id, status]]
+list); point = [x, y, heading] map coords (point[2] is a heading/orientation
+enum, 0 and 2 observed); time = the per-point dwell
 budget in seconds (60 observed = the app's "1 min" per point); type = point
 type (2 observed); param = a nested dict that is EMPTY {} in the only capture
 — the requested per-point settings (Number of Patrol Cycles, Auto-Capture)
@@ -6061,6 +6067,9 @@ are NOT stored here. Those settings are command-only and unobservable on
 every reachable surface; they are reconstructable from telemetry instead
 (cycles = count of in-place ~360° rotations at the point; auto-capture =
 whether photo_list timestamps fall in that point's dwell window). See o107.
+
+**Open questions:**
+- point[2] is a heading/orientation enum (0/2 observed); confirm full enum + the sibling point_status [[point_id,status]] status meaning (2=visited?).
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
@@ -6076,26 +6085,36 @@ point=[id3, id4].
 
 ### summary_pre_type — `pre_type`
 
-Mowing preference type. Not yet decoded from g2408 captures.
+Mowing preference type. Constant 0 across all 33 archive sessions; a non-zero
+value has never been observed, so its meaning remains undecoded.
+
+**Open questions:**
+- pre_type is 0 in every session (33/33); a non-zero value and its meaning not yet observed.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
 ### summary_pref — `global_pref`
 
-Two-int preference array present in ALL session summaries (=[45,0] on both
-the mode=107 patrol and a same-day mode=100 all-area mow). Because it is
-identical across unrelated session types it is a GLOBAL/account preference,
-NOT per-session or per-point input. DEBUNKED as a patrol-settings carrier
-(two ints could not encode per-point settings for an arbitrary point count).
-Exact meaning of the two ints undecoded.
+Two-int preference array present in ALL session summaries. DECODED (confirmed
+2026-06-28): pref = [mowing_height (cm×10), efficiency]. pref[0] ∈ {45,50,55,60}
+(= 4.5–6.0 cm) matches the per_map mowingHeight×10; pref[1] = 0 (efficientMode
+off) in all 33 archive sessions — verified against settings_snapshot (a session
+with pref=[50,0] had per_map mowingHeight=5, efficientMode=0). It is a
+GLOBAL/account-level mowing preference (identical across unrelated session
+types), NOT per-session or per-point input — earlier DEBUNKED as a
+patrol-settings carrier (two ints could not encode per-point settings for an
+arbitrary point count).
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
 ### summary_recognition — `recognition_flag`
 
-Recognition/AI flag on the patrol summary (=1 observed). Exact meaning
-undecoded — possibly whether AI recognition ran on the captured photos.
-Recorded for completeness; do not assume semantics.
+Recognition/AI flag on the patrol summary. Constant 1 across all 11 sessions
+that carry it. Exact meaning undecoded — possibly whether AI recognition ran
+on the captured photos. Recorded for completeness; do not assume semantics.
+
+**Open questions:**
+- recognition is 1 in all 11 sessions that carry it; other values / exact meaning not yet observed.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
@@ -6157,12 +6176,14 @@ captures 2026-04-17..2026-04-20.
 
 ### summary_start_mode — `start_mode`
 
-Session start-trigger mode: 1 = scheduled, 0 = manual/app-triggered
-(partial — decoded 2026-05-30; voice / HA-service start values not yet
-distinguished, may also map to 0).
+Session start-trigger mode: 0 = manual (23 sessions, label 'manual'),
+1 = scheduled (9 sessions, label 'scheduled'), 2 = other origin (1 session,
+mode 100, NO label in the integration — a third start origin: voice /
+HA-service / app-remote, label TBD). (partial — decoded 2026-05-30; value 2
+added 2026-06-28.)
 
 **Open questions:**
-- Do voice and HA-service starts have distinct start_mode values, or do they collapse to 0 (manual/app)?
+- start_mode value 2 exists (seen once, unlabeled) — identify its origin (voice / HA-service / app-remote) vs 0=manual / 1=scheduled.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 

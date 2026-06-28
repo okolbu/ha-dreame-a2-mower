@@ -11488,17 +11488,23 @@ session_summary_fields:
     category: "session_summary"
     payload_shape: "int"
     semantic: |
-      Session start-trigger mode: 1 = scheduled, 0 = manual/app-triggered
-      (partial — decoded 2026-05-30; voice / HA-service start values not yet
-      distinguished, may also map to 0).
+      Session start-trigger mode: 0 = manual (23 sessions, label 'manual'),
+      1 = scheduled (9 sessions, label 'scheduled'), 2 = other origin (1 session,
+      mode 100, NO label in the integration — a third start origin: voice /
+      HA-service / app-remote, label TBD). (partial — decoded 2026-05-30; value 2
+      added 2026-06-28.)
     status:
       seen_on_wire: false
       decoded: partial
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
     open_questions:
-      - "Do voice and HA-service starts have distinct start_mode values, or do they collapse to 0 (manual/app)?"
+      - "start_mode value 2 exists (seen once, unlabeled) — identify its origin (voice / HA-service / app-remote) vs 0=manual / 1=scheduled."
     verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "start_mode {0=manual, 1=scheduled, 2=other-origin (1 session, mode 100, unlabeled)} across 33 sessions."
+        evidence: "HA session archive — /config/dreame_a2_mower/sessions/*.json (97 archives pulled 2026-06-28); OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/ha-session-index-2026-06-28.json"
       - date: "2026-05-30"
         status: partial
         claim: |
@@ -11517,13 +11523,20 @@ session_summary_fields:
     category: "session_summary"
     payload_shape: "int"
     semantic: |
-      Mowing preference type. Not yet decoded from g2408 captures.
+      Mowing preference type. Constant 0 across all 33 archive sessions; a non-zero
+      value has never been observed, so its meaning remains undecoded.
     status:
       seen_on_wire: false
-      decoded: unknown
+      decoded: partial
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+    open_questions:
+      - "pre_type is 0 in every session (33/33); a non-zero value and its meaning not yet observed."
     verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "pre_type = 0 in all 33 archive sessions (constant; non-zero unobserved)."
+        evidence: "HA session archive — /config/dreame_a2_mower/sessions/*.json (97 archives pulled 2026-06-28); OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/ha-session-index-2026-06-28.json"
       - date: "2026-05-15"
         status: presumed
         claim: "session_card.PRE_TYPE_LABELS holds best-effort enum mappings; unmapped values render as 'raw=N' on the dashboard's Picked-session card"
@@ -11815,8 +11828,9 @@ session_summary_fields:
     semantic: |
       PATROL point route (present on mode=107 point-patrol summaries). One entry
       per user-placed patrol point, in route order. Fields: id = per-map point id
-      (matches the s2p56 queue ids and point_status); point = [x_cm, y_cm, k] map
-      coords (k=2 observed; third element undecoded); time = the per-point dwell
+      (matches the s2p56 queue ids and the sibling point_status = [[point_id, status]]
+      list); point = [x, y, heading] map coords (point[2] is a heading/orientation
+      enum, 0 and 2 observed); time = the per-point dwell
       budget in seconds (60 observed = the app's "1 min" per point); type = point
       type (2 observed); param = a nested dict that is EMPTY {} in the only capture
       — the requested per-point settings (Number of Patrol Cycles, Auto-Capture)
@@ -11829,11 +11843,17 @@ session_summary_fields:
       decoded: partial
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+    open_questions:
+      - "point[2] is a heading/orientation enum (0/2 observed); confirm full enum + the sibling point_status [[point_id,status]] status meaning (2=visited?)."
     verifications:
       - date: "2026-06-03"
         status: verified
         claim: "mode=107 patrol summary point=[{id:3,param:{},point:[-305,-548,2],time:60,type:2},{id:4,param:{},point:[-198,634,2],time:60,type:2}]; param EMPTY for both; ids 3,4 match the s2p56 queue and point_status."
         evidence: "cloud/oss/ali_dreame_2026_06_03_BM169439_-112293549_184603810.0550.json.pretty.json"
+      - date: "2026-06-28"
+        status: verified
+        claim: "summary point row = {id, param, point:[x,y,heading], time, type:2}; sibling point_status = [[point_id, status]]; decoded from 11 patrol-session archives."
+        evidence: "HA session archive — /config/dreame_a2_mower/sessions/*.json (97 archives pulled 2026-06-28); OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/ha-session-index-2026-06-28.json"
 
   - id: "summary_point_status"
     key_path: "point_status"
@@ -11858,7 +11878,8 @@ session_summary_fields:
     category: "session_summary"
     payload_shape: "int"
     semantic: |
-      Number of targets completed in the session. =2 on the double-point patrol
+      Number of targets completed in the session. Observed values {1 (9 sessions),
+      2 (2 sessions)} = count of completed targets. =2 on the double-point patrol
       (2 points), None/absent on a single-target all-area mow. It counts POINTS
       (targets), NOT cycles — the user set 2+1 cycles but complete_count=2. Maps
       to s4 eiid1 piid2 (=2 same run).
@@ -11867,6 +11888,11 @@ session_summary_fields:
       decoded: partial
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+    verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "complete_count ∈ {1,2} across the archive (1×9, 2×2) = number of completed targets."
+        evidence: "HA session archive — /config/dreame_a2_mower/sessions/*.json (97 archives pulled 2026-06-28); OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/ha-session-index-2026-06-28.json"
 
   - id: "summary_photo_list"
     key_path: "photo_list"
@@ -11937,14 +11963,19 @@ session_summary_fields:
     category: "session_summary"
     payload_shape: "int (0/1)"
     semantic: |
-      Whether the session captured any auto-capture photo. =1 on the patrol that
-      took 3 photos. Aligns with s4 eiid1 piid10 (=1 same run) — partial cross-walk
-      (single sample; needs a photo_detected=0 session to confirm piid10 mapping).
+      Whether the session captured any auto-capture photo. Binary {0,1}: 0 = no
+      photo (2 sessions), 1 = photo detected (9 sessions). Both values now observed.
+      Aligns with s4 eiid1 piid10.
     status:
       seen_on_wire: false
-      decoded: partial
+      decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+    verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "photo_detected is binary: 0 (no photo, 2 sessions) / 1 (photo detected, 9 sessions)."
+        evidence: "HA session archive — /config/dreame_a2_mower/sessions/*.json (97 archives pulled 2026-06-28); OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/ha-session-index-2026-06-28.json"
 
   - id: "summary_recognition"
     key_path: "recognition"
@@ -11952,14 +11983,21 @@ session_summary_fields:
     category: "session_summary"
     payload_shape: "int"
     semantic: |
-      Recognition/AI flag on the patrol summary (=1 observed). Exact meaning
-      undecoded — possibly whether AI recognition ran on the captured photos.
-      Recorded for completeness; do not assume semantics.
+      Recognition/AI flag on the patrol summary. Constant 1 across all 11 sessions
+      that carry it. Exact meaning undecoded — possibly whether AI recognition ran
+      on the captured photos. Recorded for completeness; do not assume semantics.
     status:
       seen_on_wire: false
-      decoded: unknown
+      decoded: partial
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+    open_questions:
+      - "recognition is 1 in all 11 sessions that carry it; other values / exact meaning not yet observed."
+    verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "recognition = 1 in all 11 archive sessions carrying it (constant)."
+        evidence: "HA session archive — /config/dreame_a2_mower/sessions/*.json (97 archives pulled 2026-06-28); OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/ha-session-index-2026-06-28.json"
 
   - id: "summary_human_detected"
     key_path: "human_detected"
@@ -11967,14 +12005,22 @@ session_summary_fields:
     category: "session_summary"
     payload_shape: "int"
     semantic: |
-      Count/flag of human detections during the session (=0 on the patrol). Likely
-      the AI human-detection counter; may align with s4 eiid1 piid11 (=0 same run).
-      Single sample — semantics presumed, not confirmed.
+      Count/flag of human detections during the session. Constant 0 across all 11
+      sessions that carry it. Likely the AI human-detection counter; may align with
+      s4 eiid1 piid11 (=0 same run). A non-zero (human-present) value has not yet
+      been observed.
     status:
       seen_on_wire: false
-      decoded: unknown
+      decoded: partial
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
+    open_questions:
+      - "human_detected is 0 in all 11 sessions carrying it; a non-zero (human-present) value not yet observed."
+    verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "human_detected = 0 in all 11 archive sessions carrying it (constant; no human-present session captured)."
+        evidence: "HA session archive — /config/dreame_a2_mower/sessions/*.json (97 archives pulled 2026-06-28); OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/ha-session-index-2026-06-28.json"
 
   - id: "summary_pref"
     key_path: "pref"
@@ -11982,15 +12028,18 @@ session_summary_fields:
     category: "session_summary"
     payload_shape: "[int, int]"
     semantic: |
-      Two-int preference array present in ALL session summaries (=[45,0] on both
-      the mode=107 patrol and a same-day mode=100 all-area mow). Because it is
-      identical across unrelated session types it is a GLOBAL/account preference,
-      NOT per-session or per-point input. DEBUNKED as a patrol-settings carrier
-      (two ints could not encode per-point settings for an arbitrary point count).
-      Exact meaning of the two ints undecoded.
+      Two-int preference array present in ALL session summaries. DECODED (confirmed
+      2026-06-28): pref = [mowing_height (cm×10), efficiency]. pref[0] ∈ {45,50,55,60}
+      (= 4.5–6.0 cm) matches the per_map mowingHeight×10; pref[1] = 0 (efficientMode
+      off) in all 33 archive sessions — verified against settings_snapshot (a session
+      with pref=[50,0] had per_map mowingHeight=5, efficientMode=0). It is a
+      GLOBAL/account-level mowing preference (identical across unrelated session
+      types), NOT per-session or per-point input — earlier DEBUNKED as a
+      patrol-settings carrier (two ints could not encode per-point settings for an
+      arbitrary point count).
     status:
       seen_on_wire: false
-      decoded: partial
+      decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields"
     verifications:
@@ -11998,6 +12047,10 @@ session_summary_fields:
         status: verified
         claim: "pref=[45,0] identical in the mode=107 patrol summary and the same-day mode=100 mow summary → global/account preference, not patrol input."
         evidence: "cloud/oss patrol .0550 vs mow -112293549_090642791 .0550 (2026-06-03)"
+      - date: "2026-06-28"
+        status: verified
+        claim: "pref = [mowing_height cm×10, efficiency]; pref[0]∈{45,50,55,60} matches per_map mowingHeight×10, pref[1]=0=efficientMode (verified vs settings_snapshot)."
+        evidence: "HA session archive — /config/dreame_a2_mower/sessions/*.json (97 archives pulled 2026-06-28); OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/ha-session-index-2026-06-28.json"
 
   - id: "summary_legs_meta"
     key_path: "_legs_meta"
