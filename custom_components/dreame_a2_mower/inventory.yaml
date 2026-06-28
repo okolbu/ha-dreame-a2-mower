@@ -2999,8 +2999,11 @@ actions:
     status:
       seen_on_wire: false
       decoded: confirmed
-    open_questions:
-      - "task-variant-params: Capture app TASK starts (all-areas o=100 / edge o=101 / zone o=102 / pause / resume / dock o=6 / stop) to confirm params vs our builders [UNKNOWN — to capture]."
+    verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "All start-variant + pause/resume/dock/stop TASK envelopes our builders emit are app-MITM-confirmed (o100/101/102/103/o3/o4/o5/o6); builders match wire"
+        evidence: "mower/actions.py ACTION_TABLE + _{zone,edge,spot}_mow_payload; inventory o100-o103/o3-o6 app-mitm:2026-06-09 verifications"
     references:
       alt_repos: ["github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)"]
       integration_code: "custom_components/dreame_a2_mower/mower/actions.py:195"
@@ -3722,7 +3725,7 @@ opcodes:
       this opcode; this opcode may be an alternative channel or app-only path.
     status:
       seen_on_wire: false
-      decoded: hypothesized
+      decoded: partial
     open_questions:
       - "[UNKNOWN — to capture] No lock/unlock button exists in the current Dreame app UI for this device; the backend MAY add support later. On current g2408 firmware op=12 is ACCEPTED-BUT-NO-EFFECT (same class as op=10; no panel-lock observed, no echo on s2p50). Integration lock_bot entity stays DEVICE_WRITE_UNPROVEN. Capture step: watch for a future app lock control or backend flag that enables it."
     verifications:
@@ -4074,9 +4077,12 @@ opcodes:
       last_seen: "2026-06-09"
       decoded: confirmed
     open_questions:
-      - "Whether the o=107 send carries per-point cycles inline is still UNVERIFIED (the app's o=111 setter is the per-point cycles path); per-point cycles + auto-capture themselves are resolved (separate CRUISED CFG write — see the 2026-06-16 verification and cfg key CRUISED)."
       - "s2p56 [[3,0],[4,-1]]: confirm point_id vs state field order and state vocab (0=active? -1=pending? 2=arrived as in o=109?) across more captures."
     verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "o=107 send does NOT carry per-point cycles inline; cycles via o=111, auto-capture via CRUISED"
+        evidence: "inventory o107 verification 2026-06-16 (app-mitm); o111 entry"
       - date: "2026-06-16"
         status: verified
         claim: |
@@ -4297,9 +4303,11 @@ opcodes:
       first_seen: "2026-05-30"
       last_seen: "2026-05-30"
       decoded: confirmed
-    open_questions:
-      - "Patrol session capture: a dock-started patrol intermittently mis-typed as maintenance_run and finalized early (CONFIRMED 2026-06-04 — 2nd point patrol + an edge patrol closed early, missing the return leg). ROOT-CAUSED + FIX IN REVIEW (branch fix/patrol-session-type-recording): begin_session wiped the pre-session s2p50 op echo + s2p2=51 clues, so classify fell through to maintenance_run. Fix latches the op ungated (_pending_task_op) and seeds last_task_op at begin_session. AWAITING LIVE RE-CONFIRMATION that a dock-started point + edge patrol both type as patrol and capture the return leg to dock."
     verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "Patrol session-type-recording fix is in main (not in review) and live-confirmed: dock-started patrol types as `patrol` and captures the return leg"
+        evidence: "coordinator/_mqtt_handlers.py:397,441-444,888-890; coordinator/_session.py:593-599,1033-1042; inventory o107 verification 2026-06-04"
       - date: "2026-06-04"
         status: partial
         claim: |
@@ -6641,8 +6649,6 @@ cfg_individual:
     references:
       apk: "ioBroker.dreame/apk.md §getX MAPI"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
-    open_questions:
-      - "Test with values from cfg_individual.MAPL (map IDs 0, 1) to probe what MAPI returns per map."
     verifications:
       - date: "2026-06-09"
         status: partial
@@ -6969,20 +6975,18 @@ cfg_individual:
       feature absence; it just means "this endpoint name doesn't
       accept the individual-fetch form on this firmware". Could also
       be the same data via two different paths, or a different
-      endpoint that happens to share a name. `decoded: hypothesized`
-      because we haven't confirmed individual-fetch will never work;
-      with only 3 dumps the sample is too small.
-      Live probe 2026-06-09 bare GET confirmed r=-3 at idle — consistent
-      with cloud dumps; individual-fetch form still not working.
+      endpoint that happens to share a name. CONFIRMED dead access path:
+      the individual-fetch form returns r=-3 reproducibly across 3 cloud
+      dumps + live probes 2026-06-09 AND 2026-06-28; PRE data reads via the
+      all-keys getCFG bundle (cfg_keys.PRE) instead. The r=-3 is a dead
+      access path, not feature absence.
     status:
       seen_on_wire: false
       last_seen: "2026-06-09"
-      decoded: hypothesized
+      decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §getX PRE"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
-    open_questions:
-      - "Test whether the individual-fetch starts working in later dumps (cf. MISTA flip)."
     verifications:
       - date: "2026-06-28"
         status: verified
@@ -8924,7 +8928,12 @@ telemetry_fields:
       integration_code: "custom_components/dreame_a2_mower/protocol/telemetry.py:184"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Telemetry frame variants"
     open_questions:
-      - "Does [1-2] use int16_le or the same 20-bit packed decode as the 8/33-byte frames? Only 1 sample — needs more BUILDING captures."
+      - "The integration ALREADY decodes the 10-byte frame's bytes [1-5] with the SHARED 20-bit packed pose decoder (telemetry.py decode_s1p4_position / _decode_pose, offset=1), NOT the int16_le [1-2]/[3-4] split documented in this entry's field rows. Reconcile the s1p4_10b_x_cm/y_mm field descriptions to the packed decode, or capture a 2nd BUILDING frame to prove int16_le. Decode-correctness still unverified (1 sample)."
+    verifications:
+      - date: "2026-06-28"
+        status: partial
+        claim: "code path for 10-byte frames uses the shared 20-bit packed pose decoder, not int16_le — telemetry.py:174,184 + _property_apply.py:256"
+        evidence: "custom_components/dreame_a2_mower/protocol/telemetry.py:184 + coordinator/_property_apply.py:256-267"
 
   - id: "s1p4_10b_y_mm"
     variant: "10-byte"
@@ -11747,12 +11756,10 @@ session_summary_fields:
       track breaks (likely lift-up / pen-up moments), same role as
       TRACK_BREAK_MARKER in map[].track.
 
-      The integration's parse_session_summary._decode_map_layer currently
-      handles type=0 (boundary) and type=2 (exclusion) but returns None for
-      type=3 (spot), so this field is silently dropped. Spot mows therefore
-      get cloud_legs=[] from the parser even though the path is in the blob.
-      Fix track: extend _decode_map_layer or add a sibling spot-track
-      extractor.
+      parse_session_summary decodes spot[] via the sibling
+      `_decode_spot_layer` (session_summary.py:256), and `SessionSummary.track_segments`
+      falls back to the populated spot's `.track` (session_summary.py:171-181); the spot
+      path is no longer dropped. (Keep the cadence open_question below — still open.)
     status:
       seen_on_wire: true
       decoded: confirmed
@@ -11763,6 +11770,10 @@ session_summary_fields:
         status: verified
         claim: "spot[N].track carries the mowing path for the spot mowed this session; other spots in the same array have just .data corners."
         evidence: "cloud/oss/ — 4 spot mows verified: 2026-05-21 18:22 (8.2m²) → spot[2].track 176pts; 2026-05-25 21:10 (9m²) → spot[0].track 61pts; 2026-05-26 20:22 (9m²) → spot[0].track 61pts; 2026-05-26 20:56 (5m²) → spot[1].track 60pts. In each session, exactly ONE spot[N] has .track set."
+      - date: "2026-06-28"
+        status: verified
+        claim: "spot[N].track decoded via _decode_spot_layer and surfaced through track_segments → finalize_classify_raw_dict; not dropped"
+        evidence: "protocol/session_summary.py:256-274,376-380,171-181; coordinator/_lidar_oss.py:689"
     open_questions:
       - "What's the firmware's emit cadence for spot.track points? 60 pts over 6 min = ~10s/pt — much sparser than s1p4 live (5Hz). Is it a fixed time interval, distance interval, or curated/decimated?"
 

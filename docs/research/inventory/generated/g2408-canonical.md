@@ -1237,9 +1237,6 @@ The same (siid=5, aiid=1) wire entry is shared by START_ZONE_MOW
 differ only in the routed_o opcode and the payload. See opcodes o100,
 o101, o102, o103 for the respective TASK envelope shapes.
 
-**Open questions:**
-- task-variant-params: Capture app TASK starts (all-areas o=100 / edge o=101 / zone o=102 / pause / resume / dock o=6 / stop) to confirm params vs our builders [UNKNOWN — to capture].
-
 **See also:** `custom_components/dreame_a2_mower/mower/actions.py:195`, `apk: ioBroker.dreame/apk.md §Actions o:100 globalMower`, `github.com/okolbu/ha-dreame-a2-mower-legacy (types.py:808)`
 
 ### s5a1_zone — `start_zone_mow`
@@ -1844,7 +1841,6 @@ current capture path, patrol settings are unobservable on the wire. Next
 candidate is the s4 eiid1 session-summary OSS object at patrol end.
 
 **Open questions:**
-- Whether the o=107 send carries per-point cycles inline is still UNVERIFIED (the app's o=111 setter is the per-point cycles path); per-point cycles + auto-capture themselves are resolved (separate CRUISED CFG write — see the 2026-06-16 verification and cfg key CRUISED).
 - s2p56 [[3,0],[4,-1]]: confirm point_id vs state field order and state vocab (0=active? -1=pending? 2=arrived as in o=109?) across more captures.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
@@ -1857,9 +1853,6 @@ user-triggered Patrol of the zone-1 edge emitted s2p50 op=108
 22:35:54, paired with s2p2=51 (patrol started) and s2p56=[[1,0,0]]. Runs
 blades-up (area=0) with valid s1p4 position telemetry. estimate_time=900s
 (15 min). Companion to o:107 (cruise to a point).
-
-**Open questions:**
-- Patrol session capture: a dock-started patrol intermittently mis-typed as maintenance_run and finalized early (CONFIRMED 2026-06-04 — 2nd point patrol + an edge patrol closed early, missing the return leg). ROOT-CAUSED + FIX IN REVIEW (branch fix/patrol-session-type-recording): begin_session wiped the pre-session s2p50 op echo + s2p2=51 clues, so classify fell through to maintenance_run. Fix latches the op ungated (_pending_task_op) and seeds last_task_op at begin_session. AWAITING LIVE RE-CONFIRMATION that a dock-started point + edge patrol both type as patrol and capture the return leg to dock.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Routed-action opcodes`, `apk: ioBroker.dreame/apk.md §m=a opcodes`
 
@@ -3179,9 +3172,6 @@ selects the map slot (0,1 captured). Pairs with MAPD, which streams
 the size-byte blob in start/size chunks. Replaces the old r=-3
 framing — the bare GET failed only because it omitted the {idx} arg.
 
-**Open questions:**
-- Test with values from cfg_individual.MAPL (map IDs 0, 1) to probe what MAPI returns per map.
-
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX MAPI`
 
 ### MAPL — `map_list`
@@ -3381,14 +3371,11 @@ doesn't work. This is a clear case where r=-3 isn't proof of
 feature absence; it just means "this endpoint name doesn't
 accept the individual-fetch form on this firmware". Could also
 be the same data via two different paths, or a different
-endpoint that happens to share a name. `decoded: hypothesized`
-because we haven't confirmed individual-fetch will never work;
-with only 3 dumps the sample is too small.
-Live probe 2026-06-09 bare GET confirmed r=-3 at idle — consistent
-with cloud dumps; individual-fetch form still not working.
-
-**Open questions:**
-- Test whether the individual-fetch starts working in later dumps (cf. MISTA flip).
+endpoint that happens to share a name. CONFIRMED dead access path:
+the individual-fetch form returns r=-3 reproducibly across 3 cloud
+dumps + live probes 2026-06-09 AND 2026-06-28; PRE data reads via the
+all-keys getCFG bundle (cfg_keys.PRE) instead. The r=-3 is a dead
+access path, not feature absence.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX PRE`
 
@@ -4097,7 +4084,7 @@ capture only (2026-04-20 17:03:41, sample byte sequence
 [0xCE, 139, 0, 240, 77, 0, 194, 21, 0, 0xCE]).
 
 **Open questions:**
-- Does [1-2] use int16_le or the same 20-bit packed decode as the 8/33-byte frames? Only 1 sample — needs more BUILDING captures.
+- The integration ALREADY decodes the 10-byte frame's bytes [1-5] with the SHARED 20-bit packed pose decoder (telemetry.py decode_s1p4_position / _decode_pose, offset=1), NOT the int16_le [1-2]/[3-4] split documented in this entry's field rows. Reconcile the s1p4_10b_x_cm/y_mm field descriptions to the packed decode, or capture a 2nd BUILDING frame to prove int16_le. Decode-correctness still unverified (1 sample).
 
 **See also:** `custom_components/dreame_a2_mower/protocol/telemetry.py:184`, `docs/research/inventory/generated/g2408-canonical.md § Telemetry frame variants`
 
@@ -6144,12 +6131,10 @@ Includes int32-max sentinel rows [2147483647, 2147483647] marking
 track breaks (likely lift-up / pen-up moments), same role as
 TRACK_BREAK_MARKER in map[].track.
 
-The integration's parse_session_summary._decode_map_layer currently
-handles type=0 (boundary) and type=2 (exclusion) but returns None for
-type=3 (spot), so this field is silently dropped. Spot mows therefore
-get cloud_legs=[] from the parser even though the path is in the blob.
-Fix track: extend _decode_map_layer or add a sibling spot-track
-extractor.
+parse_session_summary decodes spot[] via the sibling
+`_decode_spot_layer` (session_summary.py:256), and `SessionSummary.track_segments`
+falls back to the populated spot's `.track` (session_summary.py:171-181); the spot
+path is no longer dropped. (Keep the cadence open_question below — still open.)
 
 **Open questions:**
 - What's the firmware's emit cadence for spot.track points? 60 pts over 6 min = ~10s/pt — much sparser than s1p4 live (5Hz). Is it a fixed time interval, distance interval, or curated/decimated?
