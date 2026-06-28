@@ -11954,7 +11954,7 @@ session_summary_fields:
           open question). The 479D/Xiaomi-FDS hypothesis stays debunked.
         evidence: "user-observed: 18 patrol photos rendered on the photo-archive dashboard tab (2026-06-15)"
     open_questions:
-      - "transient-obstacle-photo-api: The transient session-obstacle photos (live-map clickable icons that die after the session) use a different, uncaptured API — no real mow ran. Capture during a real obstacle-hitting mow."
+      - "transient-obstacle-photo-api: CAPTURED 2026-06-17 — the live-map clickable obstacle markers are polled via routed-get t=AIOBS (each obs row carries the photo filename), and the image is a lazy on-tap fetch POST /file-bridge/user/getDeiviceFile (see api_endpoints § getdevicefile). Still open: getDeiviceFile response shape (uncaptured) + the sign algorithm (UNVERIFIED)."
       - "aiobs-photo-index: The pre-signed photo-index call (returns the album URL set) was not on HTTPS; likely a sendCommand t=AIOBS read or MQTT event (see the AIOBS inventory entry). Not needed for Phase 1 (photo_list suffices)."
 
   - id: "summary_photo_detected"
@@ -13166,3 +13166,41 @@ api_endpoints:
         status: verified
         claim: "Supersedes the stale 'install transitions uncaptured' note: the COMPLETE 0550→0625 OTA flow was captured end-to-end — checkDeviceVersion + this trigger + s1p2 (1→2→3→1) + s1p3 (0→100 download%) are all wire-verified (see those entries). No data.success:true call on acceptance (cloud queues device-side); firmware blob is device-side CDN, not on the app wire. Only the 'sign' algorithm remains open."
         evidence: "cloud/captures/mitm_session_20260616/findings/FINDING-firmware-OTA-complete-flow-2026-06-16.md; s1p2/s1p3 entries (decoded:confirmed)"
+
+  - id: "getdevicefile"
+    name: "file_bridge_getDeiviceFile"
+    category: "api_endpoint"
+    payload_shape: "POST {file-bridge-base}/file-bridge/user/getDeiviceFile {fileinfo:{filename, type:'ai_obs'}, did, sign, timestamp} → image (response NOT captured — app disconnected mid-load)"
+    semantic: |
+      AI-obstacle / patrol photo FETCH endpoint. The live-map clickable obstacle
+      markers are POLLED via routed-get t=AIOBS while the device page is open
+      (~281 reads in the capture, bursty — NOT a background poll); each AIOBS obs
+      row carries the photo filename base. The IMAGE is a separate lazy ON-TAP
+      fetch: POST /file-bridge/user/getDeiviceFile {fileinfo:{filename:'<base>.jpg',
+      type:'ai_obs'}, did, sign, timestamp}, on the file-bridge service (port 13267,
+      NO country prefix — distinct from the main cloud RPC).
+      [app-mitm:2026-06-17-ai-obstacle-photo-fetch]
+      RESPONSE not captured (app disconnected mid-load; the real app shows the same
+      load failure — backend-side unreliability). The 'sign' field is [UNVERIFIED]:
+      the integration's hypothesis signer (MD5(sorted-params + timestamp_ms + salt),
+      RE'd from libdreame-lib.so) does NOT reproduce the captured golden
+      (952cdf8580ae1c162df56b9c24fe21c3) — a hidden signed input remains. The
+      integration ships this FAIL-CLOSED (returns None on any error).
+      See FINDING-getdevicefile-signer-2026-06-20.md.
+    status:
+      seen_on_wire: false
+      first_seen: "2026-06-17"
+      last_seen: "2026-06-17"
+      decoded: partial
+    references:
+      integration_code: "custom_components/dreame_a2_mower/cloud_client/_file_bridge.py (_FileBridgeMixin.get_device_file, sign_file_bridge); archive/obstacle_markers_log.py"
+      wire_capture: "cloud/captures/mitm_session_20260619/findings/FINDING-ai-obstacle-photo-fetch-2026-06-17.md"
+      protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § API endpoints"
+    verifications:
+      - date: "2026-06-28"
+        status: partial
+        claim: "AI-obstacle photo fetch = POST /file-bridge/user/getDeiviceFile {fileinfo:{filename,type:ai_obs},did,sign,ts} on the file-bridge service (port 13267, no country prefix); markers come from the AIOBS routed-get poll (filename in the obs row), image is a lazy on-tap getDeiviceFile fetch. Request captured 2026-06-17; response uncaptured; sign UNVERIFIED (hypothesis signer fails the golden). Integration ships it fail-closed."
+        evidence: "cloud/captures/mitm_session_20260619/findings/FINDING-ai-obstacle-photo-fetch-2026-06-17.md; cloud_client/_file_bridge.py"
+    open_questions:
+      - "Response shape of getDeiviceFile (raw image bytes vs a redirect URL) — uncaptured (app disconnected mid-load)."
+      - "The 'sign' algorithm — the hypothesis signer does not reproduce the golden 952cdf...; hidden signed input. [UNKNOWN — to capture]"
