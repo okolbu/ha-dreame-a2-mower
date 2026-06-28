@@ -5852,14 +5852,26 @@ cfg_keys:
       The 2026-06-03 r=-3 probe used d:{value:[0,1]} (wrong envelope — array
       wrapped under a 'value' key instead of bare); the r=-3 was a shape/path
       mismatch, NOT a firmware veto of the PRE surface. [app-mitm:2026-06-09-settings-sweep]
-      Whether the g2408 firmware actually executes each PRE write is not yet
-      observed — device-side effect is `[UNVERIFIED]` pending live verification.
+      HA-initiated PRE writes are device-effective. The integration issues the
+      byte-identical PRE bare-array + SETTINGS dual-write the app issues (set_pre
+      uses the app's envelope), and the change round-trips to the Dreame app —
+      toggling AI Obstacle Recognition: Animals (PRE[15] bit1) in HA reflected in
+      the app [user-reported 2026-06-28]. Per the project rule (CLAUDE.md §
+      "Integration↔app passthrough is wire proof; app config is authoritative for
+      device behaviour") an app-reflected setting IS what the mower operates under,
+      so no device-effect hedge applies to these app-envelope writes. A hedge
+      survives only for a write that does NOT round-trip to the app or uses a
+      non-app envelope.
     status:
       seen_on_wire: true
       first_seen: "2026-04-23"
       last_seen: "2026-06-17"
       decoded: confirmed
     verifications:
+      - date: "2026-06-28"
+        status: verified
+        claim: "EdgeMaster app toggle writes ONLY PRE[10]. The full 21-int PRE array is resent on every save, but the in-corpus app-MITM ON/OFF pair differs at index 10 alone (1=on / 0=off); PRE[20]=cutterPositionHeight stays 30 (3.0cm) in BOTH states. So the single EdgeMaster toggle does NOT bundle or vary cutter-height / cutter-position / edge-pass-count — those are fixed firmware constants merely carried as array literals (the 2-pass / sideways / 3cm behaviour is hardcoded). cutterPositionHeight has only ever been observed =30, so its variability is unconfirmed."
+        evidence: "cloud/captures/mitm_session_20260619/miio-13267.jsonl — PRE pair OFF=[0,1,0,0,60,0,0,1,1,1,0,2,1,20,20,7,1,2,0,0,30] vs ON=[0,1,0,0,60,0,0,1,1,1,1,2,1,20,20,7,1,2,0,0,30] (idx10 sole delta; idx20=30 both)"
       - date: "2026-06-19"
         status: verified
         claim: "PRE[6] / SETTINGS.mowingDirection is the device-maintained NEXT-RUN mow angle, not a static setting: in rotation/checkerboard mode the firmware rewrites it after each mow (owner set it to align with the upper-lawn border; after one scheduled checkerboard mow it had rotated ~90° with no user edit). The official app draws the next-mow stripe preview at this stored angle (pixel angle = 180 − value, cvtMowingDirection) with NO client parity/rotation math. The integration's live-map STRIPES preview now reads settings_mowing_direction directly instead of inferring from the track (the track-inference path infer_mow_direction/next_direction + MowerState.last_all_area_mow_direction_deg was removed). Render frame (owner-observed 2026-06-19): our pixel-map display angle is 0°=left/90°=up/180°=right — the left↔right mirror of the app's cvtMowingDirection (180−value) frame — so the renderer feeds the stored value directly (in pixel-map axes), the two 180-flips cancelling."
@@ -5905,7 +5917,7 @@ cfg_keys:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
       wire_capture: "docs/research/wire-captures/pre-write-r3-2026-06-03.md"
     open_questions:
-      - "settings-only-fields: SETTINGS-only fields cutterPosition/cutterPositionHeight/edgeMowingNum/edgeMowingWalkMode/obstacleAvoidanceSensitivity/edgeCuttingAttachment have NO PRE index; whether a SETTINGS-only write changes the mower is unverified. Capture: toggle each in app-MITM and diff PRE vs SETTINGS to see which store carries it [UNKNOWN — to capture]."
+      - "settings-only-fields: SETTINGS-only fields cutterPosition/edgeMowingNum/edgeMowingWalkMode/obstacleAvoidanceSensitivity/edgeCuttingAttachment have NO PRE index (cutterPositionHeight removed from this list 2026-06-28 — it IS pinned to PRE[20], see index [20] above); whether a SETTINGS-only write changes the mower is unverified. Capture: toggle each in app-MITM and diff PRE vs SETTINGS to see which store carries it [UNKNOWN — to capture]."
 
   - id: "CRUISED"
     name: "patrol_point_settings"

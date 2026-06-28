@@ -3939,6 +3939,10 @@ entities:
         status: verified
         claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre_ai_bit, PRE[15] bit 1=Animals) through coordinator.write_map_general_ai_bit; dual-write to SETTINGS.obstacleAvoidanceAi. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-06-28"
+        status: verified
+        claim: "Live round-trip confirms device-effective: user toggled this switch in HA and the Dreame app reflected the new state. The write is byte-identical to the app's authoritative PRE[15] bit1 + SETTINGS.obstacleAvoidanceAi dual-write, so per the project rule (CLAUDE.md § integration↔app passthrough = wire proof; app config is authoritative for device behaviour) the setting is what the mower operates under, not merely cloud-cached. Resolves the earlier 'not re-confirmed live' caveat."
+        evidence: "user-reported 2026-06-28 (HA toggle → Dreame app reflected the change)"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/switch_global.py:950"

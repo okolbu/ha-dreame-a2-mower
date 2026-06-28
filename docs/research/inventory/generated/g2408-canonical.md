@@ -2766,11 +2766,19 @@ why SETTINGS-only writes never changed mower behavior. [app-mitm:2026-06-09-sett
 The 2026-06-03 r=-3 probe used d:{value:[0,1]} (wrong envelope — array
 wrapped under a 'value' key instead of bare); the r=-3 was a shape/path
 mismatch, NOT a firmware veto of the PRE surface. [app-mitm:2026-06-09-settings-sweep]
-Whether the g2408 firmware actually executes each PRE write is not yet
-observed — device-side effect is `[UNVERIFIED]` pending live verification.
+HA-initiated PRE writes are device-effective. The integration issues the
+byte-identical PRE bare-array + SETTINGS dual-write the app issues (set_pre
+uses the app's envelope), and the change round-trips to the Dreame app —
+toggling AI Obstacle Recognition: Animals (PRE[15] bit1) in HA reflected in
+the app [user-reported 2026-06-28]. Per the project rule (CLAUDE.md §
+"Integration↔app passthrough is wire proof; app config is authoritative for
+device behaviour") an app-reflected setting IS what the mower operates under,
+so no device-effect hedge applies to these app-envelope writes. A hedge
+survives only for a write that does NOT round-trip to the app or uses a
+non-app envelope.
 
 **Open questions:**
-- settings-only-fields: SETTINGS-only fields cutterPosition/cutterPositionHeight/edgeMowingNum/edgeMowingWalkMode/obstacleAvoidanceSensitivity/edgeCuttingAttachment have NO PRE index; whether a SETTINGS-only write changes the mower is unverified. Capture: toggle each in app-MITM and diff PRE vs SETTINGS to see which store carries it [UNKNOWN — to capture].
+- settings-only-fields: SETTINGS-only fields cutterPosition/edgeMowingNum/edgeMowingWalkMode/obstacleAvoidanceSensitivity/edgeCuttingAttachment have NO PRE index (cutterPositionHeight removed from this list 2026-06-28 — it IS pinned to PRE[20], see index [20] above); whether a SETTINGS-only write changes the mower is unverified. Capture: toggle each in app-MITM and diff PRE vs SETTINGS to see which store carries it [UNKNOWN — to capture].
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX PRE`
 

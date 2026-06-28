@@ -118,6 +118,21 @@ it needs rewording.
   marked `confirmed` and a control flipped writable, tagged
   `[app-mitm:<date>-<topic>]`.
 
+- **Integration↔app passthrough is wire proof; app config is authoritative for
+  device behaviour.** A setting that round-trips between the integration and the
+  Dreame app in either direction — HA writes it and the app reflects it, or the
+  app writes it and HA reads it back — is `confirmed` to be in effect on the
+  mower, NOT merely "cloud-cached." The Dreame app is the vendor control surface:
+  a setting it reflects IS what the mower operates under (otherwise the app would
+  not control the mower — there would be no point having one). So do NOT split
+  "cloud propagation" from "device-firmware execution" for an app-reflected
+  setting, and do NOT keep a device-effect `[UNVERIFIED]` hedge on a write the
+  integration issues with the app's own byte-identical envelope that round-trips
+  to the app. The hedge survives ONLY for a write that does not round-trip to the
+  app, or that uses a non-app envelope the app never sends. (Edge case to still
+  flag if seen: a setting the app shows but is genuinely display-only in the app
+  UI — rare; call it out explicitly rather than assuming it.)
+
 ### Provenance priority (app-MITM overrides)
 
 **App-MITM observations are authoritative over older probe-only or APK-derived

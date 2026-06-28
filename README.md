@@ -145,9 +145,12 @@ A subset of g2408 settings is on the Dreame app's "Mowing settings" page
 (the one with the explicit Save button). All of these settings DO
 propagate through the cloud — verified by toggling in one app instance
 and observing the change in a second app instance on a different
-device, with zero Bluetooth involvement. The remaining open question is
-narrower: whether the device firmware applies an **HA-initiated** write
-the same way it applies the Dreame app's own write `[UNVERIFIED]`.
+device, with zero Bluetooth involvement. And because the integration issues
+the **same Save path the Dreame app uses** and changes round-trip to the app
+(confirmed with a live *AI Obstacle Recognition: Animals* toggle — changed in
+HA, reflected in the app), an HA-initiated change is what the mower operates
+under, the same as an app-initiated one: the app is the vendor control surface,
+so a setting it reflects is the setting the mower runs on.
 
 - AI Obstacle Recognition: Humans / Animals / Objects
 - Mowing Direction
@@ -172,11 +175,9 @@ If you toggle one of these in HA the cloud accepts the write and other
 app instances pick it up on cold-start: the integration issues the same
 Save path the Dreame app uses — the confirmed PRE bare-array
 `action s2.a50 {m:s, t:PRE, d:[…]}`, dual-written to the SETTINGS cloud
-record `[app-mitm:2026-06-09]`. Two caveats remain: the original Dreame
-app session may keep showing the pre-write value until its UI cache
-refreshes `[UNVERIFIED]`, and whether g2408 firmware *executes* an
-HA-initiated PRE write identically to the app's is not yet observed
-`[UNVERIFIED]`.
+record `[app-mitm:2026-06-09]`. One minor caveat: the original Dreame app
+session may keep showing the pre-write value until its UI cache refreshes —
+other app instances pick it up cleanly on cold-start.
 
 Full per-entity reference — read source and verification status for every
 switch / select / number / sensor / button / service — in
