@@ -5650,7 +5650,7 @@ to within rounding.
 | summary_dock | dock_pose | [x_cm, y_cm, heading_deg] | WIRED | m (×0.01) |
 | summary_edge_status | edge_status | list[[int, int, int]]; presence-gated on mode 101 only | SEEN-UNDECODED |  |
 | summary_end | session_end_unix | unix_seconds (int) | WIRED | ISO8601 local (×1.0) |
-| summary_faults | faults | [] (empty on normal completion) | UNCLASSIFIED |  |
+| summary_faults | faults | list of [unix_ts, s2p2_code] (empty on normal completion) | UNCLASSIFIED |  |
 | summary_human_detected | human_detected_count | int | UNCLASSIFIED |  |
 | summary_legs_meta | legs_meta | [{role: str, start_ts: int, end_ts: int}, ...] | WIRED |  |
 | summary_map_area | total_lawn_area_m2 | int (m²) | WIRED | m² (×1.0) |
@@ -5894,11 +5894,12 @@ Session end timestamp in Unix seconds.
 
 ### summary_faults — `faults`
 
-Fault list recorded during the session. Empty on normal completion.
-Not yet decoded from a faulted-session capture.
-
-**Open questions:**
-- What fault objects look like? Capture during an actual fault event.
+Fault list recorded during the session — DECODED from the HA session
+archive (2026-06-28): a list of [unix_ts, s2p2_code] pairs (NOT opaque
+objects). Empty on a clean run; on faulted sessions it carries the
+timestamped s2p2 fault codes (observed: 0,1,2,5,9,23,24,36 = bumper, tilt,
+trapped, right-wheel, lift, lift-pin, low-batt, failed-start). Same code
+space as s2p2 / error_samples.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
@@ -6100,21 +6101,26 @@ Recorded for completeness; do not assume semantics.
 
 ### summary_region_status — `region_status`
 
-Per-zone mowing status list. Each entry is [zone_id, status_int].
-Status values not fully decoded.
+Per-zone mowing status list. Each entry is [zone_id, status_int]. Status
+values observed across the HA session archive (2026-06-28): {-1, 0, 2, 4}
+(the earlier 0/1/2 guess was wrong — 1 is NOT observed; -1 and 4 are). Most
+common row is [1,2]. Format [zone_id, status] confirmed; exact status→meaning
+mapping still needs correlation with per-zone coverage.
 
 **Open questions:**
-- What status values exist? Does 0=complete, 1=skipped, 2=partial?
+- status enum is {-1,0,2,4} (observed); map each value to its meaning (complete/skipped/partial) by correlating with per-zone coverage.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
 ### summary_result — `result`
 
-Session result code. Value 1 observed on normal completions. Enum not fully
-decoded.
+Session result code. DECODED from the HA session archive (97 sessions,
+2026-06-28): 1 = completed (24 sessions, all with stop_reason=-1), 3 =
+interrupted/aborted (9 sessions, all with stop_reason=101). Only {1,3}
+observed so far; a distinct rain-abort value not yet seen.
 
 **Open questions:**
-- What values indicate partial coverage, rain interrupt, or error?
+- Values beyond {1=completed, 3=interrupted} (e.g. a distinct rain-abort code) not yet observed.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/session_summary.py`, `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
@@ -6162,10 +6168,14 @@ distinguished, may also map to 0).
 
 ### summary_stop_reason — `stop_reason`
 
-Stop reason code. -1 observed on normal session end.
+Stop reason code. DECODED from the HA session archive (97 sessions,
+2026-06-28): -1 = natural end (24 sessions, all result=1); 101 = session
+aborted/interrupted (9 sessions, all result=3). 101 is GENERIC abort, NOT
+specifically user-cancel — a session with hardware faults (s2p2 5/23) also
+carried stop_reason=101. user-cancel/rain-specific sub-codes not distinguished.
 
 **Open questions:**
-- What stop_reason corresponds to user-cancel vs rain vs fault?
+- Whether 101 splits into distinct user-cancel / rain / fault sub-codes, or is a single generic-abort value (only -1 and 101 observed).
 
 **See also:** `custom_components/dreame_a2_mower/protocol/session_summary.py`, `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
