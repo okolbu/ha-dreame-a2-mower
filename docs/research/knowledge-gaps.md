@@ -34,17 +34,41 @@ for id_, name, dec, oq in walk(d):
 
 Corpus numbers below are from `probe_log_*.jsonl` (9 logs, 2026-04-17…05-30;
 66,149 s1p1 + 69,254 s1p4 frames) via the census snippet at the end. Baseline
-inventory tally (refreshed 2026-06-28, post wire-truth audit):
-**266 confirmed / 27 partial / 89 hypothesized / 7 unknown** across **389
-entries**; **126** carry `open_questions`. The audit classified the 177
-not-confirmed-or-open rows: 104 genuinely-open (need live capture), 36
-resolvable-from-corpus (answer already in the 9 logs/dumps), 18
-resolvable-from-code, 19 stale-framing (since closed). Earlier prior
-sweeps (2026-06-09 app-MITM) resolved
-SCHDTV3/GPS/PATH/PIN/REMOTE/photo-metadata/map-edit/message-record gaps;
-added SCHDSV3 v-layout, BAT[2], LIT.fill, draw-by-driving, OTA flow,
-XP2P stream, per-pathway, shape ids 12/14/15/16, MAP.* freshness, Tencent
-getIdentity.
+inventory tally (refreshed 2026-06-28, post wire-truth audit + five-source reconciliation):
+**276 confirmed / 40 partial / 72 hypothesized / 3 unknown** across **391
+entries**; **116** carry `open_questions`.
+
+The 2026-06-28 audit reconciled the inventory against **five sources** and closed
+the drift from each: the integration **code** (full-surface — schedule blob was
+byte-exact in `schedule_decode.py` but marked "[UNKNOWN] protobuf"; +8 more drift
+items), the full **probe corpus** (2.5 months / ~2M msgs, not "9 logs" — fixed
+s2p2=24/20 seen_on_wire), the **MITM captures + FINDING docs** (OTA flow + the
+getDeiviceFile photo-fetch endpoint shipped in code but absent from the SoT), the
+**HA session archive** (98 live sessions — decoded result/stop_reason/region_status/
+faults + 8 more summary fields the cloud-OSS window couldn't), and a **live device
+probe** (OBS obstacle-row layout). A `tools/inventory/findings_fold_check.py` guard
+now prevents the FINDING→inventory drift class recurring.
+
+**What genuinely remains** (bucketed by what would close each — none is desk-work
+on data already on disk except bucket 5):
+1. **Needs a condition to fire** — ~15 rare fault s2p2 codes (never fired in 98
+   sessions), a human-present recognition event, a `start_mode=2` origin, a lawn
+   >655 m² (uint24 high bytes).
+2. **Needs an app action under MITM** — schedule Edge-record byte-7; `MAPL[2..4]`;
+   unexercised opcodes (o=104/105/205/206/503/8, o=208).
+3. **BT-gated (rig has no Bluetooth)** — manual steering, live video.
+4. **Relay-flaky retry** — siid-4 (`s4p68`/`s4p83`).
+5. **Genuinely-undecoded bytes, data on disk** — `s1p1` 4/5/8/9/13-15/18 + [10]&0x80,
+   `s1p4` deltas [10-21], `s5p104-108`/`s6p1` enums, `s2p51 {type}`, `s2p56` middle
+   byte, `MITRC` flag 0/0xff. (The only true desk-work residuals.)
+6. **Not reachable on the tried path** — ARM/CHECK/WINFO/PREP (null via routed-get).
+7. **Cross-cutting crypto** — the `sign` field algorithm (getDeviceFile signer
+   unreproduced).
+
+Earlier sweeps (2026-06-09 app-MITM) resolved
+SCHDTV3/GPS/PATH/PIN/REMOTE/photo-metadata/map-edit/message-record gaps; added
+SCHDSV3 v-layout, BAT[2], LIT.fill, draw-by-driving, OTA flow, XP2P stream,
+per-pathway, shape ids 12/14/15/16, MAP.* freshness, Tencent getIdentity.
 
 Validation-process shorthands are defined in [§Validation playbook](#validation-playbook).
 
