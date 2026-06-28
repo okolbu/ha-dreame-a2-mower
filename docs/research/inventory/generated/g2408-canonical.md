@@ -6121,13 +6121,17 @@ on the captured photos. Recorded for completeness; do not assume semantics.
 ### summary_region_status — `region_status`
 
 Per-zone mowing status list. Each entry is [zone_id, status_int]. Status
-values observed across the HA session archive (2026-06-28): {-1, 0, 2, 4}
-(the earlier 0/1/2 guess was wrong — 1 is NOT observed; -1 and 4 are). Most
-common row is [1,2]. Format [zone_id, status] confirmed; exact status→meaning
-mapping still needs correlation with per-zone coverage.
+meaning DECODED by correlating 21 mow-session region_status rows against the
+session result (2026-06-28): status 2 = zone COMPLETED (13/13 of these rows
+sit in result=1 sessions with near-full coverage, ~340-350 of 383 m²);
+status 4 = interrupted mid-zone (in-progress when aborted); status 0 =
+interrupted, zone not finished; status -1 = error/failed (1 sample, area ~0).
+All of 0/4/-1 occur ONLY in result=3 (interrupted) sessions. The sibling
+patrol field `point_status` [[point_id, status]] uses status 2 = visited —
+same 'done' semantics. (Earlier 0/1/2 guess was wrong; 1 is never observed.)
 
 **Open questions:**
-- status enum is {-1,0,2,4} (observed); map each value to its meaning (complete/skipped/partial) by correlating with per-zone coverage.
+- The 0-vs-4 sub-distinction within interrupted (result=3) sessions — both carry partial coverage; what splits 'in-progress' (4) from 'not-finished' (0). status -1=error is single-sample.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Session-summary JSON fields`
 
