@@ -648,9 +648,11 @@ Apk says task progress flag. Observed 16 times in the probe corpus. Semantic
 on g2408 not yet pinned — values and timing have not been correlated with
 specific task events in the available captures. Needs a dedicated
 toggle-correlation test.
-
-**Open questions:**
-- What values appear and when? Cross-correlate with s2p1 and s2p2 transitions.
+On g2408 the value is invariant 0 across all 70 corpus pushes
+(2026-04-19 → 2026-06-17) and is emitted ~once per day while DOCKED
+(s2p1 mode 13/6, early-morning), never during a running task — so it
+does not behave as a live task-progress indicator here; the apk 'task
+progress flag' name is not borne out by the wire.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Properties`, `apk: ioBroker.dreame/apk.md §task_progress_flag`
 
@@ -939,9 +941,10 @@ MEANING of the 1-5 enum is still unknown (POTENTIAL only). dreame-mower carries
 no name (generic service5_property_105); ioBroker has none either.
 
 Surfaced as a default-disabled raw diagnostic sensor.
-
-**Open questions:**
-- What triggers the transient values 2-5? Frame structure is known; the enum's meaning is not. Correlate non-1 values against s2p1/positioning context.
+The transient 2-5 excursions do NOT correlate with s2p1 mode — across
+the 26 non-1 corpus pushes they occur in mowing (12), charge-done (8),
+returning (5) and docked (1) alike, so the 'positioning context'
+hypothesis is ruled out; the enum's meaning remains unknown.
 
 **See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:135`, `docs/research/inventory/generated/g2408-canonical.md § Properties`
 
@@ -2837,9 +2840,10 @@ Write payload: {value:0|1}. [app-mitm:2026-06-09-settings-sweep]
 STUN is its OWN key — NOT BAT.power[2] (confirmed by the sweep:
 the Auto-Recharge-after-Standby toggle was NOT on the charging-settings
 page with BAT). [app-mitm:2026-06-09-settings-sweep]
-
-**Open questions:**
-- STUN standby timeout duration — firmware constant or hidden CFG slot?
+The standby-timeout DURATION is a firmware constant — the full all-keys
+CFG enumeration (see all-keys CFG payload_shape) contains no
+timeout/duration slot; STUN is a pure on/off (0/1) flag with no
+companion duration key.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/cfg_action.py`, `docs/research/inventory/generated/g2408-canonical.md § CFG keys`, `apk: ioBroker.dreame/apk.md §setX STUN`
 
@@ -2927,22 +2931,22 @@ in HOURS (e.g. 4→5 confirmed); sen=sensitivity level.
 | FBD_NTYPE | feedback_notification_type | iotuserdata KV: FBD_NTYPE.0 = JSON-string per-map array [{<code>:<val>,…},{}]; FBD_NTYPE.info = counter int | UNCLASSIFIED |  |
 | IOT | iot_connection_status | {status: bool} | APK-KNOWN |  |
 | LOCN | dock_gps_origin | {pos: [lon, lat]} | WIRED |  |
-| MAPD | map_data | (observed: r=-3 in all 3 cloud dumps so far; payload-on-success unknown) | APK-KNOWN |  |
-| MAPI | map_info | (observed: r=-3 in all 3 cloud dumps + live probe 2026-06-09; payload-on-success unknown — requires args) | APK-KNOWN |  |
+| MAPD | map_data | args {start:<int>,size:<int>}; response {data:"<JSON-string chunk>", size:<int>, start:<int>} r=0 — paged byte-window of the map JSON blob | APK-KNOWN |  |
+| MAPI | map_info | args {idx:<map_slot>}; response {hash:<md5 str>, idx:<int>, size:<bytes int>} r=0 | APK-KNOWN |  |
 | MAPL | map_list | list[[int×5], ...] — one row per map_id | SEEN-UNDECODED |  |
 | MAP_cache | decoded_map_cache | iotuserdata KV: MAP.0, MAP.1, … MAP.N (concat = JSON array of map objects) | UNCLASSIFIED |  |
 | MIHIS | lifetime_mowing_aggregates | {area, count, start, time} | WIRED |  |
 | MISTA | mission_status | {fin: int (centiares mowed), prg: int (basis points = round(fin*10000/total)), status: [[task_type, sub_state]], total: int (centiares planned)} | DECODED-UNWIRED |  |
-| MITRC | mission_track | (observed: r=-1 in all 3 cloud dumps and live probe 2026-06-09; payload-on-success unknown — idle-only; mid-run likely required) | APK-KNOWN |  |
+| MITRC | mission_track | args {idx:<page>,size:<count>}; response {idx:<int>, track:"<base64>"} r=0 — paged mission-track blob (empty string = no data for that page) | APK-KNOWN |  |
 | MPOS | live_position | {x: int, y: int, yaw: int} — map-frame position; units/frame not yet cross-checked | SEEN-UNDECODED |  |
 | NET | wifi_info | {current: ssid, list: [{ip, rssi, ssid}, ...]} | WIRED |  |
-| OBS | obstacle_data | (observed: r=-3 in all 3 cloud dumps + live probe 2026-06-09; payload-on-success unknown — requires args) | APK-KNOWN |  |
+| OBS | obstacle_data | args {idx:<page>}; response {idx:<int>, obstacle:[...]} r=0 (obstacle array empty in all captures — no obstacles present) | APK-KNOWN |  |
 | PIN | pin_status | write: {type:'auth'|'update', value:<int>}; read (m:g): {result, time} | DECODED-UNWIRED |  |
 | PRE | preference_endpoint | (observed: r=-3 on individual fetch in all 3 cloud dumps + live probe 2026-06-09; SAME-NAMED key in cfg_keys IS readable via all-keys CFG) | APK-KNOWN |  |
-| PREI | preference_info | {type: int, ver: [[map_id, version], ...]} — per-map PRE version counters | SEEN-UNDECODED |  |
+| PREI | preference_info | args {idx:<int>}; response {type:0, ver:[[id,version],...]} r=0 — idx selects a preference category (idx:0 and idx:1 return different ver arrays) | SEEN-UNDECODED |  |
 | PREP | zone_preference_mode | {idx:<zone0based>, value:0|1} | WIRED |  |
 | REMOTE | sim_4g_status | {activeTime, cardId(ICCID), expiredTime, leftDays} | UNCLASSIFIED |  |
-| RGBPSTA | led_state | (observed: r=-3 bare GET; payload-on-success unknown — requires args or different call path) | UNCLASSIFIED |  |
+| RGBPSTA | region_progress | args {idx:<group>}; response d=[{bp_ts:"YYYY.MM.DD", bp_ts_utc:<unix>, pro:<basis-points 0-10000>, rg_id:<int>}, ...] r=0 (idx out of range → []) | UNCLASSIFIED |  |
 | RPET | rain_protection_end_time | {endTime: int} | APK-KNOWN |  |
 | SCHDDV3 | schedule_data_v3_write | {s:<offset>, l:<len>, d:"<base64 chunk>", v:<txn_ms>} | WIRED |  |
 | SCHDIV3 | schedule_index_v3_write | {i:<index>, l:<total_len>, v:<txn_ms>} | UNCLASSIFIED |  |
@@ -3131,8 +3135,10 @@ capture. [UNVERIFIED]
 IoT cloud connection alive flag (presumed). Not wired. Semantic
 unconfirmed; status:True observed when integration is online.
 Sample: {status: true}.
-App-MITM 2026-06-09 confirms the app issues routed-get t=IOT;
-response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
+App-MITM 2026-06-09 confirms the app issues routed-get t=IOT.
+Response shape CONFIRMED 2026-06-28: bare GET (no args) → r=0,
+d={status:true}. status:true in every capture; the disconnect→false
+flip still needs a real cloud-drop event.
 
 **Open questions:**
 - IOT.status — does it flip to false on cloud disconnect or always true while reachable?
@@ -3155,35 +3161,24 @@ Sample: {pos: [-1, -1]} (not configured).
 
 ### MAPD — `map_data`
 
-APK-documented endpoint. The 3 cloud dumps so far all returned
-r=-3. r=-3 is empirically NOT proof of feature absence — see
-MISTA which flipped from r=-3/r=-1 to a successful payload
-between dump 2 and dump 3. Downgraded to `decoded: hypothesized`
-pending further evidence.
-
-**Open questions:**
-- Capture during a map-edit operation (zone create/delete) — MAPD may carry the chunked map blob.
-- Test whether more cloud dumps over time produce a successful response (cf. MISTA).
+Chunked map-JSON read. App pages with {start,size} (size=400 observed);
+each response carries the byte window {data,start,size}. Concatenating
+data across start=0,400,800,... yields the full map JSON {cut_relation,
+map:[{area, data:[[x,y],...]}]} (polygon vertices in cloud-frame). Total
+length is MAPI.size. Replaces the r=-3 framing.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX MAPD`
 
 ### MAPI — `map_info`
 
-APK-documented endpoint. The 3 cloud dumps so far all returned
-r=-3. r=-3 is empirically NOT proof of feature absence — see
-MISTA which flipped from r=-3/r=-1 to a successful payload
-between dump 2 and dump 3. Downgraded to `decoded: hypothesized`
-pending further evidence.
-App-MITM 2026-06-09 confirms the app issues routed-get t=MAPI
-(map index); response shape is [UNKNOWN — to capture] —
-see tools/probes/read_key_probe.py.
-Live probe 2026-06-09 bare GET returned r=-3 (mower docked, idle) —
-endpoint requires a map_index or similar argument; the app sends args.
+Per-map map-blob descriptor. App sends {idx:0|1}; response is
+{hash (md5 of the map blob), idx, size (blob byte length)}. idx
+selects the map slot (0,1 captured). Pairs with MAPD, which streams
+the size-byte blob in start/size chunks. Replaces the old r=-3
+framing — the bare GET failed only because it omitted the {idx} arg.
 
 **Open questions:**
-- Capture with explicit map_index argument once we identify the inbound parameter shape.
 - Test with values from cfg_individual.MAPL (map IDs 0, 1) to probe what MAPI returns per map.
-- Bare GET returns r=-3 — capture the args the app sends with MAPI to get a successful response.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX MAPI`
 
@@ -3294,23 +3289,16 @@ observed during run), r:0 (OK code).
 
 ### MITRC — `mission_track`
 
-APK-documented endpoint (apk-named "Mission Track" — likely
-carries live trail / completed track). The 3 cloud dumps so far
-all returned r=-1. r=-1 is empirically NOT proof of feature
-absence — sibling MISTA flipped from r=-1 to a successful
-payload between dump 2 and dump 3. Downgraded to
-`decoded: hypothesized` pending further evidence.
-App-MITM 2026-06-09 confirms the app issues routed-get t=MITRC
-with paged {idx, size} arguments [dreame-app-implementation-guide-2026-06-09.md];
-response shape is [UNKNOWN — to capture] — see tools/probes/read_key_probe.py.
-Live probe 2026-06-09 sent {idx:0, size:20} and received r=-1 (mower
-docked, idle) — consistent with all cloud dumps; r=-1=idle, mid-run probe
-required to confirm whether it returns data during an active mission.
+Mission-track paging. App requests {idx (page offset), size (point
+count)}; response {idx, track} where track is a base64-packed binary
+trail segment ('' when that page is empty). Non-empty page captured
+mid-mow (idx:45,size:4). Replaces r=-1=idle framing — it does return
+data, the empty '' pages just mean no track at that offset. Internal
+byte layout of the base64 not yet decoded.
 
 **Open questions:**
-- Capture during an active mowing session — MITRC is apk-named 'mission tracking', likely carries live trail.
-- Test whether more cloud dumps over time produce a successful response (cf. MISTA).
 - Paged {idx, size} args confirmed by app-MITM [dreame-app-implementation-guide-2026-06-09.md] — what is the page size and total page count for a typical session?
+- Decode the base64 track-segment byte layout (point encoding).
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX MITRC`
 
@@ -3345,21 +3333,15 @@ list:[{ip, rssi(dBm), ssid}]}; rssi in dBm (e.g. -64 ≈ 70-80% signal).
 
 ### OBS — `obstacle_data`
 
-APK-documented endpoint. The 3 cloud dumps so far all returned
-r=-3. r=-3 is empirically NOT proof of feature absence — see
-MISTA which flipped from r=-3/r=-1 to a successful payload
-between dump 2 and dump 3. Downgraded to `decoded: hypothesized`
-pending further evidence.
-App-MITM 2026-06-09 confirms the app issues routed-get t=OBS
-(obstacles); response shape is [UNKNOWN — to capture] —
-see tools/probes/read_key_probe.py.
-Live probe 2026-06-09 bare GET returned r=-3 (mower docked, idle) —
-endpoint requires args; the app likely sends additional arguments.
+Obstacle list, paged by {idx}. Response envelope {idx, obstacle:[]}
+confirmed r=0; the obstacle array was empty in every capture (no
+obstacles logged during this session), so the per-row layout is still
+uncaptured. Replaces the r=-3 framing — bare GET failed only for lack
+of {idx}.
 
 **Open questions:**
 - Capture immediately after an AI-obstacle event (cloud-side; s1p53 is BLE-connection, NOT obstacle — find the real on-wire trigger).
 - Cross-reference with AIOBS — both apk-described as obstacle endpoints, semantics distinct.
-- Bare GET returns r=-3 — capture the args the app sends with OBS to get a successful response.
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`, `apk: ioBroker.dreame/apk.md §getX OBS`
 
@@ -3412,6 +3394,10 @@ write on that map (zone settings, mowing mode, etc.).
 Not wired; the per-map version could seed a cache-invalidation check.
 App-MITM 2026-06-09 confirms the app issues routed-get t=PREI
 [dreame-app-implementation-guide-2026-06-09.md].
+PREI takes an {idx} arg — idx:0 and idx:1 return distinct ver arrays
+(idx:0 ver[[0,115],[1,3]]; idx:1 ver[[0,11],[1,0]]), so idx is a
+preference-category selector, not just map. Within 06-19 map0's
+ver[0][1] rose 115→123 over the session, confirming it increments live.
 
 **Open questions:**
 - PREI.type field — purpose unknown; observed always 0. Does it ever take a non-zero value?
@@ -3450,20 +3436,18 @@ Wired in the integration: 4 diagnostic SIM sensors (cardId/activeTime/expiredTim
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 
-### RGBPSTA — `led_state`
+### RGBPSTA — `region_progress`
 
-LED state read via routed-get t=RGBPSTA. App-MITM 2026-06-09 confirms
-the app issues action(siid:2,aiid:50) {m:'g', t:'RGBPSTA'} to read the
-LED/indicator-light state [dreame-app-implementation-guide-2026-06-09.md].
-Live probe 2026-06-09 bare GET (also probed with "id":-1) returned r=-3
-(mower docked, idle) — endpoint requires args or a different call pattern;
-the app likely sends additional arguments. Response shape still
-[UNKNOWN — to capture].
+NOT an RGB-LED colour read. Response is a list of per-region progress
+records: {bp_ts (date string), bp_ts_utc (unix), pro (progress in basis
+points; 10000=100%), rg_id (region id)}. idx selects a region group
+(idx:0 → one rg_id:1 record; idx:1 → []). The 'RGB'/LED interpretation
+is debunked. Field-name meanings (bp_=?) not fully resolved, but the
+shape and that it is NOT {r,g,b} is confirmed.
 
 **Open questions:**
-- Decode the RGBPSTA response shape; does it carry {r, g, b, brightness} or an enum mode?
 - Is RGBPSTA read-write (is there a corresponding SET path)?
-- Bare GET (and id:-1 variant) returns r=-3 — capture the args the app sends with RGBPSTA to get a successful response.
+- Resolve the bp_ts / pro / rg_id field semantics (what region/progress is tracked).
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints`
 
@@ -3754,13 +3738,13 @@ following mowing session. Wire mask: byte[6] & 0x08.
 
 ### s1p1_b7 — `state_transition_marker`
 
-State transition marker. Values: 0=idle, 1 or 4 = state
-transitions. Exact semantics of 1 vs 4 not yet pinned down.
+State transition marker. Values: 0=idle, value 4 ≈ active/mowing
+context (mode 1: 7770 frames), value 1 ≈ docked/settled context
+(charge-done 13 + docked 6: ~4869). The byte is the full state_raw
+enum and carries more values than {0,1,4} — also {5,8,32,33,64,68,96}
+— so it is not a 3-state transition flag.
 Decoded by the integration as state_raw on the Heartbeat
 dataclass.
-
-**Open questions:**
-- Distinguish the semantic difference between value 1 and value 4; correlate with specific s2p1/s2p2 transitions.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/heartbeat.py`, `docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes`
 
@@ -4247,15 +4231,11 @@ without waiting for frame N+1.
 ### s1p4_33b_delta_2 — ``
 
 Second path-history delta (Δ2). Same sentinel rule as delta_1:
-|dx|>32766 AND |dy|>32766 → ABSOLUTE. Caveat: Δ2 saturates more
-regularly than Δ1/Δ3 during steady motion (often (+INT16_MAX,
--INT16_MIN)) — may be a reserved slot on g2408 where only Δ1+Δ3
-carry real data, or a different sentinel semantic than described in
-the apk. Full path-history decode validation needed before shipping
-a decoder change (see §3.1 validation steps).
-
-**Open questions:**
-- Δ2 saturates more than Δ1/Δ3 — reserved slot or different sentinel? Validate with mid-session frame plot against known path.
+|dx|>32766 AND |dy|>32766 → ABSOLUTE. Δ2 carries a real path-history
+delta (mean |dx|≈255 mm on non-saturated frames, on par with Δ1/Δ3).
+It saturates to the apk absolute-jump sentinel on ~23.5% of frames —
+comparable to Δ3 (~21%), not disproportionately — so it is a live
+delta slot, not reserved.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/telemetry.py`, `docs/research/inventory/generated/g2408-canonical.md § Telemetry (s1p4) fields`, `apk: ioBroker.dreame/apk.md §parseRobotTrace`
 
@@ -4275,21 +4255,20 @@ frames — saturation pattern matches the apk sentinel.
 
 ### s1p4_33b_flag_22 — ``
 
-Initialisation-complete flag. Observed 0 at session start, transitions
-to 1 after initialisation. Value stays 1 throughout the mowing session.
-
-**Open questions:**
-- What triggers the 0→1 transition exactly? Is it localisation-complete or first-pose-published?
+apk parseRobotTask regionId (already read as region_id=data[22] in
+telemetry.py). NOT a one-way init flag — corpus shows reversible
+transitions (1→2→1 mid-mow) and the value set {0,1,2,3}; it tracks the
+active task region, returning to lower values when the plan revisits a
+region.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/telemetry.py:239`, `docs/research/inventory/generated/g2408-canonical.md § Telemetry (s1p4) fields`
 
 ### s1p4_33b_flag_23 — ``
 
-Observed constant value 2 across all captures. Likely a protocol-version
-or frame-type marker. Not known to change.
-
-**Open questions:**
-- Does byte[23] ever differ from 2? If always 2, it may be a frame-format version constant.
+apk parseRobotTask taskId (already read as task_id=data[23] in
+telemetry.py). Corpus DEBUNKS the earlier constant-2 claim — byte[23]
+ranges 1-13 across 101,273 frames and varies within a single session;
+it indexes the active task/sub-task within the current region (b22).
 
 **See also:** `custom_components/dreame_a2_mower/protocol/telemetry.py:239`, `docs/research/inventory/generated/g2408-canonical.md § Telemetry (s1p4) fields`
 
@@ -4311,9 +4290,12 @@ exclusion zones (user-confirmed 2026-04-25). area_mowed_cent plateaus
 at (total - excluded), not at total. Resets each session. The apk
 documents this as uint24 at bytes [26-28]; byte [28] is currently
 treated as static on g2408 (small lawns keep it at 0x00).
-
-**Open questions:**
-- Switch to apk's uint24 decode for lawns > 655 m²; currently uint16 + static high byte.
+The apk uint24 LE decode at [26-28] (÷100 → m²) is the confirmed
+formula and is already computed in telemetry.py as total_uint24_m2;
+switching the published field from the uint16 read to the uint24 read
+is a lossless code change (byte[28]≡0 across all 101,273 corpus frames,
+so the two reads are identical on every observed frame). The change is
+an implementation decision, not a wire unknown.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/telemetry.py`, `docs/research/inventory/generated/g2408-canonical.md § Telemetry (s1p4) fields`, `apk: ioBroker.dreame/apk.md §parseRobotTask`
 
@@ -4339,9 +4321,10 @@ live_map.DreameA2LiveMap._handle_coordinator_update (each captured
 path point tagged with cutting=1 if this counter ticked). Apk documents
 as uint24 [29-31]; byte [31] currently static on g2408 small-lawn
 captures.
-
-**Open questions:**
-- Switch to uint24 decode [29-31] for lawns where mowed area > 655 m².
+Same as total_area — the apk uint24 LE decode at [29-31] is confirmed
+and already computed as finish_uint24_m2; byte[31]≡0 across all
+101,273 corpus frames so the uint16→uint24 switch is lossless on
+observed data; it is an implementation decision, not a wire unknown.
 
 **See also:** `custom_components/dreame_a2_mower/protocol/telemetry.py`, `docs/research/inventory/generated/g2408-canonical.md § Telemetry (s1p4) fields`, `apk: ioBroker.dreame/apk.md §parseRobotTask`
 
@@ -5638,7 +5621,7 @@ to within rounding.
 | archive_cloud_track | verbatim_cloud_track | [ [[x_m, y_m], ...], ... ] | WIRED | m |
 | archive_track | per_point_track_stream | [{t: float, x_m: float, y_m: float, area_m2: float, heading_deg: float|null, task_state: int, role: str}, ...] | WIRED |  |
 | event_s4eiid1_arg1 | mode_op | int (mode/op enum) | DECODED-UNWIRED |  |
-| event_s4eiid1_arg11 | event_arg11 | int (0 or 1) | SEEN-UNDECODED |  |
+| event_s4eiid1_arg11 | event_arg11 | int (0, 1, or 2) | SEEN-UNDECODED |  |
 | event_s4eiid1_arg13 | fault_event_timeline | list of [unix_ts, s2p2_code] | DECODED-UNWIRED |  |
 | event_s4eiid1_arg14 | total_lawn_area_m2 | int (m² rounded) | WIRED | m² (×1.0) |
 | event_s4eiid1_arg15 | event_arg15 | int (always 0) | SEEN-UNDECODED |  |
@@ -5745,10 +5728,14 @@ sampling artifact — all six were all-area mows (op 100). Disproved
 
 ### event_s4eiid1_arg11 — `event_arg11`
 
-Binary flag. Observed values: 0 and 1 across six captures. Semantics unknown.
+Integer flag, observed values {0,1,2} across 109 event_occured captures
+(NOT binary — value 2 first seen 2026-06-21/06-22). Values 1 and 2 occur
+ONLY on area-coverage modes (piid1 ∈ {100,101,102}); value 0 occurs on
+every mode including spot(103)/patrol(107)/cruise-side(108). Meaning
+still unpinned but it is gated to coverage-mode sessions.
 
 **Open questions:**
-- What does piid=11 flag? Correlate with session type or outcome.
+- Why is arg11 nonzero (1 vs 2) only on coverage modes 100/101/102, and what distinguishes value 1 from value 2 (2 = only on mode-100, piid2=1)?
 
 **See also:** `docs/research/inventory/generated/g2408-canonical.md § Events`
 
