@@ -17,7 +17,6 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ..._availability import _FreshnessAvailableMixin
 from ..._devices import map_device_info, map_unique_id
-from ...const import LOGGER
 from ...control_honesty import _ControlHonestyMixin, resolve_control_mode
 from ...coordinator import DreameA2MowerCoordinator
 

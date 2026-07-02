@@ -57,7 +57,9 @@ from .entities.switch.global_ import (
     DreameA2AiRecognitionHumansSwitch,
     DreameA2AiRecognitionAnimalsSwitch,
     DreameA2AiRecognitionObjectsSwitch,
-    # Re-exported so existing tests that import builders from switch still work.
+)
+# Re-exported so existing tests that import builders from switch still work.
+from .entities.switch.global_ import (  # noqa: F401 — re-export
     _build_ata_lift,
     _build_ata_offmap,
     _build_ata_realtime,

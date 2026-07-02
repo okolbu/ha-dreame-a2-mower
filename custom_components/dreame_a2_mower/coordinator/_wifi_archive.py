@@ -4,8 +4,7 @@ See spec docs/superpowers/specs/2026-05-15-coordinator-decomposition-design.md.
 """
 from __future__ import annotations
 
-import time as _time_module_alias  # avoid shadowing if class body imports `time`
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from ..const import LOGGER
 

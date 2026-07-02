@@ -239,3 +239,17 @@ jobs:
 
       - name: Run full test suite
         run: python -m pytest tests/ -q
+
+  ruff-f401:
+    # refactor-v2 P1 (R-9): unused-import recurrence gate. Import headers
+    # rotted to 605 unused imports after the 2026-05 package decompositions
+    # (mixins/entities/camera/wifi splits) before this job existed. Only
+    # F401 is enforced repo-wide for now; broader lint adoption is a P3+
+    # decision. Config: ruff.toml (repo root).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.13"}
+      - run: pip install ruff
+      - run: ruff check custom_components/

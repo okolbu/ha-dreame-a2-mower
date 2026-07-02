@@ -4,81 +4,22 @@ See spec docs/superpowers/specs/2026-05-15-coordinator-decomposition-design.md.
 """
 from __future__ import annotations
 
-import asyncio
-import base64
 import dataclasses
-import json
-import math
-from datetime import timedelta
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_call_later, async_track_time_interval
-from homeassistant.helpers.storage import Store
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
+from homeassistant.helpers.event import async_call_later
 
-from ..archive.lidar import LidarArchive
-from ..archive.session import ArchivedSession, SessionArchive
-from ..wifi_archive_store import WifiArchiveEntry, WifiArchiveStore
-from ..cloud_client import DreameA2CloudClient, WriteResult
+from ..cloud_client import WriteResult
 from ..const import (
-    CONF_COUNTRY,
-    CONF_LIDAR_ARCHIVE_KEEP,
-    CONF_LIDAR_ARCHIVE_MAX_MB,
-    CONF_PASSWORD,
-    CONF_SESSION_ARCHIVE_KEEP,
-    CONF_STATION_BEARING_DEG,
-    CONF_USERNAME,
-    DEFAULT_LIDAR_ARCHIVE_KEEP,
-    DEFAULT_LIDAR_ARCHIVE_MAX_MB,
-    DEFAULT_SESSION_ARCHIVE_KEEP,
-    DOMAIN,
-    EVENT_TYPE_DOCK_ARRIVED,
-    EVENT_TYPE_DOCK_DEPARTED,
-    EVENT_TYPE_MOWING_ENDED,
-    EVENT_TYPE_MOWING_PAUSED,
-    EVENT_TYPE_MOWING_RESUMED,
-    EVENT_TYPE_MOWING_STARTED,
-    LOG_NOVEL_KEY_SESSION_SUMMARY,
-    LOG_NOVEL_PROPERTY,
-    LOG_NOVEL_VALUE,
     LOGGER,
 )
-from ..inventory.loader import load_inventory
-from ..live_map.finalize import RETRY_INTERVAL_SECONDS, FinalizeAction
-from ..live_map.finalize import decide as _finalize_decide
-from ..live_map.state import LiveMapState
 from ..mower.actions import ACTION_TABLE, MowerAction
-from ..mower.property_mapping import PROPERTY_MAPPING, resolve_field
-from ..mower.state import ChargingStatus, MowerState
-from ..mower.state_machine import MowerStateMachine
-from ..mqtt_client import DreameA2MqttClient
-from ..observability.schemas import SCHEMA_SESSION_SUMMARY, SchemaCheck
 from ..protocol.schedule_action import (
     read_live_schedule,
     write_schedule_enabled_state,
     write_schedule_row,
 )
 from ..protocol.schedule_encode import encode_schedule_blob
-from ._property_apply import (
-    _BLOB_SLOTS,
-    _INVENTORY,
-    _SESSION_SUMMARY_CHECK,
-    _SETTINGS_TRIPWIRE_SLOTS,
-    _SUPPRESSED_SLOTS,
-    S2P2_EVENT_TYPES,
-    S2P2_UNKNOWN_EVENT_TYPE,
-    _apply_consumables,
-    _apply_s1p1_heartbeat,
-    _apply_s1p4_telemetry,
-    _apply_s2p51_settings,
-    _coerce_blob,
-    _consumable_pct_remaining,
-    _project_north_east,
-    apply_property_to_state,
-)
 
 if TYPE_CHECKING:
     pass  # cross-mixin type imports added as needed

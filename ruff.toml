@@ -1,0 +1,25 @@
+# refactor-v2 P1 (R-9): F401 gate — import headers rotted to 640 unused imports
+# after the 2026-05 decompositions. Only F401 is enforced repo-wide for now;
+# broader lint adoption is a P3+ decision.
+target-version = "py313"
+
+[lint]
+select = ["F401"]
+
+[lint.per-file-ignores]
+# Public re-export surfaces are intentional F401:
+"custom_components/dreame_a2_mower/**/__init__.py" = ["F401"]
+# Root re-export shims (die in P0-contract-rewrite/P3, not here):
+"custom_components/dreame_a2_mower/sensor_*.py" = ["F401"]
+"custom_components/dreame_a2_mower/select_*.py" = ["F401"]
+"custom_components/dreame_a2_mower/switch_*.py" = ["F401"]
+"custom_components/dreame_a2_mower/_camera_*.py" = ["F401"]
+"custom_components/dreame_a2_mower/_render_*.py" = ["F401"]
+"custom_components/dreame_a2_mower/_sensor_base.py" = ["F401"]
+"custom_components/dreame_a2_mower/_select_base.py" = ["F401"]
+"custom_components/dreame_a2_mower/_switch_base.py" = ["F401"]
+"custom_components/dreame_a2_mower/wifi_*.py" = ["F401"]
+"custom_components/dreame_a2_mower/map_decoder.py" = ["F401"]
+"custom_components/dreame_a2_mower/protocol/schedule.py" = ["F401"]
+# const.py re-exports mower.error_codes names until the P3 inversion (R-30):
+"custom_components/dreame_a2_mower/const.py" = ["F401"]

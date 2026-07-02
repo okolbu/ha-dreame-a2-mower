@@ -42,6 +42,10 @@ from .entities.sensor.device import (
     DreameA2WifiHeatmapAgeSensor,
     DreameA2WifiRefreshStatusSensor,
     DreameA2ZoneProgressSensor,
+)
+# Re-exported so tools/state_machine_audit_fake_coord.py can build eval-globals
+# for value_fn lambdas without importing the entities package directly.
+from .entities.sensor.device import (  # noqa: F401 — re-export
     _active_fault_text,
     _api_endpoints_value,
     _describe_error_or_none,

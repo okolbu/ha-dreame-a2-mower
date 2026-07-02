@@ -72,7 +72,7 @@ from .entities.select.map_settings import (
 # Tests import these helpers directly from the select module
 # (see tests/integration/test_entity_builders.py).
 # ---------------------------------------------------------------------------
-from .entities.select.global_ import (
+from .entities.select.global_ import (  # noqa: F401 — re-export
     _PRE_PAD_DEFAULTS,
     _build_pre_efficiency,
     _build_wrp_resume_hours,

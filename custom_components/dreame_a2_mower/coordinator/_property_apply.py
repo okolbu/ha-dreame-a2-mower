@@ -16,57 +16,19 @@ The original module docstring follows.
 # ``coordinator.data`` (the MowerState).
 from __future__ import annotations
 
-import asyncio
 import base64
 import dataclasses
-import json
 import math
-from datetime import timedelta
-from pathlib import Path
 from typing import Any
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.helpers.storage import Store
-from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from ..archive.lidar import LidarArchive
-from ..archive.session import ArchivedSession, SessionArchive
-from ..wifi_archive_store import WifiArchiveEntry, WifiArchiveStore
-from ..cloud_client import DreameA2CloudClient
 from ..const import (
-    CONF_COUNTRY,
-    CONF_LIDAR_ARCHIVE_KEEP,
-    CONF_LIDAR_ARCHIVE_MAX_MB,
-    CONF_PASSWORD,
-    CONF_SESSION_ARCHIVE_KEEP,
-    CONF_STATION_BEARING_DEG,
-    CONF_USERNAME,
-    DEFAULT_LIDAR_ARCHIVE_KEEP,
-    DEFAULT_LIDAR_ARCHIVE_MAX_MB,
-    DEFAULT_SESSION_ARCHIVE_KEEP,
-    DOMAIN,
-    EVENT_TYPE_DOCK_ARRIVED,
-    EVENT_TYPE_DOCK_DEPARTED,
-    EVENT_TYPE_MOWING_ENDED,
-    EVENT_TYPE_MOWING_PAUSED,
-    EVENT_TYPE_MOWING_RESUMED,
-    EVENT_TYPE_MOWING_STARTED,
-    LOG_NOVEL_KEY_SESSION_SUMMARY,
     LOG_NOVEL_PROPERTY,
-    LOG_NOVEL_VALUE,
     LOGGER,
 )
 from ..inventory.loader import load_inventory
-from ..live_map.finalize import RETRY_INTERVAL_SECONDS, FinalizeAction
-from ..live_map.finalize import decide as _finalize_decide
-from ..live_map.state import LiveMapState
-from ..mower.actions import ACTION_TABLE, MowerAction
 from ..mower.property_mapping import PROPERTY_MAPPING, resolve_field
 from ..mower.state import ChargingStatus, MowerState
-from ..mower.state_machine import MowerStateMachine
-from ..mqtt_client import DreameA2MqttClient
 from ..observability.schemas import SCHEMA_SESSION_SUMMARY, SchemaCheck
 from ..protocol import config_s2p51 as _s2p51
 from ..protocol import heartbeat as _heartbeat
@@ -118,8 +80,9 @@ _SETTINGS_TRIPWIRE_SLOTS: frozenset[tuple[int, int]] = frozenset({(6, 2)})
 # S2P2_EVENT_TYPES + S2P2_UNKNOWN_EVENT_TYPE moved to mower/error_codes.py
 # 2026-05-26 so external dev tools (mower_tail.py, probe_a2_mqtt.py) can
 # import them WITHOUT pulling homeassistant through the coordinator package.
-# Re-exported here for the existing `from ._property_apply import …` chain.
-from ..mower.error_codes import (  # noqa: E402 — re-export
+# Re-exported here for the existing `from ._property_apply import …` chain
+# (consumed by coordinator/__init__.py, _mqtt_handlers.py, _notifications.py).
+from ..mower.error_codes import (  # noqa: E402, F401 — re-export
     S2P2_EVENT_TYPES,
     S2P2_UNKNOWN_EVENT_TYPE,
 )

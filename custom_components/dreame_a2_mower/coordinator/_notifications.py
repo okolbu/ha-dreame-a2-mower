@@ -29,7 +29,6 @@ docs/research/app-notification-history-2026-05-16.md § Empirical s2p2 mapping.
 from __future__ import annotations
 
 import asyncio
-import collections
 import dataclasses
 from typing import Any
 
