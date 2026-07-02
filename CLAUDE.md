@@ -391,8 +391,10 @@ were removed in the 2026-05-25 refresher consolidation
 
 > **Note:** the LOCN routed-action refresher was removed (it was unscheduled
 > dead code). `position_lat`/`position_lon` are written solely by `_refresh_gps`.
-> The low-level `cloud_client.fetch_locn` fetcher is kept (unscheduled) for a
-> future dock-location entity.
+> The low-level `cloud_client.fetch_locn` fetcher was deleted in P1 (zero
+> integration callers — see `docs/research/debunked-claims.md` § single-map
+> era / D18); the LOCN wire target still exists (`inventory.yaml` § LOCN) and
+> can be re-added trivially if a future dock-location entity needs it.
 
 `CloudState` does **not** carry `dock` — it flows straight to
 `MowerState` via its 60 s timer. The CFG→MowerState port lives in the pure
@@ -419,9 +421,9 @@ the submodule whose concern it matches:
 | `_auth.py` | `_AuthMixin`: login (primary + secondary-key refresh-token path) |
 | `_discovery.py` | `_DiscoveryMixin`: device discovery (`get_devices`, `get_device_info`, `get_info`, `select_first_g2408`) |
 | `_rpc.py` | `_RpcMixin`: transport/RPC — `send`, `request`, `action`, `routed_action`, `send_async`, `action_async`, `get_properties`, `set_property`, `set_properties`, `_api_call`, `_api_call_async`, `get_api_url` |
-| `_oss.py` | `_OssMixin`: OSS signed-URL fetch (`get_interim_file_url`, `get_file_url`), WiFi heatmap fetch/list (`fetch_wifi_map`, `list_wifi_candidates`), raw file download (`get_file`) |
+| `_oss.py` | `_OssMixin`: OSS signed-URL fetch (`get_interim_file_url`, `get_file_url`), WiFi heatmap listing (`list_wifi_candidates`), raw file download (`get_file`) |
 | `_batch.py` | `_BatchMixin`: batch device-data primitives (`get_batch_device_datas`, `set_batch_device_datas`, `write_chunked_key`, `get_device_data`, `get_device_property`, `get_device_event`) |
-| `_fetchers.py` | `_FetchersMixin`: `fetch_full_cloud_state`, `fetch_cfg`, `fetch_locn`, `fetch_dev`, `fetch_mihis`, `fetch_dock`, `fetch_net`, `fetch_map`, `fetch_mapl`, `set_cfg`, `set_pre` |
+| `_fetchers.py` | `_FetchersMixin`: `fetch_full_cloud_state`, `fetch_cfg`, `fetch_dev`, `fetch_mihis`, `fetch_dock`, `fetch_net`, `fetch_map`, `fetch_mapl`, `set_cfg`, `set_pre` |
 
 ### Rules
 

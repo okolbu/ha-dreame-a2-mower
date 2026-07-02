@@ -53,41 +53,13 @@ class _FetchersMixin:
         _LOGGER.info("[AIOBS] fetched %d marker(s)", len(markers))
         return markers
 
-    def fetch_locn(self) -> dict[str, Any] | None:
-        """Fetch LOCN via the routed-action s2 aiid=50 {m:'g', t:'LOCN'} path.
-
-        Returns a dict containing a ``pos`` key (e.g. ``{"pos": [lon, lat]}``)
-        on success, or None on failure. Logs warnings; does not raise.
-
-        The sentinel value ``pos: [-1, -1]`` means the dock GPS origin has
-        not been configured — callers should treat this as "no position".
-
-        Source: docs/research/g2408-protocol.md §2.1 LOCN; legacy
-        dreame/device.py:refresh_locn for request shape and response handling.
-        """
-        from ..protocol.cfg_action import CfgActionError, probe_get  # type: ignore[import]
-
-        try:
-            payload = probe_get(self.action, "LOCN")
-        except CfgActionError as ex:
-            _LOGGER.debug("fetch_locn: routed-action error: %s", ex)
-            return None
-        except Exception as ex:  # pragma: no cover — defensive
-            _LOGGER.warning("fetch_locn: unexpected error: %s", ex)
-            return None
-
-        # Unwrap optional `d` envelope — some firmware revisions wrap the
-        # location dict in a `d` key; others return it directly.
-        if isinstance(payload, dict) and isinstance(payload.get("d"), dict):
-            result = payload["d"]
-        elif isinstance(payload, dict):
-            result = payload
-        else:
-            _LOGGER.warning("fetch_locn: unexpected payload shape: %r", payload)
-            return None
-
-        _LOGGER.debug("[LOCN] payload: %r", result)
-        return result
+    # fetch_locn() deleted 2026-07-02 — LOCN-era endpoint fetcher with zero
+    # integration callers (the only remaining caller was
+    # tools/probes/inventory_probe.py). position_lat/position_lon are
+    # written solely by _refresh_gps; LOCN's routed-action target still
+    # exists on the wire (see inventory.yaml § LOCN) and can be re-added
+    # trivially if a future dock-location entity needs it. See
+    # docs/research/debunked-claims.md § D18.
 
     def fetch_dev(self) -> dict[str, Any] | None:
         """Fetch DEV via routed-action s2 aiid=50 {m:'g', t:'DEV'}.

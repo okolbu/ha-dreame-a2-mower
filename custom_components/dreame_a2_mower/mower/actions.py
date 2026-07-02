@@ -54,7 +54,6 @@ class MowerAction(Enum):
     LOCK_BOT_TOGGLE = auto()
     LOCK_BOT = auto()  # Distinct from LOCK_BOT_TOGGLE — direct lockBot opcode (apk op=12)
     GENERATE_3D_MAP = auto()
-    REQUEST_WIFI_MAP = auto()
     SUPPRESS_FAULT = auto()
     FINALIZE_SESSION = auto()  # integration-local; no cloud call
     SET_ACTIVE_MAP = auto()
@@ -319,10 +318,10 @@ ACTION_TABLE: dict[MowerAction, ActionEntry] = {
         "siid": 2, "aiid": 50, "routed_o": 10,
         "payload_fn": _generate_3d_map_payload,
     },
-    # REQUEST_WIFI_MAP — direct MIoT action s6.aiid=4 (no routing).
-    # Different surface from the s2.50 routed-action used elsewhere.
-    # From ioBroker.dreame v0.3.7 main.js:3478. Untested on g2408 —
-    # may return 80001 if the cloud-RPC tunnel is closed for siid=6
-    # actions, in which case we'd need an alternate path.
-    MowerAction.REQUEST_WIFI_MAP: {"siid": 6, "aiid": 4},
+    # REQUEST_WIFI_MAP (s6.aiid=4 direct MIoT "request fresh wifi map")
+    # deleted 2026-07-02 — dead belief; the device generates wifi maps on
+    # its own schedule and no production code dispatched this action (the
+    # user-facing WiFi refresh button calls refresh_wifi_archive(), a
+    # cached-OSS fetch, not this RPC). See
+    # docs/research/debunked-claims.md § D19.
 }

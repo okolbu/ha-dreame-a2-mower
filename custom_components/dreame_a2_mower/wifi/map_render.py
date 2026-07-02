@@ -1,6 +1,7 @@
 """Render the WiFi signal heatmap fetched from OSS.
 
-Source format (decoded from `cloud_client.fetch_wifi_map`):
+Source format (the decoded wifimap OSS-object dict returned by
+`cloud_client.list_wifi_candidates()` / its internal `_decode_candidate`):
 
     {
       "data":   list[int],   # width*height RSSI values; `1` = no data,

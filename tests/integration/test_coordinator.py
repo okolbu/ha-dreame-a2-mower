@@ -1446,45 +1446,6 @@ def test_dispatch_action_cfg_toggle_rejected_returns_not_accepted_code_none():
     assert result.code is None
 
 
-def test_dispatch_action_direct_siid_aiid_delivered_when_action_returns():
-    """An action with no routed_o falls back to direct action(siid, aiid);
-    a non-None device result → delivered + accepted, code=None."""
-    import asyncio
-    from unittest.mock import MagicMock
-    from custom_components.dreame_a2_mower.cloud_client import WriteResult
-    from custom_components.dreame_a2_mower.mower.actions import MowerAction
-
-    coord = _make_coordinator_for_finalize_tests()
-    coord.data = MowerState()
-    # REQUEST_WIFI_MAP is siid=6/aiid=4 with no routed_o.
-    coord._cloud.action = MagicMock(return_value={"code": 0})
-
-    result = asyncio.run(coord.dispatch_action(MowerAction.REQUEST_WIFI_MAP, {}))
-    assert isinstance(result, WriteResult)
-    assert result.delivered is True
-    assert result.accepted is True
-    assert result.code is None
-    coord._cloud.action.assert_called_once_with(6, 4)
-
-
-def test_dispatch_action_direct_siid_aiid_not_delivered_when_action_none():
-    """Direct siid/aiid path: action() returns None → not-delivered."""
-    import asyncio
-    from unittest.mock import MagicMock
-    from custom_components.dreame_a2_mower.cloud_client import WriteResult
-    from custom_components.dreame_a2_mower.mower.actions import MowerAction
-
-    coord = _make_coordinator_for_finalize_tests()
-    coord.data = MowerState()
-    coord._cloud.action = MagicMock(return_value=None)
-
-    result = asyncio.run(coord.dispatch_action(MowerAction.REQUEST_WIFI_MAP, {}))
-    assert isinstance(result, WriteResult)
-    assert result.delivered is False
-    assert result.accepted is False
-    assert result.code is None
-
-
 def test_dispatch_action_payload_error_returns_not_delivered():
     """A payload_fn that raises ValueError → not-delivered WriteResult,
     non-raising, code=None, and no cloud call is made."""

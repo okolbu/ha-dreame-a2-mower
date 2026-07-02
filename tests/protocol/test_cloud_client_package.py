@@ -10,7 +10,7 @@ def test_public_client_importable_and_complete():
         "login",                              # _auth
         "get_device_info", "get_info",         # _discovery
         "send", "request", "routed_action",    # _rpc
-        "fetch_wifi_map", "get_file",          # _oss
+        "list_wifi_candidates", "get_file",    # _oss
         "get_batch_device_datas", "write_chunked_key",  # _batch
         "fetch_full_cloud_state", "set_cfg", "fetch_map",  # _fetchers
         "mqtt_host_port", "disconnect",        # shell
