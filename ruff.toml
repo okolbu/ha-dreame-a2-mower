@@ -1,4 +1,4 @@
-# refactor-v2 P1 (R-9): F401 gate — import headers rotted to 640 unused imports
+# refactor-v2 P1 (R-9): F401 gate — import headers rotted to ~605 unused imports
 # after the 2026-05 decompositions. Only F401 is enforced repo-wide for now;
 # broader lint adoption is a P3+ decision.
 target-version = "py313"

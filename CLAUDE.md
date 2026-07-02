@@ -406,9 +406,10 @@ were removed in the 2026-05-25 refresher consolidation
 > **Note:** the LOCN routed-action refresher was removed (it was unscheduled
 > dead code). `position_lat`/`position_lon` are written solely by `_refresh_gps`.
 > The low-level `cloud_client.fetch_locn` fetcher was deleted in P1 (zero
-> integration callers — see `docs/research/debunked-claims.md` § single-map
-> era / D18); the LOCN wire target still exists (`inventory.yaml` § LOCN) and
-> can be re-added trivially if a future dock-location entity needs it.
+> integration callers — see `docs/research/debunked-claims.md` § LOCN
+> endpoint era / D18); the LOCN wire target still exists (`inventory.yaml` §
+> LOCN) and can be re-added trivially if a future dock-location entity needs
+> it.
 
 `CloudState` does **not** carry `dock` — it flows straight to
 `MowerState` via its 60 s timer. The CFG→MowerState port lives in the pure
