@@ -505,8 +505,16 @@ class _CoreMixin:
             try:
                 if mqtt.is_connected:
                     return True
-            except Exception:  # pragma: no cover - defensive
-                pass
+            except AttributeError as ex:
+                # Only a partially-shaped stand-in lacking the attribute can
+                # land here (the real client always has the property; a
+                # missing _mqtt is handled by the getattr above). Anything
+                # else must propagate — the old broad `except Exception`
+                # swallow is exactly what hid the is_connected() TypeError
+                # for months (R-4 / T3-1).
+                LOGGER.debug(
+                    "mqtt_is_fresh: _mqtt not fully initialised: %s", ex
+                )
         return self.cloud_is_fresh
 
     def _note_cloud_fetch(self, *, ok: bool) -> None:

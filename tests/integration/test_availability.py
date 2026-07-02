@@ -196,6 +196,37 @@ def test_mqtt_is_fresh_false_with_real_client_when_broker_and_cloud_down():
     assert coord.mqtt_is_fresh is False
 
 
+def test_mqtt_is_fresh_swallows_only_attribute_error():
+    """The exception guard in ``mqtt_is_fresh`` is narrowed to
+    ``AttributeError`` (review follow-up to R-4): a client object missing
+    the attribute falls back to ``cloud_is_fresh``, but any OTHER exception
+    — e.g. the very ``TypeError`` class the old broad
+    ``except Exception: pass`` silently re-hid for months — must propagate.
+    """
+    import pytest
+
+    class _NoAttrMqtt:
+        """No ``is_connected`` at all → AttributeError on access."""
+
+    coord = object.__new__(DreameA2MowerCoordinator)
+    coord._mqtt = _NoAttrMqtt()
+    coord._consecutive_cloud_failures = 0
+    assert coord.mqtt_is_fresh is True  # falls back to fresh cloud
+    coord._consecutive_cloud_failures = 99
+    assert coord.mqtt_is_fresh is False  # falls back to stale cloud
+
+    class _RaisingMqtt:
+        @property
+        def is_connected(self):
+            raise TypeError("'bool' object is not callable")
+
+    coord2 = object.__new__(DreameA2MowerCoordinator)
+    coord2._mqtt = _RaisingMqtt()
+    coord2._consecutive_cloud_failures = 0
+    with pytest.raises(TypeError):
+        coord2.mqtt_is_fresh
+
+
 # ---------------------------------------------------------------------------
 # _FreshnessAvailableMixin gates per-source
 # ---------------------------------------------------------------------------
