@@ -199,14 +199,80 @@ def digest_diff(a: dict, b: dict) -> list[str]:
     return problems
 
 
+def extract_excerpt(
+    src: Path, dst: Path, start: str, end: str, max_bytes: int = 500_000
+) -> int:
+    """Copy sanitized mqtt_message lines with start <= timestamp < end.
+
+    Sanitization: the device id (read from the log's own lines) and any
+    MAC-shaped string are replaced. Returns lines written; raises if the
+    result exceeds max_bytes or the real did survives.
+    """
+    import re
+
+    did: str | None = None
+    out: list[str] = []
+    with src.open() as fh:
+        for line in fh:
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if did is None:
+                d = row.get("device") or {}
+                if d.get("did"):
+                    did = str(d["did"])
+                params = row.get("params") or []
+                if params and isinstance(params[0], dict) and params[0].get("did"):
+                    did = str(params[0]["did"])
+            if row.get("type") != "mqtt_message":
+                continue
+            ts = row.get("timestamp", "")
+            if not (start <= ts < end):
+                continue
+            keep = {
+                "type": "mqtt_message",
+                "timestamp": ts,
+                "params": row.get("params") or [],
+            }
+            text = json.dumps(keep)
+            if did:
+                text = text.replace(did, "SANITIZED_DID")
+            text = re.sub(
+                r"([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}", "SANITIZED_MAC", text
+            )
+            out.append(text)
+    blob = "\n".join(out) + "\n"
+    if did and did in blob:
+        raise RuntimeError("sanitization failed: device id survived")
+    if len(blob.encode()) > max_bytes:
+        raise RuntimeError(f"excerpt too large: {len(blob.encode())} bytes")
+    dst.write_text(blob)
+    return len(out)
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=TOOL_META["summary"])
     ap.add_argument("--corpus-dir", type=Path, required=True)
     ap.add_argument("--glob", default="probe_log_*.jsonl")
     ap.add_argument("--out", type=Path)
     ap.add_argument("--diff", type=Path)
+    ap.add_argument("--extract-src", type=Path)
+    ap.add_argument("--extract-start")
+    ap.add_argument("--extract-end")
+    ap.add_argument("--extract-dst", type=Path)
     add_to_parser(ap, TOOL_META)
     args = ap.parse_args(argv)
+
+    if args.extract_src:
+        if not (args.extract_start and args.extract_end and args.extract_dst):
+            ap.error("--extract-* flags must be given together")
+        n = extract_excerpt(
+            args.extract_src, args.extract_dst,
+            args.extract_start, args.extract_end,
+        )
+        print(f"extracted {n} sanitized lines -> {args.extract_dst}")
+        return 0
 
     paths = sorted(args.corpus_dir.glob(args.glob))
     if not paths:
