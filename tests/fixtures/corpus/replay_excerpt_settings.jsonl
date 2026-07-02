@@ -1,0 +1,235 @@
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:00:04", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:00:03.952710", "siid": 6, "value": [50, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:00:08", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:00:08.283080", "siid": 6, "value": [50, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:04:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 5, 0, 0, 128, 87, 177, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:09:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 5, 0, 0, 128, 87, 177, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:11:14", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:11:14.299571", "siid": 6, "value": [50, 1, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:11:18", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:11:18.299558", "siid": 6, "value": [50, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:12:25", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:12:24.736643", "siid": 6, "value": [50, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:12:28", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:12:28.394990", "siid": 6, "value": [50, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:13:29", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:13:28.949569", "siid": 6, "value": [50, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:13:34", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:13:33.770141", "siid": 6, "value": [50, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:14:41", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 5, 0, 0, 128, 87, 177, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:15:40", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:15:40.024365", "siid": 6, "value": [60, 0, false, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:15:46", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:15:45.749585", "siid": 6, "value": [60, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:16:50", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:16:50.176624", "siid": 6, "value": [60, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:16:56", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:16:55.386612", "siid": 6, "value": [60, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:18:52", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:18:51.321221", "siid": 6, "value": [60, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:18:54", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:18:53.702231", "siid": 6, "value": [60, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:19:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 5, 0, 0, 128, 87, 177, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:21:32", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"type": 1}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:23:02", "params": [{"did": "SANITIZED_DID", "piid": 2, "realTime": "2026-06-09 17:23:02.071265", "siid": 6, "value": [60, 0, true, 2]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:24:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 5, 0, 0, 128, 87, 177, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:26:14", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"type": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:26:40", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 4]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:27:19", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 4]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:27:26", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 5]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:28:33", "params": [{"did": "SANITIZED_DID", "piid": 106, "realTime": "2026-06-09 17:28:33.015069", "siid": 5, "value": 2}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:29:08", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:29:18", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": 1}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:29:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 5, 0, 0, 128, 87, 177, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:09", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 4, 0, 0, 128, 87, 129, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:09", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 145, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:09", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 164, 17, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:09", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 2, "value": 11}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:09", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 180, 24, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:09", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 196, 24, 0, 2, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:10", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 2, "value": {"d": {"exe": true, "o": 204, "status": true}, "t": "TASK"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:10", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 1, "value": {}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:10", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 2, "value": {"d": {"error": 0, "exe": true, "id": 102, "ids": [], "o": 234, "status": true}, "t": "TASK"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:10", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 212, 17, 0, 2, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:11", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 1, "value": {}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:11", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 2, "value": {"d": {"error": 0, "exe": true, "o": 201, "status": true}, "t": "TASK"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:11", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 228, 27, 0, 2, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:11", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 244, 27, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:11", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 2, "value": {"d": {"exe": true, "o": -1, "status": false}, "t": "TASK"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:11", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 20, 17, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:12", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 33, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:32:12", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 2, "value": 2}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:34:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 33, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:34:58", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 116, 17, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:34:58", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 2, "value": 11}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:34:58", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 132, 24, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:34:58", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 148, 24, 0, 2, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:34:59", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 2, "value": {"d": {"exe": true, "o": 204, "status": true}, "t": "TASK"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:34:59", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 1, "value": {}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:34:59", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 2, "value": {"d": {"error": 0, "exe": true, "id": 102, "ids": [], "o": 218, "status": true}, "t": "TASK"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:34:59", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 164, 17, 0, 2, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:35:00", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 1, "value": {}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:35:00", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 2, "value": {"d": {"error": 0, "exe": true, "o": 201, "status": true}, "t": "TASK"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:35:00", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 180, 27, 0, 2, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:35:00", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 196, 27, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:35:00", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 2, "value": {"d": {"exe": true, "o": -1, "status": false}, "t": "TASK"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:35:00", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 212, 17, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:35:00", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 225, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:35:01", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 2, "value": 2}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:39:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 225, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:44:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 87, 225, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:45:20", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"end": 420, "start": 1260, "value": 1}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:45:29", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"end": 420, "start": 1320, "value": 1}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:45:38", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"end": 480, "start": 1320, "value": 1}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:46:26", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"end": 480, "start": 1320, "value": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:46:32", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"end": 480, "start": 1260, "value": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:46:38", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"end": 420, "start": 1260, "value": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:46:49", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 1200, 480]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:47:32", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1200, 480]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:47:39", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1260, 480]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:47:44", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1260, 540]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:48:32", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1200, 540]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:48:36", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1200, 480]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:48:43", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": 1}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:49:29", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:49:36", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [15, 95, 1, 0, 1080, 480]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:49:38", "params": [{"did": "SANITIZED_DID", "piid": 2, "siid": 3, "value": 1}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:49:38", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 215, 113, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:49:38", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 2, "value": 6}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:49:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 215, 113, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:49:47", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 88}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:49:47", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 216, 145, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:50:22", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 89}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:50:22", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 217, 161, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:50:30", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [15, 95, 1, 1, 1080, 480]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:50:31", "params": [{"did": "SANITIZED_DID", "piid": 2, "siid": 3, "value": 0}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:50:31", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 89, 193, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:50:31", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 2, "value": 2}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:50:36", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [15, 95, 1, 1, 1140, 480]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:50:41", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [15, 95, 1, 1, 1140, 540]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:51:31", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [15, 95, 1, 1, 1080, 540]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:51:36", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [15, 95, 1, 1, 1080, 480]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:52:08", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [10, 95, 1, 1, 1080, 480]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:52:41", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [15, 95, 1, 1, 1080, 480]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:52:51", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [15, 100, 1, 1, 1080, 480]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:53:39", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [15, 95, 1, 1, 1080, 480]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:54:33", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 88}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:54:33", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 88, 65, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:54:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 88, 65, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:56:36", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:57:22", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": 1}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:57:23", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:59:08", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": 1}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 17:59:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 88, 65, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:00:02", "params": [{"did": "SANITIZED_DID", "piid": 2, "siid": 3, "value": 1}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:00:02", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 216, 209, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:00:02", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 2, "value": 6}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:00:10", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 89}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:00:10", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 217, 225, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:00:36", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 480, 1200, 1, 1, 1, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:00:46", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 90}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:00:46", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 218, 17, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:01:24", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 91}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:01:24", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 219, 49, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:01:41", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 480, 1200, 0, 1, 1, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:01:43", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 480, 1200, 0, 0, 1, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:01:45", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 480, 1200, 0, 0, 0, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:01:46", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 480, 1200, 0, 0, 0, 0, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:02:04", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 92}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:02:04", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 220, 81, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:02:06", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 480, 1200, 0, 0, 0, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:02:07", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 480, 1200, 0, 0, 1, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:02:08", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 480, 1200, 0, 1, 1, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:02:08", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 480, 1200, 1, 1, 1, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:02:11", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 480, 1200, 1, 1, 1, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:02:48", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 93}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:02:48", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 221, 113, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:02:56", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 0, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:03:20", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:03:24", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 1, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:03:34", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 94}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:03:34", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 222, 145, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:04:00", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 0, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:04:01", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 0, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:04:23", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 95}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:04:23", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 223, 177, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:04:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 223, 177, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:05:13", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 96}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:05:13", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 224, 225, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:06:03", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 97}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:06:03", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 225, 17, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:06:52", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 98}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:06:52", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 226, 49, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:07:42", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 99}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:07:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 227, 81, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:07:52", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 0, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:08:25", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 1, 1, 1, 1, 1, 0, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:08:31", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 3, "value": 100}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:08:31", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 228, 129, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:08:33", "params": [{"did": "SANITIZED_DID", "piid": 106, "realTime": "2026-06-09 18:08:33.006747", "siid": 5, "value": 4}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:09:06", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 2, 1, 1, 1, 1, 0, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:09:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 228, 129, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:09:52", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 1, 1, 1, 1, 1, 0, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:09:53", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 1, 1, 1, 0, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:10:34", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 1, 1, 1, 1, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:10:56", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 1, 1, 1, 1, 1, 10]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:11:50", "params": [{"did": "SANITIZED_DID", "piid": 2, "siid": 3, "value": 2}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:11:50", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 225, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:11:50", "params": [{"did": "SANITIZED_DID", "piid": 1, "siid": 2, "value": 13}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:12:08", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 1, 1, 1, 1, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:12:26", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 1, 1, 1, 1, 0, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:12:45", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 1, 1, 1, 1, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:13:55", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 1, 1, 1, 1, 0, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:14:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 225, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:15:22", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 1, 1, 1, 1, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:16:18", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 0, 1, 1, 1, 1, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:16:19", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 0, 0, 1, 1, 1, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:16:20", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 0, 0, 0, 1, 1, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:16:21", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 0, 0, 0, 0, 1, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:16:49", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 0, 0, 0, 1, 1, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:16:50", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 0, 0, 1, 1, 1, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:16:50", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 0, 1, 1, 1, 1, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:16:51", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 1, 1, 1, 1, 1, 3]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:17:34", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"result": 0, "time": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:18:04", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"result": 0, "time": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:19:14", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"result": 0, "time": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:19:24", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"result": 0, "time": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:19:37", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": 1}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:19:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 225, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:24:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 225, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:25:05", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 81, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:25:05", "params": [{"did": "SANITIZED_DID", "piid": 53, "siid": 1, "value": true}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:25:06", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"time": "1781022305", "tz": "Europe/Oslo"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:29:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 81, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:30:57", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"time": "1781022657", "tz": "Europe/Berlin"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:34:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 81, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:35:48", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 1, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:35:49", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 0, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:35:51", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 0, 0, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:35:52", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 0, 0, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:36:01", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 0, 0, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:36:03", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 0, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:36:04", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:36:05", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:36:08", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": 51}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:37:48", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"text": 7, "voice": 0}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:39:06", "params": [{"did": "SANITIZED_DID", "piid": 53, "siid": 2, "value": 0}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:39:07", "params": [{"did": "SANITIZED_DID", "piid": 53, "siid": 2, "value": 0}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:39:08", "params": [{"did": "SANITIZED_DID", "piid": 53, "siid": 2, "value": 10}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:39:09", "params": [{"did": "SANITIZED_DID", "piid": 53, "siid": 2, "value": 75}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:39:09", "params": [{"did": "SANITIZED_DID", "piid": 53, "siid": 2, "value": 100}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:39:09", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"text": 7, "voice": 9}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:39:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 81, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:39:48", "params": [{"did": "SANITIZED_DID", "piid": 53, "siid": 2, "value": 0}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:39:49", "params": [{"did": "SANITIZED_DID", "piid": 53, "siid": 2, "value": 0}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:39:50", "params": [{"did": "SANITIZED_DID", "piid": 53, "siid": 2, "value": 20}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:39:51", "params": [{"did": "SANITIZED_DID", "piid": 53, "siid": 2, "value": 100}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:39:51", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"text": 7, "voice": 7}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:41:48", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 1, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:41:49", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 0, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:41:50", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 0, 0, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:41:52", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [0, 0, 0, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:42:12", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 0, 0, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:42:13", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 0, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:42:14", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 0]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:42:16", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"value": [1, 1, 1, 1]}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:44:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 81, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:49:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 81, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:54:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 81, 255, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:58:08", "params": [{"did": "SANITIZED_DID", "piid": 51, "siid": 2, "value": {"time": "1781024287", "tz": "Europe/Berlin"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:58:08", "params": [{"did": "SANITIZED_DID", "piid": 106, "realTime": "2026-06-09 18:58:09.009850", "siid": 5, "value": 6}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:58:12", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 52, 17, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:58:14", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 68, 24, 0, 0, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:58:14", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 84, 24, 0, 2, 128, 192, 186, 206]}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:58:14", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 2, "value": {"d": {"exe": true, "o": 204, "status": true}, "t": "TASK"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:58:58", "params": [{"did": "SANITIZED_DID", "piid": 65, "realTime": "2026-06-09 18:58:59.066912", "siid": 2, "value": "TASK_NAV_CUSTOM_ISLAND"}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:58:58", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 2, "value": {"d": {"error": 2, "exe": true, "id": 101, "ids": [], "o": 215, "status": false}, "t": "TASK"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:59:27", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 1, "value": {}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:59:27", "params": [{"did": "SANITIZED_DID", "piid": 50, "siid": 2, "value": {"d": {"error": 0, "exe": true, "id": 101, "ids": [1], "o": 215, "status": true}, "t": "TASK"}}]}
+{"type": "mqtt_message", "timestamp": "2026-06-09 18:59:42", "params": [{"piid": 1, "siid": 1, "value": [206, 0, 0, 0, 0, 0, 0, 0, 0, 0, 128, 100, 84, 24, 0, 2, 128, 192, 186, 206]}]}
