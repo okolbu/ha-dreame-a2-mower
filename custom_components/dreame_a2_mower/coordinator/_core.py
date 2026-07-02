@@ -503,7 +503,7 @@ class _CoreMixin:
         mqtt = getattr(self, "_mqtt", None)
         if mqtt is not None:
             try:
-                if mqtt.is_connected():
+                if mqtt.is_connected:
                     return True
             except Exception:  # pragma: no cover - defensive
                 pass

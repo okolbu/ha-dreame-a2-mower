@@ -103,9 +103,25 @@ def test_refresh_cloud_state_exception_counts_as_failure():
 # ---------------------------------------------------------------------------
 
 class _FakeMqtt:
+    """Stand-in for ``DreameA2MqttClient``.
+
+    ``is_connected`` MUST be a ``@property`` here, matching the real class
+    (``mqtt_client.py``) exactly — see R-4 / T3-1 / T7-1. A hand-rolled
+    ``def is_connected(self)`` (a callable method) is the mock-mask that hid
+    the production bug: ``coordinator/_core.py`` called
+    ``mqtt.is_connected()`` (parens) against the real property, raising
+    ``TypeError: 'bool' object is not callable`` that a bare ``except`` then
+    swallowed — so ``mqtt_is_fresh`` silently degraded to ``cloud_is_fresh``
+    forever. Against a hand-rolled *method* fake, the same call site is a
+    normal, successful function call, so the bug never surfaced here. The
+    permanent guard against this exact shape mismatch recurring is
+    ``tests/audit/test_mock_shape_census.py``.
+    """
+
     def __init__(self, connected: bool):
         self._c = connected
 
+    @property
     def is_connected(self) -> bool:
         return self._c
 
@@ -139,6 +155,45 @@ def test_mqtt_is_fresh_handles_missing_mqtt_client():
     # Before the MQTT client is wired (early setup), fall back to cloud freshness.
     assert _coord(mqtt_connected=None, cloud_failures=0).mqtt_is_fresh is True
     assert _coord(mqtt_connected=None, cloud_failures=5).mqtt_is_fresh is False
+
+
+def test_mqtt_is_fresh_true_with_real_client_when_broker_connected():
+    """Regression (R-4 / T3-1 / T7-1): use the REAL ``DreameA2MqttClient``,
+    not a fake, so this proves the actual attribute shape.
+
+    ``DreameA2MqttClient.is_connected`` is a ``@property``
+    (``mqtt_client.py``). The bug was ``coordinator/_core.py`` calling it as
+    a method (``mqtt.is_connected()``), which raises ``TypeError`` against
+    the real property; the bare ``except Exception: pass`` swallowed that
+    and fell through to ``cloud_is_fresh`` — so a connected broker was
+    reported fresh ONLY because the cloud poll happened to also be fresh,
+    never because the broker itself was live. With cloud failing (stale)
+    but the broker genuinely connected, the pre-fix code returns False here;
+    it must return True.
+    """
+    from custom_components.dreame_a2_mower.mqtt_client import DreameA2MqttClient
+
+    coord = object.__new__(DreameA2MowerCoordinator)
+    mqtt = DreameA2MqttClient()
+    mqtt._connected = True  # broker has acked the connection
+    coord._mqtt = mqtt
+    coord._consecutive_cloud_failures = 99  # cloud link is stale/failing
+
+    assert coord.mqtt_is_fresh is True
+
+
+def test_mqtt_is_fresh_false_with_real_client_when_broker_and_cloud_down():
+    """Same real-client proof, negative case: broker down AND cloud stale
+    must still be a genuine unavailable."""
+    from custom_components.dreame_a2_mower.mqtt_client import DreameA2MqttClient
+
+    coord = object.__new__(DreameA2MowerCoordinator)
+    mqtt = DreameA2MqttClient()
+    mqtt._connected = False
+    coord._mqtt = mqtt
+    coord._consecutive_cloud_failures = 99
+
+    assert coord.mqtt_is_fresh is False
 
 
 # ---------------------------------------------------------------------------
