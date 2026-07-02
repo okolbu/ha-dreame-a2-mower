@@ -1446,6 +1446,60 @@ def test_dispatch_action_cfg_toggle_rejected_returns_not_accepted_code_none():
     assert result.code is None
 
 
+def test_dispatch_action_direct_siid_aiid_delivered_when_action_returns():
+    """An action entry with siid/aiid but no routed_o/local_only/cfg_toggle_field
+    falls back to a direct action(siid, aiid) call; a non-None device result →
+    delivered + accepted, code=None.
+
+    ACTION_TABLE currently has no such entry — every cloud action carries a
+    routed_o (the working path on g2408) — so this generic fallback branch in
+    dispatch_action would otherwise be untested (it lost its only coverage,
+    REQUEST_WIFI_MAP, when that dead action was deleted). We locally construct
+    a fake ActionEntry and patch.dict it onto an existing MowerAction member
+    for just this test — no new MowerAction member or permanent ACTION_TABLE
+    row is added; FIND_BOT is reused purely as a dict key.
+    """
+    import asyncio
+    from unittest.mock import MagicMock, patch
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.actions import ACTION_TABLE, MowerAction
+
+    coord = _make_coordinator_for_finalize_tests()
+    coord.data = MowerState()
+    coord._cloud.action = MagicMock(return_value={"code": 0})
+
+    fake_entry = {"siid": 6, "aiid": 4}  # no routed_o / local_only / cfg_toggle_field
+    with patch.dict(ACTION_TABLE, {MowerAction.FIND_BOT: fake_entry}):
+        result = asyncio.run(coord.dispatch_action(MowerAction.FIND_BOT, {}))
+
+    assert isinstance(result, WriteResult)
+    assert result.delivered is True
+    assert result.accepted is True
+    assert result.code is None
+    coord._cloud.action.assert_called_once_with(6, 4)
+
+
+def test_dispatch_action_direct_siid_aiid_not_delivered_when_action_none():
+    """Direct siid/aiid fallback path: action() returns None → not-delivered."""
+    import asyncio
+    from unittest.mock import MagicMock, patch
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+    from custom_components.dreame_a2_mower.mower.actions import ACTION_TABLE, MowerAction
+
+    coord = _make_coordinator_for_finalize_tests()
+    coord.data = MowerState()
+    coord._cloud.action = MagicMock(return_value=None)
+
+    fake_entry = {"siid": 6, "aiid": 4}
+    with patch.dict(ACTION_TABLE, {MowerAction.FIND_BOT: fake_entry}):
+        result = asyncio.run(coord.dispatch_action(MowerAction.FIND_BOT, {}))
+
+    assert isinstance(result, WriteResult)
+    assert result.delivered is False
+    assert result.accepted is False
+    assert result.code is None
+
+
 def test_dispatch_action_payload_error_returns_not_delivered():
     """A payload_fn that raises ValueError → not-delivered WriteResult,
     non-raising, code=None, and no cloud call is made."""

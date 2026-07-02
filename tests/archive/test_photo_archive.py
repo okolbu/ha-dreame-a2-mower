@@ -50,7 +50,7 @@ def test_archive_enforces_retention(tmp_path: Path) -> None:
     assert not any(arc.root.glob("*oldest*"))
 
 
-def test_archive_enforces_size_cap(tmp_path: Path) -> None:
+def test_photo_archive_enforces_size_cap(tmp_path: Path) -> None:
     """max_bytes prunes oldest until total on-disk size is at or below the cap."""
     photo = JPEG  # ~104 bytes
     # Cap at ~2.5 photos worth so the 3rd archive evicts the oldest.

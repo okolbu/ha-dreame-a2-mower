@@ -29,7 +29,7 @@ def _make_coord(archive_by_map_id: dict, lidar_render_entry=None, active_map_id=
     return coord
 
 
-def test_view_url_and_auth():
+def test_selected_view_url_and_auth():
     view = LidarSelectedPcdView()
     assert view.url == "/api/dreame_a2_mower/lidar/selected.pcd"
     assert view.requires_auth is True

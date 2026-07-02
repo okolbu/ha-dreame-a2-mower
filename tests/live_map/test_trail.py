@@ -190,7 +190,7 @@ class TestRenderObstacleOverlay:
         assert len(result) == 1
         assert len(result[0]) == 3
 
-    def test_skips_malformed_points(self):
+    def test_skips_malformed_points_in_obstacle_polygon(self):
         # Defensive: points with <2 coords are dropped, rest of polygon kept.
         result = render_obstacle_overlay(
             polygons=[[(0.0, 0.0), (1.0,), (1.0, 0.0), (1.0, 1.0)]],

@@ -21,7 +21,7 @@ def test_trackpoint_fields():
     assert p.role == "mowing"
 
 
-def test_default_state_is_inactive():
+def test_default_state_has_empty_track():
     s = LiveMapState()
     assert not s.is_active()
     assert s.track == []

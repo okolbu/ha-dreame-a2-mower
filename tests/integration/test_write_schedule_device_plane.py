@@ -48,7 +48,7 @@ def _make_coord(rows, version=0):
 
 
 @pytest.mark.asyncio
-async def test_write_schedule_uses_device_plane_not_kv(monkeypatch):
+async def test_write_schedule_writes_only_changed_slot_via_device_plane(monkeypatch):
     import custom_components.dreame_a2_mower.coordinator._writes as W
 
     rows = [[0, 1, "Spr", "OLD"], [1, 0, "Aut", ""]]

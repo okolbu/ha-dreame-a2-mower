@@ -69,7 +69,7 @@ class TestDreameA2TrailRenderWidthNumber:
         assert captured["state"].trail_render_width == 7
 
     @pytest.mark.asyncio
-    async def test_set_native_value_coerces_float_to_int(self):
+    async def test_trail_render_width_coerces_float_to_int(self):
         coord = _make_coord(width=24)
         ent = DreameA2TrailRenderWidthNumber(coord)
         ent.hass = MagicMock()

@@ -6,7 +6,7 @@ from custom_components.dreame_a2_mower.const import DOMAIN
 from custom_components.dreame_a2_mower.mower.state import MowerState
 
 
-def test_unique_id_and_device_are_per_map(coordinator_with_two_maps):
+def test_head_to_point_unique_id_and_device_are_per_map(coordinator_with_two_maps):
     from custom_components.dreame_a2_mower.button import DreameA2HeadToPointButton
     coord = coordinator_with_two_maps
     coord.data = MowerState()
