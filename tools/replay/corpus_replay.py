@@ -264,8 +264,11 @@ def main(argv: list[str] | None = None) -> int:
     add_to_parser(ap, TOOL_META)
     args = ap.parse_args(argv)
 
-    if args.extract_src:
-        if not (args.extract_start and args.extract_end and args.extract_dst):
+    extract_flags = (
+        args.extract_src, args.extract_start, args.extract_end, args.extract_dst
+    )
+    if any(f is not None for f in extract_flags):
+        if not all(f is not None for f in extract_flags):
             ap.error("--extract-* flags must be given together")
         n = extract_excerpt(
             args.extract_src, args.extract_dst,

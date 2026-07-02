@@ -138,6 +138,16 @@ def test_main_exit_code_1_on_mismatched_diff(tmp_path, capsys):
     assert "MISMATCH" in out and "rolling_sha256" in out
 
 
+def test_main_partial_extract_flags_error(tmp_path):
+    """A lone --extract-* flag must argparse-error (exit 2), not silently
+    fall through to a normal replay run."""
+    import pytest
+
+    with pytest.raises(SystemExit) as ei:
+        main(["--corpus-dir", str(tmp_path), "--extract-start", "x"])
+    assert ei.value.code == 2
+
+
 def test_cli_standalone_without_pytest_conftest(tmp_path):
     """`python -m tools.replay.corpus_replay` must work in a bare venv.
 
