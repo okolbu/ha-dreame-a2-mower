@@ -143,6 +143,21 @@ above — remove inline, append to `OLD/.../inventory-history/`). Do not preserv
 contradicted older claim inline, even with a tag. (Mirrored at the top of
 `inventory.yaml` in the PROVENANCE PRIORITY header note.)
 
+### Debunked-claims register (negative knowledge)
+
+`docs/research/debunked-claims.md` is the negative-knowledge companion to
+`inventory.yaml`: a numbered table (D1–D20+) of claims that were once believed
+and have since been proven false, plus a list of known-reversal "eras" (dead
+assumption-generations) found during the 2026-07-02 archaeology pass. Treat it
+as a **blocklist**, not a source of facts — never copy a row's "DEBUNKED claim"
+column into code, prose, or a new inventory entry as if true; the "truth"
+column only points at the current `inventory.yaml` id, it never restates the
+value. When you delete dead code or retract a claim that matches (or would
+resurrect) an entry here, the tombstone comment or retraction note cites
+`docs/research/debunked-claims.md § D<n>` (or `§ <era name>` for an era row) —
+never restate the debunked content inline. Adding a new entry goes through the
+normal inventory retraction flow above; this register only indexes it.
+
 ### Where this rule does NOT apply
 
 - Refactors that don't change wire understanding or entity sources.

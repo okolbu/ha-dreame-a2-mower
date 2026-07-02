@@ -444,7 +444,7 @@ entities:
     references:
       wire_entry: "s6p2"
       code: "custom_components/dreame_a2_mower/switch.py:1259"
-      docs: "/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md § s6.2"
+      docs: "custom_components/dreame_a2_mower/inventory.yaml § s6p2"
     notes: |
       Added 2026-05-14. Reads from per-map PRE shadow; converges once
       the user has saved Mowing Settings on each map at least once.
@@ -732,7 +732,7 @@ entities:
     references:
       wire_entry: "s6p2"
       code: "custom_components/dreame_a2_mower/sensor_map.py:180"
-      docs: "/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md § s6.2"
+      docs: "custom_components/dreame_a2_mower/inventory.yaml § s6p2"
     notes: |
       EntityCategory.DIAGNOSTIC. Unit cm, state class MEASUREMENT,
       suggested_display_precision=1. Wire value is millimetres in 5 mm steps;
@@ -886,7 +886,7 @@ entities:
         evidence: "app-mitm:2026-06-09-settings-sweep"
     references:
       wire_entry: "s6p2"
-      docs: "/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md § s6.2"
+      docs: "custom_components/dreame_a2_mower/inventory.yaml § s6p2"
     notes: |
       Options: Standard / Efficient (matches the Dreame app's two-mode
       toggle on the Mowing Settings page). Read-only on g2408 — no

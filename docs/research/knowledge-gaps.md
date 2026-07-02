@@ -1,5 +1,10 @@
 # g2408 Knowledge Gaps — MQTT push & cloud-API retvals
 
+> See also `docs/research/debunked-claims.md` — the negative-knowledge
+> register (D1–D20 + reversal eras). A blank spot here is *missing*
+> knowledge; a debunked claim there is knowledge that turned out to be
+> *wrong* — check both before re-deriving a protocol fact.
+
 A **blank-spots companion** to `inventory.yaml`. The inventory records what is
 *known* (and how confident we are); this file is the inverse view — the *missing*
 and *uncertain* understanding, gathered in one place because gaps are hard to

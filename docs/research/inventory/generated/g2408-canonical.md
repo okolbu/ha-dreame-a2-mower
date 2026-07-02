@@ -1070,10 +1070,26 @@ save happened" (user dismissed the unsaved-changes warning).
 Switching maps does NOT itself emit s6p2 — the next save on the
 new map reflects that map's stored values.
 
+Per-map storage is APP-SIDE ONLY — the device protocol exposes
+only the currently-active map's last-pushed profile; there is no
+device-side per-map store. The integration reconstructs a
+per-map shadow by tagging each s6p2 push with the active map_id
+(from the MAPL poll cache) at `state_machine.handle_pre_shadow_update`
+→ `snapshot().pre_shadow_by_map_id`; a map has no shadow entry
+until the user has saved Mowing Settings on it at least once.
+One null-result case: a Save screen that's entered, edited, then
+exited via "discard changes" without pressing Save never reaches
+the device-side save handler, so it is silent on the wire for a
+different reason than the map-switch silence above (no s6p2 AND
+no save occurred, vs. no s6p2 because the switch itself doesn't
+push) — don't conflate "no push seen" with "no save happened
+elsewhere"; check the map_id tag on the last push.
+
 **Open questions:**
 - What is byte[3]? Usually 2, one 198 outlier — possibly a mid-session status flag or schema/frame-type marker. Needs more samples around mid-mow setting changes.
+- Is s6p2 ever pushed by anything other than a Mowing-Settings-page Save press (e.g. schedule, automation, voice control, a mid-mow change)? The one byte[3]=198 outlier coincided with a mid-mow efficiency change, which is suggestive but not conclusive — needs more samples.
 
-**See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:110`, `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md § s6.2`
+**See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:110`, `custom_components/dreame_a2_mower/inventory.yaml § s6p2`
 
 ### s6p3 — `wifi_signal_push`
 

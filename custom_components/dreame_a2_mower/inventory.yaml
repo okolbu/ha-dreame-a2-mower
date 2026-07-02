@@ -2321,6 +2321,21 @@ properties:
       save happened" (user dismissed the unsaved-changes warning).
       Switching maps does NOT itself emit s6p2 — the next save on the
       new map reflects that map's stored values.
+
+      Per-map storage is APP-SIDE ONLY — the device protocol exposes
+      only the currently-active map's last-pushed profile; there is no
+      device-side per-map store. The integration reconstructs a
+      per-map shadow by tagging each s6p2 push with the active map_id
+      (from the MAPL poll cache) at `state_machine.handle_pre_shadow_update`
+      → `snapshot().pre_shadow_by_map_id`; a map has no shadow entry
+      until the user has saved Mowing Settings on it at least once.
+      One null-result case: a Save screen that's entered, edited, then
+      exited via "discard changes" without pressing Save never reaches
+      the device-side save handler, so it is silent on the wire for a
+      different reason than the map-switch silence above (no s6p2 AND
+      no save occurred, vs. no s6p2 because the switch itself doesn't
+      push) — don't conflate "no push seen" with "no save happened
+      elsewhere"; check the map_id tag on the last push.
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
@@ -2328,8 +2343,12 @@ properties:
       decoded: confirmed
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:110"
-      protocol_doc: "/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md § s6.2"
+      protocol_doc: "custom_components/dreame_a2_mower/inventory.yaml § s6p2"
     verifications:
+      - date: "2026-05-14"
+        status: verified
+        claim: "efficiency save on map2 pushes the full active-map profile (not just the changed field); switching active map to map1 emits no s6p2 (only s1p50); the next save on map1 then reflects map1's own stored height/edgemaster, not map2's"
+        evidence: "probe_log_20260510_190812.jsonl@19:33:21 ([60,1,true,2]) + 19:35:35 ([60,0,true,2]) + 19:36:42 ([30,0,false,2], first push after switching to map1)"
       - date: "2026-05-14"
         status: verified
         claim: "byte[2] cleanly toggles with each EdgeMaster save on both map1 and map2; map switch itself emits nothing"
@@ -2356,6 +2375,7 @@ properties:
         evidence: "docs/research/wire-captures/pre-write-r3-2026-06-03.md"
     open_questions:
       - "What is byte[3]? Usually 2, one 198 outlier — possibly a mid-session status flag or schema/frame-type marker. Needs more samples around mid-mow setting changes."
+      - "Is s6p2 ever pushed by anything other than a Mowing-Settings-page Save press (e.g. schedule, automation, voice control, a mid-mow change)? The one byte[3]=198 outlier coincided with a mid-mow efficiency change, which is suggestive but not conclusive — needs more samples."
 
   - id: "s6p3"
     siid: 6
