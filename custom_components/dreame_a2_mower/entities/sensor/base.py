@@ -1,11 +1,11 @@
 """Shared base classes and description dataclasses for the sensor platform.
 
 This module is a helper — NOT a HA platform — so HA will not attempt to
-load it as a sensor platform.  It is imported by sensor_device.py,
-sensor_map.py, sensor_session.py, and sensor.py.
+load it as a sensor platform.  It is imported by entities/sensor/device.py,
+entities/sensor/map.py, and entities/sensor/session.py.
 
 Acyclic import order:
-    _sensor_base  ←  sensor_device / sensor_map / sensor_session  ←  sensor.py
+    entities/sensor/base  ←  entities/sensor/{device,map,session}  ←  sensor.py
 """
 from __future__ import annotations
 

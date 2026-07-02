@@ -10,9 +10,10 @@ fork** of any upstream vacuum or mower project.
 `dreame.mower.g2408` on one Dreame cloud account, and in daily use against
 a live mower. Distributed as a HACS pre-release while protocol coverage and
 live validation continue. Built greenfield for the A2 — the original F1–F7
-phase rollout lives in `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/`; since then the
-coordinator, cloud client, entity platforms, and map renderer have each
-been decomposed into focused packages and multi-map support was added.
+phase rollout plans are maintainer-internal history (not distributed with
+this repo); since then the coordinator, cloud client, entity platforms, and
+map renderer have each been decomposed into focused packages and multi-map
+support was added.
 
 ## Features
 
@@ -401,10 +402,9 @@ so historical session and LiDAR data carry over without migration.
 
 ## Documentation
 
-- **`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-04-27-greenfield-integration-design.md`**
-  — full spec including the 48-item behavioral parity checklist.
-- **`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/plans/`** — phase-by-phase implementation plans
-  (F1 through F7).
+- The original greenfield design spec (48-item behavioral parity checklist)
+  and F1–F7 phase-by-phase implementation plans are maintainer-internal
+  history and are not distributed with this repo.
 - **`custom_components/dreame_a2_mower/entity-inventory.yaml`** — the
   authoritative per-entity inventory: read source + verification status
   for every entity and service. Use it to diagnose "I toggled X in HA
@@ -417,9 +417,9 @@ so historical session and LiDAR data carry over without migration.
   for MQTT property mappings, cloud-map coordinate frame, blob layouts,
   session-event schema, generated from
   `custom_components/dreame_a2_mower/inventory.yaml`. (The prior
-  architecture-overview doc, `g2408-protocol.md`, is ARCHIVED at
-  `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md`
-  — it carried debunked claims; do not resurrect it as a source.)
+  architecture-overview doc, `g2408-protocol.md`, is ARCHIVED to
+  maintainer-internal history — it carried debunked claims; do not
+  resurrect it as a source.)
 - **`docs/research/cloud-map-geometry.md`** — pixel ↔ cloud-frame mm
   transforms, midline reflections, lawn-polygon decoding.
 - **`docs/observability.md`** — diagnostic sensors, NOVEL log prefixes,

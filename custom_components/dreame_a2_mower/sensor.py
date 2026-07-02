@@ -1,11 +1,11 @@
 """Sensor platform for the Dreame A2 Mower.
 
 This file is the HA platform entry: it owns `async_setup_entry` only. The
-entity classes are split across sibling modules (B3a):
-  - `_sensor_base.py`     — shared bases + EntityDescription dataclasses
-  - `sensor_device.py`    — device-level sensors + the SENSORS / DIAGNOSTIC_SENSORS tables
-  - `sensor_map.py`       — per-map metadata sensors
-  - `sensor_session.py`   — per-map session-total sensors
+entity classes are split across the `entities/sensor/` package (Phase 3c):
+  - `entities/sensor/base.py`    — shared bases + EntityDescription dataclasses
+  - `sensor_device.py`           — device-level sensors + the SENSORS / DIAGNOSTIC_SENSORS tables (shim over entities/sensor/device.py)
+  - `sensor_map.py`              — per-map metadata sensors (shim over entities/sensor/map.py)
+  - `entities/sensor/session.py` — per-map session-total sensors
 The re-export block below keeps `from ...sensor import <X>` working for tests
 and tools that import entity classes / helpers directly from this module.
 """

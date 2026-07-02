@@ -12,8 +12,8 @@ Rotation history:
 
 Background was keyed out from JPEG ringing (alpha rebuilt via
 ImageChops.difference + threshold) so the corners are
-transparent. Source asset:
-/data/claude/homeassistant/dreame-a2-icon-large.jpg.
+transparent. Source asset (product photo, not distributed with this
+repo): dreame-a2-icon-large.jpg.
 """
 
 # Top-down product photograph of the Dreame A2 mower (g2408),

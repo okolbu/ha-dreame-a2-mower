@@ -27,10 +27,11 @@ Read-only selects (no confirmed write path in F4):
       Shipped read-only; expose the raw language_code string as the
       current option (or None if language_code is None).
 
-Implementation is split across sibling modules:
-  - _select_base.py:          DreameA2SettingsSelectDescription + _DreameA2DynamicTargetSelect
-  - select_global.py:         Device-level entities + SETTING_SELECTS table + helpers
-  - select_map_settings.py:   Per-map entities
+Implementation is split across the `entities/select/` package (Phase 3c) and
+sibling shim modules:
+  - entities/select/base.py:  DreameA2SettingsSelectDescription + _DreameA2DynamicTargetSelect
+  - select_global.py:         Device-level entities + SETTING_SELECTS table + helpers (shim over entities/select/global_.py)
+  - select_map_settings.py:   Per-map entities (shim over entities/select/map_settings.py)
 """
 from __future__ import annotations
 

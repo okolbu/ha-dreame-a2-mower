@@ -1,11 +1,11 @@
 """Shared base classes and description dataclass for the select platform.
 
 This module is a helper — NOT a HA platform — so HA will not attempt to
-load it as a select platform.  It is imported by select_global.py,
-select_map_settings.py, and select.py.
+load it as a select platform.  It is imported by entities/select/global_.py
+and entities/select/map_settings.py.
 
 Acyclic import order:
-    _select_base  ←  select_global / select_map_settings  ←  select.py
+    entities/select/base  ←  entities/select/{global_,map_settings}  ←  select.py
 """
 from __future__ import annotations
 

@@ -197,11 +197,10 @@ class _OssMixin:
             dec = _decode_candidate(obj_name)
             if dec is None:
                 continue
-            # Cloud body schema:
+            # Cloud body schema (wifimap OBJ candidate):
             #   startX, startY     — bbox origin in cm (cloud frame)
             #   width, height      — cell counts
             #   resolution         — cell size in METRES per cell on g2408
-            # (see fetch_wifi_map comment + wifi-heatmap-todo.md Issue #1).
             try:
                 start_x_cm = float(dec.get("startX", 0))
                 start_y_cm = float(dec.get("startY", 0))

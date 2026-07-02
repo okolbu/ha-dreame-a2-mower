@@ -6607,8 +6607,12 @@ cfg_individual:
     verifications:
       - date: "2026-06-10"
         status: verified
-        claim: "LOCN position_lat/lon write is RETIRED as the mower-position source — superseded by gps_get_records (device_tracker). fetch_locn is retained (unscheduled) for a future dock-location entity. This is a progression: LOCN's prior behaviour as dock-origin store was real; the integration no longer uses it for the live mower position."
+        claim: "LOCN position_lat/lon write is RETIRED as the mower-position source — superseded by gps_get_records (device_tracker). This is a progression: LOCN's prior behaviour as dock-origin store was real; the integration no longer uses it for the live mower position."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-07-02"
+        status: verified
+        claim: "Code-existence update (not a wire retraction — the LOCN wire facts above are unchanged): the client-side fetch_locn() fetcher was deleted (zero integration callers; it had been kept unscheduled for a hypothetical future dock-location entity that was never built). The LOCN backend endpoint documented above still exists and can be re-wired trivially if a dock-location entity is added later."
+        evidence: "commit 21ff30aa (chore(p1): delete LOCN/wifi-map-request/single-map dead paths)"
 
   - id: "MAPD"
     name: "map_data"

@@ -35,8 +35,9 @@ async def settings_optimistic_write(
 
     `new_value` is the entity-side value (bool / int / float). Bools are
     coerced to int for the wire (cloud SETTINGS stores all toggle fields
-    as int 0/1, not booleans — see /tmp/probe_current_state.py output).
-    The local MowerState keeps the entity-native type for clean UI reads.
+    as int 0/1, not booleans — see inventory.yaml § PRE, the dual-write
+    PRE/SETTINGS family). The local MowerState keeps the entity-native
+    type for clean UI reads.
 
     `map_id` selects which map to write to. Required — every per-map entity
     supplies its own explicit `map_id` (the single-map-era

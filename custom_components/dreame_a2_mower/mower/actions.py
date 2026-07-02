@@ -221,9 +221,8 @@ def _generate_3d_map_payload(params: dict[str, Any]) -> dict[str, Any]:
     return {"idx": int(params.get("map_index", 0))}
 
 
-# (siid, aiid) values verified against legacy
-# /data/claude/homeassistant/ha-dreame-a2-mower/custom_components/
-# dreame_a2_mower/dreame/types.py lines 807-838 (DreameMowerActionMapping).
+# (siid, aiid) values verified against the legacy okolbu/ha-dreame-a2-mower-legacy
+# fork's dreame/types.py lines 807-838 (DreameMowerActionMapping).
 ACTION_TABLE: dict[MowerAction, ActionEntry] = {
     MowerAction.START_MOWING: {
         "siid": 5, "aiid": 1,

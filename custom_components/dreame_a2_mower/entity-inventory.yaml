@@ -1766,12 +1766,16 @@ entities:
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-07-02"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: DreameA2Sensor.native_value = entity_description.value_fn(coordinator.data). Each descriptor in SENSORS table supplies its own value_fn accessing a MowerState field. Read from sensor_device.py:772-793; not re-confirmed live this pass."
         evidence: "sensor_device.py:791-792 (native_value → entity_description.value_fn(self.coordinator.data))"
+      - date: "2026-07-02"
+        status: verified
+        claim: "first_mowing_date is NOT MIHIS-sourced (the notes label below was stale, an era-carryover from before MIHIS wiring). MIHIS.start is a firmware-hardcoded sentinel (1704038400, see inventory.yaml § MIHIS) unusable as a real date, so the coordinator seeds first_mowing_date at boot from the local session archive's earliest non-in-progress session start_ts instead."
+        evidence: "coordinator/_core.py:814-877 (archive-seed loop + first_mowing_date assignment)"
     references:
       wire_entry: "varies — see notes for per-key wire surfaces"
       code: "custom_components/dreame_a2_mower/sensor_device.py:772"
@@ -1795,7 +1799,10 @@ entities:
         total_mowing_time_min  — MowerState.total_mowing_time_min (MIHIS)
         total_mowed_area_m2    — MowerState.total_mowed_area_m2 (MIHIS)
         mowing_count           — MowerState.mowing_count (MIHIS)
-        first_mowing_date      — MowerState.first_mowing_date (MIHIS)
+        first_mowing_date      — MowerState.first_mowing_date (local session
+                                 archive seed at boot — no MIHIS equivalent;
+                                 see coordinator/_core.py and inventory.yaml
+                                 § MIHIS)
         active_selection       — derived from MowerState.action_mode + zones/spots
         last_settings_change_unix — MowerState.last_settings_change_unix (s2p51)
         language_text_idx      — MowerState.language_text_idx (LANG)

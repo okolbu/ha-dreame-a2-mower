@@ -163,8 +163,9 @@ class MowerState:
     # (written by MowerStateMachine.handle_position; the N/E sensors read the
     # snapshot). They were never written here — dropped from MowerState 2026-06-15.
 
-    # Source: LOCN routed action (confirmed). Persistence: persistent.
-    # Sentinel [-1, -1] → both None.
+    # Source: location/getRecords via _refresh_gps (confirmed) — see
+    # inventory.yaml § gps_get_records. Persistence: persistent. Both cleared
+    # to None on an empty/failed getRecords response (no wire sentinel).
     position_lat: float | None = None
     position_lon: float | None = None
 

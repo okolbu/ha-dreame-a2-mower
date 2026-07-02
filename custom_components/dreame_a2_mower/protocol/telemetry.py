@@ -206,7 +206,7 @@ def decode_s1p4(data: bytes) -> MowingTelemetry:
     # (dx, dy) between frames agrees with byte[6]/255*360 at median error
     # 13°, 54% under 15°, 67% under 30° — linear decode holds. Outliers
     # cluster on pivot turns where motion vector is unreliable. See
-    # /data/claude/homeassistant/heading_correlate.py for the validator.
+    # inventory.yaml § s1p4_8b_heading_byte for the full corpus validation.
     #
     # Bytes [6-7] overlap with the `sequence` little-endian uint16 read
     # above; both interpretations are exposed so downstream code can pick.

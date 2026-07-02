@@ -386,7 +386,6 @@ were removed in the 2026-05-25 refresher consolidation
 | `_refresh_remote` | 6 h | 4G SIM status (REMOTE) → SIM sensors. |
 | `_refresh_messages` | 1 h | Account message-list unread (message-record/list v1). |
 | `_refresh_dev` | 6 h | DEV is not part of the full-state fetch. |
-| `_poll_slow_properties` | 1 h | s6.3 + s1.5 serial-while-unknown; feeds the state machine. |
 | `_refresh_aiobs` | 2 min (mow-gated) | Live AIOBS obstacle markers; early-returns unless a mow session is active. View-gated analogue — never background-polls. |
 
 > **Note:** the LOCN routed-action refresher was removed (it was unscheduled
