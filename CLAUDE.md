@@ -472,7 +472,7 @@ platform is a thin entry file with domain-grouped siblings.
   (The former `direction.py` / `_render_direction.py` track-inference module was
   removed 2026-06-19 — the next-mow stripe angle is read from the authoritative
   cloud field `settings_mowing_direction`, not inferred from the track. See
-  `docs/superpowers/specs/2026-06-19-next-direction-stripes-design.md`.)
+  `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-06-19-next-direction-stripes-design.md`.)
 - **Acyclic imports:** `{_geometry, stripes, dotted}` ← `base_map` ←
   {`main_view`, `work_log`} ← `__init__`. The leaf modules import nothing
   internal; never add a back-edge.
