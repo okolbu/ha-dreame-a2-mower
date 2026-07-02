@@ -1073,7 +1073,7 @@ new map reflects that map's stored values.
 **Open questions:**
 - What is byte[3]? Usually 2, one 198 outlier — possibly a mid-session status flag or schema/frame-type marker. Needs more samples around mid-mow setting changes.
 
-**See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:110`, `docs/research/g2408-protocol.md § s6.2`
+**See also:** `custom_components/dreame_a2_mower/mower/property_mapping.py:110`, `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md § s6.2`
 
 ### s6p3 — `wifi_signal_push`
 

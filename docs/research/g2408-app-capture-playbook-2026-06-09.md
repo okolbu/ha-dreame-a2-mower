@@ -5,7 +5,9 @@
 > - Per-entity read/write paths → **`custom_components/dreame_a2_mower/entity-inventory.yaml`** (the matrix it replaced is archived in OLD/)
 > - Per-slot semantic / structure → **`inventory/generated/g2408-canonical.md`**
 > - Cloud transport / endpoints / response codes → **`cloud-write-reference.md`**
-> - Architecture overview → **`g2408-protocol.md`**
+> - Architecture overview → **ARCHIVED**; `g2408-protocol.md` was retired 2026-07-02
+>   (debunked claims) to `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md`.
+>   Use `inventory.yaml` + `inventory/generated/g2408-canonical.md` as the current SoT.
 > - Wire-capture evidence → **`wire-captures/*.md`**
 >
 > The journal exists for traceability ("how did we figure this out?", "why was the old reading wrong?") and to keep deprecated hypotheses *visible but clearly labelled* so future contributors don't accidentally restate them. **A claim being in this doc does not mean it is currently true.**

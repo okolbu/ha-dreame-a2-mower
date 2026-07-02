@@ -16,7 +16,11 @@ For the protocol *blank-spots* (undecoded bits/bytes, uncertain slots, corpus
 coverage + how to validate each) see `docs/research/knowledge-gaps.md`.
 For shipped versions, resolved findings, and the RE journey see
 `docs/research/g2408-research-journal.md`.
-For overall protocol architecture see `docs/research/g2408-protocol.md`.
+The old protocol-architecture overview (`docs/research/g2408-protocol.md`) is
+ARCHIVED at
+`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md`
+(contained debunked claims); `custom_components/dreame_a2_mower/inventory.yaml`
+and the generated canonical doc are now the wire SoT.
 For per-slot detail see `docs/research/inventory/generated/g2408-canonical.md`.
 
 ---
@@ -360,7 +364,9 @@ recorded) + the working(1) gating caveat is confirmed.
 **Status:** command-time (op-echo) awareness DONE (v1.0.20a7); signals identified;
 step-1 ("Exiting") awareness + caveat confirmation OPEN
 **Procedure:** [docs/research/g2408-capture-procedures.md#3-active-mowing-s5p10x-sequence-capture](g2408-capture-procedures.md#3-active-mowing-s5p10x-sequence-capture)
-**Cross-refs:** `docs/research/g2408-protocol.md §1` (80001 failure context); probe-log correlation needed
+**Cross-refs:** 80001 failure context — see the ARCHIVED overview at
+`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md §1`
+(current SoT: `inventory.yaml`); probe-log correlation needed
 
 ---
 

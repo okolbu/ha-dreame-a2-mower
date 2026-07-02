@@ -17,7 +17,9 @@ cribs a non-obvious behavior from legacy code, never preemptively.
   `set_properties` / `action` / `get_properties` consistently return
   HTTP code 80001 ("device unreachable") even while MQTT is actively
   pushing telemetry. The integration treats this as expected, not
-  an error. Source: `docs/research/g2408-protocol.md` §1.2.
+  an error. Source: ARCHIVED overview
+  `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md`
+  §1.2 (current SoT: `inventory.yaml`).
 - **OSS download fallback path works** — `get_interim_file_url` +
   signed-URL fetch is the only reliable RPC path on g2408. Used for
   session-summary JSONs and LiDAR PCDs.

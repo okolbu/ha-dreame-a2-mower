@@ -30,14 +30,17 @@ please attach:
 If you're adding decoding support for a newly-observed property,
 firmware variant, or message shape:
 
-1. Add an entry to `docs/research/g2408-protocol.md` §2.1 with
-   evidence (probe-log line, observed value, timing context).
+1. Add an entry to `custom_components/dreame_a2_mower/inventory.yaml`
+   with evidence (probe-log line, observed value, timing context) —
+   see `docs/research/inventory/README.md` for the schema and workflow.
+   (The old `docs/research/g2408-protocol.md` §2.1 instruction is
+   ARCHIVED; inventory.yaml is now the SoT.)
 2. Add a decoder to `protocol/` if the property is a structured
    blob.
-3. Add a `MowerState` field with proper §2.1 citation in
-   `mower/state.py`.
+3. Add a `MowerState` field with proper inventory-row citation
+   (`id`, e.g. "s2p52") in `mower/state.py`.
 4. Add an entity descriptor to the appropriate platform.
-5. Cite the protocol-doc row in the commit message.
+5. Cite the inventory row id in the commit message.
 
 ## Cutting a release that HACS will actually see
 

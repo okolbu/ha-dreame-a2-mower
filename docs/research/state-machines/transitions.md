@@ -27,7 +27,10 @@ The dimensions covered match the public fields of `StateSnapshot` (see
 
 Cross references:
 
-- s2p2 event-code semantics — [`docs/research/g2408-protocol.md`](../g2408-protocol.md)
+- s2p2 event-code semantics — `custom_components/dreame_a2_mower/inventory.yaml` §
+  `state_codes` / the generated `../inventory/generated/g2408-canonical.md`
+  (the old `g2408-protocol.md` overview is ARCHIVED at
+  `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md`)
 - CFG.DOCK staleness — [`docs/research/cloud-write-reference.md` § "Cloud-side propagation lag"](../cloud-write-reference.md#cloud-side-propagation-lag)
 
 ---

@@ -19,7 +19,6 @@ Cross-cutting prose that is mostly evergreen but doesn't drive day-to-day decisi
 
 | Doc | Scope |
 |---|---|
-| [`g2408-protocol.md`](g2408-protocol.md) | Architecture overview: transport layer, OSS fetch flow, coordinate-frame math, contributor PROTOCOL_NOVEL guide. |
 | [`cloud-map-geometry.md`](cloud-map-geometry.md) | Map geometry transformations from cloud-frame to renderer-frame. |
 | [`g2408-capture-procedures.md`](g2408-capture-procedures.md) | How to capture specific MQTT/cloud events for closing inventory gaps. |
 
@@ -41,6 +40,10 @@ at `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/`, mirroring
 the old `docs/research/`-relative path:
 
 - `historical/` — pre-restructure raw source + retired entity-sync-matrix + old TODO snapshots.
+- `g2408-protocol.md` — ARCHIVED 2026-07-02 (refactor-v2 T1-1/T1-2): the old
+  architecture-overview doc carried debunked claims (BT config-write transport;
+  pre-catalog s2p2 rows). Wire SoT is `inventory.yaml` +
+  `inventory/generated/g2408-canonical.md`.
 
 (The whole `docs/superpowers/` specs/plans layer moved too — see
 **CLAUDE.md § "Documentation canonicity & lifecycle"** for the full rule.)

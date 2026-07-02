@@ -7,7 +7,9 @@ transformations our integration applies before handing the data to the
 zone types).
 
 Related:
-- [`g2408-protocol.md`](./g2408-protocol.md) — MQTT + cloud API protocol summary.
+- `inventory/generated/g2408-canonical.md` — MQTT + cloud API protocol SoT
+  (the old summary doc, `g2408-protocol.md`, is ARCHIVED at
+  `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md`).
 - `custom_components/dreame_a2_mower/dreame/device.py::_build_map_from_cloud` —
   the code that implements everything below.
 - `custom_components/dreame_a2_mower/protocol/cloud_map_geom.py` —

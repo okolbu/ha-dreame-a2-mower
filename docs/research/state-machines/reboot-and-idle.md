@@ -15,7 +15,11 @@ External staleness pointers:
 - s3p1 (battery%) and s3p2 (charging) only push **on change**; mid-session restarts can leave them dormant.
 - `live_map.is_active()` requires the `wifi_archive_store` blob to be reloaded; see `coordinator._restore_in_progress`.
 - For per-entity write paths and current consumer references, cross-check `custom_components/dreame_a2_mower/entity-inventory.yaml`.
-- For s2p1 / s2p2 / s1p1 / s1p4 / s3p1 / s3p2 wire semantics, see [`g2408-protocol.md`](../g2408-protocol.md).
+- For s2p1 / s2p2 / s1p1 / s1p4 / s3p1 / s3p2 wire semantics, see
+  `custom_components/dreame_a2_mower/inventory.yaml` / the generated
+  `../inventory/generated/g2408-canonical.md` (the old `g2408-protocol.md`
+  overview is ARCHIVED at
+  `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md`).
 
 ## Snapshot fields
 
@@ -32,7 +36,7 @@ External staleness pointers:
 | `last_heartbeat_unix` | snapshot | yes | last value | persisted | matches | every heartbeat | — |
 | `positioning_health` | snapshot | yes | LOCALIZED | LOCALIZED | matches | s2p2=31/33/71 | s2p2=71 disambiguates over 30 s window |
 | `wifi_rssi_dbm` | snapshot | yes | last value | persisted | matches | every heartbeat | — |
-| `pre_shadow_by_map_id` | snapshot | yes (Store) | last value (empty dict if fresh install) | per-map dict of `{mowing_height_mm, mowing_efficiency, edgemaster}` | matches | s6.2 MQTT push tagged with active map_id | empty until user saves settings on each map at least once; see [`g2408-protocol.md` § s6.2](../g2408-protocol.md#s62--user-edit-profile-push-pre-family) |
+| `pre_shadow_by_map_id` | snapshot | yes (Store) | last value (empty dict if fresh install) | per-map dict of `{mowing_height_mm, mowing_efficiency, edgemaster}` | matches | s6.2 MQTT push tagged with active map_id | empty until user saves settings on each map at least once; see `inventory.yaml` § s6.2 (the old `g2408-protocol.md § s6.2` link is ARCHIVED at `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md#s62--user-edit-profile-push-pre-family`) |
 
 ## MowerState fields (non-persisted)
 

@@ -413,8 +413,13 @@ so historical session and LiDAR data carry over without migration.
   for the chunked-batch (SETTINGS / SCHEDULE / AI_HUMAN) and
   routed-action (CFG) cloud surfaces, including the dual-entry
   semantic and propagation lag.
-- **`docs/research/g2408-protocol.md`** — MQTT property mappings,
-  cloud-map coordinate frame, blob layouts, session-event schema.
+- **`docs/research/inventory/generated/g2408-canonical.md`** — wire SoT
+  for MQTT property mappings, cloud-map coordinate frame, blob layouts,
+  session-event schema, generated from
+  `custom_components/dreame_a2_mower/inventory.yaml`. (The prior
+  architecture-overview doc, `g2408-protocol.md`, is ARCHIVED at
+  `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md`
+  — it carried debunked claims; do not resurrect it as a source.)
 - **`docs/research/cloud-map-geometry.md`** — pixel ↔ cloud-frame mm
   transforms, midline reflections, lawn-polygon decoding.
 - **`docs/observability.md`** — diagnostic sensors, NOVEL log prefixes,

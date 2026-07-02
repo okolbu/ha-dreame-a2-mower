@@ -2328,7 +2328,7 @@ properties:
       decoded: confirmed
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:110"
-      protocol_doc: "docs/research/g2408-protocol.md § s6.2"
+      protocol_doc: "/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md § s6.2"
     verifications:
       - date: "2026-05-14"
         status: verified
