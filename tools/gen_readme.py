@@ -16,12 +16,13 @@ import sys
 from pathlib import Path
 
 TOOLS_DIR = Path(__file__).resolve().parent
-DOMAIN_ORDER = ["inventory", "probes", "state_machine", "session", "release"]
+DOMAIN_ORDER = ["inventory", "probes", "state_machine", "session", "replay", "release"]
 DOMAIN_BLURB = {
     "inventory": "Fact-discipline gates — keep inventory.yaml / entity-inventory.yaml / docs honest.",
     "probes": "Device & cloud probes for owner fact-finding. Some WRITE to the live mower.",
     "state_machine": "Entity-source / state-machine audit (run after coordinator or entity changes).",
     "session": "Reconstruct or verify session archives from probe logs (dev box).",
+    "replay": "Corpus-replay golden harness — refactor-v2 safety net over months of real wire traffic.",
     "release": "Maintainer-only HACS publishing for this repo. Not general-purpose.",
 }
 RUN_BY_ICON = {"ci": "🤖 ci", "owner": "👤 owner", "maintainer": "🔧 maintainer"}

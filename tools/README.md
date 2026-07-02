@@ -142,6 +142,16 @@ Check a session JSON's time partition against probe-log evidence.
 
 *When:* When verifying a session archive's time breakdown against probe-log ground truth.
 
+## `replay/`
+
+Corpus-replay golden harness — refactor-v2 safety net over months of real wire traffic.
+
+### `python tools/replay/corpus_replay.py`  —  👤 owner
+
+Replay probe-log MQTT corpus through the decode/state pipelines; emit or diff a deterministic golden digest.
+
+*When:* Before/after any refactor-v2 migration phase, to prove decode/state semantics are byte-identical across months of real wire traffic.
+
 ## `release/`
 
 Maintainer-only HACS publishing for this repo. Not general-purpose.

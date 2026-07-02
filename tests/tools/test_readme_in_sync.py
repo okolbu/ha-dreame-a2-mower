@@ -6,7 +6,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 GEN = REPO / "tools" / "gen_readme.py"
-DOMAINS = {"inventory", "probes", "state_machine", "session", "release"}
+DOMAINS = {"inventory", "probes", "state_machine", "session", "replay", "release"}
 RUN_BY = {"ci", "owner", "maintainer"}
 
 
