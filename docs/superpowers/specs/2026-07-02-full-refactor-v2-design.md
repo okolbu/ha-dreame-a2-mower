@@ -171,7 +171,9 @@ One config-entry option ("Enable experimental features"), default **off**.
   error when off.
 - Docs list every gated feature and **what evidence promotes it**.
 - **Carveout taxonomy** (initial population from review track 5):
-  - *Speculative* — e.g. MPOS (frame/units unverified), patrol o=223 remnants.
+  - *Speculative* — e.g. MPOS (frame/units unverified), raw slot probes.
+    (Amended 2026-07-02: patrol o=223 was wrongly listed here — inventory records it
+    confirmed with live services; Act I finding T1-15 / register R-52.)
   - *Wire-verified, client-unexercised* — e.g. OTA install: the app-initiated OTA MITM
     transcript verifies the wire format byte-level; only "initiated from our client" is
     unproven. The review diffs our built envelope against the transcript byte-for-byte,
