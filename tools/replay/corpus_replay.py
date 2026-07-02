@@ -54,6 +54,39 @@ def _canon(obj: Any) -> str:
     return json.dumps(obj, **_CANON)
 
 
+def _to_jsonable(obj: Any) -> Any:
+    """Recursively convert sets/frozensets to sorted lists for stable JSON.
+
+    Without this, StateSnapshot's ``errors`` frozenset falls through to
+    ``default=str`` and gets repr-stringified — iteration-order-dependent,
+    so not machine-independent.
+    """
+    if isinstance(obj, (set, frozenset)):
+        return sorted((_to_jsonable(v) for v in obj), key=_canon)
+    if isinstance(obj, dict):
+        return {k: _to_jsonable(v) for k, v in obj.items()}
+    if isinstance(obj, (list, tuple)):
+        return [_to_jsonable(v) for v in obj]
+    return obj
+
+
+def _ensure_ha_stubs() -> None:
+    """Import the test suite's HA stubs when running outside pytest.
+
+    The vanilla venv has no real ``homeassistant``; under pytest,
+    tests/conftest.py injects a stub, which bare ``python -m`` runs never
+    see. Same precedent as tools/state_machine/
+    state_machine_audit_fake_coord.py:_ensure_ha_stubs.
+    """
+    if "homeassistant" in sys.modules:
+        return
+    root = Path(__file__).resolve().parent.parent.parent
+    if str(root) not in sys.path:
+        sys.path.insert(0, str(root))
+    sys.path.insert(0, str(root / "tests"))
+    import conftest  # noqa: F401 — side effect: stubs homeassistant
+
+
 def _ts_to_unix(ts: str) -> int:
     dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S").replace(tzinfo=_TZ)
     return int(dt.timestamp())
@@ -84,6 +117,7 @@ def iter_pushes(path: Path) -> Iterator[tuple[int, int, int, Any]]:
 def replay(paths: list[Path]) -> dict:
     """Replay logs (sorted by name = chronological) into a digest dict."""
     # Imports deferred so `--help` works without the integration on path.
+    _ensure_ha_stubs()
     from custom_components.dreame_a2_mower.coordinator import (
         apply_property_to_state,
     )
@@ -141,9 +175,11 @@ def replay(paths: list[Path]) -> dict:
         "per_slot": dict(sorted(per_slot.items())),
         "rolling_sha256": rolling.hexdigest(),
         "sm_transitions": sm_transitions,
-        "final_mower_state": json.loads(_canon(dataclasses.asdict(state))),
+        "final_mower_state": json.loads(
+            _canon(_to_jsonable(dataclasses.asdict(state)))
+        ),
         "final_snapshot": json.loads(
-            _canon(dataclasses.asdict(sm.snapshot()))
+            _canon(_to_jsonable(dataclasses.asdict(sm.snapshot())))
         ),
     }
 
