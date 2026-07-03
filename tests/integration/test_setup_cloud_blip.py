@@ -37,6 +37,8 @@ from custom_components.dreame_a2_mower.const import DOMAIN
 from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
 from custom_components.dreame_a2_mower.mower.state import MowerState
 
+from tests.factories import make_coordinator
+
 # The six platforms whose async_setup_entry dereferences
 # `coordinator.cloud_state.maps_by_id` unguarded: the five T3-2 named plus
 # button.py (found in review — its per-map DreameA2HeadToPointButton loop
@@ -56,14 +58,13 @@ _MAP_AWARE_PLATFORMS = [
 # ---------------------------------------------------------------------------
 
 def _make_coordinator_stub(*, refresh_succeeds: bool) -> DreameA2MowerCoordinator:
-    """A real (uninitialised) coordinator instance for exercising just the
-    new `_refresh_cloud_state_or_raise` method — mirrors the
-    `_make_coordinator_with_cloud` pattern in test_coordinator.py
-    (`object.__new__` skips `__init__`; only the attributes the method
-    under test touches are set).
+    """A REAL coordinator (P3 Task 1: factory-built through the real
+    __init__, which seeds ``cloud_state = None`` — the exact fresh-install
+    precondition this test exercises) with only the one network-touching
+    collaborator, `_refresh_cloud_state`, stubbed per scenario.
     """
-    coord = object.__new__(DreameA2MowerCoordinator)
-    coord.cloud_state = None
+    coord = make_coordinator()
+    assert coord.cloud_state is None  # real __init__ precondition, not seeded
 
     async def _fake_refresh_cloud_state() -> None:
         if refresh_succeeds:

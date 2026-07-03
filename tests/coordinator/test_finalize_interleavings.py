@@ -28,16 +28,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-import tempfile
 
 from unittest.mock import MagicMock
 
 from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-from custom_components.dreame_a2_mower.archive.session import SessionArchive
 from custom_components.dreame_a2_mower.live_map.finalize import FinalizeAction
-from custom_components.dreame_a2_mower.live_map.state import LiveMapState
 from custom_components.dreame_a2_mower.mower.state import MowerState
-from custom_components.dreame_a2_mower.observability import NovelObservationRegistry
+
+from tests.factories import make_coordinator
 
 T0 = 1_700_000_000
 
@@ -84,67 +82,48 @@ class _EventSpyCoord(DreameA2MowerCoordinator):
 
 
 def _build_coord(cls=DreameA2MowerCoordinator, *, pending_object_name=None):
-    """Coordinator stub wired for BOTH terminal writers + the dispatch path.
+    """REAL coordinator wired for BOTH terminal writers + the dispatch path.
 
-    Built via __new__ on the real class so every mixin method resolves
-    through the MRO (same technique as test_finalize_latch.py /
-    test_rain_reboot_finalize_veto_e2e.py). Only side-effect-only helpers
-    are mocked (_clear_pending_op, _inject_live_map_into_raw_dict,
-    _fire_mowing_ended) — the finalize ordering itself is real.
+    P3 Task 1: factory-built through the real ``__init__`` (which owns the
+    finalize latch, dock-wait plumbing, live_map, novel_registry, and the
+    session archive — all previously hand-seeded here after ``__new__``).
+    The cloud client is a MagicMock at the client boundary. Only
+    side-effect-only helpers are mocked (_clear_pending_op,
+    _inject_live_map_into_raw_dict, _fire_mowing_ended, _photo_archive) —
+    the finalize ordering itself is real.
+
+    The factory hass runs executor jobs inline via an AsyncMock whose
+    ``.side_effect`` the barrier tests below swap, and schedules
+    ``async_create_task`` coroutines as real tasks (T3-8: the dock-wait is
+    wrapped in a Task so unload can cancel it).
     """
-    c = cls.__new__(cls)
-    c.live_map = LiveMapState()
-    c.data = MowerState(
-        pending_session_object_name=pending_object_name,
-        pending_session_first_event_unix=(T0 + 3600) if pending_object_name else None,
-        pending_session_attempt_count=0 if pending_object_name else None,
-        area_mowed_m2=120.5,
-    )
-    c._active_map_id = 0
-    c._rain_delay_started_at = None
-    c._lifecycle_event = None
-    c._notification_event = None
-    c._prev_task_state = None
-    c._real_task_state_observed = True
-
-    # Finalize latch (owned by _CoreMixin.__init__; seeded manually — __new__).
-    c._finalize_lock = asyncio.Lock()
-    c._finalizing_start_ts = None
-
-    # Dock-wait plumbing (real _wait_for_dock_return is exercised).
-    c._pending_finalize_done = None
-    c._pending_finalize_done_reason = None
-    c._pending_finalize_task = None
-
-    # _do_oss_fetch_body collaborators.
-    c.novel_registry = NovelObservationRegistry()
-    c._photo_archive = MagicMock(count=0)
-    c._photo_sign_fn = None
-    c._last_session_obstacles_by_map = {}
-
-    c._clear_pending_op = MagicMock()
-    c._inject_live_map_into_raw_dict = MagicMock()
-    c._fire_mowing_ended = MagicMock()
-
-    tmpdir = tempfile.mkdtemp()
-    c.session_archive = SessionArchive(tmpdir)
-
     cloud = MagicMock()
     cloud.get_interim_file_url.return_value = "https://oss.example.com/signed"
     cloud.get_file.return_value = json.dumps(_CLOUD_SUMMARY_JSON).encode()
-    c._cloud = cloud
 
-    hass = MagicMock()
+    c = make_coordinator(
+        cls=cls,
+        cloud=cloud,
+        data=MowerState(
+            pending_session_object_name=pending_object_name,
+            pending_session_first_event_unix=(T0 + 3600) if pending_object_name else None,
+            pending_session_attempt_count=0 if pending_object_name else None,
+            area_mowed_m2=120.5,
+        ),
+        _active_map_id=0,
+        _real_task_state_observed=True,
+        # Side-effect-only collaborators of _do_oss_fetch_body.
+        _photo_archive=MagicMock(count=0),
+        _photo_sign_fn=None,
+        _clear_pending_op=MagicMock(),
+        _inject_live_map_into_raw_dict=MagicMock(),
+        _fire_mowing_ended=MagicMock(),
+    )
+    # The real __init__ pointed session_archive at the factory's per-call
+    # temp config dir — each _build_coord already gets an isolated archive.
 
-    async def _executor(fn, *args):
-        return fn(*args)
-
-    hass.async_add_executor_job.side_effect = _executor
-    # T3-8: _wait_for_dock_return wraps the Event.wait() in a Task via
-    # hass.async_create_task (so unload can cancel an in-flight wait); give
-    # the mock a real scheduler instead of returning an unawaitable MagicMock.
-    hass.async_create_task.side_effect = lambda coro, *a, **k: asyncio.ensure_future(coro)
-    c.hass = hass
+    c.cloud_state = MagicMock()
+    c.cloud_state.maps_by_id = {}
 
     # Record every published MowerState so tests can assert on transient
     # values (e.g. the pre-wait attempt stamp) after the fact.
@@ -155,9 +134,6 @@ def _build_coord(cls=DreameA2MowerCoordinator, *, pending_object_name=None):
         c._published_states.append(new)
 
     c.async_set_updated_data = _set_data
-
-    c.cloud_state = MagicMock()
-    c.cloud_state.maps_by_id = {}
     return c
 
 

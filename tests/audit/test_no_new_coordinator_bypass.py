@@ -33,7 +33,7 @@ _BYPASS_PATTERNS = (
 
 # Ratchet baseline — the total bypass-occurrence count across tests/.
 # P3 Task 1 pin. ONLY update DOWNWARD.
-BYPASS_BASELINE = 85
+BYPASS_BASELINE = 83
 
 
 def _census() -> tuple[int, dict[str, int]]:

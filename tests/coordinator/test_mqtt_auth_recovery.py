@@ -11,23 +11,21 @@ credentials, with a cooldown/in-flight guard against a tight relogin loop.
 from __future__ import annotations
 
 import asyncio
-from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.dreame_a2_mower.coordinator import _core as _core_mod
-from custom_components.dreame_a2_mower.coordinator._core import _CoreMixin
+
+from tests.factories import make_coordinator
 
 
 def _make_coord(monkeypatch, *, fake_mqtt_cls=None):
-    """A _CoreMixin built via __new__ (skips the heavy real __init__),
-    seeded with just enough state for _init_mqtt / the rc=5 recovery path."""
-    coord = _CoreMixin.__new__(_CoreMixin)
-    coord._on_mqtt_message = MagicMock()
-    coord._mqtt_host = "mqtt.example.com"
-    coord._mqtt_port = 8883
-    coord._rc5_relogin_in_progress = False
-    coord._rc5_last_attempt_unix = 0.0
-
+    """A REAL coordinator (P3 Task 1: factory-built through the real
+    __init__, which owns the rc=5 guard state ``_rc5_relogin_in_progress`` /
+    ``_rc5_last_attempt_unix``). The cloud client is a MagicMock at the
+    client boundary; ``_mqtt_host``/``_mqtt_port`` are seeded exactly as
+    ``_init_cloud`` would set them. The factory's hass runs executor jobs
+    inline (swappable ``.side_effect``) and hops ``call_soon_threadsafe``
+    synchronously (the paho-thread → loop hop)."""
     cloud = MagicMock()
     cloud.mqtt_credentials.return_value = ("uid-1", "token-1")
     cloud.mqtt_client_id.return_value = "client-1"
@@ -35,19 +33,13 @@ def _make_coord(monkeypatch, *, fake_mqtt_cls=None):
     cloud._did = "did-1"
     cloud._uid = "uid-1"
     cloud._model = "dreame.mower.g2408"
-    coord._cloud = cloud
 
-    hass = MagicMock()
-    hass.loop = SimpleNamespace(call_soon_threadsafe=lambda fn, *a: fn(*a))
-
-    async def _exec(fn, *args):
-        return fn(*args)
-
-    hass.async_add_executor_job = AsyncMock(side_effect=_exec)
-    hass.async_create_task = MagicMock(
-        side_effect=lambda coro, *a, **k: asyncio.ensure_future(coro)
+    coord = make_coordinator(
+        cloud=cloud,
+        _mqtt_host="mqtt.example.com",
+        _mqtt_port=8883,
+        _on_mqtt_message=MagicMock(),
     )
-    coord.hass = hass
 
     if fake_mqtt_cls is not None:
         monkeypatch.setattr(_core_mod, "DreameA2MqttClient", fake_mqtt_cls)
