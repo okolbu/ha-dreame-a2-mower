@@ -59,7 +59,7 @@ def _capture_async_call_later(monkeypatch):
 async def test_edit_map_transaction_order_and_commit_p():
     c, calls = _make_coord()
     ok = await c.edit_map(1, [(219, {"region": 1, "name": "X"})])
-    assert ok is True
+    assert ok.accepted is True
     ops = [(op, p) for (op, _e, p) in calls]
     assert ops == [(200, 0), (204, 0), (219, 0), (201, 1)]
     assert calls[0][1] == {"idx": 1}        # select map
@@ -72,8 +72,10 @@ async def test_edit_map_always_commits_and_reports_failure(monkeypatch):
     # mutation (3rd call) is device-rejected (accepted=False) -> overall False,
     # but commit (o=201) is still sent so the device exits edit mode.
     c, calls = _make_coord(results=[True, True, False, True])
-    ok = await c.edit_map(0, [(218, {"id": 101, "type": 0})])
-    assert ok is False
+    result = await c.edit_map(0, [(218, {"id": 101, "type": 0})])
+    assert result.accepted is False
+    # The rejected leg's own verdict (device code) survives the transaction.
+    assert result.delivered is True and result.code == -3
     assert (201, 1) in [(op, p) for (op, _e, p) in calls]
 
 
@@ -87,8 +89,8 @@ async def test_edit_map_rejected_leg_returns_falsy():
     """
     # Select (200) accepted, begin (204) accepted, mutation REJECTED, commit OK.
     c, calls = _make_coord(results=[True, True, False, True])
-    ok = await c.edit_map(2, [(219, {"region": 9, "name": "Nope"})])
-    assert ok is False
+    result = await c.edit_map(2, [(219, {"region": 9, "name": "Nope"})])
+    assert bool(result) is False and result.code == -3
     # Every leg, including the rejected one, was still dispatched.
     ops = [op for (op, _e, _p) in calls]
     assert ops == [200, 204, 219, 201]
@@ -96,10 +98,10 @@ async def test_edit_map_rejected_leg_returns_falsy():
 
 @pytest.mark.asyncio
 async def test_edit_map_all_accepted_returns_true():
-    """All legs accepted → edit_map returns True."""
+    """All legs accepted → edit_map returns an accepted WriteResult."""
     c, _calls = _make_coord()
     ok = await c.edit_map(1, [(219, {"region": 1, "name": "X"})])
-    assert ok is True
+    assert ok.accepted is True and ok.delivered is True
 
 
 @pytest.mark.asyncio
@@ -135,7 +137,7 @@ async def test_edit_map_schedules_delayed_refetches_even_on_reject(
     scheduled = _capture_async_call_later
     c, _calls = _make_coord(results=[True, True, False, True])
     ok = await c.edit_map(0, [(218, {"id": 101, "type": 2})])
-    assert ok is False
+    assert ok.accepted is False
     assert [d for (d, _cb) in scheduled] == [8, 20, 40]
 
 
@@ -145,7 +147,7 @@ async def test_create_patrol_point_builds_o223_mutation():
     mutation (DISTINCT opcode from maintenance o=224)."""
     c, calls = _make_coord()
     ok = await c.create_patrol_point(1, -2.27, 9.66, heading=0.06, object_id=-1)
-    assert ok is True
+    assert ok.accepted is True
     muts = [(op, e) for (op, e, _p) in calls]
     assert (223, {"id": -1, "points": [-2.27, 9.66, 0.06]}) in muts
     # heading defaults 0.0 when omitted.

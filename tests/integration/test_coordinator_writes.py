@@ -72,7 +72,7 @@ def test_write_settings_targets_only_the_target_maps_general_slot():
     entry. Writing every entry (the old behaviour) clobbered other maps."""
     coord = _make_coord_for_settings_write()
     ok = asyncio.run(coord.write_settings(map_id=0, field="mowingHeight", value=7))
-    assert ok is True
+    assert ok.accepted is True
     args, _ = coord._cloud.write_chunked_key.call_args
     key_prefix, value = args[0], args[1]
     assert key_prefix == "SETTINGS"
@@ -91,14 +91,17 @@ def test_write_settings_returns_false_on_cloud_rejection():
     coord._cloud.write_chunked_key = MagicMock(
         return_value=(False, {"code": 10007, "msg": "rejected"})
     )
-    ok = asyncio.run(coord.write_settings(map_id=0, field="mowingHeight", value=7))
-    assert ok is False
+    result = asyncio.run(coord.write_settings(map_id=0, field="mowingHeight", value=7))
+    # Cloud KV rejection → delivered-but-not-accepted, carrying the cloud code.
+    assert result.accepted is False
+    assert result.delivered is True and result.code == 10007
 
 
 def test_write_settings_unknown_map_id_returns_false():
     coord = _make_coord_for_settings_write()
-    ok = asyncio.run(coord.write_settings(map_id=99, field="mowingHeight", value=7))
-    assert ok is False
+    result = asyncio.run(coord.write_settings(map_id=99, field="mowingHeight", value=7))
+    # Local precondition abort (nothing sent) → not delivered.
+    assert result.accepted is False and result.delivered is False
     coord._cloud.write_chunked_key.assert_not_called()
 
 
@@ -142,7 +145,7 @@ def test_write_schedule_uses_device_plane_not_kv():
     coord._refresh_cloud_state = MagicMock(side_effect=_stub_refresh)
     new_slots = (ScheduleSlot(slot_id=0, name="A", raw_blob_b64="", plans=()),)
     ok = asyncio.run(coord.write_schedule(new_slots))
-    assert ok is True
+    assert ok.accepted is True
     # KV path retired — never touched.
     coord._cloud.write_chunked_key.assert_not_called()
     # Routed-action transport used: a m:'g' SCHDIV3 live-read probe + the

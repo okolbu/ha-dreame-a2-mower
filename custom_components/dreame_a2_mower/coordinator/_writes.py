@@ -25,6 +25,58 @@ if TYPE_CHECKING:
     pass  # cross-mixin type imports added as needed
 
 
+def _accepted() -> WriteResult:
+    """Accepted verdict for a completed device round-trip (out[0].r == 0
+    on every leg). Same fields as ``WriteResult.local_ok()`` but named for
+    the wire case — ``local_ok`` is reserved for writes with NO round-trip."""
+    return WriteResult(delivered=True, accepted=True, code=0)
+
+
+def _chunked_kv_write_result(ok: bool, response: dict | None) -> WriteResult:
+    """Map a ``write_chunked_key`` (iotuserdata setDeviceData) outcome to a
+    WriteResult.
+
+    HONEST-SIGNAL CAVEAT: this transport is the cloud KV record store (see
+    ``inventory.yaml`` § READ/WRITE SURFACES item 3) — the accept/reject
+    verdict is the CLOUD's (``success``/``code``), and there is NO per-write
+    device verdict on this channel (nothing like out[0].r exists here). For
+    keys where the cloud record is the authoritative store (SETTINGS.*,
+    AI_HUMAN.0) the cloud accepting IS the write landing; ``accepted`` here
+    claims exactly that and no more.
+    """
+    if ok:
+        return _accepted()
+    if response is None:
+        # Non-dict / no response — no evidence the cloud stored anything.
+        return WriteResult.not_delivered("no response from cloud KV write")
+    code = response.get("code")
+    msg = str(response.get("msg") or "")
+    return WriteResult(
+        delivered=True, accepted=False,
+        code=code if isinstance(code, int) else None, msg=msg,
+    )
+
+
+def _write_result_from_schedule_exc(exc: Exception) -> WriteResult:
+    """Map a SCHD*V3 write exception to an honest WriteResult.
+
+    ``write_schedule_row`` / ``write_schedule_enabled_state`` raise
+    ``CfgActionError`` on any failing leg. When the error carries a device
+    code (``out[0].r != 0`` — a Dreame application-level rejection) the
+    device demonstrably heard the request → delivered-but-rejected. Without
+    a code (None result / malformed envelope) there is no evidence of
+    delivery → not-delivered (retryable). Any other exception type is a
+    transport failure → not-delivered.
+    """
+    from ..protocol.cfg_action import CfgActionError
+
+    if isinstance(exc, CfgActionError) and exc.code is not None:
+        return WriteResult(
+            delivered=True, accepted=False, code=exc.code, msg=str(exc)
+        )
+    return WriteResult.not_delivered(str(exc))
+
+
 class _WritesMixin:
     """Methods extracted from coordinator.py — see spec for groupings."""
 
@@ -42,7 +94,7 @@ class _WritesMixin:
     async def write_schedule(
         self,
         new_slots: tuple[Any, ...] | list[Any],
-    ) -> bool:
+    ) -> WriteResult:
         """Push changed schedule slots to the device via the SCHD*V3 transport.
 
         new_slots is a sequence of ScheduleSlot dataclasses (.plans is the
@@ -51,10 +103,16 @@ class _WritesMixin:
         changed, preserving each slot's enabled state, bumping the schedule
         version. The SCHEDULE.* KV is intentionally NOT written (the device
         ignores it; see dreame-app-schedule-write-2026-06-10.md).
+
+        Returns a :class:`WriteResult` (P2 Task 5 — was a bool): accepted when
+        every changed slot's SCHD*V3 transaction was accepted; otherwise the
+        FIRST failing slot's verdict (a ``CfgActionError`` with a device code
+        → delivered-but-rejected; without one → not-delivered). A no-op write
+        (all slots unchanged) is trivially accepted.
         """
         if not hasattr(self, "_cloud") or self._cloud is None:
             LOGGER.warning("write_schedule: cloud client not ready")
-            return False
+            return WriteResult.not_delivered("cloud client not ready")
 
         # Read the authoritative LIVE schedule once (rows for the skip-gate +
         # the live version to bump). The SCHEDULE.* KV / cloud_state.version is
@@ -85,7 +143,7 @@ class _WritesMixin:
             int(by_slot[i][1]) if i in by_slot else 0 for i in (0, 1)
         ]
 
-        ok = True
+        failure: WriteResult | None = None
         async with self._chunked_write_lock:
             for slot in new_slots:
                 blob_b64 = encode_schedule_blob(tuple(slot.plans))
@@ -122,15 +180,18 @@ class _WritesMixin:
                         slot.slot_id, len(slot.plans), new_version, len(blob_b64),
                     )
                 except Exception as exc:  # noqa: BLE001 — surface, keep going
-                    ok = False
+                    if failure is None:
+                        failure = _write_result_from_schedule_exc(exc)
                     LOGGER.warning(
                         "[schedule-write] slot %d rejected: %r", slot.slot_id, exc
                     )
 
         await self._refresh_cloud_state()
-        return ok
+        return failure if failure is not None else _accepted()
 
-    async def write_schedule_enabled(self, slot_id: int, enabled: bool) -> bool:
+    async def write_schedule_enabled(
+        self, slot_id: int, enabled: bool
+    ) -> WriteResult:
         """Enable or disable one schedule season via a standalone SCHDSV3 write.
 
         Seasons are mutually exclusive (device-enforced): enabling a slot makes
@@ -140,10 +201,13 @@ class _WritesMixin:
 
         Does NOT guard against an active task — the service layer does (it owns
         the user-facing ServiceValidationError).
+
+        Returns a :class:`WriteResult` (P2 Task 5 — was a bool); see
+        ``write_schedule`` for the exception→verdict mapping.
         """
         if not hasattr(self, "_cloud") or self._cloud is None:
             LOGGER.warning("write_schedule_enabled: cloud client not ready")
-            return False
+            return WriteResult.not_delivered("cloud client not ready")
 
         live = await self.hass.async_add_executor_job(
             read_live_schedule, self._cloud.action
@@ -170,7 +234,7 @@ class _WritesMixin:
             if slot_id in (0, 1):
                 new_array[slot_id] = 0
 
-        ok = True
+        result = _accepted()
         async with self._chunked_write_lock:
             try:
                 await self.hass.async_add_executor_job(
@@ -183,22 +247,26 @@ class _WritesMixin:
                     slot_id, "on" if enabled else "off", new_array, version,
                 )
             except Exception as exc:  # noqa: BLE001 — surface, keep going
-                ok = False
+                result = _write_result_from_schedule_exc(exc)
                 LOGGER.warning("[schedule-enable] slot %d rejected: %r", slot_id, exc)
 
         await self._refresh_cloud_state()
-        return ok
+        return result
 
-    async def write_ai_human_enabled(self, enabled: bool) -> bool:
+    async def write_ai_human_enabled(self, enabled: bool) -> WriteResult:
         """Toggle AI_HUMAN.0 (Capture Photos AI Obstacles) via write_chunked_key.
 
         Cloud value is a JSON-encoded boolean string (`"true"` / `"false"`).
         Privacy auth is gated app-side; here we trust that AI_HUMAN.0
         being writable means the user has accepted the policy in the app.
+
+        Returns a :class:`WriteResult` (P2 Task 5 — was a bool); see
+        ``_chunked_kv_write_result`` for the honest-signal caveat of the
+        iotuserdata KV transport.
         """
         if not hasattr(self, "_cloud") or self._cloud is None:
             LOGGER.warning("write_ai_human_enabled: cloud client not ready")
-            return False
+            return WriteResult.not_delivered("cloud client not ready")
         value = '"true"' if enabled else '"false"'
         LOGGER.info("[ai-human-write] AI_HUMAN.0 → %s", value)
         async with self._chunked_write_lock:
@@ -208,7 +276,7 @@ class _WritesMixin:
             if not ok:
                 LOGGER.warning("[ai-human-write] rejected: %r", response)
         await self._refresh_cloud_state()
-        return ok
+        return _chunked_kv_write_result(ok, response)
 
     def _fetch_fresh_settings_blob(self) -> list[dict[str, Any]] | None:
         """Pull SETTINGS chunks fresh from the cloud and return the
@@ -258,7 +326,9 @@ class _WritesMixin:
             return None
         return parsed if isinstance(parsed, list) else None
 
-    async def write_settings(self, *, map_id: int, field: str, value: Any) -> bool:
+    async def write_settings(
+        self, *, map_id: int, field: str, value: Any
+    ) -> WriteResult:
         """Push one SETTINGS field change to the cloud.
 
         Pre-write fresh-fetch: pulls the current SETTINGS blob from the
@@ -274,12 +344,17 @@ class _WritesMixin:
         untouched. Serializes against _chunked_write_lock so concurrent
         writes can't race against the same fresh fetch.
 
-        Returns True iff cloud accepted (code=0). Triggers a cloud_state
-        refresh on success so the local view reflects what landed.
+        Returns a :class:`WriteResult` (P2 Task 5 — was a bool): accepted iff
+        the cloud accepted the KV write (code=0; see
+        ``_chunked_kv_write_result`` for the transport's honest-signal
+        caveat). Local preconditions that abort before any wire attempt
+        (no cloud client / no settings base / unknown field) return
+        not-delivered. Triggers a cloud_state refresh so the local view
+        reflects what landed.
         """
         if not hasattr(self, "_cloud") or self._cloud is None:
             LOGGER.warning("write_settings: cloud client not ready")
-            return False
+            return WriteResult.not_delivered("cloud client not ready")
         from ..protocol.settings import parse_settings_batch, write_setting
 
         async with self._chunked_write_lock:
@@ -305,7 +380,9 @@ class _WritesMixin:
                     LOGGER.warning(
                         "write_settings: cloud_state empty and fresh fetch failed"
                     )
-                    return False
+                    return WriteResult.not_delivered(
+                        "no settings base (cloud_state empty, fresh fetch failed)"
+                    )
                 settings_raw = cs.settings.raw
                 LOGGER.warning(
                     "[settings-write] fresh fetch failed; falling back to cached state"
@@ -316,7 +393,7 @@ class _WritesMixin:
                 )
             except KeyError as ex:
                 LOGGER.warning("write_settings: KeyError %s", ex)
-                return False
+                return WriteResult.not_delivered(f"unknown settings field: {ex}")
             import json as _json
             json_value = _json.dumps(new_raw, separators=(",", ":"))
             LOGGER.info(
@@ -329,14 +406,14 @@ class _WritesMixin:
             if not ok:
                 LOGGER.warning("[settings-write] rejected: %r", response)
         await self._refresh_cloud_state()
-        return ok
+        return _chunked_kv_write_result(ok, response)
 
     async def write_setting(
         self,
         cfg_key: str,
         new_full_value: Any,
         field_updates: dict[str, Any] | None = None,
-    ) -> bool:
+    ) -> WriteResult:
         """Write a settings value to the mower via the CFG write path.
 
         The entity layer (F4.6.x) is responsible for constructing the full
@@ -357,15 +434,19 @@ class _WritesMixin:
           optimistic update is applied — the entity layer handles its own
           optimistic state.
 
-        Returns ``True`` on cloud success, ``False`` on failure.
+        Returns a :class:`WriteResult` (P2 Task 5 — was a bool): the honest
+        device verdict from ``set_cfg``/``set_pre`` (accepted / rejected with
+        the device's ``out[0].r`` code / not-delivered), or not-delivered for
+        the local preconditions (no cloud client / unknown cfg_key) that
+        abort before any wire attempt.
         """
         if not hasattr(self, "_cloud") or self._cloud is None:
             LOGGER.warning("write_setting %s: cloud client not ready", cfg_key)
-            return False
+            return WriteResult.not_delivered("cloud client not ready")
 
         if cfg_key not in self._CFG_SINGLE_KEYS and cfg_key != "PRE":
             LOGGER.warning("write_setting: unknown cfg_key %r", cfg_key)
-            return False
+            return WriteResult.not_delivered(f"unknown cfg_key {cfg_key!r}")
 
         # Optimistic update — snapshot state and apply field_updates now.
         prior_state = self.data
@@ -382,23 +463,25 @@ class _WritesMixin:
                 # Don't revert — no update was applied; just proceed with the write.
 
         # Dispatch to the right cloud_client method.
-        success = await self._dispatch_cfg_write(cfg_key, new_full_value)
+        result = await self._dispatch_cfg_write(cfg_key, new_full_value)
 
-        if not success:
+        if not result.accepted:
             LOGGER.warning(
-                "write_setting %s=%r: cloud write failed; reverting optimistic update",
-                cfg_key, new_full_value,
+                "write_setting %s=%r: cloud write failed (%s); "
+                "reverting optimistic update",
+                cfg_key, new_full_value, result.msg or result.code,
             )
             if field_updates and self.data != prior_state:
                 self.async_set_updated_data(prior_state)
 
-        return success
+        return result
 
-    async def _dispatch_cfg_write(self, cfg_key: str, value: Any) -> bool:
+    async def _dispatch_cfg_write(self, cfg_key: str, value: Any) -> WriteResult:
         """Route a CFG write to the appropriate cloud_client method.
 
         All CFG single-key writes use ``cloud_client.set_cfg``.
         ``PRE`` uses ``cloud_client.set_pre`` (full-array write).
+        Both return an honest :class:`WriteResult` — propagated verbatim.
 
         Runs the blocking I/O in the executor per spec §3.
         """
@@ -408,7 +491,9 @@ class _WritesMixin:
                     "_dispatch_cfg_write PRE: expected list, got %r",
                     type(value).__name__,
                 )
-                return False
+                return WriteResult.not_delivered(
+                    f"PRE expects a list, got {type(value).__name__}"
+                )
             return await self.hass.async_add_executor_job(
                 self._cloud.set_pre, value
             )
@@ -488,19 +573,13 @@ class _WritesMixin:
                 "dispatch_action: %s toggle %s=%r → %r via write_setting(%r)",
                 action.name, cfg_toggle_field, current, toggled, cfg_key,
             )
-            ok = await self.write_setting(
+            # write_setting now returns the honest WriteResult from
+            # set_cfg (P2 Task 5) — propagate it verbatim; the old synthetic
+            # code=None "setting write rejected" wrapper is gone.
+            return await self.write_setting(
                 cfg_key,
                 int(toggled),  # CLS wire value is int {0, 1}
                 field_updates={cfg_toggle_field: toggled},
-            )
-            # write_setting returns only a bool — it never surfaces a device
-            # `-3`, so a rejection carries code=None like every other synthetic
-            # not-accepted result (NOT a fabricated wire code).
-            if ok:
-                return WriteResult.local_ok()
-            return WriteResult(
-                delivered=True, accepted=False, code=None,
-                msg="setting write rejected",
             )
 
         if not hasattr(self, "_cloud") or self._cloud is None:
@@ -675,64 +754,77 @@ class _WritesMixin:
     # PRE dual-write helpers (Phase A2 — per-map General settings)
     # ------------------------------------------------------------------
 
-    async def _write_pre_scoped(self, map_id: int, apply_fn) -> bool:
+    async def _write_pre_scoped(self, map_id: int, apply_fn) -> WriteResult:
         """Scoped PRE read for (map_id, region 0) → apply_fn(array) → set_pre.
-        apply_fn returns the full write array or None (no base). True only on
-        device accept (set_pre out[0].r==0)."""
+        apply_fn returns the full write array or None (no base). Returns the
+        honest ``set_pre`` :class:`WriteResult` — accepted only on device
+        accept (out[0].r==0); the no-base/not-ready aborts (nothing sent)
+        return not-delivered."""
         if not hasattr(self, "_cloud") or self._cloud is None:
             LOGGER.warning("_write_pre_scoped: cloud client not ready")
-            return False
+            return WriteResult.not_delivered("cloud client not ready")
         raw = await self.hass.async_add_executor_job(self._cloud.get_pre, map_id, 0)
         new_array = apply_fn(raw)
         if new_array is None:
             LOGGER.warning("_write_pre_scoped: no PRE base for map %s — aborted", map_id)
-            return False
+            return WriteResult.not_delivered(
+                f"no PRE base for map {map_id} — nothing sent"
+            )
         return await self.hass.async_add_executor_job(self._cloud.set_pre, new_array)
 
     async def write_map_general_setting(
         self, *, map_id: int, pre_index: int, pre_value,
         settings_field: str | None = None, settings_value=None,
-    ) -> bool:
+    ) -> WriteResult:
         """Dual-write a per-map General-Mode setting: PRE (device) first, then
-        SETTINGS (cloud record) if settings_field given. A SETTINGS failure is
-        logged but does NOT revert the device. Returns the PRE-write result."""
+        SETTINGS (cloud record) if settings_field given. Returns the PRE-write
+        :class:`WriteResult` — the DEVICE write is the authoritative half. A
+        SETTINGS (cloud-record) failure after an accepted PRE write is logged
+        but deliberately does NOT flip the verdict: the device applied the
+        change and the cloud record self-heals on reconcile."""
         from ..protocol import cfg_payloads
-        ok = await self._write_pre_scoped(
+        result = await self._write_pre_scoped(
             map_id,
             lambda raw: cfg_payloads.apply_pre(raw, map_idx=map_id, index=pre_index, value=pre_value),
         )
-        if not ok:
-            return False
+        if not result.accepted:
+            return result
         if settings_field is not None:
-            s_ok = await self.write_settings(map_id=map_id, field=settings_field, value=settings_value)
-            if not s_ok:
+            s_result = await self.write_settings(
+                map_id=map_id, field=settings_field, value=settings_value
+            )
+            if not s_result.accepted:
                 LOGGER.warning(
                     "write_map_general_setting: PRE ok but SETTINGS %s failed "
                     "(device changed; cloud record stale until reconcile)", settings_field,
                 )
-        return True
+        return result
 
     async def write_map_general_ai_bit(
         self, *, map_id: int, bit: int, on: bool, settings_value: int,
-    ) -> bool:
-        """Dual-write one AI-recognition bit: PRE[15] bit + SETTINGS.obstacleAvoidanceAi."""
+    ) -> WriteResult:
+        """Dual-write one AI-recognition bit: PRE[15] bit + SETTINGS.obstacleAvoidanceAi.
+
+        Same verdict semantics as ``write_map_general_setting``: the PRE
+        (device) write's :class:`WriteResult` is returned; a SETTINGS
+        cloud-record failure is log-only."""
         from ..protocol import cfg_payloads
-        ok = await self._write_pre_scoped(
+        result = await self._write_pre_scoped(
             map_id,
             lambda raw: cfg_payloads.apply_pre_ai_bit(raw, map_idx=map_id, bit=bit, on=on),
         )
-        if not ok:
-            return False
-        s_ok = await self.write_settings(
+        if not result.accepted:
+            return result
+        s_result = await self.write_settings(
             map_id=map_id, field="obstacleAvoidanceAi", value=settings_value,
         )
-        if not s_ok:
+        if not s_result.accepted:
             LOGGER.warning("write_map_general_ai_bit: PRE ok but SETTINGS failed (stale until reconcile)")
-        return True
+        return result
 
     async def edit_map(
         self, map_id: int, mutations: list[tuple[int, dict | None]]
-    ) -> bool:
+    ) -> WriteResult:
         """Run a map-edit transaction on `map_id`, then refresh state.
 
         Sequence: o=200{idx:map_id} -> o=204(p:0) begin -> each mutation(p:0)
@@ -740,30 +832,36 @@ class _WritesMixin:
         leg is sent via routed_action; the commit (o=201) is ALWAYS sent so the
         device never stays in edit mode even if an earlier leg failed.
 
-        Returns True only when EVERY leg was *accepted* by the device. Each
-        ``routed_action`` now returns a :class:`WriteResult` whose ``__bool__``
-        is its ``accepted`` flag, so ``ok = ok and bool(leg)`` means "every leg
-        accepted" — a delivered-but-rejected leg (e.g. bad region/id, r!=0) now
-        correctly drives the return to False, where the old code only caught
-        transport-level (None) failures.
+        Returns a :class:`WriteResult` (P2 Task 5 — was a bool): accepted only
+        when EVERY leg was *accepted* by the device; otherwise the FIRST
+        not-accepted leg's own WriteResult (so the device's rejection code —
+        e.g. r!=0 on a bad region/id — and the delivered-vs-not distinction
+        survive to the surfacing layer instead of collapsing into one bool).
         """
         if not hasattr(self, "_cloud") or self._cloud is None:
             LOGGER.warning("edit_map: cloud client not ready")
-            return False
+            return WriteResult.not_delivered("cloud client not ready")
 
         async def _send(op, extra=None, *, p=0):
             return await self.hass.async_add_executor_job(
                 lambda: self._cloud.routed_action(op, extra, p=p)
             )
 
-        ok = True
+        failure: WriteResult | None = None
+
+        def _track(leg: WriteResult) -> None:
+            nonlocal failure
+            if failure is None and not leg.accepted:
+                failure = leg
+
         async with self._chunked_write_lock:
-            ok = bool(await _send(200, {"idx": int(map_id)})) and ok
-            ok = bool(await _send(204)) and ok
+            _track(await _send(200, {"idx": int(map_id)}))
+            _track(await _send(204))
             for op, payload in mutations:
-                ok = bool(await _send(op, payload)) and ok
+                _track(await _send(op, payload))
             # Commit is always sent (even on prior failure) to exit edit mode.
-            ok = bool(await _send(201, p=1)) and ok
+            _track(await _send(201, p=1))
+        ok = failure is None
         LOGGER.info(
             "[map-edit] map %d, %d mutation(s), ok=%s", map_id, len(mutations), ok
         )
@@ -784,9 +882,9 @@ class _WritesMixin:
                     self._refresh_cloud_state()
                 ),
             )
-        return ok
+        return failure if failure is not None else _accepted()
 
-    async def rename_zone(self, map_id: int, region: int, name: str) -> bool:
+    async def rename_zone(self, map_id: int, region: int, name: str) -> WriteResult:
         """Rename mowing zone `region` on `map_id` (o=219)."""
         return await self.edit_map(
             int(map_id), [(219, {"region": int(region), "name": str(name)})]
@@ -794,7 +892,7 @@ class _WritesMixin:
 
     async def delete_map_object(
         self, map_id: int, object_id: int, category: int
-    ) -> bool:
+    ) -> WriteResult:
         """Delete a map object by id+category on `map_id` (o=218).
 
         category: 0 = zone/no-go/mow-shape, 1 = spot, 2 = patrol/cruise point,
@@ -805,7 +903,7 @@ class _WritesMixin:
             int(map_id), [(218, {"id": int(object_id), "type": int(category)})]
         )
 
-    async def create_no_go(self, map_id, shape, points, radius=0.0, object_id=-1) -> bool:
+    async def create_no_go(self, map_id, shape, points, radius=0.0, object_id=-1) -> WriteResult:
         """Create a no-go area (o=215): shape line(2pt)/polygon(>=3pt)/circle(1pt+radius>0).
 
         points are [x, y] meter pairs in the map edit-frame.
@@ -819,7 +917,7 @@ class _WritesMixin:
             "id": int(object_id), "type": t, "points": pts, "radius": float(radius),
         })])
 
-    async def create_ignore_obstacle(self, map_id, points, object_id=-1) -> bool:
+    async def create_ignore_obstacle(self, map_id, points, object_id=-1) -> WriteResult:
         """Create an ignore-obstacle area (o=234, polygon >=3 pt, no radius).
 
         object_id: -1 creates a new object; an existing id edits it in place.
@@ -832,7 +930,7 @@ class _WritesMixin:
             "id": int(object_id), "type": 0, "points": pts,
         })])
 
-    async def create_mow_shape(self, map_id, shape, points, object_id=-1) -> bool:
+    async def create_mow_shape(self, map_id, shape, points, object_id=-1) -> WriteResult:
         """Create a decorative mow-shape (o=215 type 9/12-18). square=4pt, others=2pt bbox.
 
         object_id: -1 creates a new object; an existing id edits it in place.
@@ -845,7 +943,7 @@ class _WritesMixin:
             "id": int(object_id), "type": t, "points": pts, "radius": 0,
         })])
 
-    async def create_spot(self, map_id, points, object_id=-1) -> bool:
+    async def create_spot(self, map_id, points, object_id=-1) -> WriteResult:
         """Create (or edit-in-place) a spot area (o=214).
 
         Spots are 4 axis-aligned corners — same geometry as a no-go rect, but
@@ -864,7 +962,7 @@ class _WritesMixin:
 
     async def create_maintenance_point(
         self, map_id, x, y, heading=0.0, object_id=-1
-    ) -> bool:
+    ) -> WriteResult:
         """Create (or move) a maintenance / clean point (o=224).
 
         Wire payload is a FLAT 3-element array ``[x, y, heading]`` (NOT a
@@ -881,7 +979,7 @@ class _WritesMixin:
 
     async def create_patrol_point(
         self, map_id, x, y, heading=0.0, object_id=-1
-    ) -> bool:
+    ) -> WriteResult:
         """Create (or move) a patrol / cruise point (o=223).
 
         DISTINCT opcode from the maintenance point (o=224), though both are
@@ -900,7 +998,7 @@ class _WritesMixin:
 
     async def write_patrol_point_config(
         self, *, map_id: int, point_id: int, cycles: int, auto_capture: bool
-    ) -> bool:
+    ) -> WriteResult:
         """Set a patrol point's per-point cycles + auto-capture.
 
         DUAL-WRITE — the app sends BOTH of these for every patrol-config change,
@@ -917,8 +1015,11 @@ class _WritesMixin:
         o=111 carries ONLY [point_id, cycles]; auto_capture lives solely in
         CRUISED (config the device reads at patrol-run time). idx = the 0-based
         map index (== map_id, same convention as PRE). value[0]=-1 is a constant
-        sentinel. See inventory.yaml § CRUISED. Returns True only when BOTH legs
-        are accepted (out[0].r==0).
+        sentinel. See inventory.yaml § CRUISED. Returns a :class:`WriteResult`
+        (P2 Task 5 — was a bool): accepted only when BOTH legs are accepted
+        (out[0].r==0); otherwise the first not-accepted leg's verdict. The
+        optimistic overlay + listener notify (v1.0.29a3) run exactly when they
+        used to — both legs accepted — so the pending-write UX is unchanged.
 
         THE WRITE WORKS — it just reads back with lag. Confirmed 2026-06-17: a
         write through this path IS applied (an independent app client reflected
@@ -944,7 +1045,15 @@ class _WritesMixin:
         cruised_ok = await self.hass.async_add_executor_job(
             self._cloud.set_cfg, "CRUISED", {"idx": int(map_id), "value": value}
         )
-        ok = bool(cycles_ok) and bool(cruised_ok)
+        # Both legs are WriteResults now (routed_action + set_cfg); surface
+        # the first not-accepted leg's honest verdict.
+        if not cycles_ok.accepted:
+            result = cycles_ok
+        elif not cruised_ok.accepted:
+            result = cruised_ok
+        else:
+            result = _accepted()
+        ok = result.accepted
         if ok:
             # Optimistic: hold the just-written value over the laggy CRUISE.0
             # cache until a poll confirms it (or the TTL expires).
@@ -972,9 +1081,9 @@ class _WritesMixin:
             notify = getattr(self, "async_update_listeners", None)
             if callable(notify):
                 notify()
-        return ok
+        return result
 
-    async def split_zone(self, map_id, zone_id, line_start, line_end) -> bool:
+    async def split_zone(self, map_id, zone_id, line_start, line_end) -> WriteResult:
         """Split a zone by a line (o=220). DESTRUCTIVE: clears that zone's schedule/prefs."""
         from ..protocol import map_edit_shapes as _mes
         return await self.edit_map(int(map_id), [(220, {
@@ -983,7 +1092,7 @@ class _WritesMixin:
             "line_end": _mes.pair(line_end),
         })])
 
-    async def merge_zones(self, map_id, ids) -> bool:
+    async def merge_zones(self, map_id, ids) -> WriteResult:
         """Merge zones by id list (o=221). DESTRUCTIVE: resets merged prefs."""
         zone_ids = [int(i) for i in ids]
         if len(zone_ids) < 2:

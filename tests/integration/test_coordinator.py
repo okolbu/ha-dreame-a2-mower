@@ -417,15 +417,28 @@ def _make_coordinator_with_cloud(set_cfg_return=True, set_pre_return=True):
     the async write_setting coroutine via ``asyncio.run()`` to avoid needing
     pytest-asyncio.  The hass.async_add_executor_job side-effect runs the
     blocking callable synchronously so no real thread pool is needed.
+
+    ``set_cfg_return`` / ``set_pre_return`` accept the legacy bool flags and
+    map them to the honest WriteResult the real transport returns (P2 Task 5):
+    True → accepted, False → delivered-but-rejected r=-3.
     """
+    from custom_components.dreame_a2_mower.cloud_client import WriteResult
+
+    def _as_result(flag):
+        if isinstance(flag, WriteResult):
+            return flag
+        if flag:
+            return WriteResult(delivered=True, accepted=True, code=0)
+        return WriteResult(delivered=True, accepted=False, code=-3, msg="not supported")
+
     coord = object.__new__(DreameA2MowerCoordinator)
     # Minimal attributes required by write_setting
     coord.data = MowerState()
     coord.logger = MagicMock()
 
     cloud = MagicMock()
-    cloud.set_cfg.return_value = set_cfg_return
-    cloud.set_pre.return_value = set_pre_return
+    cloud.set_cfg.return_value = _as_result(set_cfg_return)
+    cloud.set_pre.return_value = _as_result(set_pre_return)
     coord._cloud = cloud
 
     # hass mock: async_add_executor_job runs the callable synchronously in
@@ -447,10 +460,10 @@ def _make_coordinator_with_cloud(set_cfg_return=True, set_pre_return=True):
 
 
 def test_write_setting_cls_success():
-    """write_setting('CLS', True) calls cloud.set_cfg and returns True."""
+    """write_setting('CLS', True) calls cloud.set_cfg and returns accepted."""
     coord = _make_coordinator_with_cloud(set_cfg_return=True)
     result = asyncio.run(coord.write_setting("CLS", True))
-    assert result is True
+    assert result.accepted is True
     coord._cloud.set_cfg.assert_called_once_with("CLS", True)
 
 
@@ -458,7 +471,7 @@ def test_write_setting_vol_success():
     """write_setting('VOL', 80) calls cloud.set_cfg('VOL', 80)."""
     coord = _make_coordinator_with_cloud(set_cfg_return=True)
     result = asyncio.run(coord.write_setting("VOL", 80))
-    assert result is True
+    assert result.accepted is True
     coord._cloud.set_cfg.assert_called_once_with("VOL", 80)
 
 
@@ -467,7 +480,7 @@ def test_write_setting_dnd_full_array():
     coord = _make_coordinator_with_cloud(set_cfg_return=True)
     dnd_value = [1, 1320, 420]
     result = asyncio.run(coord.write_setting("DND", dnd_value))
-    assert result is True
+    assert result.accepted is True
     coord._cloud.set_cfg.assert_called_once_with("DND", dnd_value)
 
 
@@ -476,7 +489,7 @@ def test_write_setting_pre_uses_set_pre():
     coord = _make_coordinator_with_cloud(set_pre_return=True)
     pre_array = [0, 1, 50, 0, 0, 0, 0, 0, True, False]
     result = asyncio.run(coord.write_setting("PRE", pre_array))
-    assert result is True
+    assert result.accepted is True
     coord._cloud.set_pre.assert_called_once_with(pre_array)
     coord._cloud.set_cfg.assert_not_called()
 
@@ -485,7 +498,7 @@ def test_write_setting_unknown_key_returns_false():
     """write_setting with an unrecognised cfg_key returns False without calling cloud."""
     coord = _make_coordinator_with_cloud()
     result = asyncio.run(coord.write_setting("BOGUS", 42))
-    assert result is False
+    assert result.accepted is False and result.delivered is False
     coord._cloud.set_cfg.assert_not_called()
     coord._cloud.set_pre.assert_not_called()
 
@@ -499,7 +512,7 @@ def test_write_setting_no_cloud_returns_false():
     coord.async_set_updated_data = MagicMock()
     # No _cloud attribute — simulates pre-init state.
     result = asyncio.run(coord.write_setting("CLS", True))
-    assert result is False
+    assert result.accepted is False and result.delivered is False
 
 
 def test_write_setting_optimistic_update_applied_on_success():
@@ -510,19 +523,20 @@ def test_write_setting_optimistic_update_applied_on_success():
     result = asyncio.run(
         coord.write_setting("CLS", True, field_updates={"child_lock_enabled": True})
     )
-    assert result is True
+    assert result.accepted is True
     assert coord.data.child_lock_enabled is True
 
 
 def test_write_setting_optimistic_update_reverted_on_failure():
-    """field_updates are reverted when the cloud write returns False."""
+    """field_updates are reverted when the device rejects the write."""
     coord = _make_coordinator_with_cloud(set_cfg_return=False)
     assert coord.data.child_lock_enabled is None
 
     result = asyncio.run(
         coord.write_setting("CLS", True, field_updates={"child_lock_enabled": True})
     )
-    assert result is False
+    # The device's rejection code survives to the caller (surfacing layer).
+    assert result.accepted is False and result.code == -3
     # State reverted — child_lock_enabled should be back to None.
     assert coord.data.child_lock_enabled is None
 
@@ -533,14 +547,14 @@ def test_write_setting_all_cfg_keys_accepted():
     for key in known_keys:
         coord = _make_coordinator_with_cloud(set_cfg_return=True)
         result = asyncio.run(coord.write_setting(key, "dummy_value"))
-        assert result is True, f"Expected True for key {key!r}"
+        assert result.accepted is True, f"Expected accepted for key {key!r}"
 
 
 def test_write_setting_pre_non_list_returns_false():
     """write_setting('PRE', non-list) returns False without calling set_pre."""
     coord = _make_coordinator_with_cloud()
     result = asyncio.run(coord.write_setting("PRE", {"not": "a list"}))
-    assert result is False
+    assert result.accepted is False and result.delivered is False
     coord._cloud.set_pre.assert_not_called()
 
 
@@ -1401,8 +1415,8 @@ def test_dispatch_action_cloud_not_ready_returns_not_delivered():
 
 
 def test_dispatch_action_cfg_toggle_accepted_returns_accepted_writeresult():
-    """cfg_toggle_field path (LOCK_BOT_TOGGLE → CLS): write_setting True bool
-    → accepted WriteResult with code 0."""
+    """cfg_toggle_field path (LOCK_BOT_TOGGLE → CLS): write_setting's accepted
+    WriteResult is propagated verbatim (P2 Task 5 — no more synthetic wrap)."""
     import asyncio
     from unittest.mock import AsyncMock
     from custom_components.dreame_a2_mower.cloud_client import WriteResult
@@ -1410,15 +1424,13 @@ def test_dispatch_action_cfg_toggle_accepted_returns_accepted_writeresult():
 
     coord = _make_coordinator_for_finalize_tests()
     coord.data = MowerState(child_lock_enabled=False)
-    # Stub write_setting so we exercise dispatch_action's wrapping, not the
+    # Stub write_setting so we exercise dispatch_action's propagation, not the
     # CFG transport (covered elsewhere).
-    coord.write_setting = AsyncMock(return_value=True)
+    accepted = WriteResult(delivered=True, accepted=True, code=0)
+    coord.write_setting = AsyncMock(return_value=accepted)
 
     result = asyncio.run(coord.dispatch_action(MowerAction.LOCK_BOT_TOGGLE, {}))
-    assert isinstance(result, WriteResult)
-    assert result.delivered is True
-    assert result.accepted is True
-    assert result.code == 0
+    assert result is accepted  # verbatim propagation, not a re-wrap
     # CLS wire value is the toggled int (was False → 1).
     coord.write_setting.assert_awaited_once()
     args, kwargs = coord.write_setting.await_args
@@ -1426,10 +1438,10 @@ def test_dispatch_action_cfg_toggle_accepted_returns_accepted_writeresult():
     assert args[1] == 1
 
 
-def test_dispatch_action_cfg_toggle_rejected_returns_not_accepted_code_none():
-    """cfg_toggle_field path: write_setting False bool → not-accepted
-    WriteResult with code=None (write_setting never returns a device -3, so
-    we must NOT fabricate one)."""
+def test_dispatch_action_cfg_toggle_rejected_propagates_device_code():
+    """cfg_toggle_field path: a device-rejected write_setting WriteResult is
+    propagated verbatim — the real out[0].r code (e.g. -3) now reaches the
+    caller instead of the old synthetic code=None wrapper (P2 Task 5)."""
     import asyncio
     from unittest.mock import AsyncMock
     from custom_components.dreame_a2_mower.cloud_client import WriteResult
@@ -1437,13 +1449,12 @@ def test_dispatch_action_cfg_toggle_rejected_returns_not_accepted_code_none():
 
     coord = _make_coordinator_for_finalize_tests()
     coord.data = MowerState(child_lock_enabled=True)
-    coord.write_setting = AsyncMock(return_value=False)
+    rejected = WriteResult(delivered=True, accepted=False, code=-3, msg="not supported")
+    coord.write_setting = AsyncMock(return_value=rejected)
 
     result = asyncio.run(coord.dispatch_action(MowerAction.LOCK_BOT_TOGGLE, {}))
-    assert isinstance(result, WriteResult)
-    assert result.delivered is True
-    assert result.accepted is False
-    assert result.code is None
+    assert result is rejected
+    assert result.code == -3
 
 
 def test_dispatch_action_direct_siid_aiid_delivered_when_action_returns():

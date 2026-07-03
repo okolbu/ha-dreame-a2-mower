@@ -65,7 +65,7 @@ async def test_write_schedule_writes_only_changed_slot_via_device_plane(monkeypa
 
     ok = await c.write_schedule(new_slots)
 
-    assert ok is True
+    assert ok.accepted is True
     assert captured["kv_writes"] == []  # KV path retired
     assert len(captured["row_writes"]) == 1  # only the changed slot 0
     w = captured["row_writes"][0]
@@ -109,7 +109,7 @@ async def test_write_schedule_escapes_ampersand_name(monkeypatch):
     c.cloud_state = SimpleNamespace(schedule=ScheduleData(version=3, slots=()))
 
     ok = await c.write_schedule(slots)
-    assert ok is True
+    assert ok.accepted is True
     assert captured["row_writes"] == []  # escaped-name compare → skipped
 
     # Now change the plan so it DOES write — name must go out escaped.
@@ -127,7 +127,7 @@ async def test_write_schedule_escapes_ampersand_name(monkeypatch):
     c2.cloud_state = SimpleNamespace(schedule=ScheduleData(version=3, slots=()))
 
     ok2 = await c2.write_schedule(slots2)
-    assert ok2 is True
+    assert ok2.accepted is True
     assert len(captured2["row_writes"]) == 1
     assert captured2["row_writes"][0]["name"] == "Spr &amp; Sum"
 
@@ -155,7 +155,7 @@ async def test_write_schedule_skips_unchanged_slot(monkeypatch):
 
     ok = await c.write_schedule(slots)
 
-    assert ok is True
+    assert ok.accepted is True
     assert captured["row_writes"] == []  # unchanged — no write, no version churn
     c._refresh_cloud_state.assert_awaited()
 
@@ -185,7 +185,7 @@ async def test_write_schedule_preserves_other_season_enabled(monkeypatch):
 
     ok = await c.write_schedule(new_slots)
 
-    assert ok is True
+    assert ok.accepted is True
     assert len(captured["row_writes"]) == 1
     assert captured["row_writes"][0]["slot"] == 1
     assert captured["row_writes"][0]["enabled_array"] == [0, 1]  # both seasons preserved
@@ -224,7 +224,7 @@ async def test_write_schedule_enabled_enable_makes_sole_active(monkeypatch):
 
     ok = await c.write_schedule_enabled(slot_id=1, enabled=True)
 
-    assert ok is True
+    assert ok.accepted is True
     assert captured["enabled_writes"] == [{"version": 99, "enabled": [0, 1]}]  # Win on, Spr off
     c._refresh_cloud_state.assert_awaited()
 
@@ -239,7 +239,7 @@ async def test_write_schedule_enabled_disable_zeroes_slot(monkeypatch):
 
     ok = await c.write_schedule_enabled(slot_id=1, enabled=False)
 
-    assert ok is True
+    assert ok.accepted is True
     assert captured["enabled_writes"] == [{"version": 42, "enabled": [0, 0]}]  # both off
 
 
@@ -279,6 +279,6 @@ async def test_write_schedule_enabled_falls_back_to_cloud_state_when_live_none(m
 
     ok = await c.write_schedule_enabled(slot_id=0, enabled=False)
 
-    assert ok is True
+    assert ok.accepted is True
     # slot1 stays on (mode=1 read from cloud_state), slot0 forced off.
     assert captured["enabled_writes"] == [{"version": 31, "enabled": [0, 1]}]

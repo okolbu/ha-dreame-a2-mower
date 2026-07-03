@@ -1,4 +1,9 @@
 import pytest
+
+from custom_components.dreame_a2_mower.cloud_client import WriteResult
+
+_ACCEPTED = WriteResult(delivered=True, accepted=True, code=0)
+_REJECTED = WriteResult(delivered=True, accepted=False, code=-3, msg="not supported")
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -80,8 +85,8 @@ async def test_write_patrol_point_config_builds_cruised():
     # Dual-write: leg 1 = routed o=111 (device-applied cycles), leg 2 = CRUISED
     # (cloud CRUISE.0 record incl. auto_capture). CRUISED alone does not stick.
     c._cloud = SimpleNamespace(
-        routed_action=MagicMock(return_value={"out": [{"r": 0}]}),
-        set_cfg=MagicMock(return_value=True),
+        routed_action=MagicMock(return_value=_ACCEPTED),
+        set_cfg=MagicMock(return_value=_ACCEPTED),
     )
     # Optimistic-overlay state normally set in _CoreMixin.__init__ (the bare
     # __new__ instance skips it): the write records the just-written value here
@@ -96,7 +101,7 @@ async def test_write_patrol_point_config_builds_cruised():
     ok = await c.write_patrol_point_config(
         map_id=0, point_id=3, cycles=3, auto_capture=True
     )
-    assert ok is True
+    assert ok.accepted is True
     c.async_update_listeners.assert_called_once()
     # Leg 1: o=111 carries [point_id, cycles] only.
     c._cloud.routed_action.assert_called_once_with(111, {"point": [3, 3]})
@@ -121,7 +126,7 @@ async def test_set_patrol_point_config_handler_calls_coordinator(monkeypatch):
     from custom_components.dreame_a2_mower import services as svc
 
     coord = SimpleNamespace(
-        write_patrol_point_config=AsyncMock(return_value=True),
+        write_patrol_point_config=AsyncMock(return_value=_ACCEPTED),
         _active_map_id=0,
     )
     monkeypatch.setattr(svc, "_coordinator_from_call", lambda hass, call: coord)
@@ -144,7 +149,7 @@ async def test_set_patrol_point_config_handler_uses_explicit_map_id(monkeypatch)
     from custom_components.dreame_a2_mower import services as svc
 
     coord = SimpleNamespace(
-        write_patrol_point_config=AsyncMock(return_value=True),
+        write_patrol_point_config=AsyncMock(return_value=_ACCEPTED),
         _active_map_id=0,
     )
     monkeypatch.setattr(svc, "_coordinator_from_call", lambda hass, call: coord)
@@ -162,12 +167,12 @@ async def test_set_patrol_point_config_handler_uses_explicit_map_id(monkeypatch)
 
 @pytest.mark.asyncio
 async def test_set_patrol_point_config_handler_raises_on_device_rejection(monkeypatch):
-    """A False return from write_patrol_point_config raises ServiceValidationError."""
+    """A device-rejected WriteResult from write_patrol_point_config raises ServiceValidationError."""
     from homeassistant.exceptions import ServiceValidationError
     from custom_components.dreame_a2_mower import services as svc
 
     coord = SimpleNamespace(
-        write_patrol_point_config=AsyncMock(return_value=False),
+        write_patrol_point_config=AsyncMock(return_value=_REJECTED),
         _active_map_id=0,
     )
     monkeypatch.setattr(svc, "_coordinator_from_call", lambda hass, call: coord)
