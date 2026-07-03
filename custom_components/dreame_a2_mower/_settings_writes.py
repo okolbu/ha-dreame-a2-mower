@@ -9,13 +9,17 @@ Pattern (used by every settings-mirroring switch / select / number):
     2. Update coordinator.data optimistically + push to HA (instant UI).
     3. Call coordinator.write_settings(map_id, field, cloud_value).
     4. On success: cloud refresh confirms; nothing else to do.
-    5. On failure: revert MowerState + fire persistent_notification.
+    5. On failure: revert MowerState + fire persistent_notification + raise
+       HomeAssistantError via raise_for_write_result (P2 Task 5) so the UI
+       action shows the honest device/cloud verdict.
 """
 from __future__ import annotations
 
 import dataclasses
 import logging
 from typing import TYPE_CHECKING, Any
+
+from .coordinator._write_errors import raise_for_write_result
 
 if TYPE_CHECKING:
     from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -50,10 +54,10 @@ async def settings_optimistic_write(
     coord.data = dataclasses.replace(coord.data, **{state_field: new_value})
     entity.async_write_ha_state()
     cloud_value = int(new_value) if isinstance(new_value, bool) else new_value
-    ok = await coord.write_settings(
+    result = await coord.write_settings(
         map_id=map_id, field=field, value=cloud_value,
     )
-    if ok:
+    if result.accepted:
         return
     # Revert + notify
     coord.data = dataclasses.replace(coord.data, **{state_field: old_value})
@@ -70,6 +74,9 @@ async def settings_optimistic_write(
         },
         blocking=False,
     )
+    # P2 Task 5: after the revert + notification, raise so the UI action that
+    # triggered the write also shows the honest verdict (T3-3 surfacing).
+    raise_for_write_result(result, f"Set {field}", context="entity")
 
 
 async def pre_settings_optimistic_write(
@@ -82,11 +89,11 @@ async def pre_settings_optimistic_write(
     old_value = getattr(coord.data, state_field)
     coord.data = dataclasses.replace(coord.data, **{state_field: new_value})
     entity.async_write_ha_state()
-    ok = await coord.write_map_general_setting(
+    result = await coord.write_map_general_setting(
         map_id=map_id, pre_index=pre_index, pre_value=pre_value,
         settings_field=settings_field, settings_value=settings_value,
     )
-    if ok:
+    if result.accepted:
         return
     coord.data = dataclasses.replace(coord.data, **{state_field: old_value})
     entity.async_write_ha_state()
@@ -102,3 +109,6 @@ async def pre_settings_optimistic_write(
         },
         blocking=False,
     )
+    # P2 Task 5: after the revert + notification, raise so the UI action that
+    # triggered the write also shows the honest verdict (T3-3 surfacing).
+    raise_for_write_result(result, f"Set {state_field}", context="entity")

@@ -6,10 +6,17 @@ import pytest
 
 from custom_components.dreame_a2_mower import services
 
+from custom_components.dreame_a2_mower.cloud_client import WriteResult as _WR
+
+# P2 Task 5: the coordinator write families return WriteResult, not bool.
+_WR_ACCEPTED = _WR(delivered=True, accepted=True, code=0)
+_WR_REJECTED = _WR(delivered=True, accepted=False, code=-3, msg="not supported")
+
+
 
 @pytest.mark.asyncio
 async def test_rename_zone_service(monkeypatch):
-    coord = SimpleNamespace(rename_zone=AsyncMock(return_value=True))
+    coord = SimpleNamespace(rename_zone=AsyncMock(return_value=_WR_ACCEPTED))
     monkeypatch.setattr(services, "_coordinator_from_call", lambda hass, call: coord)
     call = SimpleNamespace(
         hass=SimpleNamespace(), data={"map_id": 1, "zone": 3, "name": "Lawn"}
@@ -20,7 +27,7 @@ async def test_rename_zone_service(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_delete_map_object_service(monkeypatch):
-    coord = SimpleNamespace(delete_map_object=AsyncMock(return_value=True))
+    coord = SimpleNamespace(delete_map_object=AsyncMock(return_value=_WR_ACCEPTED))
     monkeypatch.setattr(services, "_coordinator_from_call", lambda hass, call: coord)
     call = SimpleNamespace(
         hass=SimpleNamespace(), data={"map_id": 0, "object_id": 102, "category": 4}

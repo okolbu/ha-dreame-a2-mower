@@ -22,6 +22,7 @@ from ..._availability import _FreshnessAvailableMixin
 from ..._devices import map_unique_id, mower_device_info, mower_unique_id
 from ...control_honesty import _ControlHonestyMixin, resolve_control_mode
 from ...coordinator import DreameA2MowerCoordinator
+from ...coordinator._write_errors import raise_for_write_result
 from ...mower.state import MowerState
 from .base import (
     DreameA2SwitchEntityDescription,
@@ -661,8 +662,8 @@ class DreameA2AiHumanDetectionSwitch(
         coord = self.coordinator
         cs = getattr(coord, "cloud_state", None)
         old_value = cs.ai_human_enabled if cs is not None else None
-        ok = await coord.write_ai_human_enabled(True)
-        if ok:
+        result = await coord.write_ai_human_enabled(True)
+        if result.accepted:
             self.async_write_ha_state()
             return
         await self.hass.services.async_call(
@@ -678,6 +679,8 @@ class DreameA2AiHumanDetectionSwitch(
             blocking=False,
         )
         self.async_write_ha_state()
+        # P2 Task 5: raise so the UI action shows the honest cloud verdict.
+        raise_for_write_result(result, "Set AI Human Detection", context="entity")
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         if self.read_only:
@@ -685,8 +688,8 @@ class DreameA2AiHumanDetectionSwitch(
         coord = self.coordinator
         cs = getattr(coord, "cloud_state", None)
         old_value = cs.ai_human_enabled if cs is not None else None
-        ok = await coord.write_ai_human_enabled(False)
-        if ok:
+        result = await coord.write_ai_human_enabled(False)
+        if result.accepted:
             self.async_write_ha_state()
             return
         await self.hass.services.async_call(
@@ -702,6 +705,8 @@ class DreameA2AiHumanDetectionSwitch(
             blocking=False,
         )
         self.async_write_ha_state()
+        # P2 Task 5: raise so the UI action shows the honest cloud verdict.
+        raise_for_write_result(result, "Set AI Human Detection", context="entity")
 
 
 class DreameA2AiRecognitionHumansSwitch(_AiRecognitionBitSwitch):

@@ -20,6 +20,7 @@ from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
+from .cloud_client import WriteResult
 from .const import CONF_DEBUG_SERVICES, DEFAULT_DEBUG_SERVICES, DOMAIN, LOGGER
 from .coordinator import DreameA2MowerCoordinator
 from .coordinator._write_errors import raise_for_write_result
@@ -217,28 +218,6 @@ SCHEMA_MERGE_ZONES = vol.Schema({
 })
 
 
-def _raise_for_edit_ok(ok: bool, action_label: str) -> None:
-    """Raise a ServiceValidationError when a map-edit / bool write was not accepted.
-
-    ``edit_map`` (and the rename/delete/create/split/merge wrappers that delegate
-    to it) collapse a multi-leg transaction to a single ``ok`` bool — ``ok`` is
-    True only when EVERY leg was *accepted* by the device. That aggregate loses
-    the delivered-vs-rejected distinction the WriteResult carries, so a ``False``
-    surfaces as a plain "rejected" validation error: the user should fix the
-    request (bad geometry / id / region), not blindly retry.
-
-    TODO: having ``edit_map`` return a ``WriteResult`` (instead of collapsing to
-    a bool) would let map-edit distinguish not-delivered (retryable — mower
-    asleep/unreachable) from rejected (permanent — bad request), the same way
-    ``raise_for_write_result`` does for the action path. Out of 1.2 scope.
-    """
-    if not ok:
-        raise ServiceValidationError(
-            f"{action_label}: the device did not accept the map edit "
-            "(check the map_id / ids / geometry, then try again)"
-        )
-
-
 def _coordinator_from_call(hass: HomeAssistant, call: ServiceCall) -> DreameA2MowerCoordinator | None:
     """Resolve the (only) coordinator instance.
 
@@ -280,22 +259,25 @@ def service_handler(
 
 
 async def _run_map_edit(
-    coro: Awaitable[bool], label: str, log_key: str,
+    coro: Awaitable[WriteResult], label: str, log_key: str,
 ) -> None:
     """Run a map-edit coroutine with the 5x identical try/except/raise shape.
 
     The map-edit wrappers (``create_no_go`` / ``create_ignore_obstacle`` /
     ``create_mow_shape`` / ``split_zone`` / ``merge_zones``) raise ``ValueError``
     on a bad geometry/argument — we log+swallow that (the user fixes the
-    request, no traceback needed) — and otherwise return a single ``ok`` bool
-    that ``_raise_for_edit_ok`` turns into a ServiceValidationError on rejection.
+    request, no traceback needed; pre-existing behaviour) — and otherwise
+    return the transaction's :class:`WriteResult` (P2 Task 5 — was a bool):
+    ``raise_for_write_result`` surfaces a delivered-but-rejected leg as a
+    ServiceValidationError carrying the device's own code (fix the request)
+    and a not-delivered transaction as a retryable HomeAssistantError.
     """
     try:
-        ok = await coro
+        result = await coro
     except ValueError as err:
         LOGGER.warning("%s: %s", log_key, err)
         return
-    _raise_for_edit_ok(ok, label)
+    raise_for_write_result(result, label)
 
 
 @service_handler
@@ -469,15 +451,15 @@ async def _handle_set_schedule_plans(
             slot_id=target_slot_id, name="", raw_blob_b64="",
             plans=new_plans, mode=default_mode,
         ))
-    ok = await coordinator.write_schedule(new_slots)
+    result = await coordinator.write_schedule(new_slots)
     LOGGER.info(
         "set_schedule_plans: slot %d, %d plan(s), accepted=%s",
-        target_slot_id, len(new_plans), ok,
+        target_slot_id, len(new_plans), result.accepted,
     )
-    if not ok:
-        raise ServiceValidationError(
-            f"Set schedule plans: device rejected the write for slot {target_slot_id}"
-        )
+    # P2 Task 5: surface the honest verdict — a device rejection (SCHD*V3 leg
+    # r!=0) raises ServiceValidationError with the code; a transport drop
+    # raises the retryable HomeAssistantError.
+    raise_for_write_result(result, "Set schedule plans")
 
 
 @service_handler
@@ -496,15 +478,12 @@ async def _handle_set_schedule_enabled(
         )
     slot_id = int(call.data["slot_id"])
     enabled = bool(call.data["enabled"])
-    ok = await coordinator.write_schedule_enabled(slot_id=slot_id, enabled=enabled)
+    result = await coordinator.write_schedule_enabled(slot_id=slot_id, enabled=enabled)
     LOGGER.info(
         "set_schedule_enabled: slot %d -> %s, accepted=%s",
-        slot_id, "on" if enabled else "off", ok,
+        slot_id, "on" if enabled else "off", result.accepted,
     )
-    if not ok:
-        raise ServiceValidationError(
-            f"Set schedule enabled: device rejected the write for slot {slot_id}"
-        )
+    raise_for_write_result(result, "Set schedule enabled")
 
 
 async def _handle_show_lidar_fullscreen(call: ServiceCall) -> None:
@@ -856,10 +835,10 @@ async def _handle_rename_zone(
     coordinator: DreameA2MowerCoordinator, call: ServiceCall
 ) -> None:
     """Rename a mowing zone on a map (o=219)."""
-    ok = await coordinator.rename_zone(
+    result = await coordinator.rename_zone(
         int(call.data["map_id"]), int(call.data["zone"]), str(call.data["name"])
     )
-    _raise_for_edit_ok(ok, "Rename zone")
+    raise_for_write_result(result, "Rename zone")
 
 
 @service_handler
@@ -867,12 +846,12 @@ async def _handle_delete_map_object(
     coordinator: DreameA2MowerCoordinator, call: ServiceCall
 ) -> None:
     """Delete a map object by id+category (o=218; 0=zone/no-go/mow, 1=spot, 2=patrol, 3=maintenance, 4=ignore)."""
-    ok = await coordinator.delete_map_object(
+    result = await coordinator.delete_map_object(
         int(call.data["map_id"]),
         int(call.data["object_id"]),
         int(call.data["category"]),
     )
-    _raise_for_edit_ok(ok, "Delete map object")
+    raise_for_write_result(result, "Delete map object")
 
 
 @service_handler
@@ -980,7 +959,7 @@ async def _handle_set_patrol_point_config(
     if map_id is None:
         map_id = getattr(coordinator, "_active_map_id", None) or 0
     try:
-        ok = await coordinator.write_patrol_point_config(
+        result = await coordinator.write_patrol_point_config(
             map_id=int(map_id),
             point_id=int(call.data["point_id"]),
             cycles=int(call.data["cycles"]),
@@ -988,7 +967,7 @@ async def _handle_set_patrol_point_config(
         )
     except ValueError as err:
         raise ServiceValidationError(f"set_patrol_point_config: {err}") from err
-    _raise_for_edit_ok(ok, "Set patrol point config")
+    raise_for_write_result(result, "Set patrol point config")
 
 
 @service_handler

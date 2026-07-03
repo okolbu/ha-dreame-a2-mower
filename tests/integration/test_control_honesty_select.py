@@ -23,10 +23,18 @@ from custom_components.dreame_a2_mower.select_map_settings import (
     DreameA2PerMapMowingDirectionSelect,
 )
 from custom_components.dreame_a2_mower.select_global import (
+
     DreameA2SettingSelect,
     DreameA2ActionModeSelect,
     SETTING_SELECTS,
 )
+
+from custom_components.dreame_a2_mower.cloud_client import WriteResult as _WR
+
+# P2 Task 5: the coordinator write families return WriteResult, not bool.
+_WR_ACCEPTED = _WR(delivered=True, accepted=True, code=0)
+_WR_REJECTED = _WR(delivered=True, accepted=False, code=-3, msg="not supported")
+
 
 _MAP_ID = 0
 
@@ -121,7 +129,7 @@ def test_navigation_path_select_option_calls_write_setting():
     """async_select_option on the writable navigation_path select MUST call
     coordinator.write_setting."""
     coord = _make_mower_coord(navigation_path_smart=False)
-    coord.write_setting = AsyncMock(return_value=True)
+    coord.write_setting = AsyncMock(return_value=_WR_ACCEPTED)
     ent = DreameA2SettingSelect(coord, _setting_desc("navigation_path"))
     ent.async_write_ha_state = MagicMock()
 

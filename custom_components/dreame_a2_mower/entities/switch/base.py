@@ -23,6 +23,7 @@ from ..._devices import map_device_info, map_unique_id, mower_device_info, mower
 from ...const import LOGGER
 from ...control_honesty import _ControlHonestyMixin, resolve_control_mode
 from ...coordinator import DreameA2MowerCoordinator
+from ...coordinator._write_errors import raise_for_write_result
 from ...mower.state import MowerState
 from ..._settings_writes import pre_settings_optimistic_write
 
@@ -150,18 +151,17 @@ class DreameA2Switch(
         if desc.field_updates_fn is not None:
             field_updates = desc.field_updates_fn(self.coordinator.data, enabled)
 
-        success = await self.coordinator.write_setting(
+        result = await self.coordinator.write_setting(
             desc.cfg_key,
             wire_value,
             field_updates=field_updates,
         )
-        if not success:
-            LOGGER.warning(
-                "switch.%s: write_setting(%r, %r) returned False",
-                desc.key,
-                desc.cfg_key,
-                wire_value,
-            )
+        # P2 Task 5: surface the honest device verdict — a rejected/undelivered
+        # CFG write raises instead of silently snapping back (T3-3).
+        # write_setting already reverted any optimistic field_updates.
+        raise_for_write_result(
+            result, f"Set {desc.cfg_key} ({desc.key})", context="entity"
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -240,13 +240,13 @@ class _AiRecognitionBitSwitch(
             coord.data, settings_obstacle_avoidance_ai=new_mask
         )
         self.async_write_ha_state()
-        ok = await coord.write_map_general_ai_bit(
+        result = await coord.write_map_general_ai_bit(
             map_id=self._map_id,
             bit=bit,
             on=on,
             settings_value=new_mask,
         )
-        if ok:
+        if result.accepted:
             return
         coord.data = dataclasses.replace(
             coord.data, settings_obstacle_avoidance_ai=old
@@ -264,6 +264,9 @@ class _AiRecognitionBitSwitch(
             },
             blocking=False,
         )
+        # P2 Task 5: after the revert + notification, also raise so the UI
+        # action that triggered the write shows the honest device verdict.
+        raise_for_write_result(result, "Set AI recognition", context="entity")
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         await self._toggle(True)

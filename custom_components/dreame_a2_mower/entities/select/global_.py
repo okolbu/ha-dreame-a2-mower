@@ -537,18 +537,17 @@ class DreameA2SettingSelect(
         if desc.field_updates_fn is not None:
             field_updates = desc.field_updates_fn(self.coordinator.data, option)
 
-        success = await self.coordinator.write_setting(
+        result = await self.coordinator.write_setting(
             desc.cfg_key,
             wire_value,
             field_updates=field_updates,
         )
-        if not success:
-            LOGGER.warning(
-                "select.%s: write_setting(%r, %r) returned False",
-                desc.key,
-                desc.cfg_key,
-                wire_value,
-            )
+        # P2 Task 5: surface the honest device verdict — a rejected/undelivered
+        # CFG write raises instead of silently snapping back (T3-3).
+        # write_setting already reverted any optimistic field_updates.
+        raise_for_write_result(
+            result, f"Set {desc.cfg_key} ({desc.key})", context="entity"
+        )
 
 
 # ---------------------------------------------------------------------------

@@ -6,9 +6,17 @@ import pytest
 
 from custom_components.dreame_a2_mower import services
 from custom_components.dreame_a2_mower.cloud_state import (
+
     ScheduleData,
     ScheduleSlot,
 )
+
+from custom_components.dreame_a2_mower.cloud_client import WriteResult as _WR
+
+# P2 Task 5: the coordinator write families return WriteResult, not bool.
+_WR_ACCEPTED = _WR(delivered=True, accepted=True, code=0)
+_WR_REJECTED = _WR(delivered=True, accepted=False, code=-3, msg="not supported")
+
 
 
 @pytest.mark.asyncio
@@ -22,7 +30,7 @@ async def test_set_schedule_enabled_blocks_during_active_task(monkeypatch):
         state_machine=SimpleNamespace(
             snapshot=lambda: SimpleNamespace(mow_session=MowSession.IN_SESSION)
         ),
-        write_schedule_enabled=AsyncMock(return_value=True),
+        write_schedule_enabled=AsyncMock(return_value=_WR_ACCEPTED),
     )
     monkeypatch.setattr(
         services, "_coordinator_from_call", lambda hass, call: coordinator
@@ -46,7 +54,7 @@ async def test_set_schedule_enabled_dispatches_when_idle(monkeypatch):
         state_machine=SimpleNamespace(
             snapshot=lambda: SimpleNamespace(mow_session=MowSession.BETWEEN_SESSIONS)
         ),
-        write_schedule_enabled=AsyncMock(return_value=True),
+        write_schedule_enabled=AsyncMock(return_value=_WR_ACCEPTED),
     )
     monkeypatch.setattr(
         services, "_coordinator_from_call", lambda hass, call: coordinator
@@ -66,7 +74,7 @@ async def test_set_schedule_plans_calls_write_schedule(monkeypatch):
         cloud_state=SimpleNamespace(
             schedule=ScheduleData(version=1, slots=(existing,))
         ),
-        write_schedule=AsyncMock(return_value=True),
+        write_schedule=AsyncMock(return_value=_WR_ACCEPTED),
     )
     monkeypatch.setattr(
         services, "_coordinator_from_call", lambda hass, call: coord

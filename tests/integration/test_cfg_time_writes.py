@@ -19,6 +19,13 @@ import pytest
 from custom_components.dreame_a2_mower.time import DreameA2Time, DreameA2TimeEntityDescription, TIMES
 from custom_components.dreame_a2_mower.control_honesty import ControlMode
 
+from custom_components.dreame_a2_mower.cloud_client import WriteResult as _WR
+
+# P2 Task 5: the coordinator write families return WriteResult, not bool.
+_WR_ACCEPTED = _WR(delivered=True, accepted=True, code=0)
+_WR_REJECTED = _WR(delivered=True, accepted=False, code=-3, msg="not supported")
+
+
 
 def _find_desc(key: str) -> DreameA2TimeEntityDescription:
     for d in TIMES:
@@ -35,7 +42,7 @@ def _make_time(desc: DreameA2TimeEntityDescription, cfg: dict, *,
     coord = SimpleNamespace()
     coord.data = MowerState()
     coord.cloud_state = SimpleNamespace(cfg=cfg)
-    coord.write_setting = AsyncMock(return_value=True)
+    coord.write_setting = AsyncMock(return_value=_WR_ACCEPTED)
 
     ent = object.__new__(DreameA2Time)
     ent.coordinator = coord

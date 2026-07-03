@@ -19,6 +19,7 @@ from ..._availability import _FreshnessAvailableMixin
 from ..._devices import map_device_info, map_unique_id
 from ...control_honesty import _ControlHonestyMixin, resolve_control_mode
 from ...coordinator import DreameA2MowerCoordinator
+from ...coordinator._write_errors import raise_for_write_result
 
 
 class DreameA2MapEdgemasterSwitch(
@@ -95,10 +96,10 @@ class DreameA2MapEdgemasterSwitch(
     async def _set(self, enabled: bool) -> None:
         if self.read_only:
             return await self._reject_readonly_write()
-        ok = await self.coordinator.write_map_general_setting(
+        result = await self.coordinator.write_map_general_setting(
             map_id=self._map_id, pre_index=10, pre_value=int(enabled),
         )  # PRE-only: no settings_field (edgemaster has no SETTINGS field; reads s6p2 shadow)
-        if not ok:
+        if not result.accepted:
             await self.hass.services.async_call(
                 "persistent_notification", "create",
                 service_data={
@@ -109,3 +110,5 @@ class DreameA2MapEdgemasterSwitch(
                 blocking=False,
             )
         self.async_write_ha_state()  # re-read shadow (refreshes from s6p2 push)
+        # P2 Task 5: raise so the UI action shows the honest device verdict.
+        raise_for_write_result(result, "Set EdgeMaster", context="entity")

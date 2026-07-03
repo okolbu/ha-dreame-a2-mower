@@ -36,6 +36,13 @@ from custom_components.dreame_a2_mower.switch import (
 )
 from custom_components.dreame_a2_mower.control_honesty import _ControlHonestyMixin
 
+from custom_components.dreame_a2_mower.cloud_client import WriteResult as _WR
+
+# P2 Task 5: the coordinator write families return WriteResult, not bool.
+_WR_ACCEPTED = _WR(delivered=True, accepted=True, code=0)
+_WR_REJECTED = _WR(delivered=True, accepted=False, code=-3, msg="not supported")
+
+
 _MAP_ID = 0
 
 
@@ -122,7 +129,7 @@ def test_dnd_turn_on_calls_write_setting():
         coord.cloud_state,
         cfg={"DND": [0, 1200, 480]},
     )
-    coord.write_setting = AsyncMock(return_value=True)  # spy
+    coord.write_setting = AsyncMock(return_value=_WR_ACCEPTED)  # spy
     ent = DreameA2Switch(coord, _desc("dnd"))
     ent.async_write_ha_state = MagicMock()
 
@@ -151,7 +158,7 @@ def test_child_lock_switch_icon_is_not_padlock():
 def test_child_lock_turn_on_calls_write_setting():
     """async_turn_on on a writable switch MUST call coordinator.write_setting."""
     coord = _make_coord(child_lock_enabled=False)
-    coord.write_setting = AsyncMock(return_value=True)
+    coord.write_setting = AsyncMock(return_value=_WR_ACCEPTED)
     ent = DreameA2Switch(coord, _desc("child_lock"))
     ent.async_write_ha_state = MagicMock()
 
@@ -215,7 +222,7 @@ def test_ai_human_detection_has_padlock_icon():
 def test_ai_human_detection_turn_on_does_not_call_write_ai_human_enabled():
     """read_only guard must fire BEFORE write_ai_human_enabled is called."""
     coord = _make_coord()
-    coord.write_ai_human_enabled = AsyncMock(return_value=True)  # spy
+    coord.write_ai_human_enabled = AsyncMock(return_value=_WR_ACCEPTED)  # spy
     ent = DreameA2AiHumanDetectionSwitch(coord)
     ent.async_write_ha_state = MagicMock()
 
@@ -227,7 +234,7 @@ def test_ai_human_detection_turn_on_does_not_call_write_ai_human_enabled():
 
 def test_ai_human_detection_turn_off_does_not_call_write_ai_human_enabled():
     coord = _make_coord()
-    coord.write_ai_human_enabled = AsyncMock(return_value=True)  # spy
+    coord.write_ai_human_enabled = AsyncMock(return_value=_WR_ACCEPTED)  # spy
     ent = DreameA2AiHumanDetectionSwitch(coord)
     ent.async_write_ha_state = MagicMock()
 

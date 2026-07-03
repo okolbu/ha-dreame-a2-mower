@@ -19,11 +19,19 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.dreame_a2_mower.mower.state import MowerState
 from custom_components.dreame_a2_mower.number import (
+
     DreameA2Number,
     DreameA2PerMapMowingHeightNumber,
     DreameA2TrailRenderWidthNumber,
     NUMBERS,
 )
+
+from custom_components.dreame_a2_mower.cloud_client import WriteResult as _WR
+
+# P2 Task 5: the coordinator write families return WriteResult, not bool.
+_WR_ACCEPTED = _WR(delivered=True, accepted=True, code=0)
+_WR_REJECTED = _WR(delivered=True, accepted=False, code=-3, msg="not supported")
+
 
 _MAP_ID = 0
 
@@ -85,7 +93,7 @@ def test_per_map_mowing_height_set_value_calls_pre_settings_write():
     """async_set_native_value on the now-writable per-map number MUST call
     _pre_settings_optimistic_write (PRE dual-write path)."""
     coord = _make_map_coord()
-    coord.write_map_general_setting = AsyncMock(return_value=True)
+    coord.write_map_general_setting = AsyncMock(return_value=_WR_ACCEPTED)
     ent = DreameA2PerMapMowingHeightNumber(coord, map_id=_MAP_ID)
     ent.async_write_ha_state = MagicMock()
 
@@ -119,7 +127,7 @@ def test_volume_number_extra_attrs_control_mode():
 def test_volume_number_set_value_calls_write_setting():
     """async_set_native_value on the volume number MUST call coordinator.write_setting."""
     coord = _make_mower_coord(volume_pct=50)
-    coord.write_setting = AsyncMock(return_value=True)
+    coord.write_setting = AsyncMock(return_value=_WR_ACCEPTED)
     ent = DreameA2Number(coord, _number_desc("volume"))
     ent.async_write_ha_state = MagicMock()
 

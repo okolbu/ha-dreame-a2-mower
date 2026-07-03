@@ -13,6 +13,13 @@ import pytest
 from custom_components.dreame_a2_mower import select_global as sg
 from custom_components.dreame_a2_mower.control_honesty import ControlMode
 
+from custom_components.dreame_a2_mower.cloud_client import WriteResult as _WR
+
+# P2 Task 5: the coordinator write families return WriteResult, not bool.
+_WR_ACCEPTED = _WR(delivered=True, accepted=True, code=0)
+_WR_REJECTED = _WR(delivered=True, accepted=False, code=-3, msg="not supported")
+
+
 
 def _make_select(desc, cfg):
     """Build a minimal DreameA2SettingSelect, bypassing __init__ to avoid coordinator deps."""
@@ -29,7 +36,7 @@ def _make_select(desc, cfg):
         navigation_path_smart=False,
     )
     coord.cloud_state = SimpleNamespace(cfg=cfg)
-    coord.write_setting = AsyncMock(return_value=True)
+    coord.write_setting = AsyncMock(return_value=_WR_ACCEPTED)
 
     ent = object.__new__(sg.DreameA2SettingSelect)
     ent.coordinator = coord

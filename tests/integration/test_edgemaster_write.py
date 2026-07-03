@@ -12,12 +12,19 @@ import pytest
 from custom_components.dreame_a2_mower import switch_map as sm
 from custom_components.dreame_a2_mower.control_honesty import ControlMode
 
+from custom_components.dreame_a2_mower.cloud_client import WriteResult as _WR
+
+# P2 Task 5: the coordinator write families return WriteResult, not bool.
+_WR_ACCEPTED = _WR(delivered=True, accepted=True, code=0)
+_WR_REJECTED = _WR(delivered=True, accepted=False, code=-3, msg="not supported")
+
+
 
 def _make(map_id=0, mode=ControlMode.DEVICE_WRITABLE):
     ent = object.__new__(sm.DreameA2MapEdgemasterSwitch)
     ent._map_id = map_id
     ent._control_mode = mode
-    coord = SimpleNamespace(write_map_general_setting=AsyncMock(return_value=True))
+    coord = SimpleNamespace(write_map_general_setting=AsyncMock(return_value=_WR_ACCEPTED))
     ent.coordinator = coord
     ent.entity_id = "switch.x"
     ent.async_write_ha_state = lambda: None

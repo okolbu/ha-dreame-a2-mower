@@ -16,9 +16,17 @@ import pytest
 
 from custom_components.dreame_a2_mower import services
 from custom_components.dreame_a2_mower.const import (
+
     CONF_DEBUG_SERVICES,
     DOMAIN,
 )
+
+from custom_components.dreame_a2_mower.cloud_client import WriteResult as _WR
+
+# P2 Task 5: the coordinator write families return WriteResult, not bool.
+_WR_ACCEPTED = _WR(delivered=True, accepted=True, code=0)
+_WR_REJECTED = _WR(delivered=True, accepted=False, code=-3, msg="not supported")
+
 
 
 # ---------------------------------------------------------------------------
@@ -45,7 +53,7 @@ async def test_handler_short_circuits_when_no_coordinator(monkeypatch, handler_n
 async def test_handler_resolves_and_passes_coordinator(monkeypatch):
     """A wrapped handler runs its body with the resolved coordinator."""
     coord = SimpleNamespace(
-        rename_zone=AsyncMock(return_value=True),
+        rename_zone=AsyncMock(return_value=_WR_ACCEPTED),
     )
     monkeypatch.setattr(services, "_coordinator_from_call", lambda hass, call: coord)
     call = SimpleNamespace(hass=SimpleNamespace(), data={"map_id": 2, "zone": 5, "name": "Lawn"})

@@ -8,11 +8,22 @@ The three write-path tests below assert this new writable behavior.
 from __future__ import annotations
 
 import asyncio
+
+import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
 from custom_components.dreame_a2_mower.mower.state import MowerState
 from custom_components.dreame_a2_mower.number import DreameA2PerMapMowingHeightNumber
+
+from homeassistant.exceptions import HomeAssistantError
+
+from custom_components.dreame_a2_mower.cloud_client import WriteResult as _WR
+
+# P2 Task 5: the coordinator write families return WriteResult, not bool.
+_WR_ACCEPTED = _WR(delivered=True, accepted=True, code=0)
+_WR_REJECTED = _WR(delivered=True, accepted=False, code=-3, msg="not supported")
+
 
 
 def _make_coord(initial_value: int | None = 5):
@@ -21,7 +32,7 @@ def _make_coord(initial_value: int | None = 5):
     coord._active_map_id = 0
     coord.entry = MagicMock()
     coord.entry.entry_id = "test"
-    coord.write_map_general_setting = AsyncMock(return_value=True)
+    coord.write_map_general_setting = AsyncMock(return_value=_WR_ACCEPTED)
     coord.hass = MagicMock()
     # cloud_state.settings.by_map_id_canonical accessor used by native_value
     cs = MagicMock()
@@ -44,7 +55,7 @@ def test_number_entity_calls_write_settings_with_explicit_map_id():
 def test_number_entity_optimistic_update_then_revert_on_failure():
     """With write_map_general_setting failing, the optimistic value is reverted."""
     coord = _make_coord(5)
-    coord.write_map_general_setting = AsyncMock(return_value=False)
+    coord.write_map_general_setting = AsyncMock(return_value=_WR_REJECTED)
     ent = DreameA2PerMapMowingHeightNumber(coord, map_id=0)
     ent.async_write_ha_state = MagicMock()
     # hass.services.async_call is awaited on the revert path — must be AsyncMock
@@ -52,7 +63,9 @@ def test_number_entity_optimistic_update_then_revert_on_failure():
     hass.services.async_call = AsyncMock()
     ent.hass = hass
     ent.entity_id = "number.test"
-    asyncio.run(ent.async_set_native_value(7.0))
+    # P2 Task 5: the rejection is also RAISED (after revert + notification).
+    with pytest.raises(HomeAssistantError):
+        asyncio.run(ent.async_set_native_value(7.0))
     # write was attempted
     coord.write_map_general_setting.assert_called_once()
     # State reverted to original after failure
@@ -73,7 +86,7 @@ def test_per_map_number_writes_to_its_own_map_not_active(coordinator_with_two_ma
         1: {"mowingHeight": 6},
     }
     coord.cloud_state = cs
-    coord.write_map_general_setting = AsyncMock(return_value=True)
+    coord.write_map_general_setting = AsyncMock(return_value=_WR_ACCEPTED)
     coord.hass = MagicMock()
 
     ent = DreameA2PerMapMowingHeightNumber(coord, map_id=1)
