@@ -20,7 +20,8 @@ a mid-life `cloud_state=None` must not crash either).
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import MagicMock
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -180,3 +181,149 @@ def test_platform_setup_scales_with_map_count(module, map_count):
         one_map = _run_platform_setup(module, _make_map_coordinator([0]))
         per_map_unit = len(one_map) - len(baseline)
         assert per_map_entity_count == per_map_unit * map_count
+
+
+# ---------------------------------------------------------------------------
+# Final P2 review (Task 2 x Task 8 interaction): ConfigEntryNotReady from
+# async_config_entry_first_refresh() must tear down both transports before
+# propagating.
+#
+# By the time first_refresh can raise ConfigEntryNotReady,
+# _async_update_data has already run _init_cloud (cloud login + API worker
+# thread + requests.Session) and _init_mqtt (paho thread, connected) — see
+# coordinator/_core.py. HA does NOT call async_unload_entry when
+# async_setup_entry itself raises, and hass.data[DOMAIN] is not populated
+# yet at the point of the raise (__init__.py sets it only AFTER
+# first_refresh succeeds), so Task 8's teardown (async_unload_entry) never
+# runs. Each HA setup retry then builds a brand new coordinator + transports
+# on top of the previous ones that never disconnected — a leaking paho
+# thread + cloud worker per retry, with the zombie staying MQTT-subscribed
+# and able to fire duplicate hass.bus events alongside the eventual live
+# coordinator.
+# ---------------------------------------------------------------------------
+
+
+class _SetupFakeHass:
+    """Minimal hass for driving async_setup_entry up to the first-refresh
+    call. Executor jobs run synchronously (mirrors the pattern in
+    test_unload_lifecycle.py's _FakeHass)."""
+
+    def __init__(self) -> None:
+        self.data: dict = {}
+        self.executor_jobs: list = []
+        self.config = SimpleNamespace(path=lambda *parts: "/fake/" + "/".join(parts))
+
+    async def async_add_executor_job(self, func, *args):
+        self.executor_jobs.append(func)
+        return func(*args)
+
+
+def _make_failing_coordinator(*, has_mqtt: bool = True, has_cloud: bool = True):
+    """A coordinator stand-in whose first refresh raises ConfigEntryNotReady,
+    with optional partially-initialised transports (getattr-guard coverage:
+    a real coordinator could have _mqtt set without _cloud, or vice versa,
+    depending on exactly where _init_cloud/_init_mqtt got to)."""
+    kwargs = {}
+    if has_mqtt:
+        kwargs["_mqtt"] = MagicMock()
+    if has_cloud:
+        kwargs["_cloud"] = MagicMock()
+    coordinator = SimpleNamespace(
+        async_config_entry_first_refresh=AsyncMock(
+            side_effect=ConfigEntryNotReady("cloud blip")
+        ),
+        **kwargs,
+    )
+    return coordinator
+
+
+def _run_setup_with_failing_coordinator(coordinator):
+    """Drive async_setup_entry with the coordinator/WifiArchiveStore
+    construction points patched out, so the test exercises only the
+    first-refresh failure branch. Returns the hass used, for assertions."""
+    from custom_components.dreame_a2_mower import async_setup_entry
+
+    hass = _SetupFakeHass()
+    entry = SimpleNamespace(entry_id="entry-1")
+
+    wifi_store_instance = MagicMock()
+    wifi_store_instance.load_index.return_value = {}
+
+    with (
+        patch(
+            "custom_components.dreame_a2_mower.wifi_archive_store.WifiArchiveStore",
+            return_value=wifi_store_instance,
+        ),
+        patch(
+            "custom_components.dreame_a2_mower.coordinator.DreameA2MowerCoordinator",
+            return_value=coordinator,
+        ),
+    ):
+        with pytest.raises(ConfigEntryNotReady):
+            asyncio.run(async_setup_entry(hass, entry))
+
+    return hass
+
+
+def test_first_refresh_not_ready_disconnects_both_transports():
+    """TDD target: before the fix, __init__.py's async_setup_entry awaits
+    async_config_entry_first_refresh() with no try/except, so a
+    ConfigEntryNotReady propagates immediately and neither transport is
+    disconnected — this must fail against the pre-fix code."""
+    coordinator = _make_failing_coordinator(has_mqtt=True, has_cloud=True)
+
+    _run_setup_with_failing_coordinator(coordinator)
+
+    coordinator._mqtt.disconnect.assert_called_once()
+    coordinator._cloud.disconnect.assert_called_once()
+
+
+def test_first_refresh_not_ready_still_propagates():
+    """The exception must still surface to HA after teardown (HA needs it
+    to schedule the setup retry with backoff)."""
+    coordinator = _make_failing_coordinator(has_mqtt=True, has_cloud=True)
+
+    # _run_setup_with_failing_coordinator already asserts
+    # pytest.raises(ConfigEntryNotReady) internally; a second explicit
+    # assertion here documents the "still propagates" requirement directly
+    # at the call site the reviewer named.
+    from custom_components.dreame_a2_mower import async_setup_entry
+
+    hass = _SetupFakeHass()
+    entry = SimpleNamespace(entry_id="entry-1")
+    wifi_store_instance = MagicMock()
+    wifi_store_instance.load_index.return_value = {}
+
+    with (
+        patch(
+            "custom_components.dreame_a2_mower.wifi_archive_store.WifiArchiveStore",
+            return_value=wifi_store_instance,
+        ),
+        patch(
+            "custom_components.dreame_a2_mower.coordinator.DreameA2MowerCoordinator",
+            return_value=coordinator,
+        ),
+        pytest.raises(ConfigEntryNotReady, match="cloud blip"),
+    ):
+        asyncio.run(async_setup_entry(hass, entry))
+
+
+def test_first_refresh_not_ready_guards_partial_transports():
+    """A coordinator that only got as far as _init_mqtt (no _cloud attr
+    yet) must not crash the teardown — mirrors the getattr-guard in
+    async_unload_entry's transport teardown."""
+    coordinator = _make_failing_coordinator(has_mqtt=True, has_cloud=False)
+
+    _run_setup_with_failing_coordinator(coordinator)
+
+    coordinator._mqtt.disconnect.assert_called_once()
+    assert not hasattr(coordinator, "_cloud")
+
+
+def test_first_refresh_not_ready_guards_no_transports_at_all():
+    """A coordinator that failed before _init_cloud/_init_mqtt ran at all
+    (neither attribute set) must not crash the teardown."""
+    coordinator = _make_failing_coordinator(has_mqtt=False, has_cloud=False)
+
+    # Must not raise anything other than the expected ConfigEntryNotReady.
+    _run_setup_with_failing_coordinator(coordinator)

@@ -10,6 +10,7 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from .const import (
     CONF_LIDAR_ARCHIVE_KEEP,
@@ -65,7 +66,36 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = DreameA2MowerCoordinator(hass, entry, wifi_index=_wifi_index)
 
-    await coordinator.async_config_entry_first_refresh()
+    try:
+        await coordinator.async_config_entry_first_refresh()
+    except ConfigEntryNotReady:
+        # Final P2 review (Task 2 x Task 8 interaction): by this point
+        # _init_cloud (cloud login + API worker thread + requests.Session)
+        # and _init_mqtt (paho thread, connected) have already run inside
+        # _async_update_data's first-refresh path (coordinator/_core.py).
+        # HA does NOT call async_unload_entry when async_setup_entry itself
+        # raises, and hass.data[DOMAIN] isn't populated yet (see below) —
+        # so async_unload_entry's transport teardown never runs. Without
+        # this, each HA setup retry builds a brand-new coordinator +
+        # transports on top of ones that never disconnected: the zombie
+        # stays MQTT-subscribed and can fire duplicate hass.bus events
+        # alongside the eventual live coordinator.
+        #
+        # Mirror the executor-disconnect calls from async_unload_entry's
+        # transport teardown below (same getattr-guard — the coordinator
+        # may be only partially initialised, e.g. mqtt set but cloud not
+        # yet, or vice versa, depending on exactly where first-refresh
+        # failed). Deliberately NOT using entry.async_on_unload for this
+        # (T3-13): HA does run on_unload callbacks on setup failure (e.g.
+        # for timers), but transports are torn down explicitly here to
+        # match the unload path exactly, not implicitly via that hook.
+        mqtt = getattr(coordinator, "_mqtt", None)
+        if mqtt is not None:
+            await hass.async_add_executor_job(mqtt.disconnect)
+        cloud = getattr(coordinator, "_cloud", None)
+        if cloud is not None:
+            await hass.async_add_executor_job(cloud.disconnect)
+        raise
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
