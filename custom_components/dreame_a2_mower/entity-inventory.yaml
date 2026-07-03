@@ -1196,13 +1196,14 @@ entities:
       distance_mowing_m: "float — cumulative distance of mowing-role track points"
       distance_traversal_m: "float — cumulative distance of traversal-role track points"
       state_samples: "list[[ts, code]] — s2p1 samples for JS overlay"
+      error_samples: "list[[ts, code]] — s2p2-derived samples for the JS rain-delay overlay (code==56 windows); see inventory.yaml § state_codes"
       map_projection: "{bx2_mm, by2_mm, pixel_size_mm, width_px, height_px} | None"
       base_map_image_url: "str — static /api/dreame_a2_mower/work_log.png with md5 buster"
       # Removed in 2026-05-28 rewrite (were present in v1.0.16–v1.0.27):
       # legs, mowing_legs, traversal_legs, local_leg_count
     status:
       seen_working: false
-      last_verified: "2026-06-16"
+      last_verified: "2026-07-03"
     verifications:
       - date: "2026-05-15"
         status: presumed
@@ -1238,6 +1239,10 @@ entities:
       - date: "2026-05-28"
         status: presumed
         claim: "extra_state_attributes exposes legs_timeline (track-derived, list of leg dicts with role/start_ts/end_ts/pts), track_first_ts, track_last_ts (unix seconds from archive track), distance_mowing_m, distance_traversal_m; these all derive from the archive per-point track stream via session_card.build_picked_session_summary"
+      - date: "2026-07-03"
+        status: verified
+        claim: "build_picked_session_summary now also publishes error_samples (list[[ts, code]], same int-coercion as state_samples) — the card's rain-delay overlay (`a.error_samples`, code===56 windows) had been reading a key the backend never published (raw_dict carried error_samples but the summary dropped it), so the overlay was silently dead. No JS change needed; the card already consumed the correct shape."
+        evidence: "refactor-2026-07-02/findings/track-6-dashboard.md § T6-3; custom_components/dreame_a2_mower/www/dreame-mower-replay-card.js:422 (addWindows(a.error_samples, c => c === 56, ...)); tests/protocol/test_session_card.py::test_picked_session_summary_exposes_error_samples; tests/integration/test_card_contract.py::test_picked_session_error_samples_layout"
     references:
       code: "custom_components/dreame_a2_mower/sensor.py"
       wire_entry: "archive_track; archive_cloud_track"

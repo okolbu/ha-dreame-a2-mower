@@ -359,6 +359,30 @@ def test_picked_session_summary_exposes_state_samples():
         assert isinstance(sv, int)
 
 
+def test_picked_session_summary_exposes_error_samples():
+    """error_samples (list[[ts_s, code]]) must appear on the output.
+
+    The card's rain-delay overlay reads ``a.error_samples`` (code==56 windows,
+    see inventory.yaml state_codes) at dreame-mower-replay-card.js — this
+    attribute was raw_dict-only and never published on the summary (R-7 /
+    T6-3), so the overlay was silently dead. Mirrors the state_samples
+    normalization exactly (int-coerced [ts, code] pairs).
+    """
+    raw, summary, entry = _load_session("long_with_recharges")
+    out = build_picked_session_summary(
+        raw_dict=raw, summary=summary, entry=entry,
+        picker_label="[Mowing] [Map 1] test",
+    )
+    assert "error_samples" in out
+    assert isinstance(out["error_samples"], list)
+    assert out["error_samples"], "fixture has error_samples; expect non-empty"
+    for ts, code in out["error_samples"]:
+        assert isinstance(ts, int)
+        assert isinstance(code, int)
+    expected = [[int(t), int(v)] for t, v in raw["error_samples"]]
+    assert out["error_samples"] == expected
+
+
 # ---------------------------------------------------------------------------
 # _build_rain_intervals
 # ---------------------------------------------------------------------------

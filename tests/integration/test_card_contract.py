@@ -245,6 +245,7 @@ def test_picked_session_card_consumed_keys_present():
     out = _build_picked_summary(with_track=False)
     for key in (
         "legs_timeline", "track_first_ts", "track_last_ts", "state_samples",
+        "error_samples",
         "base_map_image_url", "base_map_image_url_no_trail", "map_projection",
     ):
         assert key in out, f"picked_session dropped card-consumed attr {key!r}"
@@ -268,6 +269,17 @@ def test_picked_session_state_samples_layout():
     assert isinstance(samples, list)
     for s in samples:
         assert len(s) == 2  # [unix_ts, state_code]
+
+
+def test_picked_session_error_samples_layout():
+    # Card's rain-delay overlay (dreame-mower-replay-card.js: `a.error_samples`,
+    # code===56 windows) indexes rows positionally — same [unix_ts, code]
+    # shape as state_samples.
+    out = _build_picked_summary(with_track=True)
+    samples = out["error_samples"]
+    assert isinstance(samples, list)
+    for s in samples:
+        assert len(s) == 2  # [unix_ts, error_code]
 
 
 # ---------------------------------------------------------------------------

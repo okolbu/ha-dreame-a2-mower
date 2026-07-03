@@ -596,6 +596,12 @@ def _summary_diagnostics(summary: Any, raw_dict: dict[str, Any]) -> dict[str, An
         [int(t), int(v)] for t, v in ss
         if isinstance(t, (int, float)) and isinstance(v, (int, float))
     ]
+    # Card-side rain-delay overlay reads error_samples to build code==56
+    # windows (dreame-mower-replay-card.js). Mirrors state_samples exactly.
+    out["error_samples"] = [
+        [int(t), int(v)] for t, v in err_samples
+        if isinstance(t, (int, float)) and isinstance(v, (int, float))
+    ]
     out["error_event_count"] = len(err_samples)
     out["error_codes_seen"] = sorted({int(v) for _, v in err_samples})
 

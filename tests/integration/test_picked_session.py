@@ -298,6 +298,7 @@ def test_build_picked_session_summary_characterization():
         "ended_at_unix",
         "error_codes_seen",
         "error_event_count",
+        "error_samples",
         "fault_count",
         "faults_compact",
         "filename",
@@ -444,6 +445,11 @@ def test_build_picked_session_summary_characterization():
     # state_samples
     assert len(result["state_samples"]) == 1
     assert result["state_samples"][0] == [1777232960, 1]
+
+    # error_samples — mirrors state_samples (int-coerced [ts, code] pairs);
+    # card's rain-delay overlay reads this (R-7 / T6-3).
+    assert len(result["error_samples"]) == 1
+    assert result["error_samples"][0] == [1777232959, 50]
 
     # wifi_samples
     assert len(result["wifi_samples"]) == 54
