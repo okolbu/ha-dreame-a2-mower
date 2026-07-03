@@ -26,6 +26,7 @@ import pytest
 
 from homeassistant.exceptions import ConfigEntryNotReady
 
+import custom_components.dreame_a2_mower.button as button_platform
 import custom_components.dreame_a2_mower.camera as camera_platform
 import custom_components.dreame_a2_mower.number as number_platform
 import custom_components.dreame_a2_mower.select as select_platform
@@ -35,14 +36,17 @@ from custom_components.dreame_a2_mower.const import DOMAIN
 from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
 from custom_components.dreame_a2_mower.mower.state import MowerState
 
-# The five platforms T3-2 identified as dereferencing
-# `coordinator.cloud_state.maps_by_id` unguarded in their async_setup_entry.
+# The six platforms whose async_setup_entry dereferences
+# `coordinator.cloud_state.maps_by_id` unguarded: the five T3-2 named plus
+# button.py (found in review — its per-map DreameA2HeadToPointButton loop
+# had the identical crash).
 _MAP_AWARE_PLATFORMS = [
     switch_platform,
     select_platform,
     sensor_platform,
     number_platform,
     camera_platform,
+    button_platform,
 ]
 
 
