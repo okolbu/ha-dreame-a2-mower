@@ -70,6 +70,12 @@ class _CoreMixin:
     # transient blip, short enough to surface a real cloud outage promptly.
     _CLOUD_UNAVAIL_THRESHOLD = 2
 
+    # T3-9: minimum spacing between MQTT rc=5 (auth-rejected) relogin
+    # attempts. Without this, a broker that keeps rejecting the refreshed
+    # credentials (e.g. genuinely bad creds, or a flapping broker) would
+    # hammer the cloud login endpoint on every reconnect attempt.
+    _RC5_RELOGIN_COOLDOWN_S = 30
+
     def __init__(
         self,
         hass: HomeAssistant,
@@ -400,10 +406,26 @@ class _CoreMixin:
         # Pending-finalize wait (dock-return capture).
         # Set to an asyncio.Event by _wait_for_dock_return; cleared in its
         # finally block so stale signals from subsequent MQTT pushes are
-        # harmless. Task slot reserved for future cancellation support.
+        # harmless. _pending_finalize_task holds the Task wrapping the
+        # actual Event.wait() (set/cleared by _wait_for_dock_return itself,
+        # T3-8) so async_unload_entry can cancel an in-flight ≤10-min dock
+        # wait instead of letting it sleep into a torn-down coordinator.
         self._pending_finalize_task: "asyncio.Task | None" = None
         self._pending_finalize_done: "asyncio.Event | None" = None
         self._pending_finalize_done_reason: str | None = None
+
+        # T3-9: MQTT rc=5 (auth-rejected) recovery state. Guards against a
+        # tight relogin loop — see _handle_mqtt_auth_error.
+        self._rc5_relogin_in_progress: bool = False
+        self._rc5_last_attempt_unix: float = 0.0
+
+        # T3-8: outstanding s2p2-notification resolver tasks (each sleeps
+        # ~_FETCH_DELAY_S before fetching device-messages). Fire-and-forget
+        # by design (one per s2p2 transition, self-removing on completion via
+        # the done-callback below), but tracked so async_unload_entry can
+        # cancel any still in flight instead of letting them fire into a
+        # torn-down cloud client after reload/unload.
+        self._s2p2_resolver_tasks: "set[asyncio.Task]" = set()
 
     @property
     def sn(self) -> str | None:
@@ -517,6 +539,24 @@ class _CoreMixin:
                     "mqtt_is_fresh: _mqtt not fully initialised: %s", ex
                 )
         return self.cloud_is_fresh
+
+    def _cancel_lifecycle_background_tasks(self) -> None:
+        """T3-8: cancel the in-flight dock-wait task (if any) and every
+        outstanding s2p2-notification resolver task.
+
+        Called from ``async_unload_entry`` BEFORE transport teardown so none
+        of them wakes into a coordinator whose MQTT/cloud links are already
+        gone (a ≤10-min dock wait or a ~10s resolver otherwise keeps running
+        past unload and either raises against dead transports or silently
+        no-ops into a torn-down instance). ``cancel()`` on an already-done
+        Task is a no-op, so this is safe to call unconditionally.
+        """
+        task = getattr(self, "_pending_finalize_task", None)
+        if task is not None and not task.done():
+            task.cancel()
+        for resolver_task in list(getattr(self, "_s2p2_resolver_tasks", ())):
+            if not resolver_task.done():
+                resolver_task.cancel()
 
     def _note_cloud_fetch(self, *, ok: bool) -> None:
         """Record the outcome of a full-state cloud poll for the availability
@@ -1077,6 +1117,14 @@ class _CoreMixin:
         def _on_broker_connected() -> None:
             LOGGER.debug("MQTT CONNACK accepted by broker for topic=%s", topic)
         self._mqtt.register_connected_callback(_on_broker_connected)
+
+        def _on_auth_error() -> None:
+            # T3-9: fires on the paho network thread (mqtt_client's
+            # _on_disconnect callback) — hop to the event loop before
+            # touching coordinator/cloud-client state.
+            self.hass.loop.call_soon_threadsafe(self._handle_mqtt_auth_error)
+
+        self._mqtt.register_auth_error_callback(_on_auth_error)
         self._mqtt._on_first_message = _on_first_inbound
         self._mqtt.connect(
             host=self._mqtt_host,
@@ -1089,4 +1137,81 @@ class _CoreMixin:
         # fires from _on_connect after CONNACK (v1.0.0a6 fix).
         self._mqtt.subscribe(topic)
         LOGGER.info("Subscribed to %s", topic)
+
+    @callback
+    def _handle_mqtt_auth_error(self) -> None:
+        """T3-9: MQTT rc=5 (broker rejected our credentials).
+
+        The cloud session token (``_key``) rotates on a periodic re-login
+        (``cloud_client/_fetchers.py`` refreshes it when ``_key_expire``
+        passes); until now nothing told the MQTT client about a rotation, so
+        a broker reconnect after the old password went stale looped on rc=5
+        forever with no self-heal short of an HA reload.
+
+        Runs on the event loop (hopped via ``call_soon_threadsafe`` from the
+        paho network thread that reported rc=5 — see ``_init_mqtt``).
+        Kicks off ``_async_recover_mqtt_auth`` as a background task: a
+        cloud re-login is a blocking ``requests`` call and must not run
+        inline on the loop.
+
+        Guarded against a tight loop: a relogin already in flight is not
+        duplicated, and a fresh rc=5 within ``_RC5_RELOGIN_COOLDOWN_S`` of
+        the last attempt is logged and skipped (covers both a broker that
+        keeps rejecting a freshly-refreshed password and rapid repeated
+        disconnects) rather than hammering the cloud login endpoint.
+        """
+        now = time.time()
+        if self._rc5_relogin_in_progress:
+            LOGGER.debug(
+                "[mqtt] rc=5 auth error while a relogin is already in "
+                "flight — ignoring duplicate signal"
+            )
+            return
+        if now - self._rc5_last_attempt_unix < self._RC5_RELOGIN_COOLDOWN_S:
+            LOGGER.warning(
+                "[mqtt] rc=5 auth error seen again within %ds of the last "
+                "relogin attempt — skipping to avoid a tight reconnect loop "
+                "(will retry on the next rc=5 once the cooldown elapses)",
+                self._RC5_RELOGIN_COOLDOWN_S,
+            )
+            return
+        self._rc5_relogin_in_progress = True
+        self._rc5_last_attempt_unix = now
+        self.hass.async_create_task(self._async_recover_mqtt_auth())
+
+    async def _async_recover_mqtt_auth(self) -> None:
+        """T3-9: re-login the cloud client and push refreshed MQTT creds.
+
+        ``cloud.login()`` blocks (``requests``), so it runs in the executor.
+        On success, ``update_credentials`` hot-swaps the MQTT client's
+        username/password so paho's own automatic reconnect (armed via
+        ``reconnect_delay_set`` in ``mqtt_client.connect``) succeeds on its
+        next attempt instead of retrying the stale password. On failure the
+        method just logs — the next genuine rc=5 (after the cooldown) will
+        retry.
+        """
+        try:
+            cloud = getattr(self, "_cloud", None)
+            mqtt = getattr(self, "_mqtt", None)
+            if cloud is None or mqtt is None:
+                LOGGER.debug(
+                    "[mqtt] rc=5 recovery: cloud/mqtt not initialised — skipping"
+                )
+                return
+            ok = await self.hass.async_add_executor_job(cloud.login)
+            if not ok:
+                LOGGER.warning(
+                    "[mqtt] rc=5 recovery: cloud re-login failed; MQTT will "
+                    "keep retrying with the stale password until the next "
+                    "rc=5 triggers another attempt"
+                )
+                return
+            username, password = cloud.mqtt_credentials()
+            mqtt.update_credentials(username, password)
+            LOGGER.info(
+                "[mqtt] rc=5 recovery: cloud re-login succeeded; refreshed "
+                "credentials pushed to the MQTT client for the next reconnect"
+            )
+        finally:
+            self._rc5_relogin_in_progress = False
 

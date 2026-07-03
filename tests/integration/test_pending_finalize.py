@@ -28,6 +28,11 @@ async def test_wait_resolves_early_when_event_fires():
     coord = MagicMock()
     coord._pending_finalize_done = None
     coord._pending_finalize_done_reason = None
+    coord._pending_finalize_task = None
+    # T3-8: _wait_for_dock_return now wraps the Event.wait() in a Task via
+    # hass.async_create_task so it can be cancelled at unload; a bare
+    # MagicMock() return value isn't awaitable, so give it a real scheduler.
+    coord.hass.async_create_task.side_effect = lambda coro, *a, **k: asyncio.ensure_future(coro)
 
     from custom_components.dreame_a2_mower.coordinator._session import _SessionMixin
 
@@ -51,6 +56,11 @@ async def test_wait_resolves_when_charging_event_fires():
     coord = MagicMock()
     coord._pending_finalize_done = None
     coord._pending_finalize_done_reason = None
+    coord._pending_finalize_task = None
+    # T3-8: _wait_for_dock_return now wraps the Event.wait() in a Task via
+    # hass.async_create_task so it can be cancelled at unload; a bare
+    # MagicMock() return value isn't awaitable, so give it a real scheduler.
+    coord.hass.async_create_task.side_effect = lambda coro, *a, **k: asyncio.ensure_future(coro)
 
     from custom_components.dreame_a2_mower.coordinator._session import _SessionMixin
 
@@ -73,6 +83,11 @@ async def test_wait_times_out_when_no_signal():
     coord = MagicMock()
     coord._pending_finalize_done = None
     coord._pending_finalize_done_reason = None
+    coord._pending_finalize_task = None
+    # T3-8: _wait_for_dock_return now wraps the Event.wait() in a Task via
+    # hass.async_create_task so it can be cancelled at unload; a bare
+    # MagicMock() return value isn't awaitable, so give it a real scheduler.
+    coord.hass.async_create_task.side_effect = lambda coro, *a, **k: asyncio.ensure_future(coro)
 
     from custom_components.dreame_a2_mower.coordinator._session import _SessionMixin
 

@@ -1,6 +1,6 @@
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.dreame_a2_mower.cloud_client import WriteResult
@@ -31,6 +31,7 @@ def _make_coord(results=None):
     c._cloud = SimpleNamespace(routed_action=_routed)
     c._chunked_write_lock = asyncio.Lock()
     c._refresh_cloud_state = AsyncMock()
+    c.entry = MagicMock()
 
     async def _exec(fn, *a, **k):
         return fn(*a, **k)
@@ -139,6 +140,19 @@ async def test_edit_map_schedules_delayed_refetches_even_on_reject(
     ok = await c.edit_map(0, [(218, {"id": 101, "type": 2})])
     assert ok.accepted is False
     assert [d for (d, _cb) in scheduled] == [8, 20, 40]
+
+
+@pytest.mark.asyncio
+async def test_edit_map_registers_unload_cancellers_for_delayed_refetches(
+    _capture_async_call_later,
+):
+    """T3-8: each of the 3 staggered async_call_later cancellers is routed
+    through entry.async_on_unload so a reload/unload inside the 40s window
+    cancels them instead of firing a refresh into a torn-down coordinator."""
+    c, _calls = _make_coord()
+    await c.edit_map(1, [(219, {"region": 1, "name": "X"})])
+
+    assert c.entry.async_on_unload.call_count == 3
 
 
 @pytest.mark.asyncio

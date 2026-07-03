@@ -74,6 +74,24 @@ async def test_post_session_gallery_refresh_scheduled_and_runs(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_post_session_gallery_refresh_registers_unload_canceller(monkeypatch):
+    """T3-8: the delayed one-shot's canceller is registered via
+    entry.async_on_unload so a reload/unload inside the delay window cancels
+    it instead of letting it fire into a torn-down coordinator."""
+    c = MIXIN()
+    c.hass = SimpleNamespace()
+    c.entry = MagicMock()
+    canceller = MagicMock(name="canceller")
+
+    monkeypatch.setattr(
+        _lidar_oss, "async_call_later", lambda hass, delay, action: canceller
+    )
+    c._schedule_post_session_gallery_refresh()
+
+    c.entry.async_on_unload.assert_called_once_with(canceller)
+
+
+@pytest.mark.asyncio
 async def test_post_session_gallery_refresh_noop_without_hass(monkeypatch):
     c = MIXIN()
     c.hass = None

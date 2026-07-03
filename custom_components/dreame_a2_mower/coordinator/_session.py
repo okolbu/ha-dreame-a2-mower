@@ -433,20 +433,31 @@ class _SessionMixin:
         only the first entry arms an Event; callers guard/abort on the
         'already-waiting' reason (this check is the defense-in-depth layer;
         both call sites also check the slot before entering).
+
+        T3-8: the actual wait runs inside a Task held on
+        _pending_finalize_task so async_unload_entry can cancel an in-flight
+        ≤10-min wait before tearing down transports. Cancelling that task
+        raises CancelledError out of the ``asyncio.wait_for`` below, which is
+        NOT caught here — it propagates straight through this method (skipping
+        the post-wait finalize dispatch entirely) up to the caller's own task,
+        a clean cooperative abort. The ``finally`` still clears both slots so a
+        subsequent restart/reload starts from a clean state.
         """
         if self._pending_finalize_done is not None:
             return "already-waiting"
         self._pending_finalize_done = asyncio.Event()
         self._pending_finalize_done_reason = None
+        wait_task = self.hass.async_create_task(self._pending_finalize_done.wait())
+        self._pending_finalize_task = wait_task
         try:
-            await asyncio.wait_for(
-                self._pending_finalize_done.wait(), timeout=timeout_s
-            )
+            await asyncio.wait_for(wait_task, timeout=timeout_s)
             return self._pending_finalize_done_reason or "early"
         except asyncio.TimeoutError:
             return "timeout"
         finally:
             self._pending_finalize_done = None
+            if self._pending_finalize_task is wait_task:
+                self._pending_finalize_task = None
 
     async def _finalize_prior_for_new_command(self, now_unix: int) -> None:
         """(c) Finalize the still-active prior session at a new-command boundary.
@@ -1210,40 +1221,61 @@ class _SessionMixin:
         so no unnecessary disk I/O occurs.
 
         All blocking I/O goes through hass.async_add_executor_job per spec §3.
-        """
-        if not self.live_map.is_active():
-            return
-        if not self._live_map_dirty:
-            LOGGER.debug("[F5.7.1] _persist_in_progress: live_map not dirty — skipping")
-            return
 
-        # The wire-shape payload (session_start_ts, session_ending, track,
-        # wifi/battery/charging/state/error samples, charge_at_start,
-        # settings_snapshot) is produced by live_map.dump_to_payload().
-        # Add the three coordinator-only keys that live on MowerState.
-        payload: dict[str, Any] = self.live_map.dump_to_payload()
-        payload["area_mowed_m2"] = self.data.area_mowed_m2 or 0.0
-        payload["map_area_m2"] = 0
-        # Rain-delay context is COORDINATOR state (not live_map state), so it
-        # is injected here rather than via dump_to_payload(). Persisting it lets
-        # _restore_in_progress rehydrate rain_delay_active across a reboot so the
-        # finalize gate can veto a premature finalize of a rain-paused session.
-        payload["rain_delay_started_at"] = getattr(
-            self, "_rain_delay_started_at", None
-        )
-        try:
-            await self.hass.async_add_executor_job(
-                self.session_archive.write_in_progress, payload
+        T3-12 (TOCTOU): the whole check-then-write runs under
+        ``_finalize_lock`` — the SAME lock ``_finalize_with_latch`` holds for
+        the brief archive-write critical section (delete_in_progress +
+        end_session, see ``_post_archive_reset``). Before this fix, a persist
+        tick landing between a finalize's archive write and its
+        ``delete_in_progress`` could resurrect ``in_progress.json`` for an
+        already-archived session (a phantom "still running" picker row).
+        Acquiring the lock here fully closes the window: either persist runs
+        first and finishes before finalize's critical section starts, or it
+        blocks until finalize releases the lock — by which point
+        ``end_session()`` has already flipped ``live_map.is_active()`` False,
+        so the re-checked guard below correctly no-ops. No new lock is
+        introduced (see the P2 Task 8 report's lock-order analysis: this
+        method never calls into the finalize path, so there is no cycle to
+        deadlock on) and the hold time is bounded to one archive write — not
+        the multi-minute dock-wait, which runs BEFORE ``_finalize_with_latch``
+        acquires the lock (see ``_wait_for_dock_return`` / ``_route_finalize``)
+        — so lock contention here costs at most a fraction of a second.
+        """
+        async with self._finalize_lock:
+            if not self.live_map.is_active():
+                return
+            if not self._live_map_dirty:
+                LOGGER.debug("[F5.7.1] _persist_in_progress: live_map not dirty — skipping")
+                return
+
+            # The wire-shape payload (session_start_ts, session_ending, track,
+            # wifi/battery/charging/state/error samples, charge_at_start,
+            # settings_snapshot) is produced by live_map.dump_to_payload().
+            # Add the three coordinator-only keys that live on MowerState.
+            payload: dict[str, Any] = self.live_map.dump_to_payload()
+            payload["area_mowed_m2"] = self.data.area_mowed_m2 or 0.0
+            payload["map_area_m2"] = 0
+            # Rain-delay context is COORDINATOR state (not live_map state), so
+            # it is injected here rather than via dump_to_payload(). Persisting
+            # it lets _restore_in_progress rehydrate rain_delay_active across a
+            # reboot so the finalize gate can veto a premature finalize of a
+            # rain-paused session.
+            payload["rain_delay_started_at"] = getattr(
+                self, "_rain_delay_started_at", None
             )
-            # Clear the dirty flag only on successful write.
-            self._live_map_dirty = False
-            LOGGER.debug(
-                "[F5.7.1] _persist_in_progress: wrote in_progress.json "
-                "(started_unix=%s, points=%d)",
-                self.live_map.started_unix,
-                self.live_map.total_points(),
-            )
-        except Exception as ex:
-            # Non-fatal — next tick will retry.
-            LOGGER.warning("[F5.7.1] _persist_in_progress: write failed: %s", ex)
+            try:
+                await self.hass.async_add_executor_job(
+                    self.session_archive.write_in_progress, payload
+                )
+                # Clear the dirty flag only on successful write.
+                self._live_map_dirty = False
+                LOGGER.debug(
+                    "[F5.7.1] _persist_in_progress: wrote in_progress.json "
+                    "(started_unix=%s, points=%d)",
+                    self.live_map.started_unix,
+                    self.live_map.total_points(),
+                )
+            except Exception as ex:
+                # Non-fatal — next tick will retry.
+                LOGGER.warning("[F5.7.1] _persist_in_progress: write failed: %s", ex)
 

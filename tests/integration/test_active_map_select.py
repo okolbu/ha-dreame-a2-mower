@@ -151,6 +151,30 @@ def test_active_map_select_allows_change_when_idle(coordinator_with_two_maps):
     coord.hass.services.async_call.assert_not_called()
 
 
+def test_active_map_select_registers_unload_canceller_for_optimistic_clear(
+    coordinator_with_two_maps, monkeypatch,
+):
+    """T3-8: the 10s optimistic-clear fallback's canceller is routed through
+    coordinator.entry.async_on_unload so a reload/unload inside the window
+    cancels it instead of firing into a torn-down entity."""
+    from custom_components.dreame_a2_mower.mower.state import State
+
+    sel, coord = _make_select_with_state(coordinator_with_two_maps, State.STANDBY)
+    sel.async_write_ha_state = MagicMock()
+
+    canceller = MagicMock(name="canceller")
+    import sys as _sys
+    monkeypatch.setattr(
+        _sys.modules["homeassistant.helpers.event"],
+        "async_call_later",
+        lambda hass, delay, action: canceller,
+    )
+
+    asyncio.run(sel.async_select_option("Back"))
+
+    coord.entry.async_on_unload.assert_called_once_with(canceller)
+
+
 def test_active_map_select_allows_change_when_charging(coordinator_with_two_maps):
     """Map switch dispatches normally when mower is charging."""
     from custom_components.dreame_a2_mower.mower.state import State

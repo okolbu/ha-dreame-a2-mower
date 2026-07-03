@@ -738,7 +738,14 @@ class _LidarOssMixin:
             except Exception:  # noqa: BLE001 — a sync failure must not propagate
                 LOGGER.exception("post-session OSS gallery refresh failed")
 
-        async_call_later(hass, self._POST_SESSION_GALLERY_DELAY_S, _run)
+        # T3-8: async_call_later returns a canceller; route it through
+        # entry.async_on_unload (same pattern as every periodic timer in
+        # _core.py) so a reload/unload within the delay window doesn't fire
+        # this into a torn-down coordinator.
+        entry = getattr(self, "entry", None)
+        canceller = async_call_later(hass, self._POST_SESSION_GALLERY_DELAY_S, _run)
+        if entry is not None:
+            entry.async_on_unload(canceller)
 
     async def _refresh_oss_gallery(self, max_pages: int = 20) -> None:
         """Canonical OSS media sync: archive new photos (categorized via COM

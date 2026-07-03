@@ -932,7 +932,14 @@ class DreameA2ActiveMapSelect(
             self._optimistic_target_map_id = None
             self.async_write_ha_state()
 
-        async_call_later(self.hass, 10.0, _clear_optimistic)
+        # T3-8: async_call_later returns a canceller; route it through the
+        # coordinator's config-entry async_on_unload (same pattern as the
+        # coordinator's own periodic timers) so a reload/unload inside the
+        # 10s window doesn't fire into a torn-down entity.
+        canceller = async_call_later(self.hass, 10.0, _clear_optimistic)
+        entry = getattr(self.coordinator, "entry", None)
+        if entry is not None:
+            entry.async_on_unload(canceller)
         # MAPL will reflect the change on the next refresh; the s1p50
         # ping (Task 8b) AND the o:200 echo will trigger a re-poll
         # within seconds.

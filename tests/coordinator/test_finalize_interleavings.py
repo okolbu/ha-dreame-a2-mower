@@ -140,6 +140,10 @@ def _build_coord(cls=DreameA2MowerCoordinator, *, pending_object_name=None):
         return fn(*args)
 
     hass.async_add_executor_job.side_effect = _executor
+    # T3-8: _wait_for_dock_return wraps the Event.wait() in a Task via
+    # hass.async_create_task (so unload can cancel an in-flight wait); give
+    # the mock a real scheduler instead of returning an unawaitable MagicMock.
+    hass.async_create_task.side_effect = lambda coro, *a, **k: asyncio.ensure_future(coro)
     c.hass = hass
 
     # Record every published MowerState so tests can assert on transient

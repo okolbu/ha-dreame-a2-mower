@@ -1,0 +1,202 @@
+"""T3-9: MQTT rc=5 (auth-rejected) recovery wiring.
+
+``mqtt_client.py`` has carried ``register_auth_error_callback`` /
+``update_credentials`` since 2026-05-x but nothing ever called them — a
+broker reconnect after the cloud session token rotated would loop on rc=5
+forever with no self-heal short of an HA reload (T3-9 in
+track-3-correctness.md). These tests pin the fix: ``_init_mqtt`` registers a
+callback that re-logins the cloud client and refreshes the MQTT client's
+credentials, with a cooldown/in-flight guard against a tight relogin loop.
+"""
+from __future__ import annotations
+
+import asyncio
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, MagicMock
+
+from custom_components.dreame_a2_mower.coordinator import _core as _core_mod
+from custom_components.dreame_a2_mower.coordinator._core import _CoreMixin
+
+
+def _make_coord(monkeypatch, *, fake_mqtt_cls=None):
+    """A _CoreMixin built via __new__ (skips the heavy real __init__),
+    seeded with just enough state for _init_mqtt / the rc=5 recovery path."""
+    coord = _CoreMixin.__new__(_CoreMixin)
+    coord._on_mqtt_message = MagicMock()
+    coord._mqtt_host = "mqtt.example.com"
+    coord._mqtt_port = 8883
+    coord._rc5_relogin_in_progress = False
+    coord._rc5_last_attempt_unix = 0.0
+
+    cloud = MagicMock()
+    cloud.mqtt_credentials.return_value = ("uid-1", "token-1")
+    cloud.mqtt_client_id.return_value = "client-1"
+    cloud.mqtt_topic.return_value = "/status/did/uid/model/eu/"
+    cloud._did = "did-1"
+    cloud._uid = "uid-1"
+    cloud._model = "dreame.mower.g2408"
+    coord._cloud = cloud
+
+    hass = MagicMock()
+    hass.loop = SimpleNamespace(call_soon_threadsafe=lambda fn, *a: fn(*a))
+
+    async def _exec(fn, *args):
+        return fn(*args)
+
+    hass.async_add_executor_job = AsyncMock(side_effect=_exec)
+    hass.async_create_task = MagicMock(
+        side_effect=lambda coro, *a, **k: asyncio.ensure_future(coro)
+    )
+    coord.hass = hass
+
+    if fake_mqtt_cls is not None:
+        monkeypatch.setattr(_core_mod, "DreameA2MqttClient", fake_mqtt_cls)
+    return coord
+
+
+class _FakeMqttClient:
+    """Records the callbacks _init_mqtt registers; connect()/subscribe() are
+    no-ops so the real paho import is never touched."""
+
+    instances: list["_FakeMqttClient"] = []
+
+    def __init__(self) -> None:
+        self.auth_error_cb = None
+        self.connected_cb = None
+        self.message_cb = None
+        self.connect_kwargs = None
+        self.subscribed_topic = None
+        self.update_credentials_calls: list[tuple] = []
+        _FakeMqttClient.instances.append(self)
+
+    def register_callback(self, cb):
+        self.message_cb = cb
+
+    def register_connected_callback(self, cb):
+        self.connected_cb = cb
+
+    def register_auth_error_callback(self, cb):
+        self.auth_error_cb = cb
+
+    def connect(self, **kwargs):
+        self.connect_kwargs = kwargs
+
+    def subscribe(self, topic):
+        self.subscribed_topic = topic
+
+    def update_credentials(self, username, password):
+        self.update_credentials_calls.append((username, password))
+
+
+def test_init_mqtt_registers_auth_error_callback(monkeypatch):
+    """T3-9: _init_mqtt must wire an auth-error callback — previously nothing
+    called register_auth_error_callback at all."""
+    _FakeMqttClient.instances.clear()
+    coord = _make_coord(monkeypatch, fake_mqtt_cls=_FakeMqttClient)
+
+    coord._init_mqtt()
+
+    fake = _FakeMqttClient.instances[-1]
+    assert fake.auth_error_cb is not None
+
+
+def test_rc5_triggers_relogin_and_refreshed_credentials(monkeypatch):
+    """Firing the registered auth-error callback (simulating rc=5) re-logins
+    the cloud client (via the executor — it's a blocking requests call) and
+    pushes the refreshed credentials into the MQTT client."""
+    _FakeMqttClient.instances.clear()
+    coord = _make_coord(monkeypatch, fake_mqtt_cls=_FakeMqttClient)
+    coord._init_mqtt()
+    fake_mqtt = _FakeMqttClient.instances[-1]
+    coord._mqtt = fake_mqtt
+
+    coord._cloud.login.return_value = True
+    coord._cloud.mqtt_credentials.return_value = ("uid-1", "refreshed-token")
+
+    async def _run():
+        # Simulate paho's on_disconnect(rc=5) invoking the registered callback.
+        fake_mqtt.auth_error_cb()
+        # _handle_mqtt_auth_error schedules _async_recover_mqtt_auth via
+        # hass.async_create_task; let it run to completion.
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    asyncio.run(_run())
+
+    coord._cloud.login.assert_called_once()
+    assert fake_mqtt.update_credentials_calls == [("uid-1", "refreshed-token")]
+    # The in-flight guard clears after completion so a LATER genuine rc=5
+    # (past the cooldown) can trigger another recovery.
+    assert coord._rc5_relogin_in_progress is False
+
+
+def test_rc5_does_not_loop_tightly_within_cooldown(monkeypatch):
+    """A second rc=5 signal arriving before _RC5_RELOGIN_COOLDOWN_S elapses
+    must NOT trigger a second cloud login (the tight-loop guard)."""
+    _FakeMqttClient.instances.clear()
+    coord = _make_coord(monkeypatch, fake_mqtt_cls=_FakeMqttClient)
+    coord._init_mqtt()
+    fake_mqtt = _FakeMqttClient.instances[-1]
+    coord._mqtt = fake_mqtt
+    coord._cloud.login.return_value = True
+
+    async def _run():
+        fake_mqtt.auth_error_cb()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+        # Immediately signal rc=5 again — well within the cooldown window.
+        fake_mqtt.auth_error_cb()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    asyncio.run(_run())
+
+    coord._cloud.login.assert_called_once()
+
+
+def test_rc5_ignores_reentrant_signal_while_relogin_in_flight(monkeypatch):
+    """A second rc=5 arriving WHILE a relogin is still executing (not yet
+    resolved) must not spawn a second recovery task."""
+    coord = _make_coord(monkeypatch)
+    coord._mqtt = MagicMock()
+    coord._cloud.login = MagicMock(side_effect=lambda: True)
+
+    # Make async_add_executor_job actually take a moment, so the in-progress
+    # flag is observably True while it's pending.
+    async def _slow_exec(fn, *args):
+        await asyncio.sleep(0.05)
+        return fn(*args)
+
+    coord.hass.async_add_executor_job = AsyncMock(side_effect=_slow_exec)
+
+    async def _run():
+        coord._handle_mqtt_auth_error()
+        await asyncio.sleep(0)  # let _async_recover_mqtt_auth start
+        assert coord._rc5_relogin_in_progress is True
+        # Re-entrant rc=5 while the first recovery is still in flight.
+        coord._handle_mqtt_auth_error()
+        await asyncio.sleep(0.1)
+
+    asyncio.run(_run())
+
+    coord._cloud.login.assert_called_once()
+
+
+def test_rc5_recovery_failure_logs_and_does_not_update_credentials(monkeypatch):
+    """A failed cloud re-login must not push stale/None credentials into the
+    MQTT client — the next genuine rc=5 (after cooldown) retries."""
+    coord = _make_coord(monkeypatch)
+    mqtt = MagicMock()
+    coord._mqtt = mqtt
+    coord._cloud.login.return_value = False
+
+    async def _run():
+        coord._handle_mqtt_auth_error()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    asyncio.run(_run())
+
+    coord._cloud.login.assert_called_once()
+    mqtt.update_credentials.assert_not_called()
+    assert coord._rc5_relogin_in_progress is False

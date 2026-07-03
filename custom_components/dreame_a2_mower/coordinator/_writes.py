@@ -874,14 +874,22 @@ class _WritesMixin:
         # that "hasn't applied yet" still benefits — and outside the write
         # lock (async_call_later fires later on the event loop).
         await self._refresh_cloud_state()
+        # T3-8: async_call_later returns a canceller; route it through
+        # entry.async_on_unload (same pattern as every periodic timer in
+        # _core.py) so a reload/unload inside the 40s window doesn't fire a
+        # refresh into a torn-down coordinator. getattr guards test doubles
+        # that build a bare _WritesMixin() without an `entry`.
+        entry = getattr(self, "entry", None)
         for delay in (8, 20, 40):
-            async_call_later(
+            canceller = async_call_later(
                 self.hass,
                 delay,
                 lambda _now: self.hass.async_create_task(
                     self._refresh_cloud_state()
                 ),
             )
+            if entry is not None:
+                entry.async_on_unload(canceller)
         return failure if failure is not None else _accepted()
 
     async def rename_zone(self, map_id: int, region: int, name: str) -> WriteResult:

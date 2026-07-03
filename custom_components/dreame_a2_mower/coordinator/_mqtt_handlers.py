@@ -716,12 +716,19 @@ class _MqttHandlersMixin:
             # the slug table.
             hass = getattr(self, "hass", None)
             if hass is not None:
-                hass.async_create_task(
+                _resolver_task = hass.async_create_task(
                     self._resolve_s2p2_notification(
                         siid=2, piid=2, value=int(new_error_code),
                         now_unix=now_unix,
                     )
                 )
+                # T3-8: track so async_unload_entry can cancel any resolver
+                # still sleeping its ~10s delay at unload time; self-removes
+                # from the set on completion (success, error, or cancel).
+                tasks = getattr(self, "_s2p2_resolver_tasks", None)
+                if tasks is not None and hasattr(_resolver_task, "add_done_callback"):
+                    tasks.add(_resolver_task)
+                    _resolver_task.add_done_callback(tasks.discard)
             # Local fire is the guaranteed floor; the cloud resolver scheduled above may
             # also fire (source="cloud") ~10s later → two activity entries for one
             # unknown-code transition is expected.

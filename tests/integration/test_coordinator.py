@@ -1710,6 +1710,9 @@ def _make_coordinator_for_persist_tests(
     coord._static_map_pngs_by_id = {}
     coord._last_map_md5_by_id = {}
     coord._active_map_id = None
+    # T3-12: _persist_in_progress now acquires _finalize_lock (owned by
+    # _CoreMixin.__init__; seeded manually here since the fixture uses __new__).
+    coord._finalize_lock = asyncio.Lock()
 
     if live_map_started_unix is not None:
         coord.live_map.started_unix = live_map_started_unix
@@ -2006,6 +2009,50 @@ def test_persist_in_progress_skips_when_session_not_active():
     )
 
     asyncio.run(coord._persist_in_progress())
+
+
+def test_persist_in_progress_blocked_by_finalize_lock_does_not_resurrect_file():
+    """T3-12 (TOCTOU): a persist tick racing a finalize's archive-write
+    critical section must not resurrect in_progress.json after the finalize
+    has archived + ended the session. _persist_in_progress now acquires
+    _finalize_lock — the SAME lock _finalize_with_latch holds — so it either
+    runs to completion before the finalize's critical section starts, or
+    blocks until that section (which calls live_map.end_session()) releases
+    the lock, at which point the re-checked is_active() guard correctly
+    no-ops instead of writing a phantom "still running" file."""
+    import asyncio
+
+    from custom_components.dreame_a2_mower.live_map.state import TrackPoint
+
+    track = [
+        TrackPoint(t=1_714_329_601, x_m=1.0, y_m=2.0, area_m2=0.0,
+                   heading_deg=None, task_state=0, role="mowing"),
+    ]
+    coord = _make_coordinator_for_persist_tests(
+        live_map_started_unix=1_714_329_600,
+        live_map_track=track,
+        live_map_dirty=True,
+    )
+
+    async def _run():
+        # Simulate finalize's critical section (_finalize_with_latch's body,
+        # e.g. _post_archive_reset): acquire the lock, do some archive I/O,
+        # THEN end_session() — all before releasing.
+        async def _fake_finalize_critical_section():
+            async with coord._finalize_lock:
+                await asyncio.sleep(0.02)
+                coord.live_map.end_session()
+
+        finalize_task = asyncio.create_task(_fake_finalize_critical_section())
+        await asyncio.sleep(0)  # let the fake finalize grab the lock first
+        await coord._persist_in_progress()
+        await finalize_task
+
+    asyncio.run(_run())
+
+    # Persist blocked on the lock; by the time it acquired it the session
+    # was already ended, so it must NOT have resurrected the file.
+    coord.session_archive.write_in_progress.assert_not_called()
 
     coord.session_archive.write_in_progress.assert_not_called()
 

@@ -222,12 +222,47 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     LOGGER.info("Unloading %s integration", DOMAIN)
     coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+
+    # T3-8: cancel the in-flight ≤10-min dock-wait finalize task and any
+    # outstanding s2p2-notification resolver tasks FIRST, before anything
+    # else below. These are background retry-loop artifacts, not tied to any
+    # platform/entity, so they must not be left running regardless of the
+    # platform-unload outcome checked next — a dock-wait in particular could
+    # otherwise wake up to 10 minutes later and dispatch an archive write
+    # against transports that are mid-disconnect or already gone.
     if coordinator is not None:
-        # Tear down both transports (MQTT + cloud) before platform unload, so
-        # neither the paho callback path nor the cloud API worker writes into
-        # entities being removed. Order between the two doesn't matter; both
-        # must precede platform unload. disconnect() is sync (and joins a
-        # thread) — run in the executor to keep async_unload_entry non-blocking.
+        cancel_background = getattr(
+            coordinator, "_cancel_lifecycle_background_tasks", None
+        )
+        if cancel_background is not None:
+            cancel_background()
+
+    # T3-13: unload platforms BEFORE tearing down transports. A platform's
+    # async_unload_entry can fail (e.g. an entity's
+    # async_will_remove_from_hass raising); when it does, HA keeps the entry
+    # "loaded" and will retry the unload later. The old order tore down
+    # transports unconditionally, which stranded that retry-pending entry
+    # with a dead MQTT/cloud link — every remaining entity would go stale
+    # with no way to recover short of a manual reload. Disconnecting only on
+    # success keeps a failed unload consistent: the entry stays loaded AND
+    # its transports keep working until the retry succeeds.
+    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if not unload_ok:
+        LOGGER.error(
+            "%s: platform unload failed — leaving MQTT/cloud connected so "
+            "the still-loaded entry keeps working; reload the integration "
+            "to retry teardown",
+            DOMAIN,
+        )
+        return unload_ok
+
+    if coordinator is not None:
+        # Tear down both transports (MQTT + cloud) now that every platform
+        # has detached, so neither the paho callback path nor the cloud API
+        # worker writes into a coordinator with no entities left to update.
+        # Order between the two doesn't matter. disconnect() is sync (and
+        # joins a thread) — run in the executor to keep async_unload_entry
+        # non-blocking.
         mqtt = getattr(coordinator, "_mqtt", None)
         if mqtt is not None:
             await hass.async_add_executor_job(mqtt.disconnect)
@@ -241,9 +276,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         handler = getattr(coordinator, "_novel_log_handler", None)
         if handler is not None:
             logging.getLogger("custom_components.dreame_a2_mower").removeHandler(handler)
-    unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unload_ok:
-        hass.data[DOMAIN].pop(entry.entry_id, None)
-        if not hass.data.get(DOMAIN):
-            async_unregister_services(hass)
+
+    hass.data[DOMAIN].pop(entry.entry_id, None)
+    if not hass.data.get(DOMAIN):
+        async_unregister_services(hass)
     return unload_ok
