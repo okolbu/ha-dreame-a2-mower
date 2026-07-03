@@ -195,6 +195,23 @@ async def test_cfg_time_accepted_writes_rmw_payload():
     assert args[1] == [1, 22 * 60 + 30, 420]
 
 
+def _wire_broadcast(coord):
+    """Give a MagicMock coordinator REAL async_set_updated_data semantics —
+    assign ``.data`` and record the broadcast — mirroring the (verified)
+    real-HA behaviour the stub now implements. P3 Task 1: the production
+    helpers no longer carry a MagicMock-compat direct ``coord.data =``
+    assign, so the broadcast IS the only state-application path; tests
+    assert through it (and gain optimistic→revert sequence visibility)."""
+    published: list = []
+
+    def _set(new_state):
+        coord.data = new_state
+        published.append(new_state)
+
+    coord.async_set_updated_data = MagicMock(side_effect=_set)
+    return published
+
+
 # ---------------------------------------------------------------------------
 # Family 3: PRE number (per-map mowing height → write_map_general_setting,
 # the PRE dual-write). Rejection = device r=-3 on the PRE array setter.
@@ -208,6 +225,7 @@ def _pre_number(write_result):
     coord = MagicMock()
     coord.data = MowerState(settings_mowing_height=5)
     coord.write_map_general_setting = AsyncMock(return_value=write_result)
+    coord._published = _wire_broadcast(coord)
     ent = object.__new__(DreameA2PerMapMowingHeightNumber)
     ent.coordinator = coord
     ent._map_id = 0
@@ -226,8 +244,10 @@ async def test_pre_number_rejection_raises_reverts_and_notifies():
     with pytest.raises(HomeAssistantError) as exc:
         await ent.async_set_native_value(7.0)
     assert not isinstance(exc.value, ServiceValidationError)
-    # Optimistic value reverted…
+    # Optimistic value reverted — and both hops were BROADCAST (listener
+    # path), which since P3 Task 1 is the only state-application path.
     assert coord.data.settings_mowing_height == 5
+    assert [s.settings_mowing_height for s in coord._published] == [7.0, 5]
     # …and the pre-existing persistent-notification UX is preserved.
     ent.hass.services.async_call.assert_awaited()
 
@@ -236,7 +256,9 @@ async def test_pre_number_rejection_raises_reverts_and_notifies():
 async def test_pre_number_accepted_applies_optimistic_value():
     ent, coord = _pre_number(_ACCEPTED)
     await ent.async_set_native_value(7.0)  # must not raise
+    # Applied AND broadcast exactly once via the listener path.
     assert coord.data.settings_mowing_height == 7.0
+    assert [s.settings_mowing_height for s in coord._published] == [7.0]
     coord.write_map_general_setting.assert_awaited_once_with(
         map_id=0, pre_index=4, pre_value=70,
         settings_field="mowingHeight", settings_value=7.0,
@@ -257,6 +279,7 @@ def _settings_number(write_result):
     coord = MagicMock()
     coord.data = MowerState(settings_cutter_position=1)
     coord.write_settings = AsyncMock(return_value=write_result)
+    coord._published = _wire_broadcast(coord)
     ent = object.__new__(DreameA2PerMapCutterPositionNumber)
     ent.coordinator = coord
     ent._map_id = 0
@@ -275,6 +298,8 @@ async def test_settings_number_cloud_rejection_raises_and_reverts():
     with pytest.raises(HomeAssistantError):
         await ent.async_set_native_value(2.0)
     assert coord.data.settings_cutter_position == 1  # reverted
+    # Optimistic→revert both broadcast via the listener path.
+    assert [s.settings_cutter_position for s in coord._published] == [2, 1]
     ent.hass.services.async_call.assert_awaited()  # notification preserved
 
 
@@ -283,6 +308,7 @@ async def test_settings_number_accepted_applies_value():
     ent, coord = _settings_number(_ACCEPTED)
     await ent.async_set_native_value(2.0)  # must not raise
     assert coord.data.settings_cutter_position == 2
+    assert [s.settings_cutter_position for s in coord._published] == [2]
     coord.write_settings.assert_awaited_once()
     _, kwargs = coord.write_settings.call_args
     assert kwargs == {"map_id": 0, "field": "cutterPosition", "value": 2}
@@ -301,6 +327,7 @@ def _direction_select(write_result):
     coord = MagicMock()
     coord.data = MowerState(settings_mowing_direction=0)
     coord.write_map_general_setting = AsyncMock(return_value=write_result)
+    coord._published = _wire_broadcast(coord)
     # P2 Task 6 (T3-4): an accepted write now awaits coordinator._render_base()
     # to refresh the stripe preview — plain MagicMock attributes aren't
     # awaitable, so this must be an AsyncMock (mirrors the established
@@ -326,6 +353,8 @@ async def test_direction_select_rejection_raises_and_reverts():
         await ent.async_select_option("90°")
     assert not isinstance(exc.value, ServiceValidationError)
     assert coord.data.settings_mowing_direction == 0  # reverted
+    # Optimistic→revert both broadcast via the listener path.
+    assert [s.settings_mowing_direction for s in coord._published] == [90, 0]
 
 
 @pytest.mark.asyncio
@@ -333,6 +362,7 @@ async def test_direction_select_accepted_applies_option():
     ent, coord = _direction_select(_ACCEPTED)
     await ent.async_select_option("90°")  # must not raise
     assert coord.data.settings_mowing_direction == 90
+    assert [s.settings_mowing_direction for s in coord._published] == [90]
     coord.write_map_general_setting.assert_awaited_once_with(
         map_id=0, pre_index=6, pre_value=90,
         settings_field="mowingDirection", settings_value=90,

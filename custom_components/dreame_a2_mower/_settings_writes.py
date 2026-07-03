@@ -52,11 +52,12 @@ async def settings_optimistic_write(
     coord = entity.coordinator
     old_value = getattr(coord.data, state_field)
     new_state = dataclasses.replace(coord.data, **{state_field: new_value})
-    # T3-5: assign directly (belt-and-suspenders for coordinator doubles whose
-    # async_set_updated_data isn't wired to mutate .data) AND broadcast via
-    # async_set_updated_data so sibling entities / FreshnessTracker listeners
-    # see the optimistic value too — not just the writing entity.
-    coord.data = new_state
+    # Broadcast via async_set_updated_data: it assigns coord.data AND notifies
+    # every listener, so sibling entities / FreshnessTracker see the optimistic
+    # value too — not just the writing entity. (P3 Task 1: the former T3-5
+    # belt-and-suspenders direct `coord.data =` assign for MagicMock doubles
+    # was removed once the test stub gained real async_set_updated_data
+    # semantics — see tests/conftest.py::_DataUpdateCoordinatorStub.)
     coord.async_set_updated_data(new_state)
     entity.async_write_ha_state()
     cloud_value = int(new_value) if isinstance(new_value, bool) else new_value
@@ -67,7 +68,6 @@ async def settings_optimistic_write(
         return
     # Revert + notify — same broadcast treatment so siblings see the revert.
     reverted_state = dataclasses.replace(coord.data, **{state_field: old_value})
-    coord.data = reverted_state
     coord.async_set_updated_data(reverted_state)
     entity.async_write_ha_state()
     await entity.hass.services.async_call(
@@ -96,11 +96,9 @@ async def pre_settings_optimistic_write(
     coord = entity.coordinator
     old_value = getattr(coord.data, state_field)
     new_state = dataclasses.replace(coord.data, **{state_field: new_value})
-    # T3-5: assign directly (belt-and-suspenders for coordinator doubles whose
-    # async_set_updated_data isn't wired to mutate .data) AND broadcast via
-    # async_set_updated_data so sibling entities / FreshnessTracker listeners
-    # see the optimistic value too — not just the writing entity.
-    coord.data = new_state
+    # Broadcast via async_set_updated_data: it assigns coord.data AND notifies
+    # every listener (see settings_optimistic_write above for the P3 Task 1
+    # note on the removed MagicMock-compat direct assign).
     coord.async_set_updated_data(new_state)
     entity.async_write_ha_state()
     result = await coord.write_map_general_setting(
@@ -111,7 +109,6 @@ async def pre_settings_optimistic_write(
         return
     # Revert + notify — same broadcast treatment so siblings see the revert.
     reverted_state = dataclasses.replace(coord.data, **{state_field: old_value})
-    coord.data = reverted_state
     coord.async_set_updated_data(reverted_state)
     entity.async_write_ha_state()
     await entity.hass.services.async_call(
