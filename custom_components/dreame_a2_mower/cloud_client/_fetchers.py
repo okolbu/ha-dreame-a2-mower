@@ -856,12 +856,20 @@ class _FetchersMixin:
         """Absolute GPS via dreame-mower-service-app/location/getRecords.
 
         Returns the newest record as ``{lat, lon, update_time, card4g}``
-        (float lat/lon, string timestamps), or ``None`` on any failure.
-        ``gpsLat``/``gpsLong`` are decimal-degree strings in the wire
-        payload.
+        (float lat/lon, string timestamps).
+
+        ``None`` = the fetch itself failed (HTTP error, timeout, transport
+        exception, or an unparsable record) — a transient failure that the
+        caller should NOT treat as "no GPS data" (T3-10: conflating the two
+        made a single flaky poll flip the tracker to unknown).
+
+        ``{}`` (empty dict) = the endpoint answered but returned zero
+        records — the genuine "no data" shape. ``gpsLat``/``gpsLong`` are
+        decimal-degree strings in the wire payload.
 
         Note: the endpoint is ATA[2]-gated — it returns an empty records
-        list when Real-Time Location is disabled in the app.
+        list when Real-Time Location is disabled in the app. That is the
+        one case that should legitimately clear a previously-known fix.
         """
         self._ensure_strings()
         if getattr(self, "_key_expire", None) and time.time() > self._key_expire:
@@ -896,7 +904,7 @@ class _FetchersMixin:
             return None
         recs = (((body or {}).get("locationRecords") or {}).get("records")) or []
         if not isinstance(recs, list) or not recs:
-            return None
+            return {}
         newest = max(recs, key=lambda r: r.get("updateTime") or "")
         try:
             return {

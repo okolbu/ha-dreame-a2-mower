@@ -158,11 +158,23 @@ class _RefreshersMixin:
             self.async_set_updated_data(new_state)
 
     async def _refresh_gps(self) -> None:
-        """Absolute GPS via getRecords → position_lat/lon (+ attrs). None clears."""
+        """Absolute GPS via getRecords → position_lat/lon (+ attrs).
+
+        T3-10: ``fetch_gps`` distinguishes transient fetch failure (``None``
+        — HTTP error, timeout, transport exception) from a genuine "no
+        data" response (``{}`` — endpoint answered, zero records, e.g.
+        Real-Time Location disabled). Only the latter clears the tracker;
+        a transient failure keeps the last known fix so a single flaky
+        poll doesn't flap the mower to "unknown".
+        """
         if not hasattr(self, "_cloud"):
             return
         gps = await self.hass.async_add_executor_job(self._cloud.fetch_gps)
         if gps is None:
+            # Transient fetch failure — keep the last known fix.
+            return
+        if not gps:
+            # Explicit empty-records response — genuine no-data, clear it.
             if (self.data.position_lat is not None or self.data.position_lon is not None
                     or self.data.gps_update_time is not None or self.data.gps_card4g is not None):
                 self.async_set_updated_data(dataclasses.replace(

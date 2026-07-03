@@ -316,6 +316,18 @@ def test_load_missing_file_returns_none(tmp_path):
     assert a.load(entry) is None
 
 
+def test_load_corrupt_body_returns_none(tmp_path, summary, raw_json):
+    """T7-25: a truncated/garbage session **body** JSON must load as a
+    clean None + warning, not crash. Only missing-file->None was pinned
+    before; this closes the corrupt-body gap (archive/session.py:load
+    already catches (OSError, ValueError) — json.JSONDecodeError is a
+    ValueError subclass — this test locks that in)."""
+    a = SessionArchive(tmp_path)
+    entry = a.archive(summary, raw_json=raw_json)
+    (tmp_path / entry.filename).write_text("{not valid json, truncated")
+    assert a.load(entry) is None
+
+
 def test_archive_without_raw_json_falls_back(tmp_path, summary):
     a = SessionArchive(tmp_path)
     entry = a.archive(summary, raw_json=None)

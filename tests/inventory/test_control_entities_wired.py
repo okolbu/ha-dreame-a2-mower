@@ -172,29 +172,71 @@ def _import_class(class_name: str, relfile: str):
 
 
 # ---------------------------------------------------------------------------
+# Collection logic (factored out so the ImportError-handling behavior below
+# is independently testable — T7-17)
+# ---------------------------------------------------------------------------
+
+def _collect_wiring_issues(
+    concrete: list[tuple[str, str]], import_class=_import_class
+) -> tuple[list[str], list[str]]:
+    """Return (import_errors, mixin_failures) for the given concrete classes.
+
+    ``import_class`` is injectable so tests can simulate a broken module
+    without needing an actually-broken module in the repo.
+    """
+    from custom_components.dreame_a2_mower.control_honesty import _ControlHonestyMixin
+
+    import_errors: list[str] = []
+    failures: list[str] = []
+    for class_name, relfile in concrete:
+        try:
+            cls = import_class(class_name, relfile)
+        except ImportError as exc:
+            import_errors.append(f"{class_name} ({relfile}): {exc}")
+            continue
+        if not issubclass(cls, _ControlHonestyMixin):
+            failures.append(f"{class_name} ({relfile}) is missing _ControlHonestyMixin")
+    return import_errors, failures
+
+
+# ---------------------------------------------------------------------------
 # The actual test
 # ---------------------------------------------------------------------------
 
 def test_every_control_entity_has_honesty_mixin() -> None:
     """All concrete control-platform DreameA2* classes must subclass _ControlHonestyMixin."""
-    from custom_components.dreame_a2_mower.control_honesty import _ControlHonestyMixin
-
     concrete = _find_concrete_control_classes()
     assert concrete, "No concrete control entity classes found — scan is broken"
 
-    failures: list[str] = []
-    for class_name, relfile in concrete:
-        try:
-            cls = _import_class(class_name, relfile)
-        except ImportError as exc:
-            # If we can't import it, skip it (CI environment may not have HA stubs
-            # for all modules). This keeps the test from false-positives on import
-            # failures unrelated to the mixin check.
-            continue
-        if not issubclass(cls, _ControlHonestyMixin):
-            failures.append(f"{class_name} ({relfile}) is missing _ControlHonestyMixin")
+    import_errors, failures = _collect_wiring_issues(concrete)
+
+    # T7-17: an ImportError used to be silently `continue`d, so a broken/
+    # renamed entity module quietly dropped out of this gate's coverage
+    # with zero signal. Now it's a hard failure naming the module.
+    assert not import_errors, (
+        "The following control entity classes could not be imported — a "
+        "broken module would silently skip its own wiring gate:\n"
+        + "\n".join(f"  - {e}" for e in import_errors)
+    )
 
     assert not failures, (
         "The following control entity classes are not wired with _ControlHonestyMixin:\n"
         + "\n".join(f"  - {f}" for f in failures)
     )
+
+
+def test_import_error_is_reported_not_swallowed() -> None:
+    """T7-17 regression: a class that fails to import must surface as a
+    named import error, not silently vanish from the scan's coverage."""
+
+    def _always_fails(class_name: str, relfile: str):
+        raise ImportError(f"simulated broken module for {class_name}")
+
+    import_errors, failures = _collect_wiring_issues(
+        [("DreameA2FakeBrokenSwitch", "switch_global.py")],
+        import_class=_always_fails,
+    )
+    assert failures == []
+    assert len(import_errors) == 1
+    assert "DreameA2FakeBrokenSwitch" in import_errors[0]
+    assert "switch_global.py" in import_errors[0]

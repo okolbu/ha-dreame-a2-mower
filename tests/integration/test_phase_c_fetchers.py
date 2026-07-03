@@ -33,8 +33,25 @@ def test_fetch_gps_takes_newest_record():
     assert out == {"lat": 3.5, "lon": 4.5, "update_time": "2026-06-09 16:00:00", "card4g": "FAKEICCID"}
 
 
-def test_fetch_gps_empty_records_returns_none():
-    assert _client_with_session({"success": True, "locationRecords": {"records": []}}).fetch_gps() is None
+def test_fetch_gps_empty_records_returns_empty_dict():
+    """T3-10: an empty ``records`` list means the endpoint answered with
+    genuine "no data" (ATA-gated / Real-Time Location off) — distinct from
+    a transport failure, which returns ``None``. The coordinator relies on
+    this distinction to avoid clearing the tracker on a transient blip."""
+    out = _client_with_session({"success": True, "locationRecords": {"records": []}}).fetch_gps()
+    assert out == {}
+
+
+def test_fetch_gps_http_error_returns_none():
+    c = _client_with_session({})
+    c._session.post = MagicMock(return_value=SimpleNamespace(status_code=502, json=lambda: {}, text="bad gateway"))
+    assert c.fetch_gps() is None
+
+
+def test_fetch_gps_exception_returns_none():
+    c = _client_with_session({})
+    c._session.post = MagicMock(side_effect=RuntimeError("boom"))
+    assert c.fetch_gps() is None
 
 
 def test_fetch_message_record_unread():

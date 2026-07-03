@@ -212,11 +212,26 @@ fi
 # cache hard in the browser, so the `console.info` banner is how the user
 # confirms which card actually loaded after an update — it's only useful if
 # it matches the shipped release. Targeted regex on the one `const
-# CARD_VERSION = "..."` line per card; harmless if a card lacks it.
+# CARD_VERSION = "..."` line per card, covering every www/*.js that carries
+# one (the glob visits ALL cards; the grep test only decides whether THIS
+# file has a banner to rewrite).
+#
+# T6-7: dreame-a2-schedule-card.js shipped without the standard banner and
+# sat silently un-synced (frozen at v1.0.2a3) for ~29 releases because a
+# missing banner was "harmless" here — nothing flagged the drift. Shared
+# libs (underscore-prefixed, e.g. `_dreame-map-core.js`) legitimately have
+# no banner; any *other* `*.js` file without one is a card that will never
+# be synced, so warn loudly instead of silently continuing.
 WWW_CARDS_DIR="custom_components/dreame_a2_mower/www"
 if compgen -G "$WWW_CARDS_DIR"/*.js >/dev/null; then
     for js in "$WWW_CARDS_DIR"/*.js; do
-        grep -q 'const CARD_VERSION = "' "$js" || continue
+        if ! grep -q 'const CARD_VERSION = "' "$js"; then
+            case "$(basename "$js")" in
+                _*) ;;  # shared lib, no banner expected
+                *) echo "⚠️  $js has no 'const CARD_VERSION' banner — will NOT be synced (T6-7 drift class)" >&2 ;;
+            esac
+            continue
+        fi
         "$PYTHON" - "$js" "$NEW" <<'PY'
 import re, sys
 path, new = sys.argv[1], sys.argv[2]

@@ -43,8 +43,25 @@ async def test_refresh_gps_sets_position():
 
 
 @pytest.mark.asyncio
-async def test_refresh_gps_none_clears():
+async def test_refresh_gps_none_keeps_last_fix():
+    """T3-10: ``None`` means the fetch itself failed (HTTP error, timeout,
+    exception) — a transient failure must NOT be conflated with genuine
+    "no GPS data" and must NOT clear the last known fix."""
     c = _coord(gps=None)
+    c.data = dataclasses.replace(
+        c.data, position_lat=9.9, position_lon=9.9,
+        gps_update_time="2026-01-01T00:00:00", gps_card4g="FAKE")
+    await c._refresh_gps()
+    assert c.data.position_lat == 9.9 and c.data.position_lon == 9.9
+    assert c.data.gps_update_time == "2026-01-01T00:00:00" and c.data.gps_card4g == "FAKE"
+
+
+@pytest.mark.asyncio
+async def test_refresh_gps_empty_dict_clears():
+    """T3-10: an empty dict is the explicit "endpoint answered, zero
+    records" shape (ATA-gated / Real-Time Location off) — this genuine
+    no-data response IS supposed to clear the tracker."""
+    c = _coord(gps={})
     c.data = dataclasses.replace(
         c.data, position_lat=9.9, position_lon=9.9,
         gps_update_time="2026-01-01T00:00:00", gps_card4g="FAKE")
