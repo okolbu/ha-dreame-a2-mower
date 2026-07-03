@@ -95,10 +95,85 @@ def _make_ha_stub() -> None:
     uc_mod = types.ModuleType("homeassistant.helpers.update_coordinator")
 
     class _DataUpdateCoordinatorStub:  # noqa: D101
-        """Minimal stub — supports DataUpdateCoordinator[T] subscript."""
+        """Faithful-minimal stub of homeassistant DataUpdateCoordinator.
+
+        P3 Task 1 (T7-7/T7-8, R-16): upgraded from a bare no-__init__ shell so
+        the REAL ``DreameA2MowerCoordinator.__init__`` can run in tests (via
+        ``tests/factories.py:make_coordinator``). Mirrors the real HA wheel's
+        semantics for exactly the surface the integration uses (the
+        async_set_updated_data core was verified against the real
+        homeassistant wheel source in the P2.6 review):
+
+        - ``__init__`` stores hass/logger/name/update_interval, seeds
+          ``data=None`` and ``last_update_success=True``, and creates the
+          listener registry.
+        - ``async_set_updated_data(data)`` does ``self.data = data``, sets
+          ``last_update_success = True``, then ``async_update_listeners()``
+          — exactly the real method's observable core (the real method also
+          cancels/reschedules the poll timer; this integration is push-based
+          with ``update_interval=None`` so there is nothing to cancel).
+        - ``async_add_listener`` returns a WORKING unsubscribe (real HA keys
+          the listener dict by the remove-callback itself).
+
+        NOTE: ``_listeners`` is accessed via ``__dict__.setdefault`` so
+        legacy ``object.__new__``-built coordinators (census-gated ratchet,
+        tests/audit/test_no_new_coordinator_bypass.py) don't AttributeError
+        when production code broadcasts through the class method.
+        """
+
+        def __init__(
+            self,
+            hass,
+            logger,
+            *,
+            name,
+            update_interval=None,
+            **kwargs,
+        ) -> None:
+            self.hass = hass
+            self.logger = logger
+            self.name = name
+            self.update_interval = update_interval
+            self.data = None
+            self.last_update_success = True
+            self._listeners: dict = {}
 
         def __class_getitem__(cls, item):  # type: ignore[override]
             return cls
+
+        def async_add_listener(self, update_callback, context=None):
+            """Mirror real HA: register a listener, return its unsubscribe."""
+            listeners = self.__dict__.setdefault("_listeners", {})
+
+            def remove_listener() -> None:
+                listeners.pop(remove_listener, None)
+
+            listeners[remove_listener] = (update_callback, context)
+            return remove_listener
+
+        def async_update_listeners(self) -> None:
+            """Mirror real HA: invoke every registered listener callback."""
+            for update_callback, _ctx in list(
+                self.__dict__.setdefault("_listeners", {}).values()
+            ):
+                update_callback()
+
+        def async_set_updated_data(self, data) -> None:
+            """Manually update data + notify listeners (real-HA semantics)."""
+            self.data = data
+            self.last_update_success = True
+            self.async_update_listeners()
+
+        async def async_config_entry_first_refresh(self) -> None:
+            """Minimal first-refresh: run _async_update_data, keep the result.
+
+            The real method wraps ``_async_refresh`` with setup-retry
+            plumbing; the observable contract the integration relies on is:
+            run the first update, store the returned data, and let
+            ``ConfigEntryNotReady`` propagate to ``async_setup_entry``.
+            """
+            self.data = await self._async_update_data()
+            self.last_update_success = True
 
     class _CoordinatorEntityStub:  # noqa: D101
         """Minimal stub — supports CoordinatorEntity[T] subscript and init."""
