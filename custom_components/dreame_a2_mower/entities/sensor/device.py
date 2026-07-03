@@ -215,14 +215,14 @@ def _parse_sim_expiry(value: str | None) -> datetime | None:
 
 
 def _api_endpoints_value(coord) -> int:
-    cloud = getattr(coord, "_cloud", None)
+    cloud = coord.cloud
     if cloud is None:
         return 0
     return sum(1 for v in cloud.endpoint_log.values() if v == "accepted")
 
 
 def _api_endpoints_attrs(coord) -> dict[str, list[str]]:
-    cloud = getattr(coord, "_cloud", None)
+    cloud = coord.cloud
     if cloud is None:
         return {"accepted": [], "rejected_80001": [], "device_rejected": [], "error": []}
     log = cloud.endpoint_log
@@ -286,14 +286,14 @@ def _mpos_attrs(coord) -> dict:
 
 def _obstacle_marker_value(coord) -> int:
     """Count of live AIOBS obstacle markers in the current session."""
-    return len(getattr(coord, "_obstacle_markers", []) or [])
+    return len(coord.obstacle_markers or [])
 
 
 def _obstacle_marker_attrs(coord) -> dict:
     """Per-marker detail + archived total. Confidence/class are the obstacle
     AI's guess, NOT a reliable person signal (see inventory § obstacle)."""
-    markers = getattr(coord, "_obstacle_markers", []) or []
-    log = getattr(coord, "_obstacle_marker_log", None)
+    markers = coord.obstacle_markers or []
+    log = coord.obstacle_marker_log
     log_entries = log.all() if log is not None else []
     status_by_id = {r.id: r.image_status for r in log_entries}
     return {
@@ -1019,7 +1019,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         # cloud account record, not the physical device. Surfaced for
         # users who need to query the cloud API directly outside HA.
         value_fn=lambda coord: (
-            getattr(getattr(coord, "_cloud", None), "device_id", None)
+            getattr(coord.cloud, "device_id", None)
         ),
     ),
     DreameA2DiagnosticSensorEntityDescription(
@@ -1034,7 +1034,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         # natively (and so other integrations can match against the same
         # physical device).
         value_fn=lambda coord: (
-            getattr(getattr(coord, "_cloud", None), "mac_address", None)
+            getattr(coord.cloud, "mac_address", None)
         ),
     ),
 
@@ -1468,7 +1468,7 @@ class DreameA2ZoneProgressSensor(
         """Resolve a zone id to its app-assigned name via the active map's
         mowing_zones; fall back to a synthetic 'Zone N'."""
         cs = getattr(self.coordinator, "cloud_state", None)
-        active = getattr(self.coordinator, "_active_map_id", None)
+        active = self.coordinator.active_map_id
         if cs is not None and active is not None:
             m = cs.maps_by_id.get(active)
             if m is not None:
@@ -1537,7 +1537,7 @@ class DreameA2WifiRefreshStatusSensor(
 
     @property
     def native_value(self) -> datetime | None:
-        status = getattr(self.coordinator, "_wifi_archive_last_refresh", {})
+        status = self.coordinator.wifi_archive_last_refresh
         ts = status.get("last_attempt_unix")
         if not isinstance(ts, (int, float)) or ts <= 0:
             return None
@@ -1545,7 +1545,7 @@ class DreameA2WifiRefreshStatusSensor(
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        status = getattr(self.coordinator, "_wifi_archive_last_refresh", {})
+        status = self.coordinator.wifi_archive_last_refresh
         # Exclude `last_attempt_unix` from attributes — it's already the state.
         return {k: v for k, v in status.items() if k != "last_attempt_unix"}
 
@@ -1605,7 +1605,7 @@ class DreameA2WifiHeatmapAgeSensor(
     _MOWER_KEY = "wifi_heatmap_age"
 
     def _newest_unix_ts(self) -> int | None:
-        idx = getattr(self.coordinator, "_wifi_archive_index", None) or []
+        idx = self.coordinator.wifi_archive_index or []
         if not idx:
             return None
         try:
@@ -1632,9 +1632,7 @@ class DreameA2WifiHeatmapAgeSensor(
         return {
             "newest_unix_ts": newest,
             "newest_iso": datetime.fromtimestamp(newest, tz=UTC).isoformat(),
-            "archive_total": len(
-                getattr(self.coordinator, "_wifi_archive_index", []) or []
-            ),
+            "archive_total": len(self.coordinator.wifi_archive_index or []),
         }
 
 
@@ -1661,14 +1659,14 @@ class DreameA2LastNotificationSensor(
 
     @property
     def native_value(self) -> str | None:
-        entry = getattr(self.coordinator, "_last_notification", None)
+        entry = self.coordinator.last_notification
         if not entry:
             return None
         return entry.get("text")
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
-        entry = getattr(self.coordinator, "_last_notification", None)
+        entry = self.coordinator.last_notification
         if not entry:
             return {}
         return {
@@ -1698,7 +1696,7 @@ class DreameA2ApiEndpointSensor(
 
     @property
     def native_value(self):
-        cloud = getattr(self.coordinator, "_cloud", None)
+        cloud = self.coordinator.cloud
         if cloud is None:
             return None
         host = getattr(cloud, "host", None) or "eu.iot.dreame.tech"

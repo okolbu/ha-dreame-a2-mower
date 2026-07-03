@@ -480,7 +480,7 @@ class DreameA2PerMapMowingDirectionSelect(
         # DreameA2ActionModeSelect.async_select_option (see
         # feedback_camera_image_refresh_pattern) — only reached when the
         # write above did NOT raise (i.e. it was accepted).
-        render_fn = getattr(self.coordinator, "_render_base", None)
+        render_fn = self.coordinator.render_base
         if callable(render_fn):
             await render_fn()
             self.coordinator.async_update_listeners()

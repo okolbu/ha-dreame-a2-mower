@@ -694,13 +694,13 @@ class DreameA2TrailRenderWidthNumber(
             self.coordinator.data, trail_render_width=new_width,
         )
         self.coordinator.async_set_updated_data(new_state)
-        render_main = getattr(self.coordinator, "_render_base", None)
+        render_main = self.coordinator.render_base
         if callable(render_main):
             await render_main()
         # Re-render the currently-picked work-log session, if any, so
         # the static replay reflects the new width without the user
         # having to re-pick the session.
-        summary = getattr(self.coordinator, "_picked_session_summary", None)
+        summary = self.coordinator.picked_session_summary
         if summary:
             filename = summary.get("filename")
             render_work = getattr(self.coordinator, "render_work_log_session", None)

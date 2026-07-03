@@ -29,7 +29,7 @@ def _stable_id(coord: DreameA2MowerCoordinator) -> str:
     sn = getattr(coord, "sn", None)
     if sn:
         return sn
-    client = getattr(coord, "_cloud", None)
+    client = coord.cloud
     mac = getattr(client, "mac_address", None) if client is not None else None
     if mac:
         return f"mac:{mac}"
@@ -57,7 +57,7 @@ def map_unique_id(
 
 
 def mower_device_info(coord: DreameA2MowerCoordinator) -> DeviceInfo:
-    client = getattr(coord, "_cloud", None)
+    client = coord.cloud
     model = getattr(client, "model", None) if client is not None else None
     mac = getattr(client, "mac_address", None) if client is not None else None
     sn = getattr(coord, "sn", None)

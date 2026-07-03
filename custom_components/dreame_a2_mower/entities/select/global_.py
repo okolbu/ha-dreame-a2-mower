@@ -1004,7 +1004,7 @@ class DreameA2ActionModeSelect(
         # ALL_AREAS stripe preview). The first render after restoration
         # is what makes the initial dashboard view match the restored
         # selection. See feedback_camera_image_refresh_pattern.
-        render_fn = getattr(self.coordinator, "_render_base", None)
+        render_fn = self.coordinator.render_base
         if callable(render_fn):
             await render_fn()
             self.coordinator.async_update_listeners()
@@ -1035,7 +1035,7 @@ class DreameA2ActionModeSelect(
         new_mode = ActionMode(option)
         new_state = dataclasses.replace(self.coordinator.data, action_mode=new_mode)
         self.coordinator.async_set_updated_data(new_state)
-        render_fn = getattr(self.coordinator, "_render_base", None)
+        render_fn = self.coordinator.render_base
         if callable(render_fn):
             await render_fn()
             self.coordinator.async_update_listeners()
@@ -1086,7 +1086,7 @@ class DreameA2WifiArchiveSelect(_DreameA2ArchivePickerSelect):
         return f"[Map {mid + 1}] {dt:%Y-%m-%d %H:%M}"
 
     def _rebuild_options(self) -> None:
-        entries = list(getattr(self.coordinator, "_wifi_archive_index", []))
+        entries = list(self.coordinator.wifi_archive_index)
         entries.sort(key=lambda e: e.unix_ts, reverse=True)
         opts = [self._format_option(e) for e in entries]
         label_map: dict[str, "WifiArchiveEntry"] = {}

@@ -55,7 +55,7 @@ async def async_get_config_entry_diagnostics(
 ) -> dict[str, Any]:
     coordinator = hass.data[DOMAIN][entry.entry_id]
     snap = coordinator.novel_registry.snapshot()
-    cloud = getattr(coordinator, "_cloud", None)
+    cloud = coordinator.cloud
     endpoint_log = dict(getattr(cloud, "endpoint_log", {})) if cloud is not None else {}
     # F6 review fix #2: defense-in-depth — wrap state and endpoint_log in
     # redact() so future field additions can't silently leak credentials.
@@ -79,7 +79,7 @@ async def async_get_config_entry_diagnostics(
             "country": getattr(cloud, "_country", None),
             "last_send_error_code": getattr(cloud, "_last_send_error_code", None),
         }
-    mqtt = getattr(coordinator, "_mqtt", None)
+    mqtt = coordinator.mqtt
     mqtt_state: dict[str, Any] = {}
     if mqtt is not None:
         mqtt_state = {

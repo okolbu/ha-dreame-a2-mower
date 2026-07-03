@@ -300,7 +300,7 @@ class DreameA2MapCamera(
         attrs["last_known_point"] = _last_known_point(
             self.coordinator.state_machine.snapshot()
         )
-        mode = getattr(self.coordinator, "_base_png_mode", None)
+        mode = self.coordinator.base_png_mode
         attrs["background_mode"] = getattr(mode, "value", None)
         # Multi-map awareness — expose active map id and name.
         active = self.coordinator._active_map_id

@@ -352,7 +352,7 @@ async def _handle_start_point_patrol(
 ) -> None:
     map_id = call.data.get("map_id")
     if map_id is None:
-        map_id = getattr(coordinator, "_active_map_id", None) or 0
+        map_id = coordinator.active_map_id or 0
     point_ids = list(int(p) for p in call.data["point_ids"])
     result = await coordinator.start_point_patrol(map_id=int(map_id), point_ids=point_ids)
     raise_for_write_result(result, "Start point patrol")
@@ -364,7 +364,7 @@ async def _handle_start_edge_patrol(
 ) -> None:
     map_id = call.data.get("map_id")
     if map_id is None:
-        map_id = getattr(coordinator, "_active_map_id", None) or 0
+        map_id = coordinator.active_map_id or 0
     contour_ids = [list(c) for c in call.data["contour_ids"]]
     result = await coordinator.start_edge_patrol(map_id=int(map_id), contour_ids=contour_ids)
     raise_for_write_result(result, "Start edge patrol")
@@ -904,7 +904,7 @@ async def _handle_create_spot(
     """Create (or edit-in-place) a spot area on a map (o=214, 4 corner metres)."""
     map_id = call.data.get("map_id")
     if map_id is None:
-        map_id = getattr(coordinator, "_active_map_id", None) or 0
+        map_id = coordinator.active_map_id or 0
     await _run_map_edit(
         coordinator.create_spot(
             int(map_id), call.data["points"],
@@ -921,7 +921,7 @@ async def _handle_create_maintenance_point(
     """Create (or move) a maintenance / clean point on a map (o=224)."""
     map_id = call.data.get("map_id")
     if map_id is None:
-        map_id = getattr(coordinator, "_active_map_id", None) or 0
+        map_id = coordinator.active_map_id or 0
     await _run_map_edit(
         coordinator.create_maintenance_point(
             int(map_id), float(call.data["x"]), float(call.data["y"]),
@@ -939,7 +939,7 @@ async def _handle_create_patrol_point(
     """Create (or move) a patrol / cruise point on a map (o=223)."""
     map_id = call.data.get("map_id")
     if map_id is None:
-        map_id = getattr(coordinator, "_active_map_id", None) or 0
+        map_id = coordinator.active_map_id or 0
     await _run_map_edit(
         coordinator.create_patrol_point(
             int(map_id), float(call.data["x"]), float(call.data["y"]),
@@ -957,7 +957,7 @@ async def _handle_set_patrol_point_config(
     """Set a patrol point's cycles + auto-capture (CRUISED CFG write)."""
     map_id = call.data.get("map_id")
     if map_id is None:
-        map_id = getattr(coordinator, "_active_map_id", None) or 0
+        map_id = coordinator.active_map_id or 0
     try:
         result = await coordinator.write_patrol_point_config(
             map_id=int(map_id),

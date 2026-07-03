@@ -82,17 +82,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # alongside the eventual live coordinator.
         #
         # Mirror the executor-disconnect calls from async_unload_entry's
-        # transport teardown below (same getattr-guard — the coordinator
-        # may be only partially initialised, e.g. mqtt set but cloud not
-        # yet, or vice versa, depending on exactly where first-refresh
-        # failed). Deliberately NOT using entry.async_on_unload for this
+        # transport teardown below (same hasattr-tolerant `.mqtt`/`.cloud`
+        # accessors — the coordinator may be only partially initialised,
+        # e.g. mqtt set but cloud not yet, or vice versa, depending on
+        # exactly where first-refresh failed). Deliberately NOT using
+        # entry.async_on_unload for this
         # (T3-13): HA does run on_unload callbacks on setup failure (e.g.
         # for timers), but transports are torn down explicitly here to
         # match the unload path exactly, not implicitly via that hook.
-        mqtt = getattr(coordinator, "_mqtt", None)
+        mqtt = coordinator.mqtt
         if mqtt is not None:
             await hass.async_add_executor_job(mqtt.disconnect)
-        cloud = getattr(coordinator, "_cloud", None)
+        cloud = coordinator.cloud
         if cloud is not None:
             await hass.async_add_executor_job(cloud.disconnect)
         raise
@@ -261,9 +262,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # otherwise wake up to 10 minutes later and dispatch an archive write
     # against transports that are mid-disconnect or already gone.
     if coordinator is not None:
-        cancel_background = getattr(
-            coordinator, "_cancel_lifecycle_background_tasks", None
-        )
+        cancel_background = coordinator.cancel_lifecycle_background_tasks
         if cancel_background is not None:
             cancel_background()
 
@@ -293,17 +292,17 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Order between the two doesn't matter. disconnect() is sync (and
         # joins a thread) — run in the executor to keep async_unload_entry
         # non-blocking.
-        mqtt = getattr(coordinator, "_mqtt", None)
+        mqtt = coordinator.mqtt
         if mqtt is not None:
             await hass.async_add_executor_job(mqtt.disconnect)
         # P1.5: also tear down the cloud client — its async API worker thread +
         # requests.Session previously leaked on every reload (disconnect() was
         # never called). disconnect() joins the worker (blocks), so run it in
         # the executor like the mqtt teardown above.
-        cloud = getattr(coordinator, "_cloud", None)
+        cloud = coordinator.cloud
         if cloud is not None:
             await hass.async_add_executor_job(cloud.disconnect)
-        handler = getattr(coordinator, "_novel_log_handler", None)
+        handler = coordinator.novel_log_handler
         if handler is not None:
             logging.getLogger("custom_components.dreame_a2_mower").removeHandler(handler)
 

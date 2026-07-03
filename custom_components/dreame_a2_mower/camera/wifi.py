@@ -177,7 +177,7 @@ class DreameA2WifiPerMapCamera(
 
     def _resolve_entry(self):
         """Newest archive entry tagged with this camera's map_id, or None."""
-        index = getattr(self.coordinator, "_wifi_archive_index", None) or []
+        index = self.coordinator.wifi_archive_index or []
         matches = [e for e in index if int(getattr(e, "map_id", -1)) == self._map_id]
         if not matches:
             return None
@@ -188,7 +188,7 @@ class DreameA2WifiPerMapCamera(
         entry = self._resolve_entry()
         if entry is None:
             return None
-        store = getattr(self.coordinator, "_wifi_archive_store", None)
+        store = self.coordinator.wifi_archive_store
         if store is None:
             return None
         return store.load_body(entry.object_name)
