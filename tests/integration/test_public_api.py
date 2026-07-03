@@ -47,6 +47,11 @@ _MAP_RENDER_EXPORTS = (
     "render_base_map",
     "render_work_log",
     "extract_projection",
+    # T2-17 map-unification: the render-side Projection builder + zone rotation
+    # helper (the decoder carries raw geometry; render owns the transform).
+    "build_projection",
+    "MapProjection",
+    "zone_render_points",
     "BackgroundMode",
     "background_mode_for",
     "_DEFAULT_PALETTE",

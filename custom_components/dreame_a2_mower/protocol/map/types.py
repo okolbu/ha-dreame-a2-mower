@@ -1,9 +1,22 @@
 """Decoded cloud-map geometry dataclasses for the Dreame g2408 mower.
 
 The single output of :func:`.parse.parse_cloud_map` is :class:`MapData`. These
-are pure data containers — no rotation / reflection / pixel math lives here
-(that is the render-side ``map_render`` presentation step). See the module
-docstrings and ``docs/research/cloud-map-geometry.md``.
+are pure data containers in ONE frame: **raw cloud-frame millimetres**, exactly
+as the cloud supplied them, plus ``angle`` / ``shape_type`` verbatim. No
+rotation, reflection, or pixel math is baked into any coordinate here — that is
+the render-side ``map_render`` presentation step (``map_render/_geometry.py``:
+``build_projection`` + ``_zone_point_to_px``). See
+``docs/research/cloud-map-geometry.md`` and CLAUDE.md
+§ "Decode->render zone frame contract".
+
+Coordinate conventions
+----------------------
+- Cloud units: millimetres. Origin ``(0, 0)`` = mower nose at dock entry.
+- ``+X`` = toward the house (docking direction).
+- Rendering flips both axes: ``px = (bx2 - x)/grid``, ``py = (by2 - y)/grid``.
+- Zone / dock overlay points are aligned to that flipped pixel frame by the
+  render's midline reflection ``(bx1+bx2 - x, by1+by2 - y)``; the decoder never
+  applies it. See §3.3 of the geometry doc.
 """
 
 from __future__ import annotations
@@ -20,91 +33,80 @@ GRID_SIZE_MM: int = 50
 
 
 # ---------------------------------------------------------------------------
-# Output dataclass
+# Unified polygonal zone (exclusion / spot) — T2-17 "one Zone(kind=…)".
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
-class ExclusionZone:
-    """A single exclusion / forbidden area polygon in *post-rotation cloud* mm.
+class Zone:
+    """A single polygonal map object (no-go / ignore / spot) in RAW cloud mm.
 
-    ``points`` contains the polygon corners after rotating around the polygon
-    centroid by ``-angle`` (angle negated to match app rendering handedness),
-    in cloud-frame millimetres.  This is the SAME frame ``points_m`` is in
-    (×1000).  The midline reflection that aligns these to the flipped pixel
-    frame is applied at RENDER time by the ``map_render`` presentation step
-    (``_zone_point_to_px``), not baked in here — so the decoder carries one
-    cloud frame.  (P3a transform-move, 2026-06-14.)
+    Collapses the old ``ExclusionZone`` + ``SpotZone`` pair (T2-17). ``kind``
+    distinguishes them; per-``kind`` fields default to their empty value.
 
-    ``subtype`` is one of:
+    ``points`` are the polygon corners **exactly as the cloud supplied them**
+    (raw cloud-frame millimetres) — the per-centroid rotation the app applies
+    (``-angle``) and the midline reflection are BOTH deferred to the render
+    presentation step. This is the single-frame contract (the ``points`` /
+    ``points_m`` stored twin is GONE: the metre-frame edit polygon is derived
+    at the ``editable_objects`` boundary as ``rotate(points, -angle)/1000``).
 
-    - ``None`` — classic no-go / forbidden (red in app)
-    - ``"ignore"`` — Designated Ignore Obstacle zone (green in app)
+    ``kind`` values:
 
-    Spots used to live here too (subtype="spot") but are now their own
-    dataclass (`SpotZone`) so the user can target individual spots by
-    cloud-provided id+name from the UI.
+    - ``"exclusion"`` — forbidden / ignore area. ``subtype`` is ``None`` (classic
+      red no-go) or ``"ignore"`` (designated ignore-obstacle, green). ``obj_id``
+      is the cloud object id; ``shape_type`` is the read-side ``shapeType`` enum
+      (see ``protocol/map/shapes.py`` + ``inventory.yaml`` § shapeType). For a
+      DECORATIVE ``shape_type`` (in ``DECORATIVE_SHAPE_TYPES``) the 2 ``points``
+      are the raw axis-aligned bbox corners and ``angle`` is the raw cloud angle
+      the render stamps the silhouette by.
+    - ``"spot"`` — spot-mow area. ``obj_id`` is the spot id (the s2.50 op=103
+      ``d.area`` key); ``name`` / ``area_m2`` carry the cloud label + size.
     """
 
     points: tuple[tuple[float, float], ...]
+    # ``kind`` defaults to ``"exclusion"`` (the dominant case) so the legacy
+    # ``ExclusionZone(points=…)`` construction path keeps working via the alias;
+    # spot zones pass ``kind="spot"`` explicitly.
+    kind: str = "exclusion"
     subtype: str | None = None
     obj_id: int | None = None
-    # Edit-frame polygon corners in METERS (un-reflected cloud frame:
-    # rotate(path, -angle)/1000). These feed the map-editor card's
-    # projectPoint directly. Post P3a transform-move ``points`` (above) is
-    # in the SAME frame ×1000 — render applies the reflection. See
-    # docs/research/wire-captures/map-edit-frame-verification-2026-06-12.md.
-    points_m: tuple[tuple[float, float], ...] = ()
-    # Cloud ``shapeType`` read-side enum (0=area, 1=line, 2=rotated-rect,
-    # 3=circle, 5=point, 7=spot, 9=square, 12=circle, 13=heart, 14=triangle,
-    # 15=teardrop, 16=mushroom, 17=cloud, 18=rainbow). For DECORATIVE types
-    # (>=9, in map_render._shape_masks.DECORATIVE_SHAPE_TYPES) the 2 ``points``
-    # are the raw axis-aligned bbox corners (UN-rotated) and ``angle`` carries
-    # the raw cloud angle so the render can stamp a silhouette rotated by it.
-    # For non-decorative types ``points`` are centroid-rotated as before and
-    # ``angle`` is informational. See cloud-map-geometry.md §4.1.
     shape_type: int | None = None
     angle: float | None = None
+    name: str | None = None
+    area_m2: float = 0.0
+
+    @property
+    def spot_id(self) -> int | None:
+        """Back-compat accessor — spot zones key on ``obj_id``."""
+        return self.obj_id
+
+
+# Backward-compatible names for the ~29 deep-import sites + isinstance checks
+# (their import rewrite is P3.10). Both resolve to the unified ``Zone`` — an
+# ``isinstance(z, ExclusionZone)`` on any zone is now ``isinstance(z, Zone)``.
+# New construction uses ``Zone(kind=…)``.
+ExclusionZone = Zone
+SpotZone = Zone
 
 
 @dataclass(frozen=True, slots=True)
 class MowingZone:
-    """Mowing area (lawn zone) as described by the cloud MAP.* JSON.
+    """Mowing area (lawn zone) from the cloud MAP.* JSON, in RAW cloud mm.
 
-    ``path`` is the raw polygon in cloud-frame mm (not yet reflected).
-    Pixel-mask painting applies the ``(bx2-x)/grid, (by2-y)/grid``
-    formula; the renderer uses the reflected midline coords.
+    NOT folded into :class:`Zone` (T2-17): mowing zones render in the plain
+    cloud->pixel frame (``_cloud_to_px``, no midline reflection), carry a
+    firmware-validated ``zone_id`` (1–62) rather than an ``obj_id``, and have no
+    ``angle`` / ``shape_type`` — a different render path and identity space, so
+    unifying would only push a ``kind`` branch into every consumer.
 
-    ``area_m2`` is the cloud-supplied ``area`` value (already in
-    square metres). May be 0.0 when the cloud omits it.
+    ``area_m2`` is the cloud-supplied ``area`` (square metres; may be 0.0).
     """
 
     zone_id: int
     name: str
     path: tuple[tuple[float, float], ...]  # cloud-frame mm
     area_m2: float = 0.0
-
-
-@dataclass(frozen=True, slots=True)
-class SpotZone:
-    """A single spot-mowing area with cloud id+name.
-
-    ``points`` is in post-rotation cloud-frame mm (same frame as
-    ExclusionZone.points; render applies the midline reflection). The
-    ``spot_id`` is the integer key from the cloud's ``spotAreas[entry][0]``
-    and is what the s2.50 op=103 spot-mow task expects in
-    ``d.area: [spot_id, ...]``.
-    """
-
-    spot_id: int
-    name: str
-    points: tuple[tuple[float, float], ...]
-    area_m2: float = 0.0
-    # Edit-frame polygon corners in METERS (÷1000 of ``points``, un-reflected
-    # cloud frame) — feeds the map-editor card's editable_objects directly,
-    # exactly like ExclusionZone.points_m. The o=214 spot create/edit wire
-    # takes these 4 corners back in metres.
-    points_m: tuple[tuple[float, float], ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -152,48 +154,18 @@ class NavPath:
 class MapData:
     """Decoded base-map geometry from the Dreame cloud ``MAP.*`` keys.
 
-    This dataclass is the single output of :func:`parse_cloud_map`.  It
-    carries all geometric fields required by the F2.8.2 renderer and
-    future overlay work.  It does **not** contain a pixel array —
-    computing the pixel mask is renderer work.
+    Single output of :func:`.parse.parse_cloud_map`. Carries the geometry the
+    F2.8.2 renderer + overlays need — no pixel array (that is renderer work).
 
-    Field notes
-    -----------
-    ``md5`` — stable content hash (not the cloud's ``md5sum`` field,
-    which is volatile).  Used for deduplication: if ``md5`` matches the
-    previously decoded map the coordinator can skip a re-render.
-
-    ``dock_xy`` — charger position in post-rotation cloud-frame mm
-    (``CHARGER_OFFSET_MM`` along the +X axis; ``(800, 0)``).  Render applies
-    the midline reflection (same as exclusion/spot points).
-    ``None`` when the boundary is zero-sized (empty/error response).
-
-    ``boundary_polygon`` — axis-aligned bounding box of the lawn
-    expressed as four ``(x, y)`` corners in cloud-frame mm:
-    ``(bx1,by1), (bx2,by1), (bx2,by2), (bx1,by2)``.  Primarily
-    informational; the renderer sizes its canvas from ``width_px`` /
-    ``height_px``.
-
-    ``exclusion_zones`` — polygons in post-rotation cloud-frame mm; the
-    renderer applies the midline reflection (presentation step) before
-    painting.
-
-    ``mowing_zones`` — raw cloud-frame polygons; the renderer's pixel
-    mask logic applies its own ``(bx2-x)/grid`` flip when painting.
-
-    ``contour_paths`` — closed contour polylines in cloud-frame mm.
-    Rendered as ``WALL`` outlines on the pixel mask.
-
-    ``maintenance_points`` — user-placed go-to markers; raw cloud-frame
-    mm so go-to services need no extra transform.
-
-    ``cloud_x_reflect``, ``cloud_y_reflect`` — midline values
-    ``bx1+bx2`` and ``by1+by2`` (mm).  Trail / overlay consumers use
-    these to convert raw cloud coords to renderer coords without knowing
-    the bbox.
-
-    ``total_area_m2`` — lawn area reported by the cloud (may be 0.0 if
-    absent from the payload).
+    All polygon / point coordinates are RAW cloud-frame millimetres (see the
+    module docstring). The canvas extents (``bx1``..``by2``, ``width_px`` /
+    ``height_px``, ``cloud_x_reflect`` / ``cloud_y_reflect``, ``dock_xy``,
+    ``boundary_polygon``) are the lawn bbox EXPANDED to cover every zone corner
+    after the app's per-centroid rotation — a pure cloud-frame geometry
+    derivation (``protocol/map/geom.py``: ``derive_canvas``); the render's
+    ``build_projection`` recomputes the identical values from these raw fields.
+    ``md5`` is a stable content hash for render dedup (not the volatile cloud
+    ``md5sum``).
     """
 
     # --- deduplication ---
@@ -204,7 +176,7 @@ class MapData:
     height_px: int
     pixel_size_mm: float  # always GRID_SIZE_MM (50) for g2408
 
-    # --- bounding box (cloud-frame mm) ---
+    # --- bounding box (cloud-frame mm; expanded over rotated zone corners) ---
     bx1: float
     by1: float
     bx2: float
@@ -217,11 +189,11 @@ class MapData:
     # --- map rotation (always 0 for g2408 cloud maps) ---
     rotation_deg: float
 
-    # --- geometry ---
+    # --- geometry (all RAW cloud-frame mm) ---
     boundary_polygon: tuple[tuple[float, float], ...]
     mowing_zones: tuple[MowingZone, ...]
-    exclusion_zones: tuple[ExclusionZone, ...]
-    spot_zones: tuple[SpotZone, ...]
+    exclusion_zones: tuple[Zone, ...]
+    spot_zones: tuple[Zone, ...]
     contour_paths: tuple[tuple[tuple[float, float], ...], ...]
     # Contour IDs in cloud-key order, parallel to ``contour_paths``.
     # Each entry is the 2-int composite identifier from the cloud's
@@ -235,7 +207,7 @@ class MapData:
     available_contour_ids: tuple[tuple[int, int], ...]
     maintenance_points: tuple[MaintenancePoint, ...]
 
-    # --- charger (post-rotation cloud-frame mm, +X offset; render reflects) ---
+    # --- charger (raw cloud-frame mm, +X offset; render reflects) ---
     dock_xy: tuple[float, float] | None
 
     # --- metadata ---

@@ -144,17 +144,23 @@ class TestFixturePopulatesEveryTransformedPath:
         assert len(md.mowing_zones[0].path) == 4
 
     def test_rotated_polygon_exclusion_present(self):
-        """The angle=-30.77 forbidden area is rotated+reflected (≠ raw)."""
+        """The angle=-30.77 forbidden area is stored RAW (P3 single-frame
+        contract); the rotation is applied by the render transform, not decode."""
+        from custom_components.dreame_a2_mower.map_render._geometry import (
+            zone_render_points,
+        )
+
         md = _map_data()
         rot = [ez for ez in md.exclusion_zones if ez.obj_id == 101]
         assert len(rot) == 1
         ez = rot[0]
         assert ez.subtype is None  # classic red no-go
         assert len(ez.points) == 4
-        # Decode applied rotation+reflection: first decoded corner differs
-        # from the raw input corner (12819.85, 12543.97).
-        dx, dy = ez.points[0]
-        assert abs(dx - 12819.85) > 1 or abs(dy - 12543.97) > 1
+        # Stored corners are raw (verbatim cloud input).
+        assert ez.points[0] == (12819.85, 12543.97)
+        # The render transform rotates them off the raw corner.
+        rx, ry = zone_render_points(ez)[0]
+        assert abs(rx - 12819.85) > 1 or abs(ry - 12543.97) > 1
 
     def test_circle_exclusion_present(self):
         """Circle no-go decodes as a multi-point polygon (≥3 → renders)."""

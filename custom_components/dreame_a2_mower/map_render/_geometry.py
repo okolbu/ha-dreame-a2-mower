@@ -7,10 +7,14 @@ _OBSTACLE_FILL, _OBSTACLE_OUTLINE, and extract_projection.
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from ..protocol.map.geom import derive_canvas, rotate_zone_points
+from ..protocol.map.types import GRID_SIZE_MM
+
 if TYPE_CHECKING:
-    from ..map_decoder import MapData
+    from ..map_decoder import MapData, Zone
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -192,18 +196,92 @@ def _zone_point_to_px(
     cloud_y: float,
     map_data: MapData,
 ) -> tuple[float, float]:
-    """Project a post-rotation cloud-mm zone/dock point to renderer pixels.
+    """Project an ALREADY-rotated cloud-mm zone/dock point to renderer pixels.
 
     Reflects through the bbox midlines (``cloud_x_reflect``/
-    ``cloud_y_reflect``) then divides by the grid via :func:`_renderer_to_px`
-    — the exact transform the decoder used to bake into ``ExclusionZone.points``
-    / ``SpotZone.points`` / ``dock_xy`` before the P3a presentation-step move.
+    ``cloud_y_reflect``) then divides by the grid via :func:`_renderer_to_px`.
+    Zone corners are stored RAW by the decoder (single-frame contract), so
+    callers must first apply :func:`zone_render_points` (the app's per-centroid
+    ``-angle`` rotation); ``dock_xy`` is a fixed ``(CHARGER_OFFSET_MM, 0)`` point
+    that needs no rotation.
     """
     rx, ry = _reflect_to_renderer(
         cloud_x, cloud_y, map_data.cloud_x_reflect, map_data.cloud_y_reflect
     )
     return _renderer_to_px(
         rx, ry, map_data.bx1, map_data.by1, map_data.pixel_size_mm
+    )
+
+
+def zone_render_points(zone: "Zone") -> tuple[tuple[float, float], ...]:
+    """Return a zone's on-screen (rotated) cloud-mm corners for drawing.
+
+    The decoder stores ``Zone.points`` raw; the render applies the app's
+    per-centroid ``-angle`` rotation here (a no-op for decorative shapes and
+    zero-angle zones). Feed the result to :func:`_zone_point_to_px`.
+    """
+    return rotate_zone_points(zone.points, zone.angle, zone.shape_type)
+
+
+# ---------------------------------------------------------------------------
+# Projection builder (T2-17) — owns the render-frame derivation from a RAW
+# MapData: the app rotation of zone corners + the expanded bbox / midline
+# reflection / dock / canvas. The decoder carries raw geometry only; this
+# rebuilds the identical canvas params ``parse_cloud_map`` also cached on
+# MapData (both via the pure ``geom.derive_canvas``), and is the single source
+# the card projection (``extract_projection``) is derived from.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class MapProjection:
+    """Render-frame projection params derived from a raw :class:`MapData`."""
+
+    bx1: float
+    by1: float
+    bx2: float
+    by2: float
+    width_px: int
+    height_px: int
+    pixel_size_mm: float
+    cloud_x_reflect: float
+    cloud_y_reflect: float
+    dock_xy: tuple[float, float] | None
+    boundary_polygon: tuple[tuple[float, float], ...]
+
+
+def build_projection(map_data: MapData | None) -> MapProjection | None:
+    """Derive the render-frame :class:`MapProjection` from a raw ``MapData``.
+
+    Rotates every exclusion/spot zone's raw corners (app ``-angle``), expands
+    the lawn bbox over them, and derives the midline reflection / dock / canvas
+    via the pure ``geom.derive_canvas`` — the same derivation the decoder caches
+    on ``MapData``, recomputed here so the render owns the transform end-to-end.
+    Returns ``None`` for a missing / half-built map (stub-safe).
+    """
+    if map_data is None:
+        return None
+    try:
+        excl = getattr(map_data, "exclusion_zones", ())
+        spot = getattr(map_data, "spot_zones", ())
+        rotated = [zone_render_points(z) for z in (*excl, *spot)]
+        canvas = derive_canvas(
+            float(map_data.bx1), float(map_data.by1),
+            float(map_data.bx2), float(map_data.by2),
+            rotated,
+            grid_size_mm=int(map_data.pixel_size_mm) or GRID_SIZE_MM,
+        )
+    except (AttributeError, TypeError, ValueError):
+        return None
+    return MapProjection(
+        bx1=canvas["bx1"], by1=canvas["by1"],
+        bx2=canvas["bx2"], by2=canvas["by2"],
+        width_px=canvas["width_px"], height_px=canvas["height_px"],
+        pixel_size_mm=float(map_data.pixel_size_mm),
+        cloud_x_reflect=canvas["cloud_x_reflect"],
+        cloud_y_reflect=canvas["cloud_y_reflect"],
+        dock_xy=canvas["dock_xy"],
+        boundary_polygon=canvas["boundary_polygon"],
     )
 
 
@@ -225,6 +303,11 @@ def extract_projection(map_data: MapData | None) -> dict | None:
     using a stub). The card's "no projection yet" branch handles None
     gracefully.
     """
+    # Echoes MapData's CANONICAL canvas (the values ``parse_cloud_map`` cached
+    # via ``geom.derive_canvas`` and that ``render_base_map`` draws against), so
+    # the card projection is byte-exact to the rendered PNG. ``build_projection``
+    # re-derives the identical values from the raw map for consumers that start
+    # without a cached canvas.
     if map_data is None:
         return None
     try:

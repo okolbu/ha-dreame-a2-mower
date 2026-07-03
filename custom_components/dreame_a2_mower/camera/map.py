@@ -10,6 +10,19 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .._devices import map_device_info, map_unique_id, mower_device_info, mower_unique_id
 from ..coordinator import DreameA2MowerCoordinator
+from ..map_render._geometry import zone_render_points
+
+
+def _zone_points_m(zone: Any) -> list[list[float]]:
+    """Metre-frame edit polygon for a :class:`Zone`, derived at this boundary.
+
+    The decoder stores raw cloud-mm corners (the ``points_m`` stored twin was
+    removed in P3, T2-17); the map-editor card's edit frame is the app-rotated
+    corners in metres — ``rotate_zone_points(points, -angle)/1000`` — computed
+    here so the ``editable_objects`` output is byte-identical to the old stored
+    ``points_m``.
+    """
+    return [[x / 1000.0, y / 1000.0] for (x, y) in zone_render_points(zone)]
 
 # Version of the camera "map" attribute contract the bundled cards consume
 # (map_projection / latest_point / track_snapshot / editable_objects shapes).
@@ -170,7 +183,7 @@ class DreameA2MapCamera(
                     "type": 0 if is_ignore else 2,
                     "kind": kind,
                     "shape_type": shape_type,
-                    "points_m": [list(p) for p in z.points_m],
+                    "points_m": _zone_points_m(z),
                     "radius": 0.0,
                 }
             )
@@ -186,7 +199,7 @@ class DreameA2MapCamera(
                     "type": 1,
                     "kind": "spot",
                     "shape_type": None,
-                    "points_m": [list(p) for p in getattr(s, "points_m", ())],
+                    "points_m": _zone_points_m(s),
                     "radius": 0.0,
                 }
             )

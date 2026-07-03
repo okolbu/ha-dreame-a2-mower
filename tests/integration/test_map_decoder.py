@@ -228,19 +228,25 @@ class TestParseCloudMap:
         assert ez.subtype is None  # classic no-go (not ignore/spot)
         assert len(ez.points) == 4
 
-    def test_exclusion_zone_rotation_applied(self):
-        """Exclusion zone with angle=-30.77 is NOT stored as raw axis-aligned path.
-
-        The decoded corners must differ from the input path after rotation +
-        reflection, so we verify at least one coordinate moved.
+    def test_exclusion_zone_stored_raw_rotation_deferred(self):
+        """P3 single-frame contract: an angle=-30.77 exclusion is stored with
+        its RAW corners verbatim; the app's per-centroid rotation is a
+        render-time transform (``zone_render_points``), not baked into the
+        decoder output.
         """
+        from custom_components.dreame_a2_mower.map_render._geometry import (
+            zone_render_points,
+        )
+
         result = parse_cloud_map(_MINIMAL_MAP)
         ez = result.exclusion_zones[0]
-        # Raw first corner: (12819.85, 12543.97)
-        raw_x, raw_y = 12819.85, 12543.97
-        decoded_x, decoded_y = ez.points[0]
-        # At least one axis should differ by more than rounding after rotation.
-        assert abs(decoded_x - raw_x) > 1 or abs(decoded_y - raw_y) > 1
+        # Stored point == raw cloud input (no rotation baked in).
+        assert ez.points[0] == (12819.85, 12543.97)
+        assert ez.angle == -30.77
+        # The render transform DOES move it (rotation applied at draw time).
+        rendered = zone_render_points(ez)
+        rx, ry = rendered[0]
+        assert abs(rx - 12819.85) > 1 or abs(ry - 12543.97) > 1
 
     def test_notobsareas_subtype_ignore(self):
         """notObsAreas entries get subtype='ignore'."""

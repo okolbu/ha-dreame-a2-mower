@@ -77,3 +77,47 @@ def test_js_python_projection_parity():
     )
     assert abs(px0 - 0.0) < EPS
     assert abs(py0 - proj["height_px"]) < EPS
+
+
+def test_unified_zone_edit_frame_matches_render_frame():
+    """P3 (T2-17): a unified ``Zone``'s edit-frame metres (the ``points_m`` the
+    card receives via ``editable_objects`` = ``zone_render_points(z)/1000``)
+    project — through the card's ``projectPoint`` frame (``_py_project``) — to
+    the SAME pixel the server draws that zone corner at
+    (``_zone_point_to_px`` + the canvas flip). Pins that the decoder's raw-frame
+    zones stay frame-locked to the render after the transform move.
+    """
+    from custom_components.dreame_a2_mower.map_render._geometry import (
+        _zone_point_to_px,
+        zone_render_points,
+    )
+    from custom_components.dreame_a2_mower.protocol.map.types import MapData, Zone
+
+    # A rotated exclusion polygon (raw corners + angle) on a fixed canvas.
+    zone = Zone(
+        kind="exclusion",
+        points=((4000.0, 3000.0), (9000.0, 3000.0), (9000.0, 7000.0), (4000.0, 7000.0)),
+        angle=27.5,
+        obj_id=101,
+    )
+    md = MapData(
+        md5="parity", width_px=400, height_px=420, pixel_size_mm=50.0,
+        bx1=1000.0, by1=-2000.0, bx2=21000.0, by2=19000.0,
+        cloud_x_reflect=22000.0, cloud_y_reflect=17000.0, rotation_deg=0.0,
+        boundary_polygon=(), mowing_zones=(), exclusion_zones=(zone,),
+        spot_zones=(), contour_paths=(), available_contour_ids=(),
+        maintenance_points=(), dock_xy=None,
+    )
+    proj = {
+        "bx2_mm": md.bx2, "by2_mm": md.by2,
+        "pixel_size_mm": md.pixel_size_mm, "height_px": md.height_px,
+    }
+    rotated = zone_render_points(zone)
+    points_m = [(x / 1000.0, y / 1000.0) for (x, y) in rotated]
+    for (x_m, y_m), (rx, ry) in zip(points_m, rotated):
+        # Card path (metres -> pixel, incl. the FLIP_TOP_BOTTOM).
+        cpx, cpy = _py_project(x_m, y_m, proj)
+        # Server zone-draw path (pre-flip pixel) then the same canvas flip.
+        spx, spy_pre = _zone_point_to_px(rx, ry, md)
+        spy = md.height_px - spy_pre
+        assert abs(cpx - spx) < EPS and abs(cpy - spy) < EPS

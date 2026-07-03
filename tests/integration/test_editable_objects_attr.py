@@ -2,9 +2,9 @@ from types import SimpleNamespace
 from custom_components.dreame_a2_mower._camera_map import DreameA2MapCamera
 from custom_components.dreame_a2_mower.map_decoder import (
     ExclusionZone,
-    SpotZone,
     MaintenancePoint,
 )
+from custom_components.dreame_a2_mower.protocol.map.types import Zone
 
 
 def _bare_cam():
@@ -18,10 +18,12 @@ def _bare_cam():
 
 
 def test_editable_objects_attribute_shape():
+    # points_m is now DERIVED (rotate(points)/1000); this test pins ids/kind/op
+    # only, so the raw points are placeholders.
     m = SimpleNamespace(exclusion_zones=(
-        ExclusionZone(points=((0.0, 0.0),), subtype=None, obj_id=101, points_m=((9.65, -0.13), (4.12, 5.01))),
-        ExclusionZone(points=((1.0, 1.0),), subtype="ignore", obj_id=102, points_m=((1.0, 2.0), (3.0, 4.0))),
-        ExclusionZone(points=((2.0, 2.0),), subtype=None, obj_id=None, points_m=()),  # no id -> skip
+        ExclusionZone(points=((0.0, 0.0),), subtype=None, obj_id=101),
+        ExclusionZone(points=((1.0, 1.0),), subtype="ignore", obj_id=102),
+        ExclusionZone(points=((2.0, 2.0),), subtype=None, obj_id=None),  # no id -> skip
     ))
     objs = _bare_cam()._editable_objects_from_map(m)
     ids = {(o["id"], o["kind"], o["op"]) for o in objs}
@@ -36,13 +38,13 @@ def test_editable_objects_spot_and_maintenance():
     m = SimpleNamespace(
         exclusion_zones=(),
         spot_zones=(
-            SpotZone(
-                spot_id=7, name="Spot 7",
-                points=((1000.0, 1000.0),),
+            # points_m derived as points/1000 (angle None) -> set raw = metres×1000.
+            Zone(
+                kind="spot", obj_id=7, name="Spot 7",
+                points=((1000.0, 1000.0), (3000.0, 1000.0), (3000.0, 3000.0), (1000.0, 3000.0)),
                 area_m2=4.0,
-                points_m=((1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0)),
             ),
-            SpotZone(spot_id=None, name="x", points=(), area_m2=0.0, points_m=()),  # skip
+            Zone(kind="spot", obj_id=None, name="x", points=(), area_m2=0.0),  # skip
         ),
         maintenance_points=(
             MaintenancePoint(point_id=42, x_mm=2500.0, y_mm=-1300.0),

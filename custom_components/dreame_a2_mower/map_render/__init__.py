@@ -11,9 +11,12 @@ from ._geometry import (
     _DEFAULT_PALETTE,
     _OBSTACLE_FILL,
     _OBSTACLE_OUTLINE,
+    MapProjection,
     _cloud_to_px,
     _renderer_to_px,
+    build_projection,
     extract_projection,
+    zone_render_points,
 )
 from .background import BackgroundMode, background_mode_for
 from .base_map import render_base_map
@@ -22,14 +25,17 @@ from .work_log import render_work_log
 
 __all__ = [
     "BackgroundMode",
+    "MapProjection",
     "_DEFAULT_PALETTE",
     "_OBSTACLE_FILL",
     "_OBSTACLE_OUTLINE",
     "_cloud_to_px",
     "_renderer_to_px",
     "background_mode_for",
+    "build_projection",
     "extract_projection",
     "render_base",
     "render_base_map",
     "render_work_log",
+    "zone_render_points",
 ]

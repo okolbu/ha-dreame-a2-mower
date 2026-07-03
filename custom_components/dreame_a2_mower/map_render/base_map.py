@@ -19,8 +19,9 @@ from ._geometry import (
     _OBSTACLE_OUTLINE,
     _cloud_to_px,
     _zone_point_to_px,
+    zone_render_points,
 )
-from ._shape_masks import DECORATIVE_SHAPE_TYPES
+from ..protocol.map.shapes import DECORATIVE_SHAPE_TYPES
 
 if TYPE_CHECKING:
     from ..cloud_state import MowPathData
@@ -313,8 +314,9 @@ def render_base_map(
         zone still shows *something*.
         """
         nonlocal image, draw
-        a = _zone_point_to_px(ez.points[0][0], ez.points[0][1], map_data)
-        b = _zone_point_to_px(ez.points[1][0], ez.points[1][1], map_data)
+        rp = zone_render_points(ez)  # decorative → raw bbox corners (identity)
+        a = _zone_point_to_px(rp[0][0], rp[0][1], map_data)
+        b = _zone_point_to_px(rp[1][0], rp[1][1], map_data)
         x0, x1 = min(a[0], b[0]), max(a[0], b[0])
         y0, y1 = min(a[1], b[1]), max(a[1], b[1])
         w = max(1, round(x1 - x0))
@@ -371,21 +373,23 @@ def render_base_map(
             _stamp_decorative_shape(ez, fill_colour, outline_colour)
             continue
 
-        if len(ez.points) == 2:
+        # Zone.points are RAW; apply the app's per-centroid rotation here.
+        rp = zone_render_points(ez)
+        if len(rp) == 2:
             # A real no-go LINE (shapeType 1) — draw a thick line between the
             # two endpoints (mirror the nav-path line draw).
-            a = _zone_point_to_px(ez.points[0][0], ez.points[0][1], map_data)
-            b = _zone_point_to_px(ez.points[1][0], ez.points[1][1], map_data)
+            a = _zone_point_to_px(rp[0][0], rp[0][1], map_data)
+            b = _zone_point_to_px(rp[1][0], rp[1][1], map_data)
             draw.line([a, b], fill=outline_colour, width=_EXCL_LINE_WIDTH_PX)
             _LOGGER.debug(
                 "render_base_map: drew exclusion line (subtype=%r)", ez.subtype
             )
             continue
 
-        if len(ez.points) >= 3:
+        if len(rp) >= 3:
             ez_px = [
                 _zone_point_to_px(cx, cy, map_data)
-                for (cx, cy) in ez.points
+                for (cx, cy) in rp
             ]
             flat = [coord for pt in ez_px for coord in pt]
             _composite_polygon(flat, fill_colour, outline_colour, 1)
@@ -402,11 +406,12 @@ def render_base_map(
     #     separately so the UI can target individual spots by id+name.
     # -----------------------------------------------------------------------
     for sz in getattr(map_data, "spot_zones", ()):
-        if len(sz.points) < 3:
+        sz_rp = zone_render_points(sz)
+        if len(sz_rp) < 3:
             continue
         sz_px = [
             _zone_point_to_px(cx, cy, map_data)
-            for (cx, cy) in sz.points
+            for (cx, cy) in sz_rp
         ]
         flat = [coord for pt in sz_px for coord in pt]
         _composite_polygon(flat, p["spot_fill"], p["spot_outline"], 1)

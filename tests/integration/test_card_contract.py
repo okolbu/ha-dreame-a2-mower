@@ -63,10 +63,11 @@ def _make_map_camera():
             ExclusionZone(points=((2.0, 2.0),), subtype="ignore", obj_id=102),
         ),
         spot_zones=(
+            # points_m is derived (points/1000); kept raw here as placeholders.
             SpotZone(
-                spot_id=201, name="Spot A", points=((1000.0, 1000.0),),
+                kind="spot", obj_id=201, name="Spot A",
+                points=((1000.0, 1000.0), (3000.0, 1000.0), (3000.0, 3000.0), (1000.0, 3000.0)),
                 area_m2=4.0,
-                points_m=((1.0, 1.0), (3.0, 1.0), (3.0, 3.0), (1.0, 3.0)),
             ),
         ),
         maintenance_points=(

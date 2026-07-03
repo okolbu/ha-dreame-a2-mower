@@ -7,8 +7,8 @@ def test_exclusion_entries_carry_obj_id():
     ]}
     out = _collect_exclusion_entries(wrapper, None)
     assert len(out) == 1
-    obj_id, rotated, subtype, points_m, shape_type, raw_angle = out[0]
-    assert obj_id == 101 and subtype is None and len(rotated) == 3
+    obj_id, raw_points, subtype, shape_type, raw_angle = out[0]
+    assert obj_id == 101 and subtype is None and len(raw_points) == 3
 
 
 def test_exclusion_entries_missing_id_is_none():

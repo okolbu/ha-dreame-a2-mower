@@ -44,12 +44,12 @@ def test_decode_decorative_heart_unrotated_carries_angle():
     }
     out = _collect_exclusion_entries(wrapper, None)
     assert len(out) == 1
-    obj_id, rotated, subtype, points_m, shape_type, raw_angle = out[0]
+    obj_id, raw_points, subtype, shape_type, raw_angle = out[0]
     assert obj_id == 401
     assert shape_type == 13
     assert raw_angle == 90.29
-    # Un-rotated: the 2 corners are exactly the input (angle NOT applied).
-    assert [(p["x"], p["y"]) for p in rotated] == [(-9000, -2000), (-4000, 3000)]
+    # Raw bbox corners stored verbatim (angle NOT applied at decode).
+    assert list(raw_points) == [(-9000.0, -2000.0), (-4000.0, 3000.0)]
 
 
 def test_decode_line_shapetype_one_two_points():
@@ -67,15 +67,18 @@ def test_decode_line_shapetype_one_two_points():
         ]
     }
     out = _collect_exclusion_entries(wrapper, None)
-    obj_id, rotated, subtype, points_m, shape_type, raw_angle = out[0]
+    obj_id, raw_points, subtype, shape_type, raw_angle = out[0]
     assert obj_id == 103
     assert shape_type == 1
-    assert len(rotated) == 2
+    assert len(raw_points) == 2
 
 
-def test_decode_non_decorative_still_centroid_rotated():
-    """A non-decorative rotated rect (shapeType 2, angle 90) still gets the
-    centroid rotation applied (un-changed behavior)."""
+def test_decode_non_decorative_stored_raw_render_rotates():
+    """A non-decorative rotated rect (shapeType 2, angle 90) is stored RAW; the
+    centroid rotation is applied by the render transform, not at decode (P3
+    single-frame contract)."""
+    from custom_components.dreame_a2_mower.protocol.map.geom import rotate_zone_points
+
     wrapper = {
         "value": [
             [
@@ -94,10 +97,13 @@ def test_decode_non_decorative_still_centroid_rotated():
         ]
     }
     out = _collect_exclusion_entries(wrapper, None)
-    _oid, rotated, _sub, _pm, shape_type, _ang = out[0]
+    _oid, raw_points, _sub, shape_type, raw_angle = out[0]
     assert shape_type == 2
-    # Rotation applied -> first corner moved off the raw (0,0).
-    assert (rotated[0]["x"], rotated[0]["y"]) != (0, 0)
+    # Stored raw (angle NOT baked): first corner is the input (0, 0).
+    assert raw_points[0] == (0.0, 0.0)
+    # Render transform rotates it off (0, 0).
+    rendered = rotate_zone_points(raw_points, raw_angle, shape_type)
+    assert rendered[0] != (0.0, 0.0)
 
 
 # ---------------------------------------------------------------------------

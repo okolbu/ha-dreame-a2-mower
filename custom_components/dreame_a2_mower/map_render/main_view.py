@@ -17,7 +17,12 @@ from typing import TYPE_CHECKING
 from PIL import Image, ImageDraw
 
 from .._png import encode_png
-from ._geometry import _DEFAULT_PALETTE, _cloud_to_px, _zone_point_to_px
+from ._geometry import (
+    _DEFAULT_PALETTE,
+    _cloud_to_px,
+    _zone_point_to_px,
+    zone_render_points,
+)
 from .base_map import render_base_map
 
 if TYPE_CHECKING:
@@ -217,11 +222,12 @@ def _render_pre_start_spot(map_data: MapData, *, palette: dict | None) -> bytes:
     image = image.transpose(Image.FLIP_TOP_BOTTOM)
     draw = ImageDraw.Draw(image, "RGBA")
     for sz in getattr(map_data, "spot_zones", ()):
-        if len(sz.points) < 3:
+        sz_rp = zone_render_points(sz)
+        if len(sz_rp) < 3:
             continue
         pts_px = [
             _zone_point_to_px(x, y, map_data)
-            for x, y in sz.points
+            for x, y in sz_rp
         ]
         # Interior fill: darker green for "this spot is eligible to mow".
         draw.polygon(pts_px, fill=(0, 100, 0, 110))

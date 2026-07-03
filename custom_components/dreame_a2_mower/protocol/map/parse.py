@@ -16,18 +16,15 @@ import logging
 from collections.abc import Sequence
 from typing import Any
 
-from .geom import _rotate_path_around_centroid
-from .shapes import DECORATIVE_SHAPE_TYPES
+from .geom import derive_canvas, rotate_zone_points
 from .types import (
-    CHARGER_OFFSET_MM,
     GRID_SIZE_MM,
-    ExclusionZone,
     MaintenancePoint,
     MapData,
     MowingZone,
     NavPath,
     PatrolPoint,
-    SpotZone,
+    Zone,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -71,38 +68,30 @@ def _collect_exclusion_entries(
 ) -> list[
     tuple[
         int | None,
-        list[dict],
-        str | None,
         tuple[tuple[float, float], ...],
+        str | None,
         int | None,
         float | None,
     ]
 ]:
-    """Parse one exclusion-zone wrapper dict into rotated-path entries.
+    """Parse one exclusion-zone wrapper dict into RAW-frame entries.
 
-    Returns a list of
-    ``(obj_id, rotated_path, subtype, points_m, shape_type, raw_angle)``
-    6-tuples, where each ``rotated_path`` is the output of
-    :func:`_rotate_path_around_centroid` (a list of ``{x, y}`` dicts) and
-    ``points_m`` is that same un-reflected path converted to METERS
-    (``(x/1000, y/1000)`` per corner) for the edit frame the map-editor card
-    consumes.  ``obj_id`` is the cloud object id from ``entry[0]`` (same
-    convention spots/zones use), or ``None`` for the id-less dict form.  The
-    cloud's angle convention is mirror-flipped vs the app's rendering; angles
-    are negated before rotating (see §4.1 of cloud-map-geometry.md).
+    Returns a list of ``(obj_id, raw_points, subtype, shape_type, raw_angle)``
+    5-tuples, where ``raw_points`` are the polygon corners exactly as the cloud
+    supplied them (raw cloud-frame mm ``(x, y)`` tuples) — NO rotation baked in
+    (single-frame contract; the app's ``-angle`` per-centroid rotation is a
+    render-time transform, ``geom.rotate_zone_points``).  ``obj_id`` is the
+    cloud object id from ``entry[0]`` (or ``None`` for the id-less dict form).
 
-    ``shape_type`` is the cloud ``shapeType`` value (or ``None`` if absent).
-    For DECORATIVE shapeTypes (``shape_type in DECORATIVE_SHAPE_TYPES``, e.g.
-    heart=13) the 2 ``path`` points are axis-aligned bbox corners that the app
-    tessellates client-side; we keep them UN-rotated so the render can build
-    the bbox and rotate a stamped silhouette by ``raw_angle`` instead.
+    ``shape_type`` is the cloud ``shapeType`` value (or ``None``); ``raw_angle``
+    the raw cloud angle.  For DECORATIVE shapeTypes the 2 points are the raw
+    bbox corners the render stamps a silhouette on (see ``protocol/map/shapes``).
     """
     result: list[
         tuple[
             int | None,
-            list[dict],
-            str | None,
             tuple[tuple[float, float], ...],
+            str | None,
             int | None,
             float | None,
         ]
@@ -131,31 +120,27 @@ def _collect_exclusion_entries(
             shape_type = int(st) if (st := zdata.get("shapeType")) is not None else None
         except (TypeError, ValueError):
             shape_type = None
-        if shape_type in DECORATIVE_SHAPE_TYPES:
-            # Decorative: the 2 points are raw axis-aligned bbox corners; keep
-            # them un-rotated. The render stamps the silhouette mask scaled to
-            # the bbox and rotated by raw_angle.
-            rotated = [dict(pt) for pt in path]
-        else:
-            rot_angle = -raw_angle if raw_angle is not None else None
-            rotated = _rotate_path_around_centroid(path, rot_angle)
-        points_m = tuple(
-            (float(pt["x"]) / 1000.0, float(pt["y"]) / 1000.0) for pt in rotated
+        raw_points = tuple(
+            (float(pt["x"]), float(pt["y"]))
+            for pt in path
+            if isinstance(pt, dict) and "x" in pt and "y" in pt
         )
-        result.append((obj_id, rotated, subtype, points_m, shape_type, raw_angle))
+        if not raw_points:
+            continue
+        result.append((obj_id, raw_points, subtype, shape_type, raw_angle))
     return result
 
 
 def _collect_spot_entries(
     entries_wrapper: Any,
-) -> list[tuple[int, str, list[dict], float]]:
-    """Parse the ``spotAreas`` wrapper dict into rotated spot entries.
+) -> list[tuple[int, str, tuple[tuple[float, float], ...], float, float | None]]:
+    """Parse the ``spotAreas`` wrapper dict into RAW-frame spot entries.
 
-    Returns a list of ``(spot_id, name, rotated_path, area_m2)`` tuples.
-    Angle negation / rotation follows the same convention as
-    :func:`_collect_exclusion_entries`.
+    Returns ``(spot_id, name, raw_points, area_m2, raw_angle)`` 5-tuples — the
+    polygon corners are the cloud's raw cloud-frame mm (no rotation baked in;
+    the render applies ``-angle`` like an exclusion polygon).
     """
-    result: list[tuple[int, str, list[dict], float]] = []
+    result: list[tuple[int, str, tuple[tuple[float, float], ...], float, float | None]] = []
     entries = entries_wrapper.get("value", []) if isinstance(entries_wrapper, dict) else []
     for entry in entries:
         if isinstance(entry, list) and len(entry) >= 2:
@@ -179,9 +164,14 @@ def _collect_spot_entries(
         except (TypeError, ValueError):
             area_m2 = 0.0
         raw_angle = zdata.get("angle")
-        rot_angle = -raw_angle if raw_angle is not None else None
-        rotated = _rotate_path_around_centroid(path, rot_angle)
-        result.append((spot_id, name, rotated, area_m2))
+        raw_points = tuple(
+            (float(pt["x"]), float(pt["y"]))
+            for pt in path
+            if isinstance(pt, dict) and "x" in pt and "y" in pt
+        )
+        if not raw_points:
+            continue
+        result.append((spot_id, name, raw_points, area_m2, raw_angle))
     return result
 
 
@@ -489,103 +479,73 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
         return None
 
     # -----------------------------------------------------------------------
-    # Forbidden/exclusion zones — pre-rotate so bbox expansion is correct.
-    # The cloud's angle convention is mirror-flipped vs the app's rendering;
-    # we negate the angle before rotating (see §4.1 of geometry doc).
+    # Forbidden/exclusion + spot zones — stored as RAW cloud-frame corners
+    # (single-frame contract). The app's per-centroid rotation (``-angle``) is
+    # a RENDER transform (``geom.rotate_zone_points``); we rotate here ONLY to
+    # (a) expand the canvas bbox to cover the on-screen corners and (b) feed the
+    # stable dedup hash. The STORED ``Zone.points`` stay raw. See §4.1 of the
+    # geometry doc + CLAUDE.md § "Decode->render zone frame contract".
     # -----------------------------------------------------------------------
     forbidden_raw = cloud_response.get("forbiddenAreas", {})
     ignore_raw = cloud_response.get("notObsAreas", {})
     spot_raw = cloud_response.get("spotAreas", {})
 
-    rotated_exclusions: list[
-        tuple[
-            int | None,
-            list[dict],
-            str | None,
-            tuple[tuple[float, float], ...],
-            int | None,
-            float | None,
-        ]
-    ] = [
+    excl_entries = [
         *_collect_exclusion_entries(forbidden_raw, None),     # red
         *_collect_exclusion_entries(ignore_raw, "ignore"),    # green
     ]
-    rotated_spots: list[tuple[int, str, list[dict], float]] = (
-        _collect_spot_entries(spot_raw)   # grey, with id+name preserved
+    spot_entries = _collect_spot_entries(spot_raw)   # grey, id+name preserved
+
+    excl_out: list[Zone] = []
+    excl_rotated: list[tuple[tuple[float, float], ...]] = []
+    for (obj_id, raw_pts, subtype, shape_type, raw_angle) in excl_entries:
+        angle = float(raw_angle) if raw_angle is not None else None
+        excl_out.append(
+            Zone(
+                kind="exclusion",
+                points=raw_pts,
+                subtype=subtype,
+                obj_id=obj_id,
+                shape_type=shape_type,
+                angle=angle,
+            )
+        )
+        excl_rotated.append(rotate_zone_points(raw_pts, angle, shape_type))
+
+    spot_out: list[Zone] = []
+    spot_rotated: list[tuple[tuple[float, float], ...]] = []
+    for (spot_id, name, raw_pts, area_m2, raw_angle) in spot_entries:
+        angle = float(raw_angle) if raw_angle is not None else None
+        spot_out.append(
+            Zone(
+                kind="spot",
+                points=raw_pts,
+                obj_id=spot_id,
+                name=name,
+                area_m2=area_m2,
+                angle=angle,
+            )
+        )
+        spot_rotated.append(rotate_zone_points(raw_pts, angle, None))
+
+    # Canvas params — bbox expanded over the ROTATED zone corners, derived by
+    # the pure ``geom.derive_canvas`` helper (the render's ``build_projection``
+    # recomputes the identical values from the raw MapData).
+    canvas = derive_canvas(
+        bx1, by1, bx2, by2,
+        (*excl_rotated, *spot_rotated),
+        grid_size_mm=GRID_SIZE_MM,
     )
-
-    # -----------------------------------------------------------------------
-    # Expand bbox to cover every rotated exclusion / spot corner.
-    # -----------------------------------------------------------------------
-    bx1_exp = bx1
-    by1_exp = by1
-    bx2_exp = bx2
-    by2_exp = by2
-    for (_oid, rp, _sub, _pm, _stype, _ang) in rotated_exclusions:
-        for pt in rp:
-            x, y = float(pt["x"]), float(pt["y"])
-            bx1_exp = min(bx1_exp, x)
-            by1_exp = min(by1_exp, y)
-            bx2_exp = max(bx2_exp, x)
-            by2_exp = max(by2_exp, y)
-    for (_sid, _nm, rp, _area) in rotated_spots:
-        for pt in rp:
-            x, y = float(pt["x"]), float(pt["y"])
-            bx1_exp = min(bx1_exp, x)
-            by1_exp = min(by1_exp, y)
-            bx2_exp = max(bx2_exp, x)
-            by2_exp = max(by2_exp, y)
-
-    width_px = max(1, int((bx2_exp - bx1_exp) / GRID_SIZE_MM) + 1)
-    height_px = max(1, int((by2_exp - by1_exp) / GRID_SIZE_MM) + 1)
-
-    # Midline reflections used to align renderer overlay coords to the
-    # flipped pixel-mask frame (see §3.3 of geometry doc).
-    x_reflect = bx1_exp + bx2_exp
-    y_reflect = by1_exp + by2_exp
-
-    # -----------------------------------------------------------------------
-    # Exclusion zones — store the post-rotation cloud-frame mm corners.
-    # The midline reflection that aligns these to the flipped pixel frame is
-    # applied at RENDER time (map_render presentation step), not here, so the
-    # decoder dataclasses carry one cloud frame (the same frame ``points_m``
-    # is in, ×1000). See cloud-map-geometry.md §3.3 + the P3a transform-move.
-    # -----------------------------------------------------------------------
-    excl_out: list[ExclusionZone] = []
-    for (obj_id, rp, subtype, points_m, shape_type, raw_angle) in rotated_exclusions:
-        pts = tuple(
-            (float(pt["x"]), float(pt["y"]))
-            for pt in rp
-        )
-        if pts:
-            excl_out.append(
-                ExclusionZone(
-                    points=pts,
-                    subtype=subtype,
-                    obj_id=obj_id,
-                    points_m=points_m,
-                    shape_type=shape_type,
-                    angle=(float(raw_angle) if raw_angle is not None else None),
-                )
-            )
-
-    spot_out: list[SpotZone] = []
-    for (spot_id, name, rp, area_m2) in rotated_spots:
-        pts = tuple(
-            (float(pt["x"]), float(pt["y"]))
-            for pt in rp
-        )
-        if pts:
-            points_m = tuple((x / 1000.0, y / 1000.0) for (x, y) in pts)
-            spot_out.append(
-                SpotZone(
-                    spot_id=spot_id,
-                    name=name,
-                    points=pts,
-                    area_m2=area_m2,
-                    points_m=points_m,
-                )
-            )
+    bx1_exp = canvas["bx1"]
+    by1_exp = canvas["by1"]
+    bx2_exp = canvas["bx2"]
+    by2_exp = canvas["by2"]
+    width_px = canvas["width_px"]
+    height_px = canvas["height_px"]
+    x_reflect = canvas["cloud_x_reflect"]
+    y_reflect = canvas["cloud_y_reflect"]
+    dock_xy = canvas["dock_xy"]
+    boundary_polygon = canvas["boundary_polygon"]
 
     # -----------------------------------------------------------------------
     # Mowing zones — keep in cloud-frame mm (renderer applies its own flip).
@@ -620,32 +580,9 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
     nav_paths_out = _parse_nav_paths(cloud_response)
 
     # -----------------------------------------------------------------------
-    # Charger position — cloud (0, 0) + CHARGER_OFFSET_MM along +X, in
-    # post-rotation cloud-frame mm. The midline reflection that aligns it to
-    # the flipped pixel frame is applied at RENDER time (presentation step),
-    # matching exclusion/spot points. See §5 of cloud-map-geometry.md.
-    # -----------------------------------------------------------------------
-    dock_xy: tuple[float, float] | None
-    if bx2_exp != bx1_exp or by2_exp != by1_exp:
-        dock_xy = (
-            float(CHARGER_OFFSET_MM),
-            0.0,
-        )
-    else:
-        dock_xy = None
-
-    # -----------------------------------------------------------------------
-    # Boundary polygon (axis-aligned box, cloud-frame mm).
-    # -----------------------------------------------------------------------
-    boundary_polygon = (
-        (bx1_exp, by1_exp),
-        (bx2_exp, by1_exp),
-        (bx2_exp, by2_exp),
-        (bx1_exp, by2_exp),
-    )
-
-    # -----------------------------------------------------------------------
-    # Stable content hash (NOT the cloud's md5sum which is volatile).
+    # Stable content hash (NOT the cloud's md5sum which is volatile). Uses the
+    # ROTATED (on-screen) exclusion corners so the dedup key is invariant to
+    # the decode->render frame move (unchanged from pre-P3).
     # -----------------------------------------------------------------------
     stable = json.dumps(
         {
@@ -655,8 +592,8 @@ def parse_cloud_map(cloud_response: dict[str, Any]) -> MapData | None:
             ),
             "excl": [
                 (round(p[0], 2), round(p[1], 2))
-                for ez in excl_out
-                for p in ez.points[:4]
+                for rp in excl_rotated
+                for p in rp[:4]
             ],
             "dims": (width_px, height_px),
             "charger": dock_xy,
@@ -716,10 +653,10 @@ def apply_session_geometry(
     The lawn boundary box is stable for a given map, so the canvas
     (bx1..by2, width/height, pixel grid) and therefore trail alignment are
     unchanged — only the user-editable no-go zones / spot areas differ between
-    session time and now. We store the points in the SAME post-rotation
-    cloud-frame mm ``parse_cloud_map`` now uses for exclusion/spot points
-    (just metres ×1000); the renderer's ``map_render`` presentation step
-    applies the midline reflection, so no coordinate math is re-derived here.
+    session time and now. The session polygons are already axis-aligned (no
+    cloud ``angle``), so the stored RAW ``Zone.points`` (metres ×1000, angle
+    ``None``) render identically once the presentation step applies its midline
+    reflection; no coordinate math is re-derived here.
 
     ``exclusion_polys_m`` / ``spot_polys_m`` are polygons in charger-relative
     METRES (the frame SessionSummary.exclusions[].points /
@@ -729,16 +666,17 @@ def apply_session_geometry(
     import dataclasses
 
     def _to_cloud_mm(poly: Sequence[tuple[float, float]]) -> tuple[tuple[float, float], ...]:
-        # metres → post-rotation cloud-frame mm (×1000). Render reflects.
+        # metres → raw cloud-frame mm (×1000). Render rotates (angle None →
+        # identity) then reflects.
         return tuple((x * 1000.0, y * 1000.0) for (x, y) in poly)
 
     excl = tuple(
-        ExclusionZone(points=_to_cloud_mm(p), subtype=None)
+        Zone(kind="exclusion", points=_to_cloud_mm(p), subtype=None)
         for p in exclusion_polys_m
         if len(p) >= 3
     )
     spots = tuple(
-        SpotZone(spot_id=i, name=None, points=_to_cloud_mm(p), area_m2=0.0)
+        Zone(kind="spot", points=_to_cloud_mm(p), obj_id=i, name=None, area_m2=0.0)
         for i, p in enumerate(spot_polys_m)
         if len(p) >= 3
     )

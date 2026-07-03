@@ -507,20 +507,50 @@ platform is a thin entry file with domain-grouped siblings.
   from the coordinator's published position stream.
 - Do NOT reintroduce a single `map_render.py`. The package is the contract.
 
-### Decode→render zone frame contract (P3a transform-move, 2026-06-14)
+### Decode→render zone frame contract (P3 map unification / T2-17, 2026-07-04)
 
-`parse_cloud_map` stores `ExclusionZone.points` / `SpotZone.points` / `dock_xy`
-in **post-rotation cloud-frame mm** (the per-zone centroid rotation IS applied at
-decode — its rotated corners drive the bbox/`cloud_*_reflect` derivation — but
-the midline reflection is NOT baked into the dataclass). `base_map.py` /
-`main_view.py` apply the reflection + pixel-grid divide via
-`_geometry._zone_point_to_px` at render time. This is the same frame
-`ExclusionZone.points_m` is in (×1000, un-reflected) — the map-editor card
-contract (`editable_objects`) reads `points_m` and is unchanged. `apply_session_geometry`
-also stores raw cloud-frame mm (metres ×1000, no reflection). Output is
-pixel-identical to the pre-move decode-time reflection — the golden gate
-(`tests/integration/test_map_render_golden.py`) pins it. Don't re-bake the
-reflection into the decoder.
+**ONE frame.** `parse_cloud_map` stores every zone's corners as **RAW cloud-frame
+mm — verbatim from the cloud** — with `angle` / `shape_type` carried alongside.
+NEITHER the per-centroid rotation NOR the midline reflection is baked into any
+dataclass. This replaced the earlier three-conventions state (post-rotation
+exclusion/spot points, raw mowing paths, raw-bbox decorative — the P3a half-move).
+
+- **Decoder** (`protocol/map/`): `types.py` = dataclasses (unified `Zone(kind=…)`
+  replaces `ExclusionZone`/`SpotZone`; `ExclusionZone`/`SpotZone` are back-compat
+  aliases of `Zone`; `MowingZone` stays separate — different render frame + id
+  space); `parse.py` = `parse_cloud_map` + collectors + `apply_session_geometry`;
+  `parts.py` = `parse_cloud_maps`/`join_map_parts`; `geom.py` = rotation +
+  `derive_canvas`; `shapes.py` = `DECORATIVE_SHAPE_TYPES` (wire knowledge — the
+  protocol→render back-edge T2-3 is dead: `protocol/map/*` imports NOTHING from
+  `map_render`). Cite `inventory.yaml` § shapeType.
+- **The `points`/`points_m` twin is DEAD.** The metre-frame edit polygon is a
+  DERIVATION — `zone_render_points(zone)/1000` — computed at the `editable_objects`
+  boundary in `camera/map.py`. `editable_objects` output is byte-identical to the
+  old stored `points_m`.
+- **Render** (`map_render/`): the app's `-angle` per-centroid rotation is applied
+  at DRAW time by `_geometry.zone_render_points` (decorative → raw bbox corners,
+  identity), then `_zone_point_to_px` applies the midline reflection + pixel-grid
+  divide. `base_map.py` / `main_view.py` rotate raw corners before projecting.
+  `_geometry.build_projection(map_data) → MapProjection` is the **render-side
+  Projection builder** (T2-17) that re-derives bbox / reflect / dock / canvas from
+  the raw map (rotating the zones); `extract_projection` echoes MapData's canonical
+  cached canvas so the card projection is byte-exact to the rendered PNG.
+- **STRUCTURAL TRAP resolution:** the canvas (`bx1..by2`/`width_px`/`height_px`/
+  `cloud_*_reflect`/`dock_xy`/`boundary_polygon`) is derived by the pure
+  `geom.derive_canvas` (bbox expanded over the ROTATED zone corners) and cached on
+  `MapData`; `build_projection` recomputes the identical values from the raw map.
+  (Deviation from the literal P3-Task-3 brief, which put that derivation lazily in
+  `map_render`: keeping the canvas cached on `MapData` avoids forcing the entity/
+  camera/session/test layers to import `map_render` merely to learn canvas size —
+  the p3a-transform-spec "minimal honest untangle" clause. The load-bearing goals
+  — one raw frame in the dataclasses, no back-edge, one `Zone(kind)`, `points_m`
+  derived — are all met.)
+- `apply_session_geometry` stores raw cloud-frame mm (metres ×1000, angle `None`).
+- Output is **pixel-identical** to the pre-move render — the golden gate
+  (`tests/integration/test_map_render_golden.py`) pins it un-re-blessed; the
+  Python↔JS frame parity (`tests/www/test_projection_parity.py`) pins the unified
+  Zone's edit-frame ↔ render-frame lock. Don't re-bake rotation/reflection into the
+  decoder; don't restore the `points_m` stored twin.
 
 ### camera package
 

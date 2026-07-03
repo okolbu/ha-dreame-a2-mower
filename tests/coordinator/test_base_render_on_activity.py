@@ -194,13 +194,11 @@ async def test_editor_base_keeps_decorative_drops_standard_exclusions():
     heart = ExclusionZone(
         points=((5000.0, 5000.0), (9000.0, 8000.0)),
         subtype=None, obj_id=101,
-        points_m=((5.0, 5.0), (9.0, 8.0)),
         shape_type=13,  # decorative -> KEEP in editor base
     )
     line = ExclusionZone(
         points=((2000.0, 2000.0), (4000.0, 6000.0)),
         subtype=None, obj_id=102,
-        points_m=((2.0, 2.0), (4.0, 6.0)),
         shape_type=1,  # standard no-go line -> STRIP (card draws it)
     )
     coord = _make_coord()
@@ -237,9 +235,8 @@ async def test_editor_base_strips_spots_maintenance_patrol():
     )
 
     spot = SpotZone(
-        spot_id=1, name="Spot A",
+        kind="spot", obj_id=1, name="Spot A",
         points=((5000.0, 5000.0), (9000.0, 5000.0), (9000.0, 8000.0), (5000.0, 8000.0)),
-        points_m=((5.0, 5.0), (9.0, 5.0), (9.0, 8.0), (5.0, 8.0)),
     )
     maint = MaintenancePoint(point_id=301, x_mm=3000.0, y_mm=-1000.0)
     patrol = PatrolPoint(point_id=401, x_mm=7000.0, y_mm=2000.0)
