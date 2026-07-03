@@ -2010,6 +2010,8 @@ def test_persist_in_progress_skips_when_session_not_active():
 
     asyncio.run(coord._persist_in_progress())
 
+    coord.session_archive.write_in_progress.assert_not_called()
+
 
 def test_persist_in_progress_blocked_by_finalize_lock_does_not_resurrect_file():
     """T3-12 (TOCTOU): a persist tick racing a finalize's archive-write
@@ -2052,8 +2054,6 @@ def test_persist_in_progress_blocked_by_finalize_lock_does_not_resurrect_file():
 
     # Persist blocked on the lock; by the time it acquired it the session
     # was already ended, so it must NOT have resurrected the file.
-    coord.session_archive.write_in_progress.assert_not_called()
-
     coord.session_archive.write_in_progress.assert_not_called()
 
 
