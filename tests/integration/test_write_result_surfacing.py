@@ -166,3 +166,88 @@ async def test_start_button_not_delivered_raises_home_assistant_error():
     b = _start_button(WriteResult.not_delivered("asleep"))
     with pytest.raises(HomeAssistantError):
         await b.async_press()
+
+
+# --------------------------------------------------------------------------
+# T7-23 rejection matrix — the raise_for_write_result call sites that were
+# happy-path-only: mow_edge / mow_spot / point+edge patrol / simple-action
+# factory (service context) and lawn_mower pause / dock (entity context).
+# --------------------------------------------------------------------------
+
+_REJECTED = WriteResult(delivered=True, accepted=False, code=-3, msg="not supported")
+
+
+def _svc_coord(monkeypatch, **methods):
+    coord = MagicMock()
+    coord.data = MowerState()
+    coord.async_set_updated_data = MagicMock()
+    for name, mock in methods.items():
+        setattr(coord, name, mock)
+    monkeypatch.setattr(services, "_coordinator_from_call", lambda hass, call: coord)
+    return coord
+
+
+@pytest.mark.asyncio
+async def test_mow_edge_rejection_raises_service_validation(monkeypatch):
+    _svc_coord(monkeypatch, dispatch_action=AsyncMock(return_value=_REJECTED))
+    call = SimpleNamespace(hass=SimpleNamespace(), data={"contour_ids": [[1, 0]]})
+    with pytest.raises(ServiceValidationError):
+        await services._handle_mow_edge(call)
+
+
+@pytest.mark.asyncio
+async def test_mow_spot_rejection_raises_service_validation(monkeypatch):
+    _svc_coord(monkeypatch, dispatch_action=AsyncMock(return_value=_REJECTED))
+    call = SimpleNamespace(hass=SimpleNamespace(), data={"spot_ids": [2]})
+    with pytest.raises(ServiceValidationError):
+        await services._handle_mow_spot(call)
+
+
+@pytest.mark.asyncio
+async def test_start_point_patrol_rejection_raises(monkeypatch):
+    coord = _svc_coord(
+        monkeypatch, start_point_patrol=AsyncMock(return_value=_REJECTED)
+    )
+    coord._active_map_id = 0
+    call = SimpleNamespace(hass=SimpleNamespace(), data={"point_ids": [1, 2]})
+    with pytest.raises(ServiceValidationError):
+        await services._handle_start_point_patrol(call)
+    coord.start_point_patrol.assert_awaited_once_with(map_id=0, point_ids=[1, 2])
+
+
+@pytest.mark.asyncio
+async def test_start_edge_patrol_rejection_raises(monkeypatch):
+    coord = _svc_coord(
+        monkeypatch, start_edge_patrol=AsyncMock(return_value=_REJECTED)
+    )
+    coord._active_map_id = 0
+    call = SimpleNamespace(hass=SimpleNamespace(), data={"contour_ids": [[1, 0]]})
+    with pytest.raises(ServiceValidationError):
+        await services._handle_start_edge_patrol(call)
+
+
+@pytest.mark.asyncio
+async def test_simple_action_factory_rejection_raises(monkeypatch):
+    """The generic parameterless-action factory (recharge/find_bot/…) surfaces
+    a device rejection as ServiceValidationError."""
+    _svc_coord(monkeypatch, dispatch_action=AsyncMock(return_value=_REJECTED))
+    handler = await services._handle_simple_action("FIND_BOT")
+    call = SimpleNamespace(hass=SimpleNamespace(), data={})
+    with pytest.raises(ServiceValidationError):
+        await handler(call)
+
+
+@pytest.mark.asyncio
+async def test_lawn_mower_pause_rejection_raises_entity_error():
+    lm = _lawn_mower(_REJECTED)
+    with pytest.raises(HomeAssistantError) as exc:
+        await lm.async_pause()
+    assert not isinstance(exc.value, ServiceValidationError)
+
+
+@pytest.mark.asyncio
+async def test_lawn_mower_dock_rejection_raises_entity_error():
+    lm = _lawn_mower(_REJECTED)
+    with pytest.raises(HomeAssistantError) as exc:
+        await lm.async_dock()
+    assert not isinstance(exc.value, ServiceValidationError)
