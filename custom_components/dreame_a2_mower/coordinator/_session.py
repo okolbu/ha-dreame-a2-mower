@@ -407,8 +407,12 @@ class _SessionMixin:
         """Block until the mower has docked or ``timeout_s`` has elapsed.
 
         Returns one of:
-          'charging'   — charging_status flipped to ChargingStatus.CHARGING (1)
-          'timeout'    — the dock signal did not fire in time
+          'charging'        — charging_status flipped to ChargingStatus.CHARGING (1)
+          'timeout'         — the dock signal did not fire in time
+          'already-waiting' — a waiter is already armed (T3-6 single-flight);
+                              the caller must ABORT its dispatch — the
+                              in-flight waiter's dispatch completes the
+                              finalize.
 
         The caller logs the reason so the timeout can be tuned later.
         Trail collection continues during the wait because MQTT events keep
@@ -419,7 +423,19 @@ class _SessionMixin:
 
         The finally block clears _pending_finalize_done to None so subsequent
         MQTT pushes don't accidentally set a stale event from a future mow.
+
+        Single-flight (T3-6): the 60 s retry tick does not await the previous
+        run, so during the ≤10-min wait each tick used to re-enter here,
+        overwrite the single _pending_finalize_done Event (orphaning the
+        elder waiters into full-timeout sleeps) and open windows where a
+        waiter's finally nulled the slot out from under the newest waiter,
+        losing the dock signal entirely. The guard below refuses to stack:
+        only the first entry arms an Event; callers guard/abort on the
+        'already-waiting' reason (this check is the defense-in-depth layer;
+        both call sites also check the slot before entering).
         """
+        if self._pending_finalize_done is not None:
+            return "already-waiting"
         self._pending_finalize_done = asyncio.Event()
         self._pending_finalize_done_reason = None
         try:
@@ -579,13 +595,41 @@ class _SessionMixin:
             and self.data.pending_session_object_name
         ):
             if dock_wait:
+                if self._pending_finalize_done is not None:
+                    # T3-6 single-flight: a dock-wait is already in flight
+                    # from an earlier retry tick. Entering again would stack
+                    # a second waiter on the single Event slot; abort this
+                    # dispatch — the in-flight waiter completes the finalize.
+                    LOGGER.debug(
+                        "[F5.6.1] _route_finalize(%s): dock-wait already in "
+                        "flight — skipping duplicate finalize dispatch",
+                        trigger,
+                    )
+                    return
                 LOGGER.info(
                     "[F5.6.1] session-done received (%s) — "
                     "entering pending-finalize wait (≤10 min)",
                     trigger,
                 )
+                # T3-6: stamp the attempt BEFORE the wait so decide()'s
+                # retry branch (2c) stops returning AWAIT_OSS_FETCH every
+                # tick during the wait window. The post-fetch stamp in
+                # _do_oss_fetch_body still lands as before; only decide()
+                # consumes this field.
+                self.async_set_updated_data(
+                    dataclasses.replace(
+                        self.data,
+                        pending_session_last_attempt_unix=now_unix,
+                    )
+                )
                 reason = await self._wait_for_dock_return(timeout_s=600)
                 LOGGER.info("[F5.6.1] pending-finalize wait ended: reason=%s", reason)
+                if reason == "already-waiting":
+                    # Defense-in-depth (guard above races nothing in
+                    # single-threaded asyncio, but the primitive refuses to
+                    # stack regardless) — never proceed past a wait we did
+                    # not own.
+                    return
             await self._do_oss_fetch(now_unix)
             return
         LOGGER.info(
@@ -656,12 +700,25 @@ class _SessionMixin:
                 )
                 await self._run_finalize_incomplete(now_unix)
                 return
+            if self._pending_finalize_done is not None:
+                # T3-6 single-flight: this arm fires EVERY tick once
+                # max-age/max-attempts is exceeded — same stacking hazard as
+                # the AWAIT_OSS_FETCH arm. Abort; the in-flight waiter's
+                # dispatch completes the finalize.
+                LOGGER.debug(
+                    "[F5.6.1] FINALIZE_INCOMPLETE: dock-wait already in "
+                    "flight — skipping duplicate finalize dispatch"
+                )
+                return
             LOGGER.info(
                 "[F5.6.1] session-done received (action=FINALIZE_INCOMPLETE) — "
                 "entering pending-finalize wait (≤10 min)"
             )
             reason = await self._wait_for_dock_return(timeout_s=600)
             LOGGER.info("[F5.6.1] pending-finalize wait ended: reason=%s", reason)
+            if reason == "already-waiting":
+                # Defense-in-depth — never proceed past a wait we did not own.
+                return
             await self._run_finalize_incomplete(now_unix)
             return
 
@@ -1037,6 +1094,26 @@ class _SessionMixin:
             LOGGER.warning(
                 "[F5.7.1] _restore_in_progress: merged payload has no valid"
                 " session_start_ts — discarding"
+            )
+            return
+
+        # Restore × finalize race guard (P2 Task 7 / T7-19): a finalize can
+        # run to completion while this coroutine is suspended in the
+        # read_in_progress executor hop above. The finalize archives the
+        # session, stamps _finalizing_start_ts (the latch's completion key)
+        # and deletes in_progress.json — but we already hold the pre-delete
+        # disk payload. Hydrating it back would resurrect the just-archived
+        # session as a zombie that a later gate tick re-archives (the
+        # "(incomplete)" md5 never matches the cloud md5, so the
+        # archive-level dedup cannot catch the duplicate). Same dedup key as
+        # _finalize_with_latch: discard when the merged payload IS the
+        # finalized session.
+        if merged_start == getattr(self, "_finalizing_start_ts", None):
+            LOGGER.info(
+                "[F5.7.1] _restore_in_progress: session start_ts=%s was"
+                " finalized while the disk read was in flight — discarding"
+                " stale in-progress payload",
+                merged_start,
             )
             return
 
