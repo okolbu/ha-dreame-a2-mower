@@ -540,6 +540,158 @@ class _CoreMixin:
                 )
         return self.cloud_is_fresh
 
+    # ------------------------------------------------------------------
+    # Transitional accessors (P3.2 string-getattr burn-down, T2-16
+    # pre-step). Each replaces one or more
+    # ``getattr(coordinator, "_foo", default)`` call sites that used to
+    # live in the entity/camera/service layers (track-2 §d2 census). A
+    # string getattr on a coordinator-private attr silently returns the
+    # default instead of raising when the attr is renamed or moved — the
+    # exact "silent breakage" trap the P3.8 domain-service extraction
+    # would otherwise walk into. These properties are the TRANSITIONAL
+    # home: each preserves the exact default/None semantics of the
+    # getattr(s) it replaces, and moves together with its backing attr
+    # when that attr is extracted into its owning service in P3.8.
+    # ------------------------------------------------------------------
+
+    @property
+    def cloud(self) -> DreameA2CloudClient | None:
+        """The cloud client, or None before `_init_cloud` has run.
+
+        transitional accessor (P3.2) — moves to the transport service in P3.8.
+        """
+        return self._cloud if hasattr(self, "_cloud") else None
+
+    @property
+    def mqtt(self) -> DreameA2MqttClient | None:
+        """The MQTT client, or None before `_init_mqtt` has run.
+
+        transitional accessor (P3.2) — moves to the transport service in P3.8.
+        """
+        return self._mqtt if hasattr(self, "_mqtt") else None
+
+    @property
+    def active_map_id(self) -> int | None:
+        """The currently-active map id (from MAPL), or None.
+
+        transitional accessor (P3.2) — moves to the map/session service in P3.8.
+        """
+        return self._active_map_id if hasattr(self, "_active_map_id") else None
+
+    @property
+    def render_base(self):
+        """Bound `_render_base` render coroutine, or None if not yet set up.
+
+        transitional accessor (P3.2) — moves to the render service in P3.8.
+        """
+        return self._render_base if hasattr(self, "_render_base") else None
+
+    @property
+    def wifi_archive_index(self) -> list:
+        """The in-memory WiFi heatmap archive index.
+
+        transitional accessor (P3.2) — moves to the wifi-archive service in P3.8.
+        """
+        return self._wifi_archive_index if hasattr(self, "_wifi_archive_index") else []
+
+    @property
+    def wifi_archive_store(self):
+        """The on-disk WiFi heatmap archive store, or None.
+
+        transitional accessor (P3.2) — moves to the wifi-archive service in P3.8.
+        """
+        return (
+            self._wifi_archive_store if hasattr(self, "_wifi_archive_store") else None
+        )
+
+    @property
+    def wifi_archive_last_refresh(self) -> dict:
+        """Detail of the most recent WiFi-archive refresh attempt.
+
+        transitional accessor (P3.2) — moves to the wifi-archive service in P3.8.
+        """
+        return (
+            self._wifi_archive_last_refresh
+            if hasattr(self, "_wifi_archive_last_refresh")
+            else {}
+        )
+
+    @property
+    def last_notification(self) -> dict | None:
+        """Most recent app-style notification synthesized from s2p2 transitions.
+
+        transitional accessor (P3.2) — moves to the notifications service in P3.8.
+        """
+        return (
+            self._last_notification if hasattr(self, "_last_notification") else None
+        )
+
+    @property
+    def obstacle_markers(self) -> list:
+        """Live AIOBS obstacle markers for the current session.
+
+        transitional accessor (P3.2) — moves to the AI-obstacle service in P3.8.
+        """
+        return self._obstacle_markers if hasattr(self, "_obstacle_markers") else []
+
+    @property
+    def obstacle_marker_log(self):
+        """The archived obstacle-marker log, or None.
+
+        transitional accessor (P3.2) — moves to the AI-obstacle service in P3.8.
+        """
+        return (
+            self._obstacle_marker_log
+            if hasattr(self, "_obstacle_marker_log")
+            else None
+        )
+
+    @property
+    def base_png_mode(self):
+        """`BackgroundMode` of the cached base-map PNG, or None.
+
+        transitional accessor (P3.2) — moves to the render service in P3.8.
+        """
+        return self._base_png_mode if hasattr(self, "_base_png_mode") else None
+
+    @property
+    def picked_session_summary(self) -> dict | None:
+        """The archived-session summary picked in the work-log selector, or None.
+
+        transitional accessor (P3.2) — moves to the session service in P3.8.
+        """
+        return (
+            self._picked_session_summary
+            if hasattr(self, "_picked_session_summary")
+            else None
+        )
+
+    @property
+    def novel_log_handler(self):
+        """The NOVEL log-line ring-buffer handler installed by `__init__.py`, or None.
+
+        Genuinely optional: assigned post-construction by the integration's
+        `async_setup_entry` (not by `_CoreMixin.__init__`), so it can be
+        absent on a coordinator that never finished setup.
+
+        transitional accessor (P3.2) — moves to the notifications service in P3.8.
+        """
+        return (
+            self._novel_log_handler if hasattr(self, "_novel_log_handler") else None
+        )
+
+    @property
+    def cancel_lifecycle_background_tasks(self):
+        """Bound `_cancel_lifecycle_background_tasks` method, or None.
+
+        transitional accessor (P3.2) — moves to the session service in P3.8.
+        """
+        return (
+            self._cancel_lifecycle_background_tasks
+            if hasattr(self, "_cancel_lifecycle_background_tasks")
+            else None
+        )
+
     def _cancel_lifecycle_background_tasks(self) -> None:
         """T3-8: cancel the in-flight dock-wait task (if any) and every
         outstanding s2p2-notification resolver task.
