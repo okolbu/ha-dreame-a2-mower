@@ -70,10 +70,14 @@ class FakeConfigEntry:
         self._on_unload: list = []
         self.update_listeners: list = []
 
-    def async_on_unload(self, func):
-        """Register a callback to run when the entry is unloaded."""
+    def async_on_unload(self, func) -> None:
+        """Register a callback to run when the entry is unloaded.
+
+        Returns None — matching real HA's ConfigEntry.async_on_unload (it
+        registers the callback and returns nothing; callers must not rely on
+        a passthrough return value).
+        """
         self._on_unload.append(func)
-        return func
 
     def add_update_listener(self, listener):
         """Register an options-update listener; returns its remover."""

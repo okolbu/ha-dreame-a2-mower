@@ -21,19 +21,40 @@ from pathlib import Path
 TESTS_DIR = Path(__file__).resolve().parent.parent
 
 # Every spelling of "construct the coordinator without running __init__"
-# observed in the suite (grep census 2026-07-03). `cls.__new__(cls)` is NOT
+# observed in the suite (grep census 2026-07-04). `cls.__new__(cls)` is NOT
 # included as a pattern because it is used by non-coordinator helpers too;
 # the two coordinator files that used it are pilot-migrated in this task.
+#
+# Constructing ANY of the coordinator's concern mixins via __new__ is the same
+# bypass class (each mixin is a facet of the same object; a test that skips
+# _WritesMixin.__init__ skips _CoreMixin.__init__ just as much). The mixin
+# names are ENUMERATED, not matched with a generic `_\w+Mixin.__new__`, on
+# purpose: cloud_client's `_FetchersMixin.__new__` (test_messages_refresh.py:16)
+# is an unrelated non-coordinator helper and must NOT be swept in. Source of
+# the roster: grep `class _*Mixin` in custom_components/.../coordinator/.
+_COORD_MIXINS = (
+    "_CloudStateMixin",
+    "_CoreMixin",
+    "_DeviceSyncMixin",
+    "_LidarOssMixin",
+    "_MqttHandlersMixin",
+    "_NotificationsMixin",
+    "_RefreshersMixin",
+    "_RenderingMixin",
+    "_SessionMixin",
+    "_WifiArchiveMixin",
+    "_WritesMixin",
+)
 _BYPASS_PATTERNS = (
     re.compile(r"object\.__new__\(\s*DreameA2MowerCoordinator\s*\)"),
     re.compile(r"DreameA2MowerCoordinator\.__new__"),
-    re.compile(r"_CoreMixin\.__new__"),
+    re.compile(r"\b(?:" + "|".join(_COORD_MIXINS) + r")\.__new__"),
     re.compile(r"object\.__new__\(\s*coord_klass\s*\)"),
 )
 
 # Ratchet baseline — the total bypass-occurrence count across tests/.
 # P3 Task 1 pin. ONLY update DOWNWARD.
-BYPASS_BASELINE = 83
+BYPASS_BASELINE = 86
 
 
 def _census() -> tuple[int, dict[str, int]]:

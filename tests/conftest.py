@@ -112,8 +112,12 @@ def _make_ha_stub() -> None:
           — exactly the real method's observable core (the real method also
           cancels/reschedules the poll timer; this integration is push-based
           with ``update_interval=None`` so there is nothing to cancel).
-        - ``async_add_listener`` returns a WORKING unsubscribe (real HA keys
-          the listener dict by the remove-callback itself).
+        - ``async_add_listener`` returns a WORKING unsubscribe. (Real HA
+          2025.12 keys ``_listeners`` by an incrementing int id and pops
+          without a default on remove, so a double-unsub raises KeyError;
+          this stub keys by the remove-callback but likewise pops WITHOUT a
+          default, so a double-unsub bug surfaces in tests instead of being
+          silently tolerated.)
 
         NOTE: ``_listeners`` is accessed via ``__dict__.setdefault`` so
         legacy ``object.__new__``-built coordinators (census-gated ratchet,
@@ -146,7 +150,9 @@ def _make_ha_stub() -> None:
             listeners = self.__dict__.setdefault("_listeners", {})
 
             def remove_listener() -> None:
-                listeners.pop(remove_listener, None)
+                # No default: real HA raises KeyError on double-remove, so a
+                # double-unsub bug surfaces here rather than being swallowed.
+                del listeners[remove_listener]
 
             listeners[remove_listener] = (update_callback, context)
             return remove_listener
