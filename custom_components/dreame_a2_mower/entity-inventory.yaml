@@ -88,6 +88,22 @@ entities:
         status: presumed
         claim: "editable_objects now ALSO surfaces PATROL-POINT descriptors {id, op:223, type:2, kind:'patrol', point_m:[x,y]} (from MapData.patrol_points / cruisePoints type=8) — DISTINCT opcode from maintenance (o=224/type=3). MAP_ATTR_SCHEMA_VERSION bumped 3→4. The map-editor card draws patrol points as a marker <g obj-patrol> (distinct teal colour from maintenance) and writes via the NEW service create_patrol_point (o=223, flat [x,y,heading=0]); delete_map_object extended to category 2 (patrol). The prior 'patrol intentionally NOT surfaced — wire UNVERIFIED' framing is withdrawn (wire confirmed app-mitm 2026-06-15). ALSO: the EDITOR BACKGROUND (coordinator._editor_base_png / clean_md) now strips spot_zones + maintenance_points + patrol_points (in addition to editable exclusion zones) so all reshape/point-edit objects are CARD OVERLAYS only — a hard refresh no longer bleeds a stale cloud point through the server PNG. AND edit_map schedules staggered delayed cloud re-fetches (8/20/40 s via async_call_later) after every map edit so a propagated change surfaces in seconds, not up to ~2 min. NOT yet device-validated."
         evidence: "tests/www/test_map_editor_points.py (patrol render/save/delete + selection-state lifecycle harness); tests/integration/test_card_contract.py::test_camera_editable_objects_exact_element_shape (patrol op=223/type=2); tests/integration/test_edit_map.py::test_create_patrol_point_builds_o223_mutation + ::test_edit_map_schedules_delayed_refetches; tests/coordinator/test_base_render_on_activity.py::test_editor_base_strips_spots_maintenance_patrol; camera/map.py _editable_objects_from_map; coordinator/_writes.py create_patrol_point; coordinator/_rendering.py clean_md"
+      - date: "2026-07-03"
+        status: verified
+        claim: "P2 Task 5 (R-35) write honesty — FAMILY NOTE covering ALL
+          map-edit services the editor card calls (create_no_go_zone /
+          create_ignore_obstacle / create_mow_shape / create_spot /
+          create_maintenance_point / create_patrol_point / rename_zone /
+          delete_map_object / split_zone / merge_zones / set_patrol_point
+          _config): edit_map now returns the FIRST not-accepted leg's own
+          WriteResult (o=200/204/…/201 transaction, inventory.yaml § o204/
+          § o201/§ o215) instead of a collapsed bool, and every handler routes
+          it through raise_for_write_result — device rejection →
+          ServiceValidationError carrying the leg's r-code; transport drop →
+          retryable HomeAssistantError (was a flat 'did not accept' error for
+          both). Commit leg (o=201) is still always sent. Ablation-verified;
+          not yet live-rejection-verified."
+        evidence: "tests/integration/test_write_honesty_cfg.py (create_no_go/rename/delete rejection + not-delivered + acceptance; ablation pass 2026-07-03); services.py _run_map_edit; coordinator/_writes.py edit_map"
     references:
       code: "custom_components/dreame_a2_mower/_camera_map.py:14"
       wire_entry: "MAPL"
@@ -3237,6 +3253,19 @@ entities:
         status: presumed
         claim: "Service handler _handle_set_schedule_enabled: slot_id (0=Spr&Sum, 1=Aut&Win), enabled (bool). Seasons are mutually exclusive — enabling one disables the other; disabling leaves no schedule running. Blocked while state_machine.snapshot().mow_session == MowSession.IN_SESSION (raises ServiceValidationError). On success calls coordinator.write_schedule_enabled which sends a standalone SCHDSV3 state blob (does NOT include plan data). Write path confirmed in inventory.yaml § SCHDSV3. Not yet live-verified end-to-end."
         evidence: "services.py:484-507 (_handle_set_schedule_enabled); coordinator/_writes.py write_schedule_enabled; protocol/schedule_action.py write_schedule_enabled_state"
+      - date: "2026-07-03"
+        status: verified
+        claim: "P2 Task 5 (R-35) write honesty — FAMILY NOTE covering BOTH
+          schedule services (set_schedule_enabled + set_schedule_plans):
+          write_schedule/write_schedule_enabled now return a WriteResult
+          mapped from the SCHD*V3 legs (inventory.yaml § SCHDIV3/§ SCHDDV3/
+          § SCHDSV3) — a CfgActionError carrying a device r-code →
+          delivered-but-rejected (ServiceValidationError with the code), no
+          readable verdict → not-delivered (retryable HomeAssistantError).
+          Replaces the flat 'device rejected the write' ServiceValidationError
+          for every failure mode. Ablation-verified; not yet
+          live-rejection-verified."
+        evidence: "tests/integration/test_write_honesty_cfg.py (schedule rejection/not-delivered/acceptance; ablation pass 2026-07-03); services.py _handle_set_schedule_plans/_handle_set_schedule_enabled; coordinator/_writes.py _write_result_from_schedule_exc; protocol/cfg_action.py CfgActionError.code"
     references:
       wire_entry: "inventory.yaml § SCHDSV3"
       code: "custom_components/dreame_a2_mower/services.py:484"
@@ -3662,6 +3691,21 @@ entities:
         status: verified
         claim: "Phase A2: now WIRED + writable via scoped PRE RMW (apply_pre, PRE[4]) through coordinator.write_map_general_setting; dual-write to SETTINGS.mowingHeight. PRE value is cm*10 (e.g. 5.5cm → 55); SETTINGS value is int cm. set_pre fixed to the app's bare-array envelope; control_mode promoted to device_writable."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-07-03"
+        status: verified
+        claim: "P2 Task 5 (R-35) write honesty — FAMILY NOTE covering the PRE
+          dual-write per-map controls (this number + the per-map SETTINGS
+          switches, mowing direction/pattern selects, EdgeMaster and AI-bit
+          switches — all through write_map_general_setting/_ai_bit →
+          _write_pre_scoped → set_pre): the coordinator chain now returns the
+          device's honest WriteResult (PRE bare-array setter verdict,
+          inventory.yaml § PRE), and the entity helpers keep the revert +
+          persistent_notification UX and ALSO raise HomeAssistantError on a
+          not-accepted verdict. A SETTINGS cloud-record leg failure after an
+          accepted PRE write stays log-only by design (device applied; cloud
+          self-heals on reconcile). Ablation-verified; not yet
+          live-rejection-verified."
+        evidence: "tests/integration/test_write_honesty_cfg.py (PRE number + direction select rejection/acceptance; ablation pass 2026-07-03); _settings_writes.py pre_settings_optimistic_write; coordinator/_writes.py write_map_general_setting"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/number.py:390"
@@ -3699,6 +3743,20 @@ entities:
           NOT wired; control_mode remains read_only_confirmed until a feature phase
           wires and live-verifies the write."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-07-03"
+        status: verified
+        claim: "P2 Task 5 (R-35) write honesty — FAMILY NOTE covering the
+          SETTINGS chunked-KV per-map controls (all _PerMapSettingsNumberBase
+          numbers + per-map entities writing through settings_optimistic_write
+          → write_settings → write_chunked_key): write_settings now returns a
+          WriteResult whose accepted = the CLOUD's setDeviceData verdict
+          (inventory.yaml § READ/WRITE SURFACES item 3 — this transport
+          carries NO per-write device verdict; the cloud KV record is the
+          authoritative store for SETTINGS.*, so cloud-accept IS the write
+          landing). Rejection (non-zero cloud code) reverts, notifies and
+          raises HomeAssistantError. Ablation-verified; not yet
+          live-rejection-verified."
+        evidence: "tests/integration/test_write_honesty_cfg.py (SETTINGS number rejection code 10007 + acceptance; ablation pass 2026-07-03); _settings_writes.py settings_optimistic_write; coordinator/_writes.py write_settings/_chunked_kv_write_result"
     references:
       wire_entry: "cloud SETTINGS (no inventory.yaml entry for SETTINGS chunked-batch key)"
       code: "custom_components/dreame_a2_mower/number.py:412"
@@ -4079,6 +4137,20 @@ entities:
         status: verified
         claim: "Phase A1: now WIRED + writable for dnd (build_dnd/DND), low_speed_at_night (build_low/LOW), custom_charging_period (build_bat_charging/BAT), rain_protection (build_wrp/WRP), led_period (build_lit/LIT), led_in_standby (build_lit/LIT), led_in_working (build_lit/LIT), led_in_charging (build_lit/LIT), led_in_error (build_lit/LIT), human_presence_alert (build_rec/REC) — all via protocol/cfg_payloads RMW builders through write_setting; control_mode promoted to device_writable. Integration envelope matches the captured app envelope (transport parity)."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-07-03"
+        status: verified
+        claim: "P2 Task 5 (R-35) write honesty — FAMILY NOTE covering ALL CFG
+          descriptor controls (this switch base + the number/select/time CFG
+          descriptor bases, which share the same write_setting seam): a
+          rejected or undelivered CFG write now RAISES HomeAssistantError from
+          the entity handler via raise_for_write_result (was log-only WARNING;
+          T3-3). write_setting returns the transport's honest WriteResult
+          (set_cfg/set_pre parse out[0].r — see inventory.yaml § READ/WRITE
+          SURFACES note 1 for the r=-3 verdict) and still reverts the
+          optimistic field_updates before the raise. Test-verified incl.
+          ablation (fix reverted → rejection test fails); not yet
+          live-rejection-verified on hardware."
+        evidence: "tests/integration/test_write_honesty_cfg.py (CFG switch real-chain r=-3 envelope + time family; ablation pass 2026-07-03); entities/switch/base.py _async_set_value; number.py/time.py/entities/select/global_.py same seam"
     references:
       wire_entry: "varies — see notes for per-key CFG surfaces"
       code: "custom_components/dreame_a2_mower/_switch_base.py:55"

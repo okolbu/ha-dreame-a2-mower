@@ -38,10 +38,22 @@ def _mow_zone_call():
 
 
 @pytest.mark.asyncio
-async def test_mow_zone_accepted_does_not_raise(monkeypatch):
-    _mow_zone_coord(monkeypatch, WriteResult.local_ok())
-    # No exception expected.
+async def test_mow_zone_accepted_dispatches_and_selects_zone(monkeypatch):
+    """Accepted mow_zone: selection state is broadcast AND the zone-mow action
+    is dispatched with the requested zones (T7-9: was an assert-nothing test)."""
+    from custom_components.dreame_a2_mower.mower.actions import MowerAction
+
+    coord = _mow_zone_coord(monkeypatch, WriteResult.local_ok())
     await services._handle_mow_zone(_mow_zone_call())
+    # The optimistic selection update was broadcast (ZONE mode, zone 1).
+    coord.async_set_updated_data.assert_called_once()
+    new_state = coord.async_set_updated_data.call_args.args[0]
+    assert new_state.action_mode == ActionMode.ZONE
+    assert new_state.active_selection_zones == (1,)
+    # The device action went out with the requested zones.
+    coord.dispatch_action.assert_awaited_once_with(
+        MowerAction.START_ZONE_MOW, {"zones": [1]}
+    )
 
 
 @pytest.mark.asyncio
@@ -79,9 +91,16 @@ def _lawn_mower(dispatch_result):
 
 
 @pytest.mark.asyncio
-async def test_lawn_mower_start_accepted_does_not_raise():
+async def test_lawn_mower_start_accepted_dispatches_all_areas():
+    """Accepted start (ALL_AREAS mode): START_MOWING is dispatched exactly once
+    with no params, and nothing raises (T7-9: was an assert-nothing test)."""
+    from custom_components.dreame_a2_mower.mower.actions import MowerAction
+
     lm = _lawn_mower(WriteResult.local_ok())
     await lm.async_start_mowing()
+    lm.coordinator.dispatch_action.assert_awaited_once_with(
+        MowerAction.START_MOWING, {}
+    )
 
 
 @pytest.mark.asyncio
@@ -119,9 +138,16 @@ def _start_button(dispatch_result):
 
 
 @pytest.mark.asyncio
-async def test_start_button_accepted_does_not_raise():
+async def test_start_button_accepted_dispatches_selected_mode():
+    """Accepted Start-button press honours action_mode (ALL_AREAS →
+    START_MOWING, {}) and dispatches exactly once (T7-9: was assert-nothing)."""
+    from custom_components.dreame_a2_mower.mower.actions import MowerAction
+
     b = _start_button(WriteResult.local_ok())
     await b.async_press()
+    b.coordinator.dispatch_action.assert_awaited_once_with(
+        MowerAction.START_MOWING, {}
+    )
 
 
 @pytest.mark.asyncio
