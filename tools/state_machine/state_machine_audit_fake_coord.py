@@ -143,6 +143,7 @@ def _eval_globals() -> dict[str, Any]:
     # When these names appear in an entity's `value_fn` source, the audit
     # needs them in scope to invoke the lambda at cold-start.
     from custom_components.dreame_a2_mower.sensor import (
+        _active_fault_slugs,
         _active_fault_text,
         _describe_error_or_none,
         _format_active_selection,
@@ -165,6 +166,7 @@ def _eval_globals() -> dict[str, Any]:
         "Connectivity": Connectivity,
         "RpcHealth": RpcHealth,
         "_active_fault_text": _active_fault_text,
+        "_active_fault_slugs": _active_fault_slugs,
         "_describe_error_or_none": _describe_error_or_none,
         "_format_active_selection": _format_active_selection,
         "_api_endpoints_value": _api_endpoints_value,

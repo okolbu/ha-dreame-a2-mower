@@ -46,6 +46,7 @@ from .entities.sensor.device import (
 # Re-exported so tools/state_machine_audit_fake_coord.py can build eval-globals
 # for value_fn lambdas without importing the entities package directly.
 from .entities.sensor.device import (  # noqa: F401 — re-export
+    _active_fault_slugs,
     _active_fault_text,
     _api_endpoints_value,
     _describe_error_or_none,
@@ -169,7 +170,7 @@ async def async_setup_entry(
 #     DreameA2LocationSensor, DreameA2PositioningHealthSensor,
 #     DreameA2MqttConnectivitySensor
 # tools/state_machine/state_machine_audit_fake_coord.py: _active_fault_text,
-#     _describe_error_or_none, _format_active_selection,
+#     _active_fault_slugs, _describe_error_or_none, _format_active_selection,
 #     _api_endpoints_value, _freshness_value
 #
 # All names are already imported above and therefore available as attributes

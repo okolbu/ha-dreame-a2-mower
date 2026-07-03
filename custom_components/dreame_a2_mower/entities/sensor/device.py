@@ -48,7 +48,14 @@ from .base import (
 # HA 2026.6's blocking-call detector (read_text inside the loop).
 def _read_manifest_version() -> str:
     try:
-        _manifest_path = Path(__file__).parent / "manifest.json"
+        # This module lives at entities/sensor/device.py — two levels below
+        # the package root (custom_components/dreame_a2_mower/) where
+        # manifest.json actually lives. parents[2] resolves to the package
+        # root: entities/sensor -> entities -> dreame_a2_mower. Using
+        # `.parent` (one level) resolved into entities/sensor/ instead, so
+        # the read always failed and this sensor showed "unknown" since the
+        # Phase-3c entities/ package move (R-6 / T5-1).
+        _manifest_path = Path(__file__).parents[2] / "manifest.json"
         return str(json.loads(_manifest_path.read_text()).get("version", "unknown"))
     except Exception:  # noqa: BLE001
         return "unknown"
@@ -89,9 +96,51 @@ def _active_fault_text(snapshot, coord=None) -> str | None:
     return "; ".join(describe_error(c, lang) for c in sorted(errors))
 
 
+_ERROR_STATE_MAX_LEN = 255  # HA's hard state-string cap
+
+
+def _active_fault_slugs(snapshot) -> str | None:
+    """Comma-joined fault event-slugs for the currently-latched fault(s), or None.
+
+    This is the sensor.error_description STATE contract (replaces the old
+    localized-text join, see entity-inventory.yaml verifications — with >=3
+    concurrent faults the text form exceeded HA's 255-char state limit and
+    HA silently fell the entity back to `unknown`, live-verified 2026-07-02).
+    Uses fault_catalog.event_slug per code (language-neutral, short), falling
+    back to ``unknown_<code>`` for a code absent from the catalog. The single-
+    fault case is just that one slug — kept consistent with the multi-fault
+    join rather than reverting to localized text.
+
+    Hard-guaranteed <= 255 chars: on overflow, whole slugs are dropped from
+    the end and a trailing ``+N`` marks how many were cut. In the (currently
+    unreachable) case where even one slug plus its marker overflows, the
+    joined string is character-truncated as a last resort.
+    """
+    errors = getattr(snapshot, "errors", None)
+    if not errors:
+        return None
+    codes = sorted(errors)
+    slugs = [fault_catalog.event_slug(c) or f"unknown_{c}" for c in codes]
+    joined = ",".join(slugs)
+    if len(joined) <= _ERROR_STATE_MAX_LEN:
+        return joined
+    kept = list(slugs)
+    while kept:
+        dropped = len(slugs) - len(kept)
+        candidate = ",".join(kept) + (f",+{dropped}" if dropped else "")
+        if len(candidate) <= _ERROR_STATE_MAX_LEN:
+            return candidate
+        kept.pop()
+    return joined[:_ERROR_STATE_MAX_LEN]
+
+
 def _error_attrs(coord) -> dict:
-    """Localized detail + language-neutral fault_names/categories for the latched
-    faults. Empty dict when there are no faults."""
+    """Localized detail + language-neutral fault_names/categories/faults for
+    the latched faults. Empty dict when there are no faults.
+
+    ``faults`` carries the FULL per-code detail ({code, slug, text}) — the
+    sensor's state is only the slug join (see _active_fault_slugs); this is
+    where the full localized text now lives."""
     snap = coord.state_machine.snapshot()
     errors = getattr(snap, "errors", None)
     if not errors:
@@ -108,6 +157,14 @@ def _error_attrs(coord) -> dict:
         out["fault_names"] = names
     if cats:
         out["fault_categories"] = cats
+    out["faults"] = [
+        {
+            "code": c,
+            "slug": fault_catalog.event_slug(c) or f"unknown_{c}",
+            "text": describe_error(c, lang),
+        }
+        for c in codes
+    ]
     return out
 
 
@@ -756,7 +813,7 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         key="error_description",
         name="Error",
         availability_source="mqtt",
-        value_fn=lambda coord: _active_fault_text(coord.state_machine.snapshot(), coord),
+        value_fn=lambda coord: _active_fault_slugs(coord.state_machine.snapshot()),
         extra_state_attributes_fn=lambda coord: _error_attrs(coord),
     ),
     # WiFi RSSI — reads the persisted snapshot value so it survives HA

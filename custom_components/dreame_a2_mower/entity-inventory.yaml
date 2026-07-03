@@ -2940,7 +2940,7 @@ entities:
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-06-18"
+      last_verified: "2026-07-03"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -2952,6 +2952,10 @@ entities:
       - date: "2026-06-18"
         status: presumed
         claim: "P1 (fault-catalog localization): sensor.dreame_a2_mower_error value is now localized via describe_error(code, hass.config.language) backed by mower/fault_catalog.py / mower/data/fault_catalog.json [apk:g2408-plugin-ext1423]. Hand-curated ERROR_CODE_DESCRIPTIONS retired. extra_state_attributes adds three new language-aware/language-neutral attrs: error_detail (localized solution text from fault_catalog.fault_detail), fault_names (language-neutral list of fault_name strings), fault_categories (sorted deduplicated list from fault_category). All via _error_attrs(coord) in entities/sensor/device.py. device-sync fault banner also localized via describe_error(code, lang) (coordinator/_device_sync.py). Code-read; live-verified after release."
+      - date: "2026-07-03"
+        status: verified
+        claim: "R-6 state-semantics fix: sensor.dreame_a2_mower_error's state was silently falling back to `unknown` because the localized-text join (the 2026-06-18 contract above) exceeds HA's 255-char state cap once >=3 faults latch concurrently. New contract: state = _active_fault_slugs(snapshot) — comma-joined fault_catalog.event_slug per latched code, hard-guaranteed <=255 chars (drops whole slugs from the end + a trailing '+N' marker on overflow; single-fault case is just that one slug, not localized text). Full per-code localized text moved off the state and into a new `faults` extra_state_attributes list ({code, slug, text}, text via describe_error). error_detail/fault_names/fault_categories attrs unchanged."
+        evidence: "2026-07-02 HA restart system log: 'State Robot tilted...; Right drive wheel error...; Emergency stop...; Low battery...; Top cover... for sensor.dreame_a2_mower_error is longer than 255, falling back to unknown' (5 concurrent faults)"
     references:
       wire_entry: "varies — see notes for per-key wire surfaces"
       code: "custom_components/dreame_a2_mower/entities/sensor/device.py"
@@ -2960,7 +2964,7 @@ entities:
       DIAGNOSTIC_SENSORS tuple (entities/sensor/device.py). Descriptor keys backed
       as of 2026-06-18:
         battery_level          — coord.state_machine.snapshot().battery_percent (s3p1)
-        error_description      — _active_fault_text(coord.state_machine.snapshot(), coord) → describe_error(code, lang) via mower/fault_catalog.py [apk:g2408-plugin-ext1423]; lang=fault_catalog.resolve_lang(hass.config.language); extra_state_attributes: error_detail (localized solution text), fault_names (language-neutral list), fault_categories (FAULT/ALERT/INFO list); latched snapshot.errors, NOT raw MowerState.error_code; no entity_category (primary entity)
+        error_description      — _active_fault_slugs(coord.state_machine.snapshot()) → comma-joined fault_catalog.event_slug per latched code, hard-capped <=255 chars (see R-6 verification below); extra_state_attributes: error_detail (localized solution text), fault_names (language-neutral list), fault_categories (FAULT/ALERT/INFO list), faults (list of {code, slug, text} — full describe_error(code, lang) text per code); latched snapshot.errors, NOT raw MowerState.error_code; no entity_category (primary entity)
         wifi_rssi_dbm          — coord.state_machine.snapshot().wifi_rssi_dbm (s1p1)
         position_x_m           — coord.state_machine.snapshot().position_x_m (s1p4)
         position_y_m           — coord.state_machine.snapshot().position_y_m (s1p4)
@@ -3379,12 +3383,16 @@ entities:
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-07-03"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: native_value = _manifest_version() which reads manifest.json at module import time and caches globally as _MANIFEST_VERSION. Returns 'unknown' on read failure. EntityCategory.DIAGNOSTIC. Read from sensor_device.py:1137-1138; not re-confirmed live."
         evidence: "sensor_device.py:1137-1138 (native_value → _manifest_version()); sensor_device.py:49-60 (_manifest_version helper)"
+      - date: "2026-07-03"
+        status: verified
+        claim: "R-6 manifest-path fix: _read_manifest_version() had always resolved Path(__file__).parent / 'manifest.json' from entities/sensor/device.py, which lands in entities/sensor/ — two levels short of the package root (custom_components/dreame_a2_mower/) where manifest.json lives. The sensor has read 'unknown' since the Phase-3c entities/ package move (never re-verified live, per the 2026-05-31 entry above). Fixed to Path(__file__).parents[2] / 'manifest.json'; native_value now returns the real manifest version."
+        evidence: "docs findings track-5-entity-surface.md T5-1; tests/integration/test_version_sensor.py"
     references:
       wire_entry: "integration-local — manifest.json"
       code: "custom_components/dreame_a2_mower/sensor_device.py:1119"
