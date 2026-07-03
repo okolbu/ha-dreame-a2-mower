@@ -903,7 +903,13 @@ class _FetchersMixin:
             _LOGGER.warning("fetch_gps: %s", ex)
             return None
         recs = (((body or {}).get("locationRecords") or {}).get("records")) or []
-        if not isinstance(recs, list) or not recs:
+        if not isinstance(recs, list):
+            # Malformed response (records present but not a list) — a
+            # failure, NOT genuine no-data: corrupt cloud data must not
+            # clear the tracker (review of the T3-10 fix).
+            _LOGGER.warning("fetch_gps: malformed records shape: %s", type(recs).__name__)
+            return None
+        if not recs:
             return {}
         newest = max(recs, key=lambda r: r.get("updateTime") or "")
         try:

@@ -42,6 +42,17 @@ def test_fetch_gps_empty_records_returns_empty_dict():
     assert out == {}
 
 
+def test_fetch_gps_malformed_records_returns_none():
+    """Review of T3-10: a MALFORMED response (records present but not a
+    list) is a failure, not genuine no-data — it must return None
+    (keep-last) rather than {} (clear), so corrupt cloud data can't wipe
+    the tracker."""
+    out = _client_with_session({"success": True, "locationRecords": {"records": "not-a-list"}}).fetch_gps()
+    assert out is None
+    out = _client_with_session({"success": True, "locationRecords": {"records": {"bogus": 1}}}).fetch_gps()
+    assert out is None
+
+
 def test_fetch_gps_http_error_returns_none():
     c = _client_with_session({})
     c._session.post = MagicMock(return_value=SimpleNamespace(status_code=502, json=lambda: {}, text="bad gateway"))

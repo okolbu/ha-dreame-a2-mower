@@ -3601,11 +3601,11 @@ entities:
     device: parent
     source:
       wire: "location/getRecords (absolute WGS84, ~4m, via 4G SIM), polled every 60s via _refresh_gps"
-      state_path: "coordinator.data.position_lat / coordinator.data.position_lon (MowerState); falls back to RestoreEntity last-known lat/lon on getRecords failure"
+      state_path: "coordinator.data.position_lat / coordinator.data.position_lon (MowerState); a transient getRecords failure keeps the last MowerState fix (T3-10 keep-last); RestoreEntity supplies the pre-first-poll fix across HA restarts"
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-06-10"
+      last_verified: "2026-07-03"
     verifications:
       - date: "2026-05-31"
         status: presumed
@@ -3615,6 +3615,10 @@ entities:
         status: verified
         claim: "Source updated Phase C: position_lat/lon now populated by location/getRecords (absolute WGS84 via 4G SIM) rather than LOCN routed-action. extra_state_attributes now exposes gps_update_time and gps_card4g from MowerState. entity_registry_enabled_default remains False."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-07-03"
+        status: verified
+        claim: "Failure semantics fixed (T3-10/R-42): fetch_gps now returns None only for a transient fetch failure (HTTP error/timeout/exception/malformed records shape) and {} for the genuine no-data response (endpoint answered, zero records — the ATA-gated Real-Time-Location-off case). _refresh_gps keeps the last MowerState fix on None (no clear) and clears position_* only on {}. RestoreEntity's fallback now matters only pre-first-poll (across HA restarts); it is no longer the keeper of the fix during transient polling failures — MowerState itself retains it."
+        evidence: "refactor-2026-07-02/findings/track-3-correctness.md § T3-10; tests/integration/test_phase_c_refreshers.py::test_refresh_gps_none_keeps_last_fix / ::test_refresh_gps_empty_dict_clears; tests/integration/test_phase_c_fetchers.py::test_fetch_gps_malformed_records_returns_none"
     references:
       wire_entry: "location/getRecords"
       code: "custom_components/dreame_a2_mower/device_tracker.py:26"
@@ -3623,9 +3627,11 @@ entities:
       polled every 60s via _refresh_gps. extra_state_attributes exposes
       gps_update_time and gps_card4g from MowerState (Phase C).
       entity_registry_enabled_default=False so it doesn't clutter the entity
-      list on fresh installs. RestoreEntity keeps the last known fix across HA
-      restarts so the map marker persists when getRecords polling temporarily
-      fails (cloud 80001 error).
+      list on fresh installs. Transient getRecords failures (cloud 80001,
+      timeouts) keep the last MowerState fix (T3-10 keep-last); only a genuine
+      empty-records response clears it. RestoreEntity restores the last known
+      fix across HA restarts so the map marker persists until the first
+      successful poll.
 
   # ------------------------------------------------------------------
   # Calendar entity
