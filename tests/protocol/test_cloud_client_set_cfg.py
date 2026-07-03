@@ -27,7 +27,7 @@ def test_set_cfg_primitive_wraps_as_value():
     """Primitive int → action gets {m:'s', t:KEY, d:{value: <int>}}."""
     client = _make_client(_OK)
     ok = client.set_cfg("VOL", 60)
-    assert ok is True
+    assert ok.accepted is True and ok.delivered is True and ok.code == 0
     client.action.assert_called_once()
     kwargs = client.action.call_args.kwargs
     params = kwargs.get("parameters") or client.action.call_args.args[0]
@@ -39,7 +39,7 @@ def test_set_cfg_bool_wraps_as_value():
     """Boolean True → wrapped as {value: True}."""
     client = _make_client(_OK)
     ok = client.set_cfg("CLS", True)
-    assert ok is True
+    assert ok.accepted is True
     payload = client.action.call_args.kwargs["parameters"][0]
     assert payload == {"m": "s", "t": "CLS", "d": {"value": True}}
 
@@ -48,7 +48,7 @@ def test_set_cfg_list_wraps_as_value():
     """A list payload (legacy callers) is also wrapped — back-compat."""
     client = _make_client(_OK)
     ok = client.set_cfg("ATA", [1, 0, 1])
-    assert ok is True
+    assert ok.accepted is True
     payload = client.action.call_args.kwargs["parameters"][0]
     assert payload == {"m": "s", "t": "ATA", "d": {"value": [1, 0, 1]}}
 
@@ -58,7 +58,7 @@ def test_set_cfg_dict_passes_through_verbatim():
     client = _make_client(_OK)
     d_payload = {"value": 1, "time": 4}
     ok = client.set_cfg("WRP", d_payload)
-    assert ok is True
+    assert ok.accepted is True
     payload = client.action.call_args.kwargs["parameters"][0]
     assert payload == {"m": "s", "t": "WRP", "d": d_payload}
 
@@ -68,7 +68,7 @@ def test_set_cfg_dict_dnd_named_key_shape():
     client = _make_client(_OK)
     d_payload = {"value": 1, "time": [1200, 480]}
     ok = client.set_cfg("DND", d_payload)
-    assert ok is True
+    assert ok.accepted is True
     payload = client.action.call_args.kwargs["parameters"][0]
     assert payload["d"] == d_payload
 
@@ -83,17 +83,29 @@ def test_set_cfg_dict_lit_full_named_keys():
         "fill": 0,
     }
     ok = client.set_cfg("LIT", d_payload)
-    assert ok is True
+    assert ok.accepted is True
     payload = client.action.call_args.kwargs["parameters"][0]
     assert payload["d"] == d_payload
 
 
-def test_set_cfg_returns_false_when_device_rejects():
-    """out[0].r=-3 → set_cfg returns False (regardless of payload shape)."""
+def test_set_cfg_rejection_carries_device_code():
+    """out[0].r=-3 → delivered-but-rejected WriteResult carrying r + msg.
+
+    r=-3 = "no setter for THIS key at THIS address" — see inventory.yaml
+    § READ/WRITE SURFACES note 1 (routed-action write surface).
+    """
     client = _make_client(_REJECTED)
-    assert client.set_cfg("WRP", {"value": 1}) is False
+    result = client.set_cfg("WRP", {"value": 1})
+    assert bool(result) is False
+    assert result.delivered is True
+    assert result.accepted is False
+    assert result.code == -3
+    assert result.msg == "not supported"
 
 
-def test_set_cfg_returns_false_when_action_returns_none():
+def test_set_cfg_none_response_is_not_delivered():
     client = _make_client(None)
-    assert client.set_cfg("VOL", 50) is False
+    result = client.set_cfg("VOL", 50)
+    assert bool(result) is False
+    assert result.delivered is False
+    assert result.accepted is False

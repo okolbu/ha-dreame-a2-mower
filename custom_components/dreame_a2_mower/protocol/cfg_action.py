@@ -22,7 +22,20 @@ ROUTED_ACTION_AIID = 50
 
 
 class CfgActionError(RuntimeError):
-    """Raised when a routed action call returns no data."""
+    """Raised when a routed action call returns no data or is rejected.
+
+    ``code`` (optional) carries the Dreame application-level rejection code
+    (``out[0].r`` — e.g. -3 "no setter for this key at this address"; see
+    ``inventory.yaml`` § READ/WRITE SURFACES note 1) when the device itself
+    rejected the request. ``code is None`` means there was no readable device
+    verdict (transport failure / malformed envelope) — the caller cannot
+    claim the device heard the request (P2 Task 5: lets ``write_schedule*``
+    map the exception to an honest delivered-vs-not WriteResult).
+    """
+
+    def __init__(self, message: str, *, code: int | None = None) -> None:
+        super().__init__(message)
+        self.code = code
 
 
 def _unwrap(result: Any) -> Any:
@@ -53,7 +66,8 @@ def _unwrap(result: Any) -> Any:
     ):
         raise CfgActionError(
             f"endpoint returned Dreame error r={payload['r']} "
-            f"(likely not supported on this firmware): {payload!r}"
+            f"(likely not supported on this firmware): {payload!r}",
+            code=int(payload["r"]),
         )
     return payload
 

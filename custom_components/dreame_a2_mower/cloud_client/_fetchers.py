@@ -4,7 +4,7 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from ._helpers import _LOGGER
+from ._helpers import _LOGGER, WriteResult
 
 
 class _FetchersMixin:
@@ -638,7 +638,7 @@ class _FetchersMixin:
         _LOGGER.debug("fetch_mapl: unexpected payload type: %r", type(payload).__name__)
         return None
 
-    def set_cfg(self, key: str, value: Any) -> bool:
+    def set_cfg(self, key: str, value: Any) -> WriteResult:
         """Write a single CFG key via routed-action s2 aiid=50.
 
         Wire format: ``{m: 's', t: key, d: <d_payload>}`` sent as
@@ -664,10 +664,26 @@ class _FetchersMixin:
         retains the old value (smoking-gun probe 2026-05-09 against
         all 16 known-writable CFG keys).
 
-        Returns True only when the device's routed-action response has
-        ``out[0].r == 0`` — i.e. the device actually accepted the
-        write. Pre-fix code only checked the top-level HTTP code which
-        is always 0 even when the device rejected the action.
+        Returns a :class:`WriteResult` (P2 Task 5 — was a bool). ``accepted``
+        is True only when the device's routed-action response has
+        ``out[0].r == 0`` — i.e. the device actually accepted the write.
+        Pre-fix code only checked the top-level HTTP code which is always 0
+        even when the device rejected the action. Outcome mapping:
+
+        - ``out[0].r == 0``            → delivered + accepted (code 0).
+        - ``out[0].r != 0``            → delivered + rejected (code=r,
+          msg from msg/e). r=-3 is the device's "no setter for this key at
+          this address" verdict — see ``inventory.yaml`` § READ/WRITE
+          SURFACES note 1.
+        - result is None               → not delivered (80001 / transport;
+          code = ``_last_send_error_code``).
+        - malformed response (non-dict / HTTP code != 0 / missing ``out``)
+          → not delivered, no fabricated device code. Unlike
+          ``routed_action`` (which treats a no-verdict envelope as accepted
+          for *actions*), a **setting** write with no readable verdict must
+          stay falsy: the caller reverts its optimistic state and the user
+          retries — the pre-WriteResult behaviour, now with an honest
+          retryable message.
 
         Wire-format coverage on g2408 (confirmed live 2026-05-09):
 
@@ -685,8 +701,8 @@ class _FetchersMixin:
         - BAT (list[6] mixed), REC (list[9] mixed), LANG (list[2] mixed)
 
         For unsupported shapes the device returns r=-3 and set_cfg
-        returns False — the entity-layer caller's optimistic update
-        is reverted.
+        returns a rejected WriteResult — the entity-layer caller's
+        optimistic update is reverted.
 
         Source: probe `/tmp/probe_cfg_writes.py` 2026-05-09; full
         evidence in docs/research/wire-captures/cfg-write-regression-2026-05-09.md
@@ -697,19 +713,25 @@ class _FetchersMixin:
         else:
             d_payload = {"value": value}
         payload = {"m": "s", "t": key, "d": d_payload}
+        self._last_send_error_code = None
         try:
             result = self.action(siid=2, aiid=50, parameters=[payload])
             if result is None:
                 _LOGGER.warning(
                     "set_cfg %s=%r: cloud returned None (80001?)", key, value
                 )
-                return False
+                code = self._last_send_error_code
+                return WriteResult(
+                    delivered=False, accepted=False, code=code,
+                    msg="not delivered (80001 — mower asleep/unreachable)"
+                    if code == 80001 else "not delivered (transport)",
+                )
             if not isinstance(result, dict):
                 _LOGGER.warning(
                     "set_cfg %s=%r: unexpected response shape: %r",
                     key, value, result,
                 )
-                return False
+                return WriteResult.not_delivered("unexpected response shape")
             # HTTP-layer code = always 0 on a reachable cloud; the actual
             # action result is in `out[0].r`.
             top_code = result.get("code")
@@ -717,14 +739,17 @@ class _FetchersMixin:
                 _LOGGER.warning(
                     "set_cfg %s=%r: cloud HTTP error code %s", key, value, top_code,
                 )
-                return False
+                return WriteResult(
+                    delivered=False, accepted=False, code=top_code,
+                    msg=f"cloud HTTP error code {top_code}",
+                )
             outs = result.get("out") or []
             if not outs or not isinstance(outs[0], dict):
                 _LOGGER.warning(
                     "set_cfg %s=%r: missing or malformed `out` in response: %r",
                     key, value, result,
                 )
-                return False
+                return WriteResult.not_delivered("no device verdict in response")
             r = outs[0].get("r")
             if r != 0:
                 msg = outs[0].get("msg") or outs[0].get("e") or ""
@@ -734,13 +759,13 @@ class _FetchersMixin:
                     "docs/research/wire-captures/cfg-write-regression-2026-05-09.md",
                     key, value, r, msg,
                 )
-                return False
-            return True
+                return WriteResult(delivered=True, accepted=False, code=r, msg=msg)
+            return WriteResult(delivered=True, accepted=True, code=0)
         except Exception as ex:
             _LOGGER.warning("set_cfg %s=%r failed: %s", key, value, ex)
-            return False
+            return WriteResult.not_delivered(str(ex))
 
-    def set_pre(self, pre_array: list) -> bool:
+    def set_pre(self, pre_array: list) -> WriteResult:
         """Write the full PRE preferences array.
 
         Delegates to ``protocol.cfg_action.set_pre`` which constructs the
@@ -751,12 +776,14 @@ class _FetchersMixin:
         current PRE array via fetch_cfg(), mutate the target element, and
         pass the full updated array here.
 
-        Returns True only when the device's routed-action response has
-        ``out[0].r == 0``. The HTTP-layer ``code`` is always 0 on a
+        Returns a :class:`WriteResult` (P2 Task 5 — was a bool) whose
+        ``accepted`` is True only when the device's routed-action response
+        has ``out[0].r == 0``. The HTTP-layer ``code`` is always 0 on a
         reachable cloud even when the device rejects the action, so a
         shallow ``result is not None`` check reports false success — the
         same bug class as the pre-v1.0.2a9 ``set_cfg``. We parse
-        ``out[0].r`` here just like ``set_cfg`` does.
+        ``out[0].r`` here just like ``set_cfg`` does, with the same
+        outcome mapping (see ``set_cfg``'s docstring).
 
         Prior r=-3 verdict debunked (2026-06-09 app MITM capture): the
         original code wrapped the array as ``d:{"value": pre_array}``, and
@@ -770,26 +797,35 @@ class _FetchersMixin:
         """
         from ..protocol import cfg_action  # type: ignore[import]
 
+        self._last_send_error_code = None
         try:
             result = cfg_action.set_pre(self.action, pre_array)
             if result is None:
                 _LOGGER.warning("set_pre: cloud returned None (80001?)")
-                return False
+                code = self._last_send_error_code
+                return WriteResult(
+                    delivered=False, accepted=False, code=code,
+                    msg="not delivered (80001 — mower asleep/unreachable)"
+                    if code == 80001 else "not delivered (transport)",
+                )
             if not isinstance(result, dict):
                 _LOGGER.warning(
                     "set_pre: unexpected response shape: %r", result
                 )
-                return False
+                return WriteResult.not_delivered("unexpected response shape")
             top_code = result.get("code")
             if top_code is not None and top_code != 0:
                 _LOGGER.warning("set_pre: cloud HTTP error code %s", top_code)
-                return False
+                return WriteResult(
+                    delivered=False, accepted=False, code=top_code,
+                    msg=f"cloud HTTP error code {top_code}",
+                )
             outs = result.get("out") or []
             if not outs or not isinstance(outs[0], dict):
                 _LOGGER.warning(
                     "set_pre: missing or malformed `out` in response: %r", result
                 )
-                return False
+                return WriteResult.not_delivered("no device verdict in response")
             r = outs[0].get("r")
             if r != 0:
                 msg = outs[0].get("msg") or outs[0].get("e") or ""
@@ -798,14 +834,14 @@ class _FetchersMixin:
                     "the app's bare array; non-zero r is a genuine device rejection",
                     r, msg,
                 )
-                return False
-            return True
+                return WriteResult(delivered=True, accepted=False, code=r, msg=msg)
+            return WriteResult(delivered=True, accepted=True, code=0)
         except ValueError as ex:
             _LOGGER.warning("set_pre: invalid array: %s", ex)
-            return False
+            return WriteResult.not_delivered(f"invalid PRE array: {ex}")
         except Exception as ex:
             _LOGGER.warning("set_pre failed: %s", ex)
-            return False
+            return WriteResult.not_delivered(str(ex))
 
     def get_pre(self, idx: int, region: int) -> list | None:
         """Scoped PRE read for map `idx`, zone `region`. None on failure."""

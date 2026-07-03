@@ -2,8 +2,8 @@
 
 set_pre delegates to protocol.cfg_action.set_pre (which builds the
 ``{m:'s', t:'PRE', d:<bare array>}`` routed-action envelope) and then
-inspects ``out[0].r`` — returning True only when the device accepted the
-write (r=0), mirroring set_cfg. The HTTP-layer ``code`` is always 0 on a
+inspects ``out[0].r`` — returning a WriteResult accepted only when the
+device accepted the write (r=0), mirroring set_cfg (P2 Task 5). The HTTP-layer ``code`` is always 0 on a
 reachable cloud even when the device rejects, so a shallow non-None check
 would report false success.
 
@@ -34,9 +34,10 @@ _OK = {"code": 0, "out": [{"r": 0}]}
 _REJECTED = {"code": 0, "out": [{"r": -3, "msg": "not supported"}]}
 
 
-def test_set_pre_returns_true_on_r0():
+def test_set_pre_accepted_on_r0():
     client = _make_client(_OK)
-    assert client.set_pre(_PRE) is True
+    result = client.set_pre(_PRE)
+    assert result.accepted is True and result.delivered is True and result.code == 0
     # cfg_action.set_pre calls action(siid, aiid, [payload]) positionally.
     args = client.action.call_args.args
     payload = args[2][0]
@@ -44,23 +45,27 @@ def test_set_pre_returns_true_on_r0():
     assert payload == {"m": "s", "t": "PRE", "d": _PRE}
 
 
-def test_set_pre_returns_false_when_device_rejects():
-    """out[0].r=-3 → set_pre returns False (surfaces rejection to caller)."""
+def test_set_pre_rejection_carries_device_code():
+    """out[0].r=-3 → delivered-but-rejected WriteResult with code=-3."""
     client = _make_client(_REJECTED)
-    assert client.set_pre(_PRE) is False
+    result = client.set_pre(_PRE)
+    assert bool(result) is False
+    assert result.delivered is True and result.accepted is False
+    assert result.code == -3 and result.msg == "not supported"
 
 
-def test_set_pre_returns_false_when_action_returns_none():
-    """80001 / send-timeout surfaces as action() == None → False."""
+def test_set_pre_none_response_is_not_delivered():
+    """80001 / send-timeout surfaces as action() == None → not delivered."""
     client = _make_client(None)
-    assert client.set_pre(_PRE) is False
+    result = client.set_pre(_PRE)
+    assert bool(result) is False and result.delivered is False
 
 
-def test_set_pre_returns_false_on_malformed_out():
-    client = _make_client({"code": 0, "out": []})
-    assert client.set_pre(_PRE) is False
+def test_set_pre_malformed_out_is_falsy_not_delivered():
+    result = _make_client({"code": 0, "out": []}).set_pre(_PRE)
+    assert bool(result) is False and result.delivered is False
 
 
-def test_set_pre_returns_false_on_http_error_code():
-    client = _make_client({"code": 5, "out": [{"r": 0}]})
-    assert client.set_pre(_PRE) is False
+def test_set_pre_http_error_code_is_falsy():
+    result = _make_client({"code": 5, "out": [{"r": 0}]}).set_pre(_PRE)
+    assert bool(result) is False and result.code == 5
