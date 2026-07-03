@@ -117,9 +117,9 @@ class _OssMixin:
     ) -> "list[dict]":
         """Return metadata for every wifimap object in the cloud, sorted newest-first.
 
-        Calls the same OBJ probe as ``fetch_wifi_map`` but returns ALL objects
-        (one per map, typically), not just the one that matches a given map_id.
-        Each returned dict has:
+        Calls the ``type: wifimap`` OBJ probe and returns ALL objects (one per
+        map, typically), unlike the deleted single-map ``fetch_wifi_map`` this
+        replaced (see the tombstone comment above). Each returned dict has:
             {
                 "object_name": str,
                 "unix_ts": int,       # parsed from filename; 0 if not parseable

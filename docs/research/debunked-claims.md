@@ -42,7 +42,8 @@ Known-reversal ERAS for archaeology (walked by Track 1, 2026-07-02; per-era verd
   in P1 (refactor-v2/p1-dead-code, 2026-07-02). Per-map entities
   static-at-setup is DESIGN, not residue (CLAUDE.md).
 - pre-catalog fault surfacing era — code clean (D4); doc remnants: protocol.md §6
-  (T1-1/D17) + shipped in-tree specs (T1-9).
+  (T1-1/D17) + shipped in-tree specs (T1-9) — the specs remnant was resolved by
+  the P1.6 docs-lifecycle move (20 specs/plans → OLD mirror, 2026-07-02).
 - pre-CRUISED patrol era — code clean; current code documents CRUISE.0 read-back
   lag correctly (D8).
 - LOCN endpoint era — refresher dead; annotation remnant (T1-7/D18) fixed in
@@ -52,7 +53,8 @@ Known-reversal ERAS for archaeology (walked by Track 1, 2026-07-02; per-era verd
   stale row in CLAUDE.md's cadence table was removed in P1
   (refactor-v2/p1-dead-code, 2026-07-02) (T1-3).
 - BT-framing era — no code transport remnants; doc remnants: protocol.md §1
-  (T1-2/D1/D15) + one comment (_property_apply.py:108, T1-12).
+  (T1-2/D1/D15) + one comment (_property_apply.py:70-71, T1-12) — corrected in
+  P1 (refactor-v2/p1-dead-code, 2026-07-02).
 - entity-validation-matrix era — matrix retired to OLD/ 2026-05-31; the stale
   citation at cloud_client/_oss.py:208 was removed along with its containing
   dead code in P1 (refactor-v2/p1-dead-code, 2026-07-02) (T1-4/T1-14).

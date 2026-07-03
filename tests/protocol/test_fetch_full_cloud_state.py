@@ -75,13 +75,11 @@ def test_fetch_full_cloud_state_returns_none_on_total_failure():
     assert cs is None
 
 
-def test_fetch_full_cloud_state_does_not_probe_locn_or_dock():
-    """LOCN/DOCK are owned by the 60s timers; the full-state fetch must
-    not double-fetch them."""
+def test_fetch_full_cloud_state_does_not_probe_dock():
+    """DOCK is owned by the 60s timer; the full-state fetch must
+    not double-fetch it."""
     client = _make_client(REAL_BATCH, {"VER": 461})
-    # Attach spies even though _make_client no longer wires these.
-    client.fetch_locn = MagicMock(return_value={"pos": [1.0, 2.0]})
+    # Attach a spy even though _make_client no longer wires this.
     client.fetch_dock = MagicMock(return_value={"dock": {"x": 1}})
     client.fetch_full_cloud_state()
-    client.fetch_locn.assert_not_called()
     client.fetch_dock.assert_not_called()

@@ -214,7 +214,6 @@ The `MowerState` dataclass (`custom_components/dreame_a2_mower/mower/state.py`) 
 | `wifi_ssid` | MowerState | no | None | persisted CFG.NET.current | None (Unknown) | CFG.NET poll | — |
 | `wifi_ip` | MowerState | no | None | persisted CFG.NET.list | None (Unknown) | CFG.NET poll | — |
 | `cloud_connected` | MowerState | no | None | True | None (Unknown) | s6p3[0] | YELLOW — should be True idle |
-| `wifi_map_data` | MowerState | no | None | last cached dict | None | cloud_client.fetch_wifi_map | — |
 
 ### Device metadata
 

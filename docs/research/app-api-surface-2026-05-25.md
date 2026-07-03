@@ -1,5 +1,13 @@
 # Dreame app — API surface vs our integration (2026-05-25)
 
+> **Status — DATED EVIDENCE DOC, NOT CURRENT TRUTH (Tier 3).** This is a
+> point-in-time capture from 2026-05-25; it is cited as evidence, not read as
+> current fact. In particular, its Recommendation section proposes changes to
+> `_poll_slow_properties`, which has since been deleted (dead code since
+> 2026-05-26, commit d7f06555 — see `docs/research/debunked-claims.md` §
+> `_poll_slow_properties` era). For current state check
+> `inventory.yaml` / `docs/research/cloud-write-reference.md` first.
+
 Goal: mine the shipped Android apps to **corroborate and extend** our MQTT +
 cloud-API understanding, and look for device-data paths less prone to the
 g2408 `80001` ("device unreachable via cloud relay") error.
