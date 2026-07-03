@@ -111,7 +111,13 @@ async def async_setup_entry(
             DreameA2SharedMessagesSensor(coordinator),
         ]
     )
-    for map_id in sorted(coordinator.cloud_state.maps_by_id.keys()):
+    # Defense-in-depth (T3-2 / R-5): cloud_state is None if the coordinator's
+    # first cloud fetch failed (that path now raises ConfigEntryNotReady
+    # before platforms are forwarded — see coordinator/_cloud_state.py:
+    # _refresh_cloud_state_or_raise) or on a mid-life reload race. Either way
+    # this must build zero per-map entities, not crash.
+    maps_by_id = coordinator.cloud_state.maps_by_id if coordinator.cloud_state else {}
+    for map_id in sorted(maps_by_id.keys()):
         entities.extend([
             DreameA2MapNameSensor(coordinator, map_id=map_id),
             DreameA2MapAreaSensor(coordinator, map_id=map_id),

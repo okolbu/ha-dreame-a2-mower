@@ -8,6 +8,7 @@ import dataclasses
 import time
 from typing import TYPE_CHECKING, Any
 
+from homeassistant.exceptions import ConfigEntryNotReady
 
 from ..const import (
     LOGGER,
@@ -89,6 +90,32 @@ class _CloudStateMixin:
         update_listeners = getattr(self, "async_update_listeners", None)
         if callable(update_listeners):
             update_listeners()
+
+    async def _refresh_cloud_state_or_raise(self) -> None:
+        """First-refresh variant of `_refresh_cloud_state` — hard-fails setup.
+
+        Called exactly once, from `_async_update_data`'s first-refresh path
+        (coordinator/_core.py). Routine periodic refreshes call
+        `_refresh_cloud_state()` directly and deliberately tolerate a failed
+        fetch — `self.cloud_state` is left unchanged (the frozen-CloudState /
+        empty-batch design; see the module docstring and `CLAUDE.md` §
+        "Refresher cadence"). That tolerance is correct for a mower that's
+        already running with a populated `cloud_state`.
+
+        But at SETUP time, if the very first fetch never lands, `cloud_state`
+        stays `None` and every per-map platform loop
+        (`coordinator.cloud_state.maps_by_id`) crashes with `AttributeError`
+        the moment `async_forward_entry_setups` runs (T3-2 / R-5). Raising
+        `ConfigEntryNotReady` here tells Home Assistant to retry the whole
+        entry setup with backoff instead of half-loading it with zero
+        per-map entities and a bunch of platform-setup tracebacks.
+        """
+        await self._refresh_cloud_state()
+        if self.cloud_state is None:
+            raise ConfigEntryNotReady(
+                "Dreame A2 Mower: initial cloud-state fetch failed "
+                "(device/cloud API unreachable); Home Assistant will retry."
+            )
 
     def _apply_pending_cruise_overlay(self, cruise_by_map: dict) -> None:
         """Overlay optimistic patrol-config writes onto a fresh CRUISE.0 poll.

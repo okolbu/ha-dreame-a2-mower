@@ -624,7 +624,12 @@ class _CoreMixin:
                     self.hass, _periodic_cloud_state, timedelta(minutes=2)
                 )
             )
-            await self._refresh_cloud_state()
+            # First-refresh contract (T3-2 / R-5): unlike the periodic timer
+            # above (which tolerates a failed fetch), a failure on THIS call
+            # raises ConfigEntryNotReady so HA retries setup instead of
+            # forwarding platforms with cloud_state still None. See
+            # _cloud_state.py:_refresh_cloud_state_or_raise.
+            await self._refresh_cloud_state_or_raise()
 
             # Cloud-notification baseline (2026-05-26). One-shot, silent —
             # seeds _notif_seen_ids with whatever the cloud's

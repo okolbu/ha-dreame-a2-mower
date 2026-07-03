@@ -92,7 +92,13 @@ async def async_setup_entry(
     )
     entities.append(DreameA2WorkLogSelect(coordinator))
     entities.append(DreameA2LidarArchiveSelect(coordinator))
-    for map_id in sorted(coordinator.cloud_state.maps_by_id.keys()):
+    # Defense-in-depth (T3-2 / R-5): cloud_state is None if the coordinator's
+    # first cloud fetch failed (that path now raises ConfigEntryNotReady
+    # before platforms are forwarded — see coordinator/_cloud_state.py:
+    # _refresh_cloud_state_or_raise) or on a mid-life reload race. Either way
+    # this must build zero per-map entities, not crash.
+    maps_by_id = coordinator.cloud_state.maps_by_id if coordinator.cloud_state else {}
+    for map_id in sorted(maps_by_id.keys()):
         entities.extend([
             DreameA2MowingModeSelect(coordinator, map_id=map_id),
             DreameA2ZoneSelect(coordinator, map_id=map_id),
@@ -102,7 +108,7 @@ async def async_setup_entry(
         ])
     entities.append(DreameA2ActiveMapSelect(coordinator))
     # Per-map SETTINGS selects (v1.0.10a7 — migrated from mower-scoped).
-    for map_id in sorted(coordinator.cloud_state.maps_by_id.keys()):
+    for map_id in sorted(maps_by_id.keys()):
         entities.extend([
             DreameA2PerMapMowingDirectionSelect(coordinator, map_id=map_id),
             DreameA2PerMapMowingDirectionModeSelect(coordinator, map_id=map_id),

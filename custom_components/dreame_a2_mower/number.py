@@ -194,7 +194,13 @@ async def async_setup_entry(
     #   - Old mower-scoped versions (DreameA2*Number subclasses below)
     #     became orphan unique_ids after this migration; users must
     #     delete them from the entity registry once on upgrade.
-    for map_id in sorted(coordinator.cloud_state.maps_by_id.keys()):
+    # Defense-in-depth (T3-2 / R-5): cloud_state is None if the coordinator's
+    # first cloud fetch failed (that path now raises ConfigEntryNotReady
+    # before platforms are forwarded — see coordinator/_cloud_state.py:
+    # _refresh_cloud_state_or_raise) or on a mid-life reload race. Either way
+    # this must build zero per-map entities, not crash.
+    maps_by_id = coordinator.cloud_state.maps_by_id if coordinator.cloud_state else {}
+    for map_id in sorted(maps_by_id.keys()):
         entities.extend([
             DreameA2PerMapMowingHeightNumber(coordinator, map_id=map_id),
             DreameA2PerMapCutterPositionNumber(coordinator, map_id=map_id),

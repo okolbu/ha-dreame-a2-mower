@@ -535,7 +535,6 @@ def _make_ha_stub() -> None:
 
     # homeassistant.exceptions
     exc_mod = types.ModuleType("homeassistant.exceptions")
-    exc_mod.ConfigEntryNotReady = Exception  # type: ignore[attr-defined]
 
     class _HomeAssistantError(Exception):
         """Stub mirroring homeassistant.exceptions.HomeAssistantError."""
@@ -547,8 +546,21 @@ def _make_ha_stub() -> None:
         that relationship so `except HomeAssistantError` catches both.
         """
 
+    class _ConfigEntryNotReady(_HomeAssistantError):
+        """Stub mirroring homeassistant.exceptions.ConfigEntryNotReady.
+
+        Real HA: raising this from `async_setup_entry` (or from a coordinator's
+        first `_async_update_data` via `async_config_entry_first_refresh`)
+        tells the config-entry setup manager to retry with backoff instead of
+        marking the entry failed. Kept as a DISTINCT subclass (not aliased to
+        bare `Exception`) so `pytest.raises(ConfigEntryNotReady)` can't be
+        satisfied by an unrelated bug like `AttributeError` — see
+        tests/integration/test_setup_cloud_blip.py (P2 Task 2 / T3-2 / R-5).
+        """
+
     exc_mod.HomeAssistantError = _HomeAssistantError  # type: ignore[attr-defined]
     exc_mod.ServiceValidationError = _ServiceValidationError  # type: ignore[attr-defined]
+    exc_mod.ConfigEntryNotReady = _ConfigEntryNotReady  # type: ignore[attr-defined]
     sys.modules["homeassistant.exceptions"] = exc_mod
 
 
