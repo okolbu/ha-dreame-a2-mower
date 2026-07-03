@@ -209,6 +209,7 @@ async def test_start_point_patrol_rejection_raises(monkeypatch):
         monkeypatch, start_point_patrol=AsyncMock(return_value=_REJECTED)
     )
     coord._active_map_id = 0
+    coord.active_map_id = 0
     call = SimpleNamespace(hass=SimpleNamespace(), data={"point_ids": [1, 2]})
     with pytest.raises(ServiceValidationError):
         await services._handle_start_point_patrol(call)
@@ -221,6 +222,7 @@ async def test_start_edge_patrol_rejection_raises(monkeypatch):
         monkeypatch, start_edge_patrol=AsyncMock(return_value=_REJECTED)
     )
     coord._active_map_id = 0
+    coord.active_map_id = 0
     call = SimpleNamespace(hass=SimpleNamespace(), data={"contour_ids": [[1, 0]]})
     with pytest.raises(ServiceValidationError):
         await services._handle_start_edge_patrol(call)

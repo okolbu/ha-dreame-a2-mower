@@ -71,6 +71,7 @@ def test_diagnostics_dump_top_level_sections():
     cloud = MagicMock()
     cloud.endpoint_log = {"routed_action_op=100": "accepted"}
     coordinator._cloud = cloud
+    coordinator.cloud = cloud
 
     hass = MagicMock()
     entry = MagicMock()

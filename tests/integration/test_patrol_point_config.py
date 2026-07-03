@@ -128,6 +128,7 @@ async def test_set_patrol_point_config_handler_calls_coordinator(monkeypatch):
     coord = SimpleNamespace(
         write_patrol_point_config=AsyncMock(return_value=_ACCEPTED),
         _active_map_id=0,
+        active_map_id=0,
     )
     monkeypatch.setattr(svc, "_coordinator_from_call", lambda hass, call: coord)
 
@@ -151,6 +152,7 @@ async def test_set_patrol_point_config_handler_uses_explicit_map_id(monkeypatch)
     coord = SimpleNamespace(
         write_patrol_point_config=AsyncMock(return_value=_ACCEPTED),
         _active_map_id=0,
+        active_map_id=0,
     )
     monkeypatch.setattr(svc, "_coordinator_from_call", lambda hass, call: coord)
 
@@ -174,6 +176,7 @@ async def test_set_patrol_point_config_handler_raises_on_device_rejection(monkey
     coord = SimpleNamespace(
         write_patrol_point_config=AsyncMock(return_value=_REJECTED),
         _active_map_id=0,
+        active_map_id=0,
     )
     monkeypatch.setattr(svc, "_coordinator_from_call", lambda hass, call: coord)
 
@@ -194,6 +197,7 @@ async def test_set_patrol_point_config_handler_raises_on_bad_cycles(monkeypatch)
     coord = SimpleNamespace(
         write_patrol_point_config=AsyncMock(side_effect=ValueError("cycles must be 1, 2 or 3")),
         _active_map_id=0,
+        active_map_id=0,
     )
     monkeypatch.setattr(svc, "_coordinator_from_call", lambda hass, call: coord)
 

@@ -56,6 +56,7 @@ async def test_create_spot_service(monkeypatch):
 async def test_create_spot_service_defaults_active_map(monkeypatch):
     coord = _patch_coord(monkeypatch, create_spot=AsyncMock(return_value=_WR_ACCEPTED))
     coord._active_map_id = 2
+    coord.active_map_id = 2
     pts = [[1, 1], [3, 1], [3, 3], [1, 3]]
     call = SimpleNamespace(hass=SimpleNamespace(), data={"points": pts, "object_id": 9})
     await services._handle_create_spot(call)
@@ -75,6 +76,7 @@ async def test_create_maintenance_point_service(monkeypatch):
 async def test_create_maintenance_point_service_defaults(monkeypatch):
     coord = _patch_coord(monkeypatch, create_maintenance_point=AsyncMock(return_value=_WR_ACCEPTED))
     coord._active_map_id = 1
+    coord.active_map_id = 1
     call = SimpleNamespace(hass=SimpleNamespace(), data={"x": 4.0, "y": 5.0})
     await services._handle_create_maintenance_point(call)
     coord.create_maintenance_point.assert_awaited_once_with(1, 4.0, 5.0, heading=0.0, object_id=-1)

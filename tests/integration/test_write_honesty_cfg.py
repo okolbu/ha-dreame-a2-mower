@@ -334,6 +334,7 @@ def _direction_select(write_result):
     # test_action_mode_select.py._make_coord convention). Inert on the
     # rejection test below since the raise happens before this is reached.
     coord._render_base = AsyncMock()
+    coord.render_base = coord._render_base
     ent = object.__new__(DreameA2PerMapMowingDirectionSelect)
     ent.coordinator = coord
     ent._map_id = 0

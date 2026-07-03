@@ -103,9 +103,10 @@ async def test_start_point_patrol_defaults_map_id_to_zero_when_absent():
     import homeassistant.core as ha_core
 
     hass, coord = _make_hass_with_coordinator()
-    # No _active_map_id attribute on the MagicMock → getattr returns MagicMock falsy
-    # We set it explicitly to None to test the fallback path.
+    # No active_map_id attribute on the MagicMock → auto-mock is truthy, not
+    # the None the fallback path needs. Set it explicitly to test the fallback.
     coord._active_map_id = None
+    coord.active_map_id = None
     await async_register_services(hass)
 
     call = ha_core.ServiceCall(
@@ -137,6 +138,7 @@ async def test_start_edge_patrol_defaults_map_id_to_zero_when_absent():
 
     hass, coord = _make_hass_with_coordinator()
     coord._active_map_id = None
+    coord.active_map_id = None
     await async_register_services(hass)
 
     call = ha_core.ServiceCall(

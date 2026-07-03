@@ -58,7 +58,15 @@ def _ordering_coordinator() -> tuple[SimpleNamespace, _FakeHass]:
     """A coordinator + hass pair that records mqtt/cloud disconnect order."""
     mqtt = MagicMock()
     cloud = MagicMock()
-    coordinator = SimpleNamespace(_mqtt=mqtt, _cloud=cloud, _novel_log_handler=None)
+    coordinator = SimpleNamespace(
+        _mqtt=mqtt, _cloud=cloud, _novel_log_handler=None,
+        # P3.2: __init__.py now reads coordinator.mqtt/.cloud/.novel_log_handler
+        # (typed accessors on the real class) instead of getattr on the
+        # private attrs. This SimpleNamespace stand-in isn't a real
+        # coordinator instance, so it must carry both spellings.
+        mqtt=mqtt, cloud=cloud, novel_log_handler=None,
+        cancel_lifecycle_background_tasks=None,
+    )
     hass = _FakeHass(coordinator)
     mqtt.disconnect.side_effect = lambda: hass.order.append("mqtt")
     cloud.disconnect.side_effect = lambda: hass.order.append("cloud")
@@ -68,7 +76,11 @@ def _ordering_coordinator() -> tuple[SimpleNamespace, _FakeHass]:
 def test_async_unload_disconnects_both_transports() -> None:
     mqtt = MagicMock()
     cloud = MagicMock()
-    coordinator = SimpleNamespace(_mqtt=mqtt, _cloud=cloud, _novel_log_handler=None)
+    coordinator = SimpleNamespace(
+        _mqtt=mqtt, _cloud=cloud, _novel_log_handler=None,
+        mqtt=mqtt, cloud=cloud, novel_log_handler=None,
+        cancel_lifecycle_background_tasks=None,
+    )
     hass = _FakeHass(coordinator)
     entry = SimpleNamespace(entry_id="entry-1")
 
@@ -85,7 +97,11 @@ def test_async_unload_disconnects_both_transports() -> None:
 def test_async_unload_guards_missing_cloud() -> None:
     """A coordinator without a _cloud attr must not blow up the unload."""
     mqtt = MagicMock()
-    coordinator = SimpleNamespace(_mqtt=mqtt, _novel_log_handler=None)
+    coordinator = SimpleNamespace(
+        _mqtt=mqtt, _novel_log_handler=None,
+        mqtt=mqtt, cloud=None, novel_log_handler=None,
+        cancel_lifecycle_background_tasks=None,
+    )
     hass = _FakeHass(coordinator)
     entry = SimpleNamespace(entry_id="entry-1")
 
@@ -118,7 +134,11 @@ def test_async_unload_platform_failure_leaves_transports_connected() -> None:
     must leave the entry in hass.data (still "loaded") so HA can retry."""
     mqtt = MagicMock()
     cloud = MagicMock()
-    coordinator = SimpleNamespace(_mqtt=mqtt, _cloud=cloud, _novel_log_handler=None)
+    coordinator = SimpleNamespace(
+        _mqtt=mqtt, _cloud=cloud, _novel_log_handler=None,
+        mqtt=mqtt, cloud=cloud, novel_log_handler=None,
+        cancel_lifecycle_background_tasks=None,
+    )
     hass = _FakeHass(coordinator, unload_platforms_ok=False)
     entry = SimpleNamespace(entry_id="entry-1")
 
@@ -146,6 +166,10 @@ def test_async_unload_cancels_background_tasks() -> None:
         _cloud=cloud,
         _novel_log_handler=None,
         _cancel_lifecycle_background_tasks=cancel_spy,
+        mqtt=mqtt,
+        cloud=cloud,
+        novel_log_handler=None,
+        cancel_lifecycle_background_tasks=cancel_spy,
     )
     hass = _FakeHass(coordinator)
     entry = SimpleNamespace(entry_id="entry-1")
@@ -168,6 +192,10 @@ def test_async_unload_cancels_background_tasks_even_when_platform_unload_fails()
         _cloud=cloud,
         _novel_log_handler=None,
         _cancel_lifecycle_background_tasks=cancel_spy,
+        mqtt=mqtt,
+        cloud=cloud,
+        novel_log_handler=None,
+        cancel_lifecycle_background_tasks=cancel_spy,
     )
     hass = _FakeHass(coordinator, unload_platforms_ok=False)
     entry = SimpleNamespace(entry_id="entry-1")
@@ -183,7 +211,11 @@ def test_async_unload_guards_missing_background_canceller() -> None:
     """A coordinator built before this fix (no _cancel_lifecycle_background_tasks
     attribute) must not blow up the unload."""
     mqtt = MagicMock()
-    coordinator = SimpleNamespace(_mqtt=mqtt, _cloud=None, _novel_log_handler=None)
+    coordinator = SimpleNamespace(
+        _mqtt=mqtt, _cloud=None, _novel_log_handler=None,
+        mqtt=mqtt, cloud=None, novel_log_handler=None,
+        cancel_lifecycle_background_tasks=None,
+    )
     hass = _FakeHass(coordinator)
     entry = SimpleNamespace(entry_id="entry-1")
 

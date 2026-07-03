@@ -53,6 +53,7 @@ def _make_map_coord(*, settings_by_map=None):
     # attributes aren't awaitable, so this must be an AsyncMock (mirrors
     # test_action_mode_select.py's _make_coord).
     coord._render_base = AsyncMock()
+    coord.render_base = coord._render_base
     return coord
 
 
@@ -167,6 +168,7 @@ def test_action_mode_select_option_performs_normal_action():
 
     coord = _make_mower_coord()
     coord._render_base = AsyncMock()
+    coord.render_base = coord._render_base
 
     captured: list[MowerState] = []
 

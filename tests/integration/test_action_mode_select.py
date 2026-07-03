@@ -42,6 +42,7 @@ class TestDreameA2ActionModeSelect:
         live-preview PNG reflects the change immediately."""
         coord = _make_coord(action_mode=ActionMode.ALL_AREAS)
         coord._render_base = AsyncMock()
+        coord.render_base = coord._render_base
         ent = DreameA2ActionModeSelect(coord)
         ent.hass = MagicMock()
 
@@ -61,6 +62,7 @@ class TestDreameA2ActionModeSelect:
             call_order.append("render")
 
         coord._render_base = _fake_render
+        coord.render_base = coord._render_base
         coord.async_update_listeners = MagicMock(
             side_effect=lambda: call_order.append("broadcast")
         )
@@ -89,6 +91,7 @@ class TestDreameA2ActionModeSelect:
 
         coord.async_set_updated_data.side_effect = _capture
         coord._render_base = AsyncMock()
+        coord.render_base = coord._render_base
 
         ent = DreameA2ActionModeSelect(coord)
         ent.hass = MagicMock()
@@ -111,6 +114,7 @@ class TestDreameA2ActionModeSelect:
 
         coord = _make_coord(action_mode=ActionMode.ALL_AREAS)
         coord._render_base = AsyncMock()
+        coord.render_base = coord._render_base
 
         ent = DreameA2ActionModeSelect(coord)
         ent.hass = MagicMock()
@@ -140,6 +144,7 @@ class TestDreameA2ActionModeSelect:
 
         coord = _make_coord(action_mode=ActionMode.EDGE)
         coord._render_base = AsyncMock()
+        coord.render_base = coord._render_base
 
         ent = DreameA2ActionModeSelect(coord)
         ent.hass = MagicMock()

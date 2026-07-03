@@ -36,6 +36,19 @@ def _make_coord(tmp_path, *, mow_session, markers):
             # Minimal photo archive stub (archive never called when get_device_file→None)
             self._photo_archive = types.SimpleNamespace(archive=lambda **k: None)
 
+        # P3.2: entities/sensor/device.py's obstacle-marker helpers now read
+        # the typed `coord.obstacle_markers` / `coord.obstacle_marker_log`
+        # accessors (coordinator/_core.py) instead of string getattr on the
+        # private attrs. Mirror them here since this stand-in isn't a real
+        # DreameA2MowerCoordinator instance.
+        @property
+        def obstacle_markers(self):
+            return self._obstacle_markers
+
+        @property
+        def obstacle_marker_log(self):
+            return self._obstacle_marker_log
+
     return _Coord()
 
 

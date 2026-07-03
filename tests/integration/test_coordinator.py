@@ -2881,7 +2881,7 @@ def test_api_endpoints_supported_sensor_value_fn_counts_accepted():
         "routed_action_op=999": "rejected_80001",
         "routed_action_op=42": "error",
     }})()
-    coord_like = type("C", (), {"_cloud": cloud_like})()
+    coord_like = type("C", (), {"_cloud": cloud_like, "cloud": property(lambda self: cloud_like)})()
 
     desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "api_endpoints_supported")
     assert desc.value_fn(coord_like) == 2
@@ -2895,7 +2895,7 @@ def test_api_endpoints_supported_sensor_attrs_buckets_by_outcome():
         "routed_action_op=999": "rejected_80001",
         "routed_action_op=42": "error",
     }})()
-    coord_like = type("C", (), {"_cloud": cloud_like})()
+    coord_like = type("C", (), {"_cloud": cloud_like, "cloud": property(lambda self: cloud_like)})()
 
     desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "api_endpoints_supported")
     attrs = desc.extra_state_attributes_fn(coord_like)
@@ -2918,7 +2918,7 @@ def test_api_endpoints_supported_sensor_attrs_surfaces_device_rejected():
         "routed_action_op=102": "device_rejected",
         "routed_action_op=999": "rejected_80001",
     }})()
-    coord_like = type("C", (), {"_cloud": cloud_like})()
+    coord_like = type("C", (), {"_cloud": cloud_like, "cloud": property(lambda self: cloud_like)})()
 
     desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "api_endpoints_supported")
     attrs = desc.extra_state_attributes_fn(coord_like)
@@ -2933,7 +2933,7 @@ def test_api_endpoints_supported_sensor_handles_no_cloud_yet():
     should return 0 / empty attrs rather than crash."""
     from custom_components.dreame_a2_mower.sensor import DIAGNOSTIC_SENSORS
 
-    coord_like = type("C", (), {"_cloud": None})()
+    coord_like = type("C", (), {"_cloud": None, "cloud": property(lambda self: None)})()
 
     desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "api_endpoints_supported")
     assert desc.value_fn(coord_like) == 0

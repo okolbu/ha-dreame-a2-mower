@@ -18,6 +18,7 @@ def _coord_with_archive_entries(*object_names):
         SimpleNamespace(object_name=name, unix_ts=1_700_000_000 + i, map_id=None)
         for i, name in enumerate(object_names)
     ]
+    coord.wifi_archive_index = coord._wifi_archive_index
     coord.set_wifi_render_entry = MagicMock(
         side_effect=lambda m, o: setattr(coord, "_wifi_render_entry", (m, o))
     )

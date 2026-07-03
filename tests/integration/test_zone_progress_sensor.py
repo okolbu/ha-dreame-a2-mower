@@ -18,6 +18,7 @@ def _make_coord(zone_progress, named_zones, active_map_id=0):
     coord = MagicMock()
     coord.entry.entry_id = "fake"
     coord._active_map_id = active_map_id
+    coord.active_map_id = active_map_id
     m = MagicMock()
     m.mowing_zones = tuple(_zone(zid, nm) for zid, nm in named_zones.items())
     coord.cloud_state.maps_by_id = {active_map_id: m}

@@ -10,6 +10,7 @@ def _coord():
     cloud.device_id = "BM169439"
     cloud.host = "eu.iot.dreame.tech"
     coord._cloud = cloud
+    coord.cloud = cloud
     return coord
 
 
@@ -30,6 +31,7 @@ def test_cloud_device_id_sensor_none_when_missing():
     None doesn't bite — the user explicitly enables it if they want it."""
     coord = MagicMock()
     coord._cloud = None
+    coord.cloud = None
     assert _cloud_device_id_descriptor().value_fn(coord) is None
 
 

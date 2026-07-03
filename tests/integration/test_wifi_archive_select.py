@@ -209,6 +209,7 @@ def test_wifi_archive_select_options_labeled():
         ),
     ]
     coord._wifi_render_entry = None
+    coord.wifi_archive_index = coord._wifi_archive_index
 
     sel = DreameA2WifiArchiveSelect(coord)
     sel._rebuild_options()
@@ -237,6 +238,7 @@ def test_wifi_archive_select_unknown_map_labeled():
         ),
     ]
     coord._wifi_render_entry = None
+    coord.wifi_archive_index = coord._wifi_archive_index
 
     sel = DreameA2WifiArchiveSelect(coord)
     sel._rebuild_options()
@@ -260,6 +262,7 @@ def test_wifi_archive_select_on_select_calls_set_wifi_render_entry():
         ),
     ]
     coord._wifi_render_entry = None
+    coord.wifi_archive_index = coord._wifi_archive_index
     coord.set_wifi_render_entry = MagicMock()
 
     sel = DreameA2WifiArchiveSelect(coord)
@@ -295,6 +298,7 @@ def test_wifi_archive_select_labels_always_map_unknown():
         ),
     ]
     coord._wifi_render_entry = None
+    coord.wifi_archive_index = coord._wifi_archive_index
     ent = DreameA2WifiArchiveSelect(coord)
     ent._rebuild_options()
     # Should have 2 entries (not the placeholder), and BOTH start with "[Map ?] ".
@@ -327,6 +331,7 @@ def test_wifi_archive_select_sorts_newest_first():
         ),
     ]
     coord._wifi_render_entry = None
+    coord.wifi_archive_index = coord._wifi_archive_index
     ent = DreameA2WifiArchiveSelect(coord)
     ent._rebuild_options()
     # First option's underlying entry has the newer unix_ts.
@@ -352,6 +357,7 @@ def test_wifi_archive_select_select_option_sets_render_entry_with_map_none():
         ),
     ]
     coord._wifi_render_entry = None
+    coord.wifi_archive_index = coord._wifi_archive_index
     coord.set_wifi_render_entry = MagicMock()
     ent = DreameA2WifiArchiveSelect(coord)
     ent._rebuild_options()

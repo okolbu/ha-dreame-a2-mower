@@ -54,6 +54,7 @@ def _make_entity(coord):
 async def test_accepted_write_triggers_render_base():
     coord = _make_coord()
     coord._render_base = AsyncMock()
+    coord.render_base = coord._render_base
     ent = _make_entity(coord)
 
     with patch(_PATCH_TARGET, new_callable=AsyncMock):
@@ -76,6 +77,7 @@ async def test_accepted_write_broadcasts_after_render():
         call_order.append("write")
 
     coord._render_base = _fake_render
+    coord.render_base = coord._render_base
     coord.async_update_listeners = MagicMock(
         side_effect=lambda: call_order.append("broadcast")
     )
@@ -94,6 +96,7 @@ async def test_rejected_write_does_not_render():
     since nothing changed relative to the pre-write PNG."""
     coord = _make_coord()
     coord._render_base = AsyncMock()
+    coord.render_base = coord._render_base
     ent = _make_entity(coord)
 
     async def _fake_write_raises(*a, **k):

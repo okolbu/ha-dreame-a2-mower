@@ -221,18 +221,34 @@ class _SetupFakeHass:
 
 def _make_failing_coordinator(*, has_mqtt: bool = True, has_cloud: bool = True):
     """A coordinator stand-in whose first refresh raises ConfigEntryNotReady,
-    with optional partially-initialised transports (getattr-guard coverage:
+    with optional partially-initialised transports (accessor-guard coverage:
     a real coordinator could have _mqtt set without _cloud, or vice versa,
-    depending on exactly where _init_cloud/_init_mqtt got to)."""
+    depending on exactly where _init_cloud/_init_mqtt got to).
+
+    P3.2: `__init__.py` now reads `coordinator.mqtt` / `coordinator.cloud`
+    (the typed, hasattr-tolerant accessors on the real coordinator class)
+    instead of `getattr(coordinator, "_mqtt"/"_cloud", None)`. This
+    SimpleNamespace stand-in is not a real coordinator instance, so it
+    can't inherit that property — it must model the accessor's RESOLVED
+    value directly (`None` when the transport was never initialised) via
+    always-present `mqtt`/`cloud` attributes. The private `_mqtt`/`_cloud`
+    attrs stay conditionally absent so the `hasattr(..., "_cloud")`
+    assertions below (pinning the underlying attr's absence) still mean
+    something.
+    """
+    mqtt_mock = MagicMock() if has_mqtt else None
+    cloud_mock = MagicMock() if has_cloud else None
     kwargs = {}
     if has_mqtt:
-        kwargs["_mqtt"] = MagicMock()
+        kwargs["_mqtt"] = mqtt_mock
     if has_cloud:
-        kwargs["_cloud"] = MagicMock()
+        kwargs["_cloud"] = cloud_mock
     coordinator = SimpleNamespace(
         async_config_entry_first_refresh=AsyncMock(
             side_effect=ConfigEntryNotReady("cloud blip")
         ),
+        mqtt=mqtt_mock,
+        cloud=cloud_mock,
         **kwargs,
     )
     return coordinator

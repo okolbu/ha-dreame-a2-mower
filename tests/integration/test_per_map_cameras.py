@@ -29,6 +29,7 @@ def test_wifi_refresh_status_sensor_none_when_no_fetches(coordinator_with_two_ma
 
     coord = coordinator_with_two_maps
     coord._wifi_archive_last_refresh = {}
+    coord.wifi_archive_last_refresh = coord._wifi_archive_last_refresh
     sensor = DreameA2WifiRefreshStatusSensor(coord)
 
     assert sensor.native_value is None
@@ -49,6 +50,7 @@ def test_wifi_refresh_status_sensor_returns_timestamp_after_fetch(
         "fetched": 2,
         "new": 1,
     }
+    coord.wifi_archive_last_refresh = coord._wifi_archive_last_refresh
     sensor = DreameA2WifiRefreshStatusSensor(coord)
 
     assert sensor.native_value == datetime(1970, 1, 1, 0, 16, 40, tzinfo=UTC)
@@ -74,6 +76,7 @@ def test_wifi_refresh_status_sensor_no_data_still_records_timestamp(
         "fetched": 3,
         "new": 0,
     }
+    coord.wifi_archive_last_refresh = coord._wifi_archive_last_refresh
     sensor = DreameA2WifiRefreshStatusSensor(coord)
 
     assert sensor.native_value == datetime(1970, 1, 1, 0, 33, 20, tzinfo=UTC)
@@ -100,6 +103,7 @@ def test_wifi_heatmap_age_sensor_none_when_archive_empty(coordinator_with_two_ma
 
     coord = coordinator_with_two_maps
     coord._wifi_archive_index = []
+    coord.wifi_archive_index = coord._wifi_archive_index
     sensor = DreameA2WifiHeatmapAgeSensor(coord)
     assert sensor.native_value is None
     assert sensor.extra_state_attributes == {}
@@ -121,6 +125,7 @@ def test_wifi_heatmap_age_sensor_reports_seconds_since_newest(
         SimpleNamespace(object_name="old", unix_ts=now - 3600, map_id=0),
         SimpleNamespace(object_name="new", unix_ts=now - 60, map_id=1),
     ]
+    coord.wifi_archive_index = coord._wifi_archive_index
     sensor = DreameA2WifiHeatmapAgeSensor(coord)
     val = sensor.native_value
     assert val is not None
@@ -146,12 +151,14 @@ def test_wifi_heatmap_age_sensor_skips_zero_unix_ts(coordinator_with_two_maps):
         SimpleNamespace(object_name="bad", unix_ts=0, map_id=0),
         SimpleNamespace(object_name="real", unix_ts=now - 120, map_id=1),
     ]
+    coord.wifi_archive_index = coord._wifi_archive_index
     sensor = DreameA2WifiHeatmapAgeSensor(coord)
     assert sensor.native_value is not None
     # All-zero archive returns None.
     coord._wifi_archive_index = [
         SimpleNamespace(object_name="bad", unix_ts=0, map_id=0),
     ]
+    coord.wifi_archive_index = coord._wifi_archive_index
     sensor2 = DreameA2WifiHeatmapAgeSensor(coord)
     assert sensor2.native_value is None
 
@@ -187,6 +194,7 @@ def test_wifi_per_map_camera_resolve_entry_filters_by_map_id(
         SimpleNamespace(object_name="b", unix_ts=2000, map_id=0),
         SimpleNamespace(object_name="c", unix_ts=1500, map_id=1),
     ]
+    coord.wifi_archive_index = coord._wifi_archive_index
     cam0 = DreameA2WifiPerMapCamera(coord, map_id=0)
     cam1 = DreameA2WifiPerMapCamera(coord, map_id=1)
     # Newest map-0 entry should win.
@@ -203,6 +211,7 @@ def test_wifi_per_map_camera_unavailable_when_no_match(coordinator_with_two_maps
         SimpleNamespace(object_name="a", unix_ts=1000, map_id=-1),
         SimpleNamespace(object_name="b", unix_ts=2000, map_id=0),
     ]
+    coord.wifi_archive_index = coord._wifi_archive_index
     cam_no_map = DreameA2WifiPerMapCamera(coord, map_id=5)
     assert cam_no_map._resolve_entry() is None
     assert cam_no_map.available is False

@@ -62,6 +62,7 @@ class TestDreameA2TrailRenderWidthNumber:
         async def _fake_render():
             pass
         coord._render_base = _fake_render
+        coord.render_base = coord._render_base
 
         await ent.async_set_native_value(7.0)
 
@@ -85,6 +86,7 @@ class TestDreameA2TrailRenderWidthNumber:
         async def _fake_render():
             pass
         coord._render_base = _fake_render
+        coord.render_base = coord._render_base
 
         await ent.async_set_native_value(12.9)
         assert captured["state"].trail_render_width == 12  # int() truncates
@@ -95,7 +97,9 @@ class TestDreameA2TrailRenderWidthNumber:
         in-band so it's updated before this call returns."""
         coord = _make_coord(width=24)
         coord._render_base = AsyncMock()
+        coord.render_base = coord._render_base
         coord._picked_session_summary = None
+        coord.picked_session_summary = None
         ent = DreameA2TrailRenderWidthNumber(coord)
         ent.hass = MagicMock()
 
@@ -111,11 +115,13 @@ class TestDreameA2TrailRenderWidthNumber:
         user re-picks the session."""
         coord = _make_coord(width=24)
         coord._render_base = AsyncMock()
+        coord.render_base = coord._render_base
         coord.render_work_log_session = AsyncMock()
         coord._picked_session_summary = {
             "filename": "session-2026-05-19.json",
             "md5": "abc",
         }
+        coord.picked_session_summary = coord._picked_session_summary
         ent = DreameA2TrailRenderWidthNumber(coord)
         ent.hass = MagicMock()
 
@@ -130,8 +136,10 @@ class TestDreameA2TrailRenderWidthNumber:
         """No picked session → no work-log re-render attempt."""
         coord = _make_coord(width=24)
         coord._render_base = AsyncMock()
+        coord.render_base = coord._render_base
         coord.render_work_log_session = AsyncMock()
         coord._picked_session_summary = None
+        coord.picked_session_summary = None
         ent = DreameA2TrailRenderWidthNumber(coord)
         ent.hass = MagicMock()
 
@@ -154,8 +162,10 @@ class TestDreameA2TrailRenderWidthNumber:
             call_order.append("render_work_log")
 
         coord._render_base = _fake_main
+        coord.render_base = coord._render_base
         coord.render_work_log_session = _fake_work_log
         coord._picked_session_summary = {"filename": "x.json"}
+        coord.picked_session_summary = coord._picked_session_summary
         coord.async_update_listeners = MagicMock(
             side_effect=lambda: call_order.append("broadcast")
         )

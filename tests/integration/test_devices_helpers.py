@@ -22,6 +22,7 @@ def _coord(sn="G2408000TESTSN0000", mac="ef:ce:cc:aa:fe:fd",
     client.mac_address = mac
     client.model = model
     coord._cloud = client
+    coord.cloud = client
     return coord
 
 

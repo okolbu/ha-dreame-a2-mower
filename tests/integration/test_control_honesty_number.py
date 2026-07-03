@@ -184,7 +184,9 @@ def test_trail_render_width_set_value_not_snapped_back():
     actually updating the state."""
     coord = _make_mower_coord(trail_render_width=24)
     coord._render_base = AsyncMock()
+    coord.render_base = coord._render_base
     coord._picked_session_summary = None
+    coord.picked_session_summary = None
     ent = DreameA2TrailRenderWidthNumber(coord)
 
     captured: list[MowerState] = []
