@@ -1,10 +1,11 @@
-"""Re-export shim — ``map_decoder`` relocated to ``protocol/map_decoder.py``.
+"""Re-export shim — ``map_decoder`` relocated to the ``protocol/map/`` package.
 
-The cloud-map parser lives under ``protocol/`` now (it parses cloud JSON →
-dataclasses, matching the ``parse_*`` decoder-naming convention). This shim
-preserves the ~31 deep-import sites across the codebase + tests
+The cloud-map parser is now the ``protocol/map/`` package (``types`` /
+``parse`` / ``parts`` / ``geom`` / ``shapes`` — split from the 1077-LOC
+``map_decoder.py`` in P3, track-2 autopsy #8). This shim preserves the ~31
+deep-import sites across the codebase + tests
 (CLAUDE.md § "Public-import preservation"). New code should import from
-``.protocol.map_decoder`` directly.
+``.protocol.map`` directly; the import rewrite + shim retirement is P3.10.
 
 Explicit re-export list (NOT ``import *``): two helpers and three module
 constants are underscore-prefixed, which ``*`` would not carry, and the test
@@ -12,7 +13,7 @@ suite imports them by name.
 """
 from __future__ import annotations
 
-from .protocol.map_decoder import (  # noqa: F401
+from .protocol.map import (  # noqa: F401
     CHARGER_OFFSET_MM,
     GRID_SIZE_MM,
     ExclusionZone,

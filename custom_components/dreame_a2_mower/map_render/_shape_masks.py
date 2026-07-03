@@ -80,5 +80,13 @@ SHAPE_MASK_PNG_B64: dict[int, str] = {
     ),
 }
 
-DECORATIVE_SHAPE_TYPES = frozenset(SHAPE_MASK_PNG_B64)
+# DECORATIVE_SHAPE_TYPES is owned by the protocol leaf ``protocol/map/shapes.py``
+# (wire knowledge — kills the protocol->render back-edge T2-3/R-10). Re-exported
+# here so render-side importers (base_map) keep a local name. The PNG masks above
+# are the presentation asset; the mask keys must stay a subset of the wire set.
+from ..protocol.map.shapes import DECORATIVE_SHAPE_TYPES  # noqa: E402,F401
+
+assert set(SHAPE_MASK_PNG_B64).issubset(DECORATIVE_SHAPE_TYPES), (
+    "SHAPE_MASK_PNG_B64 has a shapeType not in protocol.map.shapes.DECORATIVE_SHAPE_TYPES"
+)
 
