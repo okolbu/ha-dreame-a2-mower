@@ -473,6 +473,17 @@ class DreameA2PerMapMowingDirectionSelect(
             map_id=self._map_id, pre_index=6, pre_value=idx * 90,
             settings_field="mowingDirection", settings_value=idx * 90,
         )
+        # T3-4: the stripe preview reads settings_mowing_direction (see
+        # map_render/main_view.py); without an explicit re-render here the
+        # cached _base_png keeps the old stripe angle indefinitely. Same
+        # broadcast->render->broadcast token-rotation dance as
+        # DreameA2ActionModeSelect.async_select_option (see
+        # feedback_camera_image_refresh_pattern) — only reached when the
+        # write above did NOT raise (i.e. it was accepted).
+        render_fn = getattr(self.coordinator, "_render_base", None)
+        if callable(render_fn):
+            await render_fn()
+            self.coordinator.async_update_listeners()
 
 
 class DreameA2PerMapMowingDirectionModeSelect(

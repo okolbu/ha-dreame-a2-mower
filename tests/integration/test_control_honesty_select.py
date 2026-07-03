@@ -48,6 +48,11 @@ def _make_map_coord(*, settings_by_map=None):
     cs.maps_by_id = {_MAP_ID: MagicMock(name="Front")}
     cs.settings.by_map_id_canonical = settings_by_map or {_MAP_ID: {"mowingDirection": 0}}
     coord.cloud_state = cs
+    # T3-4: DreameA2PerMapMowingDirectionSelect.async_select_option awaits
+    # coordinator._render_base() after a successful write — plain MagicMock
+    # attributes aren't awaitable, so this must be an AsyncMock (mirrors
+    # test_action_mode_select.py's _make_coord).
+    coord._render_base = AsyncMock()
     return coord
 
 

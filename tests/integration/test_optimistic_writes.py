@@ -34,6 +34,11 @@ def _make_coord(initial_value: int | None = 5):
     coord.entry.entry_id = "test"
     coord.write_map_general_setting = AsyncMock(return_value=_WR_ACCEPTED)
     coord.hass = MagicMock()
+    # async_set_updated_data updates coord.data (mirrors real coordinator —
+    # the stub DataUpdateCoordinator base doesn't define this method at all,
+    # see tests/conftest.py's _DataUpdateCoordinatorStub, so it must be wired
+    # per-test like tests/integration/test_coordinator.py already does).
+    coord.async_set_updated_data = lambda new: setattr(coord, "data", new)
     # cloud_state.settings.by_map_id_canonical accessor used by native_value
     cs = MagicMock()
     cs.settings.by_map_id_canonical = {0: {"mowingHeight": initial_value}}

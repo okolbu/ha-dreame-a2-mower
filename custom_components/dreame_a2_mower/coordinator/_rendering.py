@@ -136,11 +136,18 @@ class _RenderingMixin:
         else:
             obstacles = await self._load_last_session_obstacles(active_id)
         marker_fp = hash(tuple(tuple(poly) for poly in live))
+        # T3-4: settings_mowing_direction drives the STRIPES-mode stripe angle
+        # (see map_render/main_view.py:_render_pre_start_with_stripes) but was
+        # missing from the dedup key — a direction-only change (no mode/md5/
+        # marker change) was silently deduped away, serving the stale-angle
+        # PNG until an unrelated render trigger fired.
+        direction = getattr(self.data, "settings_mowing_direction", None)
         if (
             self._base_png is not None
             and self._base_png_mode == mode
             and self._base_png_md5 == md5
             and getattr(self, "_base_png_marker_fp", None) == marker_fp
+            and getattr(self, "_base_png_direction", None) == direction
         ):
             return  # fresh render already cached
         from functools import partial
@@ -157,6 +164,7 @@ class _RenderingMixin:
             self._base_png_mode = mode
             self._base_png_md5 = md5
             self._base_png_marker_fp = marker_fp
+            self._base_png_direction = direction
             LOGGER.debug(
                 "[MAP] base render: bg=%s map=%s md5=%s",
                 mode.value, active_id, md5,

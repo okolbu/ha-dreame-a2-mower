@@ -118,6 +118,48 @@ async def test_render_base_noop_on_unchanged_mode_and_md5():
 
 
 @pytest.mark.asyncio
+async def test_render_base_noop_when_direction_unchanged():
+    """Ablation control arm: with mode/md5/marker_fp AND
+    settings_mowing_direction all unchanged, the second call must still
+    dedup (no new executor calls)."""
+    coord = _make_coord()
+    coord.data.settings_mowing_direction = 0
+    _set_activity(
+        coord, activity=CurrentActivity.IDLE, mow_session=MowSession.BETWEEN_SESSIONS
+    )
+    await coord._render_base()
+    assert len(coord.hass.calls) == 2
+    assert coord._base_png_direction == 0
+
+    await coord._render_base()  # nothing changed at all, including direction
+    assert len(coord.hass.calls) == 2
+
+
+@pytest.mark.asyncio
+async def test_render_base_rerenders_when_direction_changes_but_mode_and_md5_unchanged():
+    """T3-4 ablation arm: settings_mowing_direction drives the STRIPES-mode
+    stripe angle but was missing from the dedup key. A direction-only change
+    (mode/md5/marker_fp all held constant) must still trigger a fresh
+    render — before the fix this was silently deduped away, serving the
+    stale-angle PNG forever."""
+    coord = _make_coord()
+    coord.data.settings_mowing_direction = 0
+    _set_activity(
+        coord, activity=CurrentActivity.IDLE, mow_session=MowSession.BETWEEN_SESSIONS
+    )
+    await coord._render_base()
+    assert len(coord.hass.calls) == 2
+    assert coord._base_png_direction == 0
+
+    # Direction-only change; mode/md5/marker_fp are untouched.
+    coord.data.settings_mowing_direction = 90
+    await coord._render_base()
+    assert len(coord.hass.calls) == 4  # +2 for the re-render (live + editor)
+    assert coord._base_png_direction == 90
+    assert coord._base_png_mode == BackgroundMode.STRIPES  # mode itself didn't change
+
+
+@pytest.mark.asyncio
 async def test_render_base_rerenders_when_activity_flips_to_repositioning():
     coord = _make_coord()
     # Start idle -> STRIPES.

@@ -51,7 +51,13 @@ async def settings_optimistic_write(
     """
     coord = entity.coordinator
     old_value = getattr(coord.data, state_field)
-    coord.data = dataclasses.replace(coord.data, **{state_field: new_value})
+    new_state = dataclasses.replace(coord.data, **{state_field: new_value})
+    # T3-5: assign directly (belt-and-suspenders for coordinator doubles whose
+    # async_set_updated_data isn't wired to mutate .data) AND broadcast via
+    # async_set_updated_data so sibling entities / FreshnessTracker listeners
+    # see the optimistic value too — not just the writing entity.
+    coord.data = new_state
+    coord.async_set_updated_data(new_state)
     entity.async_write_ha_state()
     cloud_value = int(new_value) if isinstance(new_value, bool) else new_value
     result = await coord.write_settings(
@@ -59,8 +65,10 @@ async def settings_optimistic_write(
     )
     if result.accepted:
         return
-    # Revert + notify
-    coord.data = dataclasses.replace(coord.data, **{state_field: old_value})
+    # Revert + notify — same broadcast treatment so siblings see the revert.
+    reverted_state = dataclasses.replace(coord.data, **{state_field: old_value})
+    coord.data = reverted_state
+    coord.async_set_updated_data(reverted_state)
     entity.async_write_ha_state()
     await entity.hass.services.async_call(
         "persistent_notification", "create",
@@ -87,7 +95,13 @@ async def pre_settings_optimistic_write(
     reverting the local state + notifying if the device (PRE) write fails."""
     coord = entity.coordinator
     old_value = getattr(coord.data, state_field)
-    coord.data = dataclasses.replace(coord.data, **{state_field: new_value})
+    new_state = dataclasses.replace(coord.data, **{state_field: new_value})
+    # T3-5: assign directly (belt-and-suspenders for coordinator doubles whose
+    # async_set_updated_data isn't wired to mutate .data) AND broadcast via
+    # async_set_updated_data so sibling entities / FreshnessTracker listeners
+    # see the optimistic value too — not just the writing entity.
+    coord.data = new_state
+    coord.async_set_updated_data(new_state)
     entity.async_write_ha_state()
     result = await coord.write_map_general_setting(
         map_id=map_id, pre_index=pre_index, pre_value=pre_value,
@@ -95,7 +109,10 @@ async def pre_settings_optimistic_write(
     )
     if result.accepted:
         return
-    coord.data = dataclasses.replace(coord.data, **{state_field: old_value})
+    # Revert + notify — same broadcast treatment so siblings see the revert.
+    reverted_state = dataclasses.replace(coord.data, **{state_field: old_value})
+    coord.data = reverted_state
+    coord.async_set_updated_data(reverted_state)
     entity.async_write_ha_state()
     await entity.hass.services.async_call(
         "persistent_notification", "create",

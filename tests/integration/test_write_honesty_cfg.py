@@ -301,6 +301,12 @@ def _direction_select(write_result):
     coord = MagicMock()
     coord.data = MowerState(settings_mowing_direction=0)
     coord.write_map_general_setting = AsyncMock(return_value=write_result)
+    # P2 Task 6 (T3-4): an accepted write now awaits coordinator._render_base()
+    # to refresh the stripe preview — plain MagicMock attributes aren't
+    # awaitable, so this must be an AsyncMock (mirrors the established
+    # test_action_mode_select.py._make_coord convention). Inert on the
+    # rejection test below since the raise happens before this is reached.
+    coord._render_base = AsyncMock()
     ent = object.__new__(DreameA2PerMapMowingDirectionSelect)
     ent.coordinator = coord
     ent._map_id = 0
