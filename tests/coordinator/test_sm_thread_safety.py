@@ -286,6 +286,114 @@ def test_dispatcher_s2p2_handle_mqtt_property_deferred():
 
 
 # ---------------------------------------------------------------------------
+# R-39 / T3-7 — the apply BASE (self.data) is read on the loop, not paho
+# ---------------------------------------------------------------------------
+
+
+def test_hpp_apply_base_read_on_loop_not_paho_thread(monkeypatch):
+    """apply_property_to_state must NOT execute on the calling (paho) thread.
+    The function is pure, but its BASE argument (self.data) is loop-owned:
+    reading it on the paho thread opens the stale-base window (R-39/T3-7).
+    The decode must run only when the captured loop callback does."""
+    import custom_components.dreame_a2_mower.coordinator._mqtt_handlers as mh
+
+    captured: list = []
+    coord = _make_coord(capture=captured)
+
+    calls: list[tuple[int, int]] = []
+    real = mh.apply_property_to_state
+
+    def _spy(state, siid, piid, value):
+        calls.append((siid, piid))
+        return real(state, siid, piid, value)
+
+    monkeypatch.setattr(mh, "apply_property_to_state", _spy)
+
+    coord.handle_property_push(siid=3, piid=1, value=88)
+
+    assert calls == [], (
+        "apply_property_to_state ran on the calling (paho) thread — the "
+        "self.data base-read must happen inside the loop hop (R-39/T3-7)"
+    )
+    assert len(captured) >= 1
+
+    for cb in captured:
+        cb()
+
+    assert calls == [(3, 1)], "decode did not run on the loop hop"
+    assert coord.data.battery_level == 88
+
+
+def test_loop_side_mutation_in_hop_window_not_reverted():
+    """R-39/T3-7 core defect: a loop-side self.data replacement (optimistic
+    write broadcast, cloud-refresh apply) landing AFTER the paho thread
+    received a push but BEFORE the loop hop runs must SURVIVE the push's
+    broadcast. Deterministic interleaving: the capture list IS the hop
+    window — we inject the loop-side mutation between receipt and apply."""
+    import dataclasses
+
+    captured: list = []
+    coord = _make_coord(capture=captured)
+
+    # Paho thread receives the push; the hop is scheduled but has not run.
+    coord.handle_property_push(siid=3, piid=1, value=88)
+
+    # Loop-side mutation lands inside the window (e.g. _refresh_cloud_state
+    # applying a fresh settings_mowing_height via async_set_updated_data).
+    coord.data = dataclasses.replace(coord.data, settings_mowing_height=77)
+
+    # The hop runs (loop turn).
+    for cb in captured:
+        cb()
+
+    assert coord.data.battery_level == 88
+    assert coord.data.settings_mowing_height == 77, (
+        "loop-side update was REVERTED by a stale-base apply: the push's "
+        "broadcast published a state decoded from the pre-mutation "
+        "self.data (R-39/T3-7)"
+    )
+
+
+def test_back_to_back_pushes_cross_slot_no_clobber():
+    """Two pushes to DIFFERENT slots queued from the same paho thread before
+    the loop runs either hop: the second push's apply must use a base that
+    already contains the first push's field (FIFO loop-side base-reads),
+    not the shared pre-both snapshot — else push 2 reverts push 1."""
+    captured: list = []
+    coord = _make_coord(capture=captured)
+
+    coord.handle_property_push(siid=3, piid=1, value=55)   # battery_level
+    coord.handle_property_push(siid=1, piid=53, value=True)  # bluetooth_connected
+
+    for cb in captured:
+        cb()
+
+    assert coord.data.bluetooth_connected is True
+    assert coord.data.battery_level == 55, (
+        "push 2's broadcast reverted push 1's field — its base was decoded "
+        "before push 1 applied (stale shared snapshot, R-39/T3-7)"
+    )
+
+
+def test_same_slot_sequential_pushes_apply_in_arrival_order():
+    """FIFO ordering pin: call_soon_threadsafe preserves scheduling order
+    from the same thread, so two pushes to the SAME slot must land in
+    arrival order — the LAST value wins."""
+    captured: list = []
+    coord = _make_coord(capture=captured)
+
+    coord.handle_property_push(siid=3, piid=1, value=10)
+    coord.handle_property_push(siid=3, piid=1, value=20)
+
+    for cb in captured:
+        cb()
+
+    assert coord.data.battery_level == 20, (
+        "same-slot pushes applied out of arrival order"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Run-inline compatibility — the existing lambda fn: fn() mock still works
 # ---------------------------------------------------------------------------
 

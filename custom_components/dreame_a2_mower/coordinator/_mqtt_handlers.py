@@ -884,6 +884,11 @@ class _MqttHandlersMixin:
         HA's coordinator on the event loop. We hop the thread boundary
         via call_soon_threadsafe; the actual async_set_updated_data
         call lands on the event loop's next iteration.
+
+        The paho thread captures only ``(siid, piid, value, now)`` —
+        the ``self.data`` base-read, the pure decode, and every mutation
+        run inside the loop-side hop (R-39/T3-7: a paho-thread base-read
+        raced loop-side ``self.data`` replacements and reverted them).
         """
         import time as _time
         now = int(_time.time())
@@ -935,9 +940,9 @@ class _MqttHandlersMixin:
             return  # echo of our own command; nothing to record
 
         # Run order is assembled in _deferred() at the bottom of this method:
-        # _record_novel -> (early-return on unchanged state) -> _apply_sm_mutations
-        # -> _apply. The three nested defs below are declared here but sequenced
-        # there.
+        # _record_novel -> base-read + decode -> (early-return on unchanged
+        # state) -> _apply_sm_mutations -> _apply. The three nested defs below
+        # are declared here but sequenced there — ALL of it on the event loop.
         def _record_novel() -> None:
             # Thread-safety (P1.3): novelty recording MUTATES novel_registry, so
             # it must run on the event loop, NOT on paho's bg thread. It also
@@ -993,13 +998,17 @@ class _MqttHandlersMixin:
                         siid, piid, value, sorted(catalog.keys()),
                     )
 
-        # PURE decode on the paho thread — apply_property_to_state has no side
-        # effects (returns a NEW MowerState without writing self.data). The
-        # equality result decides whether the deferred hop broadcasts, but the
-        # check itself (and the broadcast) happen on the loop inside _apply.
-        new_state = apply_property_to_state(self.data, siid, piid, value)
+        # NOTE (R-39/T3-7): the paho thread does NO decode at all. It captures
+        # only (siid, piid, value, now); the self.data base-read + the pure
+        # apply_property_to_state call run inside _deferred, ON THE LOOP.
+        # apply_property_to_state itself is side-effect-free, but its BASE
+        # argument is loop-owned: reading self.data here (paho thread) opened
+        # a stale-base window — any loop-side self.data replacement
+        # (optimistic-write broadcast, cloud-refresh apply, an EARLIER queued
+        # push's own hop) landing before this push's hop was clobbered by the
+        # full-replace broadcast of the stale-base decode.
 
-        def _apply_sm_mutations() -> None:
+        def _apply_sm_mutations(new_state: MowerState) -> None:
             # Thread-safety (P1.3): every state_machine mutation below moves onto
             # the event loop. The paho thread only decoded new_state (pure); these
             # SM writes — and the snapshot.errors delta read + _fire_fault_delta —
@@ -1080,7 +1089,7 @@ class _MqttHandlersMixin:
                     except Exception:
                         LOGGER.exception("state_machine.handle_pre_shadow_update failed")
 
-        def _apply() -> None:
+        def _apply(new_state: MowerState) -> None:
             # _on_state_update mutates live_map (legs, started_unix, etc.) and
             # updates _prev_task_state / _live_map_dirty.  It must run on the
             # event loop so those shared objects are never mutated from paho's
@@ -1205,15 +1214,25 @@ class _MqttHandlersMixin:
             # Single loop hop (P1.3): runs ALL mutations for this push, in the
             # same order as the old paho-thread code, on the event loop.
             #   1. novel recording (must run on EVERY push, even no-op-state)
-            #   2. unchanged-state short-circuit (no broadcast) — but novelty
+            #   2. base-read + pure decode (R-39/T3-7: the base MUST be read
+            #      HERE, on the loop, so it always includes every loop-side
+            #      update — cloud-refresh applies, optimistic-write
+            #      broadcasts, and earlier queued pushes' own hops)
+            #   3. unchanged-state short-circuit (no broadcast) — but novelty
             #      above already happened, fixing TRAP #1
-            #   3. state-machine mutations (position / misc / pre-shadow)
-            #   4. the _apply body (_on_state_update + broadcast + render)
+            #   4. state-machine mutations (position / misc / pre-shadow)
+            #   5. the _apply body (_on_state_update + broadcast + render)
+            #
+            # Ordering: call_soon_threadsafe preserves FIFO for callbacks
+            # scheduled from the same thread, so same-thread sequential
+            # pushes still decode+apply in arrival order — each against the
+            # then-current self.data, never a shared stale snapshot.
             _record_novel()
+            new_state = apply_property_to_state(self.data, siid, piid, value)
             if new_state == self.data:
                 return
-            _apply_sm_mutations()
-            _apply()
+            _apply_sm_mutations(new_state)
+            _apply(new_state)
 
         # Zero-arg closure so the run-inline test mock `lambda fn: fn()` works.
         self.hass.loop.call_soon_threadsafe(_deferred)
