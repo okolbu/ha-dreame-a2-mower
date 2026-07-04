@@ -3,7 +3,7 @@ import types
 from datetime import UTC, datetime
 
 from custom_components.dreame_a2_mower import binary_sensor as bs
-from custom_components.dreame_a2_mower import sensor_device
+from custom_components.dreame_a2_mower.entities.sensor import device as sensor_device
 from custom_components.dreame_a2_mower.entities.sensor.device import SensorDeviceClass
 from custom_components.dreame_a2_mower.mower.state import MowerState
 

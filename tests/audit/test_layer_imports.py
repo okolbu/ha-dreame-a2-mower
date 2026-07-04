@@ -139,13 +139,6 @@ MODULE_LAYER: dict[str, int] = {
     "services": 5,
     "_availability": 5,
     "_settings_writes": 5,
-    "_switch_base": 5,  # root shim -> entities/switch/base.py
-    "sensor_device": 5,  # root shim -> entities/sensor/device.py
-    "sensor_map": 5,  # root shim -> entities/sensor/map.py
-    "select_global": 5,  # root shim -> entities/select/global_.py
-    "select_map_settings": 5,  # root shim -> entities/select/map_settings.py
-    "switch_global": 5,  # root shim -> entities/switch/global_.py
-    "switch_map": 5,  # root shim -> entities/switch/map.py
     "sensor": 5,
     "switch": 5,
     "select": 5,

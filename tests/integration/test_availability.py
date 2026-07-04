@@ -413,7 +413,7 @@ def test_none_entity_button_unaffected_by_freshness():
 
 def test_none_sourced_sensor_row_unaffected_by_freshness():
     """A DreameA2Sensor on a None-source descriptor row is NOT gated."""
-    from custom_components.dreame_a2_mower.sensor_device import (
+    from custom_components.dreame_a2_mower.entities.sensor.device import (
         SENSORS,
         DreameA2Sensor,
     )
@@ -466,7 +466,7 @@ def test_diagnostic_sensor_rows_behave_per_availability_source():
     """A mqtt-row, a cloud-row, and a none-row of the SAME generic class
     (DreameA2DiagnosticSensor) gate differently — proving the descriptor
     bridge property resolves the per-row source via MRO."""
-    from custom_components.dreame_a2_mower.sensor_device import (
+    from custom_components.dreame_a2_mower.entities.sensor.device import (
         DIAGNOSTIC_SENSORS,
         DreameA2DiagnosticSensor,
     )
@@ -499,7 +499,7 @@ def test_diagnostic_sensor_rows_behave_per_availability_source():
 def test_mqtt_connectivity_sensor_overrides_base_to_none():
     """The MQTT-connectivity link reporter subclasses _SnapshotEnumSensorBase
     (mqtt) but must stay visible — its source is overridden back to None."""
-    from custom_components.dreame_a2_mower.sensor_device import (
+    from custom_components.dreame_a2_mower.entities.sensor.device import (
         DreameA2MqttConnectivitySensor,
     )
 

@@ -811,18 +811,14 @@ the platform entry — they stay at root (out of scope; moving inline classes ou
 is more churn than value).
 
 `sensor_session.py`, `_sensor_base.py`, and `_select_base.py` were **deleted in
-P1** — zero importers (T2-7); import `entities.sensor.session`,
-`entities.sensor.base`, and `entities.select.base` directly. The remaining old
-flat root paths (`sensor_device.py`, `sensor_map.py`, `switch_global.py`,
-`switch_map.py`, `_switch_base.py`, `select_global.py`,
-`select_map_settings.py`) are still 1-line re-export **shims**
-(`from .entities.sensor.device import *`) preserving the deep test importers +
-the entry-file imports, kept ONLY until the P3 import-path rewrite +
-contract-test replacement (target-architecture § 2). `sensor_device.py`
-carries `_active_fault_text` / `_mpos_value` / `_mpos_attrs` explicitly
-(underscore names `import *` won't carry, imported by
-`test_error_sensor_value` / `test_mpos_sensor`). New code imports from
-`entities.<platform>.<module>` directly.
+P1** — zero importers (T2-7). The old flat root shims (`sensor_device.py`,
+`sensor_map.py`, `switch_global.py`, `switch_map.py`, `_switch_base.py`,
+`select_global.py`, `select_map_settings.py`) were **RETIRED in P3.10** — all
+importers (tests + entry files) rewritten to the canonical
+`entities.<platform>.<module>` paths. Import from `entities.<platform>.<module>`
+directly (the underscore helpers `_active_fault_text` / `_mpos_value` /
+`_mpos_attrs` live on `entities.sensor.device`); there are no root re-export
+shims.
 
 **Two CI lockstep targets** track these source paths and must be updated on any
 further move:

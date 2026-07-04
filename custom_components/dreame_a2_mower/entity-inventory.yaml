@@ -428,7 +428,7 @@ entities:
     platform: switch
     control_mode: device_writable
     class: "DreameA2MapEdgemasterSwitch"
-    class_file: "custom_components/dreame_a2_mower/switch_map.py"
+    class_file: "custom_components/dreame_a2_mower/entities/switch/map.py"
     device: per-map
     source:
       wire: "s6p2[2]"
@@ -468,7 +468,7 @@ entities:
   - id: "sensor.dreame_a2_mower_map_N_pre_edgemaster"
     platform: sensor
     class: "DreameA2MapPreEdgemasterSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_map.py:217"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/map.py"
     device: per-map
     source:
       wire: "s6p2[2]"
@@ -499,7 +499,7 @@ entities:
   - id: "sensor.dreame_a2_mower_map_N_name"
     platform: sensor
     class: "DreameA2MapNameSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_map.py:22"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/map.py"
     device: per-map
     source:
       wire: "cloud MAP blob (map_key_name)"
@@ -523,7 +523,7 @@ entities:
   - id: "sensor.dreame_a2_mower_map_N_area"
     platform: sensor
     class: "DreameA2MapAreaSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_map.py:40"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/map.py"
     device: per-map
     source:
       wire: "cloud MAP blob (map_key_totalArea)"
@@ -547,7 +547,7 @@ entities:
   - id: "sensor.dreame_a2_mower_map_N_segments"
     platform: sensor
     class: "DreameA2MapSegmentCountSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_map.py:54"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/map.py"
     device: per-map
     source:
       wire: "cloud MAP blob (map_key_mowingAreas)"
@@ -577,7 +577,7 @@ entities:
   - id: "sensor.dreame_a2_mower_map_N_maintenance_points"
     platform: sensor
     class: "DreameA2MaintenancePointsSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_map.py:68"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/map.py"
     device: per-map
     source:
       wire: "cloud MAP blob (map_key_cleanPoints)"
@@ -602,7 +602,7 @@ entities:
   - id: "sensor.dreame_a2_mower_map_N_patrol_points"
     platform: sensor
     class: "DreameA2PatrolPointsSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_map.py"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/map.py"
     device: per-map
     source:
       wire: "cloud MAP blob (cruisePoints, type=8) for points; CRUISE.0 device-data key for per-point cycles/auto_capture"
@@ -634,7 +634,7 @@ entities:
   - id: "sensor.dreame_a2_mower_map_N_patrol_edges"
     platform: sensor
     class: "DreameA2PatrolEdgesSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_map.py"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/map.py"
     device: per-map
     source:
       wire: "cloud MAP blob (contours / available_contour_ids, outer perimeters c==0)"
@@ -657,7 +657,7 @@ entities:
   - id: "sensor.dreame_a2_mower_map_N_exclusion_zones"
     platform: sensor
     class: "DreameA2ExclusionZonesSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_map.py:105"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/map.py"
     device: per-map
     source:
       wire: "cloud MAP blob (map_key_forbiddenAreas)"
@@ -682,7 +682,7 @@ entities:
   - id: "sensor.dreame_a2_mower_map_N_ignore_obstacle_zones"
     platform: sensor
     class: "DreameA2IgnoreObstacleZonesSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_map.py:123"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/map.py"
     device: per-map
     source:
       wire: "cloud MAP blob (map_key_notObsAreas)"
@@ -707,7 +707,7 @@ entities:
   - id: "sensor.dreame_a2_mower_map_N_spots"
     platform: sensor
     class: "DreameA2SpotsCountSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_map.py:141"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/map.py"
     device: per-map
     source:
       wire: "cloud MAP blob (map_key_spotAreas)"
@@ -732,7 +732,7 @@ entities:
   - id: "sensor.dreame_a2_mower_map_N_pre_mowing_height"
     platform: sensor
     class: "DreameA2MapPreMowingHeightSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_map.py:180"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/map.py"
     device: per-map
     source:
       wire: "s6p2 (mowing_height_mm field)"
@@ -958,7 +958,7 @@ entities:
     platform: switch
     control_mode: device_writable
     class: "DreameA2EdgeMowingSafeSwitch"
-    class_file: "custom_components/dreame_a2_mower/switch_global.py:717"
+    class_file: "custom_components/dreame_a2_mower/entities/switch/global_.py"
     device: per-map
     source:
       wire: "cloud SETTINGS.entryN.<map>.edgeMowingSafe"
@@ -996,7 +996,7 @@ entities:
     platform: switch
     control_mode: device_writable
     class: "DreameA2EdgeMowingObstacleAvoidanceSwitch"
-    class_file: "custom_components/dreame_a2_mower/switch_global.py:766"
+    class_file: "custom_components/dreame_a2_mower/entities/switch/global_.py"
     device: per-map
     source:
       wire: "cloud SETTINGS.entryN.<map>.edgeMowingObstacleAvoidance"
@@ -1034,7 +1034,7 @@ entities:
     platform: switch
     control_mode: device_writable
     class: "DreameA2ObstacleAvoidanceEnabledSwitch"
-    class_file: "custom_components/dreame_a2_mower/switch_global.py:815"
+    class_file: "custom_components/dreame_a2_mower/entities/switch/global_.py"
     device: per-map
     source:
       wire: "cloud SETTINGS.entryN.<map>.obstacleAvoidanceEnabled"
@@ -1073,7 +1073,7 @@ entities:
     platform: switch
     control_mode: read_only_pending
     class: "DreameA2AiHumanDetectionSwitch"
-    class_file: "custom_components/dreame_a2_mower/switch_global.py:864"
+    class_file: "custom_components/dreame_a2_mower/entities/switch/global_.py"
     device: parent
     source:
       wire: "cloud AI_HUMAN.0 (JSON boolean string \"true\"/\"false\")"
@@ -1145,7 +1145,7 @@ entities:
     platform: select
     control_mode: integration_local
     class: "DreameA2MaintenancePointSelect"
-    class_file: "custom_components/dreame_a2_mower/select_map_settings.py:659"
+    class_file: "custom_components/dreame_a2_mower/entities/select/map_settings.py"
     device: per-map
     source:
       wire: "cloud MapData.maintenance_points (MaintenancePoint list per map)"
@@ -1779,7 +1779,7 @@ entities:
   - id: "sensor.dreame_a2_mower_<key>"
     platform: sensor
     class: "DreameA2Sensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:772"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "varies per descriptor key (MowerState fields)"
@@ -1859,7 +1859,7 @@ entities:
   - id: "sensor.dreame_a2_mower_sim_card_id"
     platform: sensor
     class: "DreameA2Sensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "REMOTE/SIM (Phase C getRecords refresh)"
@@ -1877,7 +1877,7 @@ entities:
   - id: "sensor.dreame_a2_mower_sim_left_days"
     platform: sensor
     class: "DreameA2Sensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "REMOTE/SIM (Phase C getRecords refresh)"
@@ -1895,7 +1895,7 @@ entities:
   - id: "sensor.dreame_a2_mower_sim_active_time"
     platform: sensor
     class: "DreameA2Sensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "REMOTE/SIM (Phase C getRecords refresh)"
@@ -1967,7 +1967,7 @@ entities:
   - id: "sensor.dreame_a2_mower_service_messages_unread"
     platform: sensor
     class: "DreameA2Sensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "message-record-v1 (Phase C message refresh)"
@@ -2052,7 +2052,7 @@ entities:
   - id: "sensor.dreame_a2_mower_oss_storage_used"
     platform: sensor
     class: "DreameA2Sensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "checkDevOssStorage (Phase D _refresh_oss quota poll)"
@@ -2070,7 +2070,7 @@ entities:
   - id: "sensor.dreame_a2_mower_oss_storage_total"
     platform: sensor
     class: "DreameA2Sensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "checkDevOssStorage (Phase D _refresh_oss quota poll)"
@@ -2088,7 +2088,7 @@ entities:
   - id: "sensor.dreame_a2_mower_oss_storage_used_percent"
     platform: sensor
     class: "DreameA2Sensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:487"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "checkDevOssStorage (Phase D _refresh_oss quota poll; derived from used/total)"
@@ -2112,7 +2112,7 @@ entities:
   - id: "sensor.dreame_a2_mower_obstacle_photos"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:1007"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "OSS userDidOssList (Phase D PhotoArchive; category=obstacle)"
@@ -2134,7 +2134,7 @@ entities:
   - id: "sensor.dreame_a2_mower_photo_gallery"
     platform: sensor
     class: "DreameA2PhotoGallerySensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: mower
     source:
       wire: "OSS userDidOssList (Phase D PhotoArchive + VideoArchive) — derived manifest, no new wire fact"
@@ -2153,7 +2153,7 @@ entities:
   - id: "sensor.dreame_a2_mower_patrol_photos"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:1007"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "OSS userDidOssList (Phase D PhotoArchive; category=patrol)"
@@ -2175,7 +2175,7 @@ entities:
   - id: "sensor.dreame_a2_mower_mpos"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:834"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "routed-get m:g t:MPOS (see inventory.yaml § MPOS, status partial) — RAW {x,y,yaw}; frame/units UNVERIFIED, NOT the integration's position"
@@ -2209,7 +2209,7 @@ entities:
   - id: "sensor.dreame_a2_mower_person_photos"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:1007"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "OSS userDidOssList (Phase D PhotoArchive; category=ai_human under the 7-category scheme; identified by COM person/human detection or _person.jpg suffix)"
@@ -2235,7 +2235,7 @@ entities:
   - id: "sensor.dreame_a2_mower_videos"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:1007"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "OSS userDidOssList (Phase D VideoArchive; video clips)"
@@ -2253,7 +2253,7 @@ entities:
   - id: "sensor.dreame_a2_mower_latest_video"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:1007"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "OSS userDidOssList (Phase D VideoArchive; most-recent clip duration)"
@@ -2275,7 +2275,7 @@ entities:
   - id: "sensor.dreame_a2_mower_human_presence_push_interval"
     platform: sensor
     class: "DreameA2Sensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:772"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "REC[8]"
@@ -2306,7 +2306,7 @@ entities:
   - id: "sensor.dreame_a2_mower_charging_status_code_raw"
     platform: sensor
     class: "DreameA2Sensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:772"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "s3p2"
@@ -2336,7 +2336,7 @@ entities:
   - id: "sensor.dreame_a2_mower_rain_resume_at"
     platform: sensor
     class: "DreameA2RainResumeSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "coordinator.rain_resume_at_unix"
@@ -2477,7 +2477,7 @@ entities:
     platform: select
     control_mode: device_writable
     class: "DreameA2SettingSelect"
-    class_file: "custom_components/dreame_a2_mower/select_global.py:439"
+    class_file: "custom_components/dreame_a2_mower/entities/select/global_.py"
     device: parent
     source:
       wire: "PROT"
@@ -2506,7 +2506,7 @@ entities:
     platform: select
     control_mode: device_writable
     class: "DreameA2SettingSelect"
-    class_file: "custom_components/dreame_a2_mower/select_global.py:439"
+    class_file: "custom_components/dreame_a2_mower/entities/select/global_.py"
     device: parent
     source:
       wire: "WRP"
@@ -2545,7 +2545,7 @@ entities:
     platform: select
     control_mode: read_only_noop
     class: "DreameA2SettingSelect"
-    class_file: "custom_components/dreame_a2_mower/select_global.py:439"
+    class_file: "custom_components/dreame_a2_mower/entities/select/global_.py"
     device: parent
     source:
       wire: "LANG"
@@ -2571,7 +2571,7 @@ entities:
     platform: select
     control_mode: device_writable
     class: "DreameA2SettingSelect"
-    class_file: "custom_components/dreame_a2_mower/select_global.py:439"
+    class_file: "custom_components/dreame_a2_mower/entities/select/global_.py"
     device: parent
     source:
       wire: "LANG"
@@ -2609,7 +2609,7 @@ entities:
     platform: select
     control_mode: device_writable
     class: "DreameA2SettingSelect"
-    class_file: "custom_components/dreame_a2_mower/select_global.py:439"
+    class_file: "custom_components/dreame_a2_mower/entities/select/global_.py"
     device: parent
     source:
       wire: "LANG"
@@ -2646,7 +2646,7 @@ entities:
     platform: select
     control_mode: integration_local
     class: "DreameA2WorkLogSelect"
-    class_file: "custom_components/dreame_a2_mower/select_global.py:530"
+    class_file: "custom_components/dreame_a2_mower/entities/select/global_.py"
     device: parent
     source:
       wire: "integration state — session archive index"
@@ -2676,7 +2676,7 @@ entities:
     platform: select
     control_mode: integration_local
     class: "DreameA2LidarArchiveSelect"
-    class_file: "custom_components/dreame_a2_mower/select_global.py:650"
+    class_file: "custom_components/dreame_a2_mower/entities/select/global_.py"
     device: parent
     source:
       wire: "integration state — LiDAR archive index (coordinator.lidar_archives per-map)"
@@ -2701,7 +2701,7 @@ entities:
     platform: select
     control_mode: device_write_unproven
     class: "DreameA2ActiveMapSelect"
-    class_file: "custom_components/dreame_a2_mower/select_global.py:742"
+    class_file: "custom_components/dreame_a2_mower/entities/select/global_.py"
     device: parent
     source:
       wire: "MAPL"
@@ -2728,7 +2728,7 @@ entities:
     platform: select
     control_mode: integration_local
     class: "DreameA2ActionModeSelect"
-    class_file: "custom_components/dreame_a2_mower/select_global.py:921"
+    class_file: "custom_components/dreame_a2_mower/entities/select/global_.py"
     device: parent
     source:
       wire: "integration state — MowerState.action_mode"
@@ -2759,7 +2759,7 @@ entities:
     platform: select
     control_mode: integration_local
     class: "DreameA2WifiArchiveSelect"
-    class_file: "custom_components/dreame_a2_mower/select_global.py:1017"
+    class_file: "custom_components/dreame_a2_mower/entities/select/global_.py"
     device: parent
     source:
       wire: "integration state — coordinator._wifi_archive_index (WiFi heatmap objects from cloud)"
@@ -2790,7 +2790,7 @@ entities:
     platform: select
     control_mode: integration_local
     class: "DreameA2EdgeSelect"
-    class_file: "custom_components/dreame_a2_mower/select_map_settings.py:104"
+    class_file: "custom_components/dreame_a2_mower/entities/select/map_settings.py"
     device: per-map
     source:
       wire: "integration state — coordinator.data.active_selection_edge_contours (derived from cloud MAP.*.contours.value)"
@@ -2817,7 +2817,7 @@ entities:
     platform: select
     control_mode: integration_local
     class: "DreameA2MowingModeSelect"
-    class_file: "custom_components/dreame_a2_mower/select_map_settings.py:293"
+    class_file: "custom_components/dreame_a2_mower/entities/select/map_settings.py"
     device: per-map
     source:
       wire: "integration state — per-map zone/spot lists from cloud_state.maps_by_id[map_id]"
@@ -2844,7 +2844,7 @@ entities:
     platform: select
     control_mode: device_writable
     class: "DreameA2PerMapMowingDirectionSelect"
-    class_file: "custom_components/dreame_a2_mower/select_map_settings.py:388"
+    class_file: "custom_components/dreame_a2_mower/entities/select/map_settings.py"
     device: per-map
     source:
       wire: "cloud SETTINGS.entryN.<map>.mowingDirection"
@@ -2880,7 +2880,7 @@ entities:
     platform: select
     control_mode: device_writable
     class: "DreameA2PerMapMowingDirectionModeSelect"
-    class_file: "custom_components/dreame_a2_mower/select_map_settings.py:448"
+    class_file: "custom_components/dreame_a2_mower/entities/select/map_settings.py"
     device: per-map
     source:
       wire: "cloud SETTINGS.entryN.<map>.mowingDirectionMode"
@@ -2953,7 +2953,7 @@ entities:
   - id: "sensor.dreame_a2_mower_<diag_key>"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:795"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "varies per descriptor key (coordinator / state_machine.snapshot)"
@@ -3018,7 +3018,7 @@ entities:
   - id: "sensor.dreame_a2_mower_weather_forecast_reference"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "CFG.WRF"
@@ -3043,7 +3043,7 @@ entities:
   - id: "sensor.dreame_a2_timezone"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "CFG.TIME"
@@ -3068,7 +3068,7 @@ entities:
   - id: "sensor.dreame_a2_mower_cfg_version"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "CFG.VER"
@@ -3095,7 +3095,7 @@ entities:
   - id: "sensor.dreame_a2_mower_ota_status"
     platform: sensor
     class: "DreameA2OtaStatusSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:838"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "integration-local — coordinator.cloud_state.ota_status"
@@ -3205,7 +3205,7 @@ entities:
   - id: "sensor.dreame_a2_mower_schedule_count"
     platform: sensor
     class: "DreameA2ScheduleCountSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:868"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "cloud SETTINGS scheduled_clean (s4p47)"
@@ -3307,7 +3307,7 @@ entities:
   - id: "sensor.dreame_a2_mower_wifi_refresh_status"
     platform: sensor
     class: "DreameA2WifiRefreshStatusSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:916"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "integration-local — coordinator._wifi_archive_last_refresh"
@@ -3333,7 +3333,7 @@ entities:
   - id: "sensor.dreame_a2_mower_wifi_heatmap_age"
     platform: sensor
     class: "DreameA2WifiHeatmapAgeSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:988"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "integration-local — coordinator._wifi_archive_index"
@@ -3358,7 +3358,7 @@ entities:
   - id: "sensor.dreame_a2_mower_last_notification"
     platform: sensor
     class: "DreameA2LastNotificationSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:1053"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "s2p2 (via coordinator._last_notification)"
@@ -3384,7 +3384,7 @@ entities:
   - id: "sensor.dreame_a2_mower_api_endpoint"
     platform: sensor
     class: "DreameA2ApiEndpointSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:1093"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "integration-local — coordinator._cloud.host"
@@ -3409,7 +3409,7 @@ entities:
   - id: "sensor.dreame_a2_mower_integration_version"
     platform: sensor
     class: "DreameA2IntegrationVersionSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:1119"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "integration-local — manifest.json version field"
@@ -3958,7 +3958,7 @@ entities:
     platform: switch
     control_mode: device_writable
     class: "DreameA2AiRecognitionHumansSwitch"
-    class_file: "custom_components/dreame_a2_mower/switch_global.py:937"
+    class_file: "custom_components/dreame_a2_mower/entities/switch/global_.py"
     device: per-map
     source:
       wire: "cloud SETTINGS.entryN.<map>.obstacleAvoidanceAi (bit 0)"
@@ -3998,7 +3998,7 @@ entities:
     platform: switch
     control_mode: device_writable
     class: "DreameA2AiRecognitionAnimalsSwitch"
-    class_file: "custom_components/dreame_a2_mower/switch_global.py:950"
+    class_file: "custom_components/dreame_a2_mower/entities/switch/global_.py"
     device: per-map
     source:
       wire: "cloud SETTINGS.entryN.<map>.obstacleAvoidanceAi (bit 1)"
@@ -4040,7 +4040,7 @@ entities:
     platform: switch
     control_mode: device_writable
     class: "DreameA2AiRecognitionObjectsSwitch"
-    class_file: "custom_components/dreame_a2_mower/switch_global.py:963"
+    class_file: "custom_components/dreame_a2_mower/entities/switch/global_.py"
     device: per-map
     source:
       wire: "cloud SETTINGS.entryN.<map>.obstacleAvoidanceAi (bit 2)"
@@ -4108,7 +4108,7 @@ entities:
       led_in_error: device_writable
       human_presence_alert: device_writable
     class: "DreameA2Switch"
-    class_file: "custom_components/dreame_a2_mower/_switch_base.py:55"
+    class_file: "custom_components/dreame_a2_mower/entities/switch/base.py"
     device: parent
     source:
       wire: "varies per descriptor key — CFG transport (coordinator.write_setting)"
@@ -4558,7 +4558,7 @@ entities:
   - id: "sensor.dreame_a2_mower_current_activity"
     platform: sensor
     class: "DreameA2CurrentActivitySensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:701"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "state machine snapshot (s2p2 / s1p4 / s3p1 / s1p50 via MQTT push)"
@@ -4590,7 +4590,7 @@ entities:
   - id: "sensor.dreame_a2_mower_mower_location"
     platform: sensor
     class: "DreameA2LocationSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:714"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "s2p1 (MQTT push) — sole location authority"
@@ -4621,7 +4621,7 @@ entities:
   - id: "sensor.dreame_a2_mower_positioning_health"
     platform: sensor
     class: "DreameA2PositioningHealthSensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:723"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "state machine snapshot (s1p4 SLAM / positioning state fields via MQTT push)"
@@ -4646,7 +4646,7 @@ entities:
   - id: "sensor.dreame_a2_mower_mqtt_connectivity"
     platform: sensor
     class: "DreameA2MqttConnectivitySensor"
-    class_file: "custom_components/dreame_a2_mower/sensor_device.py:733"
+    class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     device: parent
     source:
       wire: "state machine snapshot (s1p1 heartbeat timestamp — staleness derived)"
@@ -4679,7 +4679,7 @@ entities:
     platform: select
     control_mode: integration_local
     class: "DreameA2ZoneSelect"
-    class_file: "custom_components/dreame_a2_mower/select_map_settings.py:44"
+    class_file: "custom_components/dreame_a2_mower/entities/select/map_settings.py"
     device: per-map
     source:
       wire: "cloud map data (MAP zones list; cloud SETTINGS; polled via _refresh_cloud_state)"
@@ -4709,7 +4709,7 @@ entities:
     platform: select
     control_mode: integration_local
     class: "DreameA2SpotSelect"
-    class_file: "custom_components/dreame_a2_mower/select_map_settings.py:74"
+    class_file: "custom_components/dreame_a2_mower/entities/select/map_settings.py"
     device: per-map
     source:
       wire: "cloud map data (MAP spot_zones list; polled via _refresh_cloud_state)"

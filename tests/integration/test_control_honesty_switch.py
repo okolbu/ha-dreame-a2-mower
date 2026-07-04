@@ -26,7 +26,7 @@ from custom_components.dreame_a2_mower.observability import (
     FreshnessTracker,
     NovelObservationRegistry,
 )
-from custom_components.dreame_a2_mower.switch_global import SWITCHES
+from custom_components.dreame_a2_mower.entities.switch.global_ import SWITCHES
 from custom_components.dreame_a2_mower.switch import (
     DreameA2Switch,
     DreameA2AiRecognitionHumansSwitch,

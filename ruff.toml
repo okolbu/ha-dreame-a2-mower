@@ -10,11 +10,7 @@ select = ["F401"]
 # Public re-export surfaces are intentional F401:
 "custom_components/dreame_a2_mower/**/__init__.py" = ["F401"]
 # Root re-export shims (die in P0-contract-rewrite/P3, not here):
-"custom_components/dreame_a2_mower/sensor_*.py" = ["F401"]
-"custom_components/dreame_a2_mower/select_*.py" = ["F401"]
-"custom_components/dreame_a2_mower/switch_*.py" = ["F401"]
 "custom_components/dreame_a2_mower/_render_*.py" = ["F401"]
-"custom_components/dreame_a2_mower/_switch_base.py" = ["F401"]
 "custom_components/dreame_a2_mower/wifi_*.py" = ["F401"]
 "custom_components/dreame_a2_mower/map_decoder.py" = ["F401"]
 "custom_components/dreame_a2_mower/protocol/schedule.py" = ["F401"]

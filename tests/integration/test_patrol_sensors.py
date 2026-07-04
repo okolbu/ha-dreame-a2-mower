@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock
-from custom_components.dreame_a2_mower.sensor_map import (
+from custom_components.dreame_a2_mower.entities.sensor.map import (
     DreameA2PatrolPointsSensor, DreameA2PatrolEdgesSensor,
 )
 from custom_components.dreame_a2_mower.map_decoder import PatrolPoint

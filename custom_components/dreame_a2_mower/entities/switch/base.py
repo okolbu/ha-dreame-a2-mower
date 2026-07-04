@@ -1,11 +1,11 @@
 """Shared base classes and description dataclass for the switch platform.
 
 This module is a helper — NOT a HA platform — so HA will not attempt to
-load it as a switch platform.  It is imported by switch_global.py,
-switch_map.py, and switch.py.
+load it as a switch platform.  It is imported by entities/switch/global_.py,
+entities/switch/map.py, and switch.py.
 
 Acyclic import order:
-    _switch_base  ←  switch_global / switch_map  ←  switch.py
+    entities.switch.base  ←  entities.switch.global_ / .map  ←  switch.py
 """
 from __future__ import annotations
 

@@ -80,7 +80,7 @@ def test_fires_and_sets_started_at_on_edge_into_56():
 
 def test_rain_resume_sensor_native_value():
     from datetime import UTC, datetime
-    from custom_components.dreame_a2_mower.sensor_device import DreameA2RainResumeSensor
+    from custom_components.dreame_a2_mower.entities.sensor.device import DreameA2RainResumeSensor
 
     c = _coord()
     s = DreameA2RainResumeSensor.__new__(DreameA2RainResumeSensor)

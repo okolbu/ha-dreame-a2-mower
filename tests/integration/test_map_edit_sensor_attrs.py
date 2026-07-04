@@ -1,7 +1,7 @@
 """Per-map sensor attrs: renamable_zones + deletable_objects (map-edit)."""
 from unittest.mock import MagicMock
 
-from custom_components.dreame_a2_mower.sensor_map import DreameA2MapSegmentCountSensor
+from custom_components.dreame_a2_mower.entities.sensor.map import DreameA2MapSegmentCountSensor
 from custom_components.dreame_a2_mower.map_decoder import MowingZone, ExclusionZone
 
 

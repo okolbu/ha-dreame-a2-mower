@@ -19,10 +19,10 @@ import dataclasses
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from custom_components.dreame_a2_mower.mower.state import MowerState
-from custom_components.dreame_a2_mower.select_map_settings import (
+from custom_components.dreame_a2_mower.entities.select.map_settings import (
     DreameA2PerMapMowingDirectionSelect,
 )
-from custom_components.dreame_a2_mower.select_global import (
+from custom_components.dreame_a2_mower.entities.select.global_ import (
 
     DreameA2SettingSelect,
     DreameA2ActionModeSelect,

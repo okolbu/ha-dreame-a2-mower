@@ -288,7 +288,7 @@ def test_picked_session_error_samples_layout():
 # ---------------------------------------------------------------------------
 
 def test_segment_count_rename_delete_element_shapes():
-    from custom_components.dreame_a2_mower.sensor_map import (
+    from custom_components.dreame_a2_mower.entities.sensor.map import (
         DreameA2MapSegmentCountSensor,
     )
     from custom_components.dreame_a2_mower.map_decoder import ExclusionZone, MowingZone

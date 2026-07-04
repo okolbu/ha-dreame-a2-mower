@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from custom_components.dreame_a2_mower import select_global as sg
+from custom_components.dreame_a2_mower.entities.select import global_ as sg
 from custom_components.dreame_a2_mower.control_honesty import ControlMode
 
 from custom_components.dreame_a2_mower.cloud_client import WriteResult as _WR

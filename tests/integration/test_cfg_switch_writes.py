@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from custom_components.dreame_a2_mower import _switch_base as sb
+from custom_components.dreame_a2_mower.entities.switch import base as sb
 from custom_components.dreame_a2_mower.control_honesty import ControlMode
 
 from custom_components.dreame_a2_mower.cloud_client import WriteResult as _WR
