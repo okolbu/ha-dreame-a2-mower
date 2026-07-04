@@ -6,10 +6,10 @@ points DOWNWARD per the target layer model
     6  presentation   render/ (map_render), camera/, dashboard/
     5  entities       descriptor-driven platforms, services (HA API)
     4  domain         session/, writes/, media/, wifi/, lidar/, notifications/,
-                      device_sync, ingress — realized today by coordinator/,
-                      archive/, wifi/ (+ their root re-export shims)
-    3  state          MowerState, StateSnapshot, MowerStateMachine, CloudState,
-                      apply — realized today by mower/, cloud_state.py, live_map/
+                      device_sync, ingress, boot, render, gps, faults, timers,
+                      mqtt_lifecycle (+ the thin coordinator/ delegator mixins)
+    3  state          state/ (MowerState containers, StateSnapshot,
+                      MowerStateMachine, CloudState, apply), live_map/
     2  transport      mqtt, cloud RPC/OSS/file-bridge, fetch families
     1  protocol       pure decode/encode; zero HA imports; zero upward imports
     0  foundation     const.py, observability/, inventory/ loader, and the
