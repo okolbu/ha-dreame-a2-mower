@@ -4,9 +4,11 @@ F1: minimal user-step flow. Just collects cloud credentials + country.
 F4 (settings) extends this with options-flow for archive retention and
 station bearing.
 
-Per spec §5.9 credential discipline: credentials are stored in HA's
-encrypted-at-rest config-entry secrets via the standard
-``CONF_USERNAME`` / ``CONF_PASSWORD`` constants.
+Per spec §5.9 credential discipline: credentials are stored in the config
+entry via the standard ``CONF_USERNAME`` / ``CONF_PASSWORD`` constants (HA
+persists config entries as plaintext JSON in ``.storage/`` — not encrypted
+at rest; see ``diagnostics.py`` for the allowlist that keeps them out of
+downloadable bug-report dumps).
 """
 from __future__ import annotations
 
