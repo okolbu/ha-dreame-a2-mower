@@ -8,8 +8,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from custom_components.dreame_a2_mower import _camera_photos as cp
-from custom_components.dreame_a2_mower._camera_photos import _photo_detection_attrs
+from custom_components.dreame_a2_mower.camera import photos as cp
+from custom_components.dreame_a2_mower.camera.photos import _photo_detection_attrs
 from custom_components.dreame_a2_mower.archive.photos import ArchivedPhoto
 
 

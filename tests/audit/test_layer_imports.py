@@ -165,8 +165,6 @@ MODULE_LAYER: dict[str, int] = {
     "map_render": 6,
     "_render_stripes": 6,  # root shim -> map_render/stripes.py
     "camera": 6,
-    "_camera_map": 6,  # root shim -> camera/map.py
-    "_camera_photos": 6,  # root shim -> camera/photos.py
 
     # ---- entry points (setup/unload, config flow, diagnostics): these
     #      compose across every layer below presentation, so they are

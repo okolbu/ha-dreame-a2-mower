@@ -48,7 +48,7 @@ entities:
   - id: "camera.dreame_a2_mower_map"
     platform: camera
     class: "DreameA2MapCamera"
-    class_file: "custom_components/dreame_a2_mower/_camera_map.py:14"
+    class_file: "custom_components/dreame_a2_mower/camera/map.py"
     device: parent
     source:
       wire: "rendered from cloud MAP (lawn + background only); trail + mower icon drawn client-side by the map card from published position-stream attributes"
@@ -278,7 +278,7 @@ entities:
   - id: "camera.dreame_a2_mower_work_log"
     platform: camera
     class: "DreameA2WorkLogCamera"
-    class_file: "custom_components/dreame_a2_mower/_camera_map.py:206"
+    class_file: "custom_components/dreame_a2_mower/camera/map.py"
     device: parent
     source:
       wire: "rendered from cloud session summary + local trail — driven by work-log picker"
@@ -307,7 +307,7 @@ entities:
   - id: "camera.dreame_a2_mower_album_photo"
     platform: camera
     class: "DreameA2AlbumPhotoCamera"
-    class_file: "custom_components/dreame_a2_mower/_camera_photos.py:53"
+    class_file: "custom_components/dreame_a2_mower/camera/photos.py"
     device: parent
     source:
       wire: "local PhotoArchive populated by coordinator photo_list OSS fetch [dreame-app-implementation-guide-2026-06-09.md]"
@@ -332,7 +332,7 @@ entities:
   - id: "camera.dreame_a2_mower_person_photo"
     platform: camera
     class: "DreameA2PersonPhotoCamera"
-    class_file: "custom_components/dreame_a2_mower/_camera_photos.py:79"
+    class_file: "custom_components/dreame_a2_mower/camera/photos.py"
     device: parent
     source:
       wire: "local PhotoArchive populated by coordinator photo_list OSS fetch [dreame-app-implementation-guide-2026-06-09.md]"
@@ -384,7 +384,7 @@ entities:
   - id: "camera.dreame_a2_mower_latest_video"
     platform: camera
     class: "DreameA2LatestVideoThumbCamera"
-    class_file: "custom_components/dreame_a2_mower/_camera_photos.py:136"
+    class_file: "custom_components/dreame_a2_mower/camera/photos.py"
     device: parent
     source:
       wire: "local VideoArchive populated by coordinator video_list OSS fetch [dreame-app-implementation-guide-2026-06-09.md]"

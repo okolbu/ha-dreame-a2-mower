@@ -767,15 +767,10 @@ Entity classes live in domain-grouped modules — `camera/map.py`,
 
 `_camera_lidar.py`, `_camera_views.py`, and `_camera_wifi.py` were **deleted in
 P1** — zero importers (T2-7); import `camera.lidar`, `camera.views`, and
-`camera.wifi` directly. The remaining old flat root paths (`_camera_map.py`,
-`_camera_photos.py`) are still 1-line re-export **shims**
-(`from .camera.map import *` + explicit `__all__`) preserving the deep test
-imports (`test_card_contract`, `test_editable_objects_attr`, `test_oss_camera`,
-`test_photo_camera`). They
-are kept ONLY until the P3 import-path rewrite + contract-test replacement
-(target-architecture § 2). `_camera_photos.py` carries
-`_photo_detection_attrs` explicitly (an underscore name `import *` won't carry,
-imported by `test_oss_camera`). New code imports from `camera.<module>` directly.
+`camera.wifi` directly. The old flat root shims `_camera_map.py` and
+`_camera_photos.py` were **RETIRED in P3.10** (all importers rewritten to the
+canonical `camera.map` / `camera.photos` paths). Import from `camera.<module>`
+directly; there is no root re-export shim.
 
 ### wifi/ package
 

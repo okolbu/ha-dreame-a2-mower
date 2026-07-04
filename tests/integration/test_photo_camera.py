@@ -26,7 +26,7 @@ def _make_album_camera(coordinator):
     ``__init__`` calls.  We set ``coordinator`` manually (same value that
     ``CoordinatorEntity.__init__`` would assign) so the entity methods work.
     """
-    from custom_components.dreame_a2_mower._camera_photos import (
+    from custom_components.dreame_a2_mower.camera.photos import (
         DreameA2AlbumPhotoCamera,
     )
 
@@ -42,7 +42,7 @@ def _make_person_camera(coordinator):
 
     Same pattern as ``_make_album_camera``.
     """
-    from custom_components.dreame_a2_mower._camera_photos import (
+    from custom_components.dreame_a2_mower.camera.photos import (
         DreameA2PersonPhotoCamera,
     )
 

@@ -127,7 +127,7 @@ def test_camera_map_schema_version_pinned():
     accompanied by a bump of MAP_ATTR_SCHEMA_VERSION so a card can detect a
     backend it doesn't understand. This pins the current value.
     """
-    from custom_components.dreame_a2_mower._camera_map import (
+    from custom_components.dreame_a2_mower.camera.map import (
         MAP_ATTR_SCHEMA_VERSION,
     )
 
