@@ -407,7 +407,7 @@ async def _handle_set_schedule_plans(
     slot. The coordinator does the cloud round-trip; on success the next
     cloud refresh updates sensor attrs which the card re-reads.
     """
-    from ..cloud_state import SchedulePlan, ScheduleSlot
+    from ..state.cloud_state import SchedulePlan, ScheduleSlot
 
     cs = getattr(coordinator, "cloud_state", None)
     if cs is None:

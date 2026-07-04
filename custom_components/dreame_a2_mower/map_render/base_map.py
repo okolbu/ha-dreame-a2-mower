@@ -24,7 +24,7 @@ from ._geometry import (
 from ..protocol.map.shapes import DECORATIVE_SHAPE_TYPES
 
 if TYPE_CHECKING:
-    from ..cloud_state import MowPathData
+    from ..state.cloud_state import MowPathData
     from ..protocol.map import MapData
 
 _LOGGER = logging.getLogger(__name__)

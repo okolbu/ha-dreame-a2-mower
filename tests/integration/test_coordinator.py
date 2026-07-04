@@ -3449,7 +3449,7 @@ def _empty_cloud_state_parts():
     """
     import dataclasses
 
-    from custom_components.dreame_a2_mower.cloud_state import (
+    from custom_components.dreame_a2_mower.state.cloud_state import (
         CloudState,
         ScheduleData,
         SettingsRoot,

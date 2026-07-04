@@ -5,7 +5,7 @@ None of that matters for cold-start observation. We need:
 
   - .state_machine.snapshot()  — MowerStateMachine in initial state
   - .data                      — MowerState() defaults
-  - .cloud_state               — CloudState() defaults
+  - .state.cloud_state               — CloudState() defaults
 
 Plus a permissive __getattr__ so value_fns that reach for less-common
 attributes don't crash discovery; they get a None instead.
@@ -51,7 +51,7 @@ def _empty_cloud_state() -> Any:
     factory method; this mirrors the canonical empty form used in
     tests/test_cloud_state_dataclasses.py.
     """
-    from custom_components.dreame_a2_mower.cloud_state import (
+    from custom_components.dreame_a2_mower.state.cloud_state import (
         CloudState,
         ScheduleData,
         SettingsRoot,

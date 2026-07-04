@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
-from custom_components.dreame_a2_mower.cloud_state import (
+from custom_components.dreame_a2_mower.state.cloud_state import (
     CloudState,
     ScheduleData,
     SettingsRoot,

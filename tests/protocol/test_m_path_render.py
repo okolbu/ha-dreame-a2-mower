@@ -5,7 +5,7 @@ import io
 
 from PIL import Image
 
-from custom_components.dreame_a2_mower.cloud_state import MowPathData
+from custom_components.dreame_a2_mower.state.cloud_state import MowPathData
 from custom_components.dreame_a2_mower.protocol.map import MapData
 from custom_components.dreame_a2_mower.map_render import render_base_map
 

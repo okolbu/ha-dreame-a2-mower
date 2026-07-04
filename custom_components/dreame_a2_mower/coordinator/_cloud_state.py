@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import ConfigEntryNotReady
 
-from ..cloud_state import CloudState
+from ..state.cloud_state import CloudState
 from ..const import (
     LOGGER,
 )

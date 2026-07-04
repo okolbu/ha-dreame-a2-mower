@@ -1,7 +1,7 @@
 """Tests for SCHEDULE decoder (header + blob) + encoder."""
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.cloud_state import (
+from custom_components.dreame_a2_mower.state.cloud_state import (
     ScheduleSlot,
     SchedulePlan,
 )

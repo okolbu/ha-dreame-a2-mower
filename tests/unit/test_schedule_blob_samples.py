@@ -1,5 +1,5 @@
 import base64
-from custom_components.dreame_a2_mower.cloud_state import SchedulePlan
+from custom_components.dreame_a2_mower.state.cloud_state import SchedulePlan
 from custom_components.dreame_a2_mower.protocol.schedule_encode import encode_schedule_blob
 
 

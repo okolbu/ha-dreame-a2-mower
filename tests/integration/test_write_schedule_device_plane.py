@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.dreame_a2_mower.coordinator._writes import _WritesMixin
-from custom_components.dreame_a2_mower.cloud_state import (
+from custom_components.dreame_a2_mower.state.cloud_state import (
     ScheduleData,
     SchedulePlan,
     ScheduleSlot,

@@ -105,7 +105,7 @@ def test_refresh_cloud_state_runs_the_backfill():
     """_refresh_cloud_state awaits the backfill (after the active map is set)."""
     import dataclasses
 
-    from custom_components.dreame_a2_mower.cloud_state import (
+    from custom_components.dreame_a2_mower.state.cloud_state import (
         CloudState,
         ScheduleData,
         SettingsRoot,

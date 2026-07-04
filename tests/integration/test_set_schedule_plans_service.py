@@ -5,7 +5,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from custom_components.dreame_a2_mower import services
-from custom_components.dreame_a2_mower.cloud_state import (
+from custom_components.dreame_a2_mower.state.cloud_state import (
 
     ScheduleData,
     ScheduleSlot,

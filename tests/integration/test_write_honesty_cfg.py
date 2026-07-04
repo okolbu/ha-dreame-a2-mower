@@ -375,7 +375,7 @@ async def test_direction_select_accepted_applies_option():
 # ---------------------------------------------------------------------------
 
 def _schedule_coord(monkeypatch, write_schedule=None, write_schedule_enabled=None):
-    from custom_components.dreame_a2_mower.cloud_state import (
+    from custom_components.dreame_a2_mower.state.cloud_state import (
         ScheduleData,
         ScheduleSlot,
     )

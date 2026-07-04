@@ -88,7 +88,7 @@ def make_empty_cloud_state(**overrides):
 
     All fields default to empty; pass overrides (e.g. maps_by_id=...) as needed.
     """
-    from custom_components.dreame_a2_mower.cloud_state import (
+    from custom_components.dreame_a2_mower.state.cloud_state import (
         CloudState,
         ScheduleData,
         SettingsRoot,

@@ -7,7 +7,7 @@ _REJECTED = WriteResult(delivered=True, accepted=False, code=-3, msg="not suppor
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
-from custom_components.dreame_a2_mower.cloud_state import CloudState
+from custom_components.dreame_a2_mower.state.cloud_state import CloudState
 
 
 def _bare_cloud_state(**over):

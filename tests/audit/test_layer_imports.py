@@ -114,7 +114,6 @@ MODULE_LAYER: dict[str, int] = {
     "mower": 3,
     "state": 3,  # P3.6: state/ package — containers, mower_state, snapshot,
                  # machine, cloud_state, apply (moved from mower/ + coordinator/)
-    "cloud_state": 3,
     "live_map": 3,
 
     # ---- 4: domain (session/writes/media/wifi/lidar/notifications/ota/

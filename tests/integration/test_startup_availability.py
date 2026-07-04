@@ -10,7 +10,7 @@ from __future__ import annotations
 import dataclasses
 from unittest.mock import MagicMock
 
-from custom_components.dreame_a2_mower.cloud_state import (
+from custom_components.dreame_a2_mower.state.cloud_state import (
     CloudState, ScheduleData, SettingsRoot,
 )
 from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator

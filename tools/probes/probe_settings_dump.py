@@ -26,7 +26,7 @@ def main() -> int:
     client = _build_cloud_client(DEFAULT_CREDS_PATH)
     # P3.5: fetch_full_cloud_state returns the decoded parts (CloudState kwargs);
     # the state layer composes the container, so do the same here.
-    from custom_components.dreame_a2_mower.cloud_state import CloudState
+    from custom_components.dreame_a2_mower.state.cloud_state import CloudState
     parts = client.fetch_full_cloud_state()
     if parts is None:
         print("fetch_full_cloud_state returned None (relay asleep?)")

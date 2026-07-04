@@ -310,7 +310,7 @@ def test_base_unavailable_overrides_source_fresh():
 
 from unittest.mock import MagicMock  # noqa: E402
 
-from custom_components.dreame_a2_mower.cloud_state import (  # noqa: E402
+from custom_components.dreame_a2_mower.state.cloud_state import (  # noqa: E402
     CloudState,
     ScheduleData,
     SettingsRoot,

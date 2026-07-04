@@ -317,7 +317,7 @@ def test_segment_count_rename_delete_element_shapes():
 # ---------------------------------------------------------------------------
 
 def test_schedule_count_slot_and_plan_element_shapes():
-    from custom_components.dreame_a2_mower.cloud_state import (
+    from custom_components.dreame_a2_mower.state.cloud_state import (
         CloudState, ScheduleData, SchedulePlan, ScheduleSlot, SettingsRoot,
     )
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator

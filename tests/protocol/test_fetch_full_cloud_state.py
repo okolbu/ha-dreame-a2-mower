@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from custom_components.dreame_a2_mower.cloud_client import DreameA2CloudClient
-from custom_components.dreame_a2_mower.cloud_state import CloudState
+from custom_components.dreame_a2_mower.state.cloud_state import CloudState
 
 # Real raw batch from the user's account (preserved in research artifact).
 REAL_BATCH = json.loads(

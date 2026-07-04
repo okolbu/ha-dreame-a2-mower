@@ -22,7 +22,7 @@ def test_coordinator_init_declares_chunked_write_lock():
 def _make_coord_for_settings_write():
     """Build a coordinator stub with cloud_state.settings populated."""
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-    from custom_components.dreame_a2_mower.cloud_state import (
+    from custom_components.dreame_a2_mower.state.cloud_state import (
         CloudState, ScheduleData, SettingsRoot,
     )
     coord = object.__new__(DreameA2MowerCoordinator)
@@ -113,7 +113,7 @@ def test_write_schedule_uses_device_plane_not_kv():
     the SCHEDULE.* cache mirror; see dreame-app-schedule-write-2026-06-10.md).
     """
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-    from custom_components.dreame_a2_mower.cloud_state import (
+    from custom_components.dreame_a2_mower.state.cloud_state import (
         CloudState, ScheduleData, ScheduleSlot, SettingsRoot,
     )
     coord = object.__new__(DreameA2MowerCoordinator)
