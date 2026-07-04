@@ -33,7 +33,7 @@
 
 export const DOMAIN = "dreame_a2_mower";
 export const STRATEGY_TYPE = "dreame-a2-mower";
-const CARD_VERSION = "1.0.32a3";
+const CARD_VERSION = "1.0.32a4";
 
 // ---------------------------------------------------------------------------
 // MANIFEST — the card grouping. Keys are unique_id suffixes.

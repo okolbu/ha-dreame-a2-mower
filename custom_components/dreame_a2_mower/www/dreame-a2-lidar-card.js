@@ -1089,7 +1089,7 @@ class DreameA2LidarCard extends HTMLElement {
 
 // release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
 // = "..."` shape. defineCard guards the double-define (T6-8) + logs the banner.
-const CARD_VERSION = "1.0.32a3";
+const CARD_VERSION = "1.0.32a4";
 defineCard("dreame-a2-lidar-card", DreameA2LidarCard, {
   name: "Dreame A2 LiDAR Card",
   description: "Interactive WebGL 3D view of the mower's LiDAR point-cloud scan.",
