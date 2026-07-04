@@ -403,7 +403,9 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     # ------------------------------------------------------------------
     DreameA2SwitchEntityDescription(
         key="msg_alert_anomaly",
-        name="Notification: Anomaly messages",
+        # v2 rename (P4.5, track-5 T5-11): drop the "Notification:" colon prefix.
+        # object_id: switch.dreame_a2_mower_anomaly_notifications.
+        name="Anomaly notifications",
         icon="mdi:alert-octagon",
         value_fn=lambda s: s.msg_alert_anomaly,
         cfg_key="MSG_ALERT",
@@ -412,7 +414,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     ),
     DreameA2SwitchEntityDescription(
         key="msg_alert_error",
-        name="Notification: Error messages",
+        name="Error notifications",
         icon="mdi:alert-circle",
         value_fn=lambda s: s.msg_alert_error,
         cfg_key="MSG_ALERT",
@@ -421,7 +423,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     ),
     DreameA2SwitchEntityDescription(
         key="msg_alert_task",
-        name="Notification: Task messages",
+        name="Task notifications",
         icon="mdi:clipboard-text",
         value_fn=lambda s: s.msg_alert_task,
         cfg_key="MSG_ALERT",
@@ -430,7 +432,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     ),
     DreameA2SwitchEntityDescription(
         key="msg_alert_consumables",
-        name="Notification: Consumables messages",
+        name="Consumables notifications",
         icon="mdi:tools",
         value_fn=lambda s: s.msg_alert_consumables,
         cfg_key="MSG_ALERT",
@@ -446,7 +448,9 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     # ------------------------------------------------------------------
     DreameA2SwitchEntityDescription(
         key="voice_regular_notification",
-        name="Voice: Regular notification prompt",
+        # v2 rename (P4.5, track-5 T5-11): drop the "Voice:" colon prefix.
+        # object_id: switch.dreame_a2_mower_voice_prompt_regular_notification.
+        name="Voice prompt — Regular notification",
         icon="mdi:bullhorn",
         value_fn=lambda s: s.voice_regular_notification,
         cfg_key="VOICE",
@@ -455,7 +459,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     ),
     DreameA2SwitchEntityDescription(
         key="voice_work_status",
-        name="Voice: Work status prompt",
+        name="Voice prompt — Work status",
         icon="mdi:bullhorn-variant",
         value_fn=lambda s: s.voice_work_status,
         cfg_key="VOICE",
@@ -464,7 +468,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     ),
     DreameA2SwitchEntityDescription(
         key="voice_special_status",
-        name="Voice: Special status prompt",
+        name="Voice prompt — Special status",
         icon="mdi:bullhorn-variant-outline",
         value_fn=lambda s: s.voice_special_status,
         cfg_key="VOICE",
@@ -473,7 +477,7 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
     ),
     DreameA2SwitchEntityDescription(
         key="voice_error_status",
-        name="Voice: Error status prompt",
+        name="Voice prompt — Error status",
         icon="mdi:alert-octagon-outline",
         value_fn=lambda s: s.voice_error_status,
         cfg_key="VOICE",

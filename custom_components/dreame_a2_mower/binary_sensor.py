@@ -328,7 +328,9 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
     DreameA2BinarySensorEntityDescription(
         key="human_presence_scenario_standby",
         translation_key="human_presence_scenario_standby",
-        name="Human presence scenario: standby",
+        # v2 rename (P4.5, track-5 T5-11): em-dash, not a colon. object_id is
+        # unchanged (both slugify to human_presence_scenario_standby).
+        name="Human presence scenario — standby",
         entity_category=EntityCategory.DIAGNOSTIC,
         availability_source="cloud",
         value_fn=lambda coord: coord.data.human_presence_scenario_standby,
@@ -336,7 +338,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
     DreameA2BinarySensorEntityDescription(
         key="human_presence_scenario_mowing",
         translation_key="human_presence_scenario_mowing",
-        name="Human presence scenario: mowing",
+        name="Human presence scenario — mowing",
         entity_category=EntityCategory.DIAGNOSTIC,
         availability_source="cloud",
         value_fn=lambda coord: coord.data.human_presence_scenario_mowing,
@@ -344,7 +346,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
     DreameA2BinarySensorEntityDescription(
         key="human_presence_scenario_recharge",
         translation_key="human_presence_scenario_recharge",
-        name="Human presence scenario: recharge",
+        name="Human presence scenario — recharge",
         entity_category=EntityCategory.DIAGNOSTIC,
         availability_source="cloud",
         value_fn=lambda coord: coord.data.human_presence_scenario_recharge,
@@ -352,7 +354,7 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
     DreameA2BinarySensorEntityDescription(
         key="human_presence_scenario_patrol",
         translation_key="human_presence_scenario_patrol",
-        name="Human presence scenario: patrol",
+        name="Human presence scenario — patrol",
         entity_category=EntityCategory.DIAGNOSTIC,
         availability_source="cloud",
         value_fn=lambda coord: coord.data.human_presence_scenario_patrol,
@@ -360,7 +362,10 @@ BINARY_SENSORS: tuple[DreameA2BinarySensorEntityDescription, ...] = (
     DreameA2BinarySensorEntityDescription(
         key="human_presence_alert_voice",
         translation_key="human_presence_alert_voice",
-        name="Human presence voice + push alert",
+        # v2 rename (P4.5, track-5 T5-11): spell out "and". object_id changes:
+        # binary_sensor.dreame_a2_mower_human_presence_voice_and_push_alert
+        # (was ..._human_presence_voice_push_alert).
+        name="Human presence voice and push alert",
         entity_category=EntityCategory.DIAGNOSTIC,
         availability_source="cloud",
         value_fn=lambda coord: coord.data.human_presence_alert_voice,
