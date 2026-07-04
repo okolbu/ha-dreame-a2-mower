@@ -632,6 +632,33 @@ class _CoreMixin:
         return self._wifi_archive_index if hasattr(self, "_wifi_archive_index") else []
 
     @property
+    def finalizing_start_ts(self) -> int | None:
+        """The start_ts of the session last finalized to completion (the finalize
+        latch's completion key), or None.
+
+        transitional accessor (P3.2) — moves to the session/finalize service in
+        9e. Read by domain/session/persistence.py's restore×finalize discard
+        guard; preserves the ``getattr(coord, "_finalizing_start_ts", None)``
+        None-default it replaced.
+        """
+        return (
+            self._finalizing_start_ts if hasattr(self, "_finalizing_start_ts") else None
+        )
+
+    @property
+    def rain_delay_started_at(self) -> int | None:
+        """Unix ts the current rain-delay pause started, or None.
+
+        transitional accessor (P3.2) — moves to the session service in 9e. Read
+        by domain/session/persistence.py when persisting the in-progress payload;
+        preserves the ``getattr(coord, "_rain_delay_started_at", None)``
+        None-default it replaced.
+        """
+        return (
+            self._rain_delay_started_at if hasattr(self, "_rain_delay_started_at") else None
+        )
+
+    @property
     def wifi_archive_store(self):
         """The on-disk WiFi heatmap archive store, or None.
 
