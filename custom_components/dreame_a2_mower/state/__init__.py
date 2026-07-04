@@ -21,4 +21,6 @@ from .containers import (
     ChargingStatus as ChargingStatus,
     State as State,
 )
+from .machine import MowerStateMachine as MowerStateMachine
 from .mower_state import FLAT_FIELDS as FLAT_FIELDS, MowerState as MowerState
+from .snapshot import StateSnapshot as StateSnapshot
