@@ -62,9 +62,51 @@ async def test_validate_login_raises_cannot_connect_on_transport_error(
 async def test_validate_login_raises_invalid_auth_on_false(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """login() returning False (bad creds) maps to InvalidAuth."""
+    """login() returning False (bad creds) maps to InvalidAuth.
+
+    ``_FakeClient`` here carries no ``last_login_failure`` attribute at all
+    (it's not the real ``DreameA2CloudClient``) — the refined
+    ``_validate_login`` must default an absent/non-"transport" value to
+    InvalidAuth (Task 2 / P6.1b), not blow up on the missing attribute.
+    """
 
     class _FakeClient(_FakeClientBase):
+        def login(self) -> bool:
+            return False
+
+    monkeypatch.setattr(config_flow, "DreameA2CloudClient", _FakeClient)
+
+    with pytest.raises(config_flow.InvalidAuth):
+        await config_flow._validate_login(_FakeHass(), _data())
+
+
+async def test_validate_login_false_with_transport_marker_raises_cannot_connect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Task 2 (P6.1b): login() -> False AND last_login_failure == 'transport'
+    now maps to CannotConnect, not InvalidAuth — closing the Task 1 nuance
+    where a network blip was indistinguishable from bad credentials."""
+
+    class _FakeClient(_FakeClientBase):
+        last_login_failure = "transport"
+
+        def login(self) -> bool:
+            return False
+
+    monkeypatch.setattr(config_flow, "DreameA2CloudClient", _FakeClient)
+
+    with pytest.raises(config_flow.CannotConnect):
+        await config_flow._validate_login(_FakeHass(), _data())
+
+
+async def test_validate_login_false_with_auth_marker_raises_invalid_auth(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """login() -> False AND last_login_failure == 'auth' maps to InvalidAuth."""
+
+    class _FakeClient(_FakeClientBase):
+        last_login_failure = "auth"
+
         def login(self) -> bool:
             return False
 

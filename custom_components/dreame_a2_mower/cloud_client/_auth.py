@@ -23,6 +23,10 @@ class _AuthMixin:
         self._session.close()
         self._session = requests.session()
         self._logged_in = False
+        # Task 2 (P6.1b): reset on every call so a stale value from a prior
+        # attempt never survives into this one — each branch below sets the
+        # definitive outcome (None / "auth" / "transport").
+        self._last_login_failure: str | None = None
 
         strings = self._ensure_strings()
 
@@ -65,6 +69,10 @@ class _AuthMixin:
                     self._uuid = data.get("uid")
                     self._location = data.get(strings[21], self._location)
                     self._ti = data.get(strings[22], self._ti)
+                else:
+                    # 200 but no access-token key — the cloud responded and
+                    # rejected the credentials (Task 2 / P6.1b).
+                    self._last_login_failure = "auth"
             else:
                 try:
                     data = json.loads(response.text)
@@ -77,8 +85,19 @@ class _AuthMixin:
                 except Exception:
                     pass
                 _LOGGER.error("Login failed: %s", response.text)
+                # Split by HTTP status range: a 5xx is a transient server-side
+                # outage / maintenance window (retry via backoff, NOT a
+                # credentials problem — must not force a spurious reauth
+                # prompt); a 4xx (and any other non-200 that isn't the
+                # refresh-token-expired retry handled above) is a genuine
+                # credentials-rejected outcome that warrants reauth.
+                if response.status_code >= 500:
+                    self._last_login_failure = "transport"
+                else:
+                    self._last_login_failure = "auth"
         except requests.exceptions.Timeout:
             _LOGGER.warning("Login Failed: Read timed out. (read timeout=10)")
+            self._last_login_failure = "transport"
         except (requests.exceptions.RequestException, ValueError) as ex:
             # Network failure or malformed/garbled cloud JSON → degrade to
             # logged_in=False (caller retries). A code/shape bug (KeyError,
@@ -86,6 +105,7 @@ class _AuthMixin:
             # it propagates to _init_cloud so the real fault surfaces instead
             # of an endless silent re-login loop.
             _LOGGER.error("Login failed: %s", str(ex))
+            self._last_login_failure = "transport"
 
         if self._logged_in:
             self._fail_count = 0

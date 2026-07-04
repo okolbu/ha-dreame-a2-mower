@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.storage import Store
 
 from ..archive.lidar import LidarArchive
@@ -859,7 +860,21 @@ class _CoreMixin:
             password=self._password,
             country=self._country,
         )
-        client.login()
+        ok = client.login()
+        if not ok and client.last_login_failure == "auth":
+            # Task 2 (P6.1b): the cloud responded and genuinely rejected the
+            # configured credentials — surface ConfigEntryAuthFailed so HA
+            # starts the reauth flow, instead of falling through to
+            # select_first_g2408/get_device_info (which would fail confusingly
+            # with no device data) or looping via ConfigEntryNotReady retries
+            # that can never succeed without new credentials. A transport
+            # failure ("transport", or ok=True) does NOT raise here — that
+            # case still surfaces via the existing downstream
+            # ConfigEntryNotReady path (mqtt_host_port raises once
+            # get_device_info can't populate _host).
+            raise ConfigEntryAuthFailed(
+                "Dreame cloud rejected the configured credentials"
+            )
         # Discover and pin the g2408 in the cloud device list. Without
         # this _did is None and get_device_info()'s API call returns no
         # data → _host stays None → mqtt_host_port() raises.

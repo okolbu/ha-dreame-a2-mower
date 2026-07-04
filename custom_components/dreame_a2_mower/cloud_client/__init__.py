@@ -132,6 +132,13 @@ class DreameA2CloudClient(
         self._last_send_error_code: int | None = None
         """F6.8.1 transport-layer last error code. Updated by ``send`` so callers
         that get None back can disambiguate 80001 from other failures."""
+        self._last_login_failure: str | None = None
+        """Task 2 (P6.1b) distinguishable auth error. Set by ``login()`` on
+        every outcome: ``None`` on success, ``"auth"`` when the cloud
+        responded but rejected the credentials, ``"transport"`` when a
+        network/timeout/malformed-response failure prevented a clear
+        verdict. ``login()`` itself keeps returning a plain ``bool`` — this
+        is purely additive so existing bool callers are unaffected."""
 
     # ------------------------------------------------------------------
     # Properties
@@ -174,6 +181,20 @@ class DreameA2CloudClient(
     @property
     def logged_in(self) -> bool | None:
         return self._logged_in
+
+    @property
+    def last_login_failure(self) -> str | None:
+        """Why the last ``login()`` call returned ``False``, or ``None``.
+
+        ``None`` — last login succeeded (or none attempted yet).
+        ``"auth"`` — the cloud responded but rejected the credentials.
+        ``"transport"`` — a network/timeout/malformed-response failure.
+
+        Read by ``coordinator/_core.py:_init_cloud`` (raises
+        ``ConfigEntryAuthFailed`` only for ``"auth"``) and
+        ``domain/mqtt_lifecycle.py`` (starts reauth only for ``"auth"``).
+        """
+        return self._last_login_failure
 
     @property
     def connected(self) -> bool:

@@ -54,12 +54,14 @@ async def _validate_login(hass: Any, data: dict[str, Any]) -> None:
 
     ``client.login()`` is blocking (uses ``requests``), so it's run via
     ``hass.async_add_executor_job`` rather than called directly in the
-    event loop. It returns a bool (``True``/``False``) and internally
-    swallows transport errors (``requests`` Timeout/RequestException) into
-    a ``False`` return — it does not raise a distinguishable auth-vs-
-    transport exception. Any exception that DOES escape (e.g. a genuine
-    programming error) is treated as a transport/unknown failure here;
-    only an explicit ``False`` return is mapped to ``InvalidAuth``.
+    event loop. It returns a bool (``True``/``False``); Task 2 (P6.1b)
+    added ``client.last_login_failure`` so a ``False`` return can now be
+    disambiguated: ``"transport"`` (network/timeout/malformed-response —
+    login couldn't reach a clear verdict) maps to ``CannotConnect``,
+    anything else (``"auth"``, or an absent attribute on a test double)
+    maps to ``InvalidAuth``. Any exception that escapes the executor job
+    (e.g. a genuine programming error) is treated as a transport/unknown
+    failure here.
     """
     client = DreameA2CloudClient(
         username=data[CONF_USERNAME],
@@ -71,6 +73,8 @@ async def _validate_login(hass: Any, data: dict[str, Any]) -> None:
     except Exception as err:  # noqa: BLE001 - mapped to a flow error below
         raise CannotConnect from err
     if not ok:
+        if getattr(client, "last_login_failure", None) == "transport":
+            raise CannotConnect
         raise InvalidAuth
 
 
@@ -129,6 +133,52 @@ class DreameA2MowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     ),
                 }
             ),
+            errors=errors,
+        )
+
+    async def async_step_reauth(
+        self, entry_data: dict[str, Any]
+    ) -> FlowResult:
+        """Entry point when HA starts a reauth flow (Task 2 / P6.1b).
+
+        Triggered either by ``coordinator/_core.py:_init_cloud`` raising
+        ``ConfigEntryAuthFailed`` during setup, or by
+        ``domain/mqtt_lifecycle.py`` calling
+        ``entry.async_start_reauth`` after a runtime rc=5 relogin finds the
+        cloud has genuinely rejected the credentials. Stashes the entry
+        being reauthenticated (looked up via the standard
+        ``self.context["entry_id"]``) and forwards straight to the
+        password-only confirm step.
+        """
+        self._reauth_entry = self.hass.config_entries.async_get_entry(
+            self.context["entry_id"]
+        )
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Password-only reauth form; validates via the shared ``_validate_login``."""
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            data = {**self._reauth_entry.data, CONF_PASSWORD: user_input[CONF_PASSWORD]}
+            try:
+                await _validate_login(self.hass, data)
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:  # noqa: BLE001 - last-resort form error
+                errors["base"] = "unknown"
+            else:
+                return self.async_update_reload_and_abort(
+                    self._reauth_entry, data=data
+                )
+
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
             errors=errors,
         )
 

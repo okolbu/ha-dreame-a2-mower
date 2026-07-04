@@ -90,12 +90,26 @@ async def async_recover_mqtt_auth(coord) -> None:
             # P2-inherit: escalate the cooldown so a broker that keeps
             # rejecting fresh creds is retried less and less aggressively.
             coord._rc5_consecutive_failures += 1
-            LOGGER.warning(
-                "[mqtt] rc=5 recovery: cloud re-login failed (%d consecutive); "
-                "MQTT will keep retrying with the stale password until the "
-                "next rc=5 triggers another (increasingly spaced) attempt",
-                coord._rc5_consecutive_failures,
-            )
+            if cloud.last_login_failure == "auth":
+                # Task 2 (P6.1b) DEVIATION from the literal brief: raising
+                # ConfigEntryAuthFailed from this background task is not a
+                # valid HA API (nothing awaits it into config-entry setup) —
+                # entry.async_start_reauth is the correct runtime surface for
+                # a rc=5 relogin that fails because the cloud genuinely
+                # rejected the (freshly-refreshed) credentials, as opposed to
+                # a transient network blip.
+                LOGGER.error(
+                    "[mqtt] rc=5 recovery: cloud rejected the configured "
+                    "credentials — starting the reauth flow"
+                )
+                coord.entry.async_start_reauth(coord.hass)
+            else:
+                LOGGER.warning(
+                    "[mqtt] rc=5 recovery: cloud re-login failed (%d consecutive); "
+                    "MQTT will keep retrying with the stale password until the "
+                    "next rc=5 triggers another (increasingly spaced) attempt",
+                    coord._rc5_consecutive_failures,
+                )
             return
         username, password = cloud.mqtt_credentials()
         mqtt.update_credentials(username, password)

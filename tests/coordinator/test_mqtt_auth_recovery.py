@@ -255,3 +255,48 @@ def test_rc5_recovery_failure_logs_and_does_not_update_credentials(monkeypatch):
     coord._cloud.login.assert_called_once()
     mqtt.update_credentials.assert_not_called()
     assert coord._rc5_relogin_in_progress is False
+
+
+def test_rc5_starts_reauth_when_cloud_rejects_credentials(monkeypatch):
+    """Task 2 (P6.1b) DEVIATION from the literal brief: a rc=5 relogin that
+    fails because the cloud genuinely rejected the (refreshed) credentials
+    (``last_login_failure == "auth"``) must surface the reauth flow via
+    ``entry.async_start_reauth`` — raising ConfigEntryAuthFailed from this
+    background task is not a valid HA API, so this is the runtime surface
+    instead of the brief's literal 'raise CEAF from the give-up path'."""
+    coord = _make_coord(monkeypatch)
+    coord._mqtt = MagicMock()
+    coord._cloud.login.return_value = False
+    coord._cloud.last_login_failure = "auth"
+    coord.entry.async_start_reauth = MagicMock()
+
+    async def _run():
+        coord._handle_mqtt_auth_error()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    asyncio.run(_run())
+
+    coord._cloud.login.assert_called_once()
+    coord.entry.async_start_reauth.assert_called_once_with(coord.hass)
+
+
+def test_rc5_transport_failure_does_not_start_reauth(monkeypatch):
+    """A transport-only relogin failure (last_login_failure == 'transport',
+    or unset as on a plain MagicMock) must NOT start reauth — only a
+    genuine credentials-rejected outcome does."""
+    coord = _make_coord(monkeypatch)
+    coord._mqtt = MagicMock()
+    coord._cloud.login.return_value = False
+    coord._cloud.last_login_failure = "transport"
+    coord.entry.async_start_reauth = MagicMock()
+
+    async def _run():
+        coord._handle_mqtt_auth_error()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    asyncio.run(_run())
+
+    coord._cloud.login.assert_called_once()
+    coord.entry.async_start_reauth.assert_not_called()

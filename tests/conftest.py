@@ -643,9 +643,22 @@ def _make_ha_stub() -> None:
         tests/integration/test_setup_cloud_blip.py (P2 Task 2 / T3-2 / R-5).
         """
 
+    class _ConfigEntryAuthFailed(_HomeAssistantError):
+        """Stub mirroring homeassistant.exceptions.ConfigEntryAuthFailed.
+
+        Real HA: raising this from a config-entry setup path (or from a
+        coordinator's first refresh) marks the entry as needing
+        reauthentication and starts the reauth flow. Task 2 (P6.1b) — kept
+        as a DISTINCT subclass (not aliased to ``ConfigEntryNotReady`` or a
+        bare ``Exception``) so ``pytest.raises(ConfigEntryAuthFailed)``
+        can't be satisfied by an unrelated ``ConfigEntryNotReady``/bug, and
+        so a test can assert the two are NOT confused with each other.
+        """
+
     exc_mod.HomeAssistantError = _HomeAssistantError  # type: ignore[attr-defined]
     exc_mod.ServiceValidationError = _ServiceValidationError  # type: ignore[attr-defined]
     exc_mod.ConfigEntryNotReady = _ConfigEntryNotReady  # type: ignore[attr-defined]
+    exc_mod.ConfigEntryAuthFailed = _ConfigEntryAuthFailed  # type: ignore[attr-defined]
     sys.modules["homeassistant.exceptions"] = exc_mod
 
 

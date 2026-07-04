@@ -9,6 +9,13 @@
           "password": "Password",
           "country": "Cloud region"
         }
+      },
+      "reauth_confirm": {
+        "title": "Reauthenticate Dreame A2 Mower",
+        "description": "The Dreame cloud rejected the stored credentials. Enter the current password to reconnect.",
+        "data": {
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -17,7 +24,8 @@
       "unknown": "Unexpected error."
     },
     "abort": {
-      "already_configured": "Mower is already configured."
+      "already_configured": "Mower is already configured.",
+      "reauth_successful": "Re-authentication was successful."
     }
   },
   "options": {
