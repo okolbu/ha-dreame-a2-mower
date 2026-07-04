@@ -939,6 +939,31 @@ diff identifies which key(s) change and what values mean; entities added.
 
 ---
 
+### P6: offline / restart last-known persistence + config availability (refactor-v2)
+
+**Why:** Found during the P5.5 live eyeball with the mower away for repairs.
+When offline, ~29 writable config switches + action buttons go `unavailable`
+(correctly MQTT-gated since the P2 `is_connected` fix) and ~45 read-only values
+go `unknown` — consumables %, lifetime totals, SIM status, network SSID/IP, dock
+position, firmware version, DnD/charging/low-speed time windows. Confirmed NOT a
+refactor regression: the persisted snapshot only carries state-machine fields
+(session/battery/position/charging/errors), which are the ones that DO survive;
+the rest are only populated by live cloud/MQTT fetches and were never persisted.
+The result is a poor offline/restart dashboard (mostly blank). User ruling
+2026-07-04: defer this hardening to P6 (it is a state + entity-availability
+design change, not a dashboard tweak).
+**Done when:** slowly-changing read-only values (consumables, totals, SIM, dock,
+firmware, device-wide time windows) survive a restart-while-offline showing
+last-known; AND config switches present last-known state (failing only the
+write) instead of `unavailable` when the mower is offline — OR a deliberate
+decision is recorded that a subset must stay `unavailable`. Includes persisting
+`_active_map_id` so `domain/boot.py:render_base` produces the Overview live-map
+base offline (today it early-returns because the active map is unknown offline;
+the per-map `*_base` cameras already render each map). No behaviour change while
+online; corpus IDENTICAL.
+**Status:** open (deferred from P5.5 to P6)
+**Cross-refs:** `state/snapshot.py` (persisted StateSnapshot); `domain/render.py:render_base` (+`_active_map_id`); entity `available` props on the settings switches; memory `project_refactor_v2_2026_07_02`; `.superpowers/sdd/progress.md` P5.5 findings.
+
 ### `MowerAction.SUPPRESS_FAULT` semantics
 
 **Why:** The service exists in the integration but has never been live-tested.
