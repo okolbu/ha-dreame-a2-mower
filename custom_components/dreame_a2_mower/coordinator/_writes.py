@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers.event import async_call_later
 
+from ._managed_timers import schedule_self_cleaning
 from ..cloud_client import WriteResult
 from ..const import (
     LOGGER,
@@ -897,22 +898,21 @@ class _WritesMixin:
         # that "hasn't applied yet" still benefits — and outside the write
         # lock (async_call_later fires later on the event loop).
         await self._refresh_cloud_state()
-        # T3-8: async_call_later returns a canceller; route it through
-        # entry.async_on_unload (same pattern as every periodic timer in
-        # _core.py) so a reload/unload inside the 40s window doesn't fire a
-        # refresh into a torn-down coordinator. getattr guards test doubles
-        # that build a bare _WritesMixin() without an `entry`.
-        entry = getattr(self, "entry", None)
+        # T3-8 + P2-inherit (P3.8): each staggered re-fetch is scheduled via a
+        # SELF-CLEANING canceller registry so a reload/unload inside the 40s
+        # window cancels them (never firing a refresh into a torn-down
+        # coordinator) AND the config-entry's unload-listener list does not grow
+        # by 3 on every edit_map call — one unload hook cancels all outstanding
+        # timers, and each timer removes itself on fire. See _managed_timers.
         for delay in (8, 20, 40):
-            canceller = async_call_later(
-                self.hass,
+            schedule_self_cleaning(
+                self,
+                async_call_later,
                 delay,
                 lambda _now: self.hass.async_create_task(
                     self._refresh_cloud_state()
                 ),
             )
-            if entry is not None:
-                entry.async_on_unload(canceller)
         return failure if failure is not None else _accepted()
 
     async def rename_zone(self, map_id: int, region: int, name: str) -> WriteResult:

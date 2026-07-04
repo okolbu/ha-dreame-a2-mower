@@ -146,13 +146,25 @@ async def test_edit_map_schedules_delayed_refetches_even_on_reject(
 async def test_edit_map_registers_unload_cancellers_for_delayed_refetches(
     _capture_async_call_later,
 ):
-    """T3-8: each of the 3 staggered async_call_later cancellers is routed
-    through entry.async_on_unload so a reload/unload inside the 40s window
-    cancels them instead of firing a refresh into a torn-down coordinator."""
+    """T3-8 + P2-inherit: the 3 staggered re-fetch cancellers go through a
+    SELF-CLEANING registry — a reload/unload inside the 40s window still
+    cancels them, but the entry's unload list gains ONE hook (not 3), and that
+    hook cancels every outstanding timer. Bounded growth per edit_map call."""
     c, _calls = _make_coord()
     await c.edit_map(1, [(219, {"region": 1, "name": "X"})])
 
-    assert c.entry.async_on_unload.call_count == 3
+    # Exactly one unload hook registered regardless of the 3 timers.
+    assert c.entry.async_on_unload.call_count == 1
+    # 3 timers were scheduled and are tracked in the live registry.
+    assert len(c._managed_cancellers) == 3
+    # Firing the single unload hook cancels all outstanding timers.
+    cancel_all = c.entry.async_on_unload.call_args.args[0]
+    cancel_all()
+    assert c._managed_cancellers == set()
+
+    # A second edit_map does NOT add another unload hook (still one total).
+    await c.edit_map(1, [(219, {"region": 1, "name": "Y"})])
+    assert c.entry.async_on_unload.call_count == 1
 
 
 @pytest.mark.asyncio

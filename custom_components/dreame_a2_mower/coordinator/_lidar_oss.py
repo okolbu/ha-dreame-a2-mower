@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.helpers.event import async_call_later
 
+from ._managed_timers import schedule_self_cleaning
 from ..archive.lidar import LidarArchive
 from ..archive.session import ArchivedSession
 from ..const import (
@@ -738,14 +739,14 @@ class _LidarOssMixin:
             except Exception:  # noqa: BLE001 — a sync failure must not propagate
                 LOGGER.exception("post-session OSS gallery refresh failed")
 
-        # T3-8: async_call_later returns a canceller; route it through
-        # entry.async_on_unload (same pattern as every periodic timer in
-        # _core.py) so a reload/unload within the delay window doesn't fire
-        # this into a torn-down coordinator.
-        entry = getattr(self, "entry", None)
-        canceller = async_call_later(hass, self._POST_SESSION_GALLERY_DELAY_S, _run)
-        if entry is not None:
-            entry.async_on_unload(canceller)
+        # T3-8 + P2-inherit (P3.8): schedule via the self-cleaning canceller
+        # registry so a reload/unload within the delay window cancels this
+        # one-shot AND the config-entry's unload-listener list does not grow by
+        # one on every finalize — the timer self-removes on fire and a single
+        # unload hook cancels all outstanding timers. See _managed_timers.
+        schedule_self_cleaning(
+            self, async_call_later, self._POST_SESSION_GALLERY_DELAY_S, _run
+        )
 
     async def _refresh_oss_gallery(self, max_pages: int = 20) -> None:
         """Canonical OSS media sync: archive new photos (categorized via COM

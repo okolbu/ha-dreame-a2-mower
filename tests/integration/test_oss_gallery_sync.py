@@ -75,9 +75,10 @@ async def test_post_session_gallery_refresh_scheduled_and_runs(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_post_session_gallery_refresh_registers_unload_canceller(monkeypatch):
-    """T3-8: the delayed one-shot's canceller is registered via
-    entry.async_on_unload so a reload/unload inside the delay window cancels
-    it instead of letting it fire into a torn-down coordinator."""
+    """T3-8 + P2-inherit: the delayed one-shot's canceller goes through the
+    self-cleaning registry — a reload/unload inside the delay window cancels it,
+    but the entry's unload list gains ONE hook that cancels all outstanding
+    timers (bounded growth across repeated finalizes), not one hook per timer."""
     c = MIXIN()
     c.hass = SimpleNamespace()
     c.entry = MagicMock()
@@ -88,7 +89,17 @@ async def test_post_session_gallery_refresh_registers_unload_canceller(monkeypat
     )
     c._schedule_post_session_gallery_refresh()
 
-    c.entry.async_on_unload.assert_called_once_with(canceller)
+    # One unload hook registered (the cancel-all), and firing it cancels the
+    # scheduled one-shot.
+    c.entry.async_on_unload.assert_called_once()
+    assert canceller in c._managed_cancellers
+    cancel_all = c.entry.async_on_unload.call_args.args[0]
+    cancel_all()
+    canceller.assert_called_once()
+
+    # A second finalize re-uses the same single unload hook.
+    c._schedule_post_session_gallery_refresh()
+    c.entry.async_on_unload.assert_called_once()
 
 
 @pytest.mark.asyncio
