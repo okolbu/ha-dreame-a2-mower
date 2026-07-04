@@ -36,8 +36,9 @@ After creating one:
    integration setup — reload the config entry (or restart HA) to surface
    them. (This is intentional: maps rarely change, so there is no dynamic
    per-map entity registration.)
-3. The Maps dashboard view shows a hard-coded slot for the first 2
-   maps; edit `dashboards/mower/dashboard.yaml` to add more.
+3. The bundled dashboard strategy (`custom:dreame-a2-mower`, see
+   README "Dashboard") generates one Maps view per discovered map
+   sub-device — no hard-coded slot count, no manual dashboard edit.
 
 ## Replays across maps
 

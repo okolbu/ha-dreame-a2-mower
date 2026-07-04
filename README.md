@@ -44,10 +44,13 @@ support was added.
 - **Resume** and **Cancel dock return** buttons (in addition to the
   mower entity's `start_mowing` / `pause` / `dock`).
 - Services: `set_active_selection`, `mow_zone`, `mow_edge`, `mow_spot`,
-  `recharge`, `find_bot`, `suppress_fault`, `set_child_lock`,
-  `set_schedule_plans`, `set_schedule_enabled`, `finalize_session`,
-  `replay_session`, `refresh_cloud_state`, `show_lidar_fullscreen`,
-  `start_point_patrol`, `start_edge_patrol`, `set_patrol_point_config`.
+  `suppress_fault`, `set_schedule_plans`, `set_schedule_enabled`,
+  `replay_session`, `show_lidar_fullscreen`, `start_point_patrol`,
+  `start_edge_patrol`, `set_patrol_point_config`. (Parameterless 1:1
+  button/switch duplicates — `recharge`, `find_bot`, `set_child_lock`,
+  `finalize_session`, `refresh_cloud_state` — plus the one-time
+  migration helper `move_lidar_scan` were removed; press the
+  corresponding button/switch entity instead.)
 - All routed through the cloud RPC `s2.50 aiid=50` envelope (the only
   command path that works on g2408 — direct `action()` returns 80001).
 
@@ -169,8 +172,7 @@ For the settings above, the safe pattern today is: **toggle them in the
 Dreame app**. HA picks up the change automatically within ≤2 min (cloud
 poll cadence; some changes also fire MQTT and surface within seconds).
 Force an immediate sync via
-**`button.dreame_a2_mower_refresh_from_cloud`** /
-`dreame_a2_mower.refresh_cloud_state` if you don't want to wait.
+**`button.dreame_a2_mower_refresh_from_cloud`** if you don't want to wait.
 
 If you toggle one of these in HA the cloud accepts the write and other
 app instances pick it up on cold-start: the integration issues the same
@@ -219,8 +221,6 @@ session totals). The replay picker spans all maps. See `docs/multi-map.md`.
   serves the most recent archived blob for desktop tools (Open3D,
   CloudCompare, MeshLab).
 - **Per-map LiDAR cameras** — a top-down camera per known map.
-- `move_lidar_scan` service re-tags an archived LiDAR PCD from one map's
-  archive to another (fixes a scan filed under the wrong map).
 
 ### WiFi heatmap
 
@@ -228,14 +228,13 @@ session totals). The replay picker spans all maps. See `docs/multi-map.md`.
   samples laid over the map: a picker-driven WiFi camera (follows the
   WiFi-archive select) plus a per-map WiFi camera for each known map.
 - **WiFi archive select** chooses which captured heatmap to display;
-  `input_boolean.dreame_a2_mower_wifi_flip_x` / `_flip_y` correct the
-  overlay orientation when a map needs it.
+  `switch.dreame_a2_mower_wifi_heatmap_flip_x` / `_flip_y` correct the
+  overlay orientation when a map needs it (integration-owned; no external
+  helper needed).
 
 ### Observability
 - **`sensor.dreame_a2_mower_novel_observations`** — count + attribute
   list of unfamiliar protocol shapes seen this process.
-- **`sensor.dreame_a2_mower_data_freshness`** (default-disabled) —
-  per-field staleness in seconds.
 - **`sensor.dreame_a2_mower_api_endpoints_supported`** (default-disabled)
   — passive cloud-RPC accept/reject log.
 - Raw diagnostic sensors for unmapped slots so values surface during
@@ -264,13 +263,13 @@ the merged-by-id, newest-first list), fed from the cloud
 `device-messages` list. Companion `last_notification` and per-scope
 (device / service / shared) message-list sensors surface the same feed.
 
-### Showcase dashboard
-An 8-view Lovelace dashboard at `dashboards/mower/dashboard.yaml`:
-Overview, Maps & Zones, Schedule, Sessions & History, Settings,
-Diagnostics & Tools, Photos, and Info (device-message inbox). Uses standard HA cards plus the
-bundled custom cards (LiDAR / schedule / map-editor / live-map /
-replay) and a few common HACS cards (apexcharts, button-card, card-mod,
-plotly).
+### Dashboard strategy
+
+The integration ships a registered Lovelace **dashboard strategy**
+(`custom:dreame-a2-mower`) that generates the whole dashboard from your
+live entity/device registry — no YAML to copy or edit, and it can't drift
+out of sync with the entities you actually have. See "Dashboard" under
+Installation.
 
 ## Architecture
 
@@ -299,28 +298,65 @@ graduates from `a*` pre-release, regular HACS releases will follow.
 5. Configure → **Options** → set retention caps (LiDAR archive size
    defaults to 200 MB; PCDs run 2-3 MB each).
 
-### Bundled Lovelace card
+### Dashboard
 
-To use the WebGL LiDAR view:
+The integration ships everything a dashboard needs — 7 custom cards plus
+a **dashboard strategy** that generates the whole thing from your live
+entity/device registry — under **one** Lovelace resource:
+
+1. Settings → Dashboards → Resources → **Add Resource**.
+   - URL: `/dreame_a2_mower/dreame-a2-strategy.js`
+   - Type: `JavaScript Module`
+
+   (This one resource is enough — the strategy dynamically `import()`s
+   all 7 bundled cards itself; you do not register them individually.
+   They are served from the same static path,
+   `/dreame_a2_mower/<file>.js` — see `__init__.py`'s
+   `async_register_static_paths` call.)
+2. Create a new dashboard (Settings → Dashboards → **Add Dashboard** →
+   "New dashboard from scratch"), then edit it in YAML mode (⋮ → Edit
+   Dashboard → ⋮ → Edit in YAML) and replace the content with:
+   ```yaml
+   strategy:
+     type: custom:dreame-a2-mower
+   ```
+3. Save. The strategy reads the entity/device registry at render time
+   and builds one view per discovered map plus Overview, Schedule,
+   Sessions & History, Settings, Diagnostics & Tools, Photos, and
+   Messages — it scales automatically to however many maps your mower
+   has (no hardcoded map count) and never drifts out of sync with your
+   actual entities, because it isn't a static file you copy and edit.
+   Optional strategy config keys: `plotly: true` forces the Plotly
+   session charts on (auto-detected by default; falls back to native
+   `history-graph` if the `plotly-graph-card` HACS card isn't
+   installed).
+
+The sections below cover using individual bundled cards **standalone**,
+outside the strategy (e.g. dropping the live map into a dashboard you're
+building by hand) — not needed if you're using the strategy above.
+
+#### WebGL LiDAR card
+
+To use the WebGL LiDAR view on its own:
 
 1. Settings → Dashboards → Resources → **Add Resource**.
 2. URL: `/dreame_a2_mower/dreame-a2-lidar-card.js`, type
    `JavaScript Module`.
-3. Add `type: custom:dreame-a2-lidar-card` to a card. Example in
-   `dashboards/mower/dashboard.yaml`'s LiDAR view.
+3. Add `type: custom:dreame-a2-lidar-card` to a card.
 
-### Animated live map
+#### Animated live map
 
-The Mower-tab live map is drawn by the bundled custom card
-`custom:dreame-mower-map-card`. It renders the base PNG as an SVG
-backdrop and then, reading the position stream the integration publishes
-on `camera.dreame_a2_mower_map` (`map_projection`, `point_seq`,
+The live map is drawn by the bundled custom card
+`custom:dreame-mower-map-card` (the strategy's Overview view uses it for
+the hero live map). It renders the base PNG as an SVG backdrop and then,
+reading the position stream the integration publishes on
+`camera.dreame_a2_mower_map` (`map_projection`, `point_seq`,
 `latest_point`, `track_snapshot`), accumulates the mowing trail
 client-side and glides a directional mower icon between the ~5 s position
 pushes. No more waiting on `<hui-image>`'s 10 s camera poll.
 
-Register it as a Lovelace resource (Settings → Dashboards → Resources →
-Add):
+To use it standalone, register it as a Lovelace resource (Settings →
+Dashboards → Resources → Add):
 
 - URL: `/dreame_a2_mower/dreame-mower-map-card.js`
 - Type: `JavaScript Module`
@@ -337,29 +373,25 @@ projection / icon-rotation math) as an ES module — it is pulled in
 automatically, so it needs **no** separate resource entry. Do not
 register either file via `add_extra_js_url`; that proved unreliable on
 YAML-mode dashboards (the card rendered a red "Configuration error"
-because it never landed in the dashboard's element registry). The
-bundled `dashboards/mower/dashboard.yaml` uses this card for the hero
-live map.
+because it never landed in the dashboard's element registry).
 
-### Animated session replay
+#### Animated session replay
 
-The Sessions tab includes an optional animated replay that draws the
-mower's trail over the base map at ≤30s total, with proportional
-freezes during charging / stuck / faulted intervals.
+The Sessions & History view includes an animated replay
+(`custom:dreame-mower-replay-card`) that draws the mower's trail over
+the base map at ≤30s total, with proportional freezes during charging /
+stuck / faulted intervals — the strategy renders it directly for the
+picked session, no toggle needed.
 
-To enable:
+To use it standalone, register it as a Lovelace resource (Settings →
+Dashboards → Resources → Add):
 
-1. Add a Lovelace resource (Settings → Dashboards → Resources → Add):
-   - URL: `/dreame_a2_mower/dreame-mower-replay-card.js`
-   - Type: JavaScript Module
-2. Create an `input_boolean.dreame_a2_mower_animate_session` toggle
-   helper (Settings → Devices & Services → Helpers → Create Helper →
-   Toggle, default state Off).
-3. Refresh the Sessions tab. Use the new "Animate replay (≤30s SVG)"
-   toggle in the Replay picker card to switch from the static
-   work-log image to the animated SVG card.
+- URL: `/dreame_a2_mower/dreame-mower-replay-card.js`
+- Type: JavaScript Module
 
-The JS ships with the integration — no separate HACS install needed.
+Then use `type: custom:dreame-mower-replay-card` with `entity:` set to
+the session-replay camera (`camera.dreame_a2_mower_session_replay`). The
+JS ships with the integration — no separate HACS install needed.
 
 ### Activity logbook (optional dedup)
 
@@ -386,12 +418,6 @@ logbook:
 
 The entities stay live (template/automation triggers still work) —
 only the duplicate generic logbook lines are filtered.
-
-### Showcase dashboard
-
-Copy `dashboards/mower/dashboard.yaml` to your HA config (e.g.
-`/config/dashboards/mower/dashboard.yaml`) and register it in
-`configuration.yaml` under `lovelace.dashboards`.
 
 ## Cutting over from the legacy
 

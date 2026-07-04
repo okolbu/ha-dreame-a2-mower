@@ -73,8 +73,22 @@ AI-detection bbox/label overlay that the gallery and replay cards now have (shar
 thumbnails that open the same in-card lightbox + overlay; the markdown card is replaced on the Info tab.
 **Status:** open (deferred follow-up; markdown card works, just new-tab + no overlay).
 **Cross-refs:** `www/dreame-a2-photo-gallery-card.js` (lightbox+overlay pattern),
-`www/_dreame-map-core.js:attachDetectionOverlay`; `dashboards/mower/dashboard.yaml` (Device messages card);
+`www/_dreame-map-core.js:attachDetectionOverlay`; the strategy's Info-view
+device-messages card (`www/dreame-a2-strategy.js`, `messages` manifest section);
 `sensor.dreame_a2_mower_device_messages` (`items[].photos`).
+
+### Dedicated faults/attention dashboard view (post-P5 feature idea, R-65/T6-23 — not built)
+
+**Why:** the P5 dashboard strategy (`www/dreame-a2-strategy.js`) surfaces error/attention
+state inline on Overview + Diagnostics, but there's no standalone view that lists active
+faults, the error-tier persistent-notice history, and the fault catalog's tier/category for
+each — which would give a single place to triage "what's wrong right now."
+**Done when:** a new strategy view (e.g. "Faults") lists active + recent fault_catalog-derived
+events (tier/category/severity) with a clear/dismiss action, wired the same way the strategy
+resolves other manifest sections (registry-driven, no hardcoded entity_ids).
+**Status:** open — idea only, deliberately deferred out of P5 scope.
+**Cross-refs:** `mower/fault_catalog.py` (tier/category/severity SoT); `domain/faults.py`
+(persistent-notice posting); `www/dreame-a2-strategy.js` (where the view would be added).
 
 ### Bundle `_CoreMixin.__init__` attrs into typed per-concern objects (Refactor Phase 3f attr-bundling — deferred as over-engineering)
 
