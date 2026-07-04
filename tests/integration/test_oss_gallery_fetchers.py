@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 from unittest.mock import MagicMock
-from custom_components.dreame_a2_mower.cloud_client import _fetchers
+from tests.cloud_client import _fetchers_double as _fetchers
 
 
 def _client(json_body):

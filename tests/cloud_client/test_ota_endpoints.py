@@ -7,7 +7,7 @@ Auth: Dreame-Auth bearer (token), NO sign (B1 spike: sign opaque/
 unreproducible). Body carries a millisecond `timestamp`. Source:
 app-mitm 2026-06-16.
 """
-from custom_components.dreame_a2_mower.cloud_client._fetchers import _FetchersMixin
+from tests.cloud_client._fetchers_double import _FetchersMixin
 
 
 class _FakeClient(_FetchersMixin):

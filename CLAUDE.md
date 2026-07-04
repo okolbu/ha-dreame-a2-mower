@@ -630,7 +630,7 @@ the submodule whose concern it matches:
 | `_media.py` | `_MediaMixin`: OSS media — `list_oss_media`, `fetch_oss_quota` |
 | `_ota.py` | `_OtaMixin`: `fetch_ota_version` (OTA availability check) |
 | `_writers.py` | `_WritersMixin`: device WRITES — `set_cfg`, `set_pre`, `trigger_firmware_update` (all return `WriteResult`). **FINAL HOME (P3.9b decision):** these are transport-level HTTP/routed-action calls that reach the cloud-client's own internals (`self.action`, `self.request`, `self._did`/`_uid`/`_last_send_error_code`), so they STAY here in transport (layer 2). `domain/writes/` ORCHESTRATES them via `coord._cloud.set_cfg` / `.set_pre` / `.trigger_firmware_update` — a legal domain(4)→transport(2) downward call. They do NOT move into `domain/writes/` (that would force a domain→transport-internals back-edge, undoing P3.5's clean split). |
-| `_fetchers.py` | **Back-compat shim** (P3.5): composes `_FetchersMixin` from the six family mixins above so pre-split test importers keep working. NO endpoints of its own; retired in P3.10. New code imports the specific family mixin. |
+| _(retired)_ | The P3.5 `_fetchers.py` back-compat shim (composed `_FetchersMixin` from the six family mixins) was **RETIRED in P3.10**. Production assembles the six directly in `__init__.py`; the test-only composite now lives at `tests/cloud_client/_fetchers_double.py`. New code imports the specific family mixin. |
 
 ### Rules
 
@@ -970,8 +970,10 @@ incident). The fix is *location*, not editing stale docs to agree.
   inventory SoT (the getDeiviceFile/OTA drift guard: code shipped ahead of the
   SoT). It never scans `OLD/`. Mark an intentionally-unfolded finding with a
   `FOLD-CHECK: exempt` or `Status: open`/`[UNVERIFIED]` line. (CI's
-  inventory-touch-gate also now watches the endpoint-defining `cloud_client/_fetchers.py`
-  + `_file_bridge.py`, so a new endpoint can't ship without an inventory row.)
+  inventory-touch-gate also now watches the endpoint-defining cloud_client
+  fetch-family files (`_state_fetch.py` / `_device_fetch.py` / `_messages.py` /
+  `_media.py` / `_ota.py` / `_writers.py`) + `_file_bridge.py`, so a new
+  endpoint can't ship without an inventory row.)
 - **The journal & wire-captures STAY** in-tree (Tier 3) — they are cited
   evidence — but their facts must be promoted into `inventory.yaml` (the SoT),
   and they keep their non-authoritative banner. Don't grow a NEW in-tree

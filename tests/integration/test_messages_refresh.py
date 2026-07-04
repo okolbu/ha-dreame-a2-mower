@@ -1,5 +1,5 @@
 from unittest.mock import MagicMock
-from custom_components.dreame_a2_mower.cloud_client._fetchers import _FetchersMixin
+from tests.cloud_client._fetchers_double import _FetchersMixin
 
 
 class _Resp:
