@@ -10,6 +10,7 @@ encrypted-at-rest config-entry secrets via the standard
 """
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import voluptuous as vol
@@ -34,11 +35,14 @@ from .const import (
     DEFAULT_LIDAR_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_MAX_MB,
     DEFAULT_MESSAGES_KEEP,
+    DEFAULT_MODEL,
     DEFAULT_NAME,
     DEFAULT_SESSION_ARCHIVE_KEEP,
     DEFAULT_WIFI_ARCHIVE_KEEP,
     DOMAIN,
 )
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class CannotConnect(Exception):
@@ -49,7 +53,7 @@ class InvalidAuth(Exception):
     """Raised when the cloud login attempt reports bad credentials."""
 
 
-async def _validate_login(hass: Any, data: dict[str, Any]) -> None:
+async def _validate_login(hass: Any, data: dict[str, Any]) -> DreameA2CloudClient:
     """Attempt a real cloud login with the submitted credentials.
 
     ``client.login()`` is blocking (uses ``requests``), so it's run via
@@ -62,6 +66,11 @@ async def _validate_login(hass: Any, data: dict[str, Any]) -> None:
     maps to ``InvalidAuth``. Any exception that escapes the executor job
     (e.g. a genuine programming error) is treated as a transport/unknown
     failure here.
+
+    On success, returns the now-authenticated ``client`` (Task 3 / P6.1c)
+    so ``async_step_user`` can reuse it for device discovery without a
+    second login round-trip. ``async_step_reauth_confirm`` only needs
+    "didn't raise" and ignores the return value.
     """
     client = DreameA2CloudClient(
         username=data[CONF_USERNAME],
@@ -76,6 +85,24 @@ async def _validate_login(hass: Any, data: dict[str, Any]) -> None:
         if getattr(client, "last_login_failure", None) == "transport":
             raise CannotConnect
         raise InvalidAuth
+    return client
+
+
+def _discover_mower_records(client: DreameA2CloudClient) -> list[dict[str, Any]]:
+    """Return the account's ``dreame.mower.*`` device records.
+
+    ``client.get_devices()`` is blocking — callers run it via
+    ``hass.async_add_executor_job``. Guards against ``None``/malformed
+    responses (no ``data``/``page``/``records`` keys) by returning an
+    empty list rather than raising.
+    """
+    data = client.get_devices()
+    if not data:
+        return []
+    records = data.get("page", {}).get("records", [])
+    return [
+        d for d in records if str(d.get("model", "")).startswith("dreame.mower.")
+    ]
 
 
 class DreameA2MowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -109,7 +136,7 @@ class DreameA2MowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._abort_if_unique_id_configured()
 
             try:
-                await _validate_login(self.hass, user_input)
+                client = await _validate_login(self.hass, user_input)
             except InvalidAuth:
                 errors["base"] = "invalid_auth"
             except CannotConnect:
@@ -117,9 +144,41 @@ class DreameA2MowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except Exception:  # noqa: BLE001 - last-resort form error
                 errors["base"] = "unknown"
             else:
+                mowers = await self.hass.async_add_executor_job(
+                    _discover_mower_records, client
+                )
+                if not mowers:
+                    return self.async_abort(reason="no_supported_device")
+
+                g2408s = [d for d in mowers if d.get("model") == DEFAULT_MODEL]
+                others = [d for d in mowers if d.get("model") != DEFAULT_MODEL]
+                chosen = g2408s[0] if g2408s else others[0]
+
+                if len(g2408s) > 1:
+                    _LOGGER.warning(
+                        "Multiple dreame.mower.g2408 devices found on this "
+                        "account (%d); pinning the first (did=%s) — this "
+                        "integration supports a single device.",
+                        len(g2408s),
+                        chosen.get("did"),
+                    )
+                if not g2408s:
+                    _LOGGER.warning(
+                        "No verified dreame.mower.g2408 device found; "
+                        "proceeding best-effort with model=%r (did=%s). "
+                        "This model has not been wire-verified (R-44).",
+                        chosen.get("model"),
+                        chosen.get("did"),
+                    )
+
                 return self.async_create_entry(
                     title=DEFAULT_NAME,
-                    data=user_input,
+                    data={
+                        **user_input,
+                        "did": chosen.get("did"),
+                        "sn": chosen.get("sn"),
+                        "model": chosen.get("model"),
+                    },
                 )
 
         return self.async_show_form(

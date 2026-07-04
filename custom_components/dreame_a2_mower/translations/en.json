@@ -25,7 +25,8 @@
     },
     "abort": {
       "already_configured": "Mower is already configured.",
-      "reauth_successful": "Re-authentication was successful."
+      "reauth_successful": "Re-authentication was successful.",
+      "no_supported_device": "No supported Dreame mower was found on this account."
     }
   },
   "options": {

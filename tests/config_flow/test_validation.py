@@ -163,10 +163,17 @@ def _make_flow(login_impl, created: dict) -> config_flow.DreameA2MowerConfigFlow
         # Mirror HA: re-shows the form carrying the errors dict.
         return {"type": "form", "step_id": step_id, "errors": errors}
 
+    def _abort(*, reason):
+        # Not exercised by these auth-failure cases (Task 3 / P6.1c device
+        # discovery runs only after a successful login), but wired so a
+        # missing-device path doesn't blow up with AttributeError.
+        return {"type": "abort", "reason": reason}
+
     flow.async_set_unique_id = _set_unique_id  # type: ignore[assignment]
     flow._abort_if_unique_id_configured = _abort_if_configured  # type: ignore[assignment]
     flow.async_create_entry = _create_entry  # type: ignore[assignment]
     flow.async_show_form = _show_form  # type: ignore[assignment]
+    flow.async_abort = _abort  # type: ignore[assignment]
     return flow
 
 
@@ -215,12 +222,29 @@ async def test_step_user_cannot_connect_surfaces_form_error(
 async def test_step_user_success_creates_entry(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """login()->True creates the config entry with the submitted title/data."""
-    from custom_components.dreame_a2_mower.const import DEFAULT_NAME
+    """login()->True creates the config entry with the submitted title/data.
+
+    Task 3 (P6.1c) inserted device discovery between login and entry
+    creation, so a successful login now also needs ``get_devices()`` to
+    return a matching g2408 record — the created entry's data carries the
+    submitted fields PLUS the discovered did/sn/model (see
+    ``tests/config_flow/test_device_select.py`` for the full discovery
+    matrix: no-device abort, multi-g2408 warn, non-g2408 warn).
+    """
+    from custom_components.dreame_a2_mower.const import DEFAULT_MODEL, DEFAULT_NAME
 
     class _FakeClient(_FakeClientBase):
         def login(self) -> bool:
             return True
+
+        def get_devices(self):
+            return {
+                "page": {
+                    "records": [
+                        {"did": "did-1", "model": DEFAULT_MODEL, "sn": "SN001"}
+                    ]
+                }
+            }
 
     monkeypatch.setattr(config_flow, "DreameA2CloudClient", _FakeClient)
 
@@ -232,4 +256,9 @@ async def test_step_user_success_creates_entry(
 
     assert result["type"] == "create_entry"
     assert created["title"] == DEFAULT_NAME
-    assert created["data"] == data
+    assert created["data"] == {
+        **data,
+        "did": "did-1",
+        "sn": "SN001",
+        "model": DEFAULT_MODEL,
+    }
