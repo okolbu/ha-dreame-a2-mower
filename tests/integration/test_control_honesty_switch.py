@@ -197,6 +197,73 @@ def test_ai_recognition_humans_extra_attrs_mark_writable():
     assert attrs["control_mode"] == "device_writable"
 
 
+def test_ai_recognition_humans_turn_on_routes_optimistic_through_broadcast():
+    """P3.8 regression: the AI-bit optimistic update MUST go through
+    coord.async_set_updated_data (the coordinator broadcast) so sibling
+    CoordinatorEntity listeners see the new bitmask — NOT a bare `coord.data =`
+    assign + local async_write_ha_state (which under-notified siblings).
+    Ablation: with the pre-fix bare assign this FAILS (async_set_updated_data
+    is never called)."""
+    coord = _make_coord(settings_by_map={_MAP_ID: {"obstacleAvoidanceAi": 0b000}})
+    coord.write_map_general_ai_bit = AsyncMock(return_value=_WR_ACCEPTED)
+
+    broadcasts = []
+
+    def _spy(new_state):
+        broadcasts.append(new_state)
+        coord.data = new_state
+
+    coord.async_set_updated_data = MagicMock(side_effect=_spy)
+
+    ent = DreameA2AiRecognitionHumansSwitch(coord, map_id=_MAP_ID)
+    ent.async_write_ha_state = MagicMock()
+
+    asyncio.run(ent.async_turn_on())
+
+    coord.write_map_general_ai_bit.assert_called_once()
+    # Accepted write → exactly one broadcast (the optimistic apply), carrying
+    # the humans bit set. Proves the value went through the broadcast path.
+    coord.async_set_updated_data.assert_called_once()
+    assert broadcasts[0].settings_obstacle_avoidance_ai == 0b001
+
+
+def test_ai_recognition_humans_rejected_revert_routes_through_broadcast():
+    """P3.8 regression: on a rejected write the REVERT also goes through
+    coord.async_set_updated_data (both the optimistic apply and the revert are
+    broadcasts). Ablation: pre-fix bare assigns → async_set_updated_data never
+    called (0 broadcasts) → FAILS."""
+    import pytest
+    from homeassistant.exceptions import HomeAssistantError
+
+    coord = _make_coord(settings_by_map={_MAP_ID: {"obstacleAvoidanceAi": 0b000}})
+    coord.write_map_general_ai_bit = AsyncMock(return_value=_WR_REJECTED)
+
+    broadcasts = []
+
+    def _spy(new_state):
+        broadcasts.append(new_state)
+        coord.data = new_state
+
+    coord.async_set_updated_data = MagicMock(side_effect=_spy)
+    coord.hass = MagicMock()
+    coord.hass.services.async_call = AsyncMock()
+
+    ent = DreameA2AiRecognitionHumansSwitch(coord, map_id=_MAP_ID)
+    ent.hass = coord.hass
+    ent.entity_id = "switch.test_ai_humans"
+    ent.async_write_ha_state = MagicMock()
+
+    # P2 Task 5: a rejected entity write raises HomeAssistantError after the revert.
+    with pytest.raises(HomeAssistantError):
+        asyncio.run(ent.async_turn_on())
+
+    # Two broadcasts: optimistic (bit set) then revert (back to the old mask).
+    assert len(broadcasts) == 2
+    assert broadcasts[0].settings_obstacle_avoidance_ai == 0b001
+    assert broadcasts[1].settings_obstacle_avoidance_ai == 0b000
+    coord.hass.services.async_call.assert_awaited_once()
+
+
 # ---------------------------------------------------------------------------
 # DreameA2AiHumanDetectionSwitch  (previously missed — read_only_pending)
 # ---------------------------------------------------------------------------

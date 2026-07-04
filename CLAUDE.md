@@ -350,6 +350,16 @@ is a pure method container. Don't override `__init__` in any other
 mixin; don't write to a new `self._<attr>` without first adding it to
 `_CoreMixin.__init__`.
 
+> **Documented exception (P3.8):** `_managed_timers.schedule_self_cleaning`
+> lazily initialises `owner._managed_cancellers` (a set) and
+> `owner._managed_unload_registered` (a bool) on first use, from OUTSIDE
+> `_CoreMixin.__init__` — deliberately, so the helper also works on the bare
+> `_WritesMixin()` / `_LidarOssMixin()` doubles that tests build via
+> `object.__new__` without a full coordinator. These two attrs are the ONLY
+> sanctioned exception to the "sole `__init__` owner" rule; the P3.9 attr-shrink
+> audit should treat them as owned by the timer/lifecycle service, not seed them
+> in `_CoreMixin.__init__`.
+
 ### Public-import preservation
 
 `from .coordinator import DreameA2MowerCoordinator` (and
