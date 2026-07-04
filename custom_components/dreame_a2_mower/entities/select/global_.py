@@ -24,6 +24,7 @@ if TYPE_CHECKING:
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.core import callback
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -448,6 +449,8 @@ class DreameA2SettingSelect(
     _attr_has_entity_name = True
     # All SETTING_SELECTS rows are CFG-fed (PROT / WRP / LANG) — cloud.
     _availability_source = "cloud"
+    # R-50 / track-5 T5-4: writable device-setting selects are CONFIG.
+    _attr_entity_category = EntityCategory.CONFIG
     entity_description: DreameA2SettingsSelectDescription
 
     def __init__(

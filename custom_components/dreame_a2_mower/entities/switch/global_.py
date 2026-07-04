@@ -493,7 +493,6 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         key="led_period",
         name="LED period",
         icon="mdi:led-on",
-        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.led_period_enabled,
         cfg_key="LIT",
         build_from_cfg_fn=lambda raw, on: _cfgp.build_lit(raw, value=on),
@@ -507,7 +506,6 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         key="led_in_standby",
         name="LED in standby",
         icon="mdi:led-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.led_in_standby,
         cfg_key="LIT",
         build_from_cfg_fn=lambda raw, on: _cfgp.build_lit(raw, standby=on),
@@ -521,7 +519,6 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         key="led_in_working",
         name="LED while working",
         icon="mdi:led-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.led_in_working,
         cfg_key="LIT",
         build_from_cfg_fn=lambda raw, on: _cfgp.build_lit(raw, working=on),
@@ -535,7 +532,6 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         key="led_in_charging",
         name="LED while charging",
         icon="mdi:led-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.led_in_charging,
         cfg_key="LIT",
         build_from_cfg_fn=lambda raw, on: _cfgp.build_lit(raw, charging=on),
@@ -549,7 +545,6 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         key="led_in_error",
         name="LED on error",
         icon="mdi:led-alert",
-        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.led_in_error,
         cfg_key="LIT",
         build_from_cfg_fn=lambda raw, on: _cfgp.build_lit(raw, error=on),
@@ -568,7 +563,6 @@ SWITCHES: tuple[DreameA2SwitchEntityDescription, ...] = (
         key="human_presence_alert",
         name="Human presence alert",
         icon="mdi:motion-sensor",
-        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.human_presence_alert_enabled,
         cfg_key="REC",
         build_from_cfg_fn=lambda raw, on: _cfgp.build_rec(raw, value=on),
@@ -636,6 +630,8 @@ class DreameA2AiHumanDetectionSwitch(
     _attr_translation_key = "cloud_state_ai_human_enabled"
     _attr_name = "Capture Photos AI Obstacles"
     _attr_should_poll = False
+    # R-50 / T5-4: writable AI-obstacle-photo control → CONFIG.
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         super().__init__(coordinator)

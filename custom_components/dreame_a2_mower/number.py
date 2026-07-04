@@ -3,12 +3,10 @@
 F4.6.1: VOL (voice volume), auto_recharge_battery_pct, resume_battery_pct
         are settable via coordinator.write_setting.
 
-        human_presence_alert_sensitivity is read-only in F4 because the
-        REC wire list has 9 elements of which only 2 are decoded into
-        MowerState; the remaining 7 (standby, mowing, recharge, patrol,
-        alert, photo_consent, push_min) are not stored, so a safe full-list
-        reconstruction is not possible.  It will appear in the UI as a
-        read-only number (entity_category=DIAGNOSTIC).
+        human_presence_alert_sensitivity is a writable REC[1] control
+        (RMW via build_rec preserves the undecoded slots). It is a device
+        setting, so it carries EntityCategory.CONFIG like every other
+        NUMBERS row (R-50 / track-5 T5-4).
 """
 from __future__ import annotations
 
@@ -171,7 +169,6 @@ NUMBERS: tuple[DreameA2NumberEntityDescription, ...] = (
         native_max_value=2,
         native_step=1,
         mode=NumberMode.SLIDER,
-        entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.human_presence_alert_sensitivity,
         cfg_key="REC",
         build_from_cfg_fn=lambda raw, v: _cfgp.build_rec(raw, sen=int(v)),
@@ -237,6 +234,10 @@ class DreameA2Number(
     _attr_has_entity_name = True
     # All NUMBERS rows are CFG-fed (VOL / BAT / REC) — cloud-sourced.
     _availability_source = "cloud"
+    # R-50 / track-5 T5-4: every writable device-setting control is CONFIG
+    # (DIAGNOSTIC is reserved for read-only info). All NUMBERS rows are
+    # writable CFG settings.
+    _attr_entity_category = EntityCategory.CONFIG
     entity_description: DreameA2NumberEntityDescription
 
     def __init__(
@@ -342,6 +343,8 @@ class _PerMapSettingsNumberBase(
     _attr_should_poll = False
     # Per-map values read from cloud_state.settings (SETTINGS / PRE) — cloud.
     _availability_source = "cloud"
+    # R-50 / T5-4: writable per-map SETTINGS control → CONFIG.
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self, coordinator: DreameA2MowerCoordinator, *, map_id: int

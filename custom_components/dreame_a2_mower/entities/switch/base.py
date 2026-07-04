@@ -16,6 +16,7 @@ from typing import Any
 from collections.abc import Callable
 
 from homeassistant.components.switch import SwitchEntity, SwitchEntityDescription
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ..._availability import _FreshnessAvailableMixin
@@ -75,6 +76,11 @@ class DreameA2Switch(
     _attr_has_entity_name = True
     # All SWITCHES rows are CFG-fed — cloud-sourced.
     _availability_source = "cloud"
+    # R-50 / track-5 T5-4: every writable device-setting control is CONFIG
+    # (DIAGNOSTIC is reserved for read-only info). All SWITCHES rows are
+    # writable CFG settings, so the whole class is CONFIG-categorised here
+    # rather than per-descriptor.
+    _attr_entity_category = EntityCategory.CONFIG
     entity_description: DreameA2SwitchEntityDescription
 
     def __init__(
@@ -195,6 +201,8 @@ class _AiRecognitionBitSwitch(
     _attr_should_poll = False
     # Reads cloud_state.settings (SETTINGS.obstacleAvoidanceAi) — cloud.
     _availability_source = "cloud"
+    # R-50 / T5-4: writable per-map AI-recognition control → CONFIG.
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
         super().__init__(coordinator)
@@ -367,6 +375,8 @@ class _PerMapSettingsSwitchBase(
     _attr_has_entity_name = True
     _availability_source = "cloud"
     _attr_should_poll = False
+    # R-50 / T5-4: writable per-map SETTINGS control → CONFIG.
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(self, coordinator: DreameA2MowerCoordinator, *, map_id: int) -> None:
         super().__init__(coordinator)

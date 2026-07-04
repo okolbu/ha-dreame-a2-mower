@@ -421,6 +421,8 @@ class DreameA2PerMapMowingDirectionSelect(
     _attr_translation_key = "settings_mowing_direction"
     _attr_options: ClassVar[list[str]] = list(_OPTIONS)
     _attr_should_poll = False
+    # R-50 / T5-4: writable per-map PRE/SETTINGS control → CONFIG.
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self, coordinator: DreameA2MowerCoordinator, *, map_id: int
@@ -506,6 +508,8 @@ class DreameA2PerMapMowingDirectionModeSelect(
     _attr_translation_key = "mowing_pattern"
     _attr_options: ClassVar[list[str]] = list(_OPTIONS)
     _attr_should_poll = False
+    # R-50 / T5-4: writable per-map PRE/SETTINGS control → CONFIG.
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self, coordinator: DreameA2MowerCoordinator, *, map_id: int
@@ -588,6 +592,8 @@ class DreameA2PerMapTurningMethodSelect(
     _attr_translation_key = "settings_turning_method"
     _attr_options: ClassVar[list[str]] = list(_OPTIONS)
     _attr_should_poll = False
+    # R-50 / T5-4: writable per-map PRE/SETTINGS control → CONFIG.
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self, coordinator: DreameA2MowerCoordinator, *, map_id: int
@@ -757,6 +763,8 @@ class DreameA2PerMapEdgeMowingWalkModeSelect(
     _attr_translation_key = "settings_edge_mowing_walk_mode"
     _attr_options: ClassVar[list[str]] = list(_OPTIONS)
     _attr_should_poll = False
+    # R-50 / T5-4: writable per-map PRE/SETTINGS control → CONFIG.
+    _attr_entity_category = EntityCategory.CONFIG
 
     def __init__(
         self, coordinator: DreameA2MowerCoordinator, *, map_id: int
