@@ -148,10 +148,14 @@ def replay(paths: list[Path]) -> dict:
             # Pipeline 1: pure MowerState apply.
             new_state = apply_property_to_state(state, siid, piid, value)
             if new_state != state:
+                # MowerState is now a composition of 8 domain containers
+                # (P3.6); its ``dataclasses.fields`` are the containers, not the
+                # 164 flat fields. Diff over the FLAT field view so the digest
+                # stays byte-identical to the pre-split golden.
+                before_flat = state.to_flat_dict()
+                after_flat = new_state.to_flat_dict()
                 changed = sorted(
-                    f.name
-                    for f in dataclasses.fields(new_state)
-                    if getattr(new_state, f.name) != getattr(state, f.name)
+                    k for k in after_flat if after_flat[k] != before_flat[k]
                 )
                 rolling.update(_canon([siid, piid, changed]).encode())
                 state = new_state
@@ -176,7 +180,9 @@ def replay(paths: list[Path]) -> dict:
         "rolling_sha256": rolling.hexdigest(),
         "sm_transitions": sm_transitions,
         "final_mower_state": json.loads(
-            _canon(_to_jsonable(dataclasses.asdict(state)))
+            # Flat view (P3.6 container split): asdict(state) would emit the
+            # nested container shape; to_flat_dict() keeps the pre-split digest.
+            _canon(_to_jsonable(state.to_flat_dict()))
         ),
         "final_snapshot": json.loads(
             _canon(_to_jsonable(dataclasses.asdict(sm.snapshot())))

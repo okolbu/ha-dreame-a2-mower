@@ -45,6 +45,12 @@ def redact(payload: Any) -> Any:
 def _as_dict(obj: Any) -> Any:
     if obj is None:
         return None
+    # MowerState is now a composition of 8 domain containers (P3.6); asdict()
+    # would emit the nested shape. Prefer its flat view so the diagnostics
+    # "state" section keeps its historical {field: value} layout.
+    to_flat = getattr(obj, "to_flat_dict", None)
+    if callable(to_flat):
+        return to_flat()
     if is_dataclass(obj):
         return asdict(obj)
     return obj

@@ -302,8 +302,11 @@ def find_orphan_fields(
         if "homeassistant" not in sys.modules:
             sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "tests"))
             import conftest  # noqa: F401
-        from custom_components.dreame_a2_mower.mower.state import MowerState
-        all_fields = {f.name for f in dataclasses.fields(MowerState)}
+        # MowerState is now a composition of 8 domain containers (P3.6);
+        # dataclasses.fields(MowerState) yields the container names, not the
+        # 164 flat fields. FLAT_FIELDS is the flat field view the audit needs.
+        from custom_components.dreame_a2_mower.mower.state import FLAT_FIELDS
+        all_fields = set(FLAT_FIELDS)
 
     referenced: set[str] = set()
     for ed in entities:
