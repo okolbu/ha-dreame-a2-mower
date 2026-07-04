@@ -21,14 +21,14 @@ class DreameA2WifiSelectedCamera(
     The camera key ``wifi_heatmap_selected`` in translations corresponds to
     entity_id ``camera.dreame_a2_mower_wifi_heatmap_selected``.
 
-    Flip toggles are read at render time from:
-        ``input_boolean.dreame_a2_mower_wifi_flip_x``
-        ``input_boolean.dreame_a2_mower_wifi_flip_y``
-    State changes on those entities bust the entity-picture cache automatically.
+    Flip toggles are read at render time from the integration-owned
+    coordinator attrs ``coordinator.wifi_flip_x`` / ``coordinator.wifi_flip_y``
+    (set by the two ``switch.dreame_a2_mower_wifi_heatmap_flip_{x,y}``
+    entities; R-15 / P5.1 — no external helper dependency). Toggling one of
+    those switches broadcasts a coordinator update; the flip bools are folded
+    into ``_handle_coordinator_update``'s dedup key so the ``access_token``
+    rotates and the browser re-fetches the re-oriented PNG.
     """
-
-    _FLIP_X_ENTITY = "input_boolean.dreame_a2_mower_wifi_flip_x"
-    _FLIP_Y_ENTITY = "input_boolean.dreame_a2_mower_wifi_flip_y"
 
     _attr_has_entity_name = True
     _attr_name = "WiFi heatmap (selected)"
@@ -70,14 +70,8 @@ class DreameA2WifiSelectedCamera(
         decoded = self._resolve_decoded()
         if not decoded:
             return None
-        flip_x = (
-            self.hass is not None
-            and self.hass.states.is_state(self._FLIP_X_ENTITY, "on")
-        )
-        flip_y = (
-            self.hass is not None
-            and self.hass.states.is_state(self._FLIP_Y_ENTITY, "on")
-        )
+        flip_x = bool(getattr(self.coordinator, "wifi_flip_x", False))
+        flip_y = bool(getattr(self.coordinator, "wifi_flip_y", False))
         from ..wifi.map_render import render_wifi_map_png
         return await self.hass.async_add_executor_job(
             lambda: render_wifi_map_png(decoded, flip_x=flip_x, flip_y=flip_y)
@@ -103,35 +97,24 @@ class DreameA2WifiSelectedCamera(
         sep = "&" if "?" in base else "?"
         return f"{base}{sep}v={h}"
 
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to flip toggle state changes to bust the image cache."""
-        await super().async_added_to_hass()
-        from homeassistant.helpers.event import async_track_state_change_event
-
-        @callback
-        def _flip_changed(_event) -> None:
-            self.async_update_token()
-            self.async_write_ha_state()
-
-        self.async_on_remove(
-            async_track_state_change_event(
-                self.hass,
-                [self._FLIP_X_ENTITY, self._FLIP_Y_ENTITY],
-                _flip_changed,
-            )
-        )
-
     @callback
     def _handle_coordinator_update(self) -> None:  # type: ignore[override]
-        """Rotate the camera's access_token only when the selection changes.
+        """Rotate the camera's access_token when the selection OR flip changes.
 
         The decoded body is freshly loaded from disk on every call, so its
         object id() is meaningless — keying on it would rotate the token
-        on every coordinator update.
+        on every coordinator update. The flip prefs are folded into the key
+        so a wifi-flip switch toggle (which broadcasts a coordinator update)
+        rotates the token and busts the browser's cached PNG.
         """
         render = self.coordinator._wifi_render_entry
-        if render != getattr(self, "_last_seen_key", object()):
-            self._last_seen_key = render
+        key = (
+            render,
+            bool(getattr(self.coordinator, "wifi_flip_x", False)),
+            bool(getattr(self.coordinator, "wifi_flip_y", False)),
+        )
+        if key != getattr(self, "_last_seen_key", object()):
+            self._last_seen_key = key
             self.async_update_token()
         super()._handle_coordinator_update()
 
@@ -155,9 +138,6 @@ class DreameA2WifiPerMapCamera(
     _attr_has_entity_name = True
     _attr_content_type = "image/png"
     _attr_translation_key = "wifi_heatmap_per_map"
-
-    _FLIP_X_ENTITY = "input_boolean.dreame_a2_mower_wifi_flip_x"
-    _FLIP_Y_ENTITY = "input_boolean.dreame_a2_mower_wifi_flip_y"
 
     def __init__(
         self, coordinator: DreameA2MowerCoordinator, map_id: int
@@ -203,14 +183,8 @@ class DreameA2WifiPerMapCamera(
         decoded = self._resolve_decoded()
         if not decoded:
             return None
-        flip_x = (
-            self.hass is not None
-            and self.hass.states.is_state(self._FLIP_X_ENTITY, "on")
-        )
-        flip_y = (
-            self.hass is not None
-            and self.hass.states.is_state(self._FLIP_Y_ENTITY, "on")
-        )
+        flip_x = bool(getattr(self.coordinator, "wifi_flip_x", False))
+        flip_y = bool(getattr(self.coordinator, "wifi_flip_y", False))
         from ..wifi.map_render import render_wifi_map_png
         return await self.hass.async_add_executor_job(
             lambda: render_wifi_map_png(decoded, flip_x=flip_x, flip_y=flip_y)
@@ -230,28 +204,14 @@ class DreameA2WifiPerMapCamera(
         sep = "&" if "?" in base else "?"
         return f"{base}{sep}v={h}"
 
-    async def async_added_to_hass(self) -> None:
-        """Subscribe to flip toggle state changes to bust the image cache."""
-        await super().async_added_to_hass()
-        from homeassistant.helpers.event import async_track_state_change_event
-
-        @callback
-        def _flip_changed(_event) -> None:
-            self.async_update_token()
-            self.async_write_ha_state()
-
-        self.async_on_remove(
-            async_track_state_change_event(
-                self.hass,
-                [self._FLIP_X_ENTITY, self._FLIP_Y_ENTITY],
-                _flip_changed,
-            )
-        )
-
     @callback
     def _handle_coordinator_update(self) -> None:  # type: ignore[override]
         entry = self._resolve_entry()
-        key = entry.object_name if entry is not None else None
+        key = (
+            entry.object_name if entry is not None else None,
+            bool(getattr(self.coordinator, "wifi_flip_x", False)),
+            bool(getattr(self.coordinator, "wifi_flip_y", False)),
+        )
         if key != getattr(self, "_last_seen_key", object()):
             self._last_seen_key = key
             self.async_update_token()

@@ -86,6 +86,10 @@ CONTROL_MODES: dict[str, ControlMode | dict[str, ControlMode]] = {
     "switch.dreame_a2_mower_map_N_obstacle_avoidance_on_edges": _W,
     "switch.dreame_a2_mower_map_N_lidar_obstacle_recognition": _W,
     "switch.dreame_a2_mower_cloud_state_ai_human_enabled": _P,
+    # R-15 / P5.1: integration-owned WiFi-heatmap render-orientation toggles.
+    # Local render prefs — no wire write (replace the old dashboard helpers).
+    "switch.dreame_a2_mower_wifi_heatmap_flip_x": _L,
+    "switch.dreame_a2_mower_wifi_heatmap_flip_y": _L,
     "switch.dreame_a2_mower_map_N_ai_recognition_humans": _W,
     "switch.dreame_a2_mower_map_N_ai_recognition_animals": _W,
     "switch.dreame_a2_mower_map_N_ai_recognition_objects": _W,

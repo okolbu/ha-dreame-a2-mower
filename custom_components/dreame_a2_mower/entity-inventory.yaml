@@ -243,18 +243,25 @@ entities:
     verifications:
       - date: "2026-05-31"
         status: presumed
-        claim: "Ported from code 2026-05-31: renders the WiFi heatmap OBJ body selected by DreameA2WifiArchiveSelect via coordinator._wifi_render_entry; applies flip_x/flip_y from input_boolean helpers at render time. Unavailable until body is loaded. Rotates access_token on selection change. Read from _camera_wifi.py:12-136; not re-confirmed live."
+        claim: "Ported from code 2026-05-31: renders the WiFi heatmap OBJ body selected by DreameA2WifiArchiveSelect via coordinator._wifi_render_entry; applies flip_x/flip_y at render time. Unavailable until body is loaded. Rotates access_token on selection change. Read from _camera_wifi.py:12-136; not re-confirmed live."
         evidence: "_camera_wifi.py:38-42 (__init__ → mower_unique_id 'wifi_selected'); _camera_wifi.py:67-84 (async_camera_image); _camera_wifi.py:124-136 (_handle_coordinator_update)"
+      - date: "2026-07-04"
+        status: presumed
+        claim: "R-15/P5.1: flip source changed from input_boolean.dreame_a2_mower_wifi_flip_x/y (external helper) to the integration-owned coordinator attrs coordinator.wifi_flip_x/y (set by switch.dreame_a2_mower_wifi_heatmap_flip_{x,y}). The state-change subscription was removed; flip is folded into _handle_coordinator_update's dedup key so a switch toggle's coordinator broadcast rotates the token."
+        evidence: "camera/wifi.py:async_camera_image + _handle_coordinator_update (reads coordinator.wifi_flip_x/y)"
     references:
       code: "custom_components/dreame_a2_mower/_camera_wifi.py:12"
     notes: |
       Cross-map WiFi heatmap camera on the parent device. Follows the
       DreameA2WifiArchiveSelect picker via coordinator._wifi_render_entry.
-      Flip toggles (input_boolean.dreame_a2_mower_wifi_flip_x/y) are
-      read at render time and bust the entity_picture cache automatically.
-      Unavailable (available=False) when no entry is selected or the body
-      has not yet loaded from cloud. Cache-busted via entity_picture URL hash
-      + access_token rotation on selection change.
+      Flip toggles are read at render time from the integration-owned
+      coordinator attrs coordinator.wifi_flip_x / coordinator.wifi_flip_y
+      (set by switch.dreame_a2_mower_wifi_heatmap_flip_{x,y}; R-15/P5.1 —
+      the old input_boolean.dreame_a2_mower_wifi_flip_x/y helper dependency
+      is gone). A flip toggle broadcasts a coordinator update; the flip bools
+      are folded into _handle_coordinator_update's dedup key so the token
+      rotates and busts the browser cache. Unavailable (available=False) when
+      no entry is selected or the body has not yet loaded from cloud.
 
   - id: "camera.dreame_a2_mower_map_N_wifi_heatmap"
     platform: camera
@@ -281,8 +288,10 @@ entities:
       driven by fingerprint matcher with geometry-inference fallback.
       Unavailable while no tagged entry exists for the map (e.g., brand-new
       map awaiting cloud heatmap generation). Flip toggles applied at render
-      time same as wifi_heatmap_selected. Distinct from wifi_heatmap_selected
-      which follows the archive picker; this camera is fixed to one map_id.
+      time same as wifi_heatmap_selected (reads coordinator.wifi_flip_x/y;
+      R-15/P5.1 — no input_boolean helper dependency). Distinct from
+      wifi_heatmap_selected which follows the archive picker; this camera is
+      fixed to one map_id.
 
   - id: "camera.dreame_a2_mower_work_log"
     # object_id (name-derived, T5-13): session_replay — descriptor name
@@ -1126,6 +1135,72 @@ entities:
       distinct from the SETTINGS write path used by the other three switches
       above. On write failure, fires a persistent_notification with the
       previous value for diagnostics.
+
+  - id: "switch.dreame_a2_mower_wifi_heatmap_flip_x"
+    platform: switch
+    control_mode: integration_local
+    class: "DreameA2WifiHeatmapFlipXSwitch"
+    class_file: "custom_components/dreame_a2_mower/entities/switch/global_.py"
+    device: parent
+    source:
+      wire: "integration-local (no cloud surface)"
+      state_path: "coordinator.wifi_flip_x (bool, default False)"
+    write_path: "coordinator.wifi_flip_x = bool (no cloud/device write) + async_update_listeners() to re-render wifi cameras"
+    status:
+      seen_working: false
+      last_verified: "2026-07-04"
+    verifications:
+      - date: "2026-07-04"
+        status: presumed
+        claim: |
+          R-15 / P5.1: integration-owned WiFi-heatmap horizontal-flip render
+          preference. REPLACES the old dashboard-installed helper
+          input_boolean.dreame_a2_mower_wifi_flip_x that the backend used to
+          read directly. Reads/writes coordinator.wifi_flip_x; camera/wifi.py
+          reads that attr at render time. RestoreEntity persists the toggle
+          across HA restarts. No cloud/device write.
+    references:
+      wire_entry: "n/a — integration-local preference"
+      code: "custom_components/dreame_a2_mower/entities/switch/global_.py"
+    notes: |
+      Parent-device (mower-scoped) local render-preference switch. Toggling
+      broadcasts a coordinator update so the two WiFi cameras rotate their
+      access_token (flip folded into _handle_coordinator_update key). The old
+      external helper input_boolean.dreame_a2_mower_wifi_flip_x is removed at
+      the P5.5 live cutover; the backend no longer depends on it.
+
+  - id: "switch.dreame_a2_mower_wifi_heatmap_flip_y"
+    platform: switch
+    control_mode: integration_local
+    class: "DreameA2WifiHeatmapFlipYSwitch"
+    class_file: "custom_components/dreame_a2_mower/entities/switch/global_.py"
+    device: parent
+    source:
+      wire: "integration-local (no cloud surface)"
+      state_path: "coordinator.wifi_flip_y (bool, default False)"
+    write_path: "coordinator.wifi_flip_y = bool (no cloud/device write) + async_update_listeners() to re-render wifi cameras"
+    status:
+      seen_working: false
+      last_verified: "2026-07-04"
+    verifications:
+      - date: "2026-07-04"
+        status: presumed
+        claim: |
+          R-15 / P5.1: integration-owned WiFi-heatmap vertical-flip render
+          preference. REPLACES the old dashboard-installed helper
+          input_boolean.dreame_a2_mower_wifi_flip_y that the backend used to
+          read directly. Reads/writes coordinator.wifi_flip_y; camera/wifi.py
+          reads that attr at render time. RestoreEntity persists the toggle
+          across HA restarts. No cloud/device write.
+    references:
+      wire_entry: "n/a — integration-local preference"
+      code: "custom_components/dreame_a2_mower/entities/switch/global_.py"
+    notes: |
+      Parent-device (mower-scoped) local render-preference switch. Toggling
+      broadcasts a coordinator update so the two WiFi cameras rotate their
+      access_token (flip folded into _handle_coordinator_update key). The old
+      external helper input_boolean.dreame_a2_mower_wifi_flip_y is removed at
+      the P5.5 live cutover; the backend no longer depends on it.
 
   # ------------------------------------------------------------------
   # Cloud-SETTINGS-backed selects

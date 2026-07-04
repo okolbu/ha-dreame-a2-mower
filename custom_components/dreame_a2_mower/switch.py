@@ -58,6 +58,8 @@ from .entities.switch.global_ import (
     DreameA2AiRecognitionHumansSwitch,
     DreameA2AiRecognitionAnimalsSwitch,
     DreameA2AiRecognitionObjectsSwitch,
+    DreameA2WifiHeatmapFlipXSwitch,
+    DreameA2WifiHeatmapFlipYSwitch,
 )
 # Re-exported so existing tests that import builders from switch still work.
 from .entities.switch.global_ import (  # noqa: F401 — re-export
@@ -91,6 +93,10 @@ async def async_setup_entry(
     coordinator: DreameA2MowerCoordinator = hass.data[DOMAIN][entry.entry_id]
     entities: list = [DreameA2Switch(coordinator, desc) for desc in SWITCHES]
     entities.append(DreameA2AiHumanDetectionSwitch(coordinator))
+    # R-15 / P5.1: integration-owned WiFi-heatmap flip toggles (replace the
+    # old dashboard-installed input_boolean.dreame_a2_mower_wifi_flip_x/y).
+    entities.append(DreameA2WifiHeatmapFlipXSwitch(coordinator))
+    entities.append(DreameA2WifiHeatmapFlipYSwitch(coordinator))
     # Defense-in-depth (T3-2 / R-5): cloud_state is None if the coordinator's
     # first cloud fetch failed (that path now raises ConfigEntryNotReady
     # before platforms are forwarded — see coordinator/_cloud_state.py:

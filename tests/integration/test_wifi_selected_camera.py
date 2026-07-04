@@ -160,7 +160,11 @@ _FLIP_BODY = {"data": [-50] * 16, "width": 4, "height": 4,
 
 
 def _make_camera_with_flips(flip_x: bool, flip_y: bool):
-    """Build a DreameA2WifiSelectedCamera with a mocked hass.states + store.
+    """Build a DreameA2WifiSelectedCamera reading flips from coordinator attrs.
+
+    R-15/P5.1: the flip source is the integration-owned coordinator attrs
+    coord.wifi_flip_x / coord.wifi_flip_y (set by the wifi-flip switches),
+    NOT the old external input_boolean helpers via hass.states.
 
     Post-6a77f25: _resolve_decoded() reads from coord._get_wifi_body_cached(),
     not from the store directly.  The store is still present for tests that
@@ -176,18 +180,13 @@ def _make_camera_with_flips(flip_x: bool, flip_y: bool):
     coord._wifi_archive_store.load_body = MagicMock(return_value=_FLIP_BODY)
     # Wire cache lookup to return the body — simulates a pre-warmed cache.
     coord._get_wifi_body_cached = MagicMock(return_value=_FLIP_BODY)
+    coord.wifi_flip_x = flip_x
+    coord.wifi_flip_y = flip_y
     cam = DreameA2WifiSelectedCamera(coord)
     cam.hass = MagicMock()
     cam.hass.async_add_executor_job = AsyncMock(
         side_effect=lambda fn, *args, **kw: fn(*args, **kw)
     )
-    def _is_state(eid: str, val: str) -> bool:
-        if eid == "input_boolean.dreame_a2_mower_wifi_flip_x":
-            return val == ("on" if flip_x else "off")
-        if eid == "input_boolean.dreame_a2_mower_wifi_flip_y":
-            return val == ("on" if flip_y else "off")
-        return False
-    cam.hass.states.is_state = _is_state
     return cam, coord
 
 

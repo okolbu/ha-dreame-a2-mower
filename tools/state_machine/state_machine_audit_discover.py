@@ -234,6 +234,15 @@ _STANDALONE_CLASS_REGISTRY: dict[str, tuple[str, str, str]] = {
         "switch", "cloud_state_ai_human_enabled",
         "lambda coord: coord.cloud_state.ai_human_enabled",
     ),
+    # R-15 / P5.1: local WiFi-heatmap flip toggles (coord attr, default False).
+    "DreameA2WifiHeatmapFlipXSwitch": (
+        "switch", "wifi_heatmap_flip_x",
+        "lambda coord: bool(coord.wifi_flip_x)",
+    ),
+    "DreameA2WifiHeatmapFlipYSwitch": (
+        "switch", "wifi_heatmap_flip_y",
+        "lambda coord: bool(coord.wifi_flip_y)",
+    ),
 }
 
 

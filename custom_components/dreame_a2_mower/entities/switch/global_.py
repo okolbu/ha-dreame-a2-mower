@@ -16,6 +16,7 @@ from typing import Any
 
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.helpers.entity import EntityCategory
+from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ..._availability import _FreshnessAvailableMixin
@@ -707,6 +708,102 @@ class DreameA2AiHumanDetectionSwitch(
         self.async_write_ha_state()
         # P2 Task 5: raise so the UI action shows the honest cloud verdict.
         raise_for_write_result(result, "Set AI Human Detection", context="entity")
+
+
+# ---------------------------------------------------------------------------
+# WiFi-heatmap render-orientation toggles (R-15 / P5.1)
+#
+# Integration-owned LOCAL render preferences that REPLACE the old
+# dashboard-installed helpers input_boolean.dreame_a2_mower_wifi_flip_x/y.
+# They store an on/off bool on the coordinator (coord.wifi_flip_x /
+# coord.wifi_flip_y) that camera/wifi.py reads at render time — NO wire
+# write. Eliminating the backend's dependency on external helper entities is
+# what lets the P5 dashboard strategy ship helper-free.
+# ---------------------------------------------------------------------------
+
+class _WifiHeatmapFlipSwitchBase(
+    _ControlHonestyMixin,
+    CoordinatorEntity[DreameA2MowerCoordinator],
+    RestoreEntity,
+    SwitchEntity,
+):
+    """Base for the two WiFi-heatmap render-orientation flip switches.
+
+    Each subclass binds ``_AXIS`` (``"x"`` or ``"y"``) plus its name/icon.
+    The authoritative on/off state is the coordinator attr
+    ``coord.wifi_flip_<axis>`` (set here, read by camera/wifi.py). This is a
+    local render preference (``control_mode`` = INTEGRATION_LOCAL): toggling
+    performs NO cloud/device write. ``RestoreEntity`` persists the toggle
+    across HA restarts. Toggling broadcasts a coordinator update so each WiFi
+    camera rotates its ``access_token`` (the cameras fold the flip bools into
+    their ``_handle_coordinator_update`` key), which busts the browser's
+    cached image and re-fetches the re-oriented PNG.
+    """
+
+    _AXIS: str = ""
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_entity_category = EntityCategory.CONFIG
+
+    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
+        super().__init__(coordinator)
+        leaf = f"wifi_heatmap_flip_{self._AXIS}"
+        self._attr_unique_id = mower_unique_id(coordinator, leaf)
+        self._attr_device_info = mower_device_info(coordinator)
+        self._control_mode = resolve_control_mode(platform="switch", key=leaf)
+
+    @property
+    def is_on(self) -> bool:
+        return bool(getattr(self.coordinator, f"wifi_flip_{self._AXIS}", False))
+
+    async def async_added_to_hass(self) -> None:
+        """Restore the last flip preference across HA restarts."""
+        await super().async_added_to_hass()
+        last_state = await self.async_get_last_state()
+        if last_state is not None and last_state.state in ("on", "off"):
+            setattr(
+                self.coordinator,
+                f"wifi_flip_{self._AXIS}",
+                last_state.state == "on",
+            )
+
+    async def _set(self, value: bool) -> None:
+        """Store the flip pref and re-render every WiFi camera in-band.
+
+        Writes the coordinator attr, then broadcasts a coordinator update so
+        each WiFi camera's ``_handle_coordinator_update`` observes the flip
+        change (it is folded into the camera's dedup key) and rotates its
+        ``access_token``. See ``feedback_camera_image_refresh_pattern``.
+        """
+        setattr(self.coordinator, f"wifi_flip_{self._AXIS}", value)
+        self.async_write_ha_state()
+        update_listeners = getattr(
+            self.coordinator, "async_update_listeners", None
+        )
+        if callable(update_listeners):
+            update_listeners()
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        await self._set(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        await self._set(False)
+
+
+class DreameA2WifiHeatmapFlipXSwitch(_WifiHeatmapFlipSwitchBase):
+    """WiFi heatmap horizontal-flip toggle (object_id: …_wifi_heatmap_flip_x)."""
+
+    _AXIS = "x"
+    _attr_name = "WiFi heatmap flip X"
+    _attr_icon = "mdi:flip-horizontal"
+
+
+class DreameA2WifiHeatmapFlipYSwitch(_WifiHeatmapFlipSwitchBase):
+    """WiFi heatmap vertical-flip toggle (object_id: …_wifi_heatmap_flip_y)."""
+
+    _AXIS = "y"
+    _attr_name = "WiFi heatmap flip Y"
+    _attr_icon = "mdi:flip-vertical"
 
 
 class DreameA2AiRecognitionHumansSwitch(_AiRecognitionBitSwitch):

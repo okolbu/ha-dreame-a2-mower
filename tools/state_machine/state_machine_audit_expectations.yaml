@@ -944,6 +944,18 @@ switch.voice_work_status:
   reboot: unavailable_ok
   note: "CFG-backed (cloud cache); briefly Unknown at cold-start until cloud poll fills (~5-30s)."
 
+switch.wifi_heatmap_flip_x:
+  holder: other
+  idle: false
+  reboot: required
+  note: "R-15/P5.1 local render pref; reads coord.wifi_flip_x (default False). RestoreEntity persists across HA reboots; cold-start literal False is structurally correct so no persistence gap."
+
+switch.wifi_heatmap_flip_y:
+  holder: other
+  idle: false
+  reboot: required
+  note: "R-15/P5.1 local render pref; reads coord.wifi_flip_y (default False). RestoreEntity persists across HA reboots; cold-start literal False is structurally correct so no persistence gap."
+
 # ---------------------------------------------------------------------------
 # time
 # ---------------------------------------------------------------------------

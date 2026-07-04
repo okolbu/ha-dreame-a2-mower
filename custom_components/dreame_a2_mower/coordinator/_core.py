@@ -394,6 +394,14 @@ class _CoreMixin:
         # WiFi archive selection — drives DreameA2WifiSelectedCamera.
         # Tuple of (map_id, object_name) — None means "latest from active map".
         self._wifi_render_entry: tuple[int, str] | None = None
+        # WiFi-heatmap render-orientation preferences (R-15 / P5.1). These
+        # are integration-owned local toggles that REPLACE the old
+        # dashboard-installed helpers input_boolean.dreame_a2_mower_wifi_flip_x/y
+        # — the backend no longer depends on any external helper entity.
+        # Read at render time by camera/wifi.py; written by the two
+        # DreameA2WifiHeatmapFlip{X,Y}Switch entities (RestoreEntity-persisted).
+        self.wifi_flip_x: bool = False
+        self.wifi_flip_y: bool = False
         # Last archive refresh result — updated by refresh_wifi_archive.
         self._wifi_archive_last_refresh: dict = {}
         # Decoded wifi-body cache — keyed by object_name.
