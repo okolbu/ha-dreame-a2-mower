@@ -77,14 +77,15 @@ class DreameA2SessionCalendar(
 def _event_from_entry(entry) -> CalendarEvent:
     """Render an ArchivedSession as a CalendarEvent.
 
-    The `summary` field is formatted to MATCH the work_log select's
+    The `summary` field is formatted to MATCH the session-replay select's
     option label EXACTLY:
 
         ``[Mowing] [Map N] YYYY-MM-DD HH:MM — A.A m² / Dmin``
 
     This lets a Lovelace tap_action pipe `{{ summary }}` straight into
-    `select.select_option` (entity_id: select.dreame_a2_mower_work_log)
-    so tapping a calendar event jumps the Replay picker to that
+    `select.select_option` (entity_id: select.dreame_a2_mower_session_replay,
+    renamed from ..._work_log in P4.5 — unique_id key "work_log" is
+    unchanged) so tapping a calendar event jumps the Replay picker to that
     session. Format must stay in lock-step with
     `select.DreameA2WorkLogSelect._build_options_from_sessions`.
     """

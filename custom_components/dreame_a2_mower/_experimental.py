@@ -79,8 +79,10 @@ def filter_experimental(entry: Any | None, entities: Iterable[Any]) -> list[Any]
       ``entity_registry_enabled_default=False`` so it lands disabled in the
       registry (opt-in per entity even once the gate is on).
 
-    No production descriptor sets ``experimental`` yet (P4.4 populates them), so
-    today this is a pass-through: every entity is created unchanged.
+    P4.4 populated the gate: 13 surfaces (10 entities via the descriptor field +
+    3 descriptorless classes via the ``_experimental_tier`` per-instance
+    fallback) now carry a tier. Every other descriptor still leaves
+    ``experimental`` ``None`` and passes through unchanged.
     """
     enabled = experimental_features_enabled(entry)
     result: list[Any] = []

@@ -431,8 +431,10 @@ class DreameA2WorkLogCamera(
     CoordinatorEntity[DreameA2MowerCoordinator], Camera
 ):
     """The Work Log camera. Independent of live state — its PNG is
-    written ONLY by the work-log picker (select.dreame_a2_mower_work_log).
-    Periodic refreshes never touch it.
+    written ONLY by the session-replay picker
+    (select.dreame_a2_mower_session_replay, renamed from ..._work_log in
+    P4.5 — unique_id key "work_log" is unchanged). Periodic refreshes
+    never touch it.
 
     Returns None when no log has been picked yet (or the picker is on
     the placeholder), surfacing as "Image not available" in the UI.

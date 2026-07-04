@@ -1,9 +1,11 @@
 """Coordinator-side active-map WiFi overlay accessor.
 
-The live-map card reads camera.dreame_a2_mower_map.attributes.wifi_overlay;
-that attribute is built by DreameA2MowerCoordinator.active_map_wifi_overlay,
-which resolves the newest archived heatmap tagged with the ACTIVE map_id and
-emits its cell grid in metre units (cm->m converted here)."""
+The live-map card reads camera.dreame_a2_mower_live_map.attributes.wifi_overlay
+(entity_id renamed from ..._map in P4.5, track-5 T5-11 — unique_id key "map" is
+unchanged); that attribute is built by
+DreameA2MowerCoordinator.active_map_wifi_overlay, which resolves the newest
+archived heatmap tagged with the ACTIVE map_id and emits its cell grid in metre
+units (cm->m converted here)."""
 from __future__ import annotations
 
 from pathlib import Path
