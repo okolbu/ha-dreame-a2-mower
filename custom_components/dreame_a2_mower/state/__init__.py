@@ -16,6 +16,7 @@ Modules land here across the P3.6 sub-tasks:
 """
 from __future__ import annotations
 
+from .cloud_state import CloudState as CloudState
 from .containers import (
     ActionMode as ActionMode,
     ChargingStatus as ChargingStatus,
