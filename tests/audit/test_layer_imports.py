@@ -123,6 +123,8 @@ MODULE_LAYER: dict[str, int] = {
     #        fused god-object per T2-1, not yet split by P3.8) plus the
     #        already-separate archive/ and wifi/ domain packages ----------
     "coordinator": 4,
+    "domain": 4,  # P3.7+: domain/ package — ingress + session (signals,
+                  # lifecycle_events, …) services extracted from coordinator/
     "archive": 4,
     "wifi": 4,
     "wifi_archive_store": 4,  # root shim -> wifi/archive_store.py

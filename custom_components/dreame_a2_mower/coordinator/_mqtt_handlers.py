@@ -38,34 +38,14 @@ from ._property_apply import (
     apply_property_to_state,
 )
 
+# Session-type signal capture moved to the domain layer (P3.7). Re-exported
+# here so the module attribute `_mqtt_handlers.capture_session_type_signals`
+# (used by tests + the _apply/_on_state_update callers below) still resolves.
+from ..domain.session import signals as _signals
+from ..domain.session.signals import capture_session_type_signals
+
 if TYPE_CHECKING:
     pass  # cross-mixin type imports added as needed
-
-
-def capture_session_type_signals(
-    live_map,
-    *,
-    s2p56_status: list | None,
-    s2p50_op: int | None,
-    area_m2: float | None,
-) -> None:
-    """Feed mow-evidence / target signals into the active live_map session.
-
-    - s2p56_status: list of [task_id, stage] entries -> append task_ids
-      (dedup against the running tail).
-    - s2p50_op: TASK op (15 manual, 100-103 mow, 109 cruise).
-    - area_m2: latches area_ever_positive when > 0.
-    """
-    if s2p56_status:
-        for entry in s2p56_status:
-            if isinstance(entry, list) and entry:
-                tid = entry[0]
-                if not live_map.target_ids or live_map.target_ids[-1] != tid:
-                    live_map.target_ids.append(tid)
-    if s2p50_op is not None:
-        live_map.last_task_op = s2p50_op
-    if area_m2 is not None and area_m2 > 0:
-        live_map.area_ever_positive = True
 
 
 class _MqttHandlersMixin:
@@ -344,61 +324,16 @@ class _MqttHandlersMixin:
             )
 
     def _latch_task_op(self, op: int) -> None:
-        """Record the latest task op (s2p50 echo), ungated by session-active.
-
-        Persisted to the sidecar (last-wins, no window) so it survives a
-        restart that lands before begin_session. If a session is already
-        active, also set last_task_op directly so a mid-session op change
-        (e.g. a new command without docking) is reflected immediately.
-        """
-        self._pending_task_op = int(op)
-        try:
-            self.session_archive.write_pending_op(int(op))
-        except Exception:  # pragma: no cover - sidecar write is best-effort
-            LOGGER.exception("_latch_task_op: sidecar write failed")
-        if self.live_map.is_active():
-            self.live_map.last_task_op = int(op)
+        """Delegates to ``domain.session.signals.latch_task_op`` (P3.7)."""
+        _signals.latch_task_op(self, op)
 
     def _handle_task_op_echo(self, value: Any) -> None:
-        """Extract the op from an s2p50 value and latch it.
-
-        s2p50 value is `{"d": {"o": <op>, ...}, ...}`; some payloads carry the
-        op flat as `{"o": <op>}`. Non-dict / missing-op payloads are ignored.
-        """
-        if not isinstance(value, dict):
-            return
-        # The op can live at the top level (unwrapped echo `{o, exe, status,…}`
-        # and the reject echo `{exe, o, status:false}`) OR nested under `d`
-        # (wrapped echo `{d:{…o…}, t:"TASK"}`). Prefer the top level, fall back
-        # to d.o — this also handles the SEND shape `{m, o, d:{payload}}` where d
-        # is the payload (no `o`), which the old `value.get("d") or value` form
-        # would have mis-read. (Corpus probe_log_20260520: all three echo shapes.)
-        op = value.get("o")
-        if op is None:
-            inner = value.get("d")
-            if isinstance(inner, dict):
-                op = inner.get("o")
-        if op is None:
-            return
-        try:
-            self._latch_task_op(int(op))
-        except (TypeError, ValueError):
-            return
+        """Delegates to ``domain.session.signals.handle_task_op_echo`` (P3.7)."""
+        _signals.handle_task_op_echo(self, value)
 
     def _seed_session_type_from_pending(self) -> None:
-        """Seed live_map type signals from the pending latches at session birth.
-
-        begin_session() nulls last_task_op + saw_patrol_start; this re-stamps
-        them from the op echo (s2p50) and patrol-start (s2p2=51) that arrived
-        before the session existed. No-op when nothing is latched or no session
-        is active.
-        """
-        if not self.live_map.is_active():
-            return
-        if self._pending_task_op is not None:
-            self.live_map.last_task_op = self._pending_task_op
-        if self._pending_saw_patrol_start:
-            self.live_map.saw_patrol_start = True
+        """Delegates to ``domain.session.signals.seed_session_type_from_pending`` (P3.7)."""
+        _signals.seed_session_type_from_pending(self)
 
     def _on_state_update(self, new_state: MowerState, now_unix: int) -> MowerState:
         """Hook fired after apply_property_to_state. Updates LiveMapState
