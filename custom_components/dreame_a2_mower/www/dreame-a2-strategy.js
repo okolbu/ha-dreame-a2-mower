@@ -772,7 +772,16 @@ function sessionChartsRow(ctx, picked, opts) {
   if (opts && opts.plotly) {
     const mkPlot = (title, samplesAttr, tsIdx, valIdx, yrange) => ({
       type: "custom:plotly-graph",
+      // The data comes from the picked-session attributes (below), NOT recorder
+      // history, so the x-axis must be pinned to the SESSION's own time span —
+      // an archived session is days/weeks in the past and plotly-graph-card's
+      // default window is recent-relative, which pushed every point off-screen
+      // (the charts read as "blank"). visible_range fits the window to the
+      // samples; do NOT set hours_to_show (it overrides visible_range — see the
+      // reference_plotly_graph_card_v3 quirk). Falls back to undefined (card's
+      // own autorange) when no session is picked.
       title,
+      visible_range: `$fn ({ hass }) => { const s = (hass.states['${picked}'] && hass.states['${picked}'].attributes && hass.states['${picked}'].attributes.${samplesAttr}) || []; if (!s.length) return undefined; const t = s.map(a => a[${tsIdx}] * 1000); const lo = Math.min(...t), hi = Math.max(...t); const pad = Math.max((hi - lo) * 0.02, 1000); return [lo - pad, hi + pad]; }`,
       entities: [
         {
           entity: picked,

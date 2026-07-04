@@ -951,7 +951,15 @@ refactor regression: the persisted snapshot only carries state-machine fields
 the rest are only populated by live cloud/MQTT fetches and were never persisted.
 The result is a poor offline/restart dashboard (mostly blank). User ruling
 2026-07-04: defer this hardening to P6 (it is a state + entity-availability
-design change, not a dashboard tweak).
+design change, not a dashboard tweak). A concrete inconsistency the split
+produces (user-flagged): on the Diagnostics connectivity card `wifi_rssi_dbm`
+shows a last-known value (−65 dB) while `wifi_ssid`/`wifi_ip` are blank — because
+RSSI lives in the PERSISTED state-machine snapshot (s1p1 heartbeat byte[17]) and
+is restored on boot, whereas SSID/IP are MowerState-only (NET fetch) and are not
+persisted. Resolve the whole connectivity group ONE way (all last-known, or all
+`unknown`/stale-gated) rather than the current per-field split. Same class: a
+stale persisted value can read as "connected" when the mower is away — decide a
+freshness/staleness policy for restored snapshot fields.
 **Done when:** slowly-changing read-only values (consumables, totals, SIM, dock,
 firmware, device-wide time windows) survive a restart-while-offline showing
 last-known; AND config switches present last-known state (failing only the

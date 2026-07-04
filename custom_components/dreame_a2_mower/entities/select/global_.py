@@ -695,8 +695,20 @@ class DreameA2LidarArchiveSelect(_DreameA2ArchivePickerSelect):
         # Reflect current selection.
         render = self.coordinator._lidar_render_entry
         if render is None:
-            # Default: show the newest scan.
-            cur = opts[0]
+            # Default: the newest scan. SEED the coordinator's render entry so
+            # the served /lidar/selected.pcd matches the shown default. The
+            # view's None-fallback keys off _active_map_id, which is unknown
+            # while the mower is offline, so an unseeded default 404s until the
+            # user re-picks (the reported bug). Assign directly rather than via
+            # set_lidar_render_entry: we run inside a coordinator-update
+            # callback and must not re-broadcast to listeners re-entrantly; the
+            # pcd view + camera read _lidar_render_entry fresh on each request.
+            if entries:
+                seed_map, seed_entry = entries[0]
+                self.coordinator._lidar_render_entry = (seed_map, seed_entry.filename)
+                cur = self._format_option(seed_map, seed_entry)
+            else:
+                cur = opts[0]
         else:
             map_id, filename = render
             archive = self.coordinator.lidar_archives.get(map_id)
