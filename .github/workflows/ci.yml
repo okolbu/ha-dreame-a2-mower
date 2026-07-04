@@ -260,3 +260,31 @@ jobs:
         with: {python-version: "3.13"}
       - run: pip install ruff
       - run: ruff check custom_components/
+
+  dev-box-path-gate:
+    # refactor-v2 P6.4 (R-47): keeps dev-box absolute paths — this repo's
+    # recurring leak class (see the _writers.py `/tmp/probe_cfg_writes.py`
+    # docstring incident) — out of shipped code and the README.
+    #
+    # Scoped to *.py under custom_components/ plus README.md ONLY.
+    # inventory.yaml and entity-inventory.yaml are DELIBERATELY excluded:
+    # they carry intentional evidence-provenance `/data/claude/...`
+    # citations that point at the out-of-tree probe/finding corpus (see
+    # CLAUDE.md § fact discipline) — those are load-bearing, not leaks.
+    # Restricting the grep to `*.py` files naturally excludes both YAMLs
+    # without needing an explicit exclude flag.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check for dev-box paths in shipped files
+        run: |
+          set -u
+          hits=$(grep -rn "/data/claude/\|/tmp/" \
+            --include="*.py" custom_components/dreame_a2_mower/ README.md \
+            2>/dev/null || true)
+          if [ -n "$hits" ]; then
+            echo "::error::Dev-box path(s) leaked into shipped files:"
+            echo "$hits"
+            exit 1
+          fi
+          echo "Dev-box path gate: OK"

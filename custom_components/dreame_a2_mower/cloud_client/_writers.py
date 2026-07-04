@@ -85,7 +85,7 @@ class _WritersMixin:
         returns a rejected WriteResult — the entity-layer caller's
         optimistic update is reverted.
 
-        Source: probe `/tmp/probe_cfg_writes.py` 2026-05-09; full
+        Source: dev-box CFG-write probe, 2026-05-09; full
         evidence in docs/research/wire-captures/cfg-write-regression-2026-05-09.md
         and the ioBroker catalog at iobroker-write-catalog-2026-05-09.md.
         """
