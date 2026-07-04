@@ -314,7 +314,7 @@ the submodule whose concern it matches:
 | File | LOC | Mixin | Concern |
 |---|---|---|---|
 | `__init__.py` | 78 | — (assembly) | Class assembly + public re-exports |
-| `_mqtt_handlers.py` | 1247 | `_MqttHandlersMixin` | MQTT message routing, state-update glue, event_occured, MAPL apply |
+| `_mqtt_handlers.py` | 132 | `_MqttHandlersMixin` | **Thin delegators (P3.7)** to the `domain/` ingress/lifecycle/signals modules + the `_CFG_SINGLE_KEYS` write-key table. The routing/state-update/event_occured/MAPL LOGIC moved to `domain/` (see the "Domain layer" section); this mixin preserves the public/test surface (`coord._on_mqtt_message`, `coord.handle_property_push`, `coord._on_state_update`, `_mqtt_handlers.capture_session_type_signals`). |
 | `_session.py` | 1232 | `_SessionMixin` | Restore / persist / finalize (one router + latch) / replay / work-log render |
 | `_core.py` | 1023 | `_CoreMixin` | `__init__` (the sole `self._foo` owner), `_async_update_data`, properties, `_init_cloud`, `_init_mqtt` |
 | `_lidar_oss.py` | 941 | `_LidarOssMixin` | LiDAR archive + cloud-OSS fetch/finalize + photo/video gallery |
@@ -382,6 +382,55 @@ At runtime this is a no-op; the MRO dispatches.
   the file and registering its mixin class. Static analyzers and
   Python's MRO both need the class defined before the inheritance
   list references it.
+
+---
+
+## Domain layer (load-bearing)
+
+`custom_components/dreame_a2_mower/domain/` (layer 4) holds orchestration
+services extracted from the coordinator god-object, starting with the MQTT
+ingress path in P3.7 (refactor-v2, autopsy #3). Each module takes the
+coordinator (`coord`) as an explicit first argument rather than being a
+coordinator mixin, so the LOGIC lives at the domain layer while the
+coordinator keeps a thin delegating method surface.
+
+| Module | Concern |
+|---|---|
+| `domain/ingress.py` | MQTT routing: `on_mqtt_message`, `handle_property_push` (the paho→loop `_deferred` dispatch), `handle_event_occured`, `apply_mapl`. **P2.9 paho-thread purity preserved VERBATIM** — the paho thread captures only `(siid,piid,value,now)`; base-read/decode/mutate/broadcast run loop-side in `_deferred`. |
+| `domain/session/lifecycle_events.py` | The `_on_state_update` lifecycle-edge detectors, decomposed VERBATIM into named seam functions (`_detect_session_transitions`, `_append_session_telemetry`, `_sync_session_view`, `_detect_non_mow_end_edge`, `_detect_dock_edges`, `_detect_self_shutdown_edge`, `_detect_s2p2_notification`, `_detect_lidar_object_name`, `_detect_dock_return_signal`) + the `on_state_update` orchestrator that calls them in the EXACT original order. Also the charging/rain/shutdown fire helpers + `capture_telemetry_sample`. |
+| `domain/session/signals.py` | Session-TYPE signal capture: `capture_session_type_signals` (s2p56 multi-target ids, s2p50 op, area-ever-positive), `latch_task_op`, `handle_task_op_echo`, `seed_session_type_from_pending`. |
+
+### Rules
+
+- **Layer gate** (`tests/audit/test_layer_imports.py`, `domain`=4): domain may
+  import state=3 / transport=2 / protocol=1 / foundation=0 and same-layer
+  siblings; it must NOT import entities (5) or presentation (6).
+- **VERBATIM-move discipline.** The ingress path is corpus-validated behaviour.
+  When touching these modules, MOVE/decompose — never reimplement — and prove it
+  with the corpus IDENTICAL gate (`tools/replay/corpus_replay.py --diff …`) plus
+  `test_sm_thread_safety` / `test_mqtt_auth_recovery` / `test_finalize_interleavings`.
+- **Delegators preserve the public/test surface.** `_mqtt_handlers.py`'s thin
+  methods keep `coord.handle_property_push`, `coord._on_state_update` (+ the
+  unbound `_MqttHandlersMixin._on_state_update`), and the
+  `_mqtt_handlers.capture_session_type_signals` module attribute working. Tests
+  that monkeypatch a moved symbol (`build_settings_snapshot_v2`,
+  `apply_property_to_state`) patch it at its NEW module home.
+- **`getattr(coord, "_private")` from a domain module is forbidden** by
+  `test_no_coordinator_private_getattr` (it silently returns the default once
+  P3.8 moves the attr off the coordinator). Add a typed transitional accessor to
+  `coordinator/_core.py` (the P3.2 pattern) and read that instead — as done for
+  `s2p2_resolver_tasks`, `pending_finalize_done`, `active_map_id`.
+- **Property dispatch is already table-driven where the mapping encodes it.** The
+  `(siid,piid)→field` decode dispatch lives in `state/apply.py:apply_property_to_state`
+  (driven by `protocol/property_mapping.py:PROPERTY_MAPPING`), which ingress
+  calls. The remaining per-slot ladders in ingress/lifecycle
+  (`_apply_sm_mutations` slot→SM-method routing, the `_apply` session-lifecycle
+  slot logic, `capture_telemetry_sample` slot→buffer selection) are BESPOKE
+  side-effects NOT encoded in `property_mapping.py` — do NOT invent a new
+  dispatch table for them; they stay explicit handlers.
+- The FULL coordinator de-godding (thin composition root) is P3.8/P3.9; more
+  domain services (`session/finalize.py`, `writes/`, `media/`, `wifi/`, `lidar/`,
+  `notifications`, `device_sync`, `gps`) land there.
 
 ---
 
