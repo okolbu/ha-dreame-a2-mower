@@ -27,7 +27,7 @@ from ..const import (
     LOGGER,
 )
 from ..inventory.loader import load_inventory
-from ..mower.property_mapping import PROPERTY_MAPPING, resolve_field
+from ..protocol.property_mapping import PROPERTY_MAPPING, resolve_field
 from .mower_state import ChargingStatus, MowerState
 from ..observability.schemas import SCHEMA_SESSION_SUMMARY, SchemaCheck
 from ..protocol import config_s2p51 as _s2p51

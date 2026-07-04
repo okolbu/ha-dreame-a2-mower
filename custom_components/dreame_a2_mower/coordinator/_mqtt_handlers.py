@@ -22,7 +22,7 @@ from ..const import (
     LOG_NOVEL_VALUE,
     LOGGER,
 )
-from ..mower.property_mapping import PROPERTY_MAPPING
+from ..protocol.property_mapping import PROPERTY_MAPPING
 from ..mower.state import MowerState
 from ._snapshot import build_settings_snapshot_v2
 from ..protocol import heartbeat as _heartbeat
