@@ -16,6 +16,10 @@ Modules land here across the P3.6 sub-tasks:
 """
 from __future__ import annotations
 
+from .apply import (
+    apply_property_to_state as apply_property_to_state,
+    cfg_to_state_updates as cfg_to_state_updates,
+)
 from .cloud_state import CloudState as CloudState
 from .containers import (
     ActionMode as ActionMode,
