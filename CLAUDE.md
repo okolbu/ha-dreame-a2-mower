@@ -295,6 +295,20 @@ Note the device side *is* dynamic: `_device_sync._sync_map_subdevices`
 adds/removes per-map devices on every cloud refresh, so a new map's device
 appears immediately — only its entities wait for a reload.
 
+### The lawn_mower / command-button overlap is intentional (do NOT dedupe)
+
+`lawn_mower.dreame_a2_mower` (start_mowing/pause/dock) and the individual
+command buttons (`button.start_mowing`/`pause`/`stop`/`resume`/`recharge`/
+`cancel_dock_return`/`update_station_location`/`find_my_robot`) coexist **by
+design** (track-5 T5-18): the lawn_mower entity is the HA-native surface (voice
+assistants, generic lawn-mower cards) and maps only the three features
+`LawnMowerEntityFeature` exposes, while the buttons are the full honest control
+surface incl. actions the feature set lacks (stop, resume, cancel dock return,
+update station location). A future reviewer must NOT "dedupe" them into one
+surface. (Their parameterless *service* duplicates — recharge/find_bot/… — WERE
+deleted in P4.2 because a service adds nothing over a button press; the entity
+overlap is the deliberate part.)
+
 ---
 
 ## Coordinator structure (load-bearing)
