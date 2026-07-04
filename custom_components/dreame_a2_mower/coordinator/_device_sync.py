@@ -1,20 +1,31 @@
-"""device_sync mixin — extracted from coordinator.py 2026-05-15.
+"""device_sync mixin — thin delegators (refactor-v2 P3.9d).
 
-See spec docs/superpowers/specs/2026-05-15-coordinator-decomposition-design.md.
+The map sub-device registry sync + lifecycle-event emission LOGIC moved
+VERBATIM to the ``domain/`` layer:
+
+- ``domain/device_sync.py`` — target-area computation, device-registry serial
+  sync, map sub-device sync, debounced cloud-refresh tripwire, event-entity
+  wiring + the ``_fire_*`` lifecycle emitters (mowing_ended / notification /
+  lifecycle / local-novel-s2p2).
+- ``domain/faults.py`` — the fault EMISSION glue: fault-delta lifecycle events
+  + error-tier persistent notices + the emergency-stop PIN banner.
+
+Each domain function takes the coordinator (``coord``) as its first argument;
+this mixin keeps thin delegating methods so the public/test surface
+(``coord.register_event_entities``, ``coord._fire_mowing_ended``, all the
+unbound ``_DeviceSyncMixin._X`` methods that ``test_fault_events`` binds via
+``types.MethodType(_DeviceSyncMixin._fire_fault_delta, coord)``, and the
+``_EMERGENCY_STOP_CODE`` class attr) is unchanged.
+
+See spec docs/superpowers/specs/2026-05-15-coordinator-decomposition-design.md
+(original decomposition) + the refactor-v2 P3 plan.
 """
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-
-from ..const import (
-    DOMAIN,
-    EVENT_TYPE_FAULT_CLEARED,
-    EVENT_TYPE_FAULT_DETECTED,
-    EVENT_TYPE_MOWING_ENDED,
-    LOGGER,
-)
-from ..mower import fault_catalog
+from ..domain import device_sync as _sync
+from ..domain import faults as _faults
 from ..mower.state import MowerState
 
 if TYPE_CHECKING:
@@ -22,394 +33,47 @@ if TYPE_CHECKING:
 
 
 class _DeviceSyncMixin:
-    """Methods extracted from coordinator.py — see spec for groupings."""
+    """Thin delegators to ``domain.{device_sync,faults}`` (P3.9d) — see module docstring."""
+
+    # ------------------------------------------------------------------
+    # device_sync service (P3.9d) — domain/device_sync.py
+    # ------------------------------------------------------------------
 
     def _compute_target_area_m2(self, state: MowerState) -> float | None:
-        """Effective area for the current mowing target.
-
-        Behaves like the Dreame app's "this is what will be mowed"
-        readout. Source-of-truth order:
-
-        1. Live s1.4 telemetry's per-task area
-           (``task_total_area_m2``) when a session is active. This
-           is the firmware's own "target" figure; it covers any
-           combination of selected zones/spots without the cloud map
-           round-trip.
-        2. Cloud-map area_m2 of the selected zone(s) or spot(s) when
-           the user has picked a target. Used pre-session so the
-           dashboard shows the planned target before pressing Start.
-        3. Full lawn area otherwise (the sensor's original meaning).
-        """
-        from ..mower.state import ActionMode
-
-        # Priority 1: live telemetry while mowing.
-        # Use live_map.is_active() — session_active was removed from MowerState (SM-14).
-        live_task_area = state.task_total_area_m2
-        if (
-            self.live_map.is_active()
-            and live_task_area is not None
-            and live_task_area > 0
-        ):
-            return float(live_task_area)
-
-        _maps = self.cloud_state.maps_by_id if self.cloud_state is not None else {}
-        map_data = _maps.get(self._active_map_id)
-        mode = state.action_mode
-        if map_data is not None:
-            if mode == ActionMode.ZONE and state.active_selection_zones:
-                wanted = set(state.active_selection_zones)
-                total = 0.0
-                for z in getattr(map_data, "mowing_zones", ()):
-                    if z.zone_id in wanted:
-                        total += float(getattr(z, "area_m2", 0.0) or 0.0)
-                if total > 0:
-                    return total
-            if mode == ActionMode.SPOT and state.active_selection_spots:
-                wanted = set(state.active_selection_spots)
-                total = 0.0
-                matched: list[tuple[int, str, float]] = []
-                for s in getattr(map_data, "spot_zones", ()):
-                    if s.spot_id in wanted:
-                        matched.append(
-                            (s.spot_id, s.name, float(getattr(s, "area_m2", 0.0) or 0.0))
-                        )
-                        total += matched[-1][2]
-                if total > 0:
-                    return total
-                # v1.0.0a51: log once when SPOT mode would target a real
-                # selection but we can't compute an area — distinguishes
-                # "spot not found in cached map" from "spot found but
-                # cloud sent area=0".
-                if not getattr(self, "_target_area_diagnostics_logged", False):
-                    available = [
-                        (s.spot_id, s.name, float(getattr(s, "area_m2", 0.0) or 0.0))
-                        for s in getattr(map_data, "spot_zones", ())
-                    ]
-                    LOGGER.debug(
-                        "[F5] target_area: SPOT mode wanted=%s matched=%s "
-                        "available=%s — falling back to total_lawn_area_m2",
-                        list(wanted), matched, available,
-                    )
-                    self._target_area_diagnostics_logged = True
-        # All-areas, edge mode, or no selection / no area data yet:
-        # fall back to the full lawn area (the sensor's original
-        # meaning).
-        return state.total_lawn_area_m2
-
-    def _handle_emergency_stop_transition(
-        self, prev: bool | None, new: bool | None,
-    ) -> None:
-        """Surface a persistent_notification mirroring the Dreame app's
-        modal popup when the mower goes into the PIN-required lockout
-        state, and dismiss it when the user enters the PIN to clear.
-
-        byte[3] bit 7 (state.emergency_stop) is the load-bearing latch:
-        sets on safety event (lid open OR lift), clears ONLY on PIN
-        entry. So this notification's lifecycle exactly matches the
-        app's "Emergency stop activated. Enter PIN code on the robot
-        to unlock it." popup.
-        """
-        # Treat None (state not yet known) the same as False for trigger
-        # purposes — handles the first heartbeat after HA restart where
-        # the prior state was None and the mower is already in lockout.
-        prev_active = prev is True
-        new_active = new is True
-        if prev_active and not new_active:
-            try:
-                from homeassistant.components import persistent_notification as _pn
-                _pn.async_dismiss(
-                    self.hass,
-                    notification_id=f"{DOMAIN}_emergency_stop_{self.entry.entry_id}",
-                )
-                LOGGER.info("emergency_stop cleared — persistent_notification dismissed")
-            except Exception as ex:
-                LOGGER.warning("emergency_stop dismiss failed: %s", ex)
-            return
-        if prev_active or not new_active:
-            return
-        # Transition (None|False) → True: post the modal-equivalent banner.
-        try:
-            from homeassistant.components import persistent_notification as _pn
-            _pn.async_create(
-                self.hass,
-                message=(
-                    "The mower has triggered its safety lockout. **Enter "
-                    "the PIN code on the robot to unlock it.** The mower "
-                    "will not mow until the PIN is entered.\n\n"
-                    "This notification will dismiss automatically once "
-                    "the PIN is accepted."
-                ),
-                title="Dreame A2 Mower — Emergency stop activated",
-                notification_id=f"{DOMAIN}_emergency_stop_{self.entry.entry_id}",
-            )
-            LOGGER.info("emergency_stop activated — persistent_notification posted")
-        except Exception as ex:
-            LOGGER.warning("emergency_stop notification create failed: %s", ex)
-
-    # Codes the generic fault-notice path must NOT touch: emergency-stop (23)
-    # has its own PIN-entry persistent notice via _handle_emergency_stop_transition.
-    _EMERGENCY_STOP_CODE = 23
-
-    def _fault_notification_id(self, code: int) -> str:
-        return f"{DOMAIN}_fault_{int(code)}_{self.entry.entry_id}"
-
-    def _post_fault_notice(self, code: int, lang: str) -> None:
-        """Post a persistent_notification for a newly-detected error-tier fault.
-
-        Title = the catalog fault_text; body = the catalog detail (solution
-        steps) when present, else the fault_text. Skips emergency-stop (its
-        dedicated PIN notice owns code 23). Wrapped in try/except so a UI-notice
-        failure never breaks fault handling (mirrors _handle_emergency_stop_transition).
-        No-ops if hass or entry are not yet available (e.g. test stubs)."""
-        if getattr(self, "hass", None) is None or getattr(self, "entry", None) is None:
-            return
-        if int(code) == self._EMERGENCY_STOP_CODE:
-            return
-        from ..mower import fault_catalog
-        title = fault_catalog.fault_text(int(code), lang) or f"Fault {int(code)}"
-        body = fault_catalog.fault_detail(int(code), lang) or title
-        try:
-            from homeassistant.components import persistent_notification as _pn
-            _pn.async_create(
-                self.hass,
-                message=body,
-                title=f"Dreame A2 Mower — {title}",
-                notification_id=self._fault_notification_id(code),
-            )
-            LOGGER.info("fault %d active — persistent_notification posted", int(code))
-        except Exception as ex:
-            LOGGER.warning("fault %d notice create failed: %s", int(code), ex)
-
-    def _dismiss_fault_notice(self, code: int) -> None:
-        """Dismiss the persistent_notification for a cleared error-tier fault.
-
-        No-ops if hass or entry are not yet available (e.g. test stubs)."""
-        if getattr(self, "hass", None) is None or getattr(self, "entry", None) is None:
-            return
-        if int(code) == self._EMERGENCY_STOP_CODE:
-            return
-        try:
-            from homeassistant.components import persistent_notification as _pn
-            _pn.async_dismiss(
-                self.hass, notification_id=self._fault_notification_id(code)
-            )
-            LOGGER.info("fault %d cleared — persistent_notification dismissed", int(code))
-        except Exception as ex:
-            LOGGER.warning("fault %d notice dismiss failed: %s", int(code), ex)
-
-    def _repost_active_fault_notices(self) -> None:
-        """Re-post error-tier persistent notices for faults restored from disk.
-
-        On HA restart with a still-latched fault, snapshot.errors is restored but
-        _fire_fault_delta won't re-fire (no delta when the first MQTT push equals
-        the restored set), so the banner is lost. This one-shot startup call
-        re-posts it directly — WITHOUT firing fault_detected (no _fire_fault_delta).
-        Idempotent: _post_fault_notice uses a per-code notification_id. emergency-stop
-        (23) is skipped by _post_fault_notice (its own notice re-posts via
-        _handle_emergency_stop_transition on the first heartbeat). No-ops if hass/
-        entry/state_machine are unavailable (test stubs / early boot)."""
-        if getattr(self, "hass", None) is None or getattr(self, "entry", None) is None:
-            return
-        sm = getattr(self, "state_machine", None)
-        if sm is None:
-            return
-        try:
-            errors = sm.snapshot().errors
-        except Exception:
-            return
-        if not errors:
-            return
-        from ..mower import fault_catalog
-        cfg = getattr(self.hass, "config", None)
-        lang = fault_catalog.resolve_lang(getattr(cfg, "language", None))
-        for code in sorted(errors):
-            self._post_fault_notice(int(code), lang)
+        """Delegates to ``domain.device_sync.compute_target_area_m2`` (P3.9d)."""
+        return _sync.compute_target_area_m2(self, state)
 
     def _update_device_registry_serial(self, serial: str) -> None:
-        """Reflect the real hardware serial onto the device record."""
-        try:
-            from homeassistant.helpers import device_registry as dr
-        except ImportError:
-            return
-        registry = dr.async_get(self.hass)
-        device = registry.async_get_device(identifiers={(DOMAIN, self.entry.entry_id)})
-        if device is None:
-            LOGGER.debug(
-                "hardware_serial fetched but device record not yet registered "
-                "(serial=%r) — will pick up on next entity registration",
-                serial,
-            )
-            return
-        if device.serial_number == serial:
-            return
-        registry.async_update_device(device.id, serial_number=serial)
-        LOGGER.info("device serial_number updated to %s", serial)
+        """Delegates to ``domain.device_sync.update_device_registry_serial`` (P3.9d)."""
+        _sync.update_device_registry_serial(self, serial)
 
     def _get_device_registry(self) -> object | None:
-        """Return the HA device registry, or None if unavailable in this test env."""
-        try:
-            from homeassistant.helpers import device_registry as dr
-        except ImportError:
-            return None
-        return dr.async_get(self.hass)
+        """Delegates to ``domain.device_sync.get_device_registry`` (P3.9d)."""
+        return _sync.get_device_registry(self)
 
     def _sync_map_subdevices(self) -> None:
-        """Add HA devices for new map_ids; remove devices for dropped ones.
-
-        Called whenever `cloud_state.maps_by_id` may have changed (after
-        `_apply_mapl` and after `_refresh_cloud_state`). No-ops if `self.hass` or
-        `self.entry` is missing or None (test stubs may not have them set).
-        """
-        if not hasattr(self, "hass") or self.hass is None:
-            return
-        if not hasattr(self, "entry") or self.entry is None:
-            return
-        if self.cloud_state is None:
-            return
-        from .._devices import _stable_id, map_device_info
-
-        registry = self._get_device_registry()
-        if registry is None:
-            return
-        stable = _stable_id(self)
-        wanted_ids = set(self.cloud_state.maps_by_id.keys())
-
-        for map_id, map_data in self.cloud_state.maps_by_id.items():
-            info = map_device_info(self, map_id, getattr(map_data, "name", None))
-            registry.async_get_or_create(
-                config_entry_id=self.entry.entry_id,
-                **info,
-            )
-
-        # An empty maps_by_id means "no authoritative map list right now"
-        # (transient empty cloud batch), NOT "delete every map". Pruning on
-        # empty would wipe all per-map sub-devices; skip it.
-        if not wanted_ids:
-            return
-
-        # Remove orphan map sub-devices belonging to this entry.
-        # HA device identifiers are typed as `set[tuple[str, str]]` but in
-        # the wild some integrations store longer tuples. Iterate defensively.
-        prefix = f"{stable}_map_"
-        for dev in list(registry.devices.values()):
-            for ident_tuple in dev.identifiers:
-                if len(ident_tuple) < 2 or ident_tuple[0] != DOMAIN:
-                    continue
-                ident = ident_tuple[1]
-                if not isinstance(ident, str) or not ident.startswith(prefix):
-                    continue
-                try:
-                    map_id = int(ident.removeprefix(prefix))
-                except ValueError:
-                    continue
-                if map_id not in wanted_ids:
-                    registry.async_remove_device(dev.id)
-                break
+        """Delegates to ``domain.device_sync.sync_map_subdevices`` (P3.9d)."""
+        _sync.sync_map_subdevices(self)
 
     def _schedule_cloud_refresh(
         self, *, delay_sec: float = 5.0, reason: str = "tripwire",
     ) -> None:
-        """Debounced cloud-state refresh — coalesces bursts of MQTT
-        settings tripwires (s6p2 etc.) into a single fetch.
-
-        Called from the MQTT event-loop hop on every tripwire push.
-        Each call cancels any pending fire and arms a new timer so a
-        burst of settings saves results in exactly one refresh once
-        the burst settles. Default delay 5s — short enough that HA
-        reflects an app-side edit within a few seconds, long enough
-        to coalesce the 1-3 tripwires the firmware tends to emit per
-        save (FRAME_INFO + an echo or two).
-        """
-        loop = self.hass.loop
-        if self._cloud_refresh_debounce_handle is not None:
-            self._cloud_refresh_debounce_handle.cancel()
-
-        def _fire() -> None:
-            self._cloud_refresh_debounce_handle = None
-            LOGGER.info(
-                "[cloud] settings tripwire (%s) → refreshing cloud state",
-                reason,
-            )
-            self.hass.async_create_task(self._refresh_cloud_state())
-
-        self._cloud_refresh_debounce_handle = loop.call_later(delay_sec, _fire)
+        """Delegates to ``domain.device_sync.schedule_cloud_refresh`` (P3.9d)."""
+        _sync.schedule_cloud_refresh(self, delay_sec=delay_sec, reason=reason)
 
     def register_event_entities(self, *, lifecycle: Any, notification: Any) -> None:
-        """Called from event.py's async_setup_entry to wire the event
-        entities the coordinator's dispatcher fires through.
-
-        Stored as plain attributes (no weakref needed — entities live
-        for the integration's lifetime). The lifecycle and notification
-        parameters are the EventEntity instances created by
-        event.py's setup call.
-        """
-        self._lifecycle_event = lifecycle
-        self._notification_event = notification
+        """Delegates to ``domain.device_sync.register_event_entities`` (P3.9d)."""
+        _sync.register_event_entities(self, lifecycle=lifecycle, notification=notification)
 
     def _fire_lifecycle(
         self, event_type: str, event_data: dict[str, Any] | None = None
     ) -> None:
-        """Race-safe dispatcher to the lifecycle event entity.
-
-        Drops the call with a DEBUG log if the entity isn't yet wired
-        (transient on startup before event.py's async_setup_entry has
-        run). Delegates payload-cleaning to the entity's `trigger`
-        wrapper.
-        """
-        ent = self._lifecycle_event
-        if ent is None:
-            LOGGER.debug(
-                "[event] _fire_lifecycle(%r) dropped — entity not yet registered",
-                event_type,
-            )
-            return
-        ent.trigger(event_type, event_data)
-
-    def _fire_fault_delta(
-        self, prev_errors, new_errors, *, now_unix: int
-    ) -> None:
-        """Fire fault_detected / fault_cleared lifecycle events for the
-        change between two snapshot.errors sets. Fired LOCALLY (not via the
-        cloud notification resolver) so faults always reach the activity list.
-        """
-        from ..mower.error_codes import describe_error
-        from ..mower import fault_catalog
-        hass = getattr(self, "hass", None)
-        cfg = getattr(hass, "config", None)
-        lang = fault_catalog.resolve_lang(getattr(cfg, "language", None))
-        for code in sorted(new_errors - prev_errors):
-            self._fire_lifecycle(
-                EVENT_TYPE_FAULT_DETECTED,
-                {"code": int(code), "description": describe_error(int(code), lang),
-                 "at_unix": int(now_unix)},
-            )
-            self._post_fault_notice(int(code), lang)
-        for code in sorted(prev_errors - new_errors):
-            self._fire_lifecycle(
-                EVENT_TYPE_FAULT_CLEARED,
-                {"code": int(code), "description": describe_error(int(code), lang),
-                 "at_unix": int(now_unix)},
-            )
-            self._dismiss_fault_notice(int(code))
+        """Delegates to ``domain.device_sync.fire_lifecycle`` (P3.9d)."""
+        _sync.fire_lifecycle(self, event_type, event_data)
 
     def _fire_local_novel_s2p2(self, *, code: int, now_unix: int) -> None:
-        """Fire a local (NOT cloud-gated) notification for a truly-unknown
-        s2p2 code so it always reaches the activity list. The cloud resolver
-        may still enrich with authoritative text later; this is the guaranteed
-        floor. source='local' distinguishes it from cloud-sourced fires.
-        """
-        ent = self._notification_event
-        if ent is None:
-            return
-        LOGGER.warning(
-            "[event] novel s2p2 code=%d — local activity entry created; no S2P2_EVENT_TYPES mapping",
-            int(code),
-        )
-        ent.trigger(
-            "unknown_s2p2",
-            {"code": int(code), "text": f"Unrecognised status {code}",
-             "source": "local", "siid": 2, "piid": 2, "fired_at": int(now_unix)},
-        )
+        """Delegates to ``domain.device_sync.fire_local_novel_s2p2`` (P3.9d)."""
+        _sync.fire_local_novel_s2p2(self, code=code, now_unix=now_unix)
 
     def _fire_mowing_ended(
         self,
@@ -418,34 +82,8 @@ class _DeviceSyncMixin:
         duration_min: int | None,
         completed: bool,
     ) -> None:
-        """Fire the mowing_ended lifecycle event AND notify state machine.
-
-        Called from both _do_oss_fetch (FINALIZE_COMPLETE, summary-driven)
-        and _run_finalize_incomplete (FINALIZE_INCOMPLETE, best-effort).
-        Delegates payload-shape consistency to one place.
-
-        State-machine sync: the finalize gate can fire on a cloud-
-        detected task_state transition (prev ∈ {0,4} → new ∈ {2,None})
-        without a matching MQTT push. Without this hook the state
-        machine stays IN_SESSION + MOWING indefinitely while the
-        lifecycle event correctly reports the session ended.
-        """
-        self._fire_lifecycle(
-            EVENT_TYPE_MOWING_ENDED,
-            {
-                "at_unix": int(now_unix),
-                "area_mowed_m2": area_mowed_m2,
-                "duration_min": duration_min,
-                "completed": bool(completed),
-            },
-        )
-        self._rain_delay_started_at = None  # session over → no rain wait
-        sm = getattr(self, "state_machine", None)
-        if sm is not None:
-            try:
-                sm.end_session(now_unix=int(now_unix))
-            except Exception:
-                LOGGER.exception("state_machine.end_session failed")
+        """Delegates to ``domain.device_sync.fire_mowing_ended`` (P3.9d)."""
+        _sync.fire_mowing_ended(self, now_unix, area_mowed_m2, duration_min, completed)
 
     def _fire_notification(
         self,
@@ -459,51 +97,46 @@ class _DeviceSyncMixin:
         message_id: str | None = None,
         now_unix: int = 0,
     ) -> None:
-        """Race-safe dispatcher to the notification event entity.
-
-        Called by `_NotificationsMixin._resolve_s2p2_notification` after
-        the resolver has fetched the authoritative text from the cloud's
-        device-messages store. Drops the call with DEBUG if the entity
-        isn't registered yet (transient on startup before event.py's
-        async_setup_entry has run). Also stashes the notification for
-        sensor.last_notification.
-
-        NOTE: pre-2026-05-26 there was an inline `_fire_alert` called
-        directly from _on_state_update with a hardcoded text table. That
-        path is gone — texts now come from the cloud per-fire.
-        """
-        self._last_notification = {
-            "event_type": event_type,
-            "text": text,
-            "code": code,
-            "fired_at": now_unix,
-        }
-        LOGGER.info(
-            "[notification] s%dp%d=%d slug=%r text=%r (msg=%s)",
-            siid, piid, code, event_type, text, message_id or "-",
+        """Delegates to ``domain.device_sync.fire_notification`` (P3.9d)."""
+        _sync.fire_notification(
+            self, event_type=event_type, text=text, code=code, siid=siid,
+            piid=piid, send_time=send_time, message_id=message_id, now_unix=now_unix,
         )
-        ent = self._notification_event
-        if ent is None:
-            LOGGER.debug(
-                "[event] _fire_notification(%r) dropped — entity not yet registered",
-                event_type,
-            )
-            return
-        payload = {
-            "text": text,
-            "code": code,
-            "siid": siid,
-            "piid": piid,
-            "send_time": send_time,
-            "message_id": message_id,
-            "source": "cloud",
-            "tier": fault_catalog.fault_tier(code),
-            "category": fault_catalog.fault_category(code),
-            "severity": fault_catalog.fault_severity(code),
-        }
-        ent.trigger(event_type, payload)
 
-    # -----------------------------------------------------------------------
-    # F5.7.1 — In-progress restore on HA boot + 30s debounced persist
-    # -----------------------------------------------------------------------
+    # ------------------------------------------------------------------
+    # faults service (P3.9d) — domain/faults.py
+    # ------------------------------------------------------------------
 
+    # Codes the generic fault-notice path must NOT touch: emergency-stop (23)
+    # has its own PIN-entry persistent notice. Kept as a class attr here (single
+    # source in domain/faults.py) so the established `coord._EMERGENCY_STOP_CODE`
+    # surface resolves.
+    _EMERGENCY_STOP_CODE = _faults._EMERGENCY_STOP_CODE
+
+    def _handle_emergency_stop_transition(
+        self, prev: bool | None, new: bool | None,
+    ) -> None:
+        """Delegates to ``domain.faults.handle_emergency_stop_transition`` (P3.9d)."""
+        _faults.handle_emergency_stop_transition(self, prev, new)
+
+    def _fault_notification_id(self, code: int) -> str:
+        """Delegates to ``domain.faults.fault_notification_id`` (P3.9d)."""
+        return _faults.fault_notification_id(self, code)
+
+    def _post_fault_notice(self, code: int, lang: str) -> None:
+        """Delegates to ``domain.faults.post_fault_notice`` (P3.9d)."""
+        _faults.post_fault_notice(self, code, lang)
+
+    def _dismiss_fault_notice(self, code: int) -> None:
+        """Delegates to ``domain.faults.dismiss_fault_notice`` (P3.9d)."""
+        _faults.dismiss_fault_notice(self, code)
+
+    def _repost_active_fault_notices(self) -> None:
+        """Delegates to ``domain.faults.repost_active_fault_notices`` (P3.9d)."""
+        _faults.repost_active_fault_notices(self)
+
+    def _fire_fault_delta(
+        self, prev_errors, new_errors, *, now_unix: int
+    ) -> None:
+        """Delegates to ``domain.faults.fire_fault_delta`` (P3.9d)."""
+        _faults.fire_fault_delta(self, prev_errors, new_errors, now_unix=now_unix)
