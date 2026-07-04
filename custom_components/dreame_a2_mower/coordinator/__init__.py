@@ -7,19 +7,29 @@ and plan ``docs/superpowers/plans/2026-05-15-coordinator-decomposition.md``.
 External callers continue to use ``from .coordinator import …``; the
 package re-exports the same public surface as the old module.
 
-Per-mixin file map (see CLAUDE.md § Coordinator structure):
+Post-P3.9 (refactor-v2) the coordinator is a thin **composition root + attr
+hub + poll orchestrator**: the business LOGIC lives in the layer-4 ``domain/``
+services, and every mixin below is a thin delegator preserving the public/test
+surface. See CLAUDE.md § Coordinator structure + the target architecture doc
+``docs/superpowers/specs/2026-07-02-refactor-v2-target-architecture.md`` §1.
 
-- ``_core.py``           — __init__, _async_update_data, properties
-- ``_property_apply.py`` — module-level helpers + (siid, piid)-to-state
-- ``_refreshers.py``     — all cloud refresh cycles
+Per-mixin file map (see CLAUDE.md § Coordinator structure for the full table):
+
+- ``_core.py``           — composition root + ``__init__`` attr hub + transport
+                           bootstrap (``_init_cloud`` / ``_init_mqtt``);
+                           ``_async_update_data`` delegates to ``domain/boot.py``
+- ``_property_apply.py`` — re-export shim → ``state/apply.py``
+- ``_refreshers.py``     — thin delegators → domain/{gps,device_info,obstacles,
+                           notifications} + the residual ``_refresh_mapl``
 - ``_cloud_state.py``    — cloud_state apply + map fetch/persist
-- ``_mqtt_handlers.py``  — MQTT message routing + state transitions
-- ``_writes.py``         — settings + action writes
-- ``_session.py``        — finalize + persist + replay
-- ``_rendering.py``      — live-map render + obstacle overlay
-- ``_lidar_oss.py``      — thin delegators to domain/{lidar,media,wifi}
-- ``_device_sync.py``    — registry sync + lifecycle events
-- ``_wifi_archive.py``   — WiFi heatmap archive
+- ``_mqtt_handlers.py``  — thin delegators → domain/{ingress,session}
+- ``_writes.py``         — thin delegators → domain/writes/
+- ``_session.py``        — thin delegators → domain/session/
+- ``_rendering.py``      — thin delegators → domain/render.py
+- ``_lidar_oss.py``      — thin delegators → domain/{lidar,media,wifi}
+- ``_device_sync.py``    — thin delegators → domain/{device_sync,faults}
+- ``_wifi_archive.py``   — thin delegators → domain/wifi/service.py
+- ``_notifications.py``  — thin delegators → domain/notifications.py
 """
 from __future__ import annotations
 

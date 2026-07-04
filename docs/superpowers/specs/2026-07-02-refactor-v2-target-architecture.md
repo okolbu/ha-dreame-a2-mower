@@ -26,6 +26,33 @@ slices. Everything else the 9,804-LOC coordinator package does today (R-8/T2-1) 
 into layer-4 services that own their attrs — this is how the attr-bundling verdict
 (T2-16) is realized: the god-object is removed, not decorated.
 
+> **SHIPPED-SHAPE DECISION (P3.9e capstone, recorded 2026-07-04).** Two clauses of
+> the sketch above were consciously NOT taken; both are deliberate architecture
+> decisions, not misses:
+>
+> 1. **Package, not a single file.** The composition root ships as the
+>    `coordinator/` PACKAGE of thin-delegator mixins + `_core.py`, not a single
+>    `coordinator.py`. After P3.9a–9e moved the LOGIC into `domain/` services, each
+>    mixin file is a ~70–250-LOC delegator that preserves an existing public/test
+>    surface; collapsing 11 such files into one buys nothing and would churn every
+>    `from .coordinator._x import …` importer. The "don't bring back coordinator.py
+>    single file" package-contract rule (CLAUDE.md) therefore stands.
+>
+> 2. **Attrs-on-coord + service-functions, not attr-bundling.** T2-16's "services
+>    that own their attrs" was realized as: domain services take the coordinator
+>    (`coord`) as an explicit first argument and read/write shared state on it,
+>    while `_CoreMixin.__init__` stays the single ATTR HUB (grouped by owning-
+>    service section headers). The god-object's *logic* is removed (dissolved into
+>    `domain/`); its *state* stays centralized-but-labelled rather than scattered
+>    into standalone per-service state objects. Standalone attr-bundling was judged
+>    high-blast-radius for no behavioural gain (T2-16 verdict; track-2 autopsy #7).
+>    Consequence: `_core.py` lands at ~950 LOC (≈380 of which is the one-attr-per-
+>    line `__init__` hub + the P3.2 transitional accessors + `_init_cloud`/
+>    `_init_mqtt`), NOT ≤400. That is the accepted cost of decision (2). Every
+>    `domain/` service meets the ≤400 per-module cap; `domain/boot.py` (~530, the
+>    first-refresh poll orchestrator, already split into ordered seam functions) is
+>    a recorded >400 exception.
+
 ## 2. Target package tree
 
 Names in **bold** are new/moved; unmarked = stays. Every module ≤400 LOC (spec cap);
