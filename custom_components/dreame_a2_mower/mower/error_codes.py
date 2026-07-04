@@ -77,7 +77,9 @@ S2P2_EVENT_TYPES: dict[int, str] = _derive_iot_slugs()
 
 # The event_types advertised by event.dreame_a2_mower_notification: the unique
 # derived slugs (sorted for stability) plus the unknown sentinel. Defined here
-# (catalog-authoritative home) and re-exported by const.py.
+# (catalog-authoritative home) and consumed directly by event.py /
+# device_trigger.py; const.py does NOT re-export it (R-30 inversion — a
+# fault-catalog-derived table cannot live in the foundation layer).
 NOTIFICATION_EVENT_TYPES: tuple[str, ...] = tuple(
     sorted(set(S2P2_EVENT_TYPES.values())) + [S2P2_UNKNOWN_EVENT_TYPE]
 )

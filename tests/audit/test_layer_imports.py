@@ -78,13 +78,14 @@ CC = REPO_ROOT / "custom_components" / "dreame_a2_mower"
 # ---------------------------------------------------------------------------
 MODULE_LAYER: dict[str, int] = {
     # ---- 0: foundation ---------------------------------------------------
-    # const.py itself, plus cross-cutting infra (observability, the inventory
-    # loader) and the small set of true zero-internal-dependency leaves that
-    # are imported from more than one numbered layer (state AND domain AND
-    # entities AND presentation all reach these) and therefore cannot be
-    # pinned to any single layer above 0 without creating a false back-edge.
+    # const.py itself, the inventory loader, and the small set of true
+    # zero-internal-dependency leaves that are imported from more than one
+    # numbered layer (state AND domain AND entities AND presentation all reach
+    # these) and therefore cannot be pinned to any single layer above 0
+    # without creating a false back-edge. (observability/ is NOT here — it has
+    # its own internal dependency on protocol/ and is pinned to layer 1; see
+    # below.)
     "const": 0,
-    "observability": 0,
     "inventory": 0,
     "control_honesty": 0,  # CONTROL_MODES table; zero internal imports; read by entities+domain
     "_devices": 0,  # device_info/unique_id builders; zero internal imports besides const;
@@ -97,6 +98,14 @@ MODULE_LAYER: dict[str, int] = {
     # ---- 1: protocol (pure decode/encode; zero HA imports) ---------------
     "protocol": 1,
     "map_decoder": 1,  # root re-export shim -> protocol/map/ (T2-4 autopsy #8 split)
+    # observability/ sits at layer 1 alongside protocol: its only internal
+    # dependency is observability/registry.py -> protocol/unknown_watchdog.py
+    # (a pure dataclass), so pinning it here makes that a legal SAME-layer
+    # edge. Verified nothing at layer 0/1 imports observability back — its
+    # only importers are __init__.py (6), coordinator/_core.py (4), and
+    # coordinator/_property_apply.py (4), all strictly downward. This is why
+    # the gate needs NO known-exception for that edge.
+    "observability": 1,
 
     # ---- 2: transport (mqtt, cloud RPC/OSS/file-bridge, fetchers) --------
     "cloud_client": 2,
@@ -168,19 +177,17 @@ MODULE_LAYER: dict[str, int] = {
 # allowed here (this task's brief: "const and protocol/map back-edges MUST be
 # clean") — if a violation touches either, fix the import, don't add an
 # exception.
-KNOWN_EXCEPTIONS: set[tuple[str, str]] = {
-    # observability/registry.py imports protocol/unknown_watchdog.py for the
-    # UnknownFieldWatchdog dataclass. observability (0) -> protocol (1) is an
-    # upward edge under the strict numbering, but it is a one-off pure-
-    # dataclass dependency (protocol has zero HA imports, so nothing actually
-    # breaks), it was not flagged by any track-2 finding (T2-1..T2-17), and it
-    # predates this task's scope (const.py / protocol decoder dataclasses
-    # only). Left as a documented exception rather than silently bumping
-    # observability's layer for one edge. No task currently scheduled to fix
-    # it; revisit if `unknown_watchdog` grows real HA-layer dependents that
-    # would make the direction matter.
-    ("observability.registry", "protocol.unknown_watchdog"),
-}
+#
+# EMPTY BY DESIGN. The one edge that would have needed an exception —
+# observability/registry.py -> protocol/unknown_watchdog.py — was eliminated
+# structurally instead: observability is pinned to layer 1 (same as protocol,
+# see MODULE_LAYER), which makes that a legal same-layer edge. This is a real
+# fix, not deferred debt: it was verified that nothing at layer 0/1 imports
+# observability back (its only importers are __init__.py=6 and two
+# coordinator/=4 modules, all strictly downward), so the pin creates no new
+# violation. Keep this set empty; add an entry only if you hit an upward edge
+# you genuinely cannot fix in your task, with a comment + the fixing task.
+KNOWN_EXCEPTIONS: set[tuple[str, str]] = set()
 
 
 def _module_path(file: Path) -> str:
