@@ -16,6 +16,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResult
 
+from .cloud_client import DreameA2CloudClient
 from .const import (
     CONF_COUNTRY,
     CONF_DEBUG_SERVICES,
@@ -38,6 +39,39 @@ from .const import (
     DEFAULT_WIFI_ARCHIVE_KEEP,
     DOMAIN,
 )
+
+
+class CannotConnect(Exception):
+    """Raised when the cloud login attempt fails at the transport level."""
+
+
+class InvalidAuth(Exception):
+    """Raised when the cloud login attempt reports bad credentials."""
+
+
+async def _validate_login(hass: Any, data: dict[str, Any]) -> None:
+    """Attempt a real cloud login with the submitted credentials.
+
+    ``client.login()`` is blocking (uses ``requests``), so it's run via
+    ``hass.async_add_executor_job`` rather than called directly in the
+    event loop. It returns a bool (``True``/``False``) and internally
+    swallows transport errors (``requests`` Timeout/RequestException) into
+    a ``False`` return — it does not raise a distinguishable auth-vs-
+    transport exception. Any exception that DOES escape (e.g. a genuine
+    programming error) is treated as a transport/unknown failure here;
+    only an explicit ``False`` return is mapped to ``InvalidAuth``.
+    """
+    client = DreameA2CloudClient(
+        username=data[CONF_USERNAME],
+        password=data[CONF_PASSWORD],
+        country=data[CONF_COUNTRY],
+    )
+    try:
+        ok = await hass.async_add_executor_job(client.login)
+    except Exception as err:  # noqa: BLE001 - mapped to a flow error below
+        raise CannotConnect from err
+    if not ok:
+        raise InvalidAuth
 
 
 class DreameA2MowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -67,15 +101,22 @@ class DreameA2MowerConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # F1: no live validation yet — that's added in F1.4 once the
-            # cloud client exists. For now, just accept what's entered.
             await self.async_set_unique_id(user_input[CONF_USERNAME])
             self._abort_if_unique_id_configured()
 
-            return self.async_create_entry(
-                title=DEFAULT_NAME,
-                data=user_input,
-            )
+            try:
+                await _validate_login(self.hass, user_input)
+            except InvalidAuth:
+                errors["base"] = "invalid_auth"
+            except CannotConnect:
+                errors["base"] = "cannot_connect"
+            except Exception:  # noqa: BLE001 - last-resort form error
+                errors["base"] = "unknown"
+            else:
+                return self.async_create_entry(
+                    title=DEFAULT_NAME,
+                    data=user_input,
+                )
 
         return self.async_show_form(
             step_id="user",

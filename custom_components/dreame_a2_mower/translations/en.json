@@ -11,6 +11,11 @@
         }
       }
     },
+    "error": {
+      "invalid_auth": "Invalid username or password.",
+      "cannot_connect": "Could not connect to the Dreame cloud. Try again later.",
+      "unknown": "Unexpected error."
+    },
     "abort": {
       "already_configured": "Mower is already configured."
     }
