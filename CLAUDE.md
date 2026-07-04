@@ -316,14 +316,14 @@ the submodule whose concern it matches:
 | `__init__.py` | 78 | — (assembly) | Class assembly + public re-exports |
 | `_mqtt_handlers.py` | 132 | `_MqttHandlersMixin` | **Thin delegators (P3.7)** to the `domain/` ingress/lifecycle/signals modules + the `_CFG_SINGLE_KEYS` write-key table. The routing/state-update/event_occured/MAPL LOGIC moved to `domain/` (see the "Domain layer" section); this mixin preserves the public/test surface (`coord._on_mqtt_message`, `coord.handle_property_push`, `coord._on_state_update`, `_mqtt_handlers.capture_session_type_signals`). |
 | `_session.py` | 158 | `_SessionMixin` | **Thin delegators (P3.9a)** to the `domain/session/{finalize,persistence,replay}` modules. The restore/persist/finalize/replay LOGIC moved to `domain/session/` (see the "Domain layer" section); this mixin preserves the public/test surface (`coord._route_finalize`, `._run_finalize_incomplete`, `._restore_in_progress`, `._persist_in_progress`, `.render_work_log_session`, `.replay_session`, + the unbound `_SessionMixin._X` methods bound via `__get__`). |
-| `_core.py` | 1023 | `_CoreMixin` | `__init__` (the sole `self._foo` owner), `_async_update_data`, properties, `_init_cloud`, `_init_mqtt` |
+| `_core.py` | 1373 | `_CoreMixin` | `__init__` (the sole `self._foo` owner), `_async_update_data`, properties, `_init_cloud`, `_init_mqtt`. The rc=5 MQTT auth-recovery pair (`_handle_mqtt_auth_error` @callback + `_async_recover_mqtt_auth`) is now **thin delegators (P3.9d)** to `domain/mqtt_lifecycle.py`; the `_rc5_*` guard-state attrs + `_RC5_*` constants stay owned here for the 9e attr-shrink. |
 | `_lidar_oss.py` | 185 | `_LidarOssMixin` | **Thin delegators (P3.9c)** to `domain/lidar/service.py` (LiDAR archive accessors + s99p20 fetch + 3dmap backfill), `domain/media/gallery.py` (OSS photo/video gallery), and `domain/wifi/service.py` (WiFi body cache + render-entry selection + `_build_map_extents`). The cloud-OSS finalize assembly (`_inject_live_map_into_raw_dict` / `_do_oss_fetch[_body]`) already delegates to `domain/session/finalize.py` (P3.9a). This mixin preserves the public/test surface (`coord.lidar_archive_for`, `coord._refresh_oss_gallery`, `coord.set_wifi_render_entry`, the unbound `_LidarOssMixin._X` methods, `import coordinator._lidar_oss as L`) + re-exports `finalize_classify_raw_dict` / `merge_mow_type_fields` / `fetch_photos_from_summary` and keeps `async_call_later` / `photo_meta` importable for test monkeypatches. |
 | `_writes.py` | 249 | `_WritesMixin` | **Thin delegators (P3.9b)** to the `domain/writes/{service,schedule,settings,tasks,map_edit}` modules. The write orchestration LOGIC moved VERBATIM to `domain/writes/` (see the "Domain layer" section); this mixin preserves the public/test surface (`coord.write_settings`, `coord.write_setting`, `coord.dispatch_action`, `coord.edit_map`, `coord.write_schedule`, the unbound `_WritesMixin._X` methods, `import coordinator._writes as W`). `_next_schedule_txn_id` is the ONE method kept as a real impl (not delegated) — it reads the coordinator-private lazy `_last_schedule_txn_id` via `getattr` default, which a domain module can't do without tripping `test_no_coordinator_private_getattr`. |
-| `_device_sync.py` | 467 | `_DeviceSyncMixin` | Map sub-device registry sync + emergency-stop banner + `_fire_*` lifecycle events |
+| `_device_sync.py` | 142 | `_DeviceSyncMixin` | **Thin delegators (P3.9d)** to `domain/device_sync.py` (map sub-device registry sync + target-area + cloud-refresh tripwire + event-entity wiring + `_fire_*` lifecycle emitters) and `domain/faults.py` (fault-delta + error-tier persistent notices + emergency-stop banner). ALL fault + device_sync method NAMES stay on `_DeviceSyncMixin` (test_fault_events binds `_DeviceSyncMixin._fire_fault_delta` etc. via `types.MethodType`) + the `_EMERGENCY_STOP_CODE` class attr is preserved. |
 | `_wifi_archive.py` | 364 | `_WifiArchiveMixin` | WiFi heatmap archive refresh + matcher plumbing |
 | `_rendering.py` | 348 | `_RenderingMixin` | Live-map render, live-trail re-render, last-session-obstacle overlay |
-| `_refreshers.py` | 331 | `_RefreshersMixin` | All `_refresh_*` cloud-refresh cycles |
-| `_notifications.py` | 234 | `_NotificationsMixin` | Account/device notification fetch + dedup → `sensor.last_notification` feed |
+| `_refreshers.py` | 424 | `_RefreshersMixin` | All `_refresh_*` cloud-refresh cycles. **`_refresh_gps` is now a thin delegator (P3.9d)** to `domain/gps.py` (GPS keep-last); the other 11 `_refresh_*` stay here until 9e dissolves `_async_update_data`. |
+| `_notifications.py` | 78 | `_NotificationsMixin` | **Thin delegators (P3.9d)** to `domain/notifications.py` (cloud s2p2 resolver + device-message accumulate-to-200 dedup → `sensor.last_notification` feed). Keeps `_FETCH_DELAY_S` defined here (passed into the resolver so the monkeypatch target holds) + re-exports `_source_key` / `_english_text`. |
 | `_cloud_state.py` | 227 | `_CloudStateMixin` | `cloud_state` apply to MowerState + map fetch / persist |
 
 **Non-mixin helper modules** (pure functions / classes imported by the mixins above — NO `_*Mixin`, NOT in the inheritance list):
@@ -335,7 +335,6 @@ the submodule whose concern it matches:
 | `_snapshot.py` | 139 | Build the session-begin firmware `settings_snapshot` from MowerState |
 | `_restore_merge.py` | 123 | Restore-then-merge of `in_progress.json` payloads on boot |
 | `_write_errors.py` | 78 | `raise_for_write_result` — map a `WriteResult` to `ServiceValidationError`/`HomeAssistantError` |
-| `_managed_timers.py` | ~70 | `schedule_self_cleaning` — bounded per-owner `async_call_later` registry (P3.8 P2-inherit). Each timer self-removes on fire; ONE `entry.async_on_unload` hook cancels all outstanding timers. Used by `_writes.py:edit_map` (3 staggered re-fetches/call) + `_lidar_oss.py` post-session gallery refresh so the config-entry unload list stops growing per-call. Callers pass their own module-local `async_call_later` so test monkeypatches still intercept. |
 
 ### Mixin pattern
 
@@ -350,15 +349,16 @@ is a pure method container. Don't override `__init__` in any other
 mixin; don't write to a new `self._<attr>` without first adding it to
 `_CoreMixin.__init__`.
 
-> **Documented exception (P3.8):** `_managed_timers.schedule_self_cleaning`
-> lazily initialises `owner._managed_cancellers` (a set) and
-> `owner._managed_unload_registered` (a bool) on first use, from OUTSIDE
-> `_CoreMixin.__init__` — deliberately, so the helper also works on the bare
-> `_WritesMixin()` / `_LidarOssMixin()` doubles that tests build via
-> `object.__new__` without a full coordinator. These two attrs are the ONLY
-> sanctioned exception to the "sole `__init__` owner" rule; the P3.9 attr-shrink
-> audit should treat them as owned by the timer/lifecycle service, not seed them
-> in `_CoreMixin.__init__`.
+> **Documented exception (P3.8; helper relocated P3.9d):**
+> `domain/timers.py:schedule_self_cleaning` (moved out of `coordinator/_managed_timers.py`
+> in P3.9d — its only callers are now domain services) lazily initialises
+> `owner._managed_cancellers` (a set) and `owner._managed_unload_registered`
+> (a bool) on first use, from OUTSIDE `_CoreMixin.__init__` — deliberately, so
+> the helper also works on the bare `_WritesMixin()` / `_LidarOssMixin()` doubles
+> that tests build via `object.__new__` without a full coordinator. These two
+> attrs are the ONLY sanctioned exception to the "sole `__init__` owner" rule;
+> the P3.9 attr-shrink audit should treat them as owned by the timer/lifecycle
+> service, not seed them in `_CoreMixin.__init__`.
 
 ### Public-import preservation
 
@@ -417,6 +417,12 @@ coordinator keeps a thin delegating method surface.
 | `domain/lidar/service.py` | **LiDAR archive + fetch (P3.9c, autopsy #10 §2)** — moved VERBATIM from `coordinator/_lidar_oss.py`. Per-map archive accessors (`lidar_archive_for` / `list_lidar_archive_entries` / `set_lidar_render_entry`), the live s99p20 object-name handler (`handle_lidar_object_name`), and the one-shot 3dmap startup backfill (`backfill_lidar_from_3dmap`). Pinned by `test_lidar_per_map` / `test_lidar_backfill` + `test_coordinator.py`'s lidar-object-name tests. |
 | `domain/media/gallery.py` | **OSS photo/video gallery (P3.9c, autopsy #10 §3)** — moved VERBATIM. The hourly/boot OSS media sync (`refresh_oss_gallery`), the signed-URL gallery manifest builder (`rebuild_photo_gallery` / `sign_media_path`), the per-session photo manifest (`session_photos_manifest` / `signed_photo_thumb`), the device-message snapshot-photo linker (`link_message_snapshot_photos`), the post-finalize gallery-refresh scheduler (`schedule_post_session_gallery_refresh`), plus the module-level OSS-summary helpers the finalize service calls (`fetch_photos_from_summary` / `merge_mow_type_fields`). The 7-category `photo_category.categorize` + the camera-token double-broadcast preserved byte-for-byte. Internal cross-method calls route through the coordinator delegators (`coord._sign_media_path` / `coord._signed_photo_thumb` / `coord._rebuild_photo_gallery`) so test monkeypatches still intercept. Pinned by `test_oss_gallery_sync` / `test_photo_fetch` / `test_archive_mow_type`. |
 | `domain/wifi/service.py` | **WiFi archive-camera body cache + render-entry selection (P3.9c, autopsy #10 §4/§5)** — moved VERBATIM. `get_wifi_body_cached` / `async_load_wifi_body` / `set_wifi_render_entry` (the `_lidar_oss` wifi CACHE, consolidated here at the domain layer) + `build_map_extents` (the map-geometry hint whose SOLE consumer is `coordinator/_wifi_archive.py:refresh_wifi_archive` — filed under wifi, not lidar/render, since it reads `coord.cloud_state` and feeds wifi heatmap→map matching). The pure `wifi/` support package (`archive_store` / `match` / `map_render`) and the `_WifiArchiveMixin` refresh orchestration STAY where they are (out of 9c scope). Pinned by `test_wifi_selected_camera` / `test_wifi_archive_select` / `test_wifi_archive_refresh`. |
+| `domain/notifications.py` | **Cloud s2p2 notification resolver (P3.9d)** — moved VERBATIM from `coordinator/_notifications.py`. `resolve_s2p2_notification` (cloud device-messages/v2 fetch + unseen-match fire), `establish_notification_baseline`, `mark_notification_seen` (FIFO cap), `apply_device_messages` / `merge_device_messages` (accumulate-to-200 merge-by-id dedup) + the pure `_source_key` / `_english_text` helpers. The resolver takes `fetch_delay_s` as a param so the `coordinator/_notifications.py:_FETCH_DELAY_S` monkeypatch target holds. Pinned by `test_notification_synthesizer` / `test_device_messages_accumulate` / `test_messages_refresh`. |
+| `domain/device_sync.py` | **Device-registry sync + lifecycle-event emission (P3.9d)** — moved VERBATIM from `coordinator/_device_sync.py`. `sync_map_subdevices`, `compute_target_area_m2`, `update_device_registry_serial`, `schedule_cloud_refresh` (debounced tripwire), `register_event_entities`, and the `_fire_*` emitters (`fire_mowing_ended` / `fire_notification` / `fire_lifecycle` / `fire_local_novel_s2p2`). Corpus-adjacent (fire on state edges). Pinned by `test_subdevice_sync` / `test_event_entity` / `test_coordinator`. |
+| `domain/faults.py` | **Fault-surfacing emission glue (P3.9d)** — moved VERBATIM from `coordinator/_device_sync.py`. `fire_fault_delta` (fault_detected/cleared on snapshot.errors edges), `post_fault_notice` / `dismiss_fault_notice` / `repost_active_fault_notices` (error-tier persistent notices), `handle_emergency_stop_transition` (PIN banner) + `_EMERGENCY_STOP_CODE`. The fault tier/text/category KNOWLEDGE already lives correctly at layer 3 (`mower/fault_catalog.py` + `error_codes.py`, the P4 work); this only orchestrates surfacing. Corpus-adjacent. Pinned by `test_fault_events`. |
+| `domain/gps.py` | **GPS/absolute-location refresh (P3.9d)** — moved VERBATIM from `coordinator/_refreshers.py`. `refresh_gps` (getRecords → position_lat/lon; P2.10 keep-last: None=transient-keep vs {}=clear). ONLY the GPS refresh moved; the other `_refresh_*` cycles are coordinator poll orchestration that stays until 9e. Pinned by `test_phase_c_refreshers`. |
+| `domain/mqtt_lifecycle.py` | **MQTT rc=5 auth-recovery (P3.9d)** — moved VERBATIM from `coordinator/_core.py`. `handle_mqtt_auth_error` (@callback delegator) + `async_recover_mqtt_auth` (cloud re-login + credential hot-swap) with the escalating cooldown (T3-9 / P3.8). The `_rc5_*` guard-state + `_RC5_*` constants stay owned by `_CoreMixin` (read via `coord._rc5_*`) for 9e. Pinned by `test_mqtt_auth_recovery`. |
+| `domain/timers.py` | **Self-cleaning delayed-timer registry (P3.8 P2-inherit; relocated here P3.9d from `coordinator/_managed_timers.py`)** — `schedule_self_cleaning`: bounded per-owner `async_call_later` registry; each timer self-removes on fire, ONE `entry.async_on_unload` hook cancels all outstanding. Callers pass their own module-local `async_call_later`. Sole callers: `domain/writes/map_edit.py:edit_map` + `domain/media/gallery.py` post-session refresh. Lazily inits `owner._managed_cancellers` / `_managed_unload_registered` (the sanctioned `_CoreMixin.__init__` exception). |
 
 ### Rules
 
@@ -449,16 +455,21 @@ coordinator keeps a thin delegating method surface.
 - The FULL coordinator de-godding (thin composition root) is P3.8/P3.9. **P3.8
   landed the P2-inherit correctness debt + two structural wins** (write_setting
   per-field revert, AI-bit `async_set_updated_data` routing, rc=5 cooldown
-  escalation, self-cleaning `_managed_timers` registry; `CloudState.from_parts`
+  escalation, self-cleaning timer registry; `CloudState.from_parts`
   factory at the state layer; the `services/` package + `services/debug.py`
-  isolation). The **mixin→domain-service extractions** of the coordinator's
-  heavy mixins (`session/{finalize,persistence,replay}.py`, `writes/`, `media/`,
-  `wifi/`, `lidar/`, `notifications`, `device_sync`, `gps`) + the
-  `_CoreMixin.__init__` 75-attr shrink + `_async_update_data` dissolve are
-  **DEFERRED to P3.9** — they are large VERBATIM moves of corpus-validated logic
-  (esp. the finalize latch/dock-wait) that each need the full P3.7 delegator
-  treatment with per-service corpus-IDENTICAL gating; the coordinator still holds
-  them as mixins for now.
+  isolation). The **mixin→domain-service extractions** landed across P3.9a–9d:
+  9a `session/{finalize,persistence,replay}.py`; 9b `writes/`; 9c
+  `media/`/`wifi/`/`lidar/`; **9d `notifications` / `device_sync` / `faults` /
+  `gps` + the rc=5 pair → `mqtt_lifecycle.py` + the timer registry relocated to
+  `domain/timers.py`**. The heavy coordinator mixins are now thin delegators.
+  The `_CoreMixin.__init__` ~75-attr shrink + the `_async_update_data` poll-body
+  dissolve remain **DEFERRED to 9e** (the thin-coordinator collapse): 9e owns the
+  `__init__` shrink, so the domain-service attrs still live on `_CoreMixin` (read
+  via `coord.<attr>`) until then. **OTA has no separable domain module** — the OTA
+  read is glue inside `_refreshers.py:_refresh_dev` (poll-cycle, stays until 9e),
+  the trigger is `domain/writes/service.py:async_trigger_firmware_update`, the
+  version fetch is transport (`cloud_client/_ota.py`), and the entity is
+  `update.py`; there is no `domain/ota.py`.
 
 ---
 
