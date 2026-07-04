@@ -335,6 +335,7 @@ the submodule whose concern it matches:
 | `_snapshot.py` | 139 | Build the session-begin firmware `settings_snapshot` from MowerState |
 | `_restore_merge.py` | 123 | Restore-then-merge of `in_progress.json` payloads on boot |
 | `_write_errors.py` | 78 | `raise_for_write_result` — map a `WriteResult` to `ServiceValidationError`/`HomeAssistantError` |
+| `_managed_timers.py` | ~70 | `schedule_self_cleaning` — bounded per-owner `async_call_later` registry (P3.8 P2-inherit). Each timer self-removes on fire; ONE `entry.async_on_unload` hook cancels all outstanding timers. Used by `_writes.py:edit_map` (3 staggered re-fetches/call) + `_lidar_oss.py` post-session gallery refresh so the config-entry unload list stops growing per-call. Callers pass their own module-local `async_call_later` so test monkeypatches still intercept. |
 
 ### Mixin pattern
 
@@ -428,9 +429,19 @@ coordinator keeps a thin delegating method surface.
   slot logic, `capture_telemetry_sample` slot→buffer selection) are BESPOKE
   side-effects NOT encoded in `property_mapping.py` — do NOT invent a new
   dispatch table for them; they stay explicit handlers.
-- The FULL coordinator de-godding (thin composition root) is P3.8/P3.9; more
-  domain services (`session/finalize.py`, `writes/`, `media/`, `wifi/`, `lidar/`,
-  `notifications`, `device_sync`, `gps`) land there.
+- The FULL coordinator de-godding (thin composition root) is P3.8/P3.9. **P3.8
+  landed the P2-inherit correctness debt + two structural wins** (write_setting
+  per-field revert, AI-bit `async_set_updated_data` routing, rc=5 cooldown
+  escalation, self-cleaning `_managed_timers` registry; `CloudState.from_parts`
+  factory at the state layer; the `services/` package + `services/debug.py`
+  isolation). The **mixin→domain-service extractions** of the coordinator's
+  heavy mixins (`session/{finalize,persistence,replay}.py`, `writes/`, `media/`,
+  `wifi/`, `lidar/`, `notifications`, `device_sync`, `gps`) + the
+  `_CoreMixin.__init__` 75-attr shrink + `_async_update_data` dissolve are
+  **DEFERRED to P3.9** — they are large VERBATIM moves of corpus-validated logic
+  (esp. the finalize latch/dock-wait) that each need the full P3.7 delegator
+  treatment with per-service corpus-IDENTICAL gating; the coordinator still holds
+  them as mixins for now.
 
 ---
 
@@ -553,7 +564,7 @@ the submodule whose concern it matches:
 | `_messages.py` | `_MessagesMixin`: cloud message stores — `fetch_device_messages`, `fetch_message_record`, `fetch_share_messages` |
 | `_media.py` | `_MediaMixin`: OSS media — `list_oss_media`, `fetch_oss_quota` |
 | `_ota.py` | `_OtaMixin`: `fetch_ota_version` (OTA availability check) |
-| `_writers.py` | `_WritersMixin`: device WRITES — `set_cfg`, `set_pre`, `trigger_firmware_update` (all return `WriteResult`). Staging home from the P3.5 split; P3.8 relocates these to `domain/writes`. |
+| `_writers.py` | `_WritersMixin`: device WRITES — `set_cfg`, `set_pre`, `trigger_firmware_update` (all return `WriteResult`). Staging home from the P3.5 split; the `domain/writes` relocation is DEFERRED to P3.9 (see Domain layer § P3.8/P3.9 note). |
 | `_fetchers.py` | **Back-compat shim** (P3.5): composes `_FetchersMixin` from the six family mixins above so pre-split test importers keep working. NO endpoints of its own; retired in P3.10. New code imports the specific family mixin. |
 
 ### Rules
@@ -573,9 +584,11 @@ the submodule whose concern it matches:
   `from .cloud_client import DreameA2CloudClient`.
 - **Transport never constructs the `CloudState` container (R-31/T2-6).**
   `fetch_full_cloud_state` returns the decoded PARTS (a dict of `CloudState`
-  kwargs); the `CloudState(**parts)` composition lives at the STATE layer in
-  `coordinator/_cloud_state.py:_refresh_cloud_state` (until P3.6 moves it into
-  `state/`). Do NOT re-import `..cloud_state` into any `cloud_client/*` module —
+  kwargs); the composition lives at the STATE layer via the
+  `state.cloud_state.CloudState.from_parts(parts)` factory (P3.8), which
+  `coordinator/_cloud_state.py:_refresh_cloud_state` calls — the refresh never
+  sees the kwargs (assembly knowledge stays at the state layer). Do NOT re-import
+  `..cloud_state` into any `cloud_client/*` module —
   that is an upward transport→state back-edge (it was previously hidden as a
   function-local import; the split closed it). The `tests/audit/test_layer_imports.py`
   gate pins `cloud_client` at layer 2 and `cloud_state` at layer 3.
@@ -760,6 +773,41 @@ further move:
   source files by relative path for the state-machine audit walker
   (`state_machine_audit_discover.py` resolves them as `CCDIR / fname`). Update the
   paths here when an entity source file moves.
+
+---
+
+## services/ package (load-bearing)
+
+The HA service layer is a **package** (`services/`, refactor-v2 P3.8, from a
+1,134-LOC `services.py`; T2-11). HA/`__init__.py` import `services` by name, so
+the package `__init__.py` *is* the service surface: registration
+(`async_register_services` / `async_unregister_services` /
+`async_reconcile_debug_services`), the ~30 production handlers, the `SERVICE_*`
+name constants, the `@service_handler` coordinator-resolution decorator, and
+`_coordinator_from_call`. The full public/test symbol surface
+(`services._handle_*`, `services.SERVICE_*`, `services._coordinator_from_call`)
+resolves through `__init__.py` unchanged.
+
+| Module | Concern |
+|---|---|
+| `services/__init__.py` | Registration + all production handlers + `service_handler` + `SERVICE_*` constants |
+| `services/debug.py` | Dev-only diagnostics: `dump_map_diagnostics`, `discover_cloud_api` + pure summariser helpers (`_group_keys_by_prefix` / `_summarise_value` / `_summarise_family`). The **experimental-gate seam** — registered ONLY when `_debug_services_enabled(entry)`. |
+
+### Rules
+
+- **`debug.py` bodies are plain `async def _(coordinator, call)`** — the
+  `@service_handler` wrapper (which resolves the coordinator + honours a
+  `services._coordinator_from_call` monkeypatch) is applied in `__init__.py`
+  (`_handle_dump_map_diagnostics = service_handler(debug.dump_map_diagnostics)`).
+  This keeps `debug.py` free of any import back into the package `__init__`
+  (no circular import) and keeps the monkeypatch target on the package module.
+- The debug/experimental GATE mechanism itself is P4; P3.8 only SEPARATED the
+  tooling behind the existing `debug_services` option so the production surface
+  no longer carries ~250 LOC of dev machinery.
+- Being a package inside `dreame_a2_mower`, sibling imports use `..` (e.g.
+  `from ..const import DOMAIN`), NOT `.` — the module→package conversion moved
+  every single-dot sibling import down one level.
+- Do NOT reintroduce a single `services.py`. The package is the contract.
 
 ---
 
