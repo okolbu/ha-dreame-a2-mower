@@ -17,7 +17,7 @@ Per-mixin file map (see CLAUDE.md § Coordinator structure):
 - ``_writes.py``         — settings + action writes
 - ``_session.py``        — finalize + persist + replay
 - ``_rendering.py``      — live-map render + obstacle overlay
-- ``_lidar_oss.py``      — LiDAR archive + OSS fetch
+- ``_lidar_oss.py``      — thin delegators to domain/{lidar,media,wifi}
 - ``_device_sync.py``    — registry sync + lifecycle events
 - ``_wifi_archive.py``   — WiFi heatmap archive
 """

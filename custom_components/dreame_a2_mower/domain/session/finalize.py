@@ -880,10 +880,11 @@ async def do_oss_fetch_body(coord, now_unix: int) -> None:
     All blocking I/O goes through hass.async_add_executor_job per spec §3.
     Always invoked through _finalize_with_latch (never call directly).
     """
-    # Photo-fetch + mow-type merge helpers stay in _lidar_oss.py (§2/§3
-    # media/gallery concern, deferred to P3.9c); imported here at call time
-    # to avoid a top-level domain→coordinator import cycle.
-    from ...coordinator._lidar_oss import (
+    # Photo-fetch + mow-type merge helpers now live in the media-gallery domain
+    # service (P3.9c). Imported at call time to avoid a top-level session→media
+    # domain import cycle (both are layer-4 siblings; the fn-local import keeps
+    # the module-import graph acyclic).
+    from ..media.gallery import (
         fetch_photos_from_summary,
         merge_mow_type_fields,
     )
