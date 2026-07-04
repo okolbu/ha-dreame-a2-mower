@@ -15,10 +15,9 @@
 //   * R-48 — per-map views/cards are generated per registered map sub-device, so
 //     a 1-map or 3-map mower is handled with no code change (no hardcoded 2-map
 //     assumption).
-//   * R-55 — developer-only / experimental content is either generated only when
-//     its backing entity exists in the registry (gated entities are absent when
-//     `experimental_features` is off, so they self-omit) or gated behind the
-//     strategy's `developer:` config flag.
+//   * R-55 — developer-only / experimental content is generated only when its
+//     backing entity exists in the registry: gated entities are absent when
+//     `experimental_features` is off, so they self-omit (no special-casing).
 //
 // Grouping source of truth: the MANIFEST below (baked-in machine-readable data
 // structure). It references entities by their **unique_id suffix (key)** — the
@@ -44,14 +43,13 @@ const MANIFEST = {
   // Overview "State" summary card (parent-device keys).
   overviewState: [
     { key: "current_activity" },
-    { key: "location" },
+    { key: "mower_location", name: "Location" },
     { key: "mowing_session_active", name: "Mowing session active" },
     { key: "battery_level", name: "Battery" },
     { key: "charging_status" },
     { key: "mower_in_dock", name: "In dock" },
     { key: "positioning_health" },
     { key: "mqtt_connectivity" },
-    { key: "obstacle_detected" },
     { key: "rain_protection_active" },
     { key: "active_selection" },
     { key: "area_mowed_m2", name: "Session area mowed (m²)" },
@@ -238,7 +236,7 @@ const MANIFEST = {
   // Firmware / OTA — the update entity is the honest surface; ota_state/progress
   // are disabled-by-default so they self-omit from the registry (T6-2 dies).
   firmware: [
-    { key: "firmware", name: "Firmware update", domain: "update" },
+    { key: "firmware", name: "Firmware update" },
     { key: "ota_state", name: "OTA state" },
     { key: "ota_progress", name: "OTA progress" },
   ],
@@ -254,10 +252,13 @@ const MANIFEST = {
     { key: "session_distance_m", name: "Distance (m)" },
     { key: "session_track_point_count", name: "Track points" },
   ],
-  perMapTotals: [
-    { key: "total_area_mowed", name: "total area mowed" },
-    { key: "total_mowing_time", name: "total time" },
-    { key: "mowing_sessions", name: "sessions" },
+  // All-time device-wide totals (the mower publishes NO per-map totals — the
+  // reference dashboard's per-map rows were dead; these are the real keys from
+  // entities/sensor/device.py).
+  deviceTotals: [
+    { key: "total_lawn_area_m2", name: "Total lawn area" },
+    { key: "total_mowed_area_m2", name: "Total area mowed" },
+    { key: "total_mowing_time_min", name: "Total mowing time" },
   ],
 
   // Photos tab glance.
@@ -587,7 +588,7 @@ function overviewView(ctx) {
   // Activity logbook + GPS + head-to-point (per-map).
   const bottom = [];
   const lifecycle = ctx.resolve("lifecycle");
-  const alert = ctx.resolve("alert");
+  const alert = ctx.resolve("notification"); // event entity key is "notification" (entity_id …_alert)
   const logEnts = [lifecycle, alert].filter(Boolean);
   if (logEnts.length) bottom.push({ type: "logbook", title: "Mower activity", hours_to_show: 48, entities: logEnts });
   const gps = ctx.resolve("gps");
@@ -684,7 +685,7 @@ function sessionsView(ctx, opts) {
   const cards = [headerCard("📊", "Sessions", "calendar plus per-session breakdown")];
 
   const left = [];
-  const cal = ctx.resolve("sessions");
+  const cal = ctx.resolve("session_calendar");
   if (cal) left.push({ type: "calendar", title: "Mowing sessions", entities: [cal] }); // native calendar (OQ-4)
   const workLog = ctx.resolve("work_log");
   const replayEnts = [];
@@ -697,14 +698,9 @@ function sessionsView(ctx, opts) {
   const liveCard = entitiesCard(ctx, "Live session", MANIFEST.sessionLive);
   const sess = ctx.resolve("mowing_session_active");
   if (liveCard && sess) left.push(stateConditional([{ entity: sess, state: "on" }], liveCard));
-  // Per-map session totals.
-  const totalRows = [];
-  for (const m of ctx.maps)
-    for (const t of MANIFEST.perMapTotals) {
-      const eid = ctx.resolveMap(m.id, t.key);
-      if (eid) totalRows.push({ entity: eid, name: `${m.suffix} — ${t.name}` });
-    }
-  if (totalRows.length) left.push({ type: "entities", title: "Per-map session totals", entities: totalRows });
+  // All-time device-wide totals (the mower publishes no per-map totals).
+  const totalsCard = entitiesCard(ctx, "Totals (all-time)", MANIFEST.deviceTotals);
+  if (totalsCard) left.push(totalsCard);
 
   const picked = ctx.resolve("picked_session");
   const right = [];
@@ -879,7 +875,6 @@ function messagesView(ctx) {
 export async function generateDashboard(config, hass) {
   const opts = {
     plotly: config && typeof config.plotly === "boolean" ? config.plotly : plotlyInstalled(),
-    developer: !!(config && config.developer),
   };
   const ctx = await buildContext(hass);
 

@@ -46,6 +46,7 @@ function parentKeys() {
   push(MANIFEST.toolsRecovery);
   push(MANIFEST.sessionLatest);
   push(MANIFEST.sessionLive);
+  push(MANIFEST.deviceTotals);
   push(MANIFEST.photoGlance);
   push(MANIFEST.photoCameras);
   push(MANIFEST.messages);
@@ -56,14 +57,15 @@ function parentKeys() {
     "wifi_heatmap_flip_x", "wifi_heatmap_flip_y", "photo_gallery",
     "active_map", "action_mode", "emergency_stop", "current_activity",
     "charging_status", "mower_in_dock", "mowing_session_active",
-    "positioning_health", "mqtt_connectivity", "obstacle_detected",
+    "positioning_health", "mqtt_connectivity",
     "rain_protection_active", "active_selection", "area_mowed_m2",
-    "trail_render_width", "battery_level", "location", "lifecycle", "alert",
+    "trail_render_width", "battery_level", "mower_location", "lifecycle", "notification",
     "gps", "start_mowing", "stop_mowing", "pause_mowing", "resume_mowing",
     "recharge", "cancel_dock_return", "find_bot", "update_station_location",
     "refresh_cloud_state", "refresh_wifi_heatmaps", "finalize_session",
     "wifi_rssi_dbm", "integration_version", "api_endpoint",
     "device_messages", "service_messages_unread", "shared_messages",
+    "session_calendar",
   ].forEach((k) => keys.add(k));
   return keys;
 }
@@ -74,7 +76,6 @@ function perMapKeys() {
   (MANIFEST.perMapCounts || []).forEach((r) => keys.add(r.key));
   Object.values(MANIFEST.perMapTargets).forEach((r) => keys.add(r.key));
   (MANIFEST.perMapPatrol || []).forEach((r) => keys.add(r.key));
-  (MANIFEST.perMapTotals || []).forEach((r) => keys.add(r.key));
   return keys;
 }
 
