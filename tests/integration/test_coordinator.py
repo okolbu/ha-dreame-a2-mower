@@ -541,6 +541,55 @@ def test_write_setting_optimistic_update_reverted_on_failure():
     assert coord.data.child_lock_enabled is None
 
 
+def test_write_setting_revert_preserves_concurrent_update():
+    """Per-field revert: a concurrent update to another field survives a rejected
+    write's revert (the old whole-snapshot revert clobbered it — P2 inherit)."""
+    import dataclasses
+    coord = _make_coordinator_with_cloud(set_cfg_return=False)
+    assert coord.data.child_lock_enabled is None
+    assert coord.data.battery_level is None
+
+    def _set_cfg(cfg_key, value):
+        # Simulate an MQTT push landing between the optimistic apply and the
+        # cloud rejection: it updates a DIFFERENT field concurrently.
+        coord.data = dataclasses.replace(coord.data, battery_level=42)
+        from custom_components.dreame_a2_mower.cloud_client import WriteResult
+        return WriteResult(delivered=True, accepted=False, code=-3, msg="rejected")
+
+    coord._cloud.set_cfg.side_effect = _set_cfg
+
+    result = asyncio.run(
+        coord.write_setting("CLS", True, field_updates={"child_lock_enabled": True})
+    )
+    assert result.accepted is False
+    # The optimistically-set field reverted.
+    assert coord.data.child_lock_enabled is None
+    # The concurrent update to a DIFFERENT field is NOT clobbered.
+    assert coord.data.battery_level == 42
+
+
+def test_write_setting_no_revert_when_field_concurrently_overwritten():
+    """If a concurrent writer overwrote the SAME field, revert leaves it alone."""
+    import dataclasses
+    coord = _make_coordinator_with_cloud(set_cfg_return=False)
+
+    def _set_cfg(cfg_key, value):
+        # Concurrent writer sets our own field to a third value.
+        coord.data = dataclasses.replace(coord.data, child_lock_enabled=False)
+        from custom_components.dreame_a2_mower.cloud_client import WriteResult
+        return WriteResult(delivered=True, accepted=False, code=-3, msg="rejected")
+
+    coord._cloud.set_cfg.side_effect = _set_cfg
+
+    result = asyncio.run(
+        coord.write_setting("CLS", True, field_updates={"child_lock_enabled": True})
+    )
+    assert result.accepted is False
+    # Our optimistic value (True) was overwritten to False by the concurrent
+    # writer; per-field revert must NOT stomp that back to the prior None.
+    assert coord.data.child_lock_enabled is False
+
+
 def test_write_setting_all_cfg_keys_accepted():
     """All documented CFG keys are accepted (no unknown-key warning)."""
     known_keys = ["CLS", "VOL", "LANG", "DND", "WRP", "LOW", "BAT", "LIT", "ATA", "REC"]

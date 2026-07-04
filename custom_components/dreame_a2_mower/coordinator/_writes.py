@@ -448,19 +448,28 @@ class _WritesMixin:
             LOGGER.warning("write_setting: unknown cfg_key %r", cfg_key)
             return WriteResult.not_delivered(f"unknown cfg_key {cfg_key!r}")
 
-        # Optimistic update — snapshot state and apply field_updates now.
-        prior_state = self.data
+        # Optimistic update — capture the PRIOR VALUE of each field this write
+        # touches (per-field, NOT a whole-state snapshot) and apply field_updates
+        # now. Per-field capture is what makes the revert safe against a
+        # concurrent update (an MQTT push landing between the optimistic apply
+        # and a cloud rejection): reverting the whole snapshot would clobber that
+        # concurrent change to OTHER fields (P2 final-review inherit).
+        applied_updates: dict[str, Any] = {}
+        prior_values: dict[str, Any] = {}
         if field_updates:
             try:
+                prior_values = {k: getattr(self.data, k) for k in field_updates}
                 self.async_set_updated_data(
                     dataclasses.replace(self.data, **field_updates)
                 )
-            except TypeError as ex:
+                applied_updates = dict(field_updates)
+            except (TypeError, AttributeError) as ex:
                 LOGGER.warning(
                     "write_setting %s: invalid field_updates %r — %s; skipping optimistic update",
                     cfg_key, field_updates, ex,
                 )
                 # Don't revert — no update was applied; just proceed with the write.
+                applied_updates = {}
 
         # Dispatch to the right cloud_client method.
         result = await self._dispatch_cfg_write(cfg_key, new_full_value)
@@ -471,8 +480,22 @@ class _WritesMixin:
                 "reverting optimistic update",
                 cfg_key, new_full_value, result.msg or result.code,
             )
-            if field_updates and self.data != prior_state:
-                self.async_set_updated_data(prior_state)
+            if applied_updates:
+                # Per-field revert: restore ONLY the fields this write set, and
+                # only where they still hold our optimistic value (a concurrent
+                # writer may have overwritten one — leave that alone). Fields we
+                # never touched are preserved verbatim from current state.
+                current = self.data
+                revert = {
+                    k: prior_values[k]
+                    for k, opt_v in applied_updates.items()
+                    if getattr(current, k, prior_values[k]) == opt_v
+                    and getattr(current, k, prior_values[k]) != prior_values[k]
+                }
+                if revert:
+                    self.async_set_updated_data(
+                        dataclasses.replace(current, **revert)
+                    )
 
         return result
 
