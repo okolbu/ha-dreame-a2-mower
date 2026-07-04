@@ -330,7 +330,7 @@ the submodule whose concern it matches:
 
 | File | LOC | Concern |
 |---|---|---|
-| `_property_apply.py` | 847 | Module-level helpers + constants — pure `(siid, piid, value) → MowerState` functions |
+| `_property_apply.py` | shim | **P3.6 re-export shim** → `state/apply.py` (the pure apply funnel moved to the state layer). Keeps `from ._property_apply import …` working; retired P3.10. |
 | `_recorder_merge.py` | 432 | Fill battery/wifi/state/charging/error sample gaps from HA recorder history at finalize |
 | `_snapshot.py` | 139 | Build the session-begin firmware `settings_snapshot` from MowerState |
 | `_restore_merge.py` | 123 | Restore-then-merge of `in_progress.json` payloads on boot |
@@ -382,6 +382,67 @@ At runtime this is a no-op; the MRO dispatches.
   the file and registering its mixin class. Static analyzers and
   Python's MRO both need the class defined before the inheritance
   list references it.
+
+---
+
+## State package (load-bearing)
+
+The typed mower model lives in `custom_components/dreame_a2_mower/state/`
+(layer 3), split out in P3.6 (refactor-v2, T2-15). `MowerState` is no
+longer a 164-field flat dataclass — it is a **composition of 8 frozen,
+slotted domain sub-containers**, each owned/written by one domain service:
+
+| Module | Contents |
+|---|---|
+| `state/containers.py` | The 8 sub-dataclasses (`Identity`, `OtaState`, `Telemetry`, `Connectivity`, `Consumables`, `Settings`, `SessionRefs`, `Messages`) + the value enums (`State`, `ActionMode`, `ChargingStatus`). |
+| `state/mower_state.py` | `MowerState` = composition of the 8 containers + `FLAT_FIELDS`. |
+| `state/snapshot.py` | `StateSnapshot` + dimension enums (moved from `mower/`). |
+| `state/machine.py` | `MowerStateMachine` (moved from `mower/`). |
+| `state/cloud_state.py` | `CloudState` aggregate (moved from root `cloud_state.py`; composed by the refresh service, R-31). |
+| `state/apply.py` | Pure `(siid,piid,value)/CFG → MowerState` apply funnel (moved from `coordinator/_property_apply.py`). |
+
+### The container split is field-home only — the flat surface is preserved
+
+For the duration of the P3 migration `MowerState` keeps the **entire legacy
+flat interface** so no read/write site changed this phase:
+
+- **Reads** — a delegating `@property` exists for every one of the 164 flat
+  fields (`state.battery_level` → `state.telemetry.battery_level`). Entity
+  descriptors and the ~59 prod `.data.<field>` sites are UNCHANGED.
+- **In-place writes** — each delegate also has a **setter** that swaps the
+  owning frozen container, preserving the old mutable-dataclass behaviour
+  (`state.battery_level = 5` still works — 36 test + 1 prod site rely on it).
+- **Construction** — `MowerState(battery_level=5, …)` (flat kwargs) routes
+  each kwarg to its container via a custom `__init__(init=False)`. The 258
+  test constructions are unchanged.
+- **`dataclasses.replace(state, field=x)`** funnels through the same
+  `__init__`, so the ~85 prod + ~35 test replace sites route to the right
+  container transparently — **no call-site changes were required**. The
+  preferred flat writer is `state.with_updates(**fields)`.
+- **`asdict(state)` now yields the nested container shape.** Consumers that
+  need the flat `{field: value}` shape use `state.to_flat_dict()` /
+  `FLAT_FIELDS` — the corpus-replay digest and the diagnostics `state`
+  section already do (keeps the golden digest byte-identical). Anything that
+  enumerated `dataclasses.fields(MowerState)` (which now returns the 8
+  CONTAINER names) must read `FLAT_FIELDS` instead — e.g. the state-machine
+  audit's orphan-field derivation.
+
+### Rules
+
+- **Each container is the sole writer's value-object.** As domain services
+  are extracted (P3.8+), a service owns exactly one container and mutates it;
+  do NOT scatter writes to the same container across services.
+- The old paths — `mower/state.py`, `mower/state_snapshot.py`,
+  `mower/state_machine.py`, root `cloud_state.py`,
+  `coordinator/_property_apply.py`, `mower/property_mapping.py` (→
+  `protocol/`) — are **re-export shims**, retired in P3.10. New code imports
+  from `..state` / `..state.<module>` (and `..protocol.property_mapping`).
+- The `StateSnapshot` ↔ `MowerState` **decode-staging** relationship is
+  PRESERVED (2026-06-15 3d-revisit ruling): pure `apply.py` writes
+  `MowerState`; the SM snapshot is the persisted/entity-read behavioural SoT.
+  Do NOT collapse snapshot into MowerState.
+- Do NOT reintroduce a flat 164-field `MowerState`. The container composition
+  is the contract.
 
 ---
 
