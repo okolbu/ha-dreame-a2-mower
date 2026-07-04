@@ -27,7 +27,9 @@ def _make_client(batch_response, cfg_response, mapl=None, mihis=None):
 
 def test_fetch_full_cloud_state_returns_cloud_state():
     client = _make_client(REAL_BATCH, {"VER": 461, "TIME": "Europe/Oslo"})
-    cs = client.fetch_full_cloud_state()
+    # P3.5: fetch_full_cloud_state returns the decoded PARTS (CloudState kwargs);
+    # the state layer composes the container (coordinator/_cloud_state.py).
+    cs = CloudState(**client.fetch_full_cloud_state())
     assert isinstance(cs, CloudState)
     # Real batch has 2 maps
     assert set(cs.maps_by_id.keys()) == {0, 1}
@@ -60,7 +62,7 @@ def test_fetch_full_cloud_state_returns_cloud_state():
 def test_fetch_full_cloud_state_handles_empty_batch():
     """If the cloud returns an empty batch, CloudState still constructs."""
     client = _make_client({}, {})
-    cs = client.fetch_full_cloud_state()
+    cs = CloudState(**client.fetch_full_cloud_state())
     assert isinstance(cs, CloudState)
     assert cs.maps_by_id == {}
     assert cs.settings.raw == []

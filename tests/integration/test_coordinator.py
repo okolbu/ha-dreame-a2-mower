@@ -3391,6 +3391,39 @@ def test_inject_live_map_battery_samples_passthrough():
     assert raw["battery_samples"] == [[1700000000, 87], [1700000060, 86]]
 
 
+def _empty_cloud_state_parts():
+    """The decoded PARTS dict that ``fetch_full_cloud_state`` returns post-P3.5.
+
+    The coordinator composes ``CloudState(**parts)`` in ``_refresh_cloud_state``
+    (the CloudState construction moved OUT of transport — R-31/T2-6), so these
+    tests mock the transport call to return parts rather than a CloudState.
+    """
+    import dataclasses
+
+    from custom_components.dreame_a2_mower.cloud_state import (
+        CloudState,
+        ScheduleData,
+        SettingsRoot,
+    )
+
+    cs = CloudState(
+        cfg={},
+        maps_by_id={},
+        mow_paths_by_map_id={},
+        settings=SettingsRoot(raw=[], by_map_id_canonical={}),
+        schedule=ScheduleData(version=0, slots=()),
+        ai_human_enabled=None,
+        forbidden_node_types_by_map={},
+        ota_status=None,
+        task_id=0,
+        props={},
+        mapl=None,
+        mihis={},
+        fetched_at_unix=0,
+    )
+    return {f.name: getattr(cs, f.name) for f in dataclasses.fields(cs)}
+
+
 def test_refresh_cloud_state_syncs_map_subdevices():
     """_refresh_cloud_state must call _sync_map_subdevices.
 
@@ -3409,7 +3442,7 @@ def test_refresh_cloud_state_syncs_map_subdevices():
         return fn(*a)
 
     coord.hass.async_add_executor_job.side_effect = _exec
-    coord._cloud.fetch_full_cloud_state = MagicMock(return_value=MagicMock())
+    coord._cloud.fetch_full_cloud_state = MagicMock(return_value=_empty_cloud_state_parts())
     coord.async_update_listeners = MagicMock()
 
     with patch.object(coord, "_render_maps_from_cloud_state", new=AsyncMock()), \
@@ -3435,8 +3468,9 @@ def test_refresh_cloud_state_applies_mapl():
         return fn(*a)
 
     coord.hass.async_add_executor_job.side_effect = _exec
-    fake_cs = MagicMock()
-    coord._cloud.fetch_full_cloud_state = MagicMock(return_value=fake_cs)
+    parts = _empty_cloud_state_parts()
+    parts["mapl"] = [[0, 1]]  # active map row so _apply_mapl gets a real value
+    coord._cloud.fetch_full_cloud_state = MagicMock(return_value=parts)
     coord.async_update_listeners = MagicMock()
 
     with patch.object(coord, "_render_maps_from_cloud_state", new=AsyncMock()), \
@@ -3446,7 +3480,7 @@ def test_refresh_cloud_state_applies_mapl():
          patch.object(coord, "_apply_mapl") as m_mapl:
         asyncio.run(coord._refresh_cloud_state())
 
-    m_mapl.assert_called_once_with(fake_cs.mapl)
+    m_mapl.assert_called_once_with([[0, 1]])
 
 
 # ---------------------------------------------------------------------------

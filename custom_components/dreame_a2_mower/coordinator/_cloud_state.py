@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.exceptions import ConfigEntryNotReady
 
+from ..cloud_state import CloudState
 from ..const import (
     LOGGER,
 )
@@ -52,17 +53,22 @@ class _CloudStateMixin:
         if not hasattr(self, "_cloud") or self._cloud is None:
             return
         try:
-            new_state = await self.hass.async_add_executor_job(
+            parts = await self.hass.async_add_executor_job(
                 self._cloud.fetch_full_cloud_state
             )
         except Exception as ex:
             LOGGER.warning("[cloud] _refresh_cloud_state raised: %s", ex)
             self._note_cloud_fetch(ok=False)
             return
-        if new_state is None:
+        if parts is None:
             LOGGER.debug("[cloud] _refresh_cloud_state: fetch returned None")
             self._note_cloud_fetch(ok=False)
             return
+        # Compose the state-layer CloudState container from the transport's
+        # decoded parts. The transport no longer builds CloudState (R-31/T2-6:
+        # transport→state edge closed); composition lives here at the state
+        # layer until P3.6 moves it into state/.
+        new_state = CloudState(**parts)
         self._note_cloud_fetch(ok=True)
         # Overlay optimistic patrol-config writes over the (laggy) CRUISE.0 poll
         # so a freshly-written cycles/auto_capture value isn't reverted while the

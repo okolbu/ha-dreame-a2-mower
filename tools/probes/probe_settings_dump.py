@@ -24,10 +24,14 @@ def _pick(d, *keys):
 
 def main() -> int:
     client = _build_cloud_client(DEFAULT_CREDS_PATH)
-    cs = client.fetch_full_cloud_state()
-    if cs is None:
+    # P3.5: fetch_full_cloud_state returns the decoded parts (CloudState kwargs);
+    # the state layer composes the container, so do the same here.
+    from custom_components.dreame_a2_mower.cloud_state import CloudState
+    parts = client.fetch_full_cloud_state()
+    if parts is None:
         print("fetch_full_cloud_state returned None (relay asleep?)")
         return 1
+    cs = CloudState(**parts)
 
     print("=== maps_by_id keys (cloud map ids) ===")
     print(sorted(cs.maps_by_id.keys()))

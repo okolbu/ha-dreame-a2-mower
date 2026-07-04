@@ -291,28 +291,31 @@ class _StateFetchMixin:
         _LOGGER.debug("fetch_map: decoded %d map(s) by id", len(result))
         return result
 
-    def fetch_full_cloud_state(self) -> "CloudState | None":
-        """Fetch the device's full cloud state in one orchestrated call.
+    def fetch_full_cloud_state(self) -> dict[str, Any] | None:
+        """Fetch + decode the device's full cloud state in one orchestrated call.
 
         - Empty-list `get_batch_device_datas([])` returns all chunked
           data families (MAP, M_PATH, SETTINGS, SCHEDULE, AI_HUMAN,
           FBD_NTYPE, OTA_INFO, TASKID, prop.s_*).
         - `fetch_cfg()` returns the 24 CFG keys (not in the empty-batch).
-        - Probes for LOCN, DOCK, MAPL, MIHIS (each a separate cfg_individual
-          call that's already wired).
+        - Probes for MAPL, MIHIS (each a separate cfg_individual call that's
+          already wired). DOCK is owned by the 60 s `_refresh_dock` timer and
+          is deliberately NOT probed here.
 
-        Returns None if the empty-batch call fails entirely (network
-        error). Partial data — a missing family within a successful
-        batch — produces the appropriate empty/None field on
-        CloudState rather than failing the whole fetch.
+        Returns the decoded **parts** — a dict whose keys are exactly the
+        :class:`CloudState` fields — or ``None`` if the empty-batch call fails
+        entirely (network error). Partial data — a missing family within a
+        successful batch — produces the appropriate empty/None part rather than
+        failing the whole fetch.
+
+        Composition into the ``CloudState`` container happens in the STATE layer
+        (``coordinator/_cloud_state.py:_refresh_cloud_state``) — this transport
+        method never imports the container (R-31/T2-6: closes the
+        transport→state back-edge; the CloudState import was previously
+        function-local and thus invisible to the layer gate).
         """
-        from ..cloud_state import CloudState, ScheduleData, SettingsRoot
+        from ..protocol.batch_grouper import group_keys_by_prefix
         from ..protocol.cruise_config import parse_cruise_config
-        from ..map_decoder import parse_cloud_maps
-        from ..protocol.batch_grouper import group_keys_by_prefix, join_family_chunks
-        from ..protocol.m_path import parse_m_path_batch
-        from ..protocol.schedule import parse_schedule_batch
-        from ..protocol.settings import parse_settings_batch
 
         try:
             batch = self.get_batch_device_datas([])
@@ -335,198 +338,42 @@ class _StateFetchMixin:
             _LOGGER.warning("fetch_full_cloud_state: fetch_cfg raised: %s", ex)
             cfg = {}
 
-        # Group batch keys by family prefix.
+        # Group batch keys by family prefix, then decode each family via its
+        # named helper (autopsy #2: the 235-LOC monolith split along its
+        # internal per-family seams; each helper is a pure decode of one
+        # family, behaviour-identical to the inline block it replaced).
         families = group_keys_by_prefix(batch)
 
-        # MAP.* — reuse existing fetch_map logic via an inline parse.
-        # The existing fetch_map() makes its own get_batch_device_datas
-        # call; we already have the batch, so parse directly.
-        maps_by_id: dict[int, Any] = {}
-        if "MAP" in families:
-            map_joined = join_family_chunks("MAP", batch)
-            map_info_raw = batch.get("MAP.info") or ""
-            try:
-                split_pos = int(map_info_raw) if map_info_raw else 0
-            except (TypeError, ValueError) as e:
-                _LOGGER.debug("parse_full_cloud_state: MAP.info parse failed %r: %s", map_info_raw, e)
-                split_pos = 0
-            segments = (
-                [map_joined[:split_pos], map_joined[split_pos:]]
-                if 0 < split_pos < len(map_joined)
-                else [map_joined]
-            )
-            import json as _json
-            raw_by_id: dict[int, dict] = {}
-            for seg in segments:
-                seg = seg.strip()
-                if not seg:
-                    continue
-                try:
-                    parsed = _json.loads(seg)
-                except (ValueError, _json.JSONDecodeError):
-                    continue
-                entries = parsed if isinstance(parsed, list) else [parsed]
-                for entry in entries:
-                    if isinstance(entry, str):
-                        try:
-                            entry = _json.loads(entry)
-                        except (ValueError, _json.JSONDecodeError) as e:
-                            _LOGGER.debug("parse_full_cloud_state: MAP entry double-decode failed: %s", e)
-                            continue
-                    if not isinstance(entry, dict):
-                        continue
-                    if "boundary" not in entry and "mowingAreas" not in entry:
-                        continue
-                    idx = entry.get("mapIndex", 0)
-                    try:
-                        idx_int = int(idx)
-                    except (TypeError, ValueError) as e:
-                        _LOGGER.debug("parse_full_cloud_state: mapIndex cast failed %r: %s", idx, e)
-                        idx_int = 0
-                    raw_by_id[idx_int] = entry
-            maps_by_id = parse_cloud_maps(raw_by_id) if raw_by_id else {}
-
-        # M_PATH.*
-        mow_paths_by_map_id: dict[int, Any] = {}
-        if "M_PATH" in families:
-            m_path_joined = join_family_chunks("M_PATH", batch)
-            m_path_info = batch.get("M_PATH.info") or ""
-            try:
-                m_split = int(m_path_info) if str(m_path_info).isdigit() else 0
-            except (TypeError, ValueError) as e:
-                _LOGGER.debug("parse_full_cloud_state: M_PATH.info parse failed %r: %s", m_path_info, e)
-                m_split = 0
-            mow_paths_by_map_id = parse_m_path_batch(m_path_joined, m_split)
-
-        # SETTINGS.*
-        settings_root: SettingsRoot
-        if "SETTINGS" in families:
-            settings_joined = join_family_chunks("SETTINGS", batch)
-            try:
-                import json as _json
-                settings_raw = _json.loads(settings_joined)
-            except Exception as e:
-                _LOGGER.debug("parse_full_cloud_state: SETTINGS JSON parse failed: %s", e, exc_info=True)
-                settings_raw = []
-            settings_root = parse_settings_batch(settings_raw)
-        else:
-            settings_root = SettingsRoot(raw=[], by_map_id_canonical={})
-
-        # SCHEDULE — the SCHEDULE.* iotuserdata KV is a STALE cache that app
-        # schedule edits do NOT write back (verified 2026-06-17: KV held a
-        # 6-plan v=35477 for hours while the device's live schedule was a 3-plan
-        # v=58177). Prefer the authoritative device-plane read (SCHDIV3->SCHDDV3
-        # chunked GET); fall back to the KV only when the live read is
-        # unavailable (e.g. device offline / firmware reject).
-        from ..protocol.schedule_action import read_live_schedule
-        schedule = ScheduleData(version=0, slots=())
-        live_sched = None
-        try:
-            live_sched = read_live_schedule(self.action)
-        except Exception as ex:  # noqa: BLE001 — never fail the whole fetch
-            _LOGGER.debug("fetch_full_cloud_state: live schedule read raised: %s", ex)
-        if live_sched is not None:
-            schedule = parse_schedule_batch(live_sched)
-        elif "SCHEDULE" in families:
-            sched_joined = join_family_chunks("SCHEDULE", batch)
-            try:
-                import json as _json
-                sched_raw = _json.loads(sched_joined)
-            except Exception as e:
-                _LOGGER.debug("parse_full_cloud_state: SCHEDULE JSON parse failed: %s", e, exc_info=True)
-                sched_raw = {}
-            schedule = parse_schedule_batch(sched_raw)
-
-        # AI_HUMAN — single chunk, JSON-encoded boolean.
-        ai_human_enabled: bool | None = None
-        if "AI_HUMAN" in families:
-            ai_joined = join_family_chunks("AI_HUMAN", batch)
-            try:
-                import json as _json
-                ai_human_enabled = bool(_json.loads(ai_joined))
-            except Exception as e:
-                _LOGGER.debug("parse_full_cloud_state: AI_HUMAN JSON parse failed: %s", e)
-                ai_human_enabled = None
-
-        # FBD_NTYPE — list of per-map dicts: [{<map0_dict>}, {<map1_dict>}].
-        forbidden_node_types_by_map: dict[int, dict[str, Any]] = {}
-        if "FBD_NTYPE" in families:
-            fbd_joined = join_family_chunks("FBD_NTYPE", batch)
-            try:
-                import json as _json
-                fbd_list = _json.loads(fbd_joined)
-                if isinstance(fbd_list, list):
-                    for i, entry in enumerate(fbd_list):
-                        if isinstance(entry, dict):
-                            forbidden_node_types_by_map[i] = entry
-            except Exception as e:
-                _LOGGER.debug("parse_full_cloud_state: FBD_NTYPE JSON parse failed: %s", e, exc_info=True)
-                pass
-
-        # OTA_INFO — `[status, percent]`.
-        ota_status: tuple[int, int] | None = None
-        if "OTA_INFO" in families:
-            ota_joined = join_family_chunks("OTA_INFO", batch)
-            try:
-                import json as _json
-                ota_list = _json.loads(ota_joined)
-                if isinstance(ota_list, list) and len(ota_list) >= 2:
-                    ota_status = (int(ota_list[0]), int(ota_list[1]))
-            except Exception as e:
-                _LOGGER.debug("parse_full_cloud_state: OTA_INFO JSON parse failed: %s", e)
-                pass
-
-        # TASKID — int.
-        task_id = 0
-        if "TASKID" in families:
-            tid_joined = join_family_chunks("TASKID", batch)
-            try:
-                import json as _json
-                task_id = int(_json.loads(tid_joined))
-            except Exception as e:
-                _LOGGER.debug("parse_full_cloud_state: TASKID JSON parse failed: %s", e)
-                pass
-
-        # prop.s_* — standalone keys.
-        props: dict[str, str] = {}
-        if "prop" in families:
-            for k in families["prop"]:
-                v = batch.get(k)
-                if isinstance(v, str):
-                    props[k] = v
-
-        # Fast-cadence probes (each a separate cloud call).
-        # DOCK is owned by the 60-second _refresh_dock timer; do NOT probe
-        # it here to avoid double-fetching.
-        # Errors here don't fail the whole fetch — fields just stay None/empty.
+        # Fast-cadence probes (each a separate cloud call). Errors here don't
+        # fail the whole fetch — the field just stays None/empty.
         try:
             mapl = self.fetch_mapl()
         except Exception as e:
-            _LOGGER.debug("parse_full_cloud_state: fetch_mapl raised: %s", e)
+            _LOGGER.debug("fetch_full_cloud_state: fetch_mapl raised: %s", e)
             mapl = None
         try:
             mihis = self.fetch_mihis() or {}
         except Exception as e:
-            _LOGGER.debug("parse_full_cloud_state: fetch_mihis raised: %s", e)
+            _LOGGER.debug("fetch_full_cloud_state: fetch_mihis raised: %s", e)
             mihis = {}
 
         import time as _time
-        return CloudState(
-            cfg=cfg,
-            maps_by_id=maps_by_id,
-            mow_paths_by_map_id=mow_paths_by_map_id,
-            settings=settings_root,
-            schedule=schedule,
-            ai_human_enabled=ai_human_enabled,
-            forbidden_node_types_by_map=forbidden_node_types_by_map,
-            ota_status=ota_status,
-            task_id=task_id,
-            props=props,
-            mapl=mapl,
-            mihis=mihis,
-            fetched_at_unix=int(_time.time()),
-            cruise_config_by_map=parse_cruise_config(batch.get("CRUISE.0")),
-        )
+        return {
+            "cfg": cfg,
+            "maps_by_id": _decode_maps(families, batch),
+            "mow_paths_by_map_id": _decode_mow_paths(families, batch),
+            "settings": _decode_settings(families, batch),
+            "schedule": _decode_schedule(self.action, families, batch),
+            "ai_human_enabled": _decode_ai_human(families, batch),
+            "forbidden_node_types_by_map": _decode_forbidden_node_types(families, batch),
+            "ota_status": _decode_ota_status(families, batch),
+            "task_id": _decode_task_id(families, batch),
+            "props": _decode_props(families, batch),
+            "mapl": mapl,
+            "mihis": mihis,
+            "fetched_at_unix": int(_time.time()),
+            "cruise_config_by_map": parse_cruise_config(batch.get("CRUISE.0")),
+        }
 
     def fetch_mapl(self) -> list | None:
         """Fetch MAPL via routed-action s2 aiid=50 {m:'g', t:'MAPL'}.
@@ -571,3 +418,220 @@ class _StateFetchMixin:
         except Exception as ex:  # pragma: no cover - defensive
             _LOGGER.warning("get_pre(idx=%s,region=%s) failed: %s", idx, region, ex)
             return None
+
+
+# ---------------------------------------------------------------------------
+# fetch_full_cloud_state per-family decoders (P3.5 / autopsy #2 decomposition).
+#
+# Each is a PURE decode of one empty-batch family into its protocol/state part
+# — no ``self``, no network. ``fetch_full_cloud_state`` orchestrates them. They
+# return protocol-layer types (MapData / MowPathData / SettingsRoot /
+# ScheduleData) or primitives; NONE constructs the CloudState container (that
+# is the state layer's job — R-31/T2-6). Behaviour is byte-identical to the
+# inline blocks these replaced.
+# ---------------------------------------------------------------------------
+
+
+def _decode_maps(families: dict, batch: dict) -> dict[int, Any]:
+    """MAP.* → ``{map_id: MapData}`` (empty when absent/unparsable).
+
+    We already hold the empty-batch dict, so we parse the joined MAP chunks
+    directly rather than re-calling ``fetch_map`` (which makes its own batch
+    request). ``MAP.info`` is the byte offset that splits the joined string
+    when two maps are concatenated.
+    """
+    if "MAP" not in families:
+        return {}
+    import json as _json
+
+    from ..map_decoder import parse_cloud_maps
+    from ..protocol.batch_grouper import join_family_chunks
+
+    map_joined = join_family_chunks("MAP", batch)
+    map_info_raw = batch.get("MAP.info") or ""
+    try:
+        split_pos = int(map_info_raw) if map_info_raw else 0
+    except (TypeError, ValueError) as e:
+        _LOGGER.debug("parse_full_cloud_state: MAP.info parse failed %r: %s", map_info_raw, e)
+        split_pos = 0
+    segments = (
+        [map_joined[:split_pos], map_joined[split_pos:]]
+        if 0 < split_pos < len(map_joined)
+        else [map_joined]
+    )
+    raw_by_id: dict[int, dict] = {}
+    for seg in segments:
+        seg = seg.strip()
+        if not seg:
+            continue
+        try:
+            parsed = _json.loads(seg)
+        except (ValueError, _json.JSONDecodeError):
+            continue
+        entries = parsed if isinstance(parsed, list) else [parsed]
+        for entry in entries:
+            if isinstance(entry, str):
+                try:
+                    entry = _json.loads(entry)
+                except (ValueError, _json.JSONDecodeError) as e:
+                    _LOGGER.debug("parse_full_cloud_state: MAP entry double-decode failed: %s", e)
+                    continue
+            if not isinstance(entry, dict):
+                continue
+            if "boundary" not in entry and "mowingAreas" not in entry:
+                continue
+            idx = entry.get("mapIndex", 0)
+            try:
+                idx_int = int(idx)
+            except (TypeError, ValueError) as e:
+                _LOGGER.debug("parse_full_cloud_state: mapIndex cast failed %r: %s", idx, e)
+                idx_int = 0
+            raw_by_id[idx_int] = entry
+    return parse_cloud_maps(raw_by_id) if raw_by_id else {}
+
+
+def _decode_mow_paths(families: dict, batch: dict) -> dict[int, Any]:
+    """M_PATH.* → ``{map_id: MowPathData}`` (empty when absent)."""
+    if "M_PATH" not in families:
+        return {}
+    from ..protocol.batch_grouper import join_family_chunks
+    from ..protocol.m_path import parse_m_path_batch
+
+    m_path_joined = join_family_chunks("M_PATH", batch)
+    m_path_info = batch.get("M_PATH.info") or ""
+    try:
+        m_split = int(m_path_info) if str(m_path_info).isdigit() else 0
+    except (TypeError, ValueError) as e:
+        _LOGGER.debug("parse_full_cloud_state: M_PATH.info parse failed %r: %s", m_path_info, e)
+        m_split = 0
+    return parse_m_path_batch(m_path_joined, m_split)
+
+
+def _decode_settings(families: dict, batch: dict):
+    """SETTINGS.* → ``SettingsRoot`` (empty root when absent)."""
+    from ..protocol.batch_grouper import join_family_chunks
+    from ..protocol.settings import SettingsRoot, parse_settings_batch
+
+    if "SETTINGS" not in families:
+        return SettingsRoot(raw=[], by_map_id_canonical={})
+    settings_joined = join_family_chunks("SETTINGS", batch)
+    try:
+        import json as _json
+        settings_raw = _json.loads(settings_joined)
+    except Exception as e:
+        _LOGGER.debug("parse_full_cloud_state: SETTINGS JSON parse failed: %s", e, exc_info=True)
+        settings_raw = []
+    return parse_settings_batch(settings_raw)
+
+
+def _decode_schedule(action, families: dict, batch: dict):
+    """SCHEDULE → ``ScheduleData``.
+
+    The SCHEDULE.* iotuserdata KV is a STALE cache that app schedule edits do
+    NOT write back (verified 2026-06-17: KV held a 6-plan v=35477 for hours
+    while the device's live schedule was a 3-plan v=58177). Prefer the
+    authoritative device-plane read (SCHDIV3→SCHDDV3 chunked GET); fall back to
+    the KV only when the live read is unavailable (device offline / firmware
+    reject).
+    """
+    from ..protocol.batch_grouper import join_family_chunks
+    from ..protocol.schedule import parse_schedule_batch
+    from ..protocol.schedule_action import read_live_schedule
+    from ..protocol.schedule_decode import ScheduleData
+
+    live_sched = None
+    try:
+        live_sched = read_live_schedule(action)
+    except Exception as ex:  # noqa: BLE001 — never fail the whole fetch
+        _LOGGER.debug("fetch_full_cloud_state: live schedule read raised: %s", ex)
+    if live_sched is not None:
+        return parse_schedule_batch(live_sched)
+    if "SCHEDULE" in families:
+        sched_joined = join_family_chunks("SCHEDULE", batch)
+        try:
+            import json as _json
+            sched_raw = _json.loads(sched_joined)
+        except Exception as e:
+            _LOGGER.debug("parse_full_cloud_state: SCHEDULE JSON parse failed: %s", e, exc_info=True)
+            sched_raw = {}
+        return parse_schedule_batch(sched_raw)
+    return ScheduleData(version=0, slots=())
+
+
+def _decode_ai_human(families: dict, batch: dict) -> bool | None:
+    """AI_HUMAN → bool (single chunk, JSON-encoded boolean) or None."""
+    if "AI_HUMAN" not in families:
+        return None
+    from ..protocol.batch_grouper import join_family_chunks
+
+    ai_joined = join_family_chunks("AI_HUMAN", batch)
+    try:
+        import json as _json
+        return bool(_json.loads(ai_joined))
+    except Exception as e:
+        _LOGGER.debug("parse_full_cloud_state: AI_HUMAN JSON parse failed: %s", e)
+        return None
+
+
+def _decode_forbidden_node_types(families: dict, batch: dict) -> dict[int, dict[str, Any]]:
+    """FBD_NTYPE → ``{map_id: dict}`` (a list of per-map dicts on the wire)."""
+    forbidden_node_types_by_map: dict[int, dict[str, Any]] = {}
+    if "FBD_NTYPE" not in families:
+        return forbidden_node_types_by_map
+    from ..protocol.batch_grouper import join_family_chunks
+
+    fbd_joined = join_family_chunks("FBD_NTYPE", batch)
+    try:
+        import json as _json
+        fbd_list = _json.loads(fbd_joined)
+        if isinstance(fbd_list, list):
+            for i, entry in enumerate(fbd_list):
+                if isinstance(entry, dict):
+                    forbidden_node_types_by_map[i] = entry
+    except Exception as e:
+        _LOGGER.debug("parse_full_cloud_state: FBD_NTYPE JSON parse failed: %s", e, exc_info=True)
+    return forbidden_node_types_by_map
+
+
+def _decode_ota_status(families: dict, batch: dict) -> tuple[int, int] | None:
+    """OTA_INFO → ``(status, percent)`` or None."""
+    if "OTA_INFO" not in families:
+        return None
+    from ..protocol.batch_grouper import join_family_chunks
+
+    ota_joined = join_family_chunks("OTA_INFO", batch)
+    try:
+        import json as _json
+        ota_list = _json.loads(ota_joined)
+        if isinstance(ota_list, list) and len(ota_list) >= 2:
+            return (int(ota_list[0]), int(ota_list[1]))
+    except Exception as e:
+        _LOGGER.debug("parse_full_cloud_state: OTA_INFO JSON parse failed: %s", e)
+    return None
+
+
+def _decode_task_id(families: dict, batch: dict) -> int:
+    """TASKID → int (0 when absent/unparsable)."""
+    if "TASKID" not in families:
+        return 0
+    from ..protocol.batch_grouper import join_family_chunks
+
+    tid_joined = join_family_chunks("TASKID", batch)
+    try:
+        import json as _json
+        return int(_json.loads(tid_joined))
+    except Exception as e:
+        _LOGGER.debug("parse_full_cloud_state: TASKID JSON parse failed: %s", e)
+        return 0
+
+
+def _decode_props(families: dict, batch: dict) -> dict[str, str]:
+    """prop.s_* → ``{key: value}`` standalone string props."""
+    props: dict[str, str] = {}
+    if "prop" not in families:
+        return props
+    for k in families["prop"]:
+        v = batch.get(k)
+        if isinstance(v, str):
+            props[k] = v
+    return props
