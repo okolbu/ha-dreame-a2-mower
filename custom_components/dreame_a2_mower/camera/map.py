@@ -84,7 +84,10 @@ class DreameA2MapCamera(
     """Live map camera for the Dreame A2 Mower."""
 
     _attr_has_entity_name = True
-    _attr_name = "Map"
+    # v2 rename (P4.5, track-5 T5-11): "Map" was ambiguous next to the per-map
+    # sub-device cameras. entity_id: camera.dreame_a2_mower_live_map (was
+    # ..._map). unique_id key "map" is unchanged, so the registry keeps identity.
+    _attr_name = "Live map"
     _attr_content_type = "image/png"
     # Keep the volatile/large live-stream attributes out of HA's recorder DB.
     # track_snapshot grows to O(thousands) of points during a mow; point_seq
@@ -437,8 +440,12 @@ class DreameA2WorkLogCamera(
 
     _attr_has_entity_name = True
     _attr_should_poll = False
-    _attr_translation_key = "work_log"
-    _attr_name = "Work Log"
+    # v2 rename (P4.5, track-5 T5-11): "Work Log" is app-jargon. entity_id:
+    # camera.dreame_a2_mower_session_replay (was ..._work_log). unique_id key
+    # "work_log" is unchanged (registry identity preserved); only the display
+    # name + object_id change. Pairs with select.dreame_a2_mower_session_replay.
+    _attr_translation_key = "session_replay"
+    _attr_name = "Session replay"
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         super().__init__(coordinator)

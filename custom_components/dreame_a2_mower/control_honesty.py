@@ -61,6 +61,9 @@ CONTROL_MODES: dict[str, ControlMode | dict[str, ControlMode]] = {
     "select.dreame_a2_mower_rain_protection_resume_hours": _W,
     "select.dreame_a2_mower_lcd_language": _W,
     "select.dreame_a2_mower_voice_language": _W,
+    # NOTE: this key is DESCRIPTOR-KEY-derived (resolve_control_mode builds
+    # select.dreame_a2_mower_<_KEY>); _KEY stays "work_log". The v2 rename
+    # (P4.5) only moved the name-derived object_id → select.…_session_replay.
     "select.dreame_a2_mower_work_log": _L,
     "select.dreame_a2_mower_lidar_archive": _L,
     "select.dreame_a2_mower_active_map": _U,

@@ -142,10 +142,14 @@ class DreameA2ObstaclePhotoCamera(_BasePhotoCamera):
     latest by ``unix_ts``.  Populated by the Track B obstacle-photo download
     path [UNVERIFIED — Track B download not yet live-confirmed].
 
-    entity_id: ``camera.dreame_a2_mower_obstacle_photo``
+    entity_id: ``camera.dreame_a2_mower_latest_obstacle_capture``
     """
 
-    _attr_name = "Obstacle photo"
+    # v2 rename (P4.5, track-5 T5-11/T5-2): entity_id
+    # camera.dreame_a2_mower_latest_obstacle_capture (was the stale-prefixed
+    # ..._obstacle_photo). unique_id key "obstacle_photo" is unchanged. The T3
+    # experimental gate below is UNCHANGED — only the display name + object_id.
+    _attr_name = "Latest obstacle capture"
     # P4.4 (R-52, track-5 T5-9): T3 experimental — fail-closed pending backend.
     # Track B's getDeiviceFile signer is UNVERIFIED (never reproduced a golden),
     # so the download path is fail-closed and this camera stays empty until the

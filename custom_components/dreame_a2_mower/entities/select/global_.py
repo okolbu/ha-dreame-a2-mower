@@ -394,7 +394,10 @@ SETTING_SELECTS: tuple[DreameA2SettingsSelectDescription, ...] = (
         # The old `select.dreame_a2_mower_text_language` becomes an
         # orphan in the entity registry on rename; the integration's
         # async_setup removes it via the existing orphan-cleanup pass.
-        name="Mower LCD language",
+        # v2 rename (P4.5, track-5 T5-11): drop the "Mower" name artifact so the
+        # object_id is the canonical select.dreame_a2_mower_lcd_language (was
+        # ..._mower_lcd_language). unique_id key "lcd_language" is unchanged.
+        name="LCD language",
         icon="mdi:monitor",
         options=TEXT_LANGUAGE_OPTIONS,
         value_fn=lambda s: (
@@ -562,7 +565,11 @@ class DreameA2WorkLogSelect(_DreameA2ArchivePickerSelect):
     Main view shows the live mow; Work Logs is for finalised sessions only.
     """
 
-    _attr_name = "Work Log"
+    # v2 rename (P4.5, track-5 T5-11): "Work Log" is app-jargon; pairs with the
+    # camera rename. entity_id: select.dreame_a2_mower_session_replay (was
+    # ..._work_log). unique_id key ("work_log") is unchanged; internal method
+    # names (render_work_log_session etc.) are the coordinator surface and stay.
+    _attr_name = "Session replay"
     _attr_icon = "mdi:history"
     _KEY = "work_log"
     _placeholder: str = WORK_LOG_PLACEHOLDER
