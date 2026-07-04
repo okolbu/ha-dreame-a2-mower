@@ -14,7 +14,7 @@ from ..protocol.map.geom import derive_canvas, rotate_zone_points
 from ..protocol.map.types import GRID_SIZE_MM
 
 if TYPE_CHECKING:
-    from ..map_decoder import MapData, Zone
+    from ..protocol.map.types import MapData, Zone
 
 _LOGGER = logging.getLogger(__name__)
 

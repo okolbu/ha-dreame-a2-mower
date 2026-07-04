@@ -1,6 +1,6 @@
 """Patrol points render as a green 'P' marker on the base map."""
 from custom_components.dreame_a2_mower.map_render import render_base_map
-from custom_components.dreame_a2_mower.map_decoder import PatrolPoint
+from custom_components.dreame_a2_mower.protocol.map import PatrolPoint
 
 
 class _FakeMap:

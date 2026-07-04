@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 from custom_components.dreame_a2_mower.camera.map import DreameA2MapCamera
-from custom_components.dreame_a2_mower.map_decoder import (
+from custom_components.dreame_a2_mower.protocol.map import (
     ExclusionZone,
     MaintenancePoint,
 )

@@ -684,9 +684,9 @@ platform is a thin entry file with domain-grouped siblings.
   `_geometry`), folded in from the old root `_render_stripes.py` /
   `_render_dotted.py` (P3a frame untangle, 2026-06-14). `_render_dotted.py`
   (the old shim) was **deleted in P1** — zero importers (T2-7); `dotted.py` is
-  the only surviving entry point. `_render_stripes.py` is still a 1-line
-  re-export shim preserving the old import path, kept ONLY until the P3
-  import-path rewrite + contract-test replacement (target-architecture § 2).
+  the only surviving entry point. `_render_stripes.py` (the old shim) was
+  **RETIRED in P3.10** — its one importer now imports `map_render.stripes`
+  directly; there is no root re-export shim.
   (The former `direction.py` / `_render_direction.py` track-inference module was
   removed 2026-06-19 — the next-mow stripe angle is read from the authoritative
   cloud field `settings_mowing_direction`, not inferred from the track. See

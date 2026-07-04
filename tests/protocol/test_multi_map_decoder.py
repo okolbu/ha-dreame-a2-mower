@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from custom_components.dreame_a2_mower.map_decoder import (
+from custom_components.dreame_a2_mower.protocol.map import (
     MapData,
     parse_cloud_maps,
 )

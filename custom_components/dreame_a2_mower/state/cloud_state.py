@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..map_decoder import MapData
+from ..protocol.map import MapData
 from ..protocol.m_path import MowPathData as MowPathData
 from ..protocol.schedule_decode import (
     ScheduleData as ScheduleData,

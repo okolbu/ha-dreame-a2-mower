@@ -113,7 +113,7 @@ _MINIMAL_MAP = {
 # ---------------------------------------------------------------------------
 # Import the module under test.
 # ---------------------------------------------------------------------------
-from custom_components.dreame_a2_mower.map_decoder import (  # noqa: E402
+from custom_components.dreame_a2_mower.protocol.map import (  # noqa: E402
     ExclusionZone,
     MaintenancePoint,
     MapData,
@@ -334,7 +334,7 @@ class TestParseCloudMap:
         ``cloud_x_reflect - CHARGER_OFFSET_MM, cloud_y_reflect`` in renderer
         mm). Pre-move this test pinned the reflected (renderer-frame) value.
         """
-        from custom_components.dreame_a2_mower.map_decoder import CHARGER_OFFSET_MM
+        from custom_components.dreame_a2_mower.protocol.map import CHARGER_OFFSET_MM
         from custom_components.dreame_a2_mower.map_render._geometry import (
             _reflect_to_renderer,
         )

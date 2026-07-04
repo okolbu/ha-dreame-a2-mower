@@ -1,5 +1,5 @@
 """Stripe overlay: alternating dark/light bands rotated to mow direction, clipped to lawn."""
-from custom_components.dreame_a2_mower._render_stripes import compute_stripe_overlay
+from custom_components.dreame_a2_mower.map_render.stripes import compute_stripe_overlay
 from custom_components.dreame_a2_mower.map_render import _DEFAULT_PALETTE
 
 

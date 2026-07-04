@@ -206,7 +206,7 @@ async def test_render_work_log_session_hydrate_writes_cloud_state():
     from custom_components.dreame_a2_mower.live_map.state import LiveMapState
     from tests.integration.conftest import make_empty_cloud_state
     import custom_components.dreame_a2_mower.map_render as map_render_mod
-    import custom_components.dreame_a2_mower.map_decoder as map_decoder_mod
+    import custom_components.dreame_a2_mower.protocol.map as map_decoder_mod
 
     raw = json.loads((FIXTURE_DIR / "short.json").read_text())
     entry = _make_entry_from_raw(raw)

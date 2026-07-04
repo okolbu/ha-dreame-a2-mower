@@ -7,7 +7,7 @@ from pathlib import Path
 
 def test_maintenance_point_glyph_drawn():
     from custom_components.dreame_a2_mower.map_render import render_base_map
-    from custom_components.dreame_a2_mower.map_decoder import (
+    from custom_components.dreame_a2_mower.protocol.map import (
         parse_cloud_maps, MaintenancePoint,
     )
     fixture = json.loads(

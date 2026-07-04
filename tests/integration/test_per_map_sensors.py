@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from custom_components.dreame_a2_mower.map_decoder import parse_cloud_maps
+from custom_components.dreame_a2_mower.protocol.map import parse_cloud_maps
 
 
 FIXTURE = (
@@ -37,7 +37,7 @@ def test_map_segment_count_sensor_reads_mowing_zones():
     from custom_components.dreame_a2_mower.sensor import (
         DreameA2MapSegmentCountSensor,
     )
-    from custom_components.dreame_a2_mower.map_decoder import MowingZone
+    from custom_components.dreame_a2_mower.protocol.map import MowingZone
     import dataclasses
     m = _parsed_map_zero()
     # Synthesize three zones so the assertion can distinguish a working
@@ -55,7 +55,7 @@ def test_map_name_sensor_falls_back_to_map_n_when_cloud_returns_empty():
     """Cloud often returns empty `name` — surface a friendly 'Map N' instead
     of an empty string so the dashboard isn't blank."""
     from custom_components.dreame_a2_mower.sensor import DreameA2MapNameSensor
-    from custom_components.dreame_a2_mower.map_decoder import MapData
+    from custom_components.dreame_a2_mower.protocol.map import MapData
     import dataclasses
     m = _parsed_map_zero()
     m_empty = dataclasses.replace(m, name="")

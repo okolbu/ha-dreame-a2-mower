@@ -53,7 +53,7 @@ def test_extract_projection_none_returns_none():
 
 def test_build_projection_derives_canvas_from_raw_map():
     from custom_components.dreame_a2_mower.map_render import build_projection
-    from custom_components.dreame_a2_mower.map_decoder import parse_cloud_map
+    from custom_components.dreame_a2_mower.protocol.map import parse_cloud_map
 
     # A rotated exclusion pushes the bbox beyond the raw boundary.
     cloud = {

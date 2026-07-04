@@ -76,7 +76,7 @@ if str(_REPO_ROOT) not in sys.path:
 _FIXTURE_JSON = _REPO_ROOT / "tests" / "fixtures" / "cloud_map_golden.json"
 _GOLDEN_PNG = _REPO_ROOT / "tests" / "fixtures" / "cloud_map_render_golden.png"
 
-from custom_components.dreame_a2_mower.map_decoder import parse_cloud_map  # noqa: E402
+from custom_components.dreame_a2_mower.protocol.map import parse_cloud_map  # noqa: E402
 from custom_components.dreame_a2_mower.map_render import render_base_map  # noqa: E402
 
 

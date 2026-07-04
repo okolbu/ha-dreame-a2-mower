@@ -1,5 +1,5 @@
 """cruisePoints (patrol points, type=8) parsing."""
-from custom_components.dreame_a2_mower.map_decoder import (
+from custom_components.dreame_a2_mower.protocol.map import (
     PatrolPoint, _parse_cruise_points,
 )
 
@@ -30,5 +30,5 @@ def test_parse_cruise_points_skips_pathless():
 
 
 def test_mapdata_carries_patrol_points_field():
-    from custom_components.dreame_a2_mower.map_decoder import MapData
+    from custom_components.dreame_a2_mower.protocol.map import MapData
     assert "patrol_points" in MapData.__dataclass_fields__

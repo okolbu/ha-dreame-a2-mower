@@ -3,7 +3,7 @@ DERIVATION (``rotate_zone_points(points, -angle)/1000``) at the render/edit
 boundary — the stored ``points``/``points_m`` twin was removed in P3 (T2-17).
 This pins the collector's RAW-frame output + the derivation identity.
 """
-from custom_components.dreame_a2_mower.map_decoder import _collect_exclusion_entries
+from custom_components.dreame_a2_mower.protocol.map import _collect_exclusion_entries
 from custom_components.dreame_a2_mower.protocol.map.geom import rotate_zone_points
 
 

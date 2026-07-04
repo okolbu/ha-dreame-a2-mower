@@ -97,7 +97,6 @@ MODULE_LAYER: dict[str, int] = {
 
     # ---- 1: protocol (pure decode/encode; zero HA imports) ---------------
     "protocol": 1,
-    "map_decoder": 1,  # root re-export shim -> protocol/map/ (T2-4 autopsy #8 split)
     # observability/ sits at layer 1 alongside protocol: its only internal
     # dependency is observability/registry.py -> protocol/unknown_watchdog.py
     # (a pure dataclass), so pinning it here makes that a legal SAME-layer
@@ -153,7 +152,6 @@ MODULE_LAYER: dict[str, int] = {
 
     # ---- 6: presentation (render/ [map_render], camera/, dashboard) ------
     "map_render": 6,
-    "_render_stripes": 6,  # root shim -> map_render/stripes.py
     "camera": 6,
 
     # ---- entry points (setup/unload, config flow, diagnostics): these

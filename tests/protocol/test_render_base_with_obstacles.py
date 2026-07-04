@@ -9,7 +9,7 @@ import io
 
 from PIL import Image
 
-from custom_components.dreame_a2_mower.map_decoder import MapData, MowingZone
+from custom_components.dreame_a2_mower.protocol.map import MapData, MowingZone
 from custom_components.dreame_a2_mower.map_render import (
     _OBSTACLE_FILL,
     _OBSTACLE_OUTLINE,

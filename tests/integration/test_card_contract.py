@@ -48,7 +48,7 @@ def _make_map_camera():
     from custom_components.dreame_a2_mower.camera import DreameA2MapCamera
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
     from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
-    from custom_components.dreame_a2_mower.map_decoder import (
+    from custom_components.dreame_a2_mower.protocol.map import (
         ExclusionZone,
         SpotZone,
         MaintenancePoint,
@@ -291,7 +291,7 @@ def test_segment_count_rename_delete_element_shapes():
     from custom_components.dreame_a2_mower.entities.sensor.map import (
         DreameA2MapSegmentCountSensor,
     )
-    from custom_components.dreame_a2_mower.map_decoder import ExclusionZone, MowingZone
+    from custom_components.dreame_a2_mower.protocol.map import ExclusionZone, MowingZone
 
     m = MagicMock()
     m.mowing_zones = (

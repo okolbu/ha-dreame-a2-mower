@@ -444,7 +444,7 @@ def _decode_maps(families: dict, batch: dict) -> dict[int, Any]:
         return {}
     import json as _json
 
-    from ..map_decoder import parse_cloud_maps
+    from ..protocol.map import parse_cloud_maps
     from ..protocol.batch_grouper import join_family_chunks
 
     map_joined = join_family_chunks("MAP", batch)

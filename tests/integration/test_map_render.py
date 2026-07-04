@@ -27,7 +27,7 @@ if str(_REPO_ROOT) not in sys.path:
 # ---------------------------------------------------------------------------
 from tests.integration.test_map_decoder import _MINIMAL_MAP  # noqa: E402
 
-from custom_components.dreame_a2_mower.map_decoder import parse_cloud_map  # noqa: E402
+from custom_components.dreame_a2_mower.protocol.map import parse_cloud_map  # noqa: E402
 from custom_components.dreame_a2_mower.map_render import render_base_map  # noqa: E402
 # The trail renderer moved into work_log._render_archived_trail (from the
 # deleted trail.py) in the live-map rehaul; the live map no longer renders a
@@ -127,7 +127,7 @@ class TestRenderBaseMap:
         """dock_xy=None (degenerate bbox) skips dock icon without crash."""
         import copy
 
-        from custom_components.dreame_a2_mower.map_decoder import (
+        from custom_components.dreame_a2_mower.protocol.map import (
             MapData,
             GRID_SIZE_MM,
         )

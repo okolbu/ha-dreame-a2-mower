@@ -13,7 +13,7 @@ import io
 
 from PIL import Image
 
-from custom_components.dreame_a2_mower.map_decoder import (
+from custom_components.dreame_a2_mower.protocol.map import (
     ExclusionZone,
     MapData,
     MowingZone,

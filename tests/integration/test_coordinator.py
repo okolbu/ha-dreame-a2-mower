@@ -3540,7 +3540,7 @@ def test_refresh_cloud_state_applies_mapl():
 def _make_coordinator_for_render_tests(last_map_md5: str | None = None):
     """Minimal coordinator stub exercising _render_maps_from_cloud_state."""
     from unittest.mock import MagicMock
-    from custom_components.dreame_a2_mower.map_decoder import parse_cloud_map
+    from custom_components.dreame_a2_mower.protocol.map import parse_cloud_map
     from tests.integration.test_map_decoder import _MINIMAL_MAP
     import copy
 

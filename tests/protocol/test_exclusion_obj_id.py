@@ -1,4 +1,4 @@
-from custom_components.dreame_a2_mower.map_decoder import _collect_exclusion_entries, ExclusionZone
+from custom_components.dreame_a2_mower.protocol.map import _collect_exclusion_entries, ExclusionZone
 
 
 def test_exclusion_entries_carry_obj_id():

@@ -787,7 +787,7 @@ async def render_work_log_session(coord, session_md5: str) -> None:
     """
     import time as _time
 
-    from ...map_decoder import parse_cloud_map
+    from ...protocol.map import parse_cloud_map
     from ...map_render import render_work_log
 
     replay_start_unix = _time.monotonic()
@@ -945,7 +945,7 @@ async def render_work_log_session(coord, session_md5: str) -> None:
     # Trail alignment is unaffected — the boundary box / projection are
     # unchanged; only the overlaid zones differ.
     try:
-        from ...map_decoder import apply_session_geometry
+        from ...protocol.map import apply_session_geometry
         excl_polys = [list(layer.points) for layer in summary.exclusions]
         spot_polys = [list(s.corners) for s in summary.spots]
         if excl_polys or spot_polys:

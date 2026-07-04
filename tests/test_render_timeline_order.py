@@ -12,7 +12,7 @@ approach of the legacy branches.
 """
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.map_decoder import MapData, MowingZone
+from custom_components.dreame_a2_mower.protocol.map import MapData, MowingZone
 from custom_components.dreame_a2_mower.map_render import render_work_log
 
 

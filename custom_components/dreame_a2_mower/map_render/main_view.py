@@ -26,7 +26,7 @@ from ._geometry import (
 from .base_map import render_base_map
 
 if TYPE_CHECKING:
-    from ..map_decoder import MapData
+    from ..protocol.map import MapData
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -11,7 +11,7 @@ import dataclasses
 import io
 from PIL import Image
 
-from custom_components.dreame_a2_mower.map_decoder import ExclusionZone, MapData, MowingZone
+from custom_components.dreame_a2_mower.protocol.map import ExclusionZone, MapData, MowingZone
 from custom_components.dreame_a2_mower.map_render.main_view import (
     render_base,
     _render_pre_start_with_stripes,

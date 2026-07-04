@@ -6,7 +6,7 @@ import io
 from PIL import Image
 
 from custom_components.dreame_a2_mower.cloud_state import MowPathData
-from custom_components.dreame_a2_mower.map_decoder import MapData
+from custom_components.dreame_a2_mower.protocol.map import MapData
 from custom_components.dreame_a2_mower.map_render import render_base_map
 
 
@@ -117,7 +117,7 @@ def test_default_m_path_palette_is_black():
 def test_m_path_drawn_above_mowing_zones():
     """An M_PATH segment crossing a mowing-zone polygon should be the
     M_PATH color, not zone-tinted (would mean it's drawn under the zone)."""
-    from custom_components.dreame_a2_mower.map_decoder import MowingZone
+    from custom_components.dreame_a2_mower.protocol.map import MowingZone
 
     # Map with one mowing zone covering most of the canvas.
     map_data = MapData(

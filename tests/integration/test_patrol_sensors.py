@@ -2,7 +2,7 @@ from unittest.mock import MagicMock
 from custom_components.dreame_a2_mower.entities.sensor.map import (
     DreameA2PatrolPointsSensor, DreameA2PatrolEdgesSensor,
 )
-from custom_components.dreame_a2_mower.map_decoder import PatrolPoint
+from custom_components.dreame_a2_mower.protocol.map import PatrolPoint
 
 
 def _coord_with_map(map_obj):

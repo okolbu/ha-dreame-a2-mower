@@ -190,7 +190,7 @@ async def test_editor_base_keeps_decorative_drops_standard_exclusions():
     ignore — drawn as card overlays) but KEEPS DECORATIVE shapes (heart/cloud/
     etc., shape_type in DECORATIVE_SHAPE_TYPES) so they render in the editor
     background pixel-identically to the live map. Pins the clean_md filter."""
-    from custom_components.dreame_a2_mower.map_decoder import ExclusionZone
+    from custom_components.dreame_a2_mower.protocol.map import ExclusionZone
 
     heart = ExclusionZone(
         points=((5000.0, 5000.0), (9000.0, 8000.0)),
@@ -229,7 +229,7 @@ async def test_editor_base_strips_spots_maintenance_patrol():
     editor background (clean_md) so they are drawn ONLY as card overlays — a
     hard refresh (which wipes the card's optimistic state) must not show a stale
     cloud object bleeding through the server PNG. The LIVE base keeps them."""
-    from custom_components.dreame_a2_mower.map_decoder import (
+    from custom_components.dreame_a2_mower.protocol.map import (
         MaintenancePoint,
         PatrolPoint,
         SpotZone,

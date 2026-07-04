@@ -25,7 +25,7 @@ from ..protocol.map.shapes import DECORATIVE_SHAPE_TYPES
 
 if TYPE_CHECKING:
     from ..cloud_state import MowPathData
-    from ..map_decoder import MapData
+    from ..protocol.map import MapData
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -109,7 +109,7 @@ def render_base_map(
     Returns the PNG bytes ready to set as a camera entity's image content.
 
     Args:
-        map_data: Decoded map geometry from :func:`.map_decoder.parse_cloud_map`.
+        map_data: Decoded map geometry from :func:`.protocol.map.parse_cloud_map`.
         palette: Optional colour override dict.  Keys match :data:`_DEFAULT_PALETTE`.
                  Any key omitted in *palette* falls back to the default.
         lawn_mode: Controls the primary zone fill colour.

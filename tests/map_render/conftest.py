@@ -14,7 +14,7 @@ if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
 from tests.integration.test_map_decoder import _MINIMAL_MAP  # noqa: E402
-from custom_components.dreame_a2_mower.map_decoder import parse_cloud_map  # noqa: E402
+from custom_components.dreame_a2_mower.protocol.map import parse_cloud_map  # noqa: E402
 
 
 def make_map_data():

@@ -12,7 +12,7 @@ is unchanged.
 """
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.map_decoder import (
+from custom_components.dreame_a2_mower.protocol.map import (
     apply_session_geometry,
     parse_cloud_map,
 )

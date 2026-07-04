@@ -1,7 +1,7 @@
 """Tests for the cloud `paths` key (gray nav-paths between maps)."""
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.map_decoder import (
+from custom_components.dreame_a2_mower.protocol.map import (
     MapData,
     NavPath,
     parse_cloud_map,
