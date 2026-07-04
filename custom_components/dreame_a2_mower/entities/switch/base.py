@@ -236,10 +236,13 @@ class _AiRecognitionBitSwitch(
         bit = self._BIT.bit_length() - 1
         # Optimistic update on MowerState mirror (settings_obstacle_avoidance_ai stores the
         # full bitmask int; we write the new combined mask here, not a per-bit bool).
-        coord.data = dataclasses.replace(
-            coord.data, settings_obstacle_avoidance_ai=new_mask
+        # Route through async_set_updated_data (P2-inherit): the P3.1 listener-aware
+        # stub notifies, so a bare `coord.data =` + local async_write_ha_state no
+        # longer under-notifies siblings — the coordinator broadcast covers this
+        # entity AND its siblings in one hop.
+        coord.async_set_updated_data(
+            dataclasses.replace(coord.data, settings_obstacle_avoidance_ai=new_mask)
         )
-        self.async_write_ha_state()
         result = await coord.write_map_general_ai_bit(
             map_id=self._map_id,
             bit=bit,
@@ -248,10 +251,9 @@ class _AiRecognitionBitSwitch(
         )
         if result.accepted:
             return
-        coord.data = dataclasses.replace(
-            coord.data, settings_obstacle_avoidance_ai=old
+        coord.async_set_updated_data(
+            dataclasses.replace(coord.data, settings_obstacle_avoidance_ai=old)
         )
-        self.async_write_ha_state()
         await self.hass.services.async_call(
             "persistent_notification", "create",
             service_data={
