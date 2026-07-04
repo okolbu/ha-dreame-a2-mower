@@ -1,0 +1,92 @@
+name: Bug report
+description: Report something broken in the Dreame A2 Mower integration.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to file a bug report. A few things that make
+        this much faster to diagnose:
+
+        - Please attach the integration's **diagnostics file** (see the field
+          below) rather than pasting raw log excerpts — it's structured and
+          redacted of secrets.
+        - **Do not paste raw credentials, tokens, session cookies, or
+          passwords** into this form, even if you think they're already
+          expired. If you're not sure whether something is sensitive, leave it
+          out and describe it in words instead.
+
+  - type: input
+    id: integration-version
+    attributes:
+      label: Integration version
+      description: >-
+        Settings → Devices & Services → Dreame A2 Mower → the version shown on
+        the integration entry (also visible in HACS), e.g. `1.0.32a5`.
+      placeholder: "1.0.32a5"
+    validations:
+      required: true
+
+  - type: input
+    id: ha-version
+    attributes:
+      label: Home Assistant version
+      description: Settings → About, e.g. `2026.7.1`.
+      placeholder: "2026.7.1"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: A clear description of the bug you observed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Number the steps if you can. Include which entity/service/screen you were using.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics file
+      description: >-
+        Settings → Devices & Services → Dreame A2 Mower → the ⋮ menu on the
+        device → **Download diagnostics**. Drag the downloaded `.json` file
+        into this box. The file has secrets (credentials, tokens, device id)
+        redacted before download, so it is safe to attach — please still skim
+        it once yourself and remove anything you added manually (e.g. a note
+        with your account email) before submitting.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Confirmations
+      options:
+        - label: >-
+            I have reviewed the diagnostics file (if attached) and removed any
+            personal information I may have added to it manually.
+          required: true
+        - label: I did not paste any raw credentials, tokens, or passwords into this report.
+          required: true

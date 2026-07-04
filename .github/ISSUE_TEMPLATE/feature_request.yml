@@ -1,0 +1,44 @@
+name: Feature request
+description: Suggest an idea or improvement for the Dreame A2 Mower integration.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion. Please describe the problem you're trying
+        to solve as concretely as you can — it makes it much easier to judge
+        whether an existing entity/service already covers it.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / use case
+      description: What are you trying to do, and what's missing or awkward today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed-solution
+    attributes:
+      label: Proposed solution
+      description: What would you like the integration to do instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any workarounds, other entities/services, or automations you've already tried.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Screenshots, app behavior comparisons, links, etc.
+    validations:
+      required: false

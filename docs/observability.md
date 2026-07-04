@@ -42,6 +42,31 @@ The dump is JSON with these top-level keys:
 
 Attach the dump to bug reports; everything sensitive is redacted.
 
+## Wire-trace instrument (gated, off by default)
+
+A developer-facing tracing instrument for diffing the integration's outgoing
+device writes against app↔mower captures. It ships OFF and adds no overhead
+beyond one file-existence check per write when disabled.
+
+- **What it captures.** Every device RPC *write* the integration sends (an
+  `action` call — `routed_action` / `set_cfg` and friends) is appended as one
+  JSON line: the outgoing `siid`/`aiid`/parameters plus the device's response,
+  with a timestamp. See `cloud_client/_helpers.py` (`wire_trace_enabled` /
+  `wire_trace`) and its call site in `cloud_client/_rpc.py`. It is a raw
+  request/response capture, not a decoded interpretation — no protocol
+  semantics are added by the instrument itself.
+- **Not pre-redacted.** Unlike the diagnostics dump, this file is **not**
+  scrubbed — the captured records can include the device id and full
+  write payloads. Review the file yourself before sharing or attaching it
+  anywhere; treat it the same as a raw packet capture.
+- **Enable:** `touch /config/dreame_a2_wire_trace.enabled` on the HA host (no
+  code change or restart required — the check is per-call).
+- **Disable:** delete that same sentinel file. No writes are captured once
+  it's gone.
+- **Output:** appended to `/config/dreame_a2_wire_trace.jsonl`. The file
+  self-rotates to a `.1` sibling once it grows past a fixed size cap, so it
+  can't fill the disk if left enabled.
+
 ## Operational notes
 
 - Registry and log buffer are process-scoped. A HA restart drops them. This is intentional — version upgrades may add new known shapes, and re-arming the novelty gates surfaces leftover drift.
