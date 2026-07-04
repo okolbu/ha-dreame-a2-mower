@@ -9,14 +9,75 @@ import base64
 import binascii
 import html
 import logging
+from dataclasses import dataclass
 from typing import Any
-
-from ..cloud_state import ScheduleData, SchedulePlan, ScheduleSlot
 
 _LOGGER = logging.getLogger(__name__)
 
 _RECORD_START = 0xAA
 _RECORD_END = 0xED
+
+
+@dataclass(frozen=True, slots=True)
+class SchedulePlan:
+    """One scheduled mow within a ScheduleSlot.
+
+    A plan triggers a mow at `time_min` (minute-of-day, 0..1439) on every
+    weekday whose bit is set in `weekday_mask` (bit 0 = Mon, bit 6 = Sun).
+    `action_type`: 0 = All-area, 1 = Zone, 2 = Edge.
+
+    `zone_id` is set for Zone (action=1) and Edge (action=2) plans (the
+    target zone in the active map's mowing-zone list); None for All-area.
+
+    `extra_bytes` preserves any trailing bytes the wire format includes
+    that we don't yet fully decode (Edge has 1 trailing reserved byte).
+    Lets the encoder round-trip byte-identical even when semantics are
+    not fully known.
+    """
+
+    time_min: int
+    weekday_mask: int
+    action_type: int
+    zone_id: int | None = None
+    extra_bytes: bytes = b""
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduleSlot:
+    """One slot from the SCHEDULE batch.
+
+    The cloud carries up to two slots per map ("Spr & Sum" + "Aut & Win"
+    on g2408). Wire shape is `[slot_id, mode, name, blob_b64]`.
+
+    `plans` is the decoded list of mows; `raw_blob_b64` is the untouched
+    on-wire bytes preserved for round-trip / debugging.
+
+    `mode` is the second wire-element (live g2408 cloud emits 1 for the
+    primary/active slot and 0 for an empty/inactive one). Its exact
+    semantic is not fully decoded, but it MUST be round-tripped: writes
+    that hardcode 0 silently flip an active slot off. Default 0 matches
+    new/empty slots; the parser fills it from the wire on read.
+    """
+
+    slot_id: int
+    name: str
+    raw_blob_b64: str
+    plans: tuple[SchedulePlan, ...] = ()
+    mode: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class ScheduleData:
+    """Cloud-side schedule data (header-only decode in this PR).
+
+    This trio (ScheduleData/SchedulePlan/ScheduleSlot) moved here from root
+    `cloud_state.py` (R-29a/T2-4): they are the decoder's own output types,
+    not state-layer containers. `cloud_state.py` re-exports them for the
+    existing importers.
+    """
+
+    version: int
+    slots: tuple[ScheduleSlot, ...]
 
 _VALID_LEN = (7, 8, 9)
 _ACTION_LEN = {0: 7, 1: 8, 2: 9}

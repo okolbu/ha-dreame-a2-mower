@@ -36,9 +36,34 @@ integration's polling cadence should account for that lag.
 from __future__ import annotations
 
 import copy
+from dataclasses import dataclass
 from typing import Any
 
-from ..cloud_state import SettingsRoot
+
+@dataclass(frozen=True, slots=True)
+class SettingsRoot:
+    """Per-map mowing-behaviour settings.
+
+    Preserves the dual-level structure observed on g2408 fw 4.3.6_0550
+    (two top-level entries, both `mode: 0`, each keyed by the same map
+    ids but holding DIFFERENT values). Roles confirmed 2026-05-09 via
+    controlled diffs of a cloud `getDeviceData` batch around app saves:
+    entry 0 holds user-saved settings (what the app and HA both read
+    and write; `version` increments on each save), entry 1 is a
+    firmware-applied mirror that lags arbitrarily and stays at
+    `version: 0` until the device pushes its applied state back.
+
+    `by_map_id_canonical` reflects entry 0; writes propagate to every
+    entry to keep them mutually consistent until the firmware updates
+    entry 1 on its own schedule.
+
+    Moved here from root `cloud_state.py` (R-29a/T2-4): this is the
+    decoder's own output type, not a state-layer container. `cloud_state.py`
+    re-exports it for the existing importers.
+    """
+
+    raw: list[dict[str, Any]]
+    by_map_id_canonical: dict[int, dict[str, Any]]
 
 
 def parse_settings_batch(raw: list[dict[str, Any]]) -> SettingsRoot:

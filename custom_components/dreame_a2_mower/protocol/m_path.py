@@ -14,11 +14,27 @@ Use `parse_m_path_batch(raw, split_pos)` from the joined chunks +
 from __future__ import annotations
 
 import re
-
-from ..cloud_state import MowPathData
+from dataclasses import dataclass
 
 _PAIR_RE = re.compile(r"\[(-?\d+),(-?\d+)\]")
 _SENTINEL = (32767, -32768)
+
+
+@dataclass(frozen=True, slots=True)
+class MowPathData:
+    """Per-map persisted mow-trajectory history from M_PATH.* batch.
+
+    Each segment is a tuple of (x_mm, y_mm) pairs; segment boundaries
+    correspond to the firmware's `[32767, -32768]` pen-up sentinel
+    in the raw stream.
+
+    Moved here from root `cloud_state.py` (R-29a/T2-4): this is the
+    decoder's own output type, not a state-layer container. `cloud_state.py`
+    re-exports it for the ~20 existing importers.
+    """
+
+    map_id: int
+    segments: tuple[tuple[tuple[int, int], ...], ...]
 
 
 def _decode_one(raw: str) -> tuple[tuple[tuple[int, int], ...], ...]:

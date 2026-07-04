@@ -7,8 +7,7 @@ from __future__ import annotations
 
 import base64
 
-from ..cloud_state import SchedulePlan
-from .schedule_decode import _ACTION_LEN, _RECORD_END, _RECORD_START
+from .schedule_decode import _ACTION_LEN, _RECORD_END, _RECORD_START, SchedulePlan
 
 
 def encode_schedule_blob(plans: tuple[SchedulePlan, ...]) -> str:
