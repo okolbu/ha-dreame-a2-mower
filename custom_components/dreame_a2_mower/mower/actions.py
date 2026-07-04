@@ -52,8 +52,8 @@ class MowerAction(Enum):
     UPDATE_STATION_LOCATION = auto()  # o=19 re-localize dock (app 2.5.8.1 "Update station location")
     FIND_BOT = auto()
     LOCK_BOT_TOGGLE = auto()
-    LOCK_BOT = auto()  # Distinct from LOCK_BOT_TOGGLE — direct lockBot opcode (apk op=12)
-    GENERATE_3D_MAP = auto()
+    # LOCK_BOT (op=12) + GENERATE_3D_MAP (op=10) DELETED refactor-v2 P4.2 (R-28,
+    # track-5 T5-8): accepted-but-no-effect on g2408 — see debunked-claims.md § D9.
     SUPPRESS_FAULT = auto()
     FINALIZE_SESSION = auto()  # integration-local; no cloud call
     SET_ACTIVE_MAP = auto()
@@ -209,18 +209,6 @@ def _set_active_map_payload(params: dict[str, Any]) -> dict[str, Any]:
     return {"idx": int(params["map_id"])}
 
 
-def _generate_3d_map_payload(params: dict[str, Any]) -> dict[str, Any]:
-    """d-payload for generate-3dmap (op=10).
-
-    ioBroker.dreame v0.3.7 sends ``{idx: 0}`` — opcode 10 with a
-    selector-index in the d-field (idx=0 = current/primary map).
-    Source: alternatives_archive_2026-05-05/ioBroker.dreame/main.js:3474.
-    Untested on g2408 — added for live verification once the mower
-    is docked.
-    """
-    return {"idx": int(params.get("map_index", 0))}
-
-
 # (siid, aiid) values verified against the legacy okolbu/ha-dreame-a2-mower-legacy
 # fork's dreame/types.py lines 807-838 (DreameMowerActionMapping).
 ACTION_TABLE: dict[MowerAction, ActionEntry] = {
@@ -301,22 +289,11 @@ ACTION_TABLE: dict[MowerAction, ActionEntry] = {
         "routed_t": "TASK", "routed_o": 200,
         "payload_fn": _set_active_map_payload,
     },
-    # LOCK_BOT — apk opcode 12 ("lockBot"). Distinct from LOCK_BOT_TOGGLE
-    # (which toggles CHILD_LOCK = CFG.CLS). ioBroker.dreame v0.3.7 wires
-    # this as a discrete action; semantics on g2408 are unverified —
-    # listed in protocol/cfg_action.py docstring as "12=lockBot" per the
-    # apk reference. Live-verify post-deployment.
-    MowerAction.LOCK_BOT: {"siid": 2, "aiid": 50, "routed_o": 12},
-    # GENERATE_3D_MAP — apk opcode 10 with d-payload {idx: <map_index>}.
-    # From ioBroker.dreame v0.3.7 main.js:3474. LIVE-TESTED on g2408
-    # 2026-06-08 (docked-idle): accepted (cloud r=0) but ACCEPTED-BUT-NO-EFFECT
-    # — no new 3dmap OSS object produced; on-demand 3D-map generation is ruled
-    # out (firmware-gated, no app trigger). Button stays _U. See inventory.yaml
-    # op=10 "upload_map/generate_3dmap" verifications.
-    MowerAction.GENERATE_3D_MAP: {
-        "siid": 2, "aiid": 50, "routed_o": 10,
-        "payload_fn": _generate_3d_map_payload,
-    },
+    # LOCK_BOT (routed_o=12) + GENERATE_3D_MAP (routed_o=10) rows DELETED
+    # refactor-v2 P4.2 (R-28, track-5 T5-8): both accepted-but-no-effect on
+    # g2408 (cloud r=0, no runtime effect) — see docs/research/debunked-claims.md
+    # § D9. The buttons that dispatched them were the only callers; deleted with
+    # them.
     # REQUEST_WIFI_MAP (s6.aiid=4 direct MIoT "request fresh wifi map")
     # deleted 2026-07-02 — dead belief; the device generates wifi maps on
     # its own schedule and no production code dispatched this action (the

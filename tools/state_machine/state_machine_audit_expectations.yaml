@@ -283,12 +283,6 @@ sensor.current_activity:
   reboot: required
   note: "Snapshot.current_activity starts at CurrentActivity.IDLE (non-None). Persisted via Store; enum-typed so literal compare doesn't apply."
 
-sensor.data_freshness:
-  holder: other
-  idle: null
-  reboot: unavailable_ok
-  note: "Diagnostic per-field age in seconds. Unknown at cold-start is honest."
-
 sensor.dock_x_mm:
   holder: mower_state
   idle: unavailable
@@ -342,18 +336,6 @@ sensor.integration_version:
   idle: "1.0.0"
   reboot: unavailable_ok
   note: "Synthetic placeholder in audit harness returns literal '1.0.0' (real entity reads manifest.json on disk; always available)."
-
-sensor.language_text_idx:
-  holder: mower_state
-  idle: unavailable
-  reboot: unavailable_ok
-  note: "Device identity / CFG-backed setting; populated once on first cloud poll."
-
-sensor.language_voice_idx:
-  holder: mower_state
-  idle: unavailable
-  reboot: unavailable_ok
-  note: "Device identity / CFG-backed setting; populated once on first cloud poll."
 
 sensor.last_notification:
   holder: other
@@ -420,12 +402,6 @@ sensor.timezone:
   idle: unavailable
   reboot: unavailable_ok
   note: "CFG.TIME IANA timezone name; populated once on first cloud poll."
-
-sensor.mqtt_age_s:
-  holder: snapshot
-  idle: null
-  reboot: unavailable_ok
-  note: "Seconds since snapshot.last_heartbeat_unix. None until first heartbeat. Numeric counterpart to sensor.mqtt_connectivity (which is the ONLINE/STALE enum view)."
 
 sensor.mqtt_connectivity:
   holder: snapshot

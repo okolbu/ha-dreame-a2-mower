@@ -87,8 +87,11 @@ def test_observe_can_reference_describe_error_helper():
     )
 
 
-def test_observe_can_reference_freshness_helper():
-    src = "lambda coord: _freshness_value(coord)"
+def test_observe_can_reference_api_endpoints_helper():
+    # (was test_observe_can_reference_freshness_helper; _freshness_value was
+    # deleted with sensor.data_freshness in refactor-v2 P4.2 — this now pins the
+    # same eval-globals mechanism against a surviving private helper.)
+    src = "lambda coord: _api_endpoints_value(coord)"
     val, exc = observe_cold_value(src)
     assert exc is None or not isinstance(exc, NameError), (
         f"expected no NameError, got {type(exc).__name__}: {exc}"

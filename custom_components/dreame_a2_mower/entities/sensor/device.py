@@ -9,7 +9,6 @@ entity classes, and module-level helpers used exclusively by device sensors.
 from __future__ import annotations
 
 import json
-import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -245,23 +244,6 @@ def _api_endpoints_attrs(coord) -> dict[str, list[str]]:
     }
 
 
-def _freshness_value(coord) -> int | None:
-    """Age in seconds of the oldest tracked field, or None if nothing
-    has been stamped yet."""
-    snap = coord.freshness.snapshot()
-    if not snap:
-        return None
-    now = int(time.time())
-    return now - min(snap.values())
-
-
-def _freshness_attrs(coord) -> dict[str, int]:
-    """Per-field age in seconds, keyed as ``{field}_age_s``."""
-    snap = coord.freshness.snapshot()
-    now = int(time.time())
-    return {f"{name}_age_s": now - ts for name, ts in snap.items()}
-
-
 def _mpos_value(coord) -> str | None:
     """Format the raw MPOS x/y/yaw triple as a string, or None if any field is absent."""
     s = coord.data
@@ -321,19 +303,6 @@ def _obstacle_marker_attrs(coord) -> dict:
         ],
         "archived_count": len(log_entries),
     }
-
-
-def _mqtt_age_value(coord) -> int | None:
-    """Seconds since the last MQTT heartbeat from the device, or None if
-    none has arrived yet. Reads the canonical `snapshot.last_heartbeat_unix`
-    that the state machine stamps on every s1p1 push — same source the
-    snapshot's `mqtt_connectivity` enum derives from. Pair with
-    `binary_sensor.cloud_connected` (which is the ONLINE/STALE binary view)."""
-    snap = coord.state_machine.snapshot()
-    last = snap.last_heartbeat_unix
-    if last is None:
-        return None
-    return int(time.time()) - int(last)
 
 
 # Schedule label helpers — module-level so tests / dashboard templates
@@ -556,20 +525,10 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         availability_source="cloud",
         value_fn=lambda s: s.last_settings_change_unix,
     ),
-    DreameA2SensorEntityDescription(
-        key="language_text_idx",
-        name="Language text index",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        availability_source="cloud",
-        value_fn=lambda s: s.language_text_idx,
-    ),
-    DreameA2SensorEntityDescription(
-        key="language_voice_idx",
-        name="Language voice index",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        availability_source="cloud",
-        value_fn=lambda s: s.language_voice_idx,
-    ),
+    # language_text_idx + language_voice_idx index sensors DELETED refactor-v2
+    # P4.2 (R-46, track-5 T5-6): redundant with the writable select.lcd_language
+    # / select.voice_language (the language surface). The MowerState.language_text_idx
+    # / _voice_idx fields stay — the selects read them.
 
     # ------ v1.0.0a11: raw protocol diagnostic sensors per spec §5.6 ------
     DreameA2SensorEntityDescription(
@@ -934,28 +893,10 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
             ],
         },
     ),
-    DreameA2DiagnosticSensorEntityDescription(
-        key="data_freshness",
-        translation_key="data_freshness",
-        native_unit_of_measurement="s",
-        icon="mdi:clock-alert-outline",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=_freshness_value,
-        extra_state_attributes_fn=_freshness_attrs,
-    ),
-    # 2026-05-26: time since last MQTT push from the device. Underlying
-    # signal for binary_sensor.cloud_connected; also lets dashboards
-    # template freshness directly.
-    DreameA2DiagnosticSensorEntityDescription(
-        key="mqtt_age_s",
-        translation_key="mqtt_age_s",
-        native_unit_of_measurement="s",
-        icon="mdi:lan-pending",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
-        value_fn=_mqtt_age_value,
-    ),
+    # data_freshness + mqtt_age_s staleness sensors DELETED refactor-v2 P4.2
+    # (R-51, track-5 T5-7): near-duplicates of sensor.mqtt_connectivity (the
+    # ONLINE/STALE enum), which is the ONE surviving staleness entity. Folding
+    # a numeric age_s attribute onto mqtt_connectivity is deferred to P4.3.
     DreameA2DiagnosticSensorEntityDescription(
         key="api_endpoints_supported",
         translation_key="api_endpoints_supported",

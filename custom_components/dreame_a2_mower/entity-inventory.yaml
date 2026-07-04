@@ -1832,8 +1832,6 @@ entities:
                                  § MIHIS)
         active_selection       — derived from MowerState.action_mode + zones/spots
         last_settings_change_unix — MowerState.last_settings_change_unix (s2p51)
-        language_text_idx      — MowerState.language_text_idx (LANG)
-        language_voice_idx     — MowerState.language_voice_idx (LANG)
         s5p104_raw             — MowerState.s5p104_raw (s5.104 raw)
         s5p105_raw             — MowerState.s5p105_raw (s5.105 raw)
         s5p106_raw             — MowerState.s5p106_raw (s5.106 raw)
@@ -2547,31 +2545,10 @@ entities:
       MowerState.rain_protection_enabled to preserve the enabled bit when only
       the hours field changes.
 
-  - id: "select.dreame_a2_mower_language"
-    platform: select
-    control_mode: read_only_noop
-    class: "DreameA2SettingSelect"
-    class_file: "custom_components/dreame_a2_mower/entities/select/global_.py"
-    device: parent
-    source:
-      wire: "LANG"
-      state_path: "coordinator.data.language_code (MowerState field: 'text=N,voice=M' raw string)"
-    write_path: "none (cfg_key intentionally omitted; read-only diagnostic)"
-    status:
-      seen_working: false
-      last_verified: "2026-06-04"
-    verifications:
-      - date: "2026-06-04"
-        status: presumed
-        claim: "Raw diagnostic entity (key='language') in SETTING_SELECTS; reads language_code as 'text=N,voice=M' string; cfg_key=None so no write path. EntityCategory.DIAGNOSTIC."
-        evidence: "select_global.py:372-380 (language descriptor with cfg_key omitted)"
-    references:
-      wire_entry: "LANG"
-      code: "custom_components/dreame_a2_mower/select_global.py:439"
-    notes: |
-      Raw diagnostic for the full LANG CFG value ("text=N,voice=M" string).
-      EntityCategory.DIAGNOSTIC; cfg_key omitted intentionally. Use lcd_language
-      or voice_language for the human-readable selects.
+  # select.dreame_a2_mower_language (read_only_noop "Language (raw)") DELETED
+  # refactor-v2 P4.2 (R-46, track-5 T5-6): redundant with the writable
+  # lcd_language / voice_language selects below. See
+  # /data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/inventory-history/.
 
   - id: "select.dreame_a2_mower_lcd_language"
     platform: select
@@ -3005,8 +2982,6 @@ entities:
         task_state_code        — coord.state_machine.snapshot().task_state_code (s2p56)
         slam_task_label        — coord.state_machine.snapshot().slam_task_label (s2p65)
         novel_observations     — coord.novel_registry.snapshot().count
-        data_freshness         — age of oldest freshness-tracked field in seconds
-        mqtt_age_s             — seconds since last s1p1 heartbeat
         api_endpoints_supported — count of accepted API endpoints from cloud.endpoint_log
         hardware_serial        — coord.data.hardware_serial (CFG.DEV.sn)
         firmware_version_dev   — coord.data.firmware_version (CFG.DEV.fw)
@@ -4496,70 +4471,15 @@ entities:
       path uses s2a50 with routed_o=9 (findBot opcode per cfg_action.py:182).
       No state change echoed on /status/ after the beep.
 
-  - id: "button.dreame_a2_mower_lock_bot"
-    platform: button
-    control_mode: read_only_noop
-    class: "DreameA2LockBotButton"
-    class_file: "custom_components/dreame_a2_mower/button.py:189"
-    device: parent
-    source:
-      wire: "none (fire-and-forget action)"
-      state_path: "n/a — button entity has no state"
-    write_path: "coordinator.dispatch_action(MowerAction.LOCK_BOT, {}) — wire: s2a50 with routed_o=12 (lockBot opcode)"
-    status:
-      seen_working: false
-      last_verified: "2026-05-31"
-    verifications:
-      - date: "2026-05-31"
-        status: presumed
-        claim: "Ported from code 2026-05-31: async_press dispatches MowerAction.LOCK_BOT (siid=2, aiid=50, routed_o=12). DIAGNOSTIC entity_category. Semantics on g2408 not fully confirmed; op=12 is accepted-but-no-effect per live incident. Read from button.py:189-204; not re-confirmed live."
-        evidence: "button.py:199 (_attr_entity_category = EntityCategory.DIAGNOSTIC); button.py:203 (_action = MowerAction.LOCK_BOT); mower/actions.py:237 (LOCK_BOT: siid=2, aiid=50, routed_o=12)"
-      - date: "2026-06-14"
-        status: verified
-        claim: "Reclassed control_mode device_write_unproven -> read_only_noop (Phase 2.1c): op=12 is accepted-but-no-effect on g2408 (lock_robot-op12 incident, retry n=2 clean). The button is now honestly padlocked as a no-op (read_only=True, provisional=False)."
-        evidence: "memory:lock_robot_op12_incident; control_honesty.py button.dreame_a2_mower_lock_bot = _N"
-    references:
-      wire_entry: "o12"
-      code: "custom_components/dreame_a2_mower/button.py:189"
-    notes: |
-      DIAGNOSTIC entity (hidden from default view). Distinct from
-      switch.child_lock (LOCK_BOT_TOGGLE = CFG.CLS property write).
-      op=12 ("lockBot") per ioBroker.dreame v0.3.7 and apk §Actions.
-      Live incident confirmed op=12 is ACCEPTED by the device firmware
-      on g2408 but has no observable runtime effect (see memory
-      lock_robot_op12_incident). Wire: s2a50 routed_o=12.
-
-  - id: "button.dreame_a2_mower_generate_3dmap"
-    platform: button
-    control_mode: read_only_noop
-    class: "DreameA2Generate3DMapButton"
-    class_file: "custom_components/dreame_a2_mower/button.py:206"
-    device: parent
-    source:
-      wire: "none (fire-and-forget action)"
-      state_path: "n/a — button entity has no state"
-    write_path: "coordinator.dispatch_action(MowerAction.GENERATE_3D_MAP, {}) — wire: s2a50 with routed_o=10, d={idx:0} (fast-mapping / 3D-map opcode)"
-    status:
-      seen_working: false
-      last_verified: "2026-05-31"
-    verifications:
-      - date: "2026-05-31"
-        status: presumed
-        claim: "Ported from code 2026-05-31: async_press dispatches MowerAction.GENERATE_3D_MAP (siid=2, aiid=50, routed_o=10, d={idx:0}). DIAGNOSTIC entity_category. Long-running on mower side; progress on s2p54 ('3dmap-progress'). Untested on g2408. Read from button.py:206-220."
-        evidence: "button.py:214 (_attr_entity_category = EntityCategory.DIAGNOSTIC); button.py:219 (_action = MowerAction.GENERATE_3D_MAP); mower/actions.py:243-245 (GENERATE_3D_MAP: siid=2, aiid=50, routed_o=10, payload_fn=_generate_3d_map_payload)"
-      - date: "2026-06-14"
-        status: verified
-        claim: "Reclassed control_mode device_write_unproven -> read_only_noop (Phase 2.1c): op=10 live-tested docked-idle 2026-06-08 is accepted (cloud r=0) but produces no 3dmap OSS object — accepted-but-no-effect. The button is now honestly padlocked as a no-op (read_only=True, provisional=False)."
-        evidence: "button.py DreameA2Generate3DMapButton docstring (live-tested 2026-06-08); control_honesty.py button.dreame_a2_mower_generate_3dmap = _N"
-    references:
-      wire_entry: "o10"
-      code: "custom_components/dreame_a2_mower/button.py:206"
-    notes: |
-      DIAGNOSTIC entity. Triggers on-device LIDAR 3D map render (fast-mapping
-      opcode). Wire: s2a50 routed_o=10 with d-payload {idx:0} (primary map).
-      Long-running — progress published on s2p54 ("3dmap-progress") and final
-      URL on the LIDAR file slot. Wire format from ioBroker.dreame v0.3.7
-      main.js:3474. Untested on g2408 — added for live verification.
+  # button.dreame_a2_mower_lock_bot (op=12) + button.dreame_a2_mower_generate_3dmap
+  # (op=10) DELETED refactor-v2 P4.2 (R-28, track-5 T5-8): both were
+  # read_only_noop — accepted-but-no-effect on g2408 (cloud r=0, no runtime
+  # effect). See docs/research/debunked-claims.md § D9. The spec's experimental
+  # gate is for wire-verified/unexercised features; a confirmed no-effect command
+  # is deleted, not gated. The op=12/op=10 ACTION_TABLE rows + the
+  # _generate_3d_map_payload helper were removed with them (mower/actions.py).
+  # Full superseded rows archived in
+  # /data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/inventory-history/.
 
   # ------------------------------------------------------------------
   # State-machine diagnostic sensors (sensor_device.py — _SnapshotEnumSensorBase)

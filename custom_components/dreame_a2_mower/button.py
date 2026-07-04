@@ -51,8 +51,6 @@ async def async_setup_entry(
         DreameA2CancelDockReturnButton(coordinator),
         DreameA2UpdateStationLocationButton(coordinator),
         DreameA2FindBotButton(coordinator),
-        DreameA2LockBotButton(coordinator),
-        DreameA2Generate3DMapButton(coordinator),
         DreameA2FinalizeSessionButton(coordinator),
         DreameA2RefreshCloudStateButton(coordinator),
         DreameA2RefreshMposButton(coordinator),
@@ -235,45 +233,12 @@ class DreameA2FindBotButton(_DreameA2ActionButton):
         self._action = MowerAction.FIND_BOT
 
 
-class DreameA2LockBotButton(_DreameA2ActionButton):
-    """Lock the mower (apk opcode 12 "lockBot") — distinct from CHILD_LOCK.
-
-    Where CHILD_LOCK (the toggle in switch.child_lock) flips the CFG.CLS
-    flag, this is the discrete "lockBot" action documented in apk
-    §"Actions" (op=12) and used by ioBroker.dreame v0.3.7 as a separate
-    button. CONFIRMED accepted-but-no-effect on g2408: the firmware accepts
-    op=12 (cloud r=0) but it has no observable runtime effect (lock_robot-op12
-    incident; retry n=2 clean). Control-mode ``_N`` (READ_ONLY_NOOP) — honestly
-    padlocked as a no-op. Same class as generate_3dmap op=10.
-    """
-
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator, "lock_bot", "Lock robot", "mdi:lock")
-        self._action = MowerAction.LOCK_BOT
-
-
-class DreameA2Generate3DMapButton(_DreameA2ActionButton):
-    """Fire apk opcode 10 (``{m:'a', p:0, o:10, d:{idx:0}}``, ioBroker.dreame
-    v0.3.7 main.js:3474).
-
-    LIVE-TESTED on g2408 2026-06-08 (docked-idle): the device ACCEPTS op=10
-    (cloud r=0) but it is ACCEPTED-BUT-NO-EFFECT — no new 3dmap OSS object is
-    produced and on-demand 3D-map generation is ruled out (the render is
-    firmware-gated on internal map-change conditions; the Dreame app has no
-    "generate map" trigger either). Same class as lock_robot op=12. The button
-    is therefore control-mode ``_N`` (READ_ONLY_NOOP): it sends a real,
-    accepted command that has a CONFIRMED no observable effect on this firmware
-    — honestly padlocked as a no-op.
-    See inventory.yaml op=10 "upload_map/generate_3dmap" verifications.
-    """
-
-    _attr_entity_category = EntityCategory.DIAGNOSTIC
-
-    def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
-        super().__init__(coordinator, "generate_3dmap", "Generate 3D map", "mdi:cube-outline")
-        self._action = MowerAction.GENERATE_3D_MAP
+# lock_robot (op=12) and generate_3d_map (op=10) buttons DELETED in refactor-v2
+# P4.2 (R-28, track-5 T5-8): both were accepted-but-no-effect on g2408 (cloud
+# r=0, no runtime effect) — see docs/research/debunked-claims.md § D9. The spec's
+# experimental gate is for wire-verified/unexercised features; a confirmed
+# no-effect command is deleted, not gated. The op=12/op=10 ACTION_TABLE rows +
+# _generate_3d_map_payload were removed with them (mower/actions.py).
 
 
 class DreameA2FinalizeSessionButton(

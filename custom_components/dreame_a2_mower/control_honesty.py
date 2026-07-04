@@ -59,7 +59,6 @@ CONTROL_MODES: dict[str, ControlMode | dict[str, ControlMode]] = {
     # select
     "select.dreame_a2_mower_navigation_path": _W,
     "select.dreame_a2_mower_rain_protection_resume_hours": _W,
-    "select.dreame_a2_mower_language": _N,
     "select.dreame_a2_mower_lcd_language": _W,
     "select.dreame_a2_mower_voice_language": _W,
     "select.dreame_a2_mower_work_log": _L,
@@ -122,8 +121,8 @@ CONTROL_MODES: dict[str, ControlMode | dict[str, ControlMode]] = {
     "button.dreame_a2_mower_cancel_dock_return": _W,
     "button.dreame_a2_mower_update_station_location": _W,
     "button.dreame_a2_mower_find_bot": _W,
-    "button.dreame_a2_mower_lock_bot": _N,
-    "button.dreame_a2_mower_generate_3dmap": _N,
+    # button.lock_bot (_N) + button.generate_3dmap (_N) DELETED refactor-v2 P4.2
+    # (R-28, track-5 T5-8): accepted-but-no-effect on g2408, deleted not gated.
 }
 
 

@@ -24,7 +24,6 @@ if TYPE_CHECKING:
 
 from homeassistant.components.select import SelectEntity, SelectEntityDescription
 from homeassistant.core import callback
-from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -365,28 +364,11 @@ SETTING_SELECTS: tuple[DreameA2SettingsSelectDescription, ...] = (
     ),
 
     # ------------------------------------------------------------------
-    # Read-only: CFG.LANG — language
-    #
-    # LANG on g2408 is list(2) [text_idx, voice_idx], stored as the
-    # string "text=N,voice=M" in MowerState.language_code.
-    # The set of valid text/voice index pairs is firmware-locale-specific
-    # and not enumerable without a device LANG-options query.
-    # The write path (set_cfg("LANG", ...)) is not confirmed on g2408.
-    # Shipped read-only in F4.
-    #
-    # current_option will be the raw "text=N,voice=M" string or None.
-    # options contains the currently-known value so HA doesn't error on
-    # "unknown option"; it is populated dynamically in the entity class.
-    # ------------------------------------------------------------------
-    DreameA2SettingsSelectDescription(
-        key="language",
-        name="Language (raw)",
-        icon="mdi:translate",
-        entity_category=EntityCategory.DIAGNOSTIC,
-        options=[],  # populated dynamically; see DreameA2SettingSelect.options
-        value_fn=lambda s: s.language_code,
-        # cfg_key intentionally omitted — read-only diagnostic
-    ),
+    # Read-only "language (raw)" select (key="language") DELETED refactor-v2 P4.2
+    # (R-46, track-5 T5-6): it was a _N read-only-noop echoing the raw
+    # "text=N,voice=M" string — redundant with the writable lcd_language /
+    # voice_language selects below (the real language surface). The generic
+    # empty-options fallback in DreameA2SettingSelect.options is retained (harmless).
     # ------------------------------------------------------------------
     # Settable: CFG.LANG — text language index (index 0 of LANG list).
     # Wire format verified live 2026-05-09: routed-action s2.50 m='s'

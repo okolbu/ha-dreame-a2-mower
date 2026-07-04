@@ -295,9 +295,6 @@
       "novel_observations": {
         "name": "Novel observations"
       },
-      "data_freshness": {
-        "name": "Data freshness"
-      },
       "api_endpoints_supported": {
         "name": "API endpoints supported"
       },
