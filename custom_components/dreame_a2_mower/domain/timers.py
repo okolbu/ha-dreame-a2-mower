@@ -1,12 +1,16 @@
-"""Self-cleaning delayed-timer registry (P2-inherit, refactor-v2 P3.8).
+"""Self-cleaning delayed-timer registry (P2-inherit, refactor-v2 P3.8; relocated
+from ``coordinator/_managed_timers.py`` to the domain layer in P3.9d — its only
+callers are now domain services, so a domain home removes the domain→coordinator
+import edge).
 
 ``async_call_later`` returns a canceller. Routing that canceller straight
 through ``entry.async_on_unload`` (the old T3-8 pattern) never REMOVES it after
-the timer fires, so a hot path that schedules timers on every call — ``edit_map``
-(3 staggered re-fetches per map-edit) and the post-session OSS gallery refresh
-(one per finalize) — grows the config-entry's unload-listener list without
-bound over the entry's lifetime. The P2.8 final review flagged this as a new
-listener-growth class.
+the timer fires, so a hot path that schedules timers on every call —
+``domain/writes/map_edit.py:edit_map`` (3 staggered re-fetches per map-edit) and
+the post-session OSS gallery refresh in ``domain/media/gallery.py`` (one per
+finalize) — grows the config-entry's unload-listener list without bound over the
+entry's lifetime. The P2.8 final review flagged this as a new listener-growth
+class.
 
 ``schedule_self_cleaning`` fixes it with a bounded per-owner registry:
 

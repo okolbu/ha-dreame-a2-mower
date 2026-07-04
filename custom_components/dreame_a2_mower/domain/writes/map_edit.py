@@ -19,7 +19,7 @@ from homeassistant.helpers.event import async_call_later
 
 from ...const import LOGGER
 from ...cloud_client import WriteResult
-from ...coordinator._managed_timers import schedule_self_cleaning
+from ..timers import schedule_self_cleaning
 
 from .service import _accepted
 
@@ -81,7 +81,7 @@ async def edit_map(
     # window cancels them (never firing a refresh into a torn-down
     # coordinator) AND the config-entry's unload-listener list does not grow
     # by 3 on every edit_map call — one unload hook cancels all outstanding
-    # timers, and each timer removes itself on fire. See _managed_timers.
+    # timers, and each timer removes itself on fire. See domain/timers.py.
     for delay in (8, 20, 40):
         schedule_self_cleaning(
             coord,

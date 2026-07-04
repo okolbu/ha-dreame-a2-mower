@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Any
 
 # Kept module-level so a test monkeypatch of ``_lidar_oss.async_call_later`` still
 # intercepts: ``_schedule_post_session_gallery_refresh`` passes THIS binding into
-# the domain gallery function (the _managed_timers "callers pass their own
+# the domain gallery function (the domain/timers.py "callers pass their own
 # async_call_later" convention). Also kept: ``photo_meta`` — test_oss_gallery_sync
 # patches ``L.photo_meta.parse_jpeg_com`` (same module object the gallery uses).
 from homeassistant.helpers.event import async_call_later  # noqa: F401

@@ -20,7 +20,7 @@ from ..domain import notifications as _notif
 # established test monkeypatch — ``monkeypatch.setattr(_notifications,
 # "_FETCH_DELAY_S", 0)`` — still applies: the resolver delegator reads THIS
 # binding and passes it into the domain function (the "caller passes its own
-# module-local reference" convention shared with _managed_timers).
+# module-local reference" convention shared with domain/timers.py).
 _FETCH_DELAY_S: float = 10.0
 
 # Back-compat re-exports — tests import these pure helpers from their old

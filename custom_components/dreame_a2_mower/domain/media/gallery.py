@@ -8,7 +8,7 @@ from __future__ import annotations
 from datetime import timedelta
 from typing import Any
 
-from ...coordinator._managed_timers import schedule_self_cleaning
+from ..timers import schedule_self_cleaning
 from ...const import LOGGER
 from ...protocol import photo_meta
 from ...protocol.photo_category import categorize
@@ -106,7 +106,7 @@ def schedule_post_session_gallery_refresh(coord, async_call_later) -> None:
     ``async_call_later`` is passed IN by the coordinator delegator (its own
     module-local binding) so a test monkeypatch of
     ``coordinator._lidar_oss.async_call_later`` still intercepts — the
-    ``_managed_timers`` "callers pass their own async_call_later" convention.
+    ``timers`` "callers pass their own async_call_later" convention.
     """
     hass = getattr(coord, "hass", None)
     if hass is None:
@@ -122,7 +122,7 @@ def schedule_post_session_gallery_refresh(coord, async_call_later) -> None:
     # registry so a reload/unload within the delay window cancels this
     # one-shot AND the config-entry's unload-listener list does not grow by
     # one on every finalize — the timer self-removes on fire and a single
-    # unload hook cancels all outstanding timers. See _managed_timers.
+    # unload hook cancels all outstanding timers. See domain/timers.py.
     schedule_self_cleaning(
         coord, async_call_later, _POST_SESSION_GALLERY_DELAY_S, _run
     )
