@@ -62,6 +62,7 @@ def _make_coord(*, action_mode=ActionMode.ALL_AREAS, md5="md5-aaa"):
     coord._base_png_mode = None
     coord._base_png_md5 = None
     coord._base_png_marker_fp = None
+    coord._base_png_direction = None
     coord._obstacle_markers = []
     coord._editor_base_png = None
     coord._active_map_base_png = None
