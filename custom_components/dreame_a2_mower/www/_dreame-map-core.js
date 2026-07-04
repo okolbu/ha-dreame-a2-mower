@@ -2,9 +2,7 @@
 //
 // Pure projection / icon-rotation math used by both the live-map card and the
 // replay card. This file is an ES module (`export function`), so it can only be
-// loaded with type="module"; a plain <script src> would throw a SyntaxError. It
-// is ALSO attached to window.DreameMapCore so other ES module cards that load it
-// as a side-effect import can reach the same functions without a named import.
+// loaded with type="module"; a plain <script src> would throw a SyntaxError.
 // Both cards now import `projectPoint` directly from here — there is no longer a
 // duplicate projection implementation anywhere.
 //
@@ -226,19 +224,5 @@ export function attachDetectionOverlay(wrap, img, detections) {
   if (img.complete && img.naturalWidth) build();
   else img.addEventListener("load", build, { once: true });
 }
-
-if (typeof window !== "undefined") {
-  window.DreameMapCore = {
-    projectPoint,
-    iconRotation,
-    gapBreakIndices,
-    trailPathD,
-    buildMowerIconSvg,
-    ICON_ART_FORWARD_DEG,
-    rssiToRgb,
-    WIFI_STRONGEST,
-    WIFI_WEAKEST,
-    detectionLabel,
-    attachDetectionOverlay,
-  };
-}
+// T6-12: the dead `window.DreameMapCore` global attach was removed here — all
+// three consumer cards use named ES imports; nothing ever read the global.
