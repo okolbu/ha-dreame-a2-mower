@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.dreame_a2_mower.cloud_client import WriteResult
-from custom_components.dreame_a2_mower.coordinator import _writes as _writes_mod
+from custom_components.dreame_a2_mower.domain.writes import map_edit as _map_edit_mod
 from custom_components.dreame_a2_mower.coordinator._writes import _WritesMixin
 
 _ACCEPTED = WriteResult(delivered=True, accepted=True, code=0)
@@ -52,7 +52,9 @@ def _capture_async_call_later(monkeypatch):
         scheduled.append((delay, cb))
         return lambda: None  # canceller
 
-    monkeypatch.setattr(_writes_mod, "async_call_later", _fake)
+    # P3.9b: edit_map moved to domain.writes.map_edit; it schedules the
+    # staggered re-fetches via that module's own async_call_later.
+    monkeypatch.setattr(_map_edit_mod, "async_call_later", _fake)
     return scheduled
 
 

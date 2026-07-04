@@ -49,7 +49,7 @@ def _make_coord(rows, version=0):
 
 @pytest.mark.asyncio
 async def test_write_schedule_writes_only_changed_slot_via_device_plane(monkeypatch):
-    import custom_components.dreame_a2_mower.coordinator._writes as W
+    import custom_components.dreame_a2_mower.domain.writes.schedule as W
 
     rows = [[0, 1, "Spr", "OLD"], [1, 0, "Aut", ""]]
     new_plan = SchedulePlan(
@@ -86,7 +86,7 @@ async def test_write_schedule_escapes_ampersand_name(monkeypatch):
     (no perpetual rewrite / double-escape drift), and a real write sends the
     escaped form.
     """
-    import custom_components.dreame_a2_mower.coordinator._writes as W
+    import custom_components.dreame_a2_mower.domain.writes.schedule as W
     from custom_components.dreame_a2_mower.protocol.schedule_encode import (
         encode_schedule_blob,
     )
@@ -135,7 +135,7 @@ async def test_write_schedule_escapes_ampersand_name(monkeypatch):
 @pytest.mark.asyncio
 async def test_write_schedule_skips_unchanged_slot(monkeypatch):
     """A slot whose re-encoded blob AND name match the authoritative row is skipped."""
-    import custom_components.dreame_a2_mower.coordinator._writes as W
+    import custom_components.dreame_a2_mower.domain.writes.schedule as W
     from custom_components.dreame_a2_mower.protocol.schedule_encode import (
         encode_schedule_blob,
     )
@@ -165,7 +165,7 @@ async def test_write_schedule_preserves_other_season_enabled(monkeypatch):
     """Editing slot 1's plans while slot 1 is the active season must NOT flip
     the active season: SCHDSV3 s must be [slot0_enabled, slot1_enabled], not
     [thisslot_enabled, 0]."""
-    import custom_components.dreame_a2_mower.coordinator._writes as W
+    import custom_components.dreame_a2_mower.domain.writes.schedule as W
     from custom_components.dreame_a2_mower.protocol.schedule_encode import (
         encode_schedule_blob,
     )
@@ -216,7 +216,7 @@ def _make_toggle_coord(rows, version):
 
 @pytest.mark.asyncio
 async def test_write_schedule_enabled_enable_makes_sole_active(monkeypatch):
-    import custom_components.dreame_a2_mower.coordinator._writes as W
+    import custom_components.dreame_a2_mower.domain.writes.schedule as W
     rows = [[0, 1, "Spr", "B"], [1, 0, "Win", "B"]]  # Spr on
     c, captured, write_enabled, read_live = _make_toggle_coord(rows, version=99)
     monkeypatch.setattr(W, "write_schedule_enabled_state", write_enabled, raising=False)
@@ -231,7 +231,7 @@ async def test_write_schedule_enabled_enable_makes_sole_active(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_write_schedule_enabled_disable_zeroes_slot(monkeypatch):
-    import custom_components.dreame_a2_mower.coordinator._writes as W
+    import custom_components.dreame_a2_mower.domain.writes.schedule as W
     rows = [[0, 0, "Spr", "B"], [1, 1, "Win", "B"]]  # Win on
     c, captured, write_enabled, read_live = _make_toggle_coord(rows, version=42)
     monkeypatch.setattr(W, "write_schedule_enabled_state", write_enabled, raising=False)
@@ -248,7 +248,7 @@ async def test_write_schedule_enabled_falls_back_to_cloud_state_when_live_none(m
     """When the live read is unavailable, the toggle uses cloud_state.schedule
     (version + per-slot mode). Disabling slot 0 while slot 1 is on must preserve
     slot 1 (proves the fallback reads each slot's mode, not [0,0])."""
-    import custom_components.dreame_a2_mower.coordinator._writes as W
+    import custom_components.dreame_a2_mower.domain.writes.schedule as W
     from custom_components.dreame_a2_mower.coordinator._writes import _WritesMixin
 
     captured = {"enabled_writes": []}
