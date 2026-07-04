@@ -224,14 +224,22 @@ class _WritersMixin:
             _LOGGER.warning("set_pre failed: %s", ex)
             return WriteResult.not_delivered(str(ex))
 
-    def trigger_firmware_update(self) -> bool:
+    def trigger_firmware_update(self) -> WriteResult:
         """"Update now" trigger — POST iotuserbind/manualFirmwareUpdate.
 
-        Returns the INNER ``data.success`` — the device's own verdict. The
-        outer ``success`` only means the API received the call; ``False`` here
-        means the device refused (weak WiFi / not charging — gated
-        device-side). Returns ``False`` on None / non-dict / missing-field /
-        transport error.
+        Returns a :class:`WriteResult` (P3.5 — was a bool; given WriteResult on
+        the way to domain/writes per the P2-inherit OTA-honesty note). Its
+        ``accepted`` mirrors the device's own verdict — the INNER
+        ``data.success``. The outer ``success`` only means the API received the
+        call; ``accepted=False`` (with ``delivered=True``) means the device
+        refused (weak WiFi / not charging — gated device-side). A None /
+        non-dict / missing-field / transport error is a NOT-delivered
+        WriteResult (the mower never heard the command).
+
+        ``WriteResult.__bool__`` is tied to ``accepted``, so the existing
+        ``bool(...)`` caller (``coordinator.async_trigger_firmware_update``)
+        keeps the identical pre-WriteResult truthiness — refused OR
+        not-delivered both read falsy, delivered+accepted reads truthy.
 
         Auth: Dreame-Auth bearer (via ``request()``), no ``sign`` (see
         ``_ota.fetch_ota_version``). Body carries ``did``, ``uid``, and a
@@ -252,10 +260,15 @@ class _WritersMixin:
             )
         except Exception as ex:  # noqa: BLE001 — defensive
             _LOGGER.warning("trigger_firmware_update: %s", ex)
-            return False
+            return WriteResult.not_delivered(str(ex))
         if not isinstance(resp, dict):
-            return False
+            return WriteResult.not_delivered("unexpected response shape")
         data = resp.get("data")
         if not isinstance(data, dict):
-            return False
-        return bool(data.get("success"))
+            return WriteResult.not_delivered("no `data` field in response")
+        if bool(data.get("success")):
+            return WriteResult(delivered=True, accepted=True, code=0)
+        return WriteResult(
+            delivered=True, accepted=False, code=None,
+            msg="device refused OTA (weak WiFi / not charging — gated device-side)",
+        )

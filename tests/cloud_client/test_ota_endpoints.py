@@ -111,8 +111,12 @@ def test_fetch_ota_version_none_on_exception():
 # --------------------------------------------------------------------------
 
 def test_trigger_returns_inner_success_true():
+    # P3.5: trigger_firmware_update now returns a WriteResult; `.accepted`
+    # mirrors the device's INNER data.success (bool(result) == accepted too).
     c = _FakeClient({"success": True, "data": {"success": True}})
-    assert c.trigger_firmware_update() is True
+    res = c.trigger_firmware_update()
+    assert res.accepted is True
+    assert res.delivered is True
     assert "manualFirmwareUpdate" in c.last_url
     body = _parse_body(c.last_body)
     assert "sign" not in body
@@ -123,17 +127,22 @@ def test_trigger_returns_inner_success_true():
 
 def test_trigger_false_when_inner_false_even_if_outer_true():
     # Outer success only means the API received the call; the device's verdict
-    # is the INNER data.success. Device refused (weak WiFi / not charging).
+    # is the INNER data.success. Device refused (weak WiFi / not charging):
+    # delivered but not accepted.
     c = _FakeClient({"success": True, "data": {"success": False}})
-    assert c.trigger_firmware_update() is False
+    res = c.trigger_firmware_update()
+    assert res.accepted is False
+    assert res.delivered is True
 
 
 def test_trigger_false_on_none_and_garbage():
-    assert _FakeClient(None).trigger_firmware_update() is False
-    assert _FakeClient("not-a-dict").trigger_firmware_update() is False
-    assert _FakeClient({"data": {}}).trigger_firmware_update() is False
-    assert _FakeClient({"no_data": 1}).trigger_firmware_update() is False
+    # None / non-dict / missing-field → NOT delivered (the mower never heard it).
+    assert _FakeClient(None).trigger_firmware_update().accepted is False
+    assert _FakeClient("not-a-dict").trigger_firmware_update().accepted is False
+    assert _FakeClient({"data": {}}).trigger_firmware_update().accepted is False
+    assert _FakeClient({"no_data": 1}).trigger_firmware_update().accepted is False
+    assert _FakeClient({"no_data": 1}).trigger_firmware_update().delivered is False
 
 
 def test_trigger_false_on_exception():
-    assert _FakeClient(exc=RuntimeError("boom")).trigger_firmware_update() is False
+    assert _FakeClient(exc=RuntimeError("boom")).trigger_firmware_update().accepted is False
