@@ -51,7 +51,16 @@ jobs:
             # inventory.yaml § api_endpoints). Generic transport (_rpc/_auth/_batch)
             # is intentionally excluded. Added after the getDeiviceFile drift, where
             # a new endpoint shipped in _file_bridge.py with no inventory entry.
-            'custom_components/dreame_a2_mower/cloud_client/_fetchers.py'
+            # The former single _fetchers.py was split into per-family mixins
+            # (P3.5 transport split); _fetchers.py is now a back-compat shim with
+            # NO endpoints, so the watch list follows the endpoints into the
+            # family files.
+            'custom_components/dreame_a2_mower/cloud_client/_state_fetch.py'
+            'custom_components/dreame_a2_mower/cloud_client/_device_fetch.py'
+            'custom_components/dreame_a2_mower/cloud_client/_messages.py'
+            'custom_components/dreame_a2_mower/cloud_client/_media.py'
+            'custom_components/dreame_a2_mower/cloud_client/_ota.py'
+            'custom_components/dreame_a2_mower/cloud_client/_writers.py'
             'custom_components/dreame_a2_mower/cloud_client/_file_bridge.py'
           )
           # Entity platform files. coordinator.py intentionally absent.

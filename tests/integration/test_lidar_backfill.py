@@ -103,12 +103,28 @@ def test_no_op_when_active_map_unknown(tmp_path: Path):
 
 def test_refresh_cloud_state_runs_the_backfill():
     """_refresh_cloud_state awaits the backfill (after the active map is set)."""
-    new_state = MagicMock()
-    new_state.mapl = [[0, 1, 0, 0, 0]]
+    import dataclasses
+
+    from custom_components.dreame_a2_mower.cloud_state import (
+        CloudState,
+        ScheduleData,
+        SettingsRoot,
+    )
+
+    # P3.5: fetch_full_cloud_state returns PARTS; _refresh_cloud_state composes
+    # CloudState(**parts). Mock the executor call to return the parts dict.
+    _cs = CloudState(
+        cfg={}, maps_by_id={}, mow_paths_by_map_id={},
+        settings=SettingsRoot(raw=[], by_map_id_canonical={}),
+        schedule=ScheduleData(version=0, slots=()), ai_human_enabled=None,
+        forbidden_node_types_by_map={}, ota_status=None, task_id=0, props={},
+        mapl=[[0, 1, 0, 0, 0]], mihis={}, fetched_at_unix=0,
+    )
+    parts = {f.name: getattr(_cs, f.name) for f in dataclasses.fields(_cs)}
     coord = MagicMock()
     coord._cloud = MagicMock()
     coord.hass = MagicMock()
-    coord.hass.async_add_executor_job = AsyncMock(return_value=new_state)
+    coord.hass.async_add_executor_job = AsyncMock(return_value=parts)
     coord._apply_mapl = MagicMock()
     coord._render_maps_from_cloud_state = AsyncMock()
     coord._sync_map_subdevices = MagicMock()

@@ -438,7 +438,13 @@ the submodule whose concern it matches:
 | `_rpc.py` | `_RpcMixin`: transport/RPC — `send`, `request`, `action`, `routed_action`, `send_async`, `action_async`, `get_properties`, `set_property`, `set_properties`, `_api_call`, `_api_call_async`, `get_api_url` |
 | `_oss.py` | `_OssMixin`: OSS signed-URL fetch (`get_interim_file_url`, `get_file_url`), WiFi heatmap listing (`list_wifi_candidates`), raw file download (`get_file`) |
 | `_batch.py` | `_BatchMixin`: batch device-data primitives (`get_batch_device_datas`, `set_batch_device_datas`, `write_chunked_key`, `get_device_data`, `get_device_property`, `get_device_event`) |
-| `_fetchers.py` | `_FetchersMixin`: `fetch_full_cloud_state`, `fetch_cfg`, `fetch_dev`, `fetch_mihis`, `fetch_dock`, `fetch_net`, `fetch_map`, `fetch_mapl`, `set_cfg`, `set_pre` |
+| `_state_fetch.py` | `_StateFetchMixin`: periodic cloud-state family reads — `fetch_cfg`, `fetch_dev`, `fetch_mihis`, `fetch_dock`, `fetch_net`, `fetch_map`, `fetch_mapl`, `get_pre` (PRE read), plus the `fetch_full_cloud_state` orchestrator (returns decoded **parts**, NOT a `CloudState` — composition is the state layer's job, see below) + its per-family `_decode_*` module helpers |
+| `_device_fetch.py` | `_DeviceFetchMixin`: live per-device telemetry — `fetch_gps`, `fetch_remote`, `fetch_4g_remain`, `fetch_mpos`, `fetch_aiobs_markers` |
+| `_messages.py` | `_MessagesMixin`: cloud message stores — `fetch_device_messages`, `fetch_message_record`, `fetch_share_messages` |
+| `_media.py` | `_MediaMixin`: OSS media — `list_oss_media`, `fetch_oss_quota` |
+| `_ota.py` | `_OtaMixin`: `fetch_ota_version` (OTA availability check) |
+| `_writers.py` | `_WritersMixin`: device WRITES — `set_cfg`, `set_pre`, `trigger_firmware_update` (all return `WriteResult`). Staging home from the P3.5 split; P3.8 relocates these to `domain/writes`. |
+| `_fetchers.py` | **Back-compat shim** (P3.5): composes `_FetchersMixin` from the six family mixins above so pre-split test importers keep working. NO endpoints of its own; retired in P3.10. New code imports the specific family mixin. |
 
 ### Rules
 
@@ -455,6 +461,14 @@ the submodule whose concern it matches:
 - The public `DreameA2CloudClient` is assembled and re-exported from
   `cloud_client/__init__.py`. Keep that re-export — callers do
   `from .cloud_client import DreameA2CloudClient`.
+- **Transport never constructs the `CloudState` container (R-31/T2-6).**
+  `fetch_full_cloud_state` returns the decoded PARTS (a dict of `CloudState`
+  kwargs); the `CloudState(**parts)` composition lives at the STATE layer in
+  `coordinator/_cloud_state.py:_refresh_cloud_state` (until P3.6 moves it into
+  `state/`). Do NOT re-import `..cloud_state` into any `cloud_client/*` module —
+  that is an upward transport→state back-edge (it was previously hidden as a
+  function-local import; the split closed it). The `tests/audit/test_layer_imports.py`
+  gate pins `cloud_client` at layer 2 and `cloud_state` at layer 3.
 - Do NOT reintroduce a single `cloud_client.py`. The package is the
   contract.
 

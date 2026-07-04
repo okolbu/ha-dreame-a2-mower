@@ -29,9 +29,11 @@ TESTS_DIR = Path(__file__).resolve().parent.parent
 # bypass class (each mixin is a facet of the same object; a test that skips
 # _WritesMixin.__init__ skips _CoreMixin.__init__ just as much). The mixin
 # names are ENUMERATED, not matched with a generic `_\w+Mixin.__new__`, on
-# purpose: cloud_client's `_FetchersMixin.__new__` (test_messages_refresh.py:16)
-# is an unrelated non-coordinator helper and must NOT be swept in. Source of
-# the roster: grep `class _*Mixin` in custom_components/.../coordinator/.
+# purpose: cloud_client's family mixins (e.g. `_MessagesMixin.__new__` in
+# test_messages_refresh.py — the P3.5 transport split renamed the old
+# `_FetchersMixin`) are unrelated non-coordinator helpers and must NOT be swept
+# in. Source of the roster: grep `class _*Mixin` in
+# custom_components/.../coordinator/.
 _COORD_MIXINS = (
     "_CloudStateMixin",
     "_CoreMixin",
