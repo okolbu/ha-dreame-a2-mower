@@ -24,6 +24,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ..._availability import _FreshnessAvailableMixin
 from ..._devices import _MowerScopedEntity, mower_device_info, mower_unique_id
+from ...const import EXPERIMENTAL_T1_SPECULATIVE
 from ...coordinator import DreameA2MowerCoordinator
 from ...mower import fault_catalog
 from ...mower.error_codes import describe_error
@@ -547,6 +548,10 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     # / _voice_idx fields stay — the selects read them.
 
     # ------ v1.0.0a11: raw protocol diagnostic sensors per spec §5.6 ------
+    # P4.4 (R-52, track-5 T5-9): T1 experimental — undecoded-slot probes. The
+    # gate hides them unless experimental_features is on; promotion = the slot's
+    # decode lands in inventory.yaml (then it becomes a named sensor, not a raw
+    # probe).
     DreameA2SensorEntityDescription(
         key="s5p104_raw",
         name="s5.104 raw",
@@ -554,6 +559,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         entity_registry_enabled_default=False,
         availability_source="mqtt",
         value_fn=lambda s: s.s5p104_raw,
+        experimental=EXPERIMENTAL_T1_SPECULATIVE,
     ),
     DreameA2SensorEntityDescription(
         key="s5p105_raw",
@@ -562,6 +568,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         entity_registry_enabled_default=False,
         availability_source="mqtt",
         value_fn=lambda s: s.s5p105_raw,
+        experimental=EXPERIMENTAL_T1_SPECULATIVE,
     ),
     DreameA2SensorEntityDescription(
         key="s5p106_raw",
@@ -570,6 +577,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         entity_registry_enabled_default=False,
         availability_source="mqtt",
         value_fn=lambda s: s.s5p106_raw,
+        experimental=EXPERIMENTAL_T1_SPECULATIVE,
     ),
     DreameA2SensorEntityDescription(
         key="s5p107_raw",
@@ -578,6 +586,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         entity_registry_enabled_default=False,
         availability_source="mqtt",
         value_fn=lambda s: s.s5p107_raw,
+        experimental=EXPERIMENTAL_T1_SPECULATIVE,
     ),
     DreameA2SensorEntityDescription(
         key="s6p1_raw",
@@ -586,6 +595,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         entity_registry_enabled_default=False,
         availability_source="mqtt",
         value_fn=lambda s: s.s6p1_raw,
+        experimental=EXPERIMENTAL_T1_SPECULATIVE,
     ),
 
     # ------ F5.11.1: session history sensors ------
@@ -915,6 +925,11 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=True,
         availability_source="mqtt",
+        # P4.4 (R-52, track-5 T5-9): T1 experimental — contributor/research
+        # counter of unrecognised wire observations. Promotion = the observed
+        # slots get decoded into inventory (the counter is a research artifact,
+        # not a user surface).
+        experimental=EXPERIMENTAL_T1_SPECULATIVE,
         value_fn=lambda coord: (
             coord.novel_registry.snapshot().count
             if coord.novel_registry.snapshot().count is not None
@@ -943,6 +958,11 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         entity_registry_enabled_default=False,
         value_fn=_api_endpoints_value,
         extra_state_attributes_fn=_api_endpoints_attrs,
+        # P4.4 (R-52, track-5 T5-9): T1 experimental — endpoint-probe artifact
+        # (populated only when the developer discover_cloud_api service has run;
+        # live value 0 = probe never ran). Promotion = the probe becomes a
+        # standing capability read.
+        experimental=EXPERIMENTAL_T1_SPECULATIVE,
     ),
     DreameA2DiagnosticSensorEntityDescription(
         key="hardware_serial",
@@ -1041,6 +1061,10 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         availability_source="cloud",
         value_fn=_mpos_value,
         extra_state_attributes_fn=_mpos_attrs,
+        # P4.4 (R-52, track-5 T5-9): T1 experimental — raw cloud MPOS reading;
+        # frame/units UNVERIFIED (observe-only by design). Promotion = frame +
+        # units confirmed by a physical A/B match (then it can drive position).
+        experimental=EXPERIMENTAL_T1_SPECULATIVE,
     ),
 
     # ------ Phase D: per-type photo + video count sensors ------
