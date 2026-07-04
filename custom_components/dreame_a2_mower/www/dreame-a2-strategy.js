@@ -312,10 +312,22 @@ function _mapSuffix(name, mapId) {
 }
 
 // Determine the stable id prefix (hardware SN / mac:… / entry:…) shared by every
-// integration unique_id. Prefer the parent device identifier; fall back to a
-// `_map_` split, then to the longest common uid prefix.
-function _deriveStable(parentDevId, uids) {
-  if (parentDevId) return parentDevId;
+// integration unique_id. The parent device can carry MORE THAN ONE domain
+// identifier (e.g. the config-entry ULID AND the hardware SN), and only the one
+// that actually prefixes the entity unique_ids is the right stable — so prefer a
+// candidate that prefixes a uid, then fall back to a `_map_` split, then to the
+// longest common uid prefix. (Trusting the first identifier blindly produced
+// empty views live: the ULID identifier is listed before the SN, but every
+// unique_id is SN-prefixed — see tests/www/strategy_harness.mjs.)
+function _deriveStable(parentDevCands, uids) {
+  const cands = Array.isArray(parentDevCands)
+    ? parentDevCands
+    : parentDevCands
+      ? [parentDevCands]
+      : [];
+  for (const cand of cands) {
+    if (cand && uids.some((u) => u.startsWith(cand + "_"))) return cand;
+  }
   for (const u of uids) {
     const i = u.indexOf("_map_");
     if (i > 0) return u.slice(0, i);
@@ -340,8 +352,10 @@ export async function buildContext(hass) {
   }
   const states = hass.states || {};
 
-  // Integration devices.
-  let parentDevId = null;
+  // Integration devices. The parent device may carry several domain identifiers
+  // (config-entry ULID, hardware SN, …); collect them ALL and let _deriveStable
+  // pick the one that actually prefixes the entity unique_ids.
+  const parentDevCands = [];
   const mapDevs = [];
   for (const d of devReg) {
     for (const ident of d.identifiers || []) {
@@ -350,8 +364,8 @@ export async function buildContext(hass) {
       const m = /_map_(\d+)$/.exec(id);
       if (m) {
         mapDevs.push({ id: parseInt(m[1], 10), rawId: id, deviceId: d.id, name: d.name_by_user || d.name });
-      } else if (!parentDevId) {
-        parentDevId = id;
+      } else {
+        parentDevCands.push(id);
       }
     }
   }
@@ -365,7 +379,7 @@ export async function buildContext(hass) {
       e.entity_id &&
       Object.prototype.hasOwnProperty.call(states, e.entity_id),
   );
-  const stable = _deriveStable(parentDevId, mine.map((e) => e.unique_id || ""));
+  const stable = _deriveStable(parentDevCands, mine.map((e) => e.unique_id || ""));
   const mapKeyRe = new RegExp("^" + _reEscape(stable) + "_map_(\\d+)_(.+)$");
   const parentRe = new RegExp("^" + _reEscape(stable) + "_(.+)$");
 

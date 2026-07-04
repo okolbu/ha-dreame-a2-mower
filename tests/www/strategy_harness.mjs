@@ -89,7 +89,7 @@ function slug(key, mapId) {
 }
 
 function makeHass(nMaps, opts = {}) {
-  const { experimental = false, disabledKeys = [], plotly = false } = opts;
+  const { experimental = false, disabledKeys = [], plotly = false, extraParentIdents = [] } = opts;
   const entReg = [];
   const states = {};
   const add = (key, uid, mapId, extra = {}) => {
@@ -114,7 +114,11 @@ function makeHass(nMaps, opts = {}) {
   entReg.push({ entity_id: "sensor.someone_else", unique_id: "OTHER_x", platform: "other", disabled_by: null });
   states["sensor.someone_else"] = { state: "1", attributes: {} };
 
-  const devReg = [{ id: "devP", identifiers: [[DOMAIN, STABLE]], name: "Dreame A2 Mower", name_by_user: null }];
+  // The live parent device can carry MORE THAN ONE domain identifier (e.g. the
+  // config-entry ULID listed BEFORE the hardware SN). extraParentIdents injects
+  // those ahead of STABLE so the harness exercises the real registry shape.
+  const parentIdents = [...extraParentIdents.map((x) => [DOMAIN, x]), [DOMAIN, STABLE]];
+  const devReg = [{ id: "devP", identifiers: parentIdents, name: "Dreame A2 Mower", name_by_user: null }];
   for (let m = 0; m < nMaps; m++)
     devReg.push({ id: `devM${m}`, identifiers: [[DOMAIN, `${STABLE}_map_${m}`]], name: `Dreame A2 Mower Map ${m + 1}`, name_by_user: null });
 
@@ -265,6 +269,25 @@ async function run() {
   // explicit config.plotly override wins over the global probe.
   const cfgForceOff = await generateDashboard({ plotly: false }, hassP);
   assert(!jsonHas(cfgForceOff, '"custom:plotly-graph"'), "config.plotly=false did not suppress plotly");
+
+  // (h) multi-identifier parent device (LIVE-caught, P5.5): the parent carries a
+  // config-entry ULID BEFORE the hardware SN, but every unique_id is SN-prefixed.
+  // The stable prefix must be derived from evidence (the id that prefixes the
+  // uids), not the first identifier — otherwise resolve() returns null for every
+  // key and every view collapses to just its header markdown.
+  const hassMI = makeHass(2, { extraParentIdents: ["01KQENTRYULID0000000000000"] });
+  const cfgMI = await generateDashboard({}, hassMI);
+  validateShape(cfgMI, "multi-ident");
+  validateNoDeadRefs(cfgMI, hassMI, "multi-ident");
+  // Non-degenerate: the Overview view must carry real control/state cards, not
+  // only the section-header markdown. Assert a known parent entity resolved.
+  assert(jsonHas(cfgMI, "dreame_a2_mower_battery_level") || jsonHas(cfgMI, "x.dreame_a2_mower_battery_level"),
+    "multi-ident: parent entities did not resolve (stable prefix mis-derived from the ULID identifier)");
+  const overviewMI = cfgMI.views.find((v) => v.path === "overview");
+  assert(overviewMI, "multi-ident: no overview view");
+  assert(collectEntityRefs(overviewMI).length > 0, "multi-ident: overview collapsed to header-only (no entity refs)");
+  // The per-map views must also resolve their map entities.
+  assert(jsonHas(cfgMI, "dreame_a2_mower_map_1_"), "multi-ident: map view lacks its own entities");
 
   // 0-map fixture — still a valid dashboard, no map views, no crash.
   const hass0 = makeHass(0);
