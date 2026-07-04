@@ -2,6 +2,7 @@ import pytest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from homeassistant.exceptions import HomeAssistantError
+from custom_components.dreame_a2_mower.const import CONF_EXPERIMENTAL_FEATURES
 from custom_components.dreame_a2_mower.update import DreameA2FirmwareUpdateEntity
 
 
@@ -11,7 +12,10 @@ def _entity(coord):
     return e
 
 
-def _coord(**f):
+def _coord(experimental=True, **f):
+    # P4.4 (R-52): the install ACTION is gated experimental. Default the fake
+    # coordinator's entry to gate-ON so the version/refusal tests exercise the
+    # real install path; the gate-OFF raise has its own test below.
     data = SimpleNamespace(
         firmware_version=f.get("installed"),
         firmware_latest=f.get("latest"),
@@ -20,7 +24,8 @@ def _coord(**f):
         ota_state=f.get("ota_state"),
         ota_progress=f.get("ota_progress"),
     )
-    return SimpleNamespace(data=data, cloud_state=None)
+    entry = SimpleNamespace(options={CONF_EXPERIMENTAL_FEATURES: experimental})
+    return SimpleNamespace(data=data, cloud_state=None, entry=entry)
 
 
 def test_installed_and_latest_version():
@@ -57,3 +62,16 @@ async def test_install_ok_on_accept():
     coord.async_trigger_firmware_update = AsyncMock(return_value=True)
     e = _entity(coord)
     await e.async_install(version=None, backup=False)
+
+
+@pytest.mark.asyncio
+async def test_install_raises_when_experimental_off():
+    """P4.4 (R-52, track-5 T5-9): the install action is gated — it raises
+    before touching the wire when experimental_features is off, and does NOT
+    call async_trigger_firmware_update."""
+    coord = _coord(experimental=False, installed="x")
+    coord.async_trigger_firmware_update = AsyncMock(return_value=True)
+    e = _entity(coord)
+    with pytest.raises(HomeAssistantError):
+        await e.async_install(version=None, backup=False)
+    coord.async_trigger_firmware_update.assert_not_called()

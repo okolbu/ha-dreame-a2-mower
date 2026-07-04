@@ -371,13 +371,17 @@ entities:
       wire: "local PhotoArchive populated by Track B obstacle-photo download [UNVERIFIED — Track B download not yet live-confirmed]"
       state_path: "coordinator.photo_archive.latest_by_category('obstacle_ephemeral') → read_bytes(filename)"
     write_path: read-only
+    experimental: fail_closed
     status:
       seen_working: false
-      last_verified: "2026-06-20"
+      last_verified: "2026-07-04"
     verifications:
       - date: "2026-06-20"
         status: presumed
         claim: "Serves JPEG bytes for the most-recently-archived photo with category='obstacle_ephemeral' from coordinator.photo_archive.latest_by_category('obstacle_ephemeral'). Returns None (unavailable) when no obstacle_ephemeral photos have been archived. Pull-only — no coordinator listener; archive grows monotonically."
+      - date: "2026-07-04"
+        status: presumed
+        claim: "P4.4 (R-52, track-5 T5-9): gated experimental=fail_closed (T3). Track B's getDeiviceFile signer is UNVERIFIED (never reproduced a golden signature), so the download path is fail-closed and this camera stays empty until the backend returns a file. Not created unless experimental_features is on; disabled-by-default when it is. PROMOTION: flip to production when the Track B signer reproduces a golden signature OR the backend returns a 200 with a real obstacle photo. (Class-level rename to latest_obstacle_capture is P4.5.)"
     references:
       code: "custom_components/dreame_a2_mower/camera/photos.py:137"
     notes: |
@@ -1811,6 +1815,9 @@ entities:
         status: verified
         claim: "P4.3 metadata pass (R-50 / track-5 T5-5/T5-15/T5-17): SENSORS-table device_class/unit/state_class fixes — area_mowed_m2/total_lawn_area_m2/total_mowed_area_m2/latest_session_area_m2 → device_class AREA; session_distance_m → DISTANCE; total_mowing_time_min/latest_session_duration_min/human_presence_push_interval_min/sim_left_days/latest_video → DURATION; first_mowing_date → DATE; last_settings_change_unix → TIMESTAMP (value_fn now emits datetime, was raw epoch); mowing_count invalid unit 'x' → None; dock_yaw gains '°'; archived_session_count/lidar_archive_count/session_track_point_count drop state_class; charging_status_code_raw entity_registry_enabled_default=False."
         evidence: "entities/sensor/device.py SENSORS tuple (P4.3)"
+      - date: "2026-07-04"
+        status: presumed
+        claim: "P4.4 (R-52, track-5 T5-9): FIVE keys in this table carry experimental=speculative (T1) — the undecoded-slot raw probes s5p104_raw / s5p105_raw / s5p106_raw / s5p107_raw / s6p1_raw. Each is NOT created unless experimental_features is on; disabled-by-default when it is. PROMOTION (per key): the slot's decode lands in inventory.yaml (it then becomes a named sensor, not a raw probe). The other keys in this table stay production (experimental=None)."
     references:
       wire_entry: "varies — see notes for per-key wire surfaces"
       code: "custom_components/dreame_a2_mower/sensor_device.py:772"
@@ -2193,13 +2200,17 @@ entities:
       wire: "routed-get m:g t:MPOS (see inventory.yaml § MPOS, status partial) — RAW {x,y,yaw}; frame/units UNVERIFIED, NOT the integration's position"
       state_path: "coordinator.data.mpos_x / mpos_y / mpos_yaw (populated on-demand by _refresh_mpos)"
     write_path: read-only
+    experimental: speculative
     status:
       seen_working: false
-      last_verified: "2026-06-12"
+      last_verified: "2026-07-04"
     verifications:
       - date: "2026-06-12"
         status: presumed
         claim: "DreameA2DiagnosticSensor descriptor key=mpos; value_fn=_mpos_value (coord) -> 'x, y, yaw' string; extra_state_attributes_fn=_mpos_attrs exposes raw x/y/yaw/last_updated/last_result + honesty note; entity_category=DIAGNOSTIC; entity_registry_enabled_default=False. RAW cloud values, untransformed — surfaced for physical-match characterization; MPOS frame/units [UNVERIFIED]."
+      - date: "2026-07-04"
+        status: presumed
+        claim: "P4.4 (R-52, track-5 T5-9): gated experimental=speculative (T1). Not created unless the experimental_features option is on; disabled-by-default when it is. PROMOTION: flip to production when the MPOS frame + units are confirmed by a physical A/B match (until then it must not drive position)."
 
   - id: "sensor.dreame_a2_mower_obstacle_markers"
     platform: sensor
@@ -2702,14 +2713,18 @@ entities:
       wire: "MAPL"
       state_path: "coordinator._active_map_id (from MAPL); labels from coordinator.cloud_state.maps_by_id"
     write_path: "coordinator.dispatch_action(MowerAction.SET_ACTIVE_MAP, {map_id}) → s2p50 op=200 (changeMap) via coordinator/_writes.py:345"
+    experimental: wire_unexercised
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-07-04"
     verifications:
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: current_option reads coordinator._active_map_id + maps_by_id label; async_select_option dispatches SET_ACTIVE_MAP(map_id). Read from select_global.py:742-911 + coordinator/_writes.py:345; not re-confirmed live."
         evidence: "select_global.py:778-793 (current_option via _active_map_id); select_global.py:822-911 (async_select_option → dispatch_action SET_ACTIVE_MAP)"
+      - date: "2026-07-04"
+        status: presumed
+        claim: "P4.4 (R-52, track-5 T5-9): gated experimental=wire_unexercised (T2). The o=200 changeMap envelope is app-MITM-verified, but OUR client-issued send is unexercised (control_honesty device_write_unproven / _U). Not created unless experimental_features is on; disabled-by-default when it is. PROMOTION: flip to production when a byte-diff of our o=200 send vs the app-MITM capture matches, or one live map-switch round-trips on the mower."
     references:
       wire_entry: "o200"
       code: "custom_components/dreame_a2_mower/select_global.py:742"
@@ -2980,6 +2995,9 @@ entities:
         status: verified
         claim: "P4.3 metadata pass (R-50 / track-5 T5-15/T5-17): DIAGNOSTIC_SENSORS-table fixes — position_x_m/position_y_m/position_north_m/position_east_m drop state_class (live-map-cadence, not statistics-worthy); mowing_phase drops state_class AND gains entity_registry_enabled_default=False; task_state_code + slam_task_label gain entity_registry_enabled_default=False (raw-code shadow surfaces, disabled for public). No source/value_fn change."
         evidence: "entities/sensor/device.py DIAGNOSTIC_SENSORS tuple (P4.3)"
+      - date: "2026-07-04"
+        status: presumed
+        claim: "P4.4 (R-52, track-5 T5-9): TWO keys in this table carry experimental=speculative (T1) — novel_observations (contributor/research counter of unrecognised wire observations) and api_endpoints_supported (endpoint-probe artifact; live value 0 = the developer discover_cloud_api probe never ran). Each is NOT created unless experimental_features is on; disabled-by-default when it is. PROMOTION: novel_observations → the observed slots get decoded into inventory; api_endpoints_supported → the probe becomes a standing capability read. The other keys in this table stay production (experimental=None). (sensor.mpos is a DIAGNOSTIC sensor too but has its own discrete row above.)"
     references:
       wire_entry: "varies — see notes for per-key wire surfaces"
       code: "custom_components/dreame_a2_mower/entities/sensor/device.py"
@@ -3180,15 +3198,18 @@ entities:
     source:
       wire: "checkDeviceVersion + s1p2/s1p3 + manualFirmwareUpdate"
       state_path: "coordinator.data.firmware_version / .firmware_latest"
-    write_path: "install() -> coordinator.async_trigger_firmware_update() -> manualFirmwareUpdate"
+    write_path: "install() -> coordinator.async_trigger_firmware_update() -> manualFirmwareUpdate (P4.4: install ACTION gated experimental — see below)"
     status:
       seen_working: false
-      last_verified: "2026-06-16"
+      last_verified: "2026-07-04"
     verifications:
       - date: "2026-06-16"
         status: verified
         claim: "Firmware UpdateEntity: installed=DEV.fw, latest=checkDeviceVersion.newVersion, progress=s1p2/s1p3, install()=manualFirmwareUpdate. Read side live-verifiable; install path build-correct, unverifiable until next real firmware (device at 0625)."
         evidence: "app-mitm:2026-06-16-firmware-ota"
+      - date: "2026-07-04"
+        status: presumed
+        claim: "P4.4 (R-52, track-5 T5-9): the ENTITY is NOT gated — its version display is read-side live-verified (installed=latest) and useful, so no entity-level experimental: field. ONLY the install ACTION is gated (T2 wire_unexercised): async_install raises HomeAssistantError when experimental_features is off, because the manualFirmwareUpdate wire path is unexercised (never flipped a real OTA on this device). PROMOTION of the install: byte-diff our built envelope vs an app-initiated OTA MITM transcript, or a next-firmware install succeeds."
     references:
       wire_entry: "inventory.yaml s1p2/s1p3 (live OTA) + checkDeviceVersion + manualFirmwareUpdate"
       code: "custom_components/dreame_a2_mower/update.py"
@@ -4703,14 +4724,18 @@ entities:
       wire: "integration action — no device wire"
       state_path: "n/a (button; stateless)"
     write_path: "coordinator._refresh_mpos() — on-demand fetch of RAW MPOS {x,y,yaw} via cloud routed-get MPOS; populates MowerState.mpos_* fields"
+    experimental: speculative
     status:
       seen_working: false
-      last_verified: "2026-06-12"
+      last_verified: "2026-07-04"
     verifications:
       - date: "2026-06-12"
         status: presumed
         claim: "async_press calls coordinator._refresh_mpos() directly. EntityCategory.DIAGNOSTIC. Reads button.py:316-339; not re-confirmed live. MPOS routed-get wire shape is [UNVERIFIED] — frame/units unknown."
         evidence: "button.py:337-339 (async_press → self.coordinator._refresh_mpos()); button.py:330 (_attr_entity_category = EntityCategory.DIAGNOSTIC)"
+      - date: "2026-07-04"
+        status: presumed
+        claim: "P4.4 (R-52, track-5 T5-9): gated experimental=speculative (T1) — rides with sensor.mpos (refreshes the same UNVERIFIED-frame/units reading). Descriptorless button, so the tier is a class attr (_experimental_tier) read by _experimental.filter_experimental. Not created unless experimental_features is on; disabled-by-default when it is. PROMOTION: same trigger as sensor.mpos — MPOS frame/units confirmed by a physical A/B match."
     references:
       wire_entry: "MPOS"
       code: "custom_components/dreame_a2_mower/button.py:316"

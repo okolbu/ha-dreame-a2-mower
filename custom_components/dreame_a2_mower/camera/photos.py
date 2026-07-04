@@ -18,6 +18,7 @@ from homeassistant.components.camera import Camera
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .._devices import mower_device_info, mower_unique_id
+from ..const import EXPERIMENTAL_T3_FAIL_CLOSED
 from ..archive.photos import ArchivedPhoto
 from ..archive.videos import ArchivedVideo
 from ..coordinator import DreameA2MowerCoordinator
@@ -145,6 +146,13 @@ class DreameA2ObstaclePhotoCamera(_BasePhotoCamera):
     """
 
     _attr_name = "Obstacle photo"
+    # P4.4 (R-52, track-5 T5-9): T3 experimental — fail-closed pending backend.
+    # Track B's getDeiviceFile signer is UNVERIFIED (never reproduced a golden),
+    # so the download path is fail-closed and this camera stays empty until the
+    # backend returns a photo. Descriptorless entity → tier is a class attr read
+    # by _experimental.filter_experimental. Promotion = the Track B signer
+    # reproduces a golden signature, or the backend returns a 200 with a file.
+    _experimental_tier = EXPERIMENTAL_T3_FAIL_CLOSED
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         super().__init__(coordinator)

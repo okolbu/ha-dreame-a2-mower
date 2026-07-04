@@ -30,7 +30,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ..._availability import _FreshnessAvailableMixin
 from ..._devices import mower_device_info, mower_unique_id
-from ...const import DOMAIN, LOGGER, WORK_LOG_PLACEHOLDER
+from ...const import (
+    DOMAIN,
+    EXPERIMENTAL_T2_WIRE_UNEXERCISED,
+    LOGGER,
+    WORK_LOG_PLACEHOLDER,
+)
 from ...control_honesty import _ControlHonestyMixin, resolve_control_mode
 from ...coordinator import DreameA2MowerCoordinator
 from ...coordinator._write_errors import raise_for_write_result
@@ -751,6 +756,12 @@ class DreameA2ActiveMapSelect(
     _attr_icon = "mdi:map-marker-radius"
     # MAPL-derived active map comes from the cloud full-state poll.
     _availability_source = "cloud"
+    # P4.4 (R-52, track-5 T5-9): T2 experimental — the o=200 changeMap envelope
+    # is app-MITM-verified, but OUR client-issued send is unexercised
+    # (control_honesty _U). Descriptorless entity → tier is a class attr read by
+    # _experimental.filter_experimental. Promotion = byte-diff our o=200 send vs
+    # the app-MITM capture, or one live map-switch round-trip.
+    _experimental_tier = EXPERIMENTAL_T2_WIRE_UNEXERCISED
 
     def __init__(self, coordinator: DreameA2MowerCoordinator) -> None:
         super().__init__(coordinator)

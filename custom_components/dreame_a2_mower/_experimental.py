@@ -48,9 +48,26 @@ def experimental_features_enabled(entry: Any | None) -> bool:
 
 
 def _entity_experimental_tier(entity: Any) -> str | None:
-    """Read the experimental tier off an entity's descriptor (None if absent)."""
+    """Read the experimental tier for an entity (None if it is a production surface).
+
+    Two sources, checked in order:
+
+    1. ``entity.entity_description.experimental`` — the descriptor field. Used by
+       the descriptor-driven platforms (sensor / switch / select-settings /
+       number / binary_sensor / time), whose tables carry the tier per row.
+    2. ``entity._experimental_tier`` — a per-instance (class-attr) fallback for
+       the descriptorLESS entity classes that set ``_attr_*`` directly and never
+       build an EntityDescription: ``update.firmware`` (whole-entity NOT gated —
+       only its install is, see update.py), ``camera.obstacle_photo``,
+       ``button.refresh_mpos``, ``select.active_map``. Giving each an
+       EntityDescription purely to carry one field would be more churn than a
+       single class attr, so ``filter_experimental`` honours both.
+    """
     desc = getattr(entity, "entity_description", None)
-    return getattr(desc, "experimental", None)
+    tier = getattr(desc, "experimental", None)
+    if tier is not None:
+        return tier
+    return getattr(entity, "_experimental_tier", None)
 
 
 def filter_experimental(entry: Any | None, entities: Iterable[Any]) -> list[Any]:

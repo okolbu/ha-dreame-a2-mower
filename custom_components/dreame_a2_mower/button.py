@@ -27,7 +27,7 @@ from ._devices import (
     mower_unique_id,
 )
 from ._experimental import filter_experimental
-from .const import DOMAIN, LOGGER
+from .const import DOMAIN, EXPERIMENTAL_T1_SPECULATIVE, LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .coordinator._write_errors import raise_for_write_result
@@ -314,6 +314,11 @@ class DreameA2RefreshMposButton(
     _attr_icon = "mdi:crosshairs-gps"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _MOWER_KEY = "refresh_mpos"
+    # P4.4 (R-52, track-5 T5-9): T1 experimental — rides with sensor.mpos
+    # (refreshes the same UNVERIFIED-frame/units reading). Descriptorless entity,
+    # so the tier is a class attr read by _experimental.filter_experimental.
+    # Promotion = MPOS frame/units confirmed by a physical A/B match.
+    _experimental_tier = EXPERIMENTAL_T1_SPECULATIVE
 
     async def async_press(self) -> None:
         LOGGER.info("button.refresh_mpos: pressed; refreshing MPOS diagnostic")

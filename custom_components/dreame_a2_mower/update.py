@@ -20,7 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._devices import mower_device_info, mower_unique_id
-from ._experimental import filter_experimental
+from ._experimental import experimental_features_enabled, filter_experimental
 from .const import DOMAIN, LOGGER
 from .coordinator import DreameA2MowerCoordinator
 
@@ -89,6 +89,19 @@ class DreameA2FirmwareUpdateEntity(
     async def async_install(
         self, version: str | None, backup: bool, **kwargs: Any
     ) -> None:
+        # P4.4 (R-52, track-5 T5-9): the entity itself is NOT gated — its
+        # version display is read-side live-verified (installed=latest) and
+        # useful. ONLY the install ACTION is T2 experimental: the manualFirmware
+        # Update wire byte-layout is unexercised (never flipped a real OTA). The
+        # entity stays visible; install raises when experimental_features is off.
+        # Promotion = byte-diff our built envelope vs an app-initiated OTA MITM
+        # transcript, or a next-firmware install succeeds.
+        if not experimental_features_enabled(getattr(self.coordinator, "entry", None)):
+            raise HomeAssistantError(
+                "Firmware install is experimental (the OTA-trigger wire path is "
+                "unexercised on this device). Enable 'Experimental features' in "
+                "the Dreame A2 Mower integration options to use it."
+            )
         LOGGER.info("update.firmware: install requested")
         accepted = await self.coordinator.async_trigger_firmware_update()
         if not accepted:
