@@ -24,6 +24,7 @@ from ..archive.session import SessionArchive
 from ..archive.videos import VideoArchive
 from ..wifi_archive_store import WifiArchiveEntry, WifiArchiveStore
 from ..cloud_client import DreameA2CloudClient
+from ..domain import mqtt_lifecycle as _mqtt_lifecycle
 from ..const import (
     CONF_COUNTRY,
     CONF_LIDAR_ARCHIVE_KEEP,
@@ -1356,90 +1357,17 @@ class _CoreMixin:
 
     @callback
     def _handle_mqtt_auth_error(self) -> None:
-        """T3-9: MQTT rc=5 (broker rejected our credentials).
+        """Delegates to ``domain.mqtt_lifecycle.handle_mqtt_auth_error`` (P3.9d).
 
-        The cloud session token (``_key``) rotates on a periodic re-login
-        (``cloud_client/_fetchers.py`` refreshes it when ``_key_expire``
-        passes); until now nothing told the MQTT client about a rotation, so
-        a broker reconnect after the old password went stale looped on rc=5
-        forever with no self-heal short of an HA reload.
-
-        Runs on the event loop (hopped via ``call_soon_threadsafe`` from the
-        paho network thread that reported rc=5 — see ``_init_mqtt``).
-        Kicks off ``_async_recover_mqtt_auth`` as a background task: a
-        cloud re-login is a blocking ``requests`` call and must not run
-        inline on the loop.
-
-        Guarded against a tight loop: a relogin already in flight is not
-        duplicated, and a fresh rc=5 within ``_RC5_RELOGIN_COOLDOWN_S`` of
-        the last attempt is logged and skipped (covers both a broker that
-        keeps rejecting a freshly-refreshed password and rapid repeated
-        disconnects) rather than hammering the cloud login endpoint.
+        Kept ``@callback`` + named here so the ``_init_mqtt`` paho-thread
+        ``call_soon_threadsafe(self._handle_mqtt_auth_error)`` wiring and the
+        ``test_mqtt_auth_recovery`` surface are unchanged. The rc=5 escalation
+        LOGIC moved VERBATIM to the domain layer; the guard-state attrs stay on
+        ``_CoreMixin`` (read via ``coord._rc5_*``) for the 9e attr-shrink.
         """
-        now = time.time()
-        if self._rc5_relogin_in_progress:
-            LOGGER.debug(
-                "[mqtt] rc=5 auth error while a relogin is already in "
-                "flight — ignoring duplicate signal"
-            )
-            return
-        cooldown = min(
-            self._RC5_RELOGIN_COOLDOWN_S * (2 ** self._rc5_consecutive_failures),
-            self._RC5_RELOGIN_COOLDOWN_MAX_S,
-        )
-        if now - self._rc5_last_attempt_unix < cooldown:
-            LOGGER.warning(
-                "[mqtt] rc=5 auth error seen again within %ds (escalated after "
-                "%d consecutive failure(s)) of the last relogin attempt — "
-                "skipping to avoid a tight reconnect loop (will retry on the "
-                "next rc=5 once the cooldown elapses)",
-                cooldown,
-                self._rc5_consecutive_failures,
-            )
-            return
-        self._rc5_relogin_in_progress = True
-        self._rc5_last_attempt_unix = now
-        self.hass.async_create_task(self._async_recover_mqtt_auth())
+        _mqtt_lifecycle.handle_mqtt_auth_error(self)
 
     async def _async_recover_mqtt_auth(self) -> None:
-        """T3-9: re-login the cloud client and push refreshed MQTT creds.
-
-        ``cloud.login()`` blocks (``requests``), so it runs in the executor.
-        On success, ``update_credentials`` hot-swaps the MQTT client's
-        username/password so paho's own automatic reconnect (armed via
-        ``reconnect_delay_set`` in ``mqtt_client.connect``) succeeds on its
-        next attempt instead of retrying the stale password. On failure the
-        method just logs — the next genuine rc=5 (after the cooldown) will
-        retry.
-        """
-        try:
-            cloud = getattr(self, "_cloud", None)
-            mqtt = getattr(self, "_mqtt", None)
-            if cloud is None or mqtt is None:
-                LOGGER.debug(
-                    "[mqtt] rc=5 recovery: cloud/mqtt not initialised — skipping"
-                )
-                return
-            ok = await self.hass.async_add_executor_job(cloud.login)
-            if not ok:
-                # P2-inherit: escalate the cooldown so a broker that keeps
-                # rejecting fresh creds is retried less and less aggressively.
-                self._rc5_consecutive_failures += 1
-                LOGGER.warning(
-                    "[mqtt] rc=5 recovery: cloud re-login failed (%d consecutive); "
-                    "MQTT will keep retrying with the stale password until the "
-                    "next rc=5 triggers another (increasingly spaced) attempt",
-                    self._rc5_consecutive_failures,
-                )
-                return
-            username, password = cloud.mqtt_credentials()
-            mqtt.update_credentials(username, password)
-            # Success — reset the escalation so the next rc=5 gets the base cooldown.
-            self._rc5_consecutive_failures = 0
-            LOGGER.info(
-                "[mqtt] rc=5 recovery: cloud re-login succeeded; refreshed "
-                "credentials pushed to the MQTT client for the next reconnect"
-            )
-        finally:
-            self._rc5_relogin_in_progress = False
+        """Delegates to ``domain.mqtt_lifecycle.async_recover_mqtt_auth`` (P3.9d)."""
+        await _mqtt_lifecycle.async_recover_mqtt_auth(self)
 
