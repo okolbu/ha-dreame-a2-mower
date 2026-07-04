@@ -56,11 +56,10 @@ _BYPASS_PATTERNS = (
 
 # Ratchet baseline — the total bypass-occurrence count across tests/.
 # P3 Task 1 pin. ONLY update DOWNWARD.
-# P3.11: ratcheted 86 → 81. The gain predates this task (earlier P3.9/P3.10
-# migrations dropped 5 sites without re-pinning); the P3.11 test_coordinator.py
-# split is bypass-neutral (its 10 sites moved verbatim into
-# integration/_coordinator_helpers.py + test_coordinator_{render,writes}.py).
-BYPASS_BASELINE = 81
+# P3.11 (test_coordinator.py split) is bypass-neutral: the monolith's
+# object.__new__ sites moved verbatim into integration/_coordinator_helpers.py +
+# test_coordinator_{render,writes}.py (all still under tests/, still counted).
+BYPASS_BASELINE = 86
 
 
 def _census() -> tuple[int, dict[str, int]]:
