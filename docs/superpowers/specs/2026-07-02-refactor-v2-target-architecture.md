@@ -56,7 +56,10 @@ into layer-4 services that own their attrs — this is how the attr-bundling ver
 >    2026-07-04): `session/finalize.py` 1096, `session/replay.py` 1057,
 >    `ingress.py` 665, `session/lifecycle_events.py` 598, `boot.py` 529 (the
 >    first-refresh poll orchestrator, split into ordered seam functions),
->    `wifi/service.py` 458. The P3 mandate was de-godding + strict layering with
+>    `wifi/service.py` 458. Non-`domain/` split modules also >400 (each layer-clean
+>    and smaller than the monolith it came from): `services/__init__.py` 893,
+>    `state/apply.py` 812, `protocol/map/parse.py` 683, `cloud_client/_state_fetch.py`
+>    637. The P3 mandate was de-godding + strict layering with
 >    corpus-IDENTICAL proof — NOT reshaping the moved logic (which would have
 >    broken the verbatim-move safety argument). Splitting these along their own
 >    internal seams is post-P3 cleanup (candidate for a P4+ pass), not a P3 miss.
