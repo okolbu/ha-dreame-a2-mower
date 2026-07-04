@@ -4,7 +4,6 @@ See spec docs/superpowers/specs/2026-05-15-coordinator-decomposition-design.md.
 """
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 from collections.abc import Awaitable, Callable
 from typing import TYPE_CHECKING, Any
@@ -14,7 +13,7 @@ from ..const import (
     LOGGER,
 )
 from ..live_map.finalize import FinalizeAction
-from ..live_map.finalize import decide as _finalize_decide
+from ..domain.session import finalize as _finalize
 
 if TYPE_CHECKING:
     pass  # cross-mixin type imports added as needed
@@ -328,497 +327,66 @@ class _SessionMixin:
             update_listeners()
 
     def _resolve_finalize_map_id(self) -> int:
-        """Map id to stamp on a session being finalized.
-
-        Active-map at finalize time is the canonical answer; if no
-        active map yet (rare — MAPL not yet polled), fall back to the
-        lowest-id cached map; if no maps cached at all, sentinel -1.
-        """
-        if self._active_map_id is not None:
-            return int(self._active_map_id)
-        if self.cloud_state.maps_by_id:
-            return min(self.cloud_state.maps_by_id.keys())
-        return -1
+        """Delegates to ``domain.session.finalize.resolve_finalize_map_id`` (P3.9a)."""
+        return _finalize.resolve_finalize_map_id(self)
 
     async def _periodic_session_retry(self) -> None:
-        """Periodic tick (every RETRY_INTERVAL_SECONDS) for session finalization.
+        """Delegates to ``domain.session.finalize.periodic_session_retry`` (P3.9a)."""
+        await _finalize.periodic_session_retry(self)
 
-        Calls ``finalize.decide(state, prev_task_state, now_unix)`` and
-        dispatches the returned action.  All cloud I/O and disk I/O go through
-        the executor per spec §3.
+    async def _wait_for_dock_return(self, *, timeout_s: int = 300) -> str:
+        """Delegates to ``domain.session.finalize.wait_for_dock_return`` (P3.9a).
+
+        Preserves the P2.7 single-flight guard + the P2.8
+        ``_pending_finalize_task`` cancellation VERBATIM in the domain module.
         """
-        import time as _time
-        now_unix = int(_time.time())
-        action = _finalize_decide(
-            self.data,
-            self._prev_task_state,
-            now_unix,
-            rain_delay_active=self.rain_delay_active,
-        )
-        # Boot-stale guard: filter out the gate's false-positive when
-        # we just restarted into an MQTT-quiet window mid-session.
-        # `_restore_in_progress` seeds `_prev_task_state=0` to support
-        # auto-finalize when the mower finished a mow while HA was off
-        # — but combined with MowerState.task_state_code's default None
-        # (no s2p56 push has landed yet), the gate would otherwise hit
-        # FINALIZE_INCOMPLETE on the first retry tick after boot. Skip
-        # the dispatch ONLY when the action came from the
-        # session_just_ended branch (i.e. no pending OSS object name)
-        # AND we haven't observed any real task_state push yet. The
-        # max-age / max-attempts FINALIZE_INCOMPLETE path through a
-        # known pending OSS key is unaffected.
-        # See 2026-05-15 rain-stop incident: HA restarted in a 22-min
-        # MQTT-quiet window while the mower was paused-charging; the
-        # gate created a phantom (incomplete) session at 0 m² / 337 min.
-        if (
-            action == FinalizeAction.FINALIZE_INCOMPLETE
-            and self.data.task_state_code is None
-            and not self._real_task_state_observed
-            and not self.data.pending_session_object_name
-        ):
-            LOGGER.debug(
-                "[F5.6.1] _periodic_session_retry: skipping FINALIZE_INCOMPLETE "
-                "from boot-stale state (task_state_code still default None, no "
-                "fresh MQTT push observed yet, no pending OSS event). "
-                "prev_task_state=%r, _real_task_state_observed=%s",
-                self._prev_task_state, self._real_task_state_observed,
-            )
-            return
-        if action == FinalizeAction.NOOP:
-            return
-        # v1.0.0a48: bumped to WARNING so the trail shows up in the
-        # default HA log. Only fires on non-NOOP actions, which means
-        # at most a handful per mow.
-        LOGGER.debug(
-            "[F5.6.1] _periodic_session_retry: action=%s "
-            "task_state=%r prev=%r pending_oss=%r",
-            action.name,
-            self.data.task_state_code,
-            self._prev_task_state,
-            self.data.pending_session_object_name,
-        )
-        await self._dispatch_finalize_action(action, now_unix)
-
-    async def _wait_for_dock_return(
-        self,
-        *,
-        timeout_s: int = 300,
-    ) -> str:
-        """Block until the mower has docked or ``timeout_s`` has elapsed.
-
-        Returns one of:
-          'charging'        — charging_status flipped to ChargingStatus.CHARGING (1)
-          'timeout'         — the dock signal did not fire in time
-          'already-waiting' — a waiter is already armed (T3-6 single-flight);
-                              the caller must ABORT its dispatch — the
-                              in-flight waiter's dispatch completes the
-                              finalize.
-
-        The caller logs the reason so the timeout can be tuned later.
-        Trail collection continues during the wait because MQTT events keep
-        flowing into LiveMapState while we await here.
-
-        Signals are delivered by _on_state_update in _mqtt_handlers.py:
-        it checks _pending_finalize_done after each state mutation.
-
-        The finally block clears _pending_finalize_done to None so subsequent
-        MQTT pushes don't accidentally set a stale event from a future mow.
-
-        Single-flight (T3-6): the 60 s retry tick does not await the previous
-        run, so during the ≤10-min wait each tick used to re-enter here,
-        overwrite the single _pending_finalize_done Event (orphaning the
-        elder waiters into full-timeout sleeps) and open windows where a
-        waiter's finally nulled the slot out from under the newest waiter,
-        losing the dock signal entirely. The guard below refuses to stack:
-        only the first entry arms an Event; callers guard/abort on the
-        'already-waiting' reason (this check is the defense-in-depth layer;
-        both call sites also check the slot before entering).
-
-        T3-8: the actual wait runs inside a Task held on
-        _pending_finalize_task so async_unload_entry can cancel an in-flight
-        ≤10-min wait before tearing down transports. Cancelling that task
-        raises CancelledError out of the ``asyncio.wait_for`` below, which is
-        NOT caught here — it propagates straight through this method (skipping
-        the post-wait finalize dispatch entirely) up to the caller's own task,
-        a clean cooperative abort. The ``finally`` still clears both slots so a
-        subsequent restart/reload starts from a clean state.
-        """
-        if self._pending_finalize_done is not None:
-            return "already-waiting"
-        self._pending_finalize_done = asyncio.Event()
-        self._pending_finalize_done_reason = None
-        wait_task = self.hass.async_create_task(self._pending_finalize_done.wait())
-        self._pending_finalize_task = wait_task
-        try:
-            await asyncio.wait_for(wait_task, timeout=timeout_s)
-            return self._pending_finalize_done_reason or "early"
-        except asyncio.TimeoutError:
-            return "timeout"
-        finally:
-            self._pending_finalize_done = None
-            if self._pending_finalize_task is wait_task:
-                self._pending_finalize_task = None
+        return await _finalize.wait_for_dock_return(self, timeout_s=timeout_s)
 
     async def _finalize_prior_for_new_command(self, now_unix: int) -> None:
-        """(c) Finalize the still-active prior session at a new-command boundary.
-
-        Invoked when a DISTINCT new task command begins while the previous
-        session is still active (e.g. the user abandoned a manual run on the
-        lawn and started a mow from there with no dock between). Unlike the
-        normal end-of-session finalize, there is NO dock wait here: the mower
-        did not dock — a new command superseded the prior run — so we finalize
-        immediately with whatever the prior live_map captured.
-
-        Routes by the prior session's provisional type: a mow finalizes via
-        the cloud-summary path if its OSS key already arrived (else locally);
-        a non-mow finalizes locally. After this returns the live_map session
-        has been ended, so the caller's begin_session starts a clean session.
-        """
-        if not self.live_map.is_active():
-            return
-        # Same cloud-vs-local routing as the gate path, but with NO dock-wait:
-        # the mower did not dock, a new command superseded the prior run.
-        await self._route_finalize(
-            now_unix, dock_wait=False, trigger="new-command-boundary",
-        )
+        """Delegates to ``domain.session.finalize.finalize_prior_for_new_command`` (P3.9a)."""
+        await _finalize.finalize_prior_for_new_command(self, now_unix)
 
     async def _finalize_non_mow_immediate(self, now_unix: int, trigger: str) -> None:
-        """Finalize a non-mow (non-cloud-finalized) session immediately on arrival.
-
-        Called from two new trigger paths (Option A fix):
-          1. s2p2=75 (arrived_at_maintenance_point) — primary, to-point-specific
-             arrival signal emitted at ~t+40s for op=109 runs.
-          2. task_state edge 0/4→2/None inside _on_state_update — robustness bonus,
-             catches the edge visible BEFORE _prev_task_state is advanced.
-
-        In both cases the session is non-cloud-finalized (no OSS summary expected),
-        so there is NO dock-wait: we finalize at the arrival point and the return
-        drive is not captured. This keeps the session representation clean.
-
-        Hard guards (checked synchronously before the first await):
-          - live_map must be active (no double-finalize).
-          - session must be non-cloud-finalized (mow/patrol path NEVER uses this).
-          - rain_delay_active must be False (pause-at-dock for rain is not a
-            session end).
-
-        The s2p2=75-vs-task_state-edge double-fire race (both can pass the
-        is_active() guard before either reaches end_session()) is now closed by
-        the single finalize latch inside _run_finalize_incomplete
-        (_finalize_with_latch), which de-dupes concurrent finalizes of the same
-        session — no per-method bool latch needed.
-        """
-        if not self.live_map.is_active():
-            LOGGER.debug(
-                "[F5.6.1] _finalize_non_mow_immediate(trigger=%s): live_map not active — skip",
-                trigger,
-            )
-            return
-        if self._provisional_session_is_cloud_finalized():
-            LOGGER.debug(
-                "[F5.6.1] _finalize_non_mow_immediate(trigger=%s): session is cloud-finalized "
-                "(mow/patrol) — refusing to finalize non-mow path; this is a bug if called "
-                "for a real mow",
-                trigger,
-            )
-            return
-        if self.rain_delay_active:
-            # Rain pause-at-dock veto (mirrors the finalize-gate veto in
-            # live_map/finalize.decide). The 0/4→2/None task_state edge that
-            # triggers this path also fires when the mower docks to wait out a
-            # rain delay — that is NOT a session end. rain_delay_active is
-            # bounded for resume_hours>=1 (the resume window expires); for
-            # resume_hours in {0, None} it stays active until the mower undocks
-            # (which clears _rain_delay_started_at) — in practice the mower
-            # must undock to resume, so the session still resolves.
-            LOGGER.debug(
-                "[F5.6.1] _finalize_non_mow_immediate(trigger=%s): rain delay active "
-                "— vetoing finalize (mower paused at dock for rain, session not ended)",
-                trigger,
-            )
-            return
-        LOGGER.debug(
-            "[F5.6.1] _finalize_non_mow_immediate: trigger=%s — finalizing non-mow session "
-            "immediately (no dock-wait); live_map.total_points=%d",
-            trigger,
-            self.live_map.total_points(),
-        )
-        # The double-fire race is closed by the finalize latch inside
-        # _run_finalize_incomplete (_finalize_with_latch) — a concurrent second
-        # trigger for the same session no-ops there.
-        await self._run_finalize_incomplete(now_unix)
+        """Delegates to ``domain.session.finalize.finalize_non_mow_immediate`` (P3.9a)."""
+        await _finalize.finalize_non_mow_immediate(self, now_unix, trigger)
 
     def _provisional_session_type(self) -> str:
-        """Provisional finalize-time session type, computed from the SAME
-        inputs `_inject_live_map_into_raw_dict` uses so the routing decision
-        and the archived `session_type` agree. `last_point_end_code` is
-        irrelevant to routing so we pass None.
-        """
-        from ..live_map.classify import classify_session_type
-
-        lm = self.live_map
-        codes = [code for _, code in (lm.error_samples or [])]
-        saw_mow_start = any(c in (50, 53) for c in codes)
-        saw_patrol_start = (51 in codes) or lm.saw_patrol_start
-        session_type, _ = classify_session_type(
-            last_task_op=lm.last_task_op,
-            saw_mow_start=saw_mow_start,
-            area_ever_positive=lm.area_ever_positive,
-            last_point_end_code=None,
-            saw_patrol_start=saw_patrol_start,
-        )
-        return session_type
+        """Delegates to ``domain.session.finalize.provisional_session_type`` (P3.9a)."""
+        return _finalize.provisional_session_type(self)
 
     def _provisional_session_is_mow(self) -> bool:
-        """True iff the live_map provisionally classifies as a MOW (not patrol
-        / maintenance_run / manual_drive). Kept for callers that need the
-        strict mow distinction."""
-        return self._provisional_session_type() == "mow"
+        """Delegates to ``domain.session.finalize.provisional_session_is_mow`` (P3.9a)."""
+        return _finalize.provisional_session_is_mow(self)
 
     def _provisional_session_is_cloud_finalized(self) -> bool:
-        """True iff the live_map produces a cloud OSS summary we should wait
-        for (mow OR patrol). This is the finalize-ROUTING signal: cloud-finalized
-        types fetch the summary; the rest finalize locally. Patrol is the reason
-        this is distinct from `_provisional_session_is_mow` — it's not a mow but
-        it IS cloud-finalized (verified 2026-05-30: mode=108 archive has an md5).
-        """
-        from ..live_map.classify import CLOUD_FINALIZED_SESSION_TYPES
-
-        return self._provisional_session_type() in CLOUD_FINALIZED_SESSION_TYPES
+        """Delegates to ``domain.session.finalize.provisional_session_is_cloud_finalized`` (P3.9a)."""
+        return _finalize.provisional_session_is_cloud_finalized(self)
 
     async def _route_finalize(
         self, now_unix: int, *, dock_wait: bool, trigger: str
     ) -> None:
-        """Single cloud-vs-local finalize routing decision.
-
-        - Cloud-finalized (mow/patrol) AND an OSS object key is present:
-          optionally wait for the dock-return drive to finish capturing
-          (``dock_wait``), then fetch + archive the cloud summary via
-          ``_do_oss_fetch``.
-        - Otherwise (non-cloud-finalized, or cloud-finalized with no OSS key):
-          finalize locally with whatever live_map has — never dock-waits.
-
-        ``trigger`` only labels the log lines so the entry point that routed
-        here stays visible in the log. The routing predicate is byte-equivalent
-        to the inlined callers it replaces.
-        """
-        if (
-            self._provisional_session_is_cloud_finalized()
-            and self.data.pending_session_object_name
-        ):
-            if dock_wait:
-                if self._pending_finalize_done is not None:
-                    # T3-6 single-flight: a dock-wait is already in flight
-                    # from an earlier retry tick. Entering again would stack
-                    # a second waiter on the single Event slot; abort this
-                    # dispatch — the in-flight waiter completes the finalize.
-                    LOGGER.debug(
-                        "[F5.6.1] _route_finalize(%s): dock-wait already in "
-                        "flight — skipping duplicate finalize dispatch",
-                        trigger,
-                    )
-                    return
-                LOGGER.info(
-                    "[F5.6.1] session-done received (%s) — "
-                    "entering pending-finalize wait (≤10 min)",
-                    trigger,
-                )
-                # T3-6: stamp the attempt BEFORE the wait so decide()'s
-                # retry branch (2c) stops returning AWAIT_OSS_FETCH every
-                # tick during the wait window. The post-fetch stamp in
-                # _do_oss_fetch_body still lands as before; only decide()
-                # consumes this field.
-                self.async_set_updated_data(
-                    dataclasses.replace(
-                        self.data,
-                        pending_session_last_attempt_unix=now_unix,
-                    )
-                )
-                reason = await self._wait_for_dock_return(timeout_s=600)
-                LOGGER.info("[F5.6.1] pending-finalize wait ended: reason=%s", reason)
-                if reason == "already-waiting":
-                    # Defense-in-depth (guard above races nothing in
-                    # single-threaded asyncio, but the primitive refuses to
-                    # stack regardless) — never proceed past a wait we did
-                    # not own.
-                    return
-            await self._do_oss_fetch(now_unix)
-            return
-        LOGGER.info(
-            "[F5.6.1] session-done (%s) but provisional type is "
-            "NON-CLOUD-FINALIZED (or no OSS key) — finalizing locally "
-            "immediately (no dock-wait)",
-            trigger,
+        """Delegates to ``domain.session.finalize.route_finalize`` (P3.9a)."""
+        await _finalize.route_finalize(
+            self, now_unix, dock_wait=dock_wait, trigger=trigger
         )
-        await self._run_finalize_incomplete(now_unix)
 
     async def _dispatch_finalize_action(
         self, action: FinalizeAction, now_unix: int
     ) -> None:
-        """Dispatch a FinalizeAction from the finalize gate.
-
-        BEGIN_SESSION / BEGIN_LEG: already handled by _on_state_update on every
-            property push; nothing to do in the retry path.
-        AWAIT_OSS_FETCH / FINALIZE_COMPLETE: fetch the cloud-summary JSON,
-            parse it, archive it, and update MowerState.
-        FINALIZE_INCOMPLETE: archive whatever live_map has with an "(incomplete)"
-            suffix in the md5 field, then clear pending state.
-        NOOP: do nothing.
-
-        All blocking I/O runs in the executor per spec §3.
-
-        For AWAIT_OSS_FETCH / FINALIZE_COMPLETE: if the session is cloud-finalized
-        (mow/patrol), enters a pending-finalize wait (up to 10 min) so trail
-        collection captures the dock-return drive BEFORE the archive write —
-        see _wait_for_dock_return. Non-cloud-finalized sessions (maintenance/manual)
-        finalize immediately with no dock-wait.
-        For FINALIZE_INCOMPLETE: same split — dock-wait only for cloud-finalized
-        sessions; non-cloud-finalized sessions (rare MQTT-drop fallback) finalize
-        immediately.
-        """
-        if action in (FinalizeAction.BEGIN_SESSION, FinalizeAction.BEGIN_LEG, FinalizeAction.NOOP):
-            return
-
-        if action in (FinalizeAction.AWAIT_OSS_FETCH, FinalizeAction.FINALIZE_COMPLETE):
-            # (a) Route through the shared decision helper. The cloud OSS summary
-            # only arrives for a mow OR a patrol; a maintenance run / manual
-            # drive produces no summary, so awaiting one would hang the finalize
-            # (live_map stays active and the NEXT run merges into it). For these
-            # two actions the finalize gate only returns them when an OSS object
-            # key is present (decide(): AWAIT_OSS_FETCH/FINALIZE_COMPLETE both
-            # require pending_session_object_name), so the routing predicate
-            # `cloud-finalized AND object_name` reduces to the old
-            # `cloud-finalized` check — byte-equivalent. Cloud-finalized →
-            # dock-wait then OSS fetch; otherwise finalize locally immediately.
-            await self._route_finalize(
-                now_unix, dock_wait=True, trigger=f"action={action.name}",
-            )
-            return
-
-        if action == FinalizeAction.FINALIZE_INCOMPLETE:
-            # NOT routed through _route_finalize: both arms here finalize
-            # locally (_run_finalize_incomplete) regardless of cloud-finalized
-            # type — only the dock-wait differs — so _route_finalize's
-            # cloud→_do_oss_fetch predicate doesn't apply.
-            # (b) Non-cloud-finalized sessions (maintenance/manual runs) never
-            # produce an OSS summary and don't have a return-drive to capture, so
-            # skip the dock-wait exactly as the AWAIT_OSS_FETCH branch above does.
-            # This path is a rare MQTT-drop fallback; the guard must NOT change
-            # mow behaviour — only the non-cloud-finalized arm skips the wait.
-            if not self._provisional_session_is_cloud_finalized():
-                LOGGER.info(
-                    "[F5.6.1] session-done (action=FINALIZE_INCOMPLETE) but provisional type is "
-                    "NON-CLOUD-FINALIZED — finalizing locally immediately (no dock-wait)",
-                )
-                await self._run_finalize_incomplete(now_unix)
-                return
-            if self._pending_finalize_done is not None:
-                # T3-6 single-flight: this arm fires EVERY tick once
-                # max-age/max-attempts is exceeded — same stacking hazard as
-                # the AWAIT_OSS_FETCH arm. Abort; the in-flight waiter's
-                # dispatch completes the finalize.
-                LOGGER.debug(
-                    "[F5.6.1] FINALIZE_INCOMPLETE: dock-wait already in "
-                    "flight — skipping duplicate finalize dispatch"
-                )
-                return
-            LOGGER.info(
-                "[F5.6.1] session-done received (action=FINALIZE_INCOMPLETE) — "
-                "entering pending-finalize wait (≤10 min)"
-            )
-            reason = await self._wait_for_dock_return(timeout_s=600)
-            LOGGER.info("[F5.6.1] pending-finalize wait ended: reason=%s", reason)
-            if reason == "already-waiting":
-                # Defense-in-depth — never proceed past a wait we did not own.
-                return
-            await self._run_finalize_incomplete(now_unix)
-            return
-
-        LOGGER.warning("[F5.6.1] _dispatch_finalize_action: unhandled action=%s", action)
+        """Delegates to ``domain.session.finalize.dispatch_finalize_action`` (P3.9a)."""
+        await _finalize.dispatch_finalize_action(self, action, now_unix)
 
     async def _finalize_with_latch(
         self, body: Callable[[], Awaitable[None]], *, label: str
     ) -> None:
-        """Serialize + de-dupe a terminal archive write (P3e.4).
-
-        Both terminal writers (_do_oss_fetch, _run_finalize_incomplete) run
-        their body through here. The latch:
-          1. captures the live session's start_ts SYNCHRONOUSLY (before any
-             await) so a concurrent second entry snapshots the same key while
-             the session is still active;
-          2. acquires _finalize_lock (serializes all finalize entries);
-          3. no-ops if that start_ts was already FINALIZED to completion
-             (== _finalizing_start_ts, which _post_archive_reset stamps on a
-             successful archive+end_session) — the concurrent-double-fire case;
-          4. otherwise runs ``body`` and releases in a finally.
-
-        Crucially _finalizing_start_ts is set on COMPLETION, not at entry, so a
-        legitimate SEQUENTIAL retry of a still-pending OSS fetch (the
-        AWAIT_OSS_FETCH retry loop, which early-returns without completing while
-        the cloud summary is not yet available) is NOT de-duped — only a second
-        entry that races a finalize that actually completed is.
-
-        The disk-fallback manual case (no live session → started_unix is None)
-        is never de-duped here (no key to match); the archive-level
-        (md5, start_ts) dedup remains the backstop for it. ``label`` only tags
-        the no-op debug log.
-        """
-        # Capture BEFORE the first await: both concurrent entries snapshot the
-        # same start_ts while the session is still active, before either body
-        # runs end_session().
-        intended_start = self.live_map.started_unix
-        async with self._finalize_lock:
-            if (
-                intended_start is not None
-                and intended_start == self._finalizing_start_ts
-            ):
-                LOGGER.debug(
-                    "[F5.6.1] _finalize_with_latch(%s): session start_ts=%s "
-                    "already finalized — no-op (concurrent trigger)",
-                    label, intended_start,
-                )
-                return
-            await body()
+        """Delegates to ``domain.session.finalize.finalize_with_latch`` (P3.9a)."""
+        await _finalize.finalize_with_latch(self, body, label=label)
 
     async def _merge_recorder_into_payload(
         self, payload: dict[str, Any], *, label: str
     ) -> None:
-        """Recorder-merge safety net (2026-05-16 spec) — shared by both
-        terminal archive writers (_do_oss_fetch and _run_finalize_incomplete).
-
-        Fills gaps in the battery/wifi/state/charging/error sample arrays from
-        HA's recorder history for the session's ``[start, end]`` window.
-        Idempotent; any failure leaves the in_progress samples untouched.
-
-        ``label`` only varies the INFO log line so the two callers stay
-        distinguishable in the log; behaviour is otherwise identical.
-        """
-        try:
-            from ._recorder_merge import merge_recorder_samples
-
-            _start_ts = int(payload.get("start") or 0)
-            _end_ts = int(payload.get("end") or 0)
-            if _start_ts > 0 and _end_ts > _start_ts:
-                _counts = await merge_recorder_samples(
-                    self.hass, payload, _start_ts, _end_ts,
-                )
-                LOGGER.info(
-                    "[recorder_merge] %s: "
-                    "battery=%d, wifi=%d, state=%d, charging=%d, error=%d "
-                    "samples merged from recorder for session [%d, %d]",
-                    label,
-                    _counts["battery_recorder_count"],
-                    _counts["wifi_recorder_count"],
-                    _counts["state_recorder_count"],
-                    _counts["charging_recorder_count"],
-                    _counts["error_recorder_count"],
-                    _start_ts, _end_ts,
-                )
-        except Exception:
-            LOGGER.exception(
-                "[recorder_merge] %s: merge failed; "
-                "using in_progress samples only",
-                label,
-            )
+        """Delegates to ``domain.session.finalize.merge_recorder_into_payload`` (P3.9a)."""
+        await _finalize.merge_recorder_into_payload(self, payload, label=label)
 
     async def _post_archive_reset(
         self,
@@ -830,211 +398,31 @@ class _SessionMixin:
         extra_updates: dict | None = None,
         delete_log_tag: str = "_do_finalize_incomplete",
     ) -> None:
-        """Shared post-archive teardown for both terminal writers.
-
-        Runs the sequence both writers run after a successful archive:
-          1. delete_in_progress (executor, try/except-logged) — removes the
-             synthesized in-progress entry so the picker doesn't show a phantom
-             "in progress" row alongside the archived entry.
-          2. _clear_pending_op() — drop the pending op latches + sidecar.
-          3. _fire_mowing_ended(...) — emit the lifecycle event.
-          4. live_map.end_session().
-          5. async_set_updated_data(replace(... pending_* cleared, count, ...)).
-
-        ``archived_session_count`` is read AFTER delete_in_progress (the archive
-        write has already happened in the caller), matching prior behaviour.
-
-        ``extra_updates`` carries the cloud path's extra MowerState fields
-        (latest_session_*, total_lawn_area_m2); the caller computes them and
-        passes the dict. The local path passes None.
-
-        ``delete_log_tag`` only varies the delete_in_progress warning prefix so
-        the two callers stay distinguishable in the log.
-        """
-        # Without this, the synthesized in-progress entry keeps
-        # reappearing in the picker after every finalize, leaving the
-        # archived entry _and_ a phantom "in progress" row side-by-side.
-        try:
-            await self.hass.async_add_executor_job(
-                self.session_archive.delete_in_progress
-            )
-        except Exception as ex:
-            LOGGER.warning(
-                "[F5.6.1] %s: delete_in_progress raised: %s", delete_log_tag, ex
-            )
-
-        self._clear_pending_op()
-
-        self._fire_mowing_ended(
+        """Delegates to ``domain.session.finalize.post_archive_reset`` (P3.9a)."""
+        await _finalize.post_archive_reset(
+            self,
             now_unix=now_unix,
             area_mowed_m2=area_mowed_m2,
             duration_min=duration_min,
             completed=completed,
-        )
-        # Stamp the finalize latch's completion key (P3e.4) BEFORE end_session()
-        # clears started_unix. A concurrent second finalize of this same session
-        # — which snapshotted the same start_ts before either body ran — then
-        # no-ops at the latch's pre-check instead of double-archiving.
-        if self.live_map.started_unix is not None:
-            self._finalizing_start_ts = self.live_map.started_unix
-        self.live_map.end_session()
-        new_count = self.session_archive.count
-        self.async_set_updated_data(
-            dataclasses.replace(
-                self.data,
-                pending_session_object_name=None,
-                pending_session_first_event_unix=None,
-                pending_session_last_attempt_unix=None,
-                pending_session_attempt_count=None,
-                archived_session_count=new_count,
-                session_started_unix=None,
-                session_track_segments=(),
-                **(extra_updates or {}),
-            )
+            extra_updates=extra_updates,
+            delete_log_tag=delete_log_tag,
         )
 
     async def _run_finalize_incomplete(self, now_unix: int) -> None:
-        """Archive whatever the live_map has as an "(incomplete)" session.
+        """Delegates to ``domain.session.finalize.run_finalize_incomplete`` (P3.9a).
 
-        Builds a minimal ArchivedSession directly from LiveMapState (no cloud
-        summary), archives it, then clears pending state and ends the session.
-
-        The archived entry has md5="(incomplete)" so callers can distinguish it
-        from a cloud-fetched session.
-
-        Called from several paths:
-          - ``_dispatch_finalize_action(FinalizeAction.FINALIZE_INCOMPLETE)``
-            (periodic retry gate, F5.6.1)
-          - ``_route_finalize`` local arm (gate + new-command boundary)
-          - ``_finalize_non_mow_immediate`` (s2p2=75 / task_state edge)
-          - ``dispatch_action(MowerAction.FINALIZE_SESSION, ...)``
-            (manual escape hatch, F5.10.1)
-
-        The actual work runs inside _finalize_with_latch so concurrent entries
-        for the same session de-dupe (single finalize latch, P3e.4).
+        The single finalize latch (P3e.4) is preserved VERBATIM in the domain
+        module; concurrent same-session entries de-dupe there.
         """
-        await self._finalize_with_latch(
-            lambda: self._do_run_finalize_incomplete(now_unix),
-            label="FINALIZE_INCOMPLETE",
-        )
+        await _finalize.run_finalize_incomplete(self, now_unix)
 
     async def _do_run_finalize_incomplete(self, now_unix: int) -> None:
-        """Body of _run_finalize_incomplete — see that method. Always invoked
-        through _finalize_with_latch (never call directly)."""
-        LOGGER.info(
-            "[F5.6.1] _do_finalize_incomplete: giving up on cloud summary; "
-            "archiving incomplete session (started_unix=%s, points=%d)",
-            self.live_map.started_unix,
-            self.live_map.total_points(),
-        )
+        """Delegates to ``domain.session.finalize.do_run_finalize_incomplete`` (P3.9a).
 
-        # Build a minimal ArchivedSession from whatever we have.
-        # v1.0.0a24: if live_map is empty (session already ended but
-        # in_progress.json wasn't promoted because the cloud summary
-        # never arrived), fall back to the on-disk in_progress.json.
-        # Without this, pressing the "Finalize stuck session" button
-        # after a session ended would either silently no-op or write
-        # a 0-area / 0-duration bogus entry.
-        if self.live_map.is_active() or self.live_map.track:
-            start_ts = self.live_map.started_unix or now_unix
-            end_ts = now_unix
-            area = self.data.area_mowed_m2 or 0.0
-        else:
-            # Try the disk fallback.
-            try:
-                disk_data = await self.hass.async_add_executor_job(
-                    self.session_archive.read_in_progress
-                )
-            except Exception as ex:
-                LOGGER.warning("finalize_incomplete: read_in_progress failed: %s", ex)
-                disk_data = None
-            if disk_data:
-                start_ts = int(disk_data.get("session_start_ts", 0)) or now_unix
-                end_ts = int(disk_data.get("last_update_ts", now_unix)) or now_unix
-                area = float(disk_data.get("area_mowed_m2", 0.0))
-                LOGGER.info(
-                    "finalize_incomplete: live_map empty; rebuilt from on-disk "
-                    "in_progress.json (start_ts=%s, end_ts=%s, area=%.1f m²)",
-                    start_ts, end_ts, area,
-                )
-            else:
-                LOGGER.info(
-                    "finalize_incomplete: no live session and no on-disk in_progress; "
-                    "nothing to finalize — exiting"
-                )
-                return
-        duration_min = max(0, (end_ts - start_ts) // 60)
-
-        # Write a minimal JSON to disk so the session isn't silently lost.
-        # Uses the same archive() mechanism but with a synthesised summary-like dict.
-        incomplete_payload: dict[str, Any] = {
-            "start": start_ts,
-            "end": end_ts,
-            "time": duration_min,
-            "areas": area,
-            "md5": "(incomplete)",
-            "_note": "Cloud summary fetch expired; this entry was generated locally.",
-        }
-        # v1.0.12a2+: include telemetry sample buffers, legs, and
-        # settings_snapshot when present. Delegates to the shared helper
-        # in _LidarOssMixin so both paths stay in sync.
-        self._inject_live_map_into_raw_dict(incomplete_payload)
-
-        # Recorder-merge safety net (2026-05-16 spec) — same layer
-        # _do_oss_fetch uses, applied to the FINALIZE_INCOMPLETE
-        # payload before it gets archived.
-        await self._merge_recorder_into_payload(
-            incomplete_payload, label="FINALIZE_INCOMPLETE",
-        )
-
-        # Apply smoothing-only classify so incomplete-session archives get role
-        # refinement (cloud_track=[] → smoothing still runs on track points).
-        try:
-            from ._lidar_oss import finalize_classify_raw_dict
-            finalize_classify_raw_dict(incomplete_payload, [])
-        except Exception:
-            LOGGER.debug(
-                "[F5.6.1] _do_finalize_incomplete: classify failed; "
-                "incomplete archive will have stage-1 roles only"
-            )
-
-        # Build a duck-typed proxy that satisfies SessionArchive.archive(summary).
-        # We use a SimpleNamespace because class-level attribute assignments can't
-        # reference the enclosing function's local variables in Python.
-        import types as _types
-        proxy = _types.SimpleNamespace(
-            md5="(incomplete)",
-            end_ts=end_ts,
-            start_ts=start_ts,
-            duration_min=duration_min,
-            area_mowed_m2=area,
-            map_area_m2=0,
-            mode=0,
-            result=0,
-            stop_reason=0,
-        )
-
-        try:
-            await self.hass.async_add_executor_job(
-                self.session_archive.archive, proxy, incomplete_payload,
-                self._resolve_finalize_map_id()
-            )
-        except Exception as ex:
-            LOGGER.warning("[F5.6.1] _do_finalize_incomplete: archive raised: %s", ex)
-
-        # Clear pending state, delete the in-progress entry, fire the
-        # mowing-ended event, and end the live_map session. Shared with the
-        # cloud path via _post_archive_reset (local path = no extra updates).
-        await self._post_archive_reset(
-            now_unix=now_unix,
-            area_mowed_m2=area,
-            duration_min=(
-                int((now_unix - start_ts) / 60)
-                if start_ts > 0
-                else None
-            ),
-            completed=False,
-        )
+        Always invoked through _finalize_with_latch (never call directly).
+        """
+        await _finalize.do_run_finalize_incomplete(self, now_unix)
 
     def _load_pending_op_from_sidecar(self) -> None:
         """Restore the pending task op persisted before a boot (no live session
