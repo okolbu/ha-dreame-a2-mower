@@ -48,10 +48,19 @@ into layer-4 services that own their attrs — this is how the attr-bundling ver
 >    high-blast-radius for no behavioural gain (T2-16 verdict; track-2 autopsy #7).
 >    Consequence: `_core.py` lands at ~950 LOC (≈380 of which is the one-attr-per-
 >    line `__init__` hub + the P3.2 transitional accessors + `_init_cloud`/
->    `_init_mqtt`), NOT ≤400. That is the accepted cost of decision (2). Every
->    `domain/` service meets the ≤400 per-module cap; `domain/boot.py` (~530, the
->    first-refresh poll orchestrator, already split into ordered seam functions) is
->    a recorded >400 exception.
+>    `_init_mqtt`), NOT ≤400. That is the accepted cost of decision (2).
+>
+> 3. **P3 prioritized verbatim-move behaviour-identity over the ≤400 per-module
+>    cap.** Several `domain/` modules that received large verbatim method-moves
+>    exceed the cap and are recorded >400 exceptions (LOC as of the P3.9e capstone,
+>    2026-07-04): `session/finalize.py` 1096, `session/replay.py` 1057,
+>    `ingress.py` 665, `session/lifecycle_events.py` 598, `boot.py` 529 (the
+>    first-refresh poll orchestrator, split into ordered seam functions),
+>    `wifi/service.py` 458. The P3 mandate was de-godding + strict layering with
+>    corpus-IDENTICAL proof — NOT reshaping the moved logic (which would have
+>    broken the verbatim-move safety argument). Splitting these along their own
+>    internal seams is post-P3 cleanup (candidate for a P4+ pass), not a P3 miss.
+>    Every other `domain/` module is ≤400.
 
 ## 2. Target package tree
 
