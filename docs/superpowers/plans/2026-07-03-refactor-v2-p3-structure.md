@@ -81,15 +81,18 @@
 
 **Files:** `domain/session/{finalize,persistence,replay}.py` (from `_session.py` + `_lidar_oss.py` §1 + `session_card.py` contents — killing the T2-13 misnomer); `domain/writes/` (absorbs `_writes.py` families + Task 5's `_writers.py`; **P2-inherits fixed here:** write_setting per-field revert, AI-bit bare assigns); `domain/media/gallery.py`; `domain/wifi/service.py` (+ `_lidar_oss` wifi cache consolidation); `domain/lidar/service.py`; `domain/{notifications,faults,ota,device_sync,gps}.py`; `services/` package for HA services (registration + per-domain handlers + `debug.py`).
 
-- [ ] Each service owns its attrs (moved from `_CoreMixin.__init__` — this is how T2-16's verdict lands: no standalone bundling, attrs move WITH their service); entities reach services via coordinator properties (Task 2's accessors relocate). Finalize/latch/dock-wait logic moves verbatim under the interleaving tests.
-- [ ] rc=5 backoff escalation + on_unload canceller registry (P2-inherits) implemented in the lifecycle-owning service.
-- [ ] Multi-commit by service; each commit gates. **CHECKPOINT.**
+- [x] **LANDED (P3.8, commits 5a855b4e..c670cfad):** the 4 P2-inherit correctness fixes (write_setting per-field revert, AI-bit broadcast, rc=5 bounded escalation, self-cleaning canceller registry), `CloudState.from_parts` factory, and the `services/` package + `debug.py` isolation.
+- [ ] **DEFERRED to the decomposed Task 9 sequence below** (review-driven, 2026-07-04): the actual mixin→domain-service extractions were judged ~4,700 LOC of high-blast-radius verbatim moves — too large for one atomic task. The original P3.8 brief's own "multi-commit by service, each gates" discipline is realized as per-service checkpointed tasks 9a–9d, then the thin-coordinator collapse (9e).
 
-## Task 9: thin coordinator (autopsy #7) — GO/NO-GO after
+## Task 9 (decomposed) — mixin→domain-service extractions, then thin coordinator
 
-- [ ] `coordinator/` package → single `coordinator.py` composition root (target ≤400 LOC, recorded exception allowed): constructs transports+services, owns the spine (`data`, `cloud_state`, `state_machine`, `live_map`), `_async_update_data` composes per-service refresh slices (the 450-LOC poll body dissolves along autopsy #7 seams). Public re-exports preserved via `coordinator/__init__` → module swap (import sites unchanged until Task 10).
-- [ ] CLAUDE.md coordinator section REWRITTEN (the "package is the contract / don't bring back coordinator.py" rule is superseded by the approved architecture — say so explicitly, citing the architecture doc).
-- [ ] Gates; commits. **CHECKPOINT.**
+Each 9x: attrs move WITH their service (T2-16 — no standalone bundling); entities reach services via coordinator properties (P3.2 accessors relocate + the ~26 dot-access sites convert WITH the move); logic moves VERBATIM (corpus IDENTICAL is the proof); per-service commits, each gates. The P3.7 delegator pattern is the template.
+
+- [ ] **9a — session service:** `_session.py` (1232) + `_lidar_oss.py §1` OSS-finalize → `domain/session/{finalize,persistence,replay}.py`; `session_card.py` contents → `replay.py` (kills the T2-13 misnomer, session_card.py dies). Finalize latch/dock-wait/begin-end VERBATIM under `test_finalize_interleavings`/`test_finalize_latch`/`test_pending_finalize`. **CHECKPOINT.**
+- [ ] **9b — writes service:** `_writes.py` (826) families + P3.5's `cloud_client/_writers.py` → `domain/writes/{service,schedule,settings,tasks,map_edit}.py` (the set_cfg/set_pre/OTA-trigger final home). WriteResult end-to-end preserved; the per-field revert (already landed) moves with it.
+- [ ] **9c — media/wifi/lidar services:** `_lidar_oss.py §2/§3/§4` → `domain/media/gallery.py` + `domain/wifi/service.py` (wifi-cache consolidation) + `domain/lidar/service.py`; the Messages mutable-list aliasing resolves via sole-writer ownership.
+- [ ] **9d — notifications/device_sync/gps/faults/ota:** `_notifications.py`, `_device_sync.py`, `gps` refresh, faults, ota → `domain/{notifications,device_sync,gps,faults,ota}.py`. rc=5 escalation + canceller registry (landed in 9? — relocate the P3.8 `_managed_timers`/rc=5 code from `_core.py` into the lifecycle-owning service here).
+- [ ] **9e — thin coordinator (autopsy #7):** `coordinator/` package → single `coordinator.py` composition root (target ≤400 LOC, recorded exception allowed): constructs transports+services, owns the spine (`data`, `cloud_state`, `state_machine`, `live_map`); `_async_update_data` composes per-service refresh slices (the 450-LOC poll body dissolves); `_CoreMixin.__init__` 75-attr shrink completes (attrs now live on services). CLAUDE.md coordinator section REWRITTEN (the "package is the contract / don't bring back coordinator.py" rule is superseded by the approved architecture — cite it). Public re-exports preserved via `coordinator/__init__` until Task 10. **CHECKPOINT.**
 
 ## Task 10: renames, shim retirement, import rewrite (R-34, T2-13)
 
