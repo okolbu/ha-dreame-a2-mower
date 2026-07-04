@@ -13,8 +13,10 @@ This file adds NO new event infrastructure. It re-uses:
 
 - the `dreame_a2_mower_event` bus event already fired with the payload
   `{entity_id, event_type, data}`;
-- `LIFECYCLE_EVENT_TYPES` (12 types) and the catalog-derived
-  `NOTIFICATION_EVENT_TYPES` from `const.py`.
+- `LIFECYCLE_EVENT_TYPES` from `const.py` and the catalog-derived
+  notification slugs (`triggerable_notification_slugs()`) from
+  `mower/error_codes.py` directly — const.py does not re-export the
+  catalog-derived tables (R-30 layering inversion).
 
 Tier-derived exposed set
 ------------------------

@@ -326,8 +326,8 @@ def test_s2p2_event_types_values_two_intentional_collisions():
 def test_every_slug_is_in_notification_event_types():
     """The notification entity must declare every slug we can emit, including
     the fallback `unknown_s2p2`. Uses the error_codes-derived NOTIFICATION_EVENT_TYPES
-    (catalog-authoritative home). const.NOTIFICATION_EVENT_TYPES will be updated
-    to re-export from error_codes in Task 3."""
+    (catalog-authoritative home; const.py does NOT re-export it — R-30 layering
+    inversion, see mower/error_codes.py)."""
     from custom_components.dreame_a2_mower.mower.error_codes import (
         NOTIFICATION_EVENT_TYPES as EC_NOTIFICATION_EVENT_TYPES,
     )
@@ -345,8 +345,8 @@ def test_notification_event_types_cover_all_s2p2_slugs():
     _attr_event_types (= NOTIFICATION_EVENT_TYPES). If a slug is added to
     S2P2_EVENT_TYPES without updating const, that notification silently
     never fires. Uses the error_codes-derived NOTIFICATION_EVENT_TYPES
-    (catalog-authoritative home). const.NOTIFICATION_EVENT_TYPES will be updated
-    to re-export from error_codes in Task 3.
+    (catalog-authoritative home; const.py does NOT re-export it — R-30 layering
+    inversion, see mower/error_codes.py).
     """
     from custom_components.dreame_a2_mower.mower.error_codes import (
         NOTIFICATION_EVENT_TYPES as EC_NOTIFICATION_EVENT_TYPES,

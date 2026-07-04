@@ -176,12 +176,19 @@ def test_notification_event_types_derived_and_deduped():
     assert NOTIFICATION_EVENT_TYPES[-1] == "unknown_s2p2"
 
 
-def test_const_reexports_same_notification_event_types():
+def test_const_does_not_reexport_notification_event_types():
+    """R-30 inversion: const.py must NOT re-export the catalog-derived
+    NOTIFICATION_EVENT_TYPES table (that was the foundation->domain back-edge,
+    const -> mower.error_codes -> mower.fault_catalog). Consumers import the
+    table directly from mower.error_codes. const.py only owns the bare
+    S2P2_UNKNOWN_EVENT_TYPE string constant, which error_codes imports FROM
+    const (the inverted direction)."""
     from custom_components.dreame_a2_mower import const
-    from custom_components.dreame_a2_mower.mower.error_codes import (
-        NOTIFICATION_EVENT_TYPES as SRC,
-    )
-    assert const.NOTIFICATION_EVENT_TYPES is SRC
+    from custom_components.dreame_a2_mower.mower import error_codes
+
+    assert not hasattr(const, "NOTIFICATION_EVENT_TYPES")
+    assert const.S2P2_UNKNOWN_EVENT_TYPE == "unknown_s2p2"
+    assert error_codes.S2P2_UNKNOWN_EVENT_TYPE is const.S2P2_UNKNOWN_EVENT_TYPE
 
 
 def test_triggerable_notification_slugs_is_non_info():

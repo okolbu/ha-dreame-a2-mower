@@ -57,15 +57,18 @@ LIFECYCLE_EVENT_TYPES: Final[tuple[str, ...]] = (
     EVENT_TYPE_SELF_SHUTDOWN,
 )
 
-# HA event_type slugs fired by event.dreame_a2_mower_notification, DERIVED from
-# the app catalog (see mower/error_codes.py). Re-exported here for the consumers
-# that import event-type lists from const (event.py, device_trigger.py). The
-# per-notification user-visible text is the cloud/catalog string in the event
-# payload's `text`; the slug is only a stable HA identifier.
-# Source: [apk:g2408-plugin-ext1423].
-from .mower.error_codes import (  # noqa: E402 — re-export
-    NOTIFICATION_EVENT_TYPES as NOTIFICATION_EVENT_TYPES,
-)
+# Slug fired when an s2p2 notification code has no catalog-derived mapping
+# (mower/error_codes.py:S2P2_UNKNOWN_EVENT_TYPE). This is a genuine
+# foundation-layer constant (a bare string, not derived from the fault
+# catalog), so it lives here and `mower/error_codes.py` imports it — the
+# INVERSE of the former `const -> mower.error_codes -> mower.fault_catalog`
+# back-edge (T2-5/R-30). The catalog-DERIVED slug tables themselves
+# (S2P2_EVENT_TYPES, NOTIFICATION_EVENT_TYPES, triggerable_notification_slugs)
+# stay in mower/error_codes.py — they need the fault catalog's data and
+# cannot be foundation-layer constants. Consumers that need the derived
+# tables (event.py, device_trigger.py) import them directly from
+# `mower.error_codes`, not through const.
+S2P2_UNKNOWN_EVENT_TYPE: Final = "unknown_s2p2"
 
 LOGGER: Final = logging.getLogger(__package__)
 """Module-level logger. Per spec §3, every layer-3 file uses this."""

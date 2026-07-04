@@ -19,6 +19,7 @@ it sees a code not in the catalog.
 """
 from __future__ import annotations
 
+from ..const import S2P2_UNKNOWN_EVENT_TYPE as S2P2_UNKNOWN_EVENT_TYPE
 from . import fault_catalog
 
 
@@ -70,8 +71,9 @@ S2P2_EVENT_TYPES: dict[int, str] = _derive_iot_slugs()
 
 # Slug fired when s2p2 carries a value not in S2P2_EVENT_TYPES — the cloud still
 # provides authoritative text in the payload; the slug is generic so HA can
-# register the event_type up-front.
-S2P2_UNKNOWN_EVENT_TYPE = "unknown_s2p2"
+# register the event_type up-front. Defined in const.py (foundation layer,
+# a bare string with no catalog dependency) and imported above — this module
+# imports FROM const, not the other way around (R-30 inversion).
 
 # The event_types advertised by event.dreame_a2_mower_notification: the unique
 # derived slugs (sorted for stability) plus the unknown sentinel. Defined here

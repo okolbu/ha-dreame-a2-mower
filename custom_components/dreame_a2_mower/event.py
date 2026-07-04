@@ -22,12 +22,12 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from ._devices import mower_device_info, mower_unique_id
 from .const import (
-    NOTIFICATION_EVENT_TYPES,
     DOMAIN,
     LIFECYCLE_EVENT_TYPES,
     LOGGER,
 )
 from .coordinator import DreameA2MowerCoordinator
+from .mower.error_codes import NOTIFICATION_EVENT_TYPES
 
 
 async def async_setup_entry(

@@ -4,13 +4,15 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from custom_components.dreame_a2_mower.const import (
-    NOTIFICATION_EVENT_TYPES,
     EVENT_TYPE_MOWING_STARTED,
     LIFECYCLE_EVENT_TYPES,
 )
 from custom_components.dreame_a2_mower.event import (
     DreameA2LifecycleEventEntity,
     DreameA2NotificationEventEntity,
+)
+from custom_components.dreame_a2_mower.mower.error_codes import (
+    NOTIFICATION_EVENT_TYPES,
 )
 
 
