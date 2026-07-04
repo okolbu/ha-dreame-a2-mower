@@ -211,8 +211,12 @@ def test_init_configures_wifi_retention():
 
 def test_periodic_archive_timer_is_registered():
     """The setup path registers the periodic archive re-list timer — guards
-    against the freshness wiring silently disappearing."""
-    from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
+    against the freshness wiring silently disappearing.
+
+    The first-refresh poll body moved to ``domain/boot.py`` (P3.9e); the
+    coordinator's ``_async_update_data`` now delegates to
+    ``boot.async_first_refresh``, so inspect the boot module for the timer."""
+    from custom_components.dreame_a2_mower.domain import boot
     import inspect
-    src = inspect.getsource(DreameA2MowerCoordinator._async_update_data)
+    src = inspect.getsource(boot)
     assert "_periodic_archive_refresh" in src

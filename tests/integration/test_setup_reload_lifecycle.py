@@ -40,6 +40,7 @@ from custom_components.dreame_a2_mower.coordinator import (
     DreameA2MowerCoordinator,
 )
 from custom_components.dreame_a2_mower.coordinator import _core as _core_mod
+from custom_components.dreame_a2_mower.domain import boot as _boot_mod
 
 from tests.factories import make_entry, make_hass
 
@@ -227,7 +228,10 @@ def lifecycle(monkeypatch, tmp_path):
 
     monkeypatch.setattr(_core_mod, "DreameA2CloudClient", _FakeCloudClient)
     monkeypatch.setattr(_core_mod, "DreameA2MqttClient", _FakeMqttClient)
-    monkeypatch.setattr(_core_mod, "async_track_time_interval", timers.track)
+    # P3.9e: the first-refresh timer registration moved to domain/boot.py, so
+    # the async_track_time_interval seam is patched there now (the transport
+    # clients stay on _core, exercised by _init_cloud/_init_mqtt).
+    monkeypatch.setattr(_boot_mod, "async_track_time_interval", timers.track)
     # async_setup_entry resolves the coordinator class at call time via
     # `from .coordinator import DreameA2MowerCoordinator` — patch the package
     # attribute so the real setup path constructs the lifecycle subclass.
