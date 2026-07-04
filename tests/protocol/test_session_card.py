@@ -110,6 +110,33 @@ def test_build_identity_outcome_long_session():
     assert isinstance(result["result_label"], str)
 
 
+def test_summary_exposes_raw_telemetry_samples():
+    """The replay charts read picked_session.battery_samples / wifi_samples;
+    the summary must re-expose the archive arrays verbatim (they were consumed
+    for derived stats but never surfaced, so the charts were always blank).
+    Row shapes must stay [ts, pct] and [x, y, rssi, ts] for the chart indices."""
+    raw, summary, entry = _load_session("long_with_recharges")
+    raw_mut = dict(raw)
+    raw_mut["battery_samples"] = [[1778680800, 90], [1778680860, 88]]
+    raw_mut["wifi_samples"] = [[1.0, 2.0, -55, 1778680800], [1.5, 2.5, -60, 1778680860]]
+    result = build_picked_session_summary(raw_mut, summary, entry, "lbl")
+    assert result["battery_samples"] == [[1778680800, 90], [1778680860, 88]]
+    assert result["wifi_samples"] == [[1.0, 2.0, -55, 1778680800], [1.5, 2.5, -60, 1778680860]]
+    # chart index contract: battery ts@0 pct@1, wifi rssi@2 ts@3
+    assert result["battery_samples"][0][0] == 1778680800 and result["battery_samples"][0][1] == 90
+    assert result["wifi_samples"][0][2] == -55 and result["wifi_samples"][0][3] == 1778680800
+
+
+def test_summary_telemetry_samples_default_empty():
+    """No sample arrays in the archive → [] (not missing), so the chart's
+    `||[]` guard renders an empty-but-valid graph rather than erroring."""
+    raw, summary, entry = _load_session("long_with_recharges")
+    raw_mut = {k: v for k, v in raw.items() if k not in ("battery_samples", "wifi_samples")}
+    result = build_picked_session_summary(raw_mut, summary, entry, "lbl")
+    assert result["battery_samples"] == []
+    assert result["wifi_samples"] == []
+
+
 def test_build_identity_outcome_incomplete():
     raw, summary, entry = _load_session("incomplete")
     result = build_picked_session_summary(raw, summary, entry, "lbl")

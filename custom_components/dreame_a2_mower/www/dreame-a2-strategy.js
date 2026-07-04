@@ -873,7 +873,7 @@ function messagesView(ctx) {
     any = true;
     cards.push(
       markdown(
-        `{% set items = state_attr('${eid}','items') or [] %}\n**{{ items | count }} messages**\n{% for msg in items %}\n- {{ '🔵' if msg.unread else '⚪' }} **{{ msg.title }}**{% if msg.body %}<br>{{ msg.body }}{% endif %}\n{% endfor %}\n{% if not items %}_No messages_{% endif %}`,
+        `{% set items = state_attr('${eid}','items') or [] %}\n**{{ items | count }} messages**\n{% for msg in items %}\n- {{ '🔵' if msg.unread else '⚪' }} **{{ msg.title }}**{% if msg.date %} <span style="font-size:0.8em;color:var(--secondary-text-color)">{{ (as_timestamp(msg.date, 0) | timestamp_custom('%Y-%m-%d %H:%M', true)) if as_timestamp(msg.date, 0) else msg.date }}</span>{% endif %}{% if msg.body %}<br>{{ msg.body }}{% endif %}\n{% endfor %}\n{% if not items %}_No messages_{% endif %}`,
         m.title,
       ),
     );

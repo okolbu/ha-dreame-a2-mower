@@ -727,6 +727,18 @@ def build_picked_session_summary(
     # the coordinator from the session's photo_list; [] when none / not built).
     out["photos"] = photos or []
 
+    # Raw per-session telemetry series for the replay charts (the strategy
+    # dashboard's plotly cards read these attributes directly). The summary
+    # already CONSUMES these arrays for derived stats (_battery_drops_and_rises
+    # etc.) but did not re-expose them, so the charts were always blank. Row
+    # shapes are the archive's: battery_samples = [ts, pct] (chart reads idx
+    # 0/1), wifi_samples = [x, y, rssi, ts] (chart reads idx 2/3). The sensor
+    # excludes all attributes from the recorder (_unrecorded_attributes={"*"}),
+    # so these do not bloat the history DB. Telemetry, not mow-stats — surfaced
+    # for every session type.
+    out["battery_samples"] = raw_dict.get("battery_samples") or []
+    out["wifi_samples"] = raw_dict.get("wifi_samples") or []
+
     # Always surface session classification fields.
     out["session_type"] = session_type
     out["outcome"] = raw_dict.get("outcome") or getattr(entry, "outcome", None)
