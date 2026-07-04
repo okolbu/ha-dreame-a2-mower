@@ -234,6 +234,18 @@ jobs:
         with:
           python-version: '3.13'
 
+      - name: Set up Node 22
+        # refactor-v2 P6.5a (R-67): tests/www/*.mjs harnesses (strategy_harness,
+        # card_core_harness, projection_parity, map_editor_*, schedule_modal,
+        # patrol_attr_panel, wifi_overlay_key, ...) are wrapped by
+        # tests/www/test_*.py using @pytest.mark.skipif(shutil.which("node") is
+        # None) — without a node binary on PATH they silently SKIP instead of
+        # running. The harnesses are dependency-free .mjs (no package.json /
+        # npm install needed) — bare `node <harness>.mjs` is sufficient.
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip

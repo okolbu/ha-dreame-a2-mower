@@ -972,6 +972,63 @@ online; corpus IDENTICAL.
 **Status:** open (deferred from P5.5 to P6)
 **Cross-refs:** `state/snapshot.py` (persisted StateSnapshot); `domain/render.py:render_base` (+`_active_map_id`); entity `available` props on the settings switches; memory `project_refactor_v2_2026_07_02`; `.superpowers/sdd/progress.md` P5.5 findings.
 
+---
+
+### Pillow 14 deprecation deadline (2027-10-15) — `Image.getdata()` in the test suite
+
+**Why:** Pillow 14 is scheduled to remove `Image.Image.getdata()` on 2027-10-15
+(the warning text: `Image.Image.getdata is deprecated and will be removed in
+Pillow 14 (2027-10-15). Use get_flattened_data instead.`). A 2026-07-05 audit
+(refactor-v2 P6.5a, R-67) checked the codebase against the Pillow-14 removed/
+deprecated API surface — `textsize`/`multiline_textsize`, `ImageFont.getsize`/
+`font.getsize`, the removed `Image.ANTIALIAS`/`Image.LINEAR`/`Image.CUBIC`
+resampling aliases, `Image.frombuffer`/`tobitmap` raw-mode usage, and
+`ImageDraw.getfont` — with Pillow 12.1.1 installed (`python -c 'import PIL;
+print(PIL.__version__)'`).
+**Findings:**
+- **Production rendering code is clean.** `map_render/base_map.py`,
+  `main_view.py`, `work_log.py`, `stripes.py` use only current, non-deprecated
+  API: `ImageDraw.Draw`, `ImageFont.truetype`/`load_default`,
+  `draw.text`/`.polygon`/`.line`, `Image.new`/`.open`/`.alpha_composite`/
+  `.composite`/`.transpose`, and the resampling constant `Image.BICUBIC`
+  (`base_map.py:352`) — confirmed still a live, non-deprecated top-level alias
+  of `Image.Resampling.BICUBIC` under Pillow 12.1.1 (no `DeprecationWarning` on
+  access), unlike `Image.ANTIALIAS` which Pillow already removed. No
+  `textsize`/`getsize`/`getfont`/`frombuffer`/`tobitmap` hits anywhere in
+  `custom_components/`. The lone `.getsize(` grep hit is `os.path.getsize` in
+  `cloud_client/_helpers.py:50` (filesystem, unrelated to PIL).
+- **The TEST SUITE does use a Pillow-14-removed call**, confirmed by running
+  `pytest tests/ -W always::DeprecationWarning -k render`: `Image.getdata()` is
+  called in 15 sites across 9 files — `tests/map_render/test_render_base.py:95`,
+  `tests/protocol/test_m_path_render.py:50,68,83,104,151`,
+  `tests/protocol/test_nav_paths_render.py:71,86`,
+  `tests/protocol/test_patrol_render.py:29`,
+  `tests/protocol/test_render_base_with_obstacles.py:67,107`,
+  `tests/protocol/test_render_dark_green_base.py:62`,
+  `tests/protocol/test_render_traversal_visible.py:72`,
+  `tests/protocol/test_render_work_log_uses_split.py:78`,
+  `tests/integration/test_work_log_render.py:52`. All are test-only pixel
+  assertions (`set(img.getdata())` / `list(img.getdata())` / pixel-membership
+  checks) — none are in shipped `custom_components/` code.
+**Conclusion:** no Pillow-14-removed API in use in shipped code as of Pillow
+12.1.1; the only removal-scheduled call site is `Image.getdata()` in 9 test
+files (15 sites, listed above), which the Pillow 14 changelog says to replace
+with `get_flattened_data()`.
+**Done when:** the 15 `.getdata()` test call sites are switched to
+`get_flattened_data()` (or whatever Pillow 14's stable replacement API turns
+out to be) before Pillow 14 ships, and a follow-up grep confirms no new
+deprecated call sites were introduced in the interim.
+**Status:** open (deadline 2027-10-15; low urgency — 2026-07-05 audit found the
+gap is test-only, production code is already clean).
+**Precaution:** re-audit if a Pillow `DeprecationWarning` surfaces in the render
+tests before then (run `pytest tests/ -W always::DeprecationWarning -k render`);
+consider pinning `pillow<14` in `manifest.json` in the meantime if desired
+(currently `pillow>=10.0`, unpinned on the upper bound).
+**Cross-refs:** `custom_components/dreame_a2_mower/manifest.json` (`pillow>=10.0`);
+`map_render/base_map.py`; the 9 test files listed above.
+
+---
+
 ### `MowerAction.SUPPRESS_FAULT` semantics
 
 **Why:** The service exists in the integration but has never been live-tested.
