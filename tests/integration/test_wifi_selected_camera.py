@@ -210,7 +210,7 @@ def test_camera_reads_archive_body_via_store():
 def test_camera_passes_flip_kwargs_to_renderer():
     cam, _ = _make_camera_with_flips(flip_x=True, flip_y=False)
     with patch(
-        "custom_components.dreame_a2_mower.wifi_map_render.render_wifi_map_png"
+        "custom_components.dreame_a2_mower.wifi.map_render.render_wifi_map_png"
     ) as mock_r:
         mock_r.return_value = b"\x89PNG..."
         loop = asyncio.new_event_loop()

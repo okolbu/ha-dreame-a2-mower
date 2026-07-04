@@ -5,7 +5,7 @@ from io import BytesIO
 
 from PIL import Image
 
-from custom_components.dreame_a2_mower.wifi_map_render import (
+from custom_components.dreame_a2_mower.wifi.map_render import (
     CELL_PX,
     render_wifi_map_png,
 )

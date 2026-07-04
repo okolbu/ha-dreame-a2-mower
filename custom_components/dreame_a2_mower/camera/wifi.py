@@ -78,7 +78,7 @@ class DreameA2WifiSelectedCamera(
             self.hass is not None
             and self.hass.states.is_state(self._FLIP_Y_ENTITY, "on")
         )
-        from ..wifi_map_render import render_wifi_map_png
+        from ..wifi.map_render import render_wifi_map_png
         return await self.hass.async_add_executor_job(
             lambda: render_wifi_map_png(decoded, flip_x=flip_x, flip_y=flip_y)
         )
@@ -211,7 +211,7 @@ class DreameA2WifiPerMapCamera(
             self.hass is not None
             and self.hass.states.is_state(self._FLIP_Y_ENTITY, "on")
         )
-        from ..wifi_map_render import render_wifi_map_png
+        from ..wifi.map_render import render_wifi_map_png
         return await self.hass.async_add_executor_job(
             lambda: render_wifi_map_png(decoded, flip_x=flip_x, flip_y=flip_y)
         )

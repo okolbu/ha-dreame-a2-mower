@@ -1,7 +1,7 @@
 """Tests for wifi_match.py: heatmap → session fingerprint matcher."""
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.wifi_match import (
+from custom_components.dreame_a2_mower.wifi.match import (
     NO_DATA_SENTINEL,
     match_heatmap_to_session,
     score_candidates,

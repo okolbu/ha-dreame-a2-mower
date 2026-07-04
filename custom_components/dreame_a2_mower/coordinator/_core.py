@@ -19,7 +19,7 @@ from ..protocol.obstacle_markers import ObstacleMarker
 from ..archive.photos import PhotoArchive
 from ..archive.session import SessionArchive
 from ..archive.videos import VideoArchive
-from ..wifi_archive_store import WifiArchiveEntry, WifiArchiveStore
+from ..wifi.archive_store import WifiArchiveEntry, WifiArchiveStore
 from ..cloud_client import DreameA2CloudClient
 from ..domain import boot as _boot
 from ..domain import mqtt_lifecycle as _mqtt_lifecycle

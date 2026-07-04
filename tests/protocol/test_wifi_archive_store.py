@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from custom_components.dreame_a2_mower.wifi_archive_store import (
+from custom_components.dreame_a2_mower.wifi.archive_store import (
     WifiArchiveStore,
     WifiArchiveEntry,
 )

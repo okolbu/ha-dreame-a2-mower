@@ -187,7 +187,7 @@ def test_camera_wifi_overlay_exact_shape(tmp_path):
     # wifi_overlay only appears once a heatmap for the active map is cached;
     # build that state via WifiArchiveStore (mirrors test_active_map_wifi_overlay).
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-    from custom_components.dreame_a2_mower.wifi_archive_store import WifiArchiveStore
+    from custom_components.dreame_a2_mower.wifi.archive_store import WifiArchiveStore
 
     coord = object.__new__(DreameA2MowerCoordinator)
     coord._wifi_archive_store = WifiArchiveStore(tmp_path / "wifi_archive")

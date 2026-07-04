@@ -8,7 +8,7 @@ no-data sentinel are contractually pinned here (the Python alpha 220 is not
 mirrored)."""
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.wifi_map_render import _rssi_to_rgb
+from custom_components.dreame_a2_mower.wifi.map_render import _rssi_to_rgb
 
 
 def test_no_data_sentinel_is_transparent():

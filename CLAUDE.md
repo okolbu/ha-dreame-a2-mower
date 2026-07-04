@@ -780,12 +780,11 @@ The WiFi-heatmap support layer is a **package** (`wifi/`, Phase 3c, 2026-06-14):
 (heatmap→PNG renderer). These are NOT entity classes — no HA platform / audit /
 inventory interaction.
 
-The old root paths (`wifi_archive_store.py`, `wifi_match.py`, `wifi_map_render.py`)
-are 1-line re-export **shims** preserving the ~10 coordinator importers + the
-test suite + the card-contract importer. Keep the shims. `wifi_map_render.py`
-carries `_rssi_to_rgb` explicitly (underscore name `import *` won't carry,
-imported by `test_wifi_gradient_contract`) alongside `CELL_PX` + `render_wifi_map_png`.
-New code imports from `wifi.<module>` directly.
+The old root shims (`wifi_archive_store.py`, `wifi_match.py`, `wifi_map_render.py`)
+were **RETIRED in P3.10** — all importers (coordinator, camera, domain, tests)
+rewritten to the canonical `wifi.<module>` paths (`_rssi_to_rgb` lives on
+`wifi.map_render`). Import from `wifi.<module>` directly; there are no root
+re-export shims.
 
 ### entities/ package (sensor / switch / select)
 

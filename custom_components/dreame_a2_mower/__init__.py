@@ -53,7 +53,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # F1: coordinator setup is added in F1.4. Stub for now so the
     # integration can register without errors.
     from .coordinator import DreameA2MowerCoordinator
-    from .wifi_archive_store import WifiArchiveStore
+    from .wifi.archive_store import WifiArchiveStore
     from pathlib import Path as _Path
 
     # Pre-load the wifi archive index via executor so the coordinator

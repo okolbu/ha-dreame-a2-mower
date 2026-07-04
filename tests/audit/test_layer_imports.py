@@ -130,9 +130,6 @@ MODULE_LAYER: dict[str, int] = {
                   # module is DELETED — covered by the "domain" prefix)
     "archive": 4,
     "wifi": 4,
-    "wifi_archive_store": 4,  # root shim -> wifi/archive_store.py
-    "wifi_match": 4,  # root shim -> wifi/match.py
-    "wifi_map_render": 4,  # root shim -> wifi/map_render.py
 
     # ---- 5: entities (descriptor-driven platforms + services (HA API)) ---
     "entities": 5,

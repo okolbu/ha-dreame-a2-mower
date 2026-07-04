@@ -268,7 +268,7 @@ def _run_setup_with_failing_coordinator(coordinator):
 
     with (
         patch(
-            "custom_components.dreame_a2_mower.wifi_archive_store.WifiArchiveStore",
+            "custom_components.dreame_a2_mower.wifi.archive_store.WifiArchiveStore",
             return_value=wifi_store_instance,
         ),
         patch(
@@ -313,7 +313,7 @@ def test_first_refresh_not_ready_still_propagates():
 
     with (
         patch(
-            "custom_components.dreame_a2_mower.wifi_archive_store.WifiArchiveStore",
+            "custom_components.dreame_a2_mower.wifi.archive_store.WifiArchiveStore",
             return_value=wifi_store_instance,
         ),
         patch(

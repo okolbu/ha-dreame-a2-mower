@@ -369,7 +369,7 @@ def tag_wifi_archive_map_ids(coord) -> int:
     4. If the matcher returns a non-None map_id, persist it via
        ``WifiArchiveStore.set_map_id``.
     """
-    from ...wifi_match import match_heatmap_to_session
+    from ...wifi.match import match_heatmap_to_session
 
     store = coord._wifi_archive_store
     if store is None:

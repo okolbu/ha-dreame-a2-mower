@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, AsyncMock
 
 import pytest
 
-from custom_components.dreame_a2_mower.wifi_archive_store import WifiArchiveStore
+from custom_components.dreame_a2_mower.wifi.archive_store import WifiArchiveStore
 
 
 @pytest.fixture

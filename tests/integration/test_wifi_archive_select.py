@@ -195,7 +195,7 @@ def test_set_wifi_render_entry_map_id_none_still_sets_selection():
 def test_wifi_archive_select_options_labeled():
     """Options are formatted as '[Map ?] YYYY-MM-DD HH:MM'."""
     from custom_components.dreame_a2_mower.select import DreameA2WifiArchiveSelect
-    from custom_components.dreame_a2_mower.wifi_archive_store import WifiArchiveEntry
+    from custom_components.dreame_a2_mower.wifi.archive_store import WifiArchiveEntry
 
     coord = MagicMock()
     coord.entry.entry_id = "fake"
@@ -224,7 +224,7 @@ def test_wifi_archive_select_options_labeled():
 def test_wifi_archive_select_unknown_map_labeled():
     """All labels use '[Map ?]' — map_id correlation is unsolved."""
     from custom_components.dreame_a2_mower.select import DreameA2WifiArchiveSelect
-    from custom_components.dreame_a2_mower.wifi_archive_store import WifiArchiveEntry
+    from custom_components.dreame_a2_mower.wifi.archive_store import WifiArchiveEntry
 
     coord = MagicMock()
     coord.entry.entry_id = "fake"
@@ -248,7 +248,7 @@ def test_wifi_archive_select_unknown_map_labeled():
 def test_wifi_archive_select_on_select_calls_set_wifi_render_entry():
     """Selecting an option calls set_wifi_render_entry(None, object_name)."""
     from custom_components.dreame_a2_mower.select import DreameA2WifiArchiveSelect
-    from custom_components.dreame_a2_mower.wifi_archive_store import WifiArchiveEntry
+    from custom_components.dreame_a2_mower.wifi.archive_store import WifiArchiveEntry
 
     coord = MagicMock()
     coord.entry.entry_id = "fake"
@@ -277,7 +277,7 @@ def test_wifi_archive_select_on_select_calls_set_wifi_render_entry():
 def test_wifi_archive_select_labels_always_map_unknown():
     """Every label is [Map ?] regardless of inferred map_id from the entry."""
     from custom_components.dreame_a2_mower.select import DreameA2WifiArchiveSelect
-    from custom_components.dreame_a2_mower.wifi_archive_store import WifiArchiveEntry
+    from custom_components.dreame_a2_mower.wifi.archive_store import WifiArchiveEntry
 
     coord = MagicMock()
     coord.entry.entry_id = "fake"
@@ -310,7 +310,7 @@ def test_wifi_archive_select_labels_always_map_unknown():
 def test_wifi_archive_select_sorts_newest_first():
     """Picker labels sort by unix_ts newest-first."""
     from custom_components.dreame_a2_mower.select import DreameA2WifiArchiveSelect
-    from custom_components.dreame_a2_mower.wifi_archive_store import WifiArchiveEntry
+    from custom_components.dreame_a2_mower.wifi.archive_store import WifiArchiveEntry
 
     coord = MagicMock()
     coord.entry.entry_id = "fake"
@@ -343,7 +343,7 @@ def test_wifi_archive_select_sorts_newest_first():
 def test_wifi_archive_select_select_option_sets_render_entry_with_map_none():
     """Selecting a label calls coordinator.set_wifi_render_entry(None, object_name)."""
     from custom_components.dreame_a2_mower.select import DreameA2WifiArchiveSelect
-    from custom_components.dreame_a2_mower.wifi_archive_store import WifiArchiveEntry
+    from custom_components.dreame_a2_mower.wifi.archive_store import WifiArchiveEntry
 
     coord = MagicMock()
     coord.entry.entry_id = "fake"

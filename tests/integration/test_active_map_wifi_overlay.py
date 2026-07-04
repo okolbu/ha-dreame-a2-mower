@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-from custom_components.dreame_a2_mower.wifi_archive_store import WifiArchiveStore
+from custom_components.dreame_a2_mower.wifi.archive_store import WifiArchiveStore
 
 
 def _build_coord(tmp_path: Path):
