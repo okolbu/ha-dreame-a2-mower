@@ -295,7 +295,9 @@ def test_hpp_apply_base_read_on_loop_not_paho_thread(monkeypatch):
     The function is pure, but its BASE argument (self.data) is loop-owned:
     reading it on the paho thread opens the stale-base window (R-39/T3-7).
     The decode must run only when the captured loop callback does."""
-    import custom_components.dreame_a2_mower.coordinator._mqtt_handlers as mh
+    # handle_property_push moved to domain/ingress.py (P3.7 ingress split), so
+    # apply_property_to_state is now imported/used there — patch it at ingress.
+    import custom_components.dreame_a2_mower.domain.ingress as mh
 
     captured: list = []
     coord = _make_coord(capture=captured)
