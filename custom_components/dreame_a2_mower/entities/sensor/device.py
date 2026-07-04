@@ -9,7 +9,7 @@ entity classes, and module-level helpers used exclusively by device sensors.
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -514,11 +514,18 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     DreameA2SensorEntityDescription(
         key="first_mowing_date",
         name="First mowing date",
-        # R-50 / T5-5: value is a "YYYY-MM-DD" local-date string (seeded in
-        # domain/boot.py) — a valid ISO-date state for the DATE device_class.
+        # R-50 / T5-5: state.first_mowing_date is a "YYYY-MM-DD" string (seeded
+        # in domain/boot.py). HA's DATE device_class calls ``.isoformat()`` on
+        # native_value, so it needs a ``date`` OBJECT, not the ISO string (an
+        # ISO string raises ValueError at add-time — live-caught in P4.7). Parse
+        # the string into ``date`` here.
         device_class=SensorDeviceClass.DATE,
         entity_category=EntityCategory.DIAGNOSTIC,
-        value_fn=lambda s: s.first_mowing_date,
+        value_fn=lambda s: (
+            date.fromisoformat(s.first_mowing_date)
+            if s.first_mowing_date
+            else None
+        ),
     ),
     DreameA2SensorEntityDescription(
         key="active_selection",

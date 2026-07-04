@@ -4,7 +4,8 @@ HA rejects a sensor at RUNTIME (state goes unavailable / logs an error) when
 its ``device_class`` is incompatible with the state it emits:
 
   * TIMESTAMP  → the state must be a tz-aware ``datetime``.
-  * DATE       → the state must be a ``date`` or an ISO ``YYYY-MM-DD`` string.
+  * DATE       → the state must be a ``date`` OBJECT (HA calls ``.isoformat()``
+                 on native_value; an ISO string raises ValueError at add-time).
   * DURATION   → the state must be a number AND the unit a time unit.
   * AREA       → the state must be a number AND the unit an area unit.
   * DISTANCE   → the state must be a number AND the unit a length unit.
@@ -66,11 +67,17 @@ def test_latest_session_time_is_timestamp_datetime():
 # DATE: value_fn must emit a date or ISO YYYY-MM-DD string (or None).
 # ---------------------------------------------------------------------------
 
-def test_first_mowing_date_is_date_parseable():
+def test_first_mowing_date_is_date_object():
     d = _desc("first_mowing_date")
     assert d.device_class == SensorDeviceClass.DATE
     val = d.value_fn(MowerState(first_mowing_date="2026-06-21"))
-    # HA accepts a date object or an ISO date string; ours is the latter.
+    # HA's DATE class calls ``.isoformat()`` on native_value → it MUST be a
+    # ``date`` object, NOT an ISO string (a string raises ValueError at
+    # add-time; live-caught in P4.7). None-when-unset is allowed.
+    assert val is None or isinstance(val, date)
+    assert val == date(2026, 6, 21)
+    # empty/None state → None, not a crash
+    assert d.value_fn(MowerState(first_mowing_date=None)) is None
     if isinstance(val, str):
         # Must be parseable as an ISO date, else HA rejects it at runtime.
         assert date.fromisoformat(val) == date(2026, 6, 21)
