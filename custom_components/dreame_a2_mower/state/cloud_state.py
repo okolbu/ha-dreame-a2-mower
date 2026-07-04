@@ -55,3 +55,17 @@ class CloudState:
     # {map_idx: {point_id: {"cycles": int, "auto_capture": bool}}}. Empty when
     # CRUISE.0 is absent. See protocol/cruise_config.py + inventory.yaml § CRUISED.
     cruise_config_by_map: dict = field(default_factory=dict)
+
+    @classmethod
+    def from_parts(cls, parts: dict[str, Any]) -> "CloudState":
+        """Compose the aggregate from the transport's decoded parts-dict.
+
+        ``cloud_client.fetch_full_cloud_state`` returns the decoded PARTS
+        (a dict of ``CloudState`` kwargs), NOT a ``CloudState`` — the
+        transport→state edge (R-31/T2-6) forbids transport constructing the
+        state-layer container. Composition is the state layer's own job, so it
+        lives here as a factory rather than as a bare ``CloudState(**parts)``
+        call in the coordinator refresh. Keeps the refresh a legal downward
+        edge (domain → state) with no assembly knowledge leaking upward.
+        """
+        return cls(**parts)

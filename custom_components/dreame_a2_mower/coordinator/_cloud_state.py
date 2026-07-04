@@ -64,11 +64,11 @@ class _CloudStateMixin:
             LOGGER.debug("[cloud] _refresh_cloud_state: fetch returned None")
             self._note_cloud_fetch(ok=False)
             return
-        # Compose the state-layer CloudState container from the transport's
-        # decoded parts. The transport no longer builds CloudState (R-31/T2-6:
-        # transport→state edge closed); composition lives here at the state
-        # layer until P3.6 moves it into state/.
-        new_state = CloudState(**parts)
+        # Compose the state-layer CloudState from the transport's decoded parts
+        # via the state layer's own factory (R-31/T2-6: transport→state edge
+        # closed; assembly knowledge lives at the state layer, P3.8). The refresh
+        # is a legal downward edge (domain → state) — it never sees the kwargs.
+        new_state = CloudState.from_parts(parts)
         self._note_cloud_fetch(ok=True)
         # Overlay optimistic patrol-config writes over the (laggy) CRUISE.0 poll
         # so a freshly-written cycles/auto_capture value isn't reverted while the
