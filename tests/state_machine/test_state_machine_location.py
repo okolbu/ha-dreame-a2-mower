@@ -9,8 +9,8 @@ Corpus-decided facts (do NOT relitigate):
 - s2p1=2 (idle) is a LAWN state — must never set AT_DOCK.
 - Off-dock s2p1 must not clobber AT_POINT / OUTSIDE_KNOWN_AREA (set by s2p2).
 """
-from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
-from custom_components.dreame_a2_mower.mower.state_snapshot import Location, CurrentActivity
+from custom_components.dreame_a2_mower.state.machine import MowerStateMachine
+from custom_components.dreame_a2_mower.state.snapshot import Location, CurrentActivity
 
 
 def _sm():

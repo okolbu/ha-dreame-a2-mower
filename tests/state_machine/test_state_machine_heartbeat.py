@@ -14,10 +14,10 @@ def _make_hb(pin_required: bool = False, wifi_rssi: int = -60):
 
 
 def test_handle_heartbeat_sets_connectivity_online():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         Connectivity,
     )
     sm = MowerStateMachine()
@@ -29,7 +29,7 @@ def test_handle_heartbeat_sets_connectivity_online():
 
 
 def test_handle_heartbeat_propagates_pin_required():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -40,7 +40,7 @@ def test_handle_heartbeat_propagates_pin_required():
 
 
 def test_handle_heartbeat_propagates_wifi_rssi():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -50,7 +50,7 @@ def test_handle_heartbeat_propagates_wifi_rssi():
 
 def test_repeated_heartbeat_with_same_pin_does_not_bump_pin_freshness():
     """Idempotent: same pin_required value, freshness for pin_required not bumped."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()

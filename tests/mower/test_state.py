@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.dreame_a2_mower.mower.state import (
+from custom_components.dreame_a2_mower.state import (
     ChargingStatus,
     MowerState,
     State,
@@ -102,7 +102,7 @@ def test_mower_state_f2_construction_with_all_fields():
 
 def test_action_mode_enum_covers_four_modes():
     """ActionMode enum has exactly the four documented modes (manual is BT-only)."""
-    from custom_components.dreame_a2_mower.mower.state import ActionMode
+    from custom_components.dreame_a2_mower.state import ActionMode
     expected = {"all_areas", "edge", "zone", "spot"}
     actual = {m.value for m in ActionMode}
     assert actual == expected
@@ -110,7 +110,7 @@ def test_action_mode_enum_covers_four_modes():
 
 def test_action_mode_default_is_all_areas():
     """Fresh MowerState defaults action_mode to ALL_AREAS — matches Dreame app default."""
-    from custom_components.dreame_a2_mower.mower.state import ActionMode
+    from custom_components.dreame_a2_mower.state import ActionMode
     s = MowerState()
     assert s.action_mode == ActionMode.ALL_AREAS
 
@@ -123,7 +123,7 @@ def test_active_selection_defaults_empty():
 
 
 def test_action_mode_assignment():
-    from custom_components.dreame_a2_mower.mower.state import ActionMode
+    from custom_components.dreame_a2_mower.state import ActionMode
     s = MowerState(
         action_mode=ActionMode.ZONE,
         active_selection_zones=(3, 1, 2),
@@ -200,7 +200,7 @@ def test_session_lifecycle_fields_construction():
 def test_mower_state_has_latest_lidar_object_name_field():
     """F7: MowerState carries the most recent s99.20 OSS announcement
     so the coordinator can drive the fetch on its change."""
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     s = MowerState()
     assert s.latest_lidar_object_name is None  # default

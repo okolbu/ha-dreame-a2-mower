@@ -19,10 +19,10 @@ from __future__ import annotations
 
 def test_reconcile_idle_to_mowing_when_live_map_active_and_area_mowed():
     """live_map active + area_mowed > 0 → infer MOWING + IN_SESSION."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     sm = MowerStateMachine()
@@ -39,10 +39,10 @@ def test_reconcile_idle_to_mowing_when_live_map_active_and_area_mowed():
 
 def test_reconcile_does_not_assume_mowing_for_cruise():
     """live_map active + area_mowed == 0 → don't infer MOWING (could be cruise)."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     sm = MowerStateMachine()
@@ -60,10 +60,10 @@ def test_reconcile_does_not_assume_mowing_for_cruise():
 def test_reconcile_does_not_overwrite_authoritative_state():
     """If state machine ALREADY in MOWING (from a real start event), don't
     overwrite. The reconciliation is for the boot-window gap only."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     sm = MowerStateMachine()
@@ -91,10 +91,10 @@ def test_reconcile_overrides_stuck_charge_resume_when_area_increasing():
     The MQTT s2p1=1 message that would normally trigger this transition
     only fires on change — if the integration was offline at the moment
     the mower transitioned 6→1, that signal is gone forever."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession, Location,
     )
     import dataclasses
@@ -119,10 +119,10 @@ def test_reconcile_overrides_stuck_charge_resume_when_area_increasing():
 def test_reconcile_does_not_override_authoritative_charge_resume_at_dock():
     """If state machine is CHARGE_RESUME and location is AT_DOCK, the
     mower is genuinely charging on the dock — reconcile must not flip."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession, Location,
     )
     import dataclasses
@@ -148,10 +148,10 @@ def test_reconcile_flips_stuck_mowing_to_charge_resume_at_dock():
     missed (integration was reloading at that moment). Now AT_DOCK +
     IN_SESSION but activity stuck at MOWING. Flip to CHARGE_RESUME so
     the lawn_mower entity projects to DOCKED instead of MOWING."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession, Location,
     )
     import dataclasses
@@ -177,10 +177,10 @@ def test_reconcile_resolves_stuck_charge_resume_between_sessions():
     outside a session map to IDLE, but a snapshot persisted with
     CHARGE_RESUME under the old logic stuck around until the next s2p1
     event. The reconcile case picks it up on the next 10 s tick."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     import dataclasses
@@ -201,10 +201,10 @@ def test_reconcile_resolves_stuck_charge_resume_between_sessions():
 def test_reconcile_preserves_charge_resume_in_session():
     """Mid-session CHARGE_RESUME must NOT be reset by the out-of-session
     self-heal — that's a legitimate recharge boundary inside a mow."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession, Location,
     )
     import dataclasses
@@ -228,10 +228,10 @@ def test_reconcile_stamps_freshness_only_for_changed_fields():
     changed fields (mow_session, current_activity) and leaves an unchanged
     field's freshness untouched. Pins the derived-freshness equivalence the
     B2b refactor relies on."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     sm = MowerStateMachine()
@@ -252,10 +252,10 @@ def test_reconcile_stamps_freshness_only_for_changed_fields():
 def test_reconcile_in_session_to_between_when_live_map_inactive():
     """R2 inverse inference: IN_SESSION but live_map no longer active →
     fall back to BETWEEN_SESSIONS / IDLE (stuck-session self-heal)."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     sm = MowerStateMachine()

@@ -24,7 +24,7 @@ def _find_desc(key: str):
 
 def _make_number(desc, cfg, *, control_mode=ControlMode.DEVICE_WRITABLE):
     """Build a minimal DreameA2Number, bypassing __init__ to avoid coordinator deps."""
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     coord = SimpleNamespace()
     coord.data = MowerState()

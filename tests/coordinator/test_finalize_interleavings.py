@@ -33,7 +33,7 @@ from unittest.mock import MagicMock
 
 from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
 from custom_components.dreame_a2_mower.live_map.finalize import FinalizeAction
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 from tests.factories import make_coordinator
 

@@ -47,7 +47,7 @@ FIXTURE = Path("tests/protocol/data/sessions/short.json")
 def _make_map_camera():
     from custom_components.dreame_a2_mower.camera import DreameA2MapCamera
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-    from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
+    from custom_components.dreame_a2_mower.state.machine import MowerStateMachine
     from custom_components.dreame_a2_mower.protocol.map import (
         ExclusionZone,
         SpotZone,
@@ -322,7 +322,7 @@ def test_schedule_count_slot_and_plan_element_shapes():
     )
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
     from custom_components.dreame_a2_mower.live_map.state import LiveMapState
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
     from custom_components.dreame_a2_mower.observability import (
         FreshnessTracker, NovelObservationRegistry,
     )

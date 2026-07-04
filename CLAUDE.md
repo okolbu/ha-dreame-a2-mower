@@ -358,7 +358,6 @@ existing public/test surface. When adding shared state, it still goes in
 
 | File | LOC | Concern |
 |---|---|---|
-| `_property_apply.py` | shim | **P3.6 re-export shim** → `state/apply.py` (the pure apply funnel moved to the state layer). Keeps `from ._property_apply import …` working; retired P3.10. |
 | `_recorder_merge.py` | 432 | Fill battery/wifi/state/charging/error sample gaps from HA recorder history at finalize |
 | `_snapshot.py` | 139 | Build the session-begin firmware `settings_snapshot` from MowerState |
 | `_restore_merge.py` | 123 | Restore-then-merge of `in_progress.json` payloads on boot |
@@ -412,9 +411,9 @@ At runtime this is a no-op; the MRO dispatches.
 
 ### Don't
 
-- Don't add a new method to `_property_apply.py` unless it's a pure
-  `MowerState → MowerState` function with no side effects. Side-effect
-  methods belong in one of the mixins.
+- Don't add a new method to `state/apply.py` (the pure apply funnel) unless
+  it's a pure `MowerState → MowerState` function with no side effects.
+  Side-effect methods belong in one of the mixins.
 - Don't bring back a `coordinator.py` single file. The package is the
   contract — and post-P3.9 that package is deliberately kept (see the
   "Shipped-shape deviation" note above): the mixins are thin delegators, so
@@ -559,9 +558,10 @@ flat interface** so no read/write site changed this phase:
   do NOT scatter writes to the same container across services.
 - The old paths — `mower/state.py`, `mower/state_snapshot.py`,
   `mower/state_machine.py`, root `cloud_state.py`,
-  `coordinator/_property_apply.py`, `mower/property_mapping.py` (→
-  `protocol/`) — are **re-export shims**, retired in P3.10. New code imports
-  from `..state` / `..state.<module>` (and `..protocol.property_mapping`).
+  `coordinator/_property_apply.py`, `mower/property_mapping.py` — were
+  **re-export shims, RETIRED in P3.10** (all importers rewritten). Import
+  from `..state` / `..state.<module>` (and `..protocol.property_mapping`)
+  directly; there are no re-export shims.
 - The `StateSnapshot` ↔ `MowerState` **decode-staging** relationship is
   PRESERVED (2026-06-15 3d-revisit ruling): pure `apply.py` writes
   `MowerState`; the SM snapshot is the persisted/entity-read behavioural SoT.
@@ -599,7 +599,7 @@ were removed in the 2026-05-25 refresher consolidation
 
 `CloudState` does **not** carry `dock` — it flows straight to
 `MowerState` via its 60 s timer. The CFG→MowerState port lives in the pure
-`coordinator/_property_apply.py:cfg_to_state_updates` helper, which never nulls
+`state/apply.py:cfg_to_state_updates` helper, which never nulls
 a field for an absent CFG key and never emits `pre_mowing_height_mm` /
 `pre_edgemaster` (those are owned by the s6.2 push, `property_mapping.py`).
 

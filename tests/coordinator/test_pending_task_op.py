@@ -73,7 +73,7 @@ def test_handle_task_op_echo_when_active_sets_last_task_op(tmp_path):
     assert c._pending_task_op == 102
 
 
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 class _NullFreshness:

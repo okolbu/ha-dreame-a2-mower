@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import pytest
 
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 from custom_components.dreame_a2_mower.number import (
     _build_vol,
 )

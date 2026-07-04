@@ -19,7 +19,7 @@ from __future__ import annotations
 
 
 def test_rising_battery_infers_charging_true():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -32,7 +32,7 @@ def test_rising_battery_infers_charging_true():
 def test_falling_battery_does_not_clear_charging():
     """Once charging, a brief battery drop (load spike) shouldn't flip
     charging back to False."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -46,7 +46,7 @@ def test_falling_battery_does_not_clear_charging():
 def test_first_battery_observation_does_not_infer():
     """A single battery reading is not enough — we need TWO points to
     compute a delta. The first push just stamps the value."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -58,10 +58,10 @@ def test_battery_rise_inference_sets_charging_true():
     """The only charging surface is the dock. Battery rising sets charging=True.
     Location is now driven solely by s2p1 — the charging/battery signals no
     longer set AT_DOCK (that was a removed side-effect)."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         Location, MowSession,
     )
     import dataclasses
@@ -84,10 +84,10 @@ def test_battery_rise_inference_sets_charging_true():
 def test_explicit_s3p2_true_sets_charging_flag():
     """s3p2=1 (explicit charging signal) must set charging=True.
     Location is not changed — s2p1 is the sole location authority."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         Location, MowSession,
     )
     import dataclasses
@@ -108,7 +108,7 @@ def test_explicit_s3p2_false_overrides_inference():
     """If firmware explicitly pushes s3p2=0 (not charging), that wins
     even if a subsequent battery rise looks like charging — the
     firmware signal is authoritative."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()

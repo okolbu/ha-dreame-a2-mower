@@ -17,7 +17,7 @@ from custom_components.dreame_a2_mower.map_render.main_view import (
     _render_pre_start_with_stripes,
 )
 from custom_components.dreame_a2_mower.map_render.background import BackgroundMode
-from custom_components.dreame_a2_mower.mower.state import ActionMode
+from custom_components.dreame_a2_mower.state import ActionMode
 from tests.map_render.conftest import make_map_data
 
 

@@ -1,7 +1,7 @@
 """Tests for MowerStateMachine.handle_position."""
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.mower.state_machine import (
+from custom_components.dreame_a2_mower.state.machine import (
     MowerStateMachine,
 )
 
@@ -51,7 +51,7 @@ def test_apply_position_stores_heading():
 
 
 def test_heading_defaults_none_and_persists_roundtrip():
-    from custom_components.dreame_a2_mower.mower.state_snapshot import StateSnapshot
+    from custom_components.dreame_a2_mower.state.snapshot import StateSnapshot
     sm = MowerStateMachine()
     # No heading supplied → stays None (legacy callers unaffected).
     snap = sm.handle_position(x_m=1.0, y_m=2.0, north_m=None, east_m=None, now_unix=1000)

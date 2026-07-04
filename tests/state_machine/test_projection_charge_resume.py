@@ -13,7 +13,7 @@ import dataclasses
 def test_charge_resume_on_lawn_projects_to_mowing():
     from homeassistant.components.lawn_mower import LawnMowerActivity
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot, CurrentActivity, Location,
     )
     snap = dataclasses.replace(
@@ -27,7 +27,7 @@ def test_charge_resume_on_lawn_projects_to_mowing():
 def test_charge_resume_at_dock_still_projects_to_docked():
     from homeassistant.components.lawn_mower import LawnMowerActivity
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot, CurrentActivity, Location,
     )
     snap = dataclasses.replace(

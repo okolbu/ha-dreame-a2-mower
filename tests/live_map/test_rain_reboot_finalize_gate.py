@@ -32,7 +32,7 @@ from custom_components.dreame_a2_mower.live_map.finalize import (
     FinalizeAction,
     decide,
 )
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 NOW = 1_700_000_000  # arbitrary baseline unix
 

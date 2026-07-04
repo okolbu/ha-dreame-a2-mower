@@ -11,7 +11,7 @@ import base64
 import struct
 from unittest.mock import MagicMock
 
-from custom_components.dreame_a2_mower.mower.state import (
+from custom_components.dreame_a2_mower.state import (
     ChargingStatus,
     MowerState,
     State,  # kept for State enum tests; not a MowerState field after SM-14
@@ -740,7 +740,7 @@ def test_telemetry_appends_with_real_state_machine_set():
     MowerStateMachine on the coord as a guard that the append path runs
     cleanly to the track when a state_machine is present.
     """
-    from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
+    from custom_components.dreame_a2_mower.state.machine import MowerStateMachine
 
     coord = _make_coordinator_for_session_tests()
     coord.state_machine = MowerStateMachine()  # mimic _CoreMixin.__init__
@@ -2994,7 +2994,7 @@ def test_api_endpoints_supported_sensor_handles_no_cloud_yet():
 def test_apply_lidar_object_name_property_updates_state():
     """F7.2.1: dispatching (99, 20) writes latest_lidar_object_name."""
     from custom_components.dreame_a2_mower.coordinator import apply_property_to_state
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     state = MowerState()
     new = apply_property_to_state(state, 99, 20, "dreame/lidar/abcdef.pcd")
@@ -3258,7 +3258,7 @@ def test_apply_s1p1_accepts_list_payload():
     """g2408 over MQTT delivers s1.1 as a JSON-list of ints, not bytes
     or base64. The blob applier must accept lists (Python list of int)."""
     from custom_components.dreame_a2_mower.coordinator import apply_property_to_state
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     state = MowerState()
     # Realistic 20-byte heartbeat blob shape (all-zeros except the
@@ -3276,7 +3276,7 @@ def test_apply_s1p1_accepts_list_payload():
 def test_apply_s1p4_accepts_list_payload():
     """Same coercion path for s1.4 telemetry."""
     from custom_components.dreame_a2_mower.coordinator import apply_property_to_state
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     state = MowerState()
     # 8-byte BEACON frame so position-only decode applies.

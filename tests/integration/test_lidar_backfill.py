@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.dreame_a2_mower.archive.lidar import LidarArchive
 from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 def _make_coord(tmp_path: Path, *, list_return, active_map_id=0, done=False, seeded=()):

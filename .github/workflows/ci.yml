@@ -44,7 +44,6 @@ jobs:
           # Files whose changes indicate a protocol-shape change that
           # SHOULD be reflected in inventory.yaml.
           PROTOCOL_GLOBS=(
-            'custom_components/dreame_a2_mower/mower/property_mapping.py'
             'custom_components/dreame_a2_mower/mower/error_codes.py'
             'custom_components/dreame_a2_mower/protocol/'
             # Endpoint-DEFINING cloud_client files (new API endpoints must reach

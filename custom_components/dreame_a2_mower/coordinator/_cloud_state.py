@@ -14,7 +14,7 @@ from ..state.cloud_state import CloudState
 from ..const import (
     LOGGER,
 )
-from ._property_apply import (
+from ..state.apply import (
     cfg_to_state_updates,
 )
 

@@ -11,7 +11,7 @@ from custom_components.dreame_a2_mower.state.cloud_state import (
     CloudState, ScheduleData, SettingsRoot,
 )
 from custom_components.dreame_a2_mower.live_map.state import LiveMapState
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 from custom_components.dreame_a2_mower.observability import (
     FreshnessTracker, NovelObservationRegistry,
 )

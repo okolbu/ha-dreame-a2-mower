@@ -4,7 +4,7 @@ import dataclasses
 
 
 def _build_snapshot(**overrides):
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot,
     )
     return dataclasses.replace(StateSnapshot.initial(), **overrides)
@@ -12,7 +12,7 @@ def _build_snapshot(**overrides):
 
 def test_projection_mowing():
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     from homeassistant.components.lawn_mower import LawnMowerActivity
@@ -25,7 +25,7 @@ def test_projection_mowing():
 
 def test_projection_paused_in_session():
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     from homeassistant.components.lawn_mower import LawnMowerActivity
@@ -38,7 +38,7 @@ def test_projection_paused_in_session():
 
 def test_projection_idle_at_dock_is_docked():
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, Location,
     )
     from homeassistant.components.lawn_mower import LawnMowerActivity
@@ -52,7 +52,7 @@ def test_projection_idle_at_dock_is_docked():
 def test_projection_idle_on_lawn_is_paused():
     """KEY FIX: IDLE away from dock → PAUSED, not DOCKED."""
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, Location,
     )
     from homeassistant.components.lawn_mower import LawnMowerActivity
@@ -65,7 +65,7 @@ def test_projection_idle_on_lawn_is_paused():
 
 def test_projection_cruising_to_point_is_mowing():
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     from homeassistant.components.lawn_mower import LawnMowerActivity
@@ -75,7 +75,7 @@ def test_projection_cruising_to_point_is_mowing():
 
 def test_projection_at_point_is_paused():
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     from homeassistant.components.lawn_mower import LawnMowerActivity
@@ -85,7 +85,7 @@ def test_projection_at_point_is_paused():
 
 def test_projection_returning():
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     from homeassistant.components.lawn_mower import LawnMowerActivity
@@ -95,7 +95,7 @@ def test_projection_returning():
 
 def test_projection_with_error_is_error():
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     from homeassistant.components.lawn_mower import LawnMowerActivity
@@ -109,7 +109,7 @@ def test_projection_with_error_is_error():
 
 def test_projection_charge_resume_is_docked():
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     from homeassistant.components.lawn_mower import LawnMowerActivity
@@ -119,7 +119,7 @@ def test_projection_charge_resume_is_docked():
 
 def test_projection_fast_mapping_is_mowing():
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     from homeassistant.components.lawn_mower import LawnMowerActivity
@@ -129,7 +129,7 @@ def test_projection_fast_mapping_is_mowing():
 
 def test_projection_repositioning_is_mowing():
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     from homeassistant.components.lawn_mower import LawnMowerActivity
@@ -139,7 +139,7 @@ def test_projection_repositioning_is_mowing():
 
 def test_projection_driving_blades_up_is_mowing():
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     from homeassistant.components.lawn_mower import LawnMowerActivity
@@ -150,7 +150,7 @@ def test_projection_driving_blades_up_is_mowing():
 def test_latched_fault_projects_to_error():
     from homeassistant.components.lawn_mower import LawnMowerActivity
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
+    from custom_components.dreame_a2_mower.state.machine import MowerStateMachine
 
     m = MowerStateMachine()
     # Undock into REPOSITIONING (would project MOWING) ...
@@ -166,7 +166,7 @@ def test_pin_required_projects_to_error():
     import dataclasses
     from homeassistant.components.lawn_mower import LawnMowerActivity
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import StateSnapshot
+    from custom_components.dreame_a2_mower.state.snapshot import StateSnapshot
 
     snap = dataclasses.replace(StateSnapshot.initial(), pin_required=True)
     assert project_activity(snap) == LawnMowerActivity.ERROR
@@ -177,7 +177,7 @@ def test_projection_patrol_is_mowing():
     lawn_mower entity — same as REPOSITIONING/CRUISING — so the primary entity
     shows active, not error/idle, while the detailed sensor says Edge/Point Patrol."""
     from custom_components.dreame_a2_mower.lawn_mower import project_activity
-    from custom_components.dreame_a2_mower.mower.state_snapshot import CurrentActivity
+    from custom_components.dreame_a2_mower.state.snapshot import CurrentActivity
     from homeassistant.components.lawn_mower import LawnMowerActivity
     for ca in (CurrentActivity.PATROL_EDGE, CurrentActivity.PATROL_POINT):
         s = _build_snapshot(current_activity=ca)

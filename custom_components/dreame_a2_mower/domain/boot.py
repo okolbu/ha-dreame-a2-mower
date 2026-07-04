@@ -39,7 +39,7 @@ from homeassistant.helpers.storage import Store
 
 from ..const import LOGGER
 from ..live_map.finalize import RETRY_INTERVAL_SECONDS
-from ..mower.state import MowerState
+from ..state import MowerState
 
 
 async def async_first_refresh(coord) -> MowerState:
@@ -500,7 +500,7 @@ def _schedule_persist_and_tick(coord) -> None:
         # inferred state (e.g. battery-rise → charging=True after a
         # reload that missed the explicit s3p2 push).
         try:
-            from ..mower.state import ChargingStatus
+            from ..state import ChargingStatus
             snap_charging = coord.state_machine.snapshot().charging
             inferred = (
                 ChargingStatus.CHARGING if snap_charging

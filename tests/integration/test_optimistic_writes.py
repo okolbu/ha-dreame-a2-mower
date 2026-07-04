@@ -13,7 +13,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 
 from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 from custom_components.dreame_a2_mower.number import DreameA2PerMapMowingHeightNumber
 
 from homeassistant.exceptions import HomeAssistantError

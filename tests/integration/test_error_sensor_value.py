@@ -22,7 +22,7 @@ from custom_components.dreame_a2_mower.entities.sensor.device import (
     _error_attrs,
 )
 from custom_components.dreame_a2_mower.mower import fault_catalog as fc
-from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
+from custom_components.dreame_a2_mower.state.machine import MowerStateMachine
 
 # The live 2026-07-02 incident's 5 concurrent fault codes: tilted, right_wheel,
 # emergency_stop, battery_low, top_cover_open (all fault_tier == "error").

@@ -3,10 +3,10 @@ from __future__ import annotations
 
 
 def test_state_machine_instantiates_with_initial_snapshot():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot,
     )
     sm = MowerStateMachine()
@@ -15,7 +15,7 @@ def test_state_machine_instantiates_with_initial_snapshot():
 
 def test_snapshot_returns_same_instance_when_unchanged():
     """Cheap accessor — returns the cached snapshot, not a fresh copy."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -25,7 +25,7 @@ def test_snapshot_returns_same_instance_when_unchanged():
 
 
 def test_state_machine_dirty_flag():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()

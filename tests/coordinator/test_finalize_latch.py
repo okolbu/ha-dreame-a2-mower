@@ -22,7 +22,7 @@ from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinat
 from custom_components.dreame_a2_mower.coordinator._session import _SessionMixin
 from custom_components.dreame_a2_mower.archive.session import SessionArchive
 from custom_components.dreame_a2_mower.live_map.state import LiveMapState
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 T0 = 1_700_000_000
 

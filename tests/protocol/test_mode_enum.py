@@ -39,7 +39,7 @@ def test_mow_codes_exclude_patrol():
 def test_slug_matches_action_mode_values_for_mows():
     """The mow slugs must equal mower.state.ActionMode values so the two enums
     don't drift."""
-    from custom_components.dreame_a2_mower.mower.state import ActionMode
+    from custom_components.dreame_a2_mower.state import ActionMode
 
     assert mode_slug(100) == ActionMode.ALL_AREAS.value
     assert mode_slug(101) == ActionMode.EDGE.value

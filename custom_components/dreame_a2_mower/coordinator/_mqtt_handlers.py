@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from ..mower.state import MowerState
+from ..state import MowerState
 from ..domain import ingress as _ingress
 from ..domain.session import lifecycle_events as _lifecycle_events
 from ..domain.session import signals as _signals

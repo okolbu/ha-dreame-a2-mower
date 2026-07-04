@@ -25,7 +25,7 @@ from ..._availability import _FreshnessAvailableMixin
 from ..._devices import map_device_info, map_unique_id, mower_device_info, mower_unique_id
 from ...const import NON_MOW_SESSION_TYPES
 from ...coordinator import DreameA2MowerCoordinator
-from ...mower.state import MowerState
+from ...state import MowerState
 
 
 # ---------------------------------------------------------------------------

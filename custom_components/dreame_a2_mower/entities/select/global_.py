@@ -34,7 +34,7 @@ from ...const import DOMAIN, LOGGER, WORK_LOG_PLACEHOLDER
 from ...control_honesty import _ControlHonestyMixin, resolve_control_mode
 from ...coordinator import DreameA2MowerCoordinator
 from ...coordinator._write_errors import raise_for_write_result
-from ...mower.state import ActionMode, MowerState
+from ...state import ActionMode, MowerState
 from .base import (
     DreameA2SettingsSelectDescription,
     _DreameA2ArchivePickerSelect,
@@ -839,7 +839,7 @@ class DreameA2ActiveMapSelect(
         # actively mowing. Refuse the action and surface a notification
         # instead of dispatching a call we know will fail. The flip-back-
         # to-active-map after a few seconds is the cloud's silent rejection.
-        from ...mower.state_snapshot import CurrentActivity as _CA, MowSession as _MS
+        from ...state.snapshot import CurrentActivity as _CA, MowSession as _MS
         _snap = self.coordinator.state_machine.snapshot()
         _blocked = (
             _snap.current_activity in (

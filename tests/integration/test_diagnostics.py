@@ -59,7 +59,7 @@ def test_diagnostics_dump_top_level_sections():
         NovelLogBuffer,
         NovelObservationRegistry,
     )
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     coordinator = MagicMock()
     coordinator.data = MowerState(battery_level=42)

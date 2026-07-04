@@ -1,4 +1,4 @@
-from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
+from custom_components.dreame_a2_mower.state.machine import MowerStateMachine
 
 
 def test_fault_code_latches_into_errors():
@@ -40,7 +40,7 @@ def test_same_fault_twice_does_not_re_latch():
 
 
 def test_latched_fault_survives_persist_roundtrip():
-    from custom_components.dreame_a2_mower.mower.state_snapshot import StateSnapshot
+    from custom_components.dreame_a2_mower.state.snapshot import StateSnapshot
     m = MowerStateMachine()
     m.handle_mqtt_property(siid=2, piid=2, value=5, now_unix=1000)
     restored = StateSnapshot.from_dict(m.snapshot().to_dict())

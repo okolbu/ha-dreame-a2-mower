@@ -60,7 +60,7 @@ def test_fetch_share_messages_none_on_error_code():
 import dataclasses
 import pytest
 from custom_components.dreame_a2_mower.coordinator._refreshers import _RefreshersMixin
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 @pytest.mark.asyncio

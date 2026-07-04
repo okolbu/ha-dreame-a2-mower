@@ -35,7 +35,7 @@ def _make_coord_for_dock_test(
     We call the method directly with a fake new_state.
     """
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     coord = object.__new__(DreameA2MowerCoordinator)
 
@@ -63,7 +63,7 @@ def _make_coord_for_dock_test(
     coord.freshness.record = MagicMock()
 
     # --- state_machine ---
-    from custom_components.dreame_a2_mower.mower.state_snapshot import Location
+    from custom_components.dreame_a2_mower.state.snapshot import Location
     snap = MagicMock()
     snap.location = Location.AT_DOCK if sm_location_at_dock else Location.ON_LAWN
     snap.mow_session = MagicMock()
@@ -105,7 +105,7 @@ def _call_on_state_update_dock_portion(coord, *, now_unix: int = 1_000_000):
     the dock-arrival detection path.  Returns the result.
     """
     from custom_components.dreame_a2_mower.coordinator._mqtt_handlers import _MqttHandlersMixin
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     new_state = MowerState()  # no task state changes, just dock detection
     return _MqttHandlersMixin._on_state_update(coord, new_state, now_unix)

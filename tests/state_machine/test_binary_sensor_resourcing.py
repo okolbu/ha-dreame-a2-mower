@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 
 def _coord_with_snapshot(**overrides):
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot,
     )
     coord = MagicMock()
@@ -18,7 +18,7 @@ def _coord_with_snapshot(**overrides):
 def test_mower_in_dock_is_on_when_location_at_dock():
     """Whatever entity exposes mower_in_dock, its is_on should be True
     when snapshot.location == AT_DOCK."""
-    from custom_components.dreame_a2_mower.mower.state_snapshot import Location
+    from custom_components.dreame_a2_mower.state.snapshot import Location
     coord = _coord_with_snapshot(location=Location.AT_DOCK)
     from custom_components.dreame_a2_mower import binary_sensor
     description = next(
@@ -29,7 +29,7 @@ def test_mower_in_dock_is_on_when_location_at_dock():
 
 
 def test_mower_in_dock_is_off_when_location_elsewhere():
-    from custom_components.dreame_a2_mower.mower.state_snapshot import Location
+    from custom_components.dreame_a2_mower.state.snapshot import Location
     from custom_components.dreame_a2_mower import binary_sensor
     description = next(
         d for d in binary_sensor.BINARY_SENSORS if d.key == "mower_in_dock"
@@ -44,7 +44,7 @@ def test_positioning_failed_off_on_standby_return():
     The state machine resolves a plain 71 to LOCALIZED; the sensor must follow
     the snapshot, not raw error_code==71 (which false-trips on every standby
     auto-return — the 2026-05-30 18:26:50 bug)."""
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         PositioningHealth,
     )
     from custom_components.dreame_a2_mower import binary_sensor
@@ -59,7 +59,7 @@ def test_positioning_failed_off_on_standby_return():
 def test_positioning_failed_on_when_health_stuck():
     """positioning_failed fires only when the state machine resolves STUCK
     (s2p2=71 followed by 31/33 within the disambiguation window)."""
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         PositioningHealth,
     )
     from custom_components.dreame_a2_mower import binary_sensor
@@ -72,7 +72,7 @@ def test_positioning_failed_on_when_health_stuck():
 
 def test_mowing_session_active_true_only_in_mow_session():
     """Cruise must NOT trigger mowing_session_active."""
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         MowSession, CurrentActivity,
     )
     from custom_components.dreame_a2_mower import binary_sensor

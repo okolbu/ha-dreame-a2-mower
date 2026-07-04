@@ -77,10 +77,10 @@ def _empty_cloud_state() -> Any:
 def build_fake_coord() -> _PermissiveCoord:
     """Construct a coordinator with all state holders in their initial state."""
     _ensure_ha_stubs()
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
     from custom_components.dreame_a2_mower.observability.registry import (
         NovelObservationRegistry,
     )
@@ -131,7 +131,7 @@ def observe_cold_value(
 def _eval_globals() -> dict[str, Any]:
     """Globals that value_fn lambdas may reference (snapshot enums + private helpers)."""
     _ensure_ha_stubs()
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         Location,
         MowSession,
         CurrentActivity,

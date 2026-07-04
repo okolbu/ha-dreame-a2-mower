@@ -41,7 +41,7 @@ from ...const import (
 )
 from ...coordinator._snapshot import build_settings_snapshot_v2
 from ...mower.error_codes import S2P2_EVENT_TYPES
-from ...mower.state import MowerState
+from ...state import MowerState
 from .signals import capture_session_type_signals
 
 
@@ -383,7 +383,7 @@ def _detect_dock_edges(coord, new_state: MowerState, now_unix: int) -> None:
     # doesn't fire a spurious arrived/departed event.
     # Defensive: test fixtures construct via __new__ without __init__,
     # so state_machine may be missing; treat as "not at dock" then.
-    from ...mower.state_snapshot import Location as _Location
+    from ...state.snapshot import Location as _Location
     _sm = getattr(coord, "state_machine", None)
     _sm_at_dock: bool = (
         _sm is not None and _sm.snapshot().location == _Location.AT_DOCK

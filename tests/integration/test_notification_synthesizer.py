@@ -77,7 +77,7 @@ def _make_coord(
     coord.hass.async_add_executor_job = _aexec
     # Reactive device-messages list-refresh (2026-06-15) reads coord.data +
     # coord.entry.options and writes via async_set_updated_data.
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
     coord.data = MowerState()
     coord.entry = type("E", (), {"options": {}})()
     coord.async_set_updated_data = MagicMock()
@@ -138,7 +138,7 @@ async def test_resolver_fires_when_cloud_record_matches():
 async def test_resolver_reactively_refreshes_device_messages_list():
     """The s2p2 resolver also refreshes MowerState.device_messages from the page
     it fetched, so the Info-tab Device card updates immediately (not just hourly)."""
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     recs = [
         _record(2, 2, 48, msg_id="m1", text="Mowing task complete.",

@@ -31,7 +31,7 @@ from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .coordinator._write_errors import raise_for_write_result
 from .mower.actions import MowerAction
-from .mower.state_snapshot import CurrentActivity
+from .state.snapshot import CurrentActivity
 
 
 async def async_setup_entry(
@@ -108,7 +108,7 @@ class DreameA2StartMowingButton(_DreameA2ActionButton):
     async def async_press(self) -> None:
         # Route through the lawn_mower entity's start handler so action_mode
         # + active_selection get respected (zone/spot/edge → right opcode).
-        from .mower.state import ActionMode
+        from .state import ActionMode
 
         state = self.coordinator.data
         mode = state.action_mode

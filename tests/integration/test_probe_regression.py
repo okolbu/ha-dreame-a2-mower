@@ -41,8 +41,8 @@ from custom_components.dreame_a2_mower.coordinator import (
     _SUPPRESSED_SLOTS,
     apply_property_to_state,
 )
-from custom_components.dreame_a2_mower.mower.property_mapping import PROPERTY_MAPPING
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.protocol.property_mapping import PROPERTY_MAPPING
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 # (siid, piid) pairs we have OBSERVED on the wire across all historical

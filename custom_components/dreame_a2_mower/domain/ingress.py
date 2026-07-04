@@ -32,7 +32,7 @@ from ..const import (
     LOGGER,
 )
 from ..protocol.property_mapping import PROPERTY_MAPPING
-from ..mower.state import MowerState
+from ..state import MowerState
 from ..protocol import heartbeat as _heartbeat
 from ..state.apply import (
     _BLOB_SLOTS,

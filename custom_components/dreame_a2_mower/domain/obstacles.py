@@ -24,7 +24,7 @@ async def refresh_aiobs(coord) -> None:
     tick. Do NOT poll at seconds cadence / 24-7.
     [cloud/captures/mitm_session_20260619/miio-13267.jsonl@2026-06-17]
     """
-    from ..mower.state_snapshot import MowSession  # local import: avoid cycle
+    from ..state.snapshot import MowSession  # local import: avoid cycle
 
     snap = coord.state_machine.snapshot()
     mow_session = getattr(snap, "mow_session", None)

@@ -5,7 +5,7 @@ import pytest
 from custom_components.dreame_a2_mower.archive.photos import PhotoArchive
 from custom_components.dreame_a2_mower.archive.videos import VideoArchive
 from custom_components.dreame_a2_mower.coordinator import _lidar_oss
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 MIXIN = _lidar_oss._LidarOssMixin
 

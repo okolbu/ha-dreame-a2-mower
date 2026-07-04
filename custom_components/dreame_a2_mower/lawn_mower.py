@@ -24,7 +24,7 @@ from .control_honesty import ControlMode, _ControlHonestyMixin
 from .coordinator import DreameA2MowerCoordinator
 from .coordinator._write_errors import raise_for_write_result
 from .mower.actions import MowerAction
-from .mower.state import ActionMode
+from .state import ActionMode
 
 
 def project_activity(snapshot) -> LawnMowerActivity:
@@ -35,7 +35,7 @@ def project_activity(snapshot) -> LawnMowerActivity:
     the projection rules from the spec (§ Entities consuming the
     snapshot, lawn_mower projection rules).
     """
-    from .mower.state_snapshot import (
+    from .state.snapshot import (
         CurrentActivity as CA, Location as L,
     )
     # An active latched fault OR a PIN-required emergency-stop both mean the

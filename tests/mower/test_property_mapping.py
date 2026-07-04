@@ -1,7 +1,7 @@
 """Property mapping — the (siid, piid) → field_name table."""
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.mower.property_mapping import (
+from custom_components.dreame_a2_mower.protocol.property_mapping import (
     PROPERTY_MAPPING,
     PropertyMappingEntry,
     resolve_field,
@@ -115,7 +115,7 @@ def test_task_state_reads_last_element_stage():
 
 def test_s2p56_multi_field_sets_task_state_and_zone_progress():
     from custom_components.dreame_a2_mower.coordinator import apply_property_to_state
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
     st = apply_property_to_state(MowerState(), 2, 56, {"status": [[1, 2], [2, 0]]})
     assert st.task_state_code == 2
     assert st.zone_progress == ((1, 2), (2, 0))
@@ -123,7 +123,7 @@ def test_s2p56_multi_field_sets_task_state_and_zone_progress():
 
 def test_s2p56_empty_status_clears_zone_progress():
     from custom_components.dreame_a2_mower.coordinator import apply_property_to_state
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
     st = apply_property_to_state(MowerState(), 2, 56, {"status": []})
     assert st.task_state_code is None
     assert st.zone_progress == ()
@@ -131,7 +131,7 @@ def test_s2p56_empty_status_clears_zone_progress():
 
 def test_s2p56_three_element_entry_tolerated():
     from custom_components.dreame_a2_mower.coordinator import apply_property_to_state
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
     st = apply_property_to_state(MowerState(), 2, 56, {"status": [[1, 0, 4]]})
     assert st.task_state_code == 4
     assert st.zone_progress == ((1, 4),)
@@ -174,6 +174,6 @@ def test_s1p3_maps_to_ota_progress():
 
 def test_s2p57_maps_to_robot_shutdown_trigger():
     from custom_components.dreame_a2_mower.coordinator import apply_property_to_state
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
     st = apply_property_to_state(MowerState(), 2, 57, 1)
     assert st.robot_shutdown_trigger == 1

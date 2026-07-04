@@ -3,7 +3,7 @@ from unittest.mock import AsyncMock
 
 from custom_components.dreame_a2_mower.cloud_client import WriteResult
 from custom_components.dreame_a2_mower.const import DOMAIN
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 def test_head_to_point_unique_id_and_device_are_per_map(coordinator_with_two_maps):

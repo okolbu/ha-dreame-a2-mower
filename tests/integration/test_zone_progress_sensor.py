@@ -4,7 +4,7 @@ State "Mowing zone N of M" / "Idle"; attributes join zone ids to the active
 map's MowingZone wire names. inventory § s2p56 (verified 2026-06-16)."""
 from unittest.mock import MagicMock
 
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 def _zone(zone_id, name):

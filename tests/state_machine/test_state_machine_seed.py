@@ -10,10 +10,10 @@ from __future__ import annotations
 
 def test_seed_in_session_from_initial_state():
     """Initial (BETWEEN_SESSIONS, IDLE) → IN_SESSION + MOWING."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     sm = MowerStateMachine()
@@ -27,10 +27,10 @@ def test_seed_in_session_from_initial_state():
 
 def test_seed_in_session_does_not_clobber_authoritative_state():
     """If state machine already received a real start event, seed is a no-op."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     sm = MowerStateMachine()
@@ -47,10 +47,10 @@ def test_seed_in_session_does_not_clobber_authoritative_state():
 def test_seed_in_session_does_not_clobber_paused():
     """If the mower came back as PAUSED (s2p1=4 received post-boot), don't
     overwrite that with MOWING. mow_session is already IN_SESSION."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     import dataclasses

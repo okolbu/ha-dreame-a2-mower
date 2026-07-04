@@ -3,7 +3,7 @@ from __future__ import annotations
 
 
 def test_handle_s3p1_updates_battery():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -13,7 +13,7 @@ def test_handle_s3p1_updates_battery():
 
 
 def test_handle_s3p2_updates_charging():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -25,7 +25,7 @@ def test_handle_s3p2_updates_charging():
 
 def test_handle_unknown_slot_does_not_raise_and_logs_novel():
     """Unknown (siid, piid) returns snapshot unchanged, no exception."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -36,7 +36,7 @@ def test_handle_unknown_slot_does_not_raise_and_logs_novel():
 
 def test_freshness_only_updates_when_value_changes():
     """Re-applying the same value does NOT bump the freshness timestamp."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -47,7 +47,7 @@ def test_freshness_only_updates_when_value_changes():
 
 
 def test_freshness_bumps_on_value_change():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -58,10 +58,10 @@ def test_freshness_bumps_on_value_change():
 
 def test_s2p1_task_state_done_transitions_to_idle():
     """s2p1 = 2 (task done) → current_activity = IDLE."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     sm = MowerStateMachine()
@@ -75,10 +75,10 @@ def test_s2p1_task_state_done_transitions_to_idle():
 
 
 def test_s2p1_returning_sets_returning_activity():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     sm = MowerStateMachine()
@@ -88,10 +88,10 @@ def test_s2p1_returning_sets_returning_activity():
 
 def test_s2p2_event_50_starts_mow_session():
     """s2p2 = 50 (mowing_started) → mow_session = IN_SESSION."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         MowSession, CurrentActivity,
     )
     sm = MowerStateMachine()
@@ -104,10 +104,10 @@ def test_s2p2_event_50_starts_mow_session():
 
 def test_s2p2_event_48_ends_mow_session():
     """s2p2 = 48 (mowing_complete) → mow_session = BETWEEN_SESSIONS."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         MowSession, CurrentActivity,
     )
     sm = MowerStateMachine()
@@ -120,10 +120,10 @@ def test_s2p2_event_48_ends_mow_session():
 
 def test_s2p2_event_75_signals_arrived_at_point():
     """s2p2 = 75 → location = AT_POINT, current_activity = AT_POINT."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         Location, CurrentActivity,
     )
     sm = MowerStateMachine()
@@ -135,10 +135,10 @@ def test_s2p2_event_75_signals_arrived_at_point():
 
 def test_s2p50_op_100_mow_dispatches_mowing():
     """TASK envelope with op=100 (global mow) → current_activity = MOWING."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     sm = MowerStateMachine()
@@ -154,10 +154,10 @@ def test_s2p50_op_100_mow_dispatches_mowing():
 
 def test_s2p50_op_109_dispatches_cruise_no_session():
     """op=109 → CRUISING_TO_POINT and mow_session stays BETWEEN_SESSIONS."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     sm = MowerStateMachine()
@@ -175,10 +175,10 @@ def test_s2p50_op_109_dispatches_cruise_no_session():
 
 def test_s2p56_arrived_stage_transitions():
     """s2p56 [[N, 2]] (lifecycle stage 2) signals arrival from cruise."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     sm = MowerStateMachine()
@@ -198,10 +198,10 @@ def test_s2p56_arrived_stage_transitions():
 
 def test_s2p50_failed_status_does_not_transition_activity():
     """`status: False` in TASK echo → don't change activity, but DO record op."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     sm = MowerStateMachine()
@@ -215,10 +215,10 @@ def test_s2p50_failed_status_does_not_transition_activity():
 
 
 def test_s2p50_op_10_fast_mapping():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity, MowSession,
     )
     sm = MowerStateMachine()
@@ -238,10 +238,10 @@ def test_s2p56_arrival_does_not_transition_if_not_cruising():
 
     For a mow op finishing, stage 2 is handled by s2p1=2 or s2p2=48, not s2p56.
     """
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     sm = MowerStateMachine()

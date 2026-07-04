@@ -17,7 +17,7 @@ import asyncio
 import dataclasses
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 from custom_components.dreame_a2_mower.number import (
 
     DreameA2Number,

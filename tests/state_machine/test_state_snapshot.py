@@ -5,7 +5,7 @@ import pytest
 
 
 def test_dimension_enums_have_expected_values():
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         MowSession, CurrentActivity, Location, PositioningHealth,
         Connectivity, RpcHealth,
     )
@@ -28,7 +28,7 @@ def test_dimension_enums_have_expected_values():
 
 def test_state_snapshot_is_frozen():
     from dataclasses import FrozenInstanceError
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot,
     )
     s = StateSnapshot.initial()
@@ -37,7 +37,7 @@ def test_state_snapshot_is_frozen():
 
 
 def test_state_snapshot_initial_has_safe_defaults():
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot, MowSession, CurrentActivity, Location,
         Connectivity, RpcHealth, PositioningHealth,
     )
@@ -58,7 +58,7 @@ def test_state_snapshot_initial_has_safe_defaults():
 
 def test_state_snapshot_serialise_roundtrip():
     """Snapshot serialises to JSON-able dict and restores cleanly."""
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot, CurrentActivity, Location,
     )
     s = StateSnapshot.initial()
@@ -76,7 +76,7 @@ def test_state_snapshot_serialise_roundtrip():
 
 
 def test_initial_snapshot_serializes_round_trip():
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot,
     )
     snap = StateSnapshot.initial()
@@ -89,7 +89,7 @@ def test_initial_snapshot_serializes_round_trip():
 
 def test_from_dict_tolerates_legacy_error_code_key():
     """Older persisted snapshots may include error_code: must not crash."""
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot,
     )
     raw = StateSnapshot.initial().to_dict()

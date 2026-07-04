@@ -59,7 +59,7 @@ def _build_rain_coord():
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
     from custom_components.dreame_a2_mower.archive.session import SessionArchive
     from custom_components.dreame_a2_mower.live_map.state import LiveMapState
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
     from custom_components.dreame_a2_mower.coordinator._session import _SessionMixin
 
     c = DreameA2MowerCoordinator.__new__(DreameA2MowerCoordinator)
@@ -145,7 +145,7 @@ async def test_rain_active_bounded_window_vetoes_finalize():
     """
     import time as _time
 
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     c = _build_rain_coord()
     _active_non_mow_session(c)
@@ -202,7 +202,7 @@ async def test_rain_active_resume_hours_none_vetoes_finalize():
     here we'd archive the session prematurely during the boot-up cloud-refresh
     race window.
     """
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     c = _build_rain_coord()
     _active_non_mow_session(c)

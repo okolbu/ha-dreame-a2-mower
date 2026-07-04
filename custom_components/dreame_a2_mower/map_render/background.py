@@ -11,8 +11,8 @@ from __future__ import annotations
 
 from enum import Enum
 
-from ..mower.state import ActionMode
-from ..mower.state_snapshot import CurrentActivity, MowSession
+from ..state import ActionMode
+from ..state.snapshot import CurrentActivity, MowSession
 
 
 class BackgroundMode(str, Enum):

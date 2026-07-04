@@ -15,7 +15,7 @@ from custom_components.dreame_a2_mower.entities.sensor.device import (
     DreameA2ServiceMessagesSensor,
     DreameA2SharedMessagesSensor,
 )
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 class _Coord:

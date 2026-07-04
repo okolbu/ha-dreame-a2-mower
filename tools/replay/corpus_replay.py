@@ -121,8 +121,8 @@ def replay(paths: list[Path]) -> dict:
     from custom_components.dreame_a2_mower.coordinator import (
         apply_property_to_state,
     )
-    from custom_components.dreame_a2_mower.mower.state import MowerState
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state import MowerState
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     from custom_components.dreame_a2_mower.protocol import heartbeat as _hb

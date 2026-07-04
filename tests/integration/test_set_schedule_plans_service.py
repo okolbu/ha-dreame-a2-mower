@@ -23,7 +23,7 @@ _WR_REJECTED = _WR(delivered=True, accepted=False, code=-3, msg="not supported")
 async def test_set_schedule_enabled_blocks_during_active_task(monkeypatch):
     """Handler must raise ServiceValidationError and NOT call write_schedule_enabled
     when a mow session is currently IN_SESSION."""
-    from custom_components.dreame_a2_mower.mower.state_snapshot import MowSession
+    from custom_components.dreame_a2_mower.state.snapshot import MowSession
     from homeassistant.exceptions import ServiceValidationError
 
     coordinator = SimpleNamespace(
@@ -48,7 +48,7 @@ async def test_set_schedule_enabled_blocks_during_active_task(monkeypatch):
 async def test_set_schedule_enabled_dispatches_when_idle(monkeypatch):
     """Handler must call write_schedule_enabled with the correct kwargs when
     the mower is BETWEEN_SESSIONS (no active task)."""
-    from custom_components.dreame_a2_mower.mower.state_snapshot import MowSession
+    from custom_components.dreame_a2_mower.state.snapshot import MowSession
 
     coordinator = SimpleNamespace(
         state_machine=SimpleNamespace(

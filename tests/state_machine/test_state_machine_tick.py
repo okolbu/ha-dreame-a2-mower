@@ -12,10 +12,10 @@ def _make_hb():
 
 
 def test_tick_flips_connectivity_stale_after_90s_gap():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         Connectivity,
     )
     sm = MowerStateMachine()
@@ -31,10 +31,10 @@ def test_s2p2_33_sets_positioning_stuck():
     """s2p2=33 (positioning / off-dock-relocate failure) sets STUCK directly.
     33 is the real positioning-failure signal (e.g. the 2026-05-25 12:32
     relocate-fail burst → s2p1=4 Paused), NOT a 71+31 combination."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         PositioningHealth, Location,
     )
     sm = MowerStateMachine()
@@ -47,10 +47,10 @@ def test_s2p2_33_sets_positioning_stuck():
 def test_positioning_stuck_clears_on_mowing_resume():
     """STUCK clears back to LOCALIZED when the mower resumes mowing (s2p1=1) —
     e.g. the 12:32 incident auto-resumed an hour later."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         PositioningHealth,
     )
     sm = MowerStateMachine()
@@ -64,10 +64,10 @@ def test_s2p2_71_then_31_is_not_stuck():
     """71 (standby→returning) and 31 (failed-to-return) are orthogonal signals;
     neither is a positioning failure, so together they do NOT set STUCK. The old
     71+31→STUCK coupling (which never co-occurred in any probe log) is removed."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         PositioningHealth,
     )
     sm = MowerStateMachine()
@@ -79,10 +79,10 @@ def test_s2p2_71_then_31_is_not_stuck():
 
 def test_s2p2_71_is_returning_not_stuck():
     """s2p2=71 followed by s2p1=5 → RETURNING activity, positioning LOCALIZED."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         PositioningHealth, CurrentActivity,
     )
     sm = MowerStateMachine()
@@ -94,7 +94,7 @@ def test_s2p2_71_is_returning_not_stuck():
 
 
 def test_tick_no_op_when_nothing_to_resolve():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()

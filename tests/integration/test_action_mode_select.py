@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from custom_components.dreame_a2_mower.mower.state import ActionMode, MowerState
+from custom_components.dreame_a2_mower.state import ActionMode, MowerState
 from custom_components.dreame_a2_mower.select import DreameA2ActionModeSelect
 
 

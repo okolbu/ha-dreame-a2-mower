@@ -16,7 +16,7 @@ from custom_components.dreame_a2_mower.const import (
     EVENT_TYPE_DOCK_ARRIVED,
     EVENT_TYPE_DOCK_DEPARTED,
 )
-from custom_components.dreame_a2_mower.mower.state import (
+from custom_components.dreame_a2_mower.state import (
     ActionMode,
     MowerState,
 )
@@ -34,7 +34,7 @@ def _make_coord(at_dock: bool = False) -> DreameA2MowerCoordinator:
     Use `_set_at_dock(coord, True/False)` to flip mid-test for
     rising/falling-edge dock tests.
     """
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot, Location,
     )
     coord = object.__new__(DreameA2MowerCoordinator)
@@ -68,7 +68,7 @@ def _make_coord(at_dock: bool = False) -> DreameA2MowerCoordinator:
 
 def _set_at_dock(coord, at_dock: bool) -> None:
     """Flip the state-machine snapshot's location between AT_DOCK and ON_LAWN."""
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot, Location,
     )
     coord.state_machine.snapshot.return_value = dataclasses.replace(

@@ -9,7 +9,7 @@ from custom_components.dreame_a2_mower.const import DOMAIN
 def test_zone_select_per_map(coordinator_with_two_maps):
     coord = coordinator_with_two_maps
     from custom_components.dreame_a2_mower.select import DreameA2ZoneSelect
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     coord.data = MowerState()
 
@@ -30,7 +30,7 @@ def test_zone_select_per_map(coordinator_with_two_maps):
 def test_spot_select_per_map(coordinator_with_two_maps):
     coord = coordinator_with_two_maps
     from custom_components.dreame_a2_mower.select import DreameA2SpotSelect
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     coord.data = MowerState()
 
@@ -46,7 +46,7 @@ def test_spot_select_per_map(coordinator_with_two_maps):
 def test_edge_select_per_map(coordinator_with_two_maps):
     coord = coordinator_with_two_maps
     from custom_components.dreame_a2_mower.select import DreameA2EdgeSelect
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     coord.data = MowerState()
 
@@ -63,7 +63,7 @@ def test_zone_select_reads_own_map_data(coordinator_with_two_maps):
     """Each entity reads its own map's mowing_zones, not the active map."""
     coord = coordinator_with_two_maps
     from custom_components.dreame_a2_mower.select import DreameA2ZoneSelect
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     coord.data = MowerState()
 
@@ -92,7 +92,7 @@ def test_edge_select_reads_own_map_data(coordinator_with_two_maps):
     """Edge select uses its own map_id, not active_map_id."""
     coord = coordinator_with_two_maps
     from custom_components.dreame_a2_mower.select import DreameA2EdgeSelect
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     coord.data = MowerState()
 

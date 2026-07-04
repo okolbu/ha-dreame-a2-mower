@@ -25,7 +25,7 @@ from ..cloud_client import WriteResult
 from ..const import CONF_DEBUG_SERVICES, DEFAULT_DEBUG_SERVICES, DOMAIN, LOGGER
 from ..coordinator import DreameA2MowerCoordinator
 from ..coordinator._write_errors import raise_for_write_result
-from ..mower.state import ActionMode
+from ..state import ActionMode
 
 # Service names — keep in sync with services.yaml
 SERVICE_SET_ACTIVE_SELECTION = "set_active_selection"
@@ -470,7 +470,7 @@ async def _handle_set_schedule_enabled(
     """Enable/disable one schedule season (mutually exclusive). Blocked while a
     mow session is active — the Dreame app forbids this mid-task; we replicate
     the guard (the mower's mid-task behavior is untested)."""
-    from ..mower.state_snapshot import MowSession
+    from ..state.snapshot import MowSession
 
     sm = getattr(coordinator, "state_machine", None)
     if sm is not None and sm.snapshot().mow_session == MowSession.IN_SESSION:

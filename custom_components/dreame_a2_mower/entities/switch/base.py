@@ -24,7 +24,7 @@ from ...const import LOGGER
 from ...control_honesty import _ControlHonestyMixin, resolve_control_mode
 from ...coordinator import DreameA2MowerCoordinator
 from ...coordinator._write_errors import raise_for_write_result
-from ...mower.state import MowerState
+from ...state import MowerState
 from ..._settings_writes import pre_settings_optimistic_write
 
 

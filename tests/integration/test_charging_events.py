@@ -1,7 +1,7 @@
 """charging_started / charging_complete fire on s3.2 rising edges."""
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.mower.state import ChargingStatus
+from custom_components.dreame_a2_mower.state import ChargingStatus
 
 
 class _FakeLifecycle:

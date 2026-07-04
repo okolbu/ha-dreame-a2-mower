@@ -1,6 +1,6 @@
 """Tests for the MPOS diagnostic sensor value/attrs helpers."""
 from custom_components.dreame_a2_mower.entities.sensor.device import _mpos_value, _mpos_attrs
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 class _Coord:

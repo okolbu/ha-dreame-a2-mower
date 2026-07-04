@@ -23,7 +23,7 @@ from ..const import (
     LOGGER,
 )
 from ..mower import fault_catalog
-from ..mower.state import MowerState
+from ..state import MowerState
 
 
 def compute_target_area_m2(coord, state: MowerState) -> float | None:
@@ -42,7 +42,7 @@ def compute_target_area_m2(coord, state: MowerState) -> float | None:
        dashboard shows the planned target before pressing Start.
     3. Full lawn area otherwise (the sensor's original meaning).
     """
-    from ..mower.state import ActionMode
+    from ..state import ActionMode
 
     # Priority 1: live telemetry while mowing.
     # Use live_map.is_active() — session_active was removed from MowerState (SM-14).

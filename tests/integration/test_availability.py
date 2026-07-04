@@ -315,8 +315,8 @@ from custom_components.dreame_a2_mower.state.cloud_state import (  # noqa: E402
     ScheduleData,
     SettingsRoot,
 )
-from custom_components.dreame_a2_mower.mower.state import MowerState  # noqa: E402
-from custom_components.dreame_a2_mower.mower.state_machine import (  # noqa: E402
+from custom_components.dreame_a2_mower.state import MowerState  # noqa: E402
+from custom_components.dreame_a2_mower.state.machine import (  # noqa: E402
     MowerStateMachine,
 )
 

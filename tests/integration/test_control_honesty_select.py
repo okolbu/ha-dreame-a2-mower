@@ -18,7 +18,7 @@ import asyncio
 import dataclasses
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 from custom_components.dreame_a2_mower.entities.select.map_settings import (
     DreameA2PerMapMowingDirectionSelect,
 )
@@ -164,7 +164,7 @@ def test_action_mode_select_extra_attrs_control_mode():
 
 def test_action_mode_select_option_performs_normal_action():
     """Selecting an action_mode must update coordinator state (not snapped back)."""
-    from custom_components.dreame_a2_mower.mower.state import ActionMode
+    from custom_components.dreame_a2_mower.state import ActionMode
 
     coord = _make_mower_coord()
     coord._render_base = AsyncMock()

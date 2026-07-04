@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 from custom_components.dreame_a2_mower import binary_sensor as bs
 from custom_components.dreame_a2_mower.entities.sensor import device as sensor_device
 from custom_components.dreame_a2_mower.entities.sensor.device import SensorDeviceClass
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 _LIST = sensor_device.SENSORS
 

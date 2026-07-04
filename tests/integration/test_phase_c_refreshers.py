@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from custom_components.dreame_a2_mower.coordinator._refreshers import _RefreshersMixin
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 def _coord(gps=None, remote=None, msg=None, dev=None, ota=None, g4=None):

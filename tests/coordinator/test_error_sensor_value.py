@@ -1,4 +1,4 @@
-from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
+from custom_components.dreame_a2_mower.state.machine import MowerStateMachine
 from custom_components.dreame_a2_mower.mower import fault_catalog as fc
 from custom_components.dreame_a2_mower.entities.sensor.device import _active_fault_text
 

@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 from custom_components.dreame_a2_mower.entities.sensor import device as sensor_device
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 # ---------------------------------------------------------------------------

@@ -51,8 +51,8 @@ from ..const import (
     LOGGER,
 )
 from ..live_map.state import LiveMapState
-from ..mower.state import MowerState
-from ..mower.state_machine import MowerStateMachine
+from ..state import MowerState
+from ..state.machine import MowerStateMachine
 from ..mqtt_client import DreameA2MqttClient
 from ..observability import FreshnessTracker, NovelObservationRegistry
 

@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING, Any
 
 from ..domain import device_sync as _sync
 from ..domain import faults as _faults
-from ..mower.state import MowerState
+from ..state import MowerState
 
 if TYPE_CHECKING:
     pass  # cross-mixin type imports added as needed

@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 
 def _coord(**overrides):
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot,
     )
     coord = MagicMock()
@@ -17,7 +17,7 @@ def _coord(**overrides):
 
 
 def test_current_activity_sensor():
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         CurrentActivity,
     )
     from custom_components.dreame_a2_mower.sensor import (
@@ -29,7 +29,7 @@ def test_current_activity_sensor():
 
 
 def test_location_sensor():
-    from custom_components.dreame_a2_mower.mower.state_snapshot import Location
+    from custom_components.dreame_a2_mower.state.snapshot import Location
     from custom_components.dreame_a2_mower.sensor import (
         DreameA2LocationSensor,
     )
@@ -39,7 +39,7 @@ def test_location_sensor():
 
 
 def test_positioning_health_sensor():
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         PositioningHealth,
     )
     from custom_components.dreame_a2_mower.sensor import (
@@ -51,7 +51,7 @@ def test_positioning_health_sensor():
 
 
 def test_mqtt_connectivity_sensor():
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         Connectivity,
     )
     from custom_components.dreame_a2_mower.sensor import (
@@ -66,14 +66,14 @@ def test_current_activity_options_cover_every_enum_value():
     """The ENUM sensor must list every CurrentActivity value, else a real value
     (e.g. the new patrol_edge / patrol_point) renders as an invalid state. Drift
     guard: options set == enum value set."""
-    from custom_components.dreame_a2_mower.mower.state_snapshot import CurrentActivity
+    from custom_components.dreame_a2_mower.state.snapshot import CurrentActivity
     from custom_components.dreame_a2_mower.sensor import DreameA2CurrentActivitySensor
     enum_values = {a.value for a in CurrentActivity}
     assert set(DreameA2CurrentActivitySensor._attr_options) == enum_values
 
 
 def test_current_activity_patrol_values():
-    from custom_components.dreame_a2_mower.mower.state_snapshot import CurrentActivity
+    from custom_components.dreame_a2_mower.state.snapshot import CurrentActivity
     from custom_components.dreame_a2_mower.sensor import DreameA2CurrentActivitySensor
     for ca in (CurrentActivity.PATROL_EDGE, CurrentActivity.PATROL_POINT):
         coord = _coord(current_activity=ca)

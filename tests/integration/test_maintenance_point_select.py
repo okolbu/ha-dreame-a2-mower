@@ -2,7 +2,7 @@
 from unittest.mock import MagicMock
 
 from custom_components.dreame_a2_mower.const import DOMAIN
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 def _points(*ids):

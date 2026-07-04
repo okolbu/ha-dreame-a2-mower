@@ -4,10 +4,10 @@ import pytest
 from custom_components.dreame_a2_mower.map_render.background import (
     BackgroundMode, background_mode_for,
 )
-from custom_components.dreame_a2_mower.mower.state_snapshot import (
+from custom_components.dreame_a2_mower.state.snapshot import (
     MowSession, CurrentActivity,
 )
-from custom_components.dreame_a2_mower.mower.state import ActionMode
+from custom_components.dreame_a2_mower.state import ActionMode
 
 ACTIVE = [
     CurrentActivity.MOWING, CurrentActivity.PAUSED, CurrentActivity.REPOSITIONING,

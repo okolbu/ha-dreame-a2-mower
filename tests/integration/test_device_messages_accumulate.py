@@ -5,7 +5,7 @@ from types import SimpleNamespace
 from custom_components.dreame_a2_mower.coordinator._notifications import (
     _NotificationsMixin,
 )
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 def _rec(mid, send_time, text="hello"):

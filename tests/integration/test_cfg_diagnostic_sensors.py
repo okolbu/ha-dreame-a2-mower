@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from custom_components.dreame_a2_mower.coordinator._property_apply import (
+from custom_components.dreame_a2_mower.state.apply import (
     cfg_to_state_updates,
 )
 

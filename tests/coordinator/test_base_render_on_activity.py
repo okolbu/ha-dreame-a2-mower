@@ -16,9 +16,9 @@ import pytest
 
 from custom_components.dreame_a2_mower.coordinator._rendering import _RenderingMixin
 from custom_components.dreame_a2_mower.map_render import BackgroundMode
-from custom_components.dreame_a2_mower.mower.state import ActionMode
-from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
-from custom_components.dreame_a2_mower.mower.state_snapshot import (
+from custom_components.dreame_a2_mower.state import ActionMode
+from custom_components.dreame_a2_mower.state.machine import MowerStateMachine
+from custom_components.dreame_a2_mower.state.snapshot import (
     CurrentActivity,
     MowSession,
 )

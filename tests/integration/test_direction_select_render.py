@@ -24,7 +24,7 @@ from homeassistant.exceptions import HomeAssistantError
 from custom_components.dreame_a2_mower.entities.select.map_settings import (
     DreameA2PerMapMowingDirectionSelect,
 )
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 _MAP_ID = 0
 _PATCH_TARGET = (

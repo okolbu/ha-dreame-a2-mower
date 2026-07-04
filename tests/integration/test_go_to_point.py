@@ -28,7 +28,7 @@ def test_go_to_point_action_table_entry():
 
 def test_mower_state_active_selection_point_defaults_none():
     import dataclasses
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
     s = MowerState()
     assert s.active_selection_point is None
     s2 = dataclasses.replace(s, active_selection_point=(0, 1))

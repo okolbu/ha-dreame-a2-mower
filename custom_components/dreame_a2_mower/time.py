@@ -31,7 +31,7 @@ from .const import DOMAIN, LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
 from .coordinator._write_errors import raise_for_write_result
-from .mower.state import MowerState
+from .state import MowerState
 from .protocol import cfg_payloads as _cfgp
 
 # ---------------------------------------------------------------------------

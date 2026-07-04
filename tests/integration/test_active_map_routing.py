@@ -4,7 +4,7 @@ from __future__ import annotations
 from unittest.mock import MagicMock
 
 from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 from custom_components.dreame_a2_mower.live_map.state import LiveMapState
 from custom_components.dreame_a2_mower.observability import (
     FreshnessTracker,

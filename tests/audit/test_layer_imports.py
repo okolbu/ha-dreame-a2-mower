@@ -102,7 +102,7 @@ MODULE_LAYER: dict[str, int] = {
     # (a pure dataclass), so pinning it here makes that a legal SAME-layer
     # edge. Verified nothing at layer 0/1 imports observability back — its
     # only importers are __init__.py (6), coordinator/_core.py (4), and
-    # coordinator/_property_apply.py (4), all strictly downward. This is why
+    # state/apply.py (3), all strictly downward. This is why
     # the gate needs NO known-exception for that edge.
     "observability": 1,
 

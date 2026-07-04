@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 
 def test_save_persisted_writes_serialised_snapshot():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -23,7 +23,7 @@ def test_save_persisted_writes_serialised_snapshot():
 
 
 def test_save_persisted_clears_dirty():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
     sm = MowerStateMachine()
@@ -37,10 +37,10 @@ def test_save_persisted_clears_dirty():
 
 
 def test_load_persisted_restores_snapshot():
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot, CurrentActivity, Location,
     )
     sm = MowerStateMachine()
@@ -64,10 +64,10 @@ def test_load_persisted_restores_snapshot():
 
 def test_load_persisted_handles_missing_store_data():
     """No saved data → snapshot stays at initial."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot,
     )
     sm = MowerStateMachine()
@@ -81,10 +81,10 @@ def test_load_persisted_handles_missing_store_data():
 
 def test_load_persisted_handles_corrupt_data_logs_warning():
     """Garbage in store → snapshot stays at initial (no exception)."""
-    from custom_components.dreame_a2_mower.mower.state_machine import (
+    from custom_components.dreame_a2_mower.state.machine import (
         MowerStateMachine,
     )
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot,
     )
     sm = MowerStateMachine()

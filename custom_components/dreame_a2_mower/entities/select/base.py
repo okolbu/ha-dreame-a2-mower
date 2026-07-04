@@ -26,7 +26,7 @@ from ..._devices import (
 from ...const import LOGGER
 from ...control_honesty import _ControlHonestyMixin, resolve_control_mode
 from ...coordinator import DreameA2MowerCoordinator
-from ...mower.state import MowerState
+from ...state import MowerState
 
 
 # ---------------------------------------------------------------------------

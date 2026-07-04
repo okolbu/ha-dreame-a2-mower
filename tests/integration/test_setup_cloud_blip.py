@@ -35,7 +35,7 @@ import custom_components.dreame_a2_mower.sensor as sensor_platform
 import custom_components.dreame_a2_mower.switch as switch_platform
 from custom_components.dreame_a2_mower.const import DOMAIN
 from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 from tests.factories import make_coordinator
 

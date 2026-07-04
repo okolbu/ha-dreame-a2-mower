@@ -37,7 +37,7 @@ def _find_desc(key: str) -> DreameA2TimeEntityDescription:
 def _make_time(desc: DreameA2TimeEntityDescription, cfg: dict, *,
                control_mode: ControlMode = ControlMode.DEVICE_WRITE_UNPROVEN):
     """Build a minimal DreameA2Time bypassing __init__ to avoid coordinator deps."""
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
     coord = SimpleNamespace()
     coord.data = MowerState()

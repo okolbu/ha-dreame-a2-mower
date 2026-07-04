@@ -23,7 +23,7 @@ from enum import Enum, auto
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
 
 # ---------------------------------------------------------------------------
 # Module-level constants (per spec §5.7 / task F5.5.1)

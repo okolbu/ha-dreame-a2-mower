@@ -1,5 +1,5 @@
 from custom_components.dreame_a2_mower.coordinator._refreshers import apply_mpos_result
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.state import MowerState
 
 
 def test_apply_ok_sets_fields_and_timestamp():

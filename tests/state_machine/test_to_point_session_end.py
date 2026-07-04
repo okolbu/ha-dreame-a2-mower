@@ -58,9 +58,9 @@ from custom_components.dreame_a2_mower.live_map.finalize import (
     FinalizeAction,
     decide,
 )
-from custom_components.dreame_a2_mower.mower.state import MowerState
-from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
-from custom_components.dreame_a2_mower.mower.state_snapshot import (
+from custom_components.dreame_a2_mower.state import MowerState
+from custom_components.dreame_a2_mower.state.machine import MowerStateMachine
+from custom_components.dreame_a2_mower.state.snapshot import (
     CurrentActivity,
     MowSession,
 )
@@ -324,7 +324,7 @@ def _build_finalize_coord():
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
     from custom_components.dreame_a2_mower.archive.session import SessionArchive
     from custom_components.dreame_a2_mower.live_map.state import LiveMapState
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
     from custom_components.dreame_a2_mower.coordinator._session import _SessionMixin
 
     c = DreameA2MowerCoordinator.__new__(DreameA2MowerCoordinator)

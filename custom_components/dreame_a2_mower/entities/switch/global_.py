@@ -23,7 +23,7 @@ from ..._devices import map_unique_id, mower_device_info, mower_unique_id
 from ...control_honesty import _ControlHonestyMixin, resolve_control_mode
 from ...coordinator import DreameA2MowerCoordinator
 from ...coordinator._write_errors import raise_for_write_result
-from ...mower.state import MowerState
+from ...state import MowerState
 from .base import (
     DreameA2SwitchEntityDescription,
     _AiRecognitionBitSwitch,

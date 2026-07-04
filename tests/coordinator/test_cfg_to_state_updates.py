@@ -1,7 +1,7 @@
 """Unit tests for the pure CFG -> MowerState updates helper."""
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.coordinator._property_apply import (
+from custom_components.dreame_a2_mower.state.apply import (
     cfg_to_state_updates,
 )
 

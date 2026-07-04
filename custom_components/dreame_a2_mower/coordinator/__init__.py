@@ -35,14 +35,14 @@ from __future__ import annotations
 
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
-from ..mower.state import MowerState
+from ..state import MowerState
 from ._cloud_state import _CloudStateMixin
 from ._core import _CoreMixin
 from ._device_sync import _DeviceSyncMixin
 from ._lidar_oss import _LidarOssMixin
 from ._mqtt_handlers import _MqttHandlersMixin
 from ._notifications import _NotificationsMixin
-from ._property_apply import (
+from ..state.apply import (
     _BLOB_SLOTS,
     _SUPPRESSED_SLOTS,
     S2P2_EVENT_TYPES,

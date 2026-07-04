@@ -6,8 +6,8 @@ from pathlib import Path
 from enum import IntEnum, Enum
 
 from custom_components.dreame_a2_mower.coordinator import apply_property_to_state, _BLOB_SLOTS, _SUPPRESSED_SLOTS
-from custom_components.dreame_a2_mower.mower.property_mapping import PROPERTY_MAPPING
-from custom_components.dreame_a2_mower.mower.state import MowerState
+from custom_components.dreame_a2_mower.protocol.property_mapping import PROPERTY_MAPPING
+from custom_components.dreame_a2_mower.state import MowerState
 
 def test_probe_values_produce_correct_types(capsys):
     hints = typing.get_type_hints(MowerState)

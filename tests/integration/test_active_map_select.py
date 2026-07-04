@@ -59,8 +59,8 @@ def _make_select_with_state(coordinator_with_two_maps, state_value):
     """
     import dataclasses
     from custom_components.dreame_a2_mower.select import DreameA2ActiveMapSelect
-    from custom_components.dreame_a2_mower.mower.state import State
-    from custom_components.dreame_a2_mower.mower.state_snapshot import (
+    from custom_components.dreame_a2_mower.state import State
+    from custom_components.dreame_a2_mower.state.snapshot import (
         StateSnapshot, CurrentActivity, MowSession,
     )
 
@@ -93,7 +93,7 @@ def _make_select_with_state(coordinator_with_two_maps, state_value):
 
 def test_active_map_select_refuses_change_while_mowing(coordinator_with_two_maps):
     """Cloud rejects map switch during active mow; refuse client-side."""
-    from custom_components.dreame_a2_mower.mower.state import State
+    from custom_components.dreame_a2_mower.state import State
 
     sel, coord = _make_select_with_state(coordinator_with_two_maps, State.WORKING)
 
@@ -112,7 +112,7 @@ def test_active_map_select_refuses_change_while_mowing(coordinator_with_two_maps
 
 def test_active_map_select_refuses_change_while_paused(coordinator_with_two_maps):
     """Map switch is also blocked in paused state (mow session still active)."""
-    from custom_components.dreame_a2_mower.mower.state import State
+    from custom_components.dreame_a2_mower.state import State
 
     sel, coord = _make_select_with_state(coordinator_with_two_maps, State.PAUSED)
 
@@ -126,7 +126,7 @@ def test_active_map_select_refuses_change_while_paused(coordinator_with_two_maps
 
 def test_active_map_select_allows_change_when_idle(coordinator_with_two_maps):
     """Map switch dispatches normally when mower is idle/docked (STANDBY)."""
-    from custom_components.dreame_a2_mower.mower.state import State
+    from custom_components.dreame_a2_mower.state import State
 
     sel, coord = _make_select_with_state(coordinator_with_two_maps, State.STANDBY)
     # async_write_ha_state is called before dispatch; provide a no-op stub
@@ -157,7 +157,7 @@ def test_active_map_select_registers_unload_canceller_for_optimistic_clear(
     """T3-8: the 10s optimistic-clear fallback's canceller is routed through
     coordinator.entry.async_on_unload so a reload/unload inside the window
     cancels it instead of firing into a torn-down entity."""
-    from custom_components.dreame_a2_mower.mower.state import State
+    from custom_components.dreame_a2_mower.state import State
 
     sel, coord = _make_select_with_state(coordinator_with_two_maps, State.STANDBY)
     sel.async_write_ha_state = MagicMock()
@@ -177,7 +177,7 @@ def test_active_map_select_registers_unload_canceller_for_optimistic_clear(
 
 def test_active_map_select_allows_change_when_charging(coordinator_with_two_maps):
     """Map switch dispatches normally when mower is charging."""
-    from custom_components.dreame_a2_mower.mower.state import State
+    from custom_components.dreame_a2_mower.state import State
 
     sel, coord = _make_select_with_state(coordinator_with_two_maps, State.CHARGING)
     sel.async_write_ha_state = MagicMock()
@@ -196,7 +196,7 @@ def test_active_map_select_raises_on_rejected_dispatch(coordinator_with_two_maps
     import pytest
     from homeassistant.exceptions import HomeAssistantError
     from custom_components.dreame_a2_mower.cloud_client import WriteResult
-    from custom_components.dreame_a2_mower.mower.state import State
+    from custom_components.dreame_a2_mower.state import State
 
     sel, coord = _make_select_with_state(coordinator_with_two_maps, State.STANDBY)
     sel.async_write_ha_state = MagicMock()
@@ -218,7 +218,7 @@ def test_active_map_select_raises_on_rejected_dispatch(coordinator_with_two_maps
 def test_active_map_select_does_not_raise_on_accepted(coordinator_with_two_maps):
     """An accepted changeMap dispatch must not raise."""
     from custom_components.dreame_a2_mower.cloud_client import WriteResult
-    from custom_components.dreame_a2_mower.mower.state import State
+    from custom_components.dreame_a2_mower.state import State
 
     sel, coord = _make_select_with_state(coordinator_with_two_maps, State.STANDBY)
     sel.async_write_ha_state = MagicMock()

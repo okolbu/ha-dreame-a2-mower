@@ -11,8 +11,8 @@ must still yield MOWING.
 """
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
-from custom_components.dreame_a2_mower.mower.state_snapshot import (
+from custom_components.dreame_a2_mower.state.machine import MowerStateMachine
+from custom_components.dreame_a2_mower.state.snapshot import (
     CurrentActivity,
     MowSession,
 )

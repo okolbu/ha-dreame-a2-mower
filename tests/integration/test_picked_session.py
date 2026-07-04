@@ -97,7 +97,7 @@ def test_build_picked_session_summary_populates_all_required_keys():
 async def test_render_work_log_session_populates_picked_summary():
     """render_work_log_session populates coord._picked_session_summary."""
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
     from custom_components.dreame_a2_mower.live_map.state import LiveMapState
     from custom_components.dreame_a2_mower.observability import (
         FreshnessTracker,
@@ -202,7 +202,7 @@ async def test_render_work_log_session_hydrate_writes_cloud_state():
     """When the map cache is empty, the last-resort live fetch must hydrate
     cloud_state.maps_by_id (not a private shadow) so later replays reuse it."""
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-    from custom_components.dreame_a2_mower.mower.state import MowerState
+    from custom_components.dreame_a2_mower.state import MowerState
     from custom_components.dreame_a2_mower.live_map.state import LiveMapState
     from tests.integration.conftest import make_empty_cloud_state
     import custom_components.dreame_a2_mower.map_render as map_render_mod

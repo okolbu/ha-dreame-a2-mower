@@ -10,7 +10,7 @@ from unittest.mock import MagicMock
 def _make_camera(tmp_path: Path, *, with_body: bool):
     from custom_components.dreame_a2_mower.camera import DreameA2MapCamera
     from custom_components.dreame_a2_mower.coordinator import DreameA2MowerCoordinator
-    from custom_components.dreame_a2_mower.mower.state_machine import MowerStateMachine
+    from custom_components.dreame_a2_mower.state.machine import MowerStateMachine
     from custom_components.dreame_a2_mower.wifi.archive_store import WifiArchiveStore
 
     md = SimpleNamespace(

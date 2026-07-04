@@ -20,7 +20,7 @@ from ._availability import _FreshnessAvailableMixin
 from ._devices import mower_device_info, mower_unique_id
 from .const import DOMAIN
 from .coordinator import DreameA2MowerCoordinator
-from .mower.state_snapshot import (
+from .state.snapshot import (
     Connectivity,
     Location,
     MowSession,

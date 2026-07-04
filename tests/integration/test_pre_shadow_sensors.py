@@ -13,7 +13,7 @@ mower/state_machine.handle_pre_shadow_update.
 """
 from unittest.mock import MagicMock
 
-from custom_components.dreame_a2_mower.mower.state_machine import (
+from custom_components.dreame_a2_mower.state.machine import (
     MowerStateMachine,
 )
 

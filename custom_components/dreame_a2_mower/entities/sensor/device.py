@@ -28,7 +28,7 @@ from ..._devices import _MowerScopedEntity, mower_device_info, mower_unique_id
 from ...coordinator import DreameA2MowerCoordinator
 from ...mower import fault_catalog
 from ...mower.error_codes import describe_error
-from ...mower.state import ChargingStatus, MowerState
+from ...state import ChargingStatus, MowerState
 from .base import (
     DreameA2DiagnosticSensorEntityDescription,
     DreameA2SensorEntityDescription,
@@ -178,7 +178,7 @@ def _format_active_selection(state: MowerState) -> str | None:
       action_mode=zone, zones=() → 'No zones selected'
       action_mode=spot, spots=() → 'No spots selected'
     """
-    from ...mower.state import ActionMode
+    from ...state import ActionMode
     mode = state.action_mode
     if mode == ActionMode.ALL_AREAS:
         return "All areas"
