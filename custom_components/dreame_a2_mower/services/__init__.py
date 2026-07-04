@@ -677,11 +677,18 @@ async def _handle_create_maintenance_point(
     )
 
 
-@service_handler
+@experimental_service
 async def _handle_create_patrol_point(
     coordinator: DreameA2MowerCoordinator, call: ServiceCall
 ) -> None:
-    """Create (or move) a patrol / cruise point on a map (o=223)."""
+    """Create (or move) a patrol / cruise point on a map (o=223).
+
+    P4.4 (R-52, track-5 T5-9): T1 experimental — the o=223 SEND is
+    integration-issued but never live round-trip-confirmed (inventory.yaml
+    § routed_ops o223). Gated behind experimental_features via
+    ``experimental_service`` (raises when off; stays visible in the registry).
+    Promotion = one live create-patrol-point round-trip observed on the mower.
+    """
     map_id = call.data.get("map_id")
     if map_id is None:
         map_id = coordinator.active_map_id or 0
