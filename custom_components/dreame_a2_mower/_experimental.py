@@ -79,9 +79,11 @@ def filter_experimental(entry: Any | None, entities: Iterable[Any]) -> list[Any]
       ``entity_registry_enabled_default=False`` so it lands disabled in the
       registry (opt-in per entity even once the gate is on).
 
-    P4.4 populated the gate: 13 surfaces (10 entities via the descriptor field +
-    3 descriptorless classes via the ``_experimental_tier`` per-instance
-    fallback) now carry a tier. Every other descriptor still leaves
+    P4.4 populated the gate: 13 surfaces = 11 gated entities (8 via the
+    descriptor ``experimental`` field + 3 descriptorless classes via the
+    ``_experimental_tier`` per-instance fallback) plus 2 gated actions
+    (the ``create_patrol_point`` service + the firmware install action, which
+    raise when off rather than vanishing). Every other descriptor still leaves
     ``experimental`` ``None`` and passes through unchanged.
     """
     enabled = experimental_features_enabled(entry)
