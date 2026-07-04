@@ -44,7 +44,7 @@ secrets.yaml
 
 # Local archives (these belong in <ha_config>/dreame_a2_mower/, not the repo)
 sessions/
-lidar/
+/lidar/
 mqtt_archive/
 
 # Auto-generated, data-dependent: tools/inventory_audit.py regenerates this
