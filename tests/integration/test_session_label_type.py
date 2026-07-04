@@ -1,5 +1,5 @@
 from types import SimpleNamespace
-from custom_components.dreame_a2_mower.session_card import format_session_label
+from custom_components.dreame_a2_mower.domain.session.replay import format_session_label
 
 
 def _entry(**kw):
@@ -13,7 +13,7 @@ def test_mode_and_start_mode_labels_match_decoded_mapping():
     (inventory § summary_mode): 100 all-areas / 101 edge / 102 zone / 103 spot /
     107 point-patrol / 108 edge-patrol; start_mode 1=scheduled / 0=manual. (Old
     code had 102='All areas' and reversed start_mode — guesswork.)"""
-    from custom_components.dreame_a2_mower.session_card import (
+    from custom_components.dreame_a2_mower.domain.session.replay import (
         MODE_LABELS, START_MODE_LABELS,
     )
     assert MODE_LABELS[100] == "All areas"

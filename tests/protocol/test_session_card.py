@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from custom_components.dreame_a2_mower.protocol import session_summary as _ss
-from custom_components.dreame_a2_mower.session_card import (
+from custom_components.dreame_a2_mower.domain.session.replay import (
     _build_rain_intervals,
     _build_state_intervals,
     _compute_time_breakdown,

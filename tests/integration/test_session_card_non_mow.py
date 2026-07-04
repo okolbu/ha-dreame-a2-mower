@@ -12,7 +12,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from custom_components.dreame_a2_mower.session_card import (
+from custom_components.dreame_a2_mower.domain.session.replay import (
     build_picked_session_summary,
     format_session_label,
 )

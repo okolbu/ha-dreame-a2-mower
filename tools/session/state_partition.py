@@ -76,15 +76,20 @@ def main(session_path: Path, probe_path: Path) -> None:
 
     state_probe, err_probe = parse_probe_log(probe_path, start_ts, end_ts)
 
-    # Import session_card directly as a standalone module to avoid pulling
-    # in HA via the package __init__ (which fails outside the HA runtime).
-    import importlib.util as ilu
+    # Import the session-replay derivation module directly to avoid pulling in
+    # HA via the package __init__ (which fails outside the HA runtime).
+    # P3.9a: the _compute_time_breakdown helper moved from the deleted
+    # session_card.py into domain/session/replay.py. NOTE: standalone-by-path
+    # load only resolves if the module's parent packages are importable — the
+    # module uses package-relative imports, so run this tool from the repo root
+    # with the package importable.
+    import importlib
 
     repo_root = Path(__file__).resolve().parent.parent.parent
-    sc_path = repo_root / "custom_components" / "dreame_a2_mower" / "session_card.py"
-    spec = ilu.spec_from_file_location("session_card", sc_path)
-    sc = ilu.module_from_spec(spec)  # type: ignore[arg-type]
-    spec.loader.exec_module(sc)  # type: ignore[union-attr]
+    sys.path.insert(0, str(repo_root))
+    sc = importlib.import_module(
+        "custom_components.dreame_a2_mower.domain.session.replay"
+    )
     _compute_time_breakdown = sc._compute_time_breakdown
 
     # Probe-truth breakdown

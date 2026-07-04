@@ -1,7 +1,7 @@
 """Tests for session_card.derive_render_legs."""
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.session_card import derive_render_legs
+from custom_components.dreame_a2_mower.domain.session.replay import derive_render_legs
 
 
 def _pt(t, x, y, role):
@@ -54,7 +54,7 @@ def test_empty_track():
     assert derive_render_legs([]) == []
 
 
-from custom_components.dreame_a2_mower.session_card import compute_track_distances
+from custom_components.dreame_a2_mower.domain.session.replay import compute_track_distances
 
 
 def test_compute_distances_total_and_split():

@@ -188,7 +188,7 @@ def test_missing_fields_become_none():
 
 def test_consumer_handles_v1_legacy_snapshot():
     """A flat dict (v1) gets normalised as per_map; downstream reads still work."""
-    from custom_components.dreame_a2_mower.session_card import _normalise_settings_snapshot
+    from custom_components.dreame_a2_mower.domain.session.replay import _normalise_settings_snapshot
     v1 = {"mowingHeight": 4, "edgeMowingAuto": 1}
     out = _normalise_settings_snapshot(v1)
     assert out["version"] == 1
@@ -198,7 +198,7 @@ def test_consumer_handles_v1_legacy_snapshot():
 
 def test_consumer_handles_v2_snapshot():
     """v2 dict passes through with all 4 sections intact."""
-    from custom_components.dreame_a2_mower.session_card import _normalise_settings_snapshot
+    from custom_components.dreame_a2_mower.domain.session.replay import _normalise_settings_snapshot
     v2 = {
         "version": 2,
         "per_map": {"mowingHeight": 4},
@@ -214,7 +214,7 @@ def test_consumer_handles_v2_snapshot():
 
 def test_consumer_handles_none_snapshot():
     """Missing settings_snapshot returns an empty v2 shape so downstream lookups don't crash."""
-    from custom_components.dreame_a2_mower.session_card import _normalise_settings_snapshot
+    from custom_components.dreame_a2_mower.domain.session.replay import _normalise_settings_snapshot
     out = _normalise_settings_snapshot(None)
     assert out["per_map"] == {}
     assert out["device_wide"] == {}

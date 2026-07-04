@@ -1,19 +1,34 @@
-"""Picked-session summary builder.
+"""Session replay + work-log render service (layer 4) — extracted VERBATIM from
+``coordinator/_session.py`` (the replay/work-log render orchestration) and the
+former root ``session_card.py`` (picked-session summary derivation) in
+refactor-v2 P3.9a. This kills the T2-13 ``session_card.py`` misnomer: its pure
+derivation helpers were never a "card" — they build the picked-session attribute
+dict + the render legs the work-log screen consumes, which is session-replay
+domain logic.
 
-Pure derivation: takes a raw archive dict + parsed SessionSummary +
-ArchivedSession-like metadata, returns a flat dict of attributes the
-dashboard cards consume. No HA / coordinator imports — fully unit-
-testable in isolation.
+Two parts:
+
+  1. **Pure derivation** (moved byte-for-byte from ``session_card.py``, which is
+     now DELETED): ``build_picked_session_summary`` + its section helpers,
+     ``derive_render_legs`` / ``compute_track_distances``, ``format_session_label``,
+     ``_normalise_settings_snapshot``, the enum label tables, and ``_track_as_dicts``.
+     No HA / coordinator imports — still fully unit-testable in isolation.
+  2. **Render orchestration** (``render_work_log_session`` + the
+     ``replay_session`` back-compat alias): coord-taking functions that look up an
+     archived session, build the picked-session summary, resolve the target map,
+     and render the work-log PNG. The coordinator keeps thin ``_SessionMixin``
+     delegators for its public surface.
 
 Spec: docs/superpowers/specs/2026-05-15-session-summary-card-design.md
 """
 from __future__ import annotations
 
+import dataclasses
 from datetime import datetime
 from typing import Any
 
-from .const import NON_MOW_SESSION_TYPES
-from .protocol.mode_enum import MODE_BY_CODE, MOW_MODE_CODES
+from ...const import NON_MOW_SESSION_TYPES, LOGGER
+from ...protocol.mode_enum import MODE_BY_CODE, MOW_MODE_CODES
 
 MODE_LABELS: dict[int, str] = {code: info.label for code, info in MODE_BY_CODE.items()}
 """Mode-enum display labels (100 All areas / 101 Edge / 102 Zone / 103 Spot /
@@ -626,7 +641,7 @@ def _track_as_dicts(raw_dict: dict[str, Any]) -> list[dict]:
     task_state, role]); the in-memory/derive working shape is dicts. This is
     the archive→working-shape boundary: rows are converted, dicts pass
     through unchanged (transient in-memory callers + unit tests)."""
-    from .live_map.state import track_row_to_dict
+    from ...live_map.state import track_row_to_dict
 
     out: list[dict] = []
     for r in raw_dict.get("track") or []:
@@ -731,3 +746,312 @@ def build_picked_session_summary(
         out["time_other_min"] = None
 
     return out
+
+
+# ---------------------------------------------------------------------------
+# Render orchestration (coord-taking) — moved VERBATIM from _session.py.
+# ---------------------------------------------------------------------------
+
+
+async def replay_session(coord, session_md5: str) -> None:
+    """Backwards-compat alias for the Work Log render method.
+
+    Kept so the public dreame_a2_mower.replay_session service (and any
+    user automations referencing it) keep working after the rename.
+    """
+    await coord.render_work_log_session(session_md5)
+
+
+async def render_work_log_session(coord, session_md5: str) -> None:
+    """Render an archived session's path into _work_log_png.
+
+    Look up the session by md5 in session_archive, parse its track
+    segments via parse_session_summary, then render via
+    render_work_log using the archived legs.  Updates
+    _work_log_png in-place — the work-log camera entity serves whatever is
+    cached, so the replay is immediately visible.
+
+    The replay persists in the work-log camera until the user selects
+    the work-log picker's placeholder entry (which sets _work_log_png
+    back to None) or the config entry is reloaded.  No periodic refresh
+    path touches _work_log_png, so it is not automatically cleared.
+
+    Args:
+        session_md5: The md5 string of the archived session.
+
+    Logs a warning and returns early if:
+    - The md5 does not match any session in the archive.
+    - The raw JSON cannot be loaded from disk.
+    - parse_session_summary raises (malformed data).
+    - No cloud client is available (not yet initialised).
+    """
+    import time as _time
+
+    from ...map_decoder import parse_cloud_map
+    from ...map_render import render_work_log
+
+    replay_start_unix = _time.monotonic()
+    LOGGER.info("[F5.9.1] render_work_log_session: looking up md5=%s", session_md5)
+
+    # --- 1. Find the ArchivedSession entry. The picker passes either:
+    #   - the unique filename (post-v1.0.0a53; only key with no
+    #     collisions when multiple sessions share an md5), OR
+    #   - a 32-char md5 (legacy, also used by the public
+    #     dreame_a2_mower.replay_session service). Match either.
+    # When multiple entries share an md5 (g2408 reuses md5 across
+    # sessions on an unchanged map — see project memo
+    # 'g2408 session-archive + target-area quirks'), pick the most
+    # recent by end_ts so the user gets the entry they actually
+    # see at the top of the picker label list.
+    sessions = await coord.hass.async_add_executor_job(
+        coord.session_archive.list_sessions
+    )
+    by_filename = next(
+        (s for s in sessions if s.filename == session_md5), None
+    )
+    if by_filename is not None:
+        entry = by_filename
+    else:
+        md5_matches = [s for s in sessions if s.md5 == session_md5]
+        entry = max(md5_matches, key=lambda s: s.end_ts, default=None)
+    if entry is None:
+        LOGGER.warning(
+            "[F5.9.1] render_work_log_session: no session with key=%s in archive "
+            "(%d sessions total)", session_md5, len(sessions)
+        )
+        return
+
+    # --- 2. Load the raw JSON from disk ---
+    raw_dict = await coord.hass.async_add_executor_job(
+        coord.session_archive.load, entry
+    )
+    if raw_dict is None:
+        LOGGER.warning(
+            "[F5.9.1] render_work_log_session: failed to load raw JSON for md5=%s "
+            "(filename=%s)", session_md5, entry.filename
+        )
+        return
+
+    # --- 3. Parse the session summary to extract track_segments ---
+    from ...protocol import session_summary as _session_summary
+    try:
+        summary = _session_summary.parse_session_summary(raw_dict)
+    except _session_summary.InvalidSessionSummary as ex:
+        LOGGER.warning(
+            "[F5.9.1] render_work_log_session: parse_session_summary failed for "
+            "md5=%s: %s", session_md5, ex
+        )
+        return
+
+    # --- 3b. Build the picked-session summary dict (T13) ---
+    from ...map_render import extract_projection
+
+    try:
+        picker_label = format_session_label(entry)
+    except Exception:
+        picker_label = (
+            getattr(entry, "filename", None)
+            or getattr(entry, "md5", None)
+            or "(unknown)"
+        )
+    from ...live_map.state import track_row_to_dict
+
+    track_rows = raw_dict.get("track") or []
+    track = [track_row_to_dict(r) for r in track_rows]
+    legs_timeline: list[dict] | None = derive_render_legs(track) or None
+
+    # Replay-only overlay: each Obstacle.polygon is already a tuple
+    # of (x_m, y_m) pairs (the protocol decoder handled the cm→m
+    # conversion). Pass empty list rather than None when the session
+    # has none, so the renderer's branch is consistent.
+    obstacle_polygons_m: list[list[tuple[float, float]]] = [
+        list(o.polygon) for o in summary.obstacles if len(o.polygon) >= 3
+    ]
+
+    if not track:
+        LOGGER.warning(
+            "[F5.9.1] render_work_log_session: key=%s has no track data "
+            "(archive pre-dates per-point track)", session_md5
+        )
+        # Fall through — render_work_log handles empty legs gracefully
+        # (produces same output as render_base_map).
+
+    # --- 4. Resolve which map to render against (MM Task 11: cross-map replay).
+    # Use the map_id stamped on the archived session so replays from a
+    # non-active map render against their own base map, not today's active.
+    # Fall back to _active_map_id when map_id is -1 (legacy entries).
+    session_map_id = getattr(entry, "map_id", -1)
+    target_map_id = (
+        session_map_id if session_map_id != -1 else coord._active_map_id
+    )
+    map_data = (
+        coord.cloud_state.maps_by_id.get(target_map_id)
+        if target_map_id is not None
+        else None
+    )
+    if map_data is None and coord.cloud_state.maps_by_id:
+        # No map for the session's stamped id — fall back to any cached map
+        # rather than making the replay entirely black. Log a warning so the
+        # user knows the render may be wrong.
+        fallback_id = min(coord.cloud_state.maps_by_id.keys())
+        LOGGER.warning(
+            "[F5.9.1] render_work_log_session: map_id=%r not in cache (have: %s); "
+            "falling back to map_id=%r",
+            target_map_id,
+            sorted(coord.cloud_state.maps_by_id.keys()),
+            fallback_id,
+        )
+        target_map_id = fallback_id
+        map_data = coord.cloud_state.maps_by_id[fallback_id]
+    if map_data is None:
+        # Cache entirely empty — try a live fetch as a last resort (slow).
+        if not hasattr(coord, "_cloud"):
+            LOGGER.warning(
+                "[F5.9.1] render_work_log_session: cloud client not ready yet; "
+                "cannot fetch map for replay"
+            )
+            return
+        cloud_response = await coord.hass.async_add_executor_job(
+            coord._cloud.fetch_map
+        )
+        if cloud_response is None:
+            LOGGER.warning(
+                "[F5.9.1] render_work_log_session: fetch_map returned None; "
+                "cannot render replay for md5=%s", session_md5
+            )
+            return
+        map_data = parse_cloud_map(cloud_response)
+        if map_data is None:
+            LOGGER.warning(
+                "[F5.9.1] render_work_log_session: parse_cloud_map returned None; "
+                "cannot render replay for md5=%s", session_md5
+            )
+            return
+        # Hydrate the active-map slot so subsequent replays don't re-fetch.
+        # cloud_state is the single map store; replace it immutably.
+        active_id = coord._active_map_id if coord._active_map_id is not None else 0
+        coord.cloud_state = dataclasses.replace(
+            coord.cloud_state,
+            maps_by_id={**coord.cloud_state.maps_by_id, active_id: map_data},
+        )
+        target_map_id = active_id
+
+    # --- 4a. Override with SESSION-TIME no-go zones / spots (Issue 1) ---
+    # The replay map's boundary box is stable for a given map, but the
+    # exclusion zones / spot areas are user-editable and may have changed
+    # since the session ran. Replace the current map's zones with the
+    # archived session-time geometry (from the cloud summary's map[]/spot[]
+    # layers) so the replay shows what was actually in place during the mow.
+    # Trail alignment is unaffected — the boundary box / projection are
+    # unchanged; only the overlaid zones differ.
+    try:
+        from ...map_decoder import apply_session_geometry
+        excl_polys = [list(layer.points) for layer in summary.exclusions]
+        spot_polys = [list(s.corners) for s in summary.spots]
+        if excl_polys or spot_polys:
+            map_data = apply_session_geometry(
+                map_data,
+                exclusion_polys_m=excl_polys,
+                spot_polys_m=spot_polys,
+            )
+    except Exception:
+        LOGGER.exception(
+            "[F5.9.1] render_work_log_session: session-geometry override "
+            "failed for %s — falling back to current-map zones",
+            getattr(entry, "filename", "?"),
+        )
+
+    # --- 4b. Build the picked-session summary dict (T13) ---
+    # Built after map_data is resolved so map_projection can be baked in
+    # at construction time (no post-mutation, no transient None state).
+    # Per-session photo thumbnails (replay screen). Built separately with its
+    # own guard so a signing/IO hiccup degrades to no-photos rather than
+    # clearing the whole picked-session summary.
+    try:
+        session_photos = coord.session_photos_manifest(raw_dict)
+    except Exception:
+        LOGGER.exception(
+            "[F5.9.1] render_work_log_session: session_photos_manifest failed "
+            "for filename=%s — rendering session without photos",
+            getattr(entry, "filename", "?"),
+        )
+        session_photos = []
+    try:
+        coord._picked_session_summary = build_picked_session_summary(
+            raw_dict=raw_dict,
+            summary=summary,
+            entry=entry,
+            picker_label=picker_label,
+            map_projection=extract_projection(map_data),
+            photos=session_photos,
+        )
+    except Exception:
+        LOGGER.exception(
+            "[F5.9.1] render_work_log_session: build_picked_session_summary failed "
+            "for filename=%s — clearing picked_session",
+            getattr(entry, "filename", "?"),
+        )
+        coord._picked_session_summary = None
+
+    # --- 5. Render and cache ---
+    # async_add_executor_job only forwards positional args, so use
+    # functools.partial to bake obstacle_polygons_m in as a kwarg.
+    from functools import partial
+
+    render_kwargs = {"legs_timeline": legs_timeline} if legs_timeline else {}
+    png = await coord.hass.async_add_executor_job(
+        partial(
+            render_work_log,
+            map_data,
+            obstacle_polygons_m=obstacle_polygons_m,
+            trail_width_px=coord.data.trail_render_width,
+            **render_kwargs,
+        )
+    )
+    coord._work_log_png = png
+
+    # Render the no-trail base alongside (for replay card background).
+    # The replay card draws the trail itself via animated SVG; if the
+    # base image already has the trail painted, the user sees both —
+    # the static trail flashes before animation begins. The no-trail
+    # variant prevents that.
+    # Pass obstacle_polygons_m so the base image includes obstacles
+    # at the same z-order as the work-log trail render; the SVG animated trail
+    # then draws on top, giving the animated replay visual parity with
+    # the static work_log.png (fix for replay card obstacle parity).
+    try:
+        from ...map_render import render_base_map
+        from functools import partial as _partial
+        base_png = await coord.hass.async_add_executor_job(
+            _partial(
+                render_base_map,
+                map_data,
+                lawn_mode="dark",
+                obstacles=obstacle_polygons_m or None,
+            )
+        )
+        coord._work_log_base_png = base_png
+    except Exception:
+        LOGGER.debug(
+            "[F5.9.1] render_work_log_session: render_base_map failed for "
+            "no-trail base — replay card will fall back to trail variant"
+        )
+        coord._work_log_base_png = None
+    elapsed_ms = int((_time.monotonic() - replay_start_unix) * 1000)
+    tl_count = len(legs_timeline) if legs_timeline else 0
+    total_pts = sum(len(leg["pts"]) for leg in legs_timeline) if legs_timeline else 0
+    LOGGER.debug(
+        "[F5.9.1] render_work_log_session: rendered work-log PNG (%d bytes) "
+        "for key=%s, track_points=%d, legs=%d, total_leg_points=%d, elapsed=%dms",
+        len(png) if png else 0,
+        session_md5,
+        len(track),
+        tl_count,
+        total_pts,
+        elapsed_ms,
+    )
+    # Tell HA the camera image changed so it triggers an immediate
+    # refresh instead of waiting for the next coordinator tick.
+    update_listeners = getattr(coord, "async_update_listeners", None)
+    if callable(update_listeners):
+        update_listeners()

@@ -525,7 +525,7 @@ def test_index_entry_carries_session_type_from_raw_json(tmp_path, summary, raw_j
     assert reloaded.session_type == "patrol"
 
     # And the picker label reflects it.
-    from custom_components.dreame_a2_mower.session_card import format_session_label
+    from custom_components.dreame_a2_mower.domain.session.replay import format_session_label
     assert format_session_label(reloaded).startswith("[Patrol]")
 
 
@@ -548,7 +548,7 @@ def test_index_entry_carries_mode_from_raw_json(tmp_path, summary, raw_json):
     assert reloaded.mode == 107
 
     # And the picker label reflects the subtype.
-    from custom_components.dreame_a2_mower.session_card import format_session_label
+    from custom_components.dreame_a2_mower.domain.session.replay import format_session_label
     assert "— Point" in format_session_label(reloaded)
 
 

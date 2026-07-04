@@ -216,7 +216,7 @@ def test_camera_wifi_overlay_exact_shape(tmp_path):
 # ---------------------------------------------------------------------------
 
 def _build_picked_summary(*, with_track: bool):
-    from custom_components.dreame_a2_mower.session_card import (
+    from custom_components.dreame_a2_mower.domain.session.replay import (
         build_picked_session_summary, format_session_label,
     )
     from custom_components.dreame_a2_mower.protocol.session_summary import (

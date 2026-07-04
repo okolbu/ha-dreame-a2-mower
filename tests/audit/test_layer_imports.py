@@ -124,14 +124,15 @@ MODULE_LAYER: dict[str, int] = {
     #        already-separate archive/ and wifi/ domain packages ----------
     "coordinator": 4,
     "domain": 4,  # P3.7+: domain/ package — ingress + session (signals,
-                  # lifecycle_events, …) services extracted from coordinator/
+                  # lifecycle_events, finalize, persistence, replay) services
+                  # extracted from coordinator/ (P3.9a folded session_card.py's
+                  # derivation into domain/session/replay.py; the T2-13 misnomer
+                  # module is DELETED — covered by the "domain" prefix)
     "archive": 4,
     "wifi": 4,
     "wifi_archive_store": 4,  # root shim -> wifi/archive_store.py
     "wifi_match": 4,  # root shim -> wifi/match.py
     "wifi_map_render": 4,  # root shim -> wifi/map_render.py
-    "session_card": 4,  # pure derivation module (T2-13 misnomer); moves to
-                         # domain/session/replay.py in a later P3 sub-task
 
     # ---- 5: entities (descriptor-driven platforms + services (HA API)) ---
     "entities": 5,

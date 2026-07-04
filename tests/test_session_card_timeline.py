@@ -1,7 +1,7 @@
 """Tests for session_card trail/legs assembly from the per-point track."""
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.session_card import _summary_trail_legs
+from custom_components.dreame_a2_mower.domain.session.replay import _summary_trail_legs
 
 
 def _pt(t, x, y, role, area=0.0):

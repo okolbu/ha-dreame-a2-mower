@@ -587,7 +587,7 @@ class DreameA2WorkLogSelect(_DreameA2ArchivePickerSelect):
 
         Filters out still_running entries (in-progress lives on Main view).
         """
-        from ...session_card import format_session_label
+        from ...domain.session.replay import format_session_label
 
         eligible = [s for s in sessions if not getattr(s, "still_running", False)]
         eligible = sorted(eligible, key=lambda s: s.end_ts, reverse=True)[: self._max_options]

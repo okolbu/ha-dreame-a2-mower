@@ -85,7 +85,7 @@ def _event_from_entry(entry) -> CalendarEvent:
     session. Format must stay in lock-step with
     `select.DreameA2WorkLogSelect._build_options_from_sessions`.
     """
-    from .session_card import format_session_label
+    from .domain.session.replay import format_session_label
 
     start = datetime.fromtimestamp(entry.start_ts, tz=timezone.utc)
     end = datetime.fromtimestamp(entry.end_ts, tz=timezone.utc)

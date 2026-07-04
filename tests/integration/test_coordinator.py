@@ -690,7 +690,7 @@ def test_resume_after_recharge_splits_track_on_pen_up_gap():
     6. Verify the resume left the session active and the derived render
        legs split into two on the pen-up boundary.
     """
-    from custom_components.dreame_a2_mower.session_card import derive_render_legs
+    from custom_components.dreame_a2_mower.domain.session.replay import derive_render_legs
 
     coord = _make_coordinator_for_session_tests()
     now = 1_714_329_600
