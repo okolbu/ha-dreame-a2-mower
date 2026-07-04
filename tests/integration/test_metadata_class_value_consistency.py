@@ -128,6 +128,89 @@ def test_session_distance_is_distance_and_length_unit():
 
 
 # ---------------------------------------------------------------------------
+# P4.6-INPUT (deferred from P4.3): latest_video_duration lives in
+# DIAGNOSTIC_SENSORS (coord-aware value_fn), not SENSORS/MowerState — verified
+# correct manually in P4.3 but never parametrized into this guard.
+# ---------------------------------------------------------------------------
+
+def test_latest_video_duration_is_numeric_and_time_unit():
+    from types import SimpleNamespace
+
+    d = _diag("latest_video")
+    assert d.device_class == SensorDeviceClass.DURATION
+    assert d.native_unit_of_measurement in _TIME_UNITS
+    coord = SimpleNamespace(
+        _video_archive=SimpleNamespace(latest=lambda: SimpleNamespace(duration=42))
+    )
+    val = d.value_fn(coord)
+    assert isinstance(val, (int, float))
+    # Empty archive -> None (no crash, entity just unknown).
+    coord_empty = SimpleNamespace(_video_archive=SimpleNamespace(latest=lambda: None))
+    assert d.value_fn(coord_empty) is None
+
+
+# ---------------------------------------------------------------------------
+# P4.6-INPUT (deferred from P4.3): per-map AREA/DURATION class-level
+# descriptors (entities/sensor/map.py, session.py) — verified correct
+# manually, never parametrized into this guard.
+# ---------------------------------------------------------------------------
+
+def _map_coord(*, sessions=()):
+    from unittest.mock import MagicMock
+
+    coord = MagicMock()
+    coord.entry.entry_id = "e"
+    map_obj = MagicMock()
+    map_obj.total_area_m2 = 500.0
+    coord.cloud_state.maps_by_id = {0: map_obj}
+    coord.session_archive._index = list(sessions)
+    return coord
+
+
+def test_map_area_sensor_is_area_and_area_unit():
+    from custom_components.dreame_a2_mower.entities.sensor.map import (
+        DreameA2MapAreaSensor,
+    )
+
+    s = DreameA2MapAreaSensor(_map_coord(), map_id=0)
+    assert s._attr_device_class == SensorDeviceClass.AREA
+    assert s._attr_native_unit_of_measurement in _AREA_UNITS
+    assert isinstance(s.native_value, (int, float))
+
+
+def test_map_session_area_total_is_area_and_area_unit():
+    from types import SimpleNamespace
+
+    from custom_components.dreame_a2_mower.entities.sensor.session import (
+        DreameA2MapSessionAreaTotalSensor,
+    )
+
+    sessions = (
+        SimpleNamespace(map_id=0, area_mowed_m2=50.0, session_type="mow"),
+    )
+    s = DreameA2MapSessionAreaTotalSensor(_map_coord(sessions=sessions), map_id=0)
+    assert s._attr_device_class == SensorDeviceClass.AREA
+    assert s._attr_native_unit_of_measurement in _AREA_UNITS
+    assert isinstance(s.native_value, (int, float))
+
+
+def test_map_session_time_total_is_duration_and_time_unit():
+    from types import SimpleNamespace
+
+    from custom_components.dreame_a2_mower.entities.sensor.session import (
+        DreameA2MapSessionTimeTotalSensor,
+    )
+
+    sessions = (
+        SimpleNamespace(map_id=0, duration_min=30, session_type="mow"),
+    )
+    s = DreameA2MapSessionTimeTotalSensor(_map_coord(sessions=sessions), map_id=0)
+    assert s._attr_device_class == SensorDeviceClass.DURATION
+    assert s._attr_native_unit_of_measurement in _TIME_UNITS
+    assert isinstance(s.native_value, (int, float))
+
+
+# ---------------------------------------------------------------------------
 # mowing_count: the invalid "x" unit is gone (unitless counter).
 # ---------------------------------------------------------------------------
 
