@@ -315,9 +315,9 @@ the submodule whose concern it matches:
 |---|---|---|---|
 | `__init__.py` | 78 | — (assembly) | Class assembly + public re-exports |
 | `_mqtt_handlers.py` | 132 | `_MqttHandlersMixin` | **Thin delegators (P3.7)** to the `domain/` ingress/lifecycle/signals modules + the `_CFG_SINGLE_KEYS` write-key table. The routing/state-update/event_occured/MAPL LOGIC moved to `domain/` (see the "Domain layer" section); this mixin preserves the public/test surface (`coord._on_mqtt_message`, `coord.handle_property_push`, `coord._on_state_update`, `_mqtt_handlers.capture_session_type_signals`). |
-| `_session.py` | 1232 | `_SessionMixin` | Restore / persist / finalize (one router + latch) / replay / work-log render |
+| `_session.py` | 158 | `_SessionMixin` | **Thin delegators (P3.9a)** to the `domain/session/{finalize,persistence,replay}` modules. The restore/persist/finalize/replay LOGIC moved to `domain/session/` (see the "Domain layer" section); this mixin preserves the public/test surface (`coord._route_finalize`, `._run_finalize_incomplete`, `._restore_in_progress`, `._persist_in_progress`, `.render_work_log_session`, `.replay_session`, + the unbound `_SessionMixin._X` methods bound via `__get__`). |
 | `_core.py` | 1023 | `_CoreMixin` | `__init__` (the sole `self._foo` owner), `_async_update_data`, properties, `_init_cloud`, `_init_mqtt` |
-| `_lidar_oss.py` | 941 | `_LidarOssMixin` | LiDAR archive + cloud-OSS fetch/finalize + photo/video gallery |
+| `_lidar_oss.py` | 712 | `_LidarOssMixin` | LiDAR archive + photo/video gallery + OSS media sync. **The cloud-OSS finalize assembly (`_inject_live_map_into_raw_dict` / `_do_oss_fetch[_body]`) moved to `domain/session/finalize.py` (P3.9a)**; this mixin keeps thin delegators + re-exports `finalize_classify_raw_dict`. |
 | `_writes.py` | 826 | `_WritesMixin` | `write_*` (settings, schedule, ai_human, action) + `dispatch_action` + `start_mowing_*` |
 | `_device_sync.py` | 467 | `_DeviceSyncMixin` | Map sub-device registry sync + emergency-stop banner + `_fire_*` lifecycle events |
 | `_wifi_archive.py` | 364 | `_WifiArchiveMixin` | WiFi heatmap archive refresh + matcher plumbing |
@@ -410,6 +410,9 @@ coordinator keeps a thin delegating method surface.
 | `domain/ingress.py` | MQTT routing: `on_mqtt_message`, `handle_property_push` (the paho→loop `_deferred` dispatch), `handle_event_occured`, `apply_mapl`. **P2.9 paho-thread purity preserved VERBATIM** — the paho thread captures only `(siid,piid,value,now)`; base-read/decode/mutate/broadcast run loop-side in `_deferred`. |
 | `domain/session/lifecycle_events.py` | The `_on_state_update` lifecycle-edge detectors, decomposed VERBATIM into named seam functions (`_detect_session_transitions`, `_append_session_telemetry`, `_sync_session_view`, `_detect_non_mow_end_edge`, `_detect_dock_edges`, `_detect_self_shutdown_edge`, `_detect_s2p2_notification`, `_detect_lidar_object_name`, `_detect_dock_return_signal`) + the `on_state_update` orchestrator that calls them in the EXACT original order. Also the charging/rain/shutdown fire helpers + `capture_telemetry_sample`. |
 | `domain/session/signals.py` | Session-TYPE signal capture: `capture_session_type_signals` (s2p56 multi-target ids, s2p50 op, area-ever-positive), `latch_task_op`, `handle_task_op_echo`, `seed_session_type_from_pending`. |
+| `domain/session/finalize.py` | **The finalize state machine (P3.9a, autopsy #4/#10§1)** — the most corpus-validated code in the repo, moved VERBATIM. `route_finalize` / `dispatch_finalize_action` / `periodic_session_retry`; `finalize_with_latch` (single latch, P3e.4, completion-sentinel via `post_archive_reset`); `wait_for_dock_return` (P2.7 single-flight + P2.8 `_pending_finalize_task` cancel); `finalize_non_mow_immediate` / `finalize_prior_for_new_command`; `run/do_run_finalize_incomplete`; `merge_recorder_into_payload`; `provisional_session_type/is_mow/is_cloud_finalized`; `resolve_finalize_map_id`; the OSS-finalize assembly `inject_live_map_into_raw_dict` / `finalize_classify_raw_dict` / `do_oss_fetch[_body]`. Pinned by `test_finalize_interleavings/latch` + `test_pending_finalize`. |
+| `domain/session/persistence.py` | **in_progress.json lifecycle (P3.9a)** — `restore_in_progress` (restore-then-merge + P2.7 restore×finalize discard guard), `persist_in_progress` (T3-12 TOCTOU `_finalize_lock` hold), `load_pending_op_from_sidecar` / `clear_pending_op`. |
+| `domain/session/replay.py` | **Session replay + work-log render + picked-session derivation (P3.9a)** — `render_work_log_session` + `replay_session` (coord-taking render orchestration) + the pure derivation folded in from the DELETED root `session_card.py` (T2-13 misnomer): `build_picked_session_summary` + section helpers, `derive_render_legs` / `compute_track_distances`, `format_session_label`, `_normalise_settings_snapshot`, `_track_as_dicts`, `_compute_time_breakdown`, enum label tables. |
 
 ### Rules
 
@@ -842,11 +845,11 @@ When adding a new decoder, pick the prefix by source: device/MQTT wire →
 
 ### The single trail storage: `track`
 
-Per-point `track` is the **ONLY** trail storage in the archive JSON.  On disk it is a list of **ROWS** — `[t, x_m, y_m, area_m2, heading_deg, task_state, role]` (see `_inject_live_map_into_raw_dict`).  The in-memory/derive working shape is the matching DICT `{t, x_m, y_m, area_m2, heading_deg, task_state, role}`; convert at the archive→working boundary with `live_map.state.track_row_to_dict` (or `session_card._track_as_dicts`, which is row/dict tolerant).  `derive_render_legs` / `compute_track_distances` / `classify_track` all consume the DICT shape — passing raw rows to them raises `TypeError`.  Legs are a render-time derivation — never stored; call `session_card.derive_render_legs(track_dicts)`.
+Per-point `track` is the **ONLY** trail storage in the archive JSON.  On disk it is a list of **ROWS** — `[t, x_m, y_m, area_m2, heading_deg, task_state, role]` (see `_inject_live_map_into_raw_dict`).  The in-memory/derive working shape is the matching DICT `{t, x_m, y_m, area_m2, heading_deg, task_state, role}`; convert at the archive→working boundary with `live_map.state.track_row_to_dict` (or `domain/session/replay.py:_track_as_dicts`, which is row/dict tolerant).  `derive_render_legs` / `compute_track_distances` / `classify_track` all consume the DICT shape — passing raw rows to them raises `TypeError`.  Legs are a render-time derivation — never stored; call `domain/session/replay.py:derive_render_legs(track_dicts)`.
 
 ### Role classification
 
-`role` is set inline at append time in `live_map/state.py:append_point` by the area **delta**: if the cumulative mowed-area counter GREW since the previous point (`area_m2 - prev_area > 0`) → `"mowing"`, else `"traversal"`.  (`area_m2` is cumulative, so the delta — not the absolute value — is what marks blades-down-on-new-grass.)  **Area-delta is the sole authority.**  At finalize, `coordinator/_lidar_oss.py:finalize_classify_raw_dict` → `live_map/classify.py:classify_track` only **smooths** isolated single-point role anomalies (flip a lone point to match both neighbours).
+`role` is set inline at append time in `live_map/state.py:append_point` by the area **delta**: if the cumulative mowed-area counter GREW since the previous point (`area_m2 - prev_area > 0`) → `"mowing"`, else `"traversal"`.  (`area_m2` is cumulative, so the delta — not the absolute value — is what marks blades-down-on-new-grass.)  **Area-delta is the sole authority.**  At finalize, `domain/session/finalize.py:finalize_classify_raw_dict` → `live_map/classify.py:classify_track` only **smooths** isolated single-point role anomalies (flip a lone point to match both neighbours).
 
 Do NOT re-add a cloud-coverage "rescue" (upgrade a traversal point to mowing because it's near the cloud `track_segments` path).  It was tried and removed 2026-05-28: on a full-lawn mow the cloud's blades-down segments blanket the whole lawn, so a cross-area traversal driving over already-mowed grass sits on the cloud path and gets falsely greened (measured: all 478 genuine traversal points on a 2613-pt mow flipped).  Only area-delta separates "mowing now" from "driving over what I mowed earlier".  `cloud_track` is still stored verbatim (reference only), not used to classify.
 
@@ -854,7 +857,7 @@ The same classify (smoothing) runs on the FINALIZE_INCOMPLETE path too (after `_
 
 ### `cloud_track`
 
-`cloud_track` is stored verbatim from the cloud session summary's `trajectory.track_segments`.  Capture continues until the mower is docked (charging state) — see `coordinator/_session.py:_wait_for_dock_return` for the lifecycle.
+`cloud_track` is stored verbatim from the cloud session summary's `trajectory.track_segments`.  Capture continues until the mower is docked (charging state) — see `domain/session/finalize.py:wait_for_dock_return` (coord delegator `_wait_for_dock_return`) for the lifecycle.
 
 ### Removed for good
 
