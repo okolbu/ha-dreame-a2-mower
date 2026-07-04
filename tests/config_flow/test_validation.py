@@ -87,3 +87,107 @@ async def test_validate_login_succeeds_on_true(
 
     # Must not raise.
     await config_flow._validate_login(_FakeHass(), _data())
+
+
+# ---------------------------------------------------------------------------
+# Form-level tests: drive async_step_user end-to-end and assert the
+# errors["base"] mapping / entry creation.
+#
+# The reviewer confirmed DreameA2MowerConfigFlow() is a bare Python object
+# (no __slots__), so it can be instantiated directly and have its
+# instance attributes/methods monkeypatched WITHOUT touching conftest.
+# ---------------------------------------------------------------------------
+def _make_flow(login_impl, created: dict) -> config_flow.DreameA2MowerConfigFlow:
+    """Build a flow wired with fakes for the HA plumbing async_step_user uses.
+
+    ``login_impl`` is bound as ``DreameA2CloudClient.login`` for the case;
+    ``created`` captures the ``async_create_entry`` kwargs on success.
+    """
+    flow = config_flow.DreameA2MowerConfigFlow()
+    flow.hass = _FakeHass()  # type: ignore[attr-defined]
+
+    async def _set_unique_id(unique_id):  # async no-op
+        return None
+
+    def _abort_if_configured():  # no-op
+        return None
+
+    def _create_entry(*, title, data):
+        created["title"] = title
+        created["data"] = data
+        return {"type": "create_entry", "title": title, "data": data}
+
+    def _show_form(*, step_id, data_schema, errors):
+        # Mirror HA: re-shows the form carrying the errors dict.
+        return {"type": "form", "step_id": step_id, "errors": errors}
+
+    flow.async_set_unique_id = _set_unique_id  # type: ignore[assignment]
+    flow._abort_if_unique_id_configured = _abort_if_configured  # type: ignore[assignment]
+    flow.async_create_entry = _create_entry  # type: ignore[assignment]
+    flow.async_show_form = _show_form  # type: ignore[assignment]
+    return flow
+
+
+async def test_step_user_invalid_auth_surfaces_form_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """login()->False re-shows the form with errors[base]==invalid_auth; no entry."""
+
+    class _FakeClient(_FakeClientBase):
+        def login(self) -> bool:
+            return False
+
+    monkeypatch.setattr(config_flow, "DreameA2CloudClient", _FakeClient)
+
+    created: dict = {}
+    flow = _make_flow(None, created)
+
+    result = await flow.async_step_user(_data())
+
+    assert result["type"] == "form"
+    assert result["errors"]["base"] == "invalid_auth"
+    assert created == {}  # no entry created on failure
+
+
+async def test_step_user_cannot_connect_surfaces_form_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """login() raising a transport error re-shows form with errors[base]==cannot_connect."""
+
+    class _FakeClient(_FakeClientBase):
+        def login(self) -> bool:
+            raise TimeoutError("simulated transport failure")
+
+    monkeypatch.setattr(config_flow, "DreameA2CloudClient", _FakeClient)
+
+    created: dict = {}
+    flow = _make_flow(None, created)
+
+    result = await flow.async_step_user(_data())
+
+    assert result["type"] == "form"
+    assert result["errors"]["base"] == "cannot_connect"
+    assert created == {}
+
+
+async def test_step_user_success_creates_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """login()->True creates the config entry with the submitted title/data."""
+    from custom_components.dreame_a2_mower.const import DEFAULT_NAME
+
+    class _FakeClient(_FakeClientBase):
+        def login(self) -> bool:
+            return True
+
+    monkeypatch.setattr(config_flow, "DreameA2CloudClient", _FakeClient)
+
+    created: dict = {}
+    flow = _make_flow(None, created)
+
+    data = _data()
+    result = await flow.async_step_user(data)
+
+    assert result["type"] == "create_entry"
+    assert created["title"] == DEFAULT_NAME
+    assert created["data"] == data
