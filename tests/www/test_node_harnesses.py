@@ -27,6 +27,9 @@ HARNESSES = [
     # R-54 / P5.2 card hygiene: guarded defineCard, renderMissingEntity,
     # per-card no-throw on empty hass (the missing-entity path).
     "card_core_harness.mjs",
+    # R-13/R-14/R-48 / P5.3 dashboard strategy: registry-generated views, no
+    # dead refs, no `attribute:` conditionals, per-map scaling, plotly degrade.
+    "strategy_harness.mjs",
 ]
 
 
