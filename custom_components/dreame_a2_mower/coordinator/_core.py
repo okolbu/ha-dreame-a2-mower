@@ -98,9 +98,25 @@ class _CoreMixin:
         self._password = entry.data[CONF_PASSWORD]
         self._country = entry.data[CONF_COUNTRY]
 
+        # ==================================================================
+        # Attr hub (T2-16 shipped shape). _CoreMixin.__init__ is the SOLE
+        # owner of the coordinator's shared private state. The refactor-v2
+        # verdict (T2-16, target-architecture §1) did NOT adopt standalone
+        # attr-bundling: the domain services extracted in P3.9a-9e take the
+        # coordinator (`coord`) as an explicit argument and read/write these
+        # attrs on it (attrs-on-coord + service-functions), so this init stays
+        # the identifiable home for each service's state. The sections below
+        # group the attrs by their OWNING domain service so ownership is
+        # legible; the code order is unchanged from the pre-9e init (grouping
+        # is by comment, not by reordering — several blocks have construction-
+        # order dependencies, e.g. archive-then-set_retention).
+        # ==================================================================
+
         # Initialize empty MowerState — fields fill in as MQTT pushes arrive
         self.data = MowerState()
 
+        # --- Session / live-map lifecycle state (domain/session/*, live_map,
+        #     domain/ingress, domain/faults) ---
         # Live session state machine (F5.3.1).
         self.live_map = LiveMapState()
         self._prev_task_state: int | None = None
@@ -189,6 +205,7 @@ class _CoreMixin:
         # Shape: {"event_type": str, "text": str, "code": int, "fired_at": int}
         self._last_notification: dict | None = None
 
+        # --- Cloud-notification resolver state (domain/notifications) ---
         # Cloud-driven notification resolver state (2026-05-26). All
         # in-memory only — restart wipes them by design; the baseline
         # task re-seeds seen_ids on next startup so old records don't
@@ -201,6 +218,8 @@ class _CoreMixin:
         )
         self._notif_baseline_done: bool = False
 
+        # --- On-disk archives (archive/*; served by domain/session,
+        #     domain/media/gallery, domain/lidar, domain/wifi) ---
         # Session archive — persists completed sessions to disk (F5.4.1, F5.6.1).
         # <config>/dreame_a2_mower/sessions/ — matches legacy layout.
         sessions_dir = hass.config.path(DOMAIN, "sessions")
@@ -300,6 +319,7 @@ class _CoreMixin:
         # lives here as the single source of truth.
         self.cloud_state: Any = None  # CloudState | None — actual import deferred
 
+        # --- Live-map render caches (domain/render) ---
         # Live-map base PNG cache (rehaul). The composited live PNG is gone:
         # the server renders only the base, keyed on background mode + map md5.
         # Trail + mower icon are drawn client-side from the published stream.
@@ -345,6 +365,8 @@ class _CoreMixin:
         self._last_session_obstacles_by_map: dict[
             int, list[list[tuple[float, float]]]
         ] = {}
+        # --- Writes + active-map + wifi/lidar render selection
+        #     (domain/writes, domain/wifi, domain/lidar, domain/device_sync) ---
         # Single coordinator-wide mutex serializing all chunked-batch
         # cloud writes (SETTINGS / SCHEDULE / AI_HUMAN). Each per-domain
         # helper acquires this around the read-modify-write sequence so
@@ -385,6 +407,7 @@ class _CoreMixin:
         # _persist_in_progress after a successful disk write.
         self._live_map_dirty: bool = False
 
+        # --- Observability (observability/) ---
         # Novel-observation registry (F6.2.1).
         # Tracks first-sightings of unknown protocol tokens so the watchdog
         # WARNING fires only once per token per process lifetime.
@@ -393,6 +416,8 @@ class _CoreMixin:
         # Records the last unix timestamp each MowerState field changed.
         self.freshness = FreshnessTracker()
 
+        # --- Availability gate + cloud-poll accounting (domain/boot poll
+        #     orchestrator + _note_cloud_fetch) ---
         # Cloud-poll availability gate (Phase 1.1). Counts CONSECUTIVE
         # full-state poll (`_refresh_cloud_state`) failures; cloud-sourced
         # entities go unavailable once it reaches _CLOUD_UNAVAIL_THRESHOLD.
@@ -402,6 +427,8 @@ class _CoreMixin:
         # would otherwise mask a cloud-read outage while the device link is up.
         self._consecutive_cloud_failures = 0
 
+        # --- State machine + persistence stores + finalize dock-wait
+        #     (state/machine, domain/boot restore, domain/session) ---
         # Multi-dimensional state machine — canonical source of behavioural
         # state (activity, location, session). Entities read from
         # state_machine.snapshot().
@@ -419,6 +446,7 @@ class _CoreMixin:
         self._pending_finalize_done: "asyncio.Event | None" = None
         self._pending_finalize_done_reason: str | None = None
 
+        # --- MQTT rc=5 auth-recovery guard state (domain/mqtt_lifecycle) ---
         # T3-9: MQTT rc=5 (auth-rejected) recovery state. Guards against a
         # tight relogin loop — see _handle_mqtt_auth_error.
         self._rc5_relogin_in_progress: bool = False
