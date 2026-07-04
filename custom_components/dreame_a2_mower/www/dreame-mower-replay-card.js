@@ -671,7 +671,7 @@ class DreameMowerReplayCard extends HTMLElement {
 // release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
 // = "..."` shape. defineCard logs the once-per-tag console banner + adds the
 // guard against a double module-load (T6-8).
-const CARD_VERSION = "1.0.32a4";
+const CARD_VERSION = "1.0.32a5";
 defineCard("dreame-mower-replay-card", DreameMowerReplayCard, {
   name: "Dreame Mower Session Replay",
   description: "Animated replay of an archived mowing session over the base map.",

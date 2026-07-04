@@ -295,7 +295,7 @@ class DreameMowerMapCard extends HTMLElement {
 }
 // release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
 // = "..."` shape. defineCard logs the once-per-tag console banner.
-const CARD_VERSION = "1.0.32a4";
+const CARD_VERSION = "1.0.32a5";
 defineCard("dreame-mower-map-card", DreameMowerMapCard, {
   name: "Dreame Mower Live Map",
   description: "Animated live map: base + trail + directional mower icon + WiFi overlay.",
