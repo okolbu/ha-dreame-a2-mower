@@ -2977,6 +2977,10 @@ entities:
         status: verified
         claim: "R-6 state-semantics fix: sensor.dreame_a2_mower_error's state was silently falling back to `unknown` because the localized-text join (the 2026-06-18 contract above) exceeds HA's 255-char state cap once >=3 faults latch concurrently. New contract: state = _active_fault_slugs(snapshot) — comma-joined fault_catalog.event_slug per latched code, hard-guaranteed <=255 chars (drops whole slugs from the end + a trailing '+N' marker on overflow; single-fault case is just that one slug, not localized text). Full per-code localized text moved off the state and into a new `faults` extra_state_attributes list ({code, slug, text}, text via describe_error). error_detail/fault_names/fault_categories attrs unchanged."
         evidence: "2026-07-02 HA restart system log: 'State Robot tilted...; Right drive wheel error...; Emergency stop...; Low battery...; Top cover... for sensor.dreame_a2_mower_error is longer than 255, falling back to unknown' (5 concurrent faults)"
+      - date: "2026-07-04"
+        status: verified
+        claim: "P3.11 dup-slug fix: _active_fault_slugs now dedups the slug list order-preserving before joining. The fault_catalog has two intentional event_slug collision pairs (codes 11/42 and 43/59 -> same slug); when both codes of a pair latch concurrently the raw list repeated the slug and the STATE showed e.g. 'battery_overheat,battery_overheat'. Only the state string dedups; the `faults` attribute still lists every distinct code."
+        evidence: "tests/integration/test_error_sensor_value.py::test_error_sensor_dedups_collision_pair_slugs (asserts fc.event_slug(11)==fc.event_slug(42) and 43==59, then a single deduped slug)"
     references:
       wire_entry: "varies — see notes for per-key wire surfaces"
       code: "custom_components/dreame_a2_mower/entities/sensor/device.py"

@@ -77,6 +77,24 @@ def test_error_sensor_slug_state_hard_truncates_on_pathological_overflow():
     assert "+" in state  # some codes were dropped and counted
 
 
+def test_error_sensor_dedups_collision_pair_slugs():
+    """Catalog has two intentional slug collisions (codes 11/42 and 43/59 each
+    map to the SAME event_slug). When both codes of a pair latch at once the
+    state must NOT repeat the slug -- dedup is order-preserving, leaving one.
+
+    The `faults` attribute already lists distinct codes, so only the slug STATE
+    needed the fix.
+    """
+    from types import SimpleNamespace
+
+    for a, b in [(11, 42), (43, 59)]:
+        # Precondition: the pair genuinely collides on event_slug.
+        assert fc.event_slug(a) == fc.event_slug(b), (a, b)
+        state = _active_fault_slugs(SimpleNamespace(errors={a, b}))
+        parts = state.split(",")
+        assert parts == [fc.event_slug(a)], f"expected single deduped slug, got {state!r}"
+
+
 def test_error_attrs_faults_list_carries_full_text_for_every_code():
     c = _coord(_LIVE_INCIDENT_CODES)
     attrs = _error_attrs(c)

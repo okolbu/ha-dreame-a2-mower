@@ -73,7 +73,7 @@ def test_observe_can_reference_location_enum():
 def test_observe_can_reference_describe_error_helper():
     """_describe_error_or_none must remain resolvable in the audit eval-globals.
 
-    error_description now calls _active_fault_text (not _describe_error_or_none
+    error_description now calls _active_fault_slugs (not _describe_error_or_none
     directly), but _describe_error_or_none is kept in sensor_device.py for any
     lambda in the audit corpus that references it. This test confirms the name
     doesn't fall out of the eval-globals and cause a NameError.

@@ -120,7 +120,18 @@ def _active_fault_slugs(snapshot) -> str | None:
     if not errors:
         return None
     codes = sorted(errors)
-    slugs = [fault_catalog.event_slug(c) or f"unknown_{c}" for c in codes]
+    # Two catalog codes can share one event_slug (intentional collision pairs
+    # 11/42, 43/59). If both codes of a pair latch at once the raw list repeats
+    # the slug; dedup order-preserving so the STATE never shows "foo,foo".
+    # (The `faults` attr still lists every distinct code — only the slug state
+    # dedups.)
+    slugs: list[str] = []
+    _seen: set[str] = set()
+    for c in codes:
+        s = fault_catalog.event_slug(c) or f"unknown_{c}"
+        if s not in _seen:
+            _seen.add(s)
+            slugs.append(s)
     joined = ",".join(slugs)
     if len(joined) <= _ERROR_STATE_MAX_LEN:
         return joined
