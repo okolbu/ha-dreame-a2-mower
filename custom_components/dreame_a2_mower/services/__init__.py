@@ -33,19 +33,20 @@ SERVICE_SET_ACTIVE_SELECTION = "set_active_selection"
 SERVICE_MOW_ZONE = "mow_zone"
 SERVICE_MOW_EDGE = "mow_edge"
 SERVICE_MOW_SPOT = "mow_spot"
-SERVICE_RECHARGE = "recharge"
-SERVICE_FIND_BOT = "find_bot"
-SERVICE_SET_CHILD_LOCK = "set_child_lock"
+# recharge / find_bot / set_child_lock / finalize_session / refresh_cloud_state
+# services DELETED refactor-v2 P4.2 (R-28, track-5 T5-12): each duplicated an
+# existing entity press/toggle 1:1 with no params (button.recharge +
+# lawn_mower.dock / button.find_my_robot / switch.child_lock /
+# button.finalize_session / button.refresh_from_cloud). Automations use
+# button.press / switch.turn_on. move_lidar_scan (below) also deleted — a
+# one-time T12 archive-migration helper by its own description.
 SERVICE_SUPPRESS_FAULT = "suppress_fault"
-SERVICE_FINALIZE_SESSION = "finalize_session"
 SERVICE_REPLAY_SESSION = "replay_session"
 SERVICE_SHOW_LIDAR_FULLSCREEN = "show_lidar_fullscreen"
 SERVICE_DUMP_MAP_DIAGNOSTICS = "dump_map_diagnostics"
 SERVICE_DISCOVER_CLOUD_API = "discover_cloud_api"
 SERVICE_SET_SCHEDULE_PLANS = "set_schedule_plans"
-SERVICE_REFRESH_CLOUD_STATE = "refresh_cloud_state"
 SERVICE_SHOW_PHOTO_PRIVACY_POLICY = "show_photo_privacy_policy"
-SERVICE_MOVE_LIDAR_SCAN = "move_lidar_scan"
 SERVICE_START_POINT_PATROL = "start_point_patrol"
 SERVICE_START_EDGE_PATROL = "start_edge_patrol"
 SERVICE_RENAME_ZONE = "rename_zone"
@@ -106,14 +107,6 @@ SCHEMA_START_EDGE_PATROL = vol.Schema(
 )
 
 SCHEMA_EMPTY = vol.Schema({})
-
-SCHEMA_MOVE_LIDAR_SCAN = vol.Schema(
-    {
-        vol.Required("from_map_id"): vol.Coerce(int),
-        vol.Required("filename"): str,
-        vol.Required("to_map_id"): vol.Coerce(int),
-    }
-)
 
 SCHEMA_REPLAY_SESSION = vol.Schema(
     {vol.Required("session_md5"): str}
@@ -576,54 +569,10 @@ async def _handle_show_photo_privacy_policy(call: ServiceCall) -> None:
     )
 
 
-@service_handler
-async def _handle_refresh_cloud_state(
-    coordinator: DreameA2MowerCoordinator, call: ServiceCall
-) -> None:
-    """Force an on-demand re-fetch of all cloud-derived state.
-
-    Same code path as the periodic 2-min poll and the s6p2 tripwire,
-    but fires immediately. Use it from automations or manually when
-    you want HA's view of CFG / SETTINGS / SCHEDULE / MAP / etc. to
-    catch up without waiting.
-    """
-    LOGGER.info("service.refresh_cloud_state: forcing cloud refresh")
-    await coordinator._refresh_cloud_state()
-
-
-async def _async_move_lidar_scan(call: ServiceCall) -> None:
-    """Move a LiDAR PCD between two maps' archives."""
-    hass = call.hass
-    from_map_id = int(call.data["from_map_id"])
-    filename = str(call.data["filename"])
-    to_map_id = int(call.data["to_map_id"])
-
-    if from_map_id == to_map_id:
-        raise ServiceValidationError(
-            f"from_map_id and to_map_id must differ ({from_map_id})"
-        )
-
-    coordinator = _coordinator_from_call(hass, call)
-    if coordinator is None:
-        return
-
-    src = coordinator.lidar_archive_for(from_map_id)
-    dst = coordinator.lidar_archive_for(to_map_id)
-
-    moved = await hass.async_add_executor_job(src.move_entry_to, filename, dst)
-    if not moved:
-        raise ServiceValidationError(
-            f"scan {filename!r} not found in map_{from_map_id} archive"
-        )
-
-    LOGGER.info(
-        "move_lidar_scan: moved %r from map %d -> map %d",
-        filename,
-        from_map_id,
-        to_map_id,
-    )
-    # Refresh state listeners so the picker re-enumerates.
-    await coordinator.async_request_refresh()
+# _handle_refresh_cloud_state + _async_move_lidar_scan handlers DELETED
+# refactor-v2 P4.2 (R-28, track-5 T5-12): refresh_cloud_state duplicated
+# button.refresh_from_cloud 1:1; move_lidar_scan was a one-time archive-migration
+# helper. See the SERVICE_* deletion note above.
 
 
 @service_handler
@@ -828,16 +777,8 @@ async def async_register_services(hass: HomeAssistant, entry: Any | None = None)
                                   _handle_mow_edge, schema=SCHEMA_MOW_EDGE)
     hass.services.async_register(DOMAIN, SERVICE_MOW_SPOT,
                                   _handle_mow_spot, schema=SCHEMA_MOW_SPOT)
-    hass.services.async_register(DOMAIN, SERVICE_RECHARGE,
-                                  await _handle_simple_action("RECHARGE"), schema=SCHEMA_EMPTY)
-    hass.services.async_register(DOMAIN, SERVICE_FIND_BOT,
-                                  await _handle_simple_action("FIND_BOT"), schema=SCHEMA_EMPTY)
-    hass.services.async_register(DOMAIN, SERVICE_SET_CHILD_LOCK,
-                                  await _handle_simple_action("LOCK_BOT_TOGGLE"), schema=SCHEMA_EMPTY)
     hass.services.async_register(DOMAIN, SERVICE_SUPPRESS_FAULT,
                                   await _handle_simple_action("SUPPRESS_FAULT"), schema=SCHEMA_EMPTY)
-    hass.services.async_register(DOMAIN, SERVICE_FINALIZE_SESSION,
-                                  await _handle_simple_action("FINALIZE_SESSION"), schema=SCHEMA_EMPTY)
     hass.services.async_register(DOMAIN, SERVICE_REPLAY_SESSION,
                                   _handle_replay_session, schema=SCHEMA_REPLAY_SESSION)
     hass.services.async_register(DOMAIN, SERVICE_SET_SCHEDULE_PLANS,
@@ -852,15 +793,8 @@ async def async_register_services(hass: HomeAssistant, entry: Any | None = None)
                                       _handle_dump_map_diagnostics, schema=SCHEMA_EMPTY)
         hass.services.async_register(DOMAIN, SERVICE_DISCOVER_CLOUD_API,
                                       _async_handle_discover_cloud_api, schema=SCHEMA_EMPTY)
-    hass.services.async_register(DOMAIN, SERVICE_REFRESH_CLOUD_STATE,
-                                  _handle_refresh_cloud_state, schema=SCHEMA_EMPTY)
     hass.services.async_register(DOMAIN, SERVICE_SHOW_PHOTO_PRIVACY_POLICY,
                                   _handle_show_photo_privacy_policy, schema=SCHEMA_EMPTY)
-    hass.services.async_register(
-        DOMAIN, SERVICE_MOVE_LIDAR_SCAN,
-        _async_move_lidar_scan,
-        schema=SCHEMA_MOVE_LIDAR_SCAN,
-    )
     hass.services.async_register(DOMAIN, SERVICE_START_POINT_PATROL,
                                   _handle_start_point_patrol, schema=SCHEMA_START_POINT_PATROL)
     hass.services.async_register(DOMAIN, SERVICE_START_EDGE_PATROL,
@@ -915,12 +849,11 @@ def async_unregister_services(hass: HomeAssistant) -> None:
     # so this correctly handles the gated-OFF case where they were never added.
     for svc in (
         SERVICE_SET_ACTIVE_SELECTION, SERVICE_MOW_ZONE, SERVICE_MOW_EDGE, SERVICE_MOW_SPOT,
-        SERVICE_RECHARGE, SERVICE_FIND_BOT, SERVICE_SET_CHILD_LOCK, SERVICE_SUPPRESS_FAULT,
-        SERVICE_FINALIZE_SESSION, SERVICE_REPLAY_SESSION, SERVICE_SET_SCHEDULE_PLANS,
+        SERVICE_SUPPRESS_FAULT,
+        SERVICE_REPLAY_SESSION, SERVICE_SET_SCHEDULE_PLANS,
         SERVICE_SET_SCHEDULE_ENABLED,
         SERVICE_SHOW_LIDAR_FULLSCREEN, SERVICE_DUMP_MAP_DIAGNOSTICS, SERVICE_DISCOVER_CLOUD_API,
-        SERVICE_REFRESH_CLOUD_STATE, SERVICE_SHOW_PHOTO_PRIVACY_POLICY,
-        SERVICE_MOVE_LIDAR_SCAN,
+        SERVICE_SHOW_PHOTO_PRIVACY_POLICY,
         SERVICE_START_POINT_PATROL, SERVICE_START_EDGE_PATROL,
         SERVICE_RENAME_ZONE, SERVICE_DELETE_MAP_OBJECT,
         SERVICE_CREATE_NO_GO_ZONE, SERVICE_CREATE_IGNORE_OBSTACLE,

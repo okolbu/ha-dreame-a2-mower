@@ -36,7 +36,6 @@ _WR_REJECTED = _WR(delivered=True, accepted=False, code=-3, msg="not supported")
 @pytest.mark.parametrize(
     "handler_name, data",
     [
-        ("_handle_refresh_cloud_state", {}),
         ("_handle_rename_zone", {"map_id": 0, "zone": 1, "name": "x"}),
         ("_handle_mow_zone", {"zone_ids": [1]}),
     ],
@@ -62,13 +61,10 @@ async def test_handler_resolves_and_passes_coordinator(monkeypatch):
     coord.rename_zone.assert_awaited_once_with(2, 5, "Lawn")
 
 
-async def test_refresh_cloud_state_runs_body(monkeypatch):
-    """refresh_cloud_state forwards to coordinator._refresh_cloud_state."""
-    coord = SimpleNamespace(_refresh_cloud_state=AsyncMock())
-    monkeypatch.setattr(services, "_coordinator_from_call", lambda hass, call: coord)
-    call = SimpleNamespace(hass=SimpleNamespace(), data={})
-    await services._handle_refresh_cloud_state(call)
-    coord._refresh_cloud_state.assert_awaited_once()
+# test_refresh_cloud_state_runs_body DELETED refactor-v2 P4.2 (R-28, track-5
+# T5-12): the refresh_cloud_state service was removed (duplicated
+# button.refresh_from_cloud 1:1). The button's own press path
+# (coordinator._refresh_cloud_state) is exercised by button tests.
 
 
 async def test_map_edit_helper_swallows_value_error(monkeypatch):
