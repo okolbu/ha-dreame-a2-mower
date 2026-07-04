@@ -174,6 +174,69 @@ def test_rc5_ignores_reentrant_signal_while_relogin_in_flight(monkeypatch):
     coord._cloud.login.assert_called_once()
 
 
+def test_rc5_cooldown_escalates_on_consecutive_failures(monkeypatch):
+    """P2-inherit: consecutive relogin failures escalate the cooldown so a
+    broker that keeps rejecting fresh creds is retried less aggressively."""
+    coord = _make_coord(monkeypatch)
+    coord._mqtt = MagicMock()
+    coord._cloud.login.return_value = False  # keeps failing
+
+    fake_now = [1000.0]
+    monkeypatch.setattr(_core_mod.time, "time", lambda: fake_now[0])
+
+    async def _fire():
+        coord._handle_mqtt_auth_error()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    async def _run():
+        # 1st rc=5 → attempt; login fails → failures=1.
+        await _fire()
+        assert coord._cloud.login.call_count == 1
+        assert coord._rc5_consecutive_failures == 1
+        # After 1 failure the cooldown is base*2 = 60s. An rc=5 at +31s (past
+        # the base 30 but within the escalated 60) must be SKIPPED — the old
+        # fixed-30s cooldown would have retried here.
+        fake_now[0] += 31
+        await _fire()
+        assert coord._cloud.login.call_count == 1
+        # Past the escalated 60s window → attempt again; fails → failures=2.
+        fake_now[0] += 30  # now +61 from the first attempt
+        await _fire()
+        assert coord._cloud.login.call_count == 2
+        assert coord._rc5_consecutive_failures == 2
+
+    asyncio.run(_run())
+
+
+def test_rc5_success_resets_escalation(monkeypatch):
+    """P2-inherit: a successful re-login resets the failure counter so the next
+    rc=5 gets the base cooldown again."""
+    coord = _make_coord(monkeypatch)
+    coord._mqtt = MagicMock()
+
+    fake_now = [1000.0]
+    monkeypatch.setattr(_core_mod.time, "time", lambda: fake_now[0])
+
+    async def _fire():
+        coord._handle_mqtt_auth_error()
+        await asyncio.sleep(0)
+        await asyncio.sleep(0)
+
+    async def _run():
+        coord._cloud.login.return_value = False
+        await _fire()
+        assert coord._rc5_consecutive_failures == 1
+        # Advance well past the escalated window and succeed.
+        fake_now[0] += 1000
+        coord._cloud.login.return_value = True
+        coord._cloud.mqtt_credentials.return_value = ("uid-1", "fresh")
+        await _fire()
+        assert coord._rc5_consecutive_failures == 0
+
+    asyncio.run(_run())
+
+
 def test_rc5_recovery_failure_logs_and_does_not_update_credentials(monkeypatch):
     """A failed cloud re-login must not push stale/None credentials into the
     MQTT client — the next genuine rc=5 (after cooldown) retries."""

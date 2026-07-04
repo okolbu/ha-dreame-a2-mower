@@ -74,7 +74,14 @@ class _CoreMixin:
     # attempts. Without this, a broker that keeps rejecting the refreshed
     # credentials (e.g. genuinely bad creds, or a flapping broker) would
     # hammer the cloud login endpoint on every reconnect attempt.
+    #
+    # P2-inherit (P3.8): the cooldown now ESCALATES with consecutive failures
+    # — a broker that keeps rejecting even freshly-refreshed creds shouldn't
+    # keep retrying every 30s forever. Effective spacing is
+    # ``base * 2**consecutive_failures`` capped at ``_RC5_RELOGIN_COOLDOWN_MAX_S``;
+    # a successful re-login resets the counter back to the base spacing.
     _RC5_RELOGIN_COOLDOWN_S = 30
+    _RC5_RELOGIN_COOLDOWN_MAX_S = 480
 
     def __init__(
         self,
@@ -418,6 +425,9 @@ class _CoreMixin:
         # tight relogin loop — see _handle_mqtt_auth_error.
         self._rc5_relogin_in_progress: bool = False
         self._rc5_last_attempt_unix: float = 0.0
+        # P2-inherit (P3.8): consecutive relogin failures drive the cooldown
+        # escalation; reset to 0 on a successful re-login.
+        self._rc5_consecutive_failures: int = 0
 
         # T3-8: outstanding s2p2-notification resolver tasks (each sleeps
         # ~_FETCH_DELAY_S before fetching device-messages). Fire-and-forget
@@ -1346,12 +1356,18 @@ class _CoreMixin:
                 "flight — ignoring duplicate signal"
             )
             return
-        if now - self._rc5_last_attempt_unix < self._RC5_RELOGIN_COOLDOWN_S:
+        cooldown = min(
+            self._RC5_RELOGIN_COOLDOWN_S * (2 ** self._rc5_consecutive_failures),
+            self._RC5_RELOGIN_COOLDOWN_MAX_S,
+        )
+        if now - self._rc5_last_attempt_unix < cooldown:
             LOGGER.warning(
-                "[mqtt] rc=5 auth error seen again within %ds of the last "
-                "relogin attempt — skipping to avoid a tight reconnect loop "
-                "(will retry on the next rc=5 once the cooldown elapses)",
-                self._RC5_RELOGIN_COOLDOWN_S,
+                "[mqtt] rc=5 auth error seen again within %ds (escalated after "
+                "%d consecutive failure(s)) of the last relogin attempt — "
+                "skipping to avoid a tight reconnect loop (will retry on the "
+                "next rc=5 once the cooldown elapses)",
+                cooldown,
+                self._rc5_consecutive_failures,
             )
             return
         self._rc5_relogin_in_progress = True
@@ -1379,14 +1395,20 @@ class _CoreMixin:
                 return
             ok = await self.hass.async_add_executor_job(cloud.login)
             if not ok:
+                # P2-inherit: escalate the cooldown so a broker that keeps
+                # rejecting fresh creds is retried less and less aggressively.
+                self._rc5_consecutive_failures += 1
                 LOGGER.warning(
-                    "[mqtt] rc=5 recovery: cloud re-login failed; MQTT will "
-                    "keep retrying with the stale password until the next "
-                    "rc=5 triggers another attempt"
+                    "[mqtt] rc=5 recovery: cloud re-login failed (%d consecutive); "
+                    "MQTT will keep retrying with the stale password until the "
+                    "next rc=5 triggers another (increasingly spaced) attempt",
+                    self._rc5_consecutive_failures,
                 )
                 return
             username, password = cloud.mqtt_credentials()
             mqtt.update_credentials(username, password)
+            # Success — reset the escalation so the next rc=5 gets the base cooldown.
+            self._rc5_consecutive_failures = 0
             LOGGER.info(
                 "[mqtt] rc=5 recovery: cloud re-login succeeded; refreshed "
                 "credentials pushed to the MQTT client for the next reconnect"
