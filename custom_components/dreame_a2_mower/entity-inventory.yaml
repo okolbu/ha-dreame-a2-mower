@@ -1414,6 +1414,10 @@ entities:
         status: verified
         claim: "Phase A1: now WIRED + writable — auto_recharge_battery_pct and resume_battery_pct both via protocol/cfg_payloads.build_bat_power through write_setting (CFG BAT {type:'power', value:[recharge_pct, resume_pct, flag]}); control_mode promoted to device_writable. Integration envelope matches the captured app envelope (transport parity)."
         evidence: "app-mitm:2026-06-09-settings-sweep"
+      - date: "2026-07-04"
+        status: verified
+        claim: "P4.3 (R-50 / track-5 T5-4): all NUMBERS (volume/auto_recharge_battery_pct/resume_battery_pct/human_presence_alert_sensitivity) + per-map SETTINGS numbers carry EntityCategory.CONFIG via class-level _attr_entity_category on DreameA2Number / _PerMapSettingsNumberBase; human_presence_alert_sensitivity's previous DIAGNOSTIC override removed (it is a writable REC[1] control). station_bearing_deg / trail_render_width were already CONFIG."
+        evidence: "number.py (P4.3); tests/integration/test_metadata_class_value_consistency.py::test_settings_controls_are_config_category"
     notes: >
       Config-driven DreameA2Number instances from the NUMBERS descriptor tuple
       (number.py). VOL=volume is a working-9 CFG key (device-applied); the two
@@ -1803,6 +1807,10 @@ entities:
         status: verified
         claim: "first_mowing_date is NOT MIHIS-sourced (the notes label below was stale, an era-carryover from before MIHIS wiring). MIHIS.start is a firmware-hardcoded sentinel (1704038400, see inventory.yaml § MIHIS) unusable as a real date, so the coordinator seeds first_mowing_date at boot from the local session archive's earliest non-in-progress session start_ts instead."
         evidence: "coordinator/_core.py:814-877 (archive-seed loop + first_mowing_date assignment)"
+      - date: "2026-07-04"
+        status: verified
+        claim: "P4.3 metadata pass (R-50 / track-5 T5-5/T5-15/T5-17): SENSORS-table device_class/unit/state_class fixes — area_mowed_m2/total_lawn_area_m2/total_mowed_area_m2/latest_session_area_m2 → device_class AREA; session_distance_m → DISTANCE; total_mowing_time_min/latest_session_duration_min/human_presence_push_interval_min/sim_left_days/latest_video → DURATION; first_mowing_date → DATE; last_settings_change_unix → TIMESTAMP (value_fn now emits datetime, was raw epoch); mowing_count invalid unit 'x' → None; dock_yaw gains '°'; archived_session_count/lidar_archive_count/session_track_point_count drop state_class; charging_status_code_raw entity_registry_enabled_default=False."
+        evidence: "entities/sensor/device.py SENSORS tuple (P4.3)"
     references:
       wire_entry: "varies — see notes for per-key wire surfaces"
       code: "custom_components/dreame_a2_mower/sensor_device.py:772"
@@ -2495,6 +2503,10 @@ entities:
         status: presumed
         claim: "Ported from code 2026-05-31: reads MowerState.navigation_path_smart via SETTING_SELECTS descriptor value_fn, writes PROT via coordinator.write_setting('PROT', 0|1). Read from select_global.py:439 + coordinator/_writes.py:258; not re-confirmed live."
         evidence: "select_global.py:328-341 (descriptor); select_global.py:488-522 (async_select_option → write_setting)"
+      - date: "2026-07-04"
+        status: verified
+        claim: "P4.3 (R-50 / track-5 T5-4): DreameA2SettingSelect carries a class-level EntityCategory.CONFIG, so all 4 global setting selects (navigation_path, rain_protection_resume_hours, lcd_language, voice_language) are CONFIG. The 4 writable per-map setting selects (settings_mowing_direction, settings_mowing_direction_mode, settings_turning_method, edge_walk_mode) each gained _attr_entity_category=CONFIG (map_N_mowing_efficiency was already CONFIG). Primary/action selects (work_log, lidar_archive, active_map, action_mode, wifi_archive, mowing_mode, maintenance_point) and the DIAGNOSTIC target selects (zone/spot/edge) are unchanged."
+        evidence: "entities/select/global_.py + entities/select/map_settings.py (P4.3); tests/integration/test_metadata_class_value_consistency.py::test_settings_controls_are_config_category"
     references:
       wire_entry: "PROT"
       code: "custom_components/dreame_a2_mower/select_global.py:439"
@@ -2964,6 +2976,10 @@ entities:
         status: verified
         claim: "P3.11 dup-slug fix: _active_fault_slugs now dedups the slug list order-preserving before joining. The fault_catalog has two intentional event_slug collision pairs (codes 11/42 and 43/59 -> same slug); when both codes of a pair latch concurrently the raw list repeated the slug and the STATE showed e.g. 'battery_overheat,battery_overheat'. Only the state string dedups; the `faults` attribute still lists every distinct code."
         evidence: "tests/integration/test_error_sensor_value.py::test_error_sensor_dedups_collision_pair_slugs (asserts fc.event_slug(11)==fc.event_slug(42) and 43==59, then a single deduped slug)"
+      - date: "2026-07-04"
+        status: verified
+        claim: "P4.3 metadata pass (R-50 / track-5 T5-15/T5-17): DIAGNOSTIC_SENSORS-table fixes — position_x_m/position_y_m/position_north_m/position_east_m drop state_class (live-map-cadence, not statistics-worthy); mowing_phase drops state_class AND gains entity_registry_enabled_default=False; task_state_code + slam_task_label gain entity_registry_enabled_default=False (raw-code shadow surfaces, disabled for public). No source/value_fn change."
+        evidence: "entities/sensor/device.py DIAGNOSTIC_SENSORS tuple (P4.3)"
     references:
       wire_entry: "varies — see notes for per-key wire surfaces"
       code: "custom_components/dreame_a2_mower/entities/sensor/device.py"
@@ -4142,6 +4158,10 @@ entities:
           ablation (fix reverted → rejection test fails); not yet
           live-rejection-verified on hardware."
         evidence: "tests/integration/test_write_honesty_cfg.py (CFG switch real-chain r=-3 envelope + time family; ablation pass 2026-07-03); entities/switch/base.py _async_set_value; number.py/time.py/entities/select/global_.py same seam"
+      - date: "2026-07-04"
+        status: verified
+        claim: "P4.3 (R-50 / track-5 T5-4): all SWITCHES + per-map SETTINGS/AI-recognition + AI-human switches carry EntityCategory.CONFIG (writable device settings are CONFIG, not DIAGNOSTIC/primary). Set as a class-level _attr_entity_category on DreameA2Switch / _AiRecognitionBitSwitch / _PerMapSettingsSwitchBase / DreameA2AiHumanDetectionSwitch / DreameA2MapEdgemasterSwitch; the 6 previously-DIAGNOSTIC descriptor rows (led_* + human_presence_alert) had their DIAGNOSTIC override removed."
+        evidence: "entities/switch/base.py + entities/switch/global_.py + entities/switch/map.py (P4.3); tests/integration/test_metadata_class_value_consistency.py::test_settings_controls_are_config_category"
     references:
       wire_entry: "varies — see notes for per-key CFG surfaces"
       code: "custom_components/dreame_a2_mower/_switch_base.py:55"
@@ -4590,6 +4610,10 @@ entities:
         status: presumed
         claim: "Ported from code 2026-05-31: native_value = getattr(snapshot, 'mqtt_connectivity').value. ENUM device class; options: online/stale. DIAGNOSTIC entity_category. Derived from snapshot.last_heartbeat_unix timestamp staleness (updated by state_machine.handle_heartbeat on s1p1 push). Read from sensor_device.py:733-741 + _sensor_base.py:58-78; not re-confirmed live."
         evidence: "_sensor_base.py:75-78 (native_value → getattr(snap, _SNAPSHOT_FIELD).value); sensor_device.py:733-741 (_SNAPSHOT_FIELD='mqtt_connectivity', _KEY='mqtt_connectivity', _attr_entity_category=DIAGNOSTIC)"
+      - date: "2026-07-04"
+        status: verified
+        claim: "P4.3 (R-51 / track-5 T5-7): mqtt_connectivity is now the ONE staleness entity and absorbs an `age_s` extra_state_attribute = seconds since snapshot.last_heartbeat_unix (None until first heartbeat) — the numeric MQTT-silence age that the deleted sensor.mqtt_age_s / sensor.data_freshness carried (both removed in P4.2). No other sensor/binary_sensor duplicates staleness, so the consolidation is complete."
+        evidence: "entities/sensor/device.py DreameA2MqttConnectivitySensor.extra_state_attributes (P4.3); tests/integration/test_metadata_class_value_consistency.py::test_mqtt_connectivity_exposes_age_s"
     references:
       wire_entry: "s1p1"
       code: "custom_components/dreame_a2_mower/sensor_device.py:733"

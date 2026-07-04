@@ -12,7 +12,7 @@ DreameA2MapPreEdgemasterSensor.
 """
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorStateClass
+from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 
 from .base import (
     _DreameA2PerMapPreShadowBase,
@@ -43,6 +43,7 @@ class DreameA2MapAreaSensor(_DreameA2PerMapSensorBase):
 
     _attr_name = "Area"
     _attr_translation_key = "map_area"
+    _attr_device_class = SensorDeviceClass.AREA
     _attr_icon = "mdi:vector-square"
     _attr_native_unit_of_measurement = "m²"
     _attr_state_class = SensorStateClass.MEASUREMENT

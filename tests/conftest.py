@@ -280,7 +280,11 @@ def _make_ha_stub() -> None:
 
     class _SensorDeviceClass:  # noqa: D101
         """Stub enum-like for SensorDeviceClass — provides common attributes."""
+        AREA = "area"
         BATTERY = "battery"
+        DATE = "date"
+        DISTANCE = "distance"
+        DURATION = "duration"
         ENUM = "enum"
         SIGNAL_STRENGTH = "signal_strength"
         TIMESTAMP = "timestamp"

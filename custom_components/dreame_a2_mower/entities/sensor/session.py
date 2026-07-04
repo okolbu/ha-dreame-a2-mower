@@ -8,7 +8,7 @@ DreameA2MapSessionCountSensor.
 """
 from __future__ import annotations
 
-from homeassistant.components.sensor import SensorStateClass
+from homeassistant.components.sensor import SensorDeviceClass, SensorStateClass
 
 from .base import _DreameA2PerMapSessionSensorBase
 
@@ -22,7 +22,10 @@ class DreameA2MapSessionAreaTotalSensor(_DreameA2PerMapSessionSensorBase):
     _attr_name = "Total area mowed"
     _attr_translation_key = "map_session_area_total"
     _attr_icon = "mdi:vector-square"
+    _attr_device_class = SensorDeviceClass.AREA
     _attr_native_unit_of_measurement = "m²"
+    # Recomputed from the archive each refresh (can decrease if sessions are
+    # pruned), so MEASUREMENT — not TOTAL_INCREASING (track-5 row 283 check).
     _attr_state_class = SensorStateClass.MEASUREMENT
     _KEY = "session_area_total"
 
@@ -42,6 +45,7 @@ class DreameA2MapSessionTimeTotalSensor(_DreameA2PerMapSessionSensorBase):
     _attr_name = "Total mowing time"
     _attr_translation_key = "map_session_time_total"
     _attr_icon = "mdi:clock-outline"
+    _attr_device_class = SensorDeviceClass.DURATION
     _attr_native_unit_of_measurement = "min"
     _attr_state_class = SensorStateClass.MEASUREMENT
     _KEY = "session_time_total"

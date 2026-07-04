@@ -347,6 +347,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     DreameA2SensorEntityDescription(
         key="area_mowed_m2",
         name="Area mowed",
+        device_class=SensorDeviceClass.AREA,
         native_unit_of_measurement="m²",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
@@ -356,6 +357,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     DreameA2SensorEntityDescription(
         key="session_distance_m",
         name="Session distance",
+        device_class=SensorDeviceClass.DISTANCE,
         native_unit_of_measurement="m",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
@@ -384,6 +386,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         # 'Target area' so the friendly name matches the value.
         key="total_lawn_area_m2",
         name="Target area",
+        device_class=SensorDeviceClass.AREA,
         native_unit_of_measurement="m²",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=1,
@@ -432,6 +435,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     DreameA2SensorEntityDescription(
         key="dock_yaw",
         name="Dock yaw",
+        native_unit_of_measurement="°",
         state_class=SensorStateClass.MEASUREMENT,
         entity_category=EntityCategory.DIAGNOSTIC,
         availability_source="cloud",
@@ -476,6 +480,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     DreameA2SensorEntityDescription(
         key="total_mowing_time_min",
         name="Total mowing time",
+        device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement="min",
         state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -485,6 +490,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     DreameA2SensorEntityDescription(
         key="total_mowed_area_m2",
         name="Total mowed area",
+        device_class=SensorDeviceClass.AREA,
         native_unit_of_measurement="m²",
         state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -495,11 +501,10 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     DreameA2SensorEntityDescription(
         key="mowing_count",
         name="Mowing count",
-        # Pre-greenfield used "x" as the unit; HA's recorder compares
-        # incoming statistics against the historical unit and suppresses
-        # long-term stats on mismatch. Keep the same unit so existing
-        # statistics carry over without manual cleanup.
-        native_unit_of_measurement="x",
+        # R-50 / track-5 T5-5: "x" is not a valid HA unit — a unitless
+        # TOTAL_INCREASING counter is correct. (Dropping the unit resets
+        # LTS continuity, acceptable for a single-user reinstallable dev
+        # integration — see feedback_no_migration_overengineering.)
         state_class=SensorStateClass.TOTAL_INCREASING,
         entity_category=EntityCategory.DIAGNOSTIC,
         availability_source="cloud",
@@ -508,6 +513,9 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     DreameA2SensorEntityDescription(
         key="first_mowing_date",
         name="First mowing date",
+        # R-50 / T5-5: value is a "YYYY-MM-DD" local-date string (seeded in
+        # domain/boot.py) — a valid ISO-date state for the DATE device_class.
+        device_class=SensorDeviceClass.DATE,
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.first_mowing_date,
     ),
@@ -521,9 +529,17 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     DreameA2SensorEntityDescription(
         key="last_settings_change_unix",
         name="Last settings change",
+        # R-50 / T5-5: was emitting a raw epoch int with no device_class.
+        # TIMESTAMP requires a tz-aware datetime state, so convert the epoch
+        # here (same pattern as latest_session_unix_ts).
+        device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
         availability_source="cloud",
-        value_fn=lambda s: s.last_settings_change_unix,
+        value_fn=lambda s: (
+            datetime.fromtimestamp(s.last_settings_change_unix, tz=UTC)
+            if s.last_settings_change_unix is not None
+            else None
+        ),
     ),
     # language_text_idx + language_voice_idx index sensors DELETED refactor-v2
     # P4.2 (R-46, track-5 T5-6): redundant with the writable select.lcd_language
@@ -577,6 +593,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     DreameA2SensorEntityDescription(
         key="latest_session_area_m2",
         name="Latest session area",
+        device_class=SensorDeviceClass.AREA,
         native_unit_of_measurement="m²",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=2,
@@ -585,6 +602,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     DreameA2SensorEntityDescription(
         key="latest_session_duration_min",
         name="Latest session duration",
+        device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement="min",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda s: s.latest_session_duration_min,
@@ -602,7 +620,8 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
     DreameA2SensorEntityDescription(
         key="archived_session_count",
         name="Archived session count",
-        state_class=SensorStateClass.MEASUREMENT,
+        # R-50 / T5-15 row: counters are not statistics-worthy measurements —
+        # drop state_class to avoid needless recorder/LTS churn.
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.archived_session_count,
     ),
@@ -610,14 +629,14 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         key="lidar_archive_count",
         translation_key="lidar_archive_count",
         icon="mdi:cube-scan",
-        state_class=SensorStateClass.MEASUREMENT,
+        # R-50 / T5-15 row: counter, not a measurement — drop state_class.
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: s.archived_lidar_count,
     ),
     DreameA2SensorEntityDescription(
         key="session_track_point_count",
         name="Session track point count",
-        state_class=SensorStateClass.MEASUREMENT,
+        # R-50 / T5-15 row: counter, not a measurement — drop state_class.
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda s: (
             sum(len(leg) for leg in s.session_track_segments)
@@ -632,6 +651,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         key="human_presence_push_interval_min",
         translation_key="human_presence_push_interval_min",
         name="Human presence push interval",
+        device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement="min",
         entity_category=EntityCategory.DIAGNOSTIC,
         availability_source="cloud",
@@ -650,6 +670,9 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         translation_key="charging_status_code_raw",
         name="Charging status code (raw)",
         entity_category=EntityCategory.DIAGNOSTIC,
+        # R-50 / T5-17: raw-code shadow of sensor.charging_status — a
+        # contributor/debug surface, disabled by default for the public release.
+        entity_registry_enabled_default=False,
         availability_source="mqtt",
         value_fn=lambda s: s.charging_status.value if s.charging_status is not None else None,
     ),
@@ -708,6 +731,7 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         key="sim_left_days",
         name="SIM days remaining",
         icon="mdi:sim-alert",
+        device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement="d",
         entity_category=EntityCategory.DIAGNOSTIC,
         availability_source="cloud",
@@ -811,7 +835,9 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         key="position_x_m",
         name="Position X",
         native_unit_of_measurement="m",
-        state_class=SensorStateClass.MEASUREMENT,
+        # R-50 / T5-15: live-map-cadence position — drop state_class so it
+        # stops generating recorder/LTS churn (the card reads the camera's
+        # published position stream, not these sensors).
         suggested_display_precision=2,
         availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().position_x_m,
@@ -820,7 +846,9 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         key="position_y_m",
         name="Position Y",
         native_unit_of_measurement="m",
-        state_class=SensorStateClass.MEASUREMENT,
+        # R-50 / T5-15: live-map-cadence position — drop state_class so it
+        # stops generating recorder/LTS churn (the card reads the camera's
+        # published position stream, not these sensors).
         suggested_display_precision=2,
         availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().position_y_m,
@@ -829,7 +857,9 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         key="position_north_m",
         name="Position North",
         native_unit_of_measurement="m",
-        state_class=SensorStateClass.MEASUREMENT,
+        # R-50 / T5-15: live-map-cadence position — drop state_class so it
+        # stops generating recorder/LTS churn (the card reads the camera's
+        # published position stream, not these sensors).
         suggested_display_precision=2,
         availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().position_north_m,
@@ -838,7 +868,9 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         key="position_east_m",
         name="Position East",
         native_unit_of_measurement="m",
-        state_class=SensorStateClass.MEASUREMENT,
+        # R-50 / T5-15: live-map-cadence position — drop state_class so it
+        # stops generating recorder/LTS churn (the card reads the camera's
+        # published position stream, not these sensors).
         suggested_display_precision=2,
         availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().position_east_m,
@@ -850,8 +882,10 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
     DreameA2DiagnosticSensorEntityDescription(
         key="mowing_phase",
         name="Mowing phase",
-        state_class=SensorStateClass.MEASUREMENT,
+        # R-50 / T5-17: raw phase code — drop state_class (T5-17 says it's not
+        # a measurement) and disable by default (contributor/debug surface).
         entity_category=EntityCategory.DIAGNOSTIC,
+        entity_registry_enabled_default=False,
         availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().mowing_phase,
     ),
@@ -860,6 +894,8 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         translation_key="task_state_code",
         name="Task state (raw)",
         entity_category=EntityCategory.DIAGNOSTIC,
+        # R-50 / T5-17: raw-code shadow — disabled by default for public.
+        entity_registry_enabled_default=False,
         availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().task_state_code,
     ),
@@ -867,6 +903,8 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         key="slam_task_label",
         name="SLAM task",
         entity_category=EntityCategory.DIAGNOSTIC,
+        # R-50 / T5-17: raw-code shadow — disabled by default for public.
+        entity_registry_enabled_default=False,
         availability_source="mqtt",
         value_fn=lambda coord: coord.state_machine.snapshot().slam_task_label,
     ),
@@ -1048,6 +1086,8 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         key="latest_video",
         name="Latest video",
         icon="mdi:video-box",
+        # R-50 / T5-5: state is the newest clip's duration in seconds.
+        device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement="s",
         entity_category=EntityCategory.DIAGNOSTIC,
         value_fn=lambda coord: (
@@ -1169,6 +1209,19 @@ class DreameA2MqttConnectivitySensor(_SnapshotEnumSensorBase):
     # never be gated on it (else it'd vanish exactly when it's useful).
     # Override the _SnapshotEnumSensorBase mqtt default back to None.
     _availability_source = None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """R-51 / track-5 T5-7: this is the ONE staleness entity — it absorbs
+        the numeric MQTT-silence age that the deleted sensor.mqtt_age_s /
+        sensor.data_freshness carried. ``age_s`` = seconds since the last s1p1
+        heartbeat (the same ``last_heartbeat_unix`` the online/stale enum
+        derives from); None until the first heartbeat arrives."""
+        import time as _time
+
+        snap = self.coordinator.state_machine.snapshot()
+        last = snap.last_heartbeat_unix
+        return {"age_s": (int(_time.time()) - int(last)) if last is not None else None}
 
 
 class DreameA2PickedSessionSensor(
