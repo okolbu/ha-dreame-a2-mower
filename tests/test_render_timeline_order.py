@@ -83,6 +83,62 @@ def test_legs_timeline_painted_in_order():
     assert png and len(png) > 100
 
 
+def _count_exact(png: bytes, rgb: tuple[int, int, int]) -> int:
+    """Count pixels whose RGB exactly matches ``rgb`` (alpha ignored)."""
+    import io
+
+    from PIL import Image
+
+    raw = Image.open(io.BytesIO(png)).convert("RGB").tobytes()
+    return sum(
+        1
+        for i in range(0, len(raw), 3)
+        if (raw[i], raw[i + 1], raw[i + 2]) == rgb
+    )
+
+
+def test_legs_timeline_later_record_paints_over_earlier():
+    """Real paint-ORDER proof (T7-11): two fully-overlapping legs of different
+    roles, rendered in both orders. Because the renderer paints records in list
+    order with opaque colours, the OVERLAP takes the LAST record's colour — so
+    swapping the list order swaps which colour survives on the shared pixels.
+
+    Uses explicit opaque palette colours (pure blue = mowing, pure red =
+    traversal) that never occur in the base map, so an exact-match pixel count
+    isolates the trail.
+    """
+    md = _trivial_map_data()
+    # Identical geometry for both legs → they fully overlap.
+    leg_pts = [(2.0, 2.0), (8.0, 8.0)]
+    palette = {
+        "mow_trail_color": (0, 0, 255, 255),   # pure blue, opaque
+        "traversal_color": (255, 0, 0, 255),   # pure red, opaque
+    }
+    mow = {"role": "mowing", "start_ts": 1000, "end_ts": 1100, "pts": leg_pts}
+    trav = {"role": "traversal", "start_ts": 1100, "end_ts": 1200, "pts": leg_pts}
+
+    # Mowing painted LAST → the shared line is blue, no red survives.
+    png_mow_last = render_work_log(
+        md, legs_timeline=[trav, mow], palette=palette, trail_width_px=4
+    )
+    # Traversal painted LAST → the shared line is red, no blue survives.
+    png_trav_last = render_work_log(
+        md, legs_timeline=[mow, trav], palette=palette, trail_width_px=4
+    )
+
+    blue_when_mow_last = _count_exact(png_mow_last, (0, 0, 255))
+    red_when_mow_last = _count_exact(png_mow_last, (255, 0, 0))
+    blue_when_trav_last = _count_exact(png_trav_last, (0, 0, 255))
+    red_when_trav_last = _count_exact(png_trav_last, (255, 0, 0))
+
+    # The last-painted role owns every overlapping pixel; the earlier one is
+    # fully covered. This can only hold if records paint in list order.
+    assert blue_when_mow_last > 0 and red_when_mow_last == 0
+    assert red_when_trav_last > 0 and blue_when_trav_last == 0
+    # Same geometry both ways → the surviving-colour pixel counts match.
+    assert blue_when_mow_last == red_when_trav_last
+
+
 def test_legs_timeline_takes_priority_over_split_args():
     """legs_timeline early-returns before mowing_legs/traversal_legs are consulted."""
     md = _trivial_map_data()

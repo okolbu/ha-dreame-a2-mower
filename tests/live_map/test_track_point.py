@@ -22,8 +22,11 @@ def test_trackpoint_fields():
 
 
 def test_default_state_has_empty_track():
+    # Track-model invariant only: the default track list is empty. The
+    # is_active()/total_points() default is owned by
+    # tests/live_map/test_state.py:test_default_state_is_inactive (this test
+    # deliberately does NOT re-assert it, to stay a distinct invariant).
     s = LiveMapState()
-    assert not s.is_active()
     assert s.track == []
 
 

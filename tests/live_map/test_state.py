@@ -5,6 +5,8 @@ from custom_components.dreame_a2_mower.live_map.state import LiveMapState
 
 
 def test_default_state_is_inactive():
+    # Sole owner of the default inactive/empty-counter invariant (the track-model
+    # counterpart test_default_state_has_empty_track only asserts track == []).
     s = LiveMapState()
     assert not s.is_active()
     assert s.total_points() == 0
