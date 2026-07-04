@@ -15,6 +15,11 @@ import {
   rssiToRgb,
   wifiOverlayKey,
 } from "./_dreame-map-core.js";
+import {
+  defineCard,
+  renderMissingEntity,
+  checkMapSchema,
+} from "./_dreame-card-core.js";
 
 const ICON_PX = 32;
 const GLIDE_MS = 5000;   // glide duration ~ the observed s1p4 cadence (~5s)
@@ -45,9 +50,20 @@ class DreameMowerMapCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     const ent = hass.states[this._cfg.entity];
-    if (!ent || !ent.attributes) return;
-    const a = ent.attributes;
-    if (!a.map_projection || !a.entity_picture) return;
+    if (!ent) {
+      this._showPlaceholder(renderMissingEntity(this._cfg.entity));
+      return;
+    }
+    const a = ent.attributes || {};
+    checkMapSchema("dreame-mower-map-card", a);
+    if (!a.map_projection || !a.entity_picture) {
+      // Entity exists but hasn't published map geometry yet (fresh install /
+      // mower never ran). Show a "waiting" placeholder instead of a blank card
+      // (T6-20) — but only until the SVG is built, then never clobber it.
+      this._showPlaceholder(renderMissingEntity(this._cfg.entity, { waiting: true }));
+      return;
+    }
+    this._placeholder = null;
     this._ensureSvg(a);
     const img = this.shadowRoot.getElementById("base");
     if (img && img.getAttribute("href") !== a.entity_picture) {
@@ -77,6 +93,15 @@ class DreameMowerMapCard extends HTMLElement {
       if (ang != null) this._iconAngle = ang;
       this._placeIcon();
     }
+  }
+  // Render a missing/waiting placeholder (T6-20), but never over a live map:
+  // once the SVG exists, a transient attribute drop keeps the last frame.
+  _showPlaceholder(html) {
+    if (this.shadowRoot && this.shadowRoot.getElementById("svg")) return;
+    if (this._placeholder === html) return; // avoid per-tick DOM churn
+    this._placeholder = html;
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    this.shadowRoot.innerHTML = html;
   }
   _ensureSvg(a) {
     const p = a.map_projection;
@@ -268,20 +293,11 @@ class DreameMowerMapCard extends HTMLElement {
   getCardSize() { return 6; }
   static getStubConfig() { return { entity: "camera.dreame_a2_mower_map" }; }
 }
-if (!customElements.get("dreame-mower-map-card")) {
-  customElements.define("dreame-mower-map-card", DreameMowerMapCard);
-  window.customCards = window.customCards || [];
-  window.customCards.push({
-    type: "dreame-mower-map-card",
-    name: "Dreame Mower Live Map",
-    description: "Animated live map: base + trail + directional mower icon + WiFi overlay.",
-  });
-}
-
-// Card version banner — lets the user confirm which build loaded in the
-// browser console (the cards "cache hard"; a stale cache shows the old version).
+// release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
+// = "..."` shape. defineCard logs the once-per-tag console banner.
 const CARD_VERSION = "1.0.32a1";
-console.info(
-  `%c dreame-mower-map-card v${CARD_VERSION} `,
-  "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"
-);
+defineCard("dreame-mower-map-card", DreameMowerMapCard, {
+  name: "Dreame Mower Live Map",
+  description: "Animated live map: base + trail + directional mower icon + WiFi overlay.",
+  version: CARD_VERSION,
+});

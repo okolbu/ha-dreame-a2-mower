@@ -33,6 +33,11 @@ import {
   circleFromCenterEdge,
   patrolConfigServiceData,
 } from "./_dreame-map-edit-geom.js";
+import {
+  defineCard,
+  renderMissingEntity,
+  checkMapSchema,
+} from "./_dreame-card-core.js";
 
 // ----- read-only overlay rendering (Task 5) -------------------------------
 // Manual post-merge verification: the overlays must sit EXACTLY over the
@@ -119,15 +124,25 @@ class DreameMapEditorCard extends HTMLElement {
   set hass(hass) {
     this._hass = hass;
     const ent = hass.states[this._cfg.entity];
-    if (!ent || !ent.attributes) return;
-    const a = ent.attributes;
+    if (!ent) {
+      this._showPlaceholder(renderMissingEntity(this._cfg.entity));
+      return;
+    }
+    const a = ent.attributes || {};
+    checkMapSchema("dreame-map-editor-card", a);
     // The editor uses a no-exclusions background (editor_base_url) so the
     // no-go/ignore zones render ONLY as the editable overlays below — the
     // normal entity_picture bakes them in, which double-draws/ghosts while a
     // device edit is still propagating to the cloud. Fall back to
     // entity_picture when the clean URL isn't published (backward compat).
     const baseHref = a.editor_base_url || a.entity_picture;
-    if (!a.map_projection || !baseHref) return;
+    if (!a.map_projection || !baseHref) {
+      // Entity present but no map geometry yet — waiting placeholder until the
+      // SVG is built (T6-20), then never clobber a live editor.
+      this._showPlaceholder(renderMissingEntity(this._cfg.entity, { waiting: true }));
+      return;
+    }
+    this._placeholder = null;
     this._proj = a.map_projection;
     this._ensureSvg(a);
     const img = this.shadowRoot.getElementById("base");
@@ -140,6 +155,14 @@ class DreameMapEditorCard extends HTMLElement {
   }
 
   // ----- DOM skeleton ------------------------------------------------------
+  // Missing/waiting placeholder (T6-20); never clobbers a built editor SVG.
+  _showPlaceholder(html) {
+    if (this.shadowRoot && this.shadowRoot.getElementById("svg")) return;
+    if (this._placeholder === html) return; // avoid per-tick DOM churn
+    this._placeholder = html;
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    this.shadowRoot.innerHTML = html;
+  }
   _ensureSvg(a) {
     if (this.shadowRoot && this.shadowRoot.getElementById("svg")) return;
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
@@ -1251,20 +1274,11 @@ class DreameMapEditorCard extends HTMLElement {
 //    point shows the bright teal marker (distinct from the muted non-selected
 //    obj-patrol markers), and exactly ONE point is selected at a time.
 
-if (!customElements.get("dreame-map-editor-card")) {
-  customElements.define("dreame-map-editor-card", DreameMapEditorCard);
-  window.customCards = window.customCards || [];
-  window.customCards.push({
-    type: "dreame-map-editor-card",
-    name: "Dreame Mower Map Editor",
-    description: "Interactive map editor: draw / resize / delete no-go, ignore and mow shapes.",
-  });
-}
-
-// Card version banner — lets the user confirm which build loaded in the
-// browser console (the cards "cache hard"; a stale cache shows the old version).
+// release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
+// = "..."` shape. defineCard logs the once-per-tag console banner.
 const CARD_VERSION = "1.0.32a1";
-console.info(
-  `%c dreame-map-editor-card v${CARD_VERSION} `,
-  "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"
-);
+defineCard("dreame-map-editor-card", DreameMapEditorCard, {
+  name: "Dreame Mower Map Editor",
+  description: "Interactive map editor: draw / resize / delete no-go, ignore and mow shapes.",
+  version: CARD_VERSION,
+});

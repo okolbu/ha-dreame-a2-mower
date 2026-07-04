@@ -23,7 +23,10 @@
 // Controls: drag to orbit, wheel to zoom. Bottom controls: slider for
 // splat size (1-12 px), toggle for map underlay.
 //
-// Feasibility write-up: docs/research/webgl-lidar-card-feasibility.md
+// Feasibility write-up: OLD/ha-dreame-a2-mower-docs/research/
+// webgl-lidar-card-feasibility.md (moved out-of-tree per docs canonicity; T6-11).
+
+import { defineCard, checkMapSchema } from "./_dreame-card-core.js";
 
 const VERTEX_SRC = `
   attribute vec3 aPos;
@@ -564,7 +567,9 @@ class DreameA2LidarCard extends HTMLElement {
       // `Last-Modified` comes from HA's static-path handler: it reflects
       // the PCD file's mtime on disk, which = the moment the integration
       // archived the scan after the mower's s99p20 OSS push (see
-      // docs/research/g2408-protocol.md §7.3b). Show it bottom-left so
+      // inventory.yaml § s99p20 / LiDAR; the old g2408-protocol.md §7.3b was
+      // archived to OLD/ha-dreame-a2-mower-docs/research/ on 2026-07-02, T6-11).
+      // Show it bottom-left so
       // users have a clear visual cue whether the 3D view is current.
       const lm = r.headers.get("last-modified");
       if (lm && this._timestamp) {
@@ -667,6 +672,7 @@ class DreameA2LidarCard extends HTMLElement {
       const entityId = this._config.map_entity || "camera.dreame_a2_mower_map";
       const state = this._hass.states?.[entityId];
       if (!state) throw new Error(`${entityId} not found`);
+      checkMapSchema("dreame-a2-lidar-card", state.attributes); // T6-9
       const calib = state.attributes?.calibration_points;
       const token = this._hass.auth?.data?.access_token;
       if (!calib || calib.length < 3) {
@@ -1081,19 +1087,11 @@ class DreameA2LidarCard extends HTMLElement {
   }
 }
 
-customElements.define("dreame-a2-lidar-card", DreameA2LidarCard);
-
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "dreame-a2-lidar-card",
+// release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
+// = "..."` shape. defineCard guards the double-define (T6-8) + logs the banner.
+const CARD_VERSION = "1.0.32a1";
+defineCard("dreame-a2-lidar-card", DreameA2LidarCard, {
   name: "Dreame A2 LiDAR Card",
   description: "Interactive WebGL 3D view of the mower's LiDAR point-cloud scan.",
+  version: CARD_VERSION,
 });
-
-// Card version banner — lets the user confirm which build loaded in the
-// browser console (the cards "cache hard"; a stale cache shows the old version).
-const CARD_VERSION = "1.0.32a1";
-console.info(
-  `%c dreame-a2-lidar-card v${CARD_VERSION} `,
-  "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"
-);

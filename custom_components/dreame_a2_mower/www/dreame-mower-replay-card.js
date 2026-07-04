@@ -19,7 +19,8 @@
 //   ...
 //   - type: custom:dreame-mower-replay-card
 //     entity: sensor.dreame_a2_mower_picked_session
-import { projectPoint, iconRotation, buildMowerIconSvg, attachDetectionOverlay } from "./_dreame-map-core.js";
+import { projectPoint, iconRotation, buildMowerIconSvg } from "./_dreame-map-core.js";
+import { defineCard, renderMissingEntity, openLightbox } from "./_dreame-card-core.js";
 
 const ICON_PX = 32;
 
@@ -37,6 +38,11 @@ class DreameMowerReplayCard extends HTMLElement {
       throw new Error("entity is required (sensor.dreame_a2_mower_picked_session)");
     }
     this._entityId = config.entity;
+    // T6-10: the trail-width source is config-driven (default preserved) so a
+    // P4 entity rename / a strategy-assigned id doesn't silently break the
+    // width control.
+    this._trailWidthEntity =
+      config.trail_width_entity || "number.dreame_a2_mower_trail_render_width";
   }
 
   set hass(hass) {
@@ -65,10 +71,7 @@ class DreameMowerReplayCard extends HTMLElement {
   }
 
   _renderMissing() {
-    this.shadowRoot.innerHTML = `
-      <div style="padding:12px;">
-        Picked-session entity not found — set <code>entity:</code>.
-      </div>`;
+    this.shadowRoot.innerHTML = renderMissingEntity(this._entityId);
   }
 
   _buildLegPathD(leg, proj) {
@@ -626,53 +629,17 @@ class DreameMowerReplayCard extends HTMLElement {
   // Read the trail_render_width from the integration's number entity.
   // Falls back to 24 if the entity is not yet available.
   _currentTrailWidth() {
-    const ent = this._hass && this._hass.states && this._hass.states['number.dreame_a2_mower_trail_render_width'];
+    const ent =
+      this._hass && this._hass.states && this._hass.states[this._trailWidthEntity];
     const v = parseFloat(ent && ent.state);
     return Number.isFinite(v) ? Math.round(v) : 24;
   }
 
-  // In-card lightbox for a session photo (matches the gallery card's popup
-  // instead of opening a new browser tab), with the AI-detection overlay.
+  // In-card lightbox for a session photo — the shared openLightbox() (T6-17),
+  // with the AI-detection overlay, instead of opening a new browser tab.
   _openPhotoLightbox(photo) {
-    this._closePhotoLightbox();
-    const lb = document.createElement("div");
-    lb.style.cssText =
-      "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.85);" +
-      "display:flex;align-items:center;justify-content:center;";
-    const wrap = document.createElement("div");
-    wrap.style.cssText = "position:relative;display:inline-block;line-height:0;";
-    wrap.addEventListener("click", (e) => e.stopPropagation());
-    const img = document.createElement("img");
-    img.src = photo.url;
-    img.style.cssText = "max-width:92vw;max-height:86vh;display:block;";
-    wrap.appendChild(img);
-    attachDetectionOverlay(wrap, img, photo.detections);
-    lb.appendChild(wrap);
-    const close = document.createElement("button");
-    close.textContent = "×";
-    close.setAttribute("aria-label", "Close");
-    close.style.cssText =
-      "position:absolute;top:12px;right:16px;width:40px;height:40px;border:none;" +
-      "border-radius:50%;background:rgba(255,255,255,0.15);color:#fff;" +
-      "font-size:24px;line-height:1;cursor:pointer;";
-    close.addEventListener("click", (e) => { e.stopPropagation(); this._closePhotoLightbox(); });
-    lb.appendChild(close);
-    lb.addEventListener("click", () => this._closePhotoLightbox());
-    this._photoLbKey = (e) => { if (e.key === "Escape") this._closePhotoLightbox(); };
-    document.addEventListener("keydown", this._photoLbKey);
-    this._photoLb = lb;
-    this.shadowRoot.appendChild(lb);
-  }
-
-  _closePhotoLightbox() {
-    if (this._photoLbKey) {
-      document.removeEventListener("keydown", this._photoLbKey);
-      this._photoLbKey = null;
-    }
-    if (this._photoLb && this._photoLb.parentNode) {
-      this._photoLb.parentNode.removeChild(this._photoLb);
-    }
-    this._photoLb = null;
+    if (this._photoLb) this._photoLb.close();
+    this._photoLb = openLightbox({ url: photo.url, detections: photo.detections });
   }
 
   _applyRenderStyle() {
@@ -691,15 +658,22 @@ class DreameMowerReplayCard extends HTMLElement {
     }
   }
 
+  disconnectedCallback() {
+    if (this._photoLb) {
+      this._photoLb.close();
+      this._photoLb = null;
+    }
+  }
+
   getCardSize() { return 6; }
 }
 
-customElements.define("dreame-mower-replay-card", DreameMowerReplayCard);
-
-// Card version banner — lets the user confirm which build loaded in the
-// browser console (the cards "cache hard"; a stale cache shows the old version).
+// release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
+// = "..."` shape. defineCard logs the once-per-tag console banner + adds the
+// guard against a double module-load (T6-8).
 const CARD_VERSION = "1.0.32a1";
-console.info(
-  `%c dreame-mower-replay-card v${CARD_VERSION} `,
-  "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"
-);
+defineCard("dreame-mower-replay-card", DreameMowerReplayCard, {
+  name: "Dreame Mower Session Replay",
+  description: "Animated replay of an archived mowing session over the base map.",
+  version: CARD_VERSION,
+});

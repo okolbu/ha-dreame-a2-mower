@@ -5,6 +5,8 @@
  * with client-side overlap validation matching the app's behavior.
  */
 
+import { defineCard, renderMissingEntity } from "./_dreame-card-core.js";
+
 const SLOT_DEFAULTS = {
   0: "Spr & Sum Schedule",
   1: "Aut & Win Schedule",
@@ -46,7 +48,7 @@ class DreameA2ScheduleCard extends HTMLElement {
     this._hass = hass;
     const state = hass.states[this._sensor];
     if (!state) {
-      this.shadowRoot.innerHTML = `<ha-card><div style="padding:16px;">Sensor ${this._sensor} not available</div></ha-card>`;
+      this.shadowRoot.innerHTML = renderMissingEntity(this._sensor);
       return;
     }
     // Drop optimistic entries the server has now confirmed.
@@ -423,17 +425,11 @@ class DreameA2ScheduleCard extends HTMLElement {
   }
 }
 
-customElements.define("dreame-a2-schedule-card", DreameA2ScheduleCard);
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "dreame-a2-schedule-card",
+// release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
+// = "..."` shape. defineCard guards the double-define (T6-8) + logs the banner.
+const CARD_VERSION = "1.0.32a1";
+defineCard("dreame-a2-schedule-card", DreameA2ScheduleCard, {
   name: "Dreame A2 Schedule",
   description: "Edit Spr & Sum / Aut & Win mowing schedules",
+  version: CARD_VERSION,
 });
-// Card version banner — lets the user confirm which build loaded in the
-// browser console (the cards "cache hard"; a stale cache shows the old version).
-const CARD_VERSION = "1.0.32a1";
-console.info(
-  `%c dreame-a2-schedule-card v${CARD_VERSION} `,
-  "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"
-);

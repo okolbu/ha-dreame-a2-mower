@@ -1,7 +1,16 @@
 // Generic multi-select card: reads `items` from a sensor attribute and calls a
 // service with the checked item ids. Reusable across patrol points, patrol
 // edges, and (later) zone/spot mow — set entity/service/id_param per instance.
+import { defineCard } from "./_dreame-card-core.js";
+
 class DreameMultiSelectCard extends HTMLElement {
+  constructor() {
+    super();
+    // Shadow DOM for parity with the rest of the card family (T6-19) — the
+    // light-DOM `this.innerHTML` leaked into / from theme + global CSS.
+    this.attachShadow({ mode: "open" });
+  }
+
   setConfig(config) {
     if (!config.entity) throw new Error("entity is required");
     if (!config.service) throw new Error("service is required (domain.service)");
@@ -38,15 +47,15 @@ class DreameMultiSelectCard extends HTMLElement {
   _update() {
     const items = this._items();
     if (!this._rendered) {
-      this.innerHTML = `
+      this.shadowRoot.innerHTML = `
         <ha-card header="${this._config.title || ""}">
           <div class="dms-list" style="padding:0 16px"></div>
           <div style="padding:16px">
             <button class="dms-go" style="background:var(--primary-color);color:var(--text-primary-color,#fff);border:none;padding:8px 18px;border-radius:6px;font-size:14px;font-weight:500"></button>
           </div>
         </ha-card>`;
-      this._list = this.querySelector(".dms-list");
-      this._btn = this.querySelector(".dms-go");
+      this._list = this.shadowRoot.querySelector(".dms-list");
+      this._btn = this.shadowRoot.querySelector(".dms-go");
       this._btn.textContent = this._config.action_label;
       this._btn.addEventListener("click", () => this._fire());
       this._rendered = true;
@@ -91,20 +100,11 @@ class DreameMultiSelectCard extends HTMLElement {
   getCardSize() { return 3; }
 }
 
-if (!customElements.get("dreame-multi-select-card")) {
-  customElements.define("dreame-multi-select-card", DreameMultiSelectCard);
-  window.customCards = window.customCards || [];
-  window.customCards.push({
-    type: "dreame-multi-select-card",
-    name: "Dreame Multi-Select",
-    description: "Pick items from a sensor's `items` attribute and call a service with the ids.",
-  });
-}
-
-// Card version banner — lets the user confirm which build loaded in the
-// browser console (the cards "cache hard"; a stale cache shows the old version).
+// release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
+// = "..."` shape. defineCard guards the double-define (T6-8) + logs the banner.
 const CARD_VERSION = "1.0.32a1";
-console.info(
-  `%c dreame-multi-select-card v${CARD_VERSION} `,
-  "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"
-);
+defineCard("dreame-multi-select-card", DreameMultiSelectCard, {
+  name: "Dreame Multi-Select",
+  description: "Pick items from a sensor's `items` attribute and call a service with the ids.",
+  version: CARD_VERSION,
+});

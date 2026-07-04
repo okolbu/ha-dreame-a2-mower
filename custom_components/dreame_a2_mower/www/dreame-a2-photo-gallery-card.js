@@ -18,7 +18,7 @@
 //   video: {type:"video", id, ts, date, category:"video", duration:int(sec),
 //           url, thumb_url}
 
-import { attachDetectionOverlay } from "./_dreame-map-core.js";
+import { defineCard, renderMissingEntity, openLightbox } from "./_dreame-card-core.js";
 
 const CATEGORY_LABELS = {
   ai_human: "AI · Human",
@@ -40,6 +40,19 @@ class DreameA2PhotoGalleryCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    // Distinguish "entity not found" (wrong id / fresh install) from an empty
+    // gallery — otherwise a missing entity renders the same "No photos yet"
+    // grid as a real-but-empty one (T6-20).
+    if (!hass.states[this._cfg.entity]) {
+      if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+      if (this._missingShown !== this._cfg.entity) {
+        this._missingShown = this._cfg.entity;
+        this._built = false;
+        this.shadowRoot.innerHTML = renderMissingEntity(this._cfg.entity);
+      }
+      return;
+    }
+    this._missingShown = null;
     if (!this._built) this._build();
     const items = this._items();
     const key = items.length + ":" + (items[0] && items[0].id);
@@ -136,29 +149,9 @@ class DreameA2PhotoGalleryCard extends HTMLElement {
         padding: 40px 16px; text-align: center;
         color: var(--secondary-text-color, #727272); font-size: 14px;
       }
-      /* lightbox */
-      .lb {
-        position: fixed; inset: 0; z-index: 9999;
-        background: rgba(0,0,0,0.85);
-        display: flex; align-items: center; justify-content: center;
-        flex-direction: column;
-      }
-      .lb video { max-width: 92%; max-height: 86%; display: block; }
-      .lb .lbwrap {
-        position: relative; display: inline-block; line-height: 0;
-      }
-      .lb .lbwrap img { max-width: 92vw; max-height: 86vh; display: block; }
-      .lb .lbcap {
-        margin-top: 12px; color: #eee; font-size: 13px;
-        max-width: 92%; text-align: center;
-      }
-      .lb .close {
-        position: absolute; top: 12px; right: 16px;
-        width: 40px; height: 40px; border-radius: 50%; border: none;
-        background: rgba(255,255,255,0.15); color: #fff;
-        font-size: 24px; line-height: 1; cursor: pointer;
-      }
-      .lb .close:hover { background: rgba(255,255,255,0.3); }
+      /* The click-to-enlarge lightbox is the shared openLightbox() from
+         _dreame-card-core.js (T6-17) — it mounts on document.body with inline
+         styles, so no lightbox CSS lives here. */
     `;
     const card = document.createElement("ha-card");
     this._tabsEl = document.createElement("div");
@@ -275,86 +268,21 @@ class DreameA2PhotoGalleryCard extends HTMLElement {
   // --- lightbox -----------------------------------------------------------
 
   _openLightbox(item) {
-    this._closeLightbox(); // ensure only one
-
-    const lb = document.createElement("div");
-    lb.className = "lb";
-
-    let media;
-    if (item.type === "video") {
-      media = document.createElement("video");
-      media.setAttribute("controls", "");
-      media.setAttribute("autoplay", "");
-      media.setAttribute("playsinline", "");
-      if (item.url) media.setAttribute("src", item.url);
-      // Clicking the media itself must NOT close the lightbox.
-      media.addEventListener("click", (e) => e.stopPropagation());
-      lb.appendChild(media);
-    } else {
-      media = document.createElement("img");
-      if (item.url) media.setAttribute("src", item.url);
-      media.alt = item.category || "photo";
-      // Wrap so AI-detection bounding boxes + labels overlay the photo.
-      const wrap = document.createElement("div");
-      wrap.className = "lbwrap";
-      wrap.addEventListener("click", (e) => e.stopPropagation());
-      wrap.appendChild(media);
-      attachDetectionOverlay(wrap, media, item.detections);
-      lb.appendChild(wrap);
-    }
-
-    const cap = document.createElement("div");
-    cap.className = "lbcap";
-    cap.textContent = this._captionText(item);
-    cap.addEventListener("click", (e) => e.stopPropagation());
-    lb.appendChild(cap);
-
-    const close = document.createElement("button");
-    close.className = "close";
-    close.setAttribute("aria-label", "Close");
-    close.textContent = "×"; // ×
-    close.addEventListener("click", (e) => {
-      e.stopPropagation();
-      this._closeLightbox();
+    if (this._lbHandle) this._lbHandle.close(); // ensure only one
+    this._lbHandle = openLightbox({
+      url: item.url,
+      video: item.type === "video",
+      detections: item.detections,
+      caption: this._captionText(item),
+      alt: item.category || "photo",
     });
-    lb.appendChild(close);
-
-    // Backdrop click (anywhere not caught by media/caption) closes.
-    lb.addEventListener("click", () => this._closeLightbox());
-
-    this._onKey = (e) => {
-      if (e.key === "Escape") this._closeLightbox();
-    };
-    document.addEventListener("keydown", this._onKey);
-
-    this._lb = lb;
-    this._lbVideo = item.type === "video" ? media : null;
-    this.shadowRoot.appendChild(lb);
-  }
-
-  _closeLightbox() {
-    if (this._onKey) {
-      document.removeEventListener("keydown", this._onKey);
-      this._onKey = null;
-    }
-    if (this._lbVideo) {
-      try {
-        this._lbVideo.pause();
-        this._lbVideo.removeAttribute("src");
-        this._lbVideo.load();
-      } catch (e) {
-        /* ignore */
-      }
-      this._lbVideo = null;
-    }
-    if (this._lb && this._lb.parentNode) {
-      this._lb.parentNode.removeChild(this._lb);
-    }
-    this._lb = null;
   }
 
   disconnectedCallback() {
-    this._closeLightbox();
+    if (this._lbHandle) {
+      this._lbHandle.close();
+      this._lbHandle = null;
+    }
   }
 
   getCardSize() {
@@ -366,21 +294,12 @@ class DreameA2PhotoGalleryCard extends HTMLElement {
   }
 }
 
-if (!customElements.get("dreame-a2-photo-gallery-card")) {
-  customElements.define("dreame-a2-photo-gallery-card", DreameA2PhotoGalleryCard);
-  window.customCards = window.customCards || [];
-  window.customCards.push({
-    type: "dreame-a2-photo-gallery-card",
-    name: "Dreame Mower Photo Gallery",
-    description:
-      "Thumbnail gallery of archived AI-detection / patrol / obstacle photos + videos, click to enlarge.",
-  });
-}
-
-// Card version banner — lets the user confirm which build loaded in the
-// browser console (the cards "cache hard"; a stale cache shows the old version).
+// release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
+// = "..."` shape. defineCard logs the once-per-tag console banner.
 const CARD_VERSION = "1.0.32a1";
-console.info(
-  `%c dreame-a2-photo-gallery-card v${CARD_VERSION} `,
-  "color:#fff;background:#2b8a3e;border-radius:3px;padding:1px 4px"
-);
+defineCard("dreame-a2-photo-gallery-card", DreameA2PhotoGalleryCard, {
+  name: "Dreame Mower Photo Gallery",
+  description:
+    "Thumbnail gallery of archived AI-detection / patrol / obstacle photos + videos, click to enlarge.",
+  version: CARD_VERSION,
+});

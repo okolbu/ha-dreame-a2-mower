@@ -24,6 +24,9 @@ HARNESSES = [
     "live_map_trail_harness.mjs",
     "geom_harness.mjs",
     "wifi_overlay_key_harness.mjs",
+    # R-54 / P5.2 card hygiene: guarded defineCard, renderMissingEntity,
+    # per-card no-throw on empty hass (the missing-entity path).
+    "card_core_harness.mjs",
 ]
 
 
