@@ -1108,7 +1108,11 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
     # player / downloader integrations). None when archive is empty.
     DreameA2DiagnosticSensorEntityDescription(
         key="latest_video",
-        name="Latest video",
+        # v2 rename (P4.5, track-5 T5-11): state is a duration in seconds, so
+        # "Latest video" was misleading. entity_id:
+        # sensor.dreame_a2_mower_latest_video_duration (was ..._latest_video).
+        # unique_id key "latest_video" is unchanged.
+        name="Latest video duration",
         icon="mdi:video-box",
         # R-50 / T5-5: state is the newest clip's duration in seconds.
         device_class=SensorDeviceClass.DURATION,

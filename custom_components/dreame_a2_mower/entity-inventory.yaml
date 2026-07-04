@@ -52,6 +52,9 @@ entities:
   # ------------------------------------------------------------------
 
   - id: "camera.dreame_a2_mower_map"
+    # object_id (name-derived, T5-13): live_map — descriptor name "Live map".
+    # Renamed from ..._map in P4.5 (track-5 T5-11). unique_id key "map" stable.
+    object_id: "live_map"
     platform: camera
     class: "DreameA2MapCamera"
     class_file: "custom_components/dreame_a2_mower/camera/map.py"
@@ -282,6 +285,11 @@ entities:
       which follows the archive picker; this camera is fixed to one map_id.
 
   - id: "camera.dreame_a2_mower_work_log"
+    # object_id (name-derived, T5-13): session_replay — descriptor name
+    # "Session replay". Renamed from ..._work_log in P4.5 (track-5 T5-11);
+    # unique_id key "work_log" stable. Internal method names
+    # (render_work_log_session etc.) are the coordinator surface and unchanged.
+    object_id: "session_replay"
     platform: camera
     class: "DreameA2WorkLogCamera"
     class_file: "custom_components/dreame_a2_mower/camera/map.py"
@@ -363,6 +371,11 @@ entities:
       from a live g2408 photo_list payload].
 
   - id: "camera.dreame_a2_mower_obstacle_photo"
+    # object_id (name-derived, T5-13): latest_obstacle_capture — descriptor name
+    # "Latest obstacle capture". Renamed from ..._obstacle_photo in P4.5
+    # (track-5 T5-11 + T5-2 stale floor_0_outside_ prefix). unique_id key
+    # "obstacle_photo" stable. T3 experimental gate (P4.4) unchanged.
+    object_id: "latest_obstacle_capture"
     platform: camera
     class: "DreameA2ObstaclePhotoCamera"
     class_file: "custom_components/dreame_a2_mower/camera/photos.py:137"
@@ -1429,6 +1442,10 @@ entities:
       read-only human_presence_alert_sensitivity (CFG.REC[1], cfg_key=None) has
       its own row above. See docs/research/control-honesty-audit-2026-06-03.md.
   - id: "binary_sensor.dreame_a2_mower_human_presence_scenario_standby"
+    # object_id unchanged by the P4.5 rename: "Human presence scenario: standby"
+    # → "Human presence scenario — standby" both slugify identically (T5-11 was
+    # a display-only colon→em-dash change here).
+    object_id: "human_presence_scenario_standby"
     platform: binary_sensor
     class: "DreameA2BinarySensor"
     class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
@@ -1459,6 +1476,8 @@ entities:
       write path is identified the entity can be promoted to switch.
 
   - id: "binary_sensor.dreame_a2_mower_human_presence_scenario_mowing"
+    # object_id unchanged by the P4.5 display-only colon→em-dash rename (T5-11).
+    object_id: "human_presence_scenario_mowing"
     platform: binary_sensor
     class: "DreameA2BinarySensor"
     class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
@@ -1488,6 +1507,8 @@ entities:
       entity can be promoted to switch.
 
   - id: "binary_sensor.dreame_a2_mower_human_presence_scenario_recharge"
+    # object_id unchanged by the P4.5 display-only colon→em-dash rename (T5-11).
+    object_id: "human_presence_scenario_recharge"
     platform: binary_sensor
     class: "DreameA2BinarySensor"
     class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
@@ -1517,6 +1538,8 @@ entities:
       entity can be promoted to switch.
 
   - id: "binary_sensor.dreame_a2_mower_human_presence_scenario_patrol"
+    # object_id unchanged by the P4.5 display-only colon→em-dash rename (T5-11).
+    object_id: "human_presence_scenario_patrol"
     platform: binary_sensor
     class: "DreameA2BinarySensor"
     class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
@@ -1546,6 +1569,11 @@ entities:
       entity can be promoted to switch.
 
   - id: "binary_sensor.dreame_a2_mower_human_presence_voice_push_alert"
+    # object_id (name-derived, T5-13): human_presence_voice_and_push_alert —
+    # descriptor name "Human presence voice and push alert". Renamed from
+    # ..._voice_push_alert in P4.5 (T5-11: "+" spelled out as "and"). unique_id
+    # key "human_presence_alert_voice" stable.
+    object_id: "human_presence_voice_and_push_alert"
     platform: binary_sensor
     class: "DreameA2BinarySensor"
     class_file: "custom_components/dreame_a2_mower/binary_sensor.py"
@@ -2274,6 +2302,10 @@ entities:
         evidence: "app-mitm:2026-06-09-settings-sweep"
 
   - id: "sensor.dreame_a2_mower_latest_video"
+    # object_id (name-derived, T5-13): latest_video_duration — descriptor name
+    # "Latest video duration". Renamed from ..._latest_video in P4.5 (T5-11: the
+    # state is a duration in seconds). unique_id key "latest_video" stable.
+    object_id: "latest_video_duration"
     platform: sensor
     class: "DreameA2DiagnosticSensor"
     class_file: "custom_components/dreame_a2_mower/entities/sensor/device.py"
@@ -2574,6 +2606,11 @@ entities:
   # /data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/inventory-history/.
 
   - id: "select.dreame_a2_mower_lcd_language"
+    # object_id (name-derived, T5-13): lcd_language — descriptor name was "Mower
+    # LCD language" (live object_id ..._mower_lcd_language); P4.5 dropped the
+    # "Mower" name artifact (T5-11) so the object_id now matches this canonical
+    # id. unique_id key "lcd_language" unchanged.
+    object_id: "lcd_language"
     platform: select
     control_mode: device_writable
     class: "DreameA2SettingSelect"
@@ -2649,6 +2686,11 @@ entities:
       target ({type:'voice'} vs {type:'text'}). Wire format verified live 2026-05-09.
 
   - id: "select.dreame_a2_mower_work_log"
+    # object_id (name-derived, T5-13): session_replay — descriptor name "Session
+    # replay". Renamed from ..._work_log in P4.5 (T5-11); pairs with the camera
+    # rename. unique_id key ("work_log", via _KEY) stable; the coordinator
+    # render_work_log_session method surface is unchanged.
+    object_id: "session_replay"
     platform: select
     control_mode: integration_local
     class: "DreameA2WorkLogSelect"
@@ -4140,6 +4182,20 @@ entities:
       seen_working: false
       last_verified: "2026-06-10"
     verifications:
+      - date: "2026-07-04"
+        status: verified
+        claim: "P4.5 v2 rename (track-5 T5-11): the 8 notification/voice switch
+          DESCRIPTOR NAMES were de-colon'd, changing only the name-derived
+          object_ids (descriptor keys + unique_ids unchanged): msg_alert_anomaly
+          → object_id anomaly_notifications, msg_alert_error → error_notifications,
+          msg_alert_task → task_notifications, msg_alert_consumables →
+          consumables_notifications, voice_regular_notification →
+          voice_prompt_regular_notification, voice_work_status →
+          voice_prompt_work_status, voice_special_status →
+          voice_prompt_special_status, voice_error_status →
+          voice_prompt_error_status. Old live object_ids (notification_* /
+          voice_*_prompt) become registry orphans → P4.7 registry sweep."
+        evidence: "entities/switch/global_.py (descriptor name= edits); tests/integration/test_entity_renames.py"
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: DreameA2Switch.is_on = entity_description.value_fn(coordinator.data); async_turn_on/off calls coordinator.write_setting(desc.cfg_key, wire_value) with optional field_updates_fn for optimistic MowerState update; logs warning + no-ops when cfg_key is None. Read from _switch_base.py:55-141 + switch.py; not re-confirmed live this pass."
