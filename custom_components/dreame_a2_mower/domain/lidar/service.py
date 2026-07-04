@@ -71,7 +71,7 @@ async def handle_lidar_object_name(coord, object_name: str, now_unix: int) -> No
     if not object_name or object_name == coord._last_lidar_object_name:
         return
     coord._last_lidar_object_name = object_name
-    LOGGER.info("[LIDAR] s99p20 announced object_name=%r", object_name)
+    LOGGER.debug("[LIDAR] s99p20 announced object_name=%r", object_name)
 
     # T12: route to the per-map archive for the currently active map.
     active_id = coord._active_map_id

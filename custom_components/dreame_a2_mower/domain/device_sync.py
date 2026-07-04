@@ -120,7 +120,7 @@ def update_device_registry_serial(coord, serial: str) -> None:
     if device.serial_number == serial:
         return
     registry.async_update_device(device.id, serial_number=serial)
-    LOGGER.info("device serial_number updated to %s", serial)
+    LOGGER.debug("device serial_number updated to %s", serial)
 
 
 def get_device_registry(coord) -> object | None:

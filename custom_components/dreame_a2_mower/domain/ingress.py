@@ -288,7 +288,7 @@ async def handle_event_occured(coord, arguments: list[dict[str, Any]]) -> None:
         )
         return
 
-    LOGGER.info(
+    LOGGER.debug(
         "[F5.6.1] event_occured: OSS object_name=%r — scheduling fetch",
         object_name,
     )

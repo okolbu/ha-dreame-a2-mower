@@ -24,7 +24,7 @@ class _DiscoveryMixin:
                 "cloud _handle_device_info: sn missing from device info;"
                 " falling back to mac/entry_id for identifiers"
             )
-        _LOGGER.info(
+        _LOGGER.debug(
             "cloud _handle_device_info: did=%r model=%r mac=%r _host=%r",
             self._did, self._model, self._mac, self._host,
         )
@@ -102,7 +102,7 @@ class _DiscoveryMixin:
                         **data,
                     }
                 else:
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "Get Device OTC Info empty, trying fallback... (%s)", response
                     )
                     devices = self.get_devices()

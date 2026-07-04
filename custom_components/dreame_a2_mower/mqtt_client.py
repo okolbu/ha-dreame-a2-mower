@@ -179,7 +179,7 @@ class DreameA2MqttClient:
         self._stopping = False
 
         if self._client is None:
-            _LOGGER.info("Connecting to MQTT broker %s:%s", host, port)
+            _LOGGER.debug("Connecting to MQTT broker %s:%s", host, port)
             try:
                 self._client = mqtt_client.Client(
                     mqtt_client.CallbackAPIVersion.VERSION1,
@@ -230,10 +230,10 @@ class DreameA2MqttClient:
             )
             return
         if self._connected:
-            _LOGGER.info("MQTT subscribing to %s", topic)
+            _LOGGER.debug("MQTT subscribing to %s", topic)
             self._client.subscribe(topic)
         else:
-            _LOGGER.info(
+            _LOGGER.debug(
                 "MQTT subscribe(%r) cached — will fire from on_connect", topic
             )
 
@@ -304,7 +304,7 @@ class DreameA2MqttClient:
             # successful connect. paho clears subscriptions on
             # reconnects, so this also handles transient broker drops.
             if self._subscribe_topic:
-                _LOGGER.info(
+                _LOGGER.debug(
                     "MQTT subscribing to %s (from on_connect)",
                     self._subscribe_topic,
                 )

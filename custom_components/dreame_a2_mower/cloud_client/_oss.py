@@ -260,7 +260,7 @@ class _OssMixin:
                 for r, mid in zip(unmatched_results, unmatched_map_ids):
                     r["map_id"] = mid
                     r["_assigned_by"] = "positional"
-                    _LOGGER.info(
+                    _LOGGER.debug(
                         "list_wifi_candidates: positional fallback "
                         "assigned %s → map_id=%d",
                         r["object_name"], mid,

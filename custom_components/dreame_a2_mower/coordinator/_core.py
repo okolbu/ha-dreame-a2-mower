@@ -883,7 +883,7 @@ class _CoreMixin:
         host, port = client.mqtt_host_port()
         self._mqtt_host = host
         self._mqtt_port = port
-        LOGGER.info(
+        LOGGER.debug(
             "Cloud auth ok; device %s model=%s host=%s",
             client.device_id,
             client.model,
@@ -957,7 +957,7 @@ class _CoreMixin:
         # subscribe() now caches the topic; the actual paho subscribe
         # fires from _on_connect after CONNACK (v1.0.0a6 fix).
         self._mqtt.subscribe(topic)
-        LOGGER.info("Subscribed to %s", topic)
+        LOGGER.debug("Subscribed to %s", topic)
 
     @callback
     def _handle_mqtt_auth_error(self) -> None:

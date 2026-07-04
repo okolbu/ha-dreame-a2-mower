@@ -450,7 +450,7 @@ def tag_wifi_archive_map_ids(coord) -> int:
             continue
         if store.set_map_id(entry.object_name, int(map_id)):
             modified += 1
-            LOGGER.info(
+            LOGGER.debug(
                 "[wifi-match] tagged %s → map_id=%d "
                 "(scored against %d session(s))",
                 entry.object_name, map_id, len(flat_candidates),
