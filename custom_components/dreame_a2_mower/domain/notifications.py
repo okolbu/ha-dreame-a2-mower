@@ -280,3 +280,51 @@ def _english_text(record: Any) -> str | None:
     if not isinstance(loc, dict):
         return None
     return loc.get("en") or loc.get("en-US") or None
+
+
+async def refresh_messages(coord) -> None:
+    """Account message lists + unread counts via message-record/list v1,
+    device-messages/v2, and share-messages. Trims each list to the cap.
+
+    Moved VERBATIM from ``coordinator/_refreshers.py`` (P3.9e). The
+    accumulate-to-200 merge for device-messages runs through
+    ``coord._merge_device_messages`` (this module's ``merge_device_messages``)
+    so the sole-writer ownership is preserved.
+    """
+    if not hasattr(coord, "_cloud"):
+        return
+    entry = getattr(coord, "entry", None)
+    cap = int(
+        entry.options.get(CONF_MESSAGES_KEEP, DEFAULT_MESSAGES_KEEP)
+        if entry is not None else DEFAULT_MESSAGES_KEEP
+    )
+    # did is derived the same way as resolve_s2p2_notification
+    did = getattr(coord._cloud, "device_id", None) or getattr(coord._cloud, "_did", None)
+    m = await coord.hass.async_add_executor_job(coord._cloud.fetch_message_record)
+    dev_raw = await coord.hass.async_add_executor_job(
+        coord._cloud.fetch_device_messages, did, 10
+    )
+    share_raw = await coord.hass.async_add_executor_job(
+        coord._cloud.fetch_share_messages, cap
+    )
+    kw: dict = {}
+    if m:
+        kw["service_messages_unread"] = m.get("service_unread")
+        kw["system_messages_unread"] = m.get("system_unread")
+        kw["latest_service_message"] = m.get("latest")
+        kw["service_messages"] = [
+            msg.as_dict()
+            for msg in message_record.normalize_service(m.get("service_records"))[:cap]
+        ]
+    if dev_raw is not None:
+        fresh = [msg.as_dict() for msg in message_record.normalize_device(dev_raw)]
+        kw["device_messages"] = coord._merge_device_messages(fresh)
+    if share_raw is not None:
+        kw["shared_messages"] = [
+            msg.as_dict() for msg in message_record.normalize_share(share_raw)[:cap]
+        ]
+    if not kw:
+        return
+    new = dataclasses.replace(coord.data, **kw)
+    if new != coord.data:
+        coord.async_set_updated_data(new)
