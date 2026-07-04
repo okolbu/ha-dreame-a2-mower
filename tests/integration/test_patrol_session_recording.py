@@ -69,8 +69,10 @@ def _coord(tmp_path, monkeypatch):
     c.hass = hass
 
     # build_settings_snapshot_v2 reads many coordinator attrs; monkeypatch the
-    # symbol used by the module so the session-start path is a no-op.
-    import custom_components.dreame_a2_mower.coordinator._mqtt_handlers as mh
+    # symbol used by the module so the session-start path is a no-op. The
+    # begin-session snapshot call lives in domain/session/lifecycle_events.py
+    # (P3.7 ingress split).
+    import custom_components.dreame_a2_mower.domain.session.lifecycle_events as mh
     monkeypatch.setattr(mh, "build_settings_snapshot_v2", lambda *a, **k: None)
 
     # Do NOT stub _provisional_session_type or _provisional_session_is_cloud_finalized

@@ -9,22 +9,12 @@ from typing import TYPE_CHECKING, Any
 
 
 from ..const import (
-    EVENT_TYPE_CHARGING_COMPLETE,
-    EVENT_TYPE_CHARGING_STARTED,
-    EVENT_TYPE_DOCK_ARRIVED,
-    EVENT_TYPE_DOCK_DEPARTED,
-    EVENT_TYPE_MOWING_PAUSED,
-    EVENT_TYPE_MOWING_RESUMED,
-    EVENT_TYPE_MOWING_STARTED,
-    EVENT_TYPE_RAIN_DELAY_STARTED,
-    EVENT_TYPE_SELF_SHUTDOWN,
     LOG_NOVEL_PROPERTY,
     LOG_NOVEL_VALUE,
     LOGGER,
 )
 from ..protocol.property_mapping import PROPERTY_MAPPING
 from ..mower.state import MowerState
-from ._snapshot import build_settings_snapshot_v2
 from ..protocol import heartbeat as _heartbeat
 
 from ._property_apply import (
@@ -32,7 +22,6 @@ from ._property_apply import (
     _INVENTORY,
     _SETTINGS_TRIPWIRE_SLOTS,
     _SUPPRESSED_SLOTS,
-    S2P2_EVENT_TYPES,
     _coerce_blob,
     _project_north_east,
     apply_property_to_state,
@@ -41,6 +30,7 @@ from ._property_apply import (
 # Session-type signal capture moved to the domain layer (P3.7). Re-exported
 # here so the module attribute `_mqtt_handlers.capture_session_type_signals`
 # (used by tests + the _apply/_on_state_update callers below) still resolves.
+from ..domain.session import lifecycle_events as _lifecycle_events
 from ..domain.session import signals as _signals
 from ..domain.session.signals import capture_session_type_signals
 
@@ -269,59 +259,26 @@ class _MqttHandlersMixin:
     def _maybe_fire_charging_events(
         self, charging_status, now_unix: int, battery: int | None
     ) -> None:
-        """Fire charging_started / charging_complete on s3.2 rising edges.
-
-        Distinct from dock_arrived (cloud DOCK connect_status): this is the
-        energy-state. The first observation only primes _prev so a charging
-        state already active at HA boot doesn't fire spuriously.
-        """
-        if charging_status is None:
-            return
-        new_val = (
-            charging_status.value
-            if hasattr(charging_status, "value")
-            else int(charging_status)
+        """Delegates to ``domain.session.lifecycle_events.maybe_fire_charging_events`` (P3.7)."""
+        _lifecycle_events.maybe_fire_charging_events(
+            self, charging_status, now_unix, battery
         )
-        prev = self._prev_charging_status
-        if prev is not None and new_val != prev:
-            if new_val == 1:  # ChargingStatus.CHARGING
-                self._fire_lifecycle(
-                    EVENT_TYPE_CHARGING_STARTED,
-                    {"at_unix": int(now_unix), "battery_level": battery},
-                )
-            elif new_val == 2:  # ChargingStatus.CHARGED
-                self._fire_lifecycle(
-                    EVENT_TYPE_CHARGING_COMPLETE,
-                    {"at_unix": int(now_unix), "battery_level": battery},
-                )
-        self._prev_charging_status = new_val
 
     def _fire_rain_delay_started_if_edge(
         self, *, old: int | None, new: int | None, now_unix: int
     ) -> None:
-        """On the s2p2 rising edge into 56 (rain_protection), record the
-        start time and fire rain_delay_started. No rain-END signal exists,
-        so the field is cleared elsewhere (dock departure / session end)."""
-        if new == 56 and old != 56:
-            self._rain_delay_started_at = int(now_unix)
-            self._fire_lifecycle(
-                EVENT_TYPE_RAIN_DELAY_STARTED, {"at_unix": int(now_unix)}
-            )
+        """Delegates to ``domain.session.lifecycle_events.fire_rain_delay_started_if_edge`` (P3.7)."""
+        _lifecycle_events.fire_rain_delay_started_if_edge(
+            self, old=old, new=new, now_unix=now_unix
+        )
 
     def _fire_self_shutdown_if_edge(
         self, *, old: int | None, new: int | None, now_unix: int
     ) -> None:
-        """Fire self_shutdown on the s2p57 rising edge into 1 (firmware
-        self-shutdown — confirmed low-battery protective cutoff 2026-06-14).
-        First observation only primes _prev so a value already 1 at boot
-        doesn't fire spuriously."""
-        if old is None:
-            return  # first observation primes _prev (caller sets it)
-        if new == 1 and old != 1:
-            self._fire_lifecycle(
-                EVENT_TYPE_SELF_SHUTDOWN,
-                {"at_unix": int(now_unix), "reason": "low_battery", "value": int(new)},
-            )
+        """Delegates to ``domain.session.lifecycle_events.fire_self_shutdown_if_edge`` (P3.7)."""
+        _lifecycle_events.fire_self_shutdown_if_edge(
+            self, old=old, new=new, now_unix=now_unix
+        )
 
     def _latch_task_op(self, op: int) -> None:
         """Delegates to ``domain.session.signals.latch_task_op`` (P3.7)."""
@@ -336,388 +293,14 @@ class _MqttHandlersMixin:
         _signals.seed_session_type_from_pending(self)
 
     def _on_state_update(self, new_state: MowerState, now_unix: int) -> MowerState:
-        """Hook fired after apply_property_to_state. Updates LiveMapState
-        based on s2p56 transitions and appends s1p4 positions to the
-        current leg.
+        """Delegates to ``domain.session.lifecycle_events.on_state_update`` (P3.7).
 
-        Returns a possibly-modified MowerState (with session_active /
-        session_started_unix / session_track_segments synced from LiveMapState).
+        The 375-LOC edge-detector body was decomposed VERBATIM into named seam
+        functions + an orchestrator in that module; this thin method preserves
+        the public/test surface (``coord._on_state_update`` and the unbound
+        ``_MqttHandlersMixin._on_state_update``).
         """
-        new_task_state = new_state.task_state_code
-        prev = self._prev_task_state
-
-        # Mark that we've now seen a real task_state from MQTT so the
-        # finalize gate can distinguish "task is genuinely idle/end"
-        # from "task_state_code defaulted to None because we just
-        # booted into an MQTT-quiet window". Latches once observed —
-        # subsequent transitions to None are then legitimately a
-        # session-end signal.
-        if new_task_state is not None:
-            self._real_task_state_observed = True
-
-        # v1.0.0a18: task_state_code semantics changed when the s2.56
-        # extract_value was fixed to read status[0][1] (the sub-state).
-        # New mapping: 0 = running, 4 = paused-pending-resume,
-        # None = no task (status: []). begin_session fires on any
-        # transition from None to a non-None task; the 4 → 0 recharge
-        # resume just continues appending to the track (the pause→resume
-        # time gap becomes a pen-up boundary at render/finalize time).
-        if new_task_state != prev:
-            # v1.0.0a48: bumped to WARNING so the trail is visible in
-            # the HA default log without enabling DEBUG. Each mow only
-            # produces a handful of these so noise stays low.
-            LOGGER.debug(
-                "[F5] task_state_code transition %r → %r (live_map.is_active=%s)",
-                prev, new_task_state, self.live_map.is_active(),
-            )
-        # Begin a session whenever we transition from a non-active code
-        # (None=idle, 2=complete) to an active code (0=running,
-        # 4=paused). prev=4→new=0 is the recharge-resume case which
-        # starts a new leg rather than a new session.
-        is_active_now = new_task_state in (0, 4)
-        was_active_before = prev in (0, 4)
-        if is_active_now and not was_active_before and not self.live_map.is_active():
-            # Skip begin_session when live_map is already active — that
-            # means _restore_in_progress repopulated legs/started_unix
-            # from disk (mid-mow HA restart). begin_session would clear
-            # legs to [[]] and reset started_unix to now_unix, abandoning
-            # the pre-restart trail. Just continue appending to the
-            # restored leg.
-            self.live_map.begin_session(now_unix)
-            # Seed the just-born session's type from the op echo that arrived
-            # before it existed (begin_session nulled last_task_op). Fixes the
-            # dock-start race where the s2p50 echo / s2p2=51 are lost.
-            self._seed_session_type_from_pending()
-            # Reset the published live position stream so the new session's
-            # trail starts clean on the client card.
-            self._begin_live_stream()
-            # Snapshot battery % at session start so the archive consumer
-            # has a cheap start/end SoC pair without scanning the full
-            # battery_samples list. None when battery_level isn't known
-            # yet — the first s3p1 push will still populate samples.
-            if new_state.battery_level is not None:
-                try:
-                    self.live_map.charge_at_start = int(new_state.battery_level)
-                except (TypeError, ValueError):
-                    pass
-            # Snapshot the FULL firmware state at session start (settings_snapshot v2 —
-            # per_map + device_wide + peripheral + forensic). Replaces the v1 narrow
-            # per-map-only dict; v1 archive consumers continue to read the per_map
-            # subsection via the v1-fallback path in session_card.py.
-            self.live_map.settings_snapshot = build_settings_snapshot_v2(
-                self, captured_at_unix=int(now_unix)
-            )
-            self._fire_lifecycle(
-                EVENT_TYPE_MOWING_STARTED,
-                {
-                    "at_unix": int(now_unix),
-                    "action_mode": (
-                        new_state.action_mode.value
-                        if new_state.action_mode is not None
-                        else None
-                    ),
-                    "target_area_m2": new_state.target_area_m2,
-                },
-            )
-            # Re-poll MAPL so the live trail lands on the firmware's
-            # current active map, even if the last 2-min cloud refresh was
-            # before the user switched maps.
-            hass = getattr(self, "hass", None)
-            if hass is not None:
-                hass.async_create_task(self._refresh_mapl())
-        elif (
-            new_task_state == 4
-            and prev != 4
-            and self.live_map.is_active()
-        ):
-            # Mid-mow pause. Previously gated on `prev == 0` exactly,
-            # but a transient `0 → None` observation (occasional MQTT
-            # parse blip; system_log shows "[F5] task_state_code
-            # transition 0 → None" entries) overwrites _prev_task_state
-            # to None, after which the true `0 → 4` pause arrives as
-            # `None → 4` and the strict prev==0 check skips it.
-            # Resume still fires (prev becomes 4 when pause finally
-            # latches) but the pause event was lost.
-            #
-            # Generalise: pause fires on any "was-not-already-paused"
-            # → "now paused" transition while the live_map is active
-            # (i.e., we're genuinely mid-session). Live_map.is_active
-            # gates against firing pause when the integration first
-            # observes task_state=4 on boot before any session is
-            # running.
-            #
-            # Reason is best-effort: if the current MowerState exposes
-            # an obvious cause use it, otherwise "unknown".
-            reason = "unknown"
-            if new_state.battery_level is not None and new_state.battery_level <= 20:
-                reason = "recharge_required"
-            self._fire_lifecycle(
-                EVENT_TYPE_MOWING_PAUSED,
-                {
-                    "at_unix": int(now_unix),
-                    "area_mowed_m2": new_state.area_mowed_m2,
-                    "reason": reason,
-                },
-            )
-        elif prev == 4 and new_task_state == 0:
-            # Recharge-resume. No explicit leg break needed in the track
-            # model: the pause→resume time gap naturally creates a pen-up
-            # boundary that derive_render_legs() splits on at render time.
-            self._fire_lifecycle(
-                EVENT_TYPE_MOWING_RESUMED,
-                {
-                    "at_unix": int(now_unix),
-                    "area_mowed_m2": new_state.area_mowed_m2,
-                },
-            )
-
-        # Telemetry append: if session is active and a position is available
-        # and something changed this tick, append the current position.
-        if (
-            self.live_map.is_active()
-            and new_state.position_x_m is not None
-            and new_state.position_y_m is not None
-            and (new_state != self.data)  # something changed
-        ):
-            import time as _time
-            before_pts = self.live_map.total_points()
-            self.live_map.append_point(
-                t=_time.time(),
-                x_m=new_state.position_x_m,
-                y_m=new_state.position_y_m,
-                area_m2=(new_state.area_mowed_m2 or 0.0),
-                heading_deg=new_state.position_heading_deg,
-            )
-            capture_session_type_signals(
-                self.live_map,
-                s2p56_status=None,
-                s2p50_op=None,
-                area_m2=new_state.area_mowed_m2,
-            )
-            # Mark dirty if a point was actually added (dedup may have skipped it).
-            if self.live_map.total_points() > before_pts:
-                self._live_map_dirty = True
-                # Rehaul: instead of compositing a fresh PNG on every push,
-                # publish the new position to the live stream the map camera
-                # exposes as attributes, then push listeners so the client
-                # card (which draws the trail + icon) picks it up. No throttle:
-                # publishing is a list append, not a PIL render.
-                self._publish_live_point(
-                    x_m=float(new_state.position_x_m),
-                    y_m=float(new_state.position_y_m),
-                    heading_deg=(
-                        float(new_state.position_heading_deg)
-                        if new_state.position_heading_deg is not None else None
-                    ),
-                    t=float(now_unix),
-                )
-                # Push listeners so the map camera entity re-exposes the new
-                # live-stream attributes. Defensive getattr/callable guard
-                # (mirrors the MAPL trigger) so __init__-bypassing test
-                # fixtures that don't set up the DataUpdateCoordinator base
-                # don't crash on this append-path side effect.
-                _update_listeners = getattr(self, "async_update_listeners", None)
-                if callable(_update_listeners):
-                    _update_listeners()
-
-        # Sync MowerState's session view from LiveMapState. session_distance_m
-        # is integrated from the track (sum of segment lengths, pen-up gaps
-        # excluded) — see LiveMapState.total_distance_m(). session_track_segments
-        # is a flat tuple of the captured (x_m, y_m) points (one segment) so the
-        # session-points sensor has a count to report; the per-leg split now
-        # lives in derive_render_legs() at render time.
-        # Cleared to None when no session is active so the sensor goes
-        # unavailable between mows rather than persisting the last value.
-        new_state = dataclasses.replace(
-            new_state,
-            session_started_unix=self.live_map.started_unix,
-            session_track_segments=(
-                tuple((p.x_m, p.y_m) for p in self.live_map.track),
-            ),
-            session_distance_m=(
-                self.live_map.total_distance_m() if self.live_map.is_active() else None
-            ),
-            target_area_m2=self._compute_target_area_m2(new_state),
-        )
-
-        # (B) ROBUSTNESS: non-mow session end via task_state edge 0/4→2/None.
-        # The edge is visible HERE before _prev_task_state is advanced at the
-        # line below.  If s2p2=75 was missed (e.g. arrived before session
-        # began, or MQTT drop) this catches the structural completion signal.
-        # GUARD: non-cloud-finalized only — mow/patrol sessions must NOT be
-        # finalized here; they wait for the OSS summary via the periodic retry.
-        if (
-            prev in (0, 4)
-            and new_task_state in (2, None)
-            and self.live_map.is_active()
-            and not self._provisional_session_is_cloud_finalized()
-        ):
-            LOGGER.debug(
-                "[F5] non-mow session end edge %r→%r — scheduling immediate finalize",
-                prev, new_task_state,
-            )
-            _hass = getattr(self, "hass", None)
-            if _hass is not None:
-                import time as _time
-                _hass.async_create_task(
-                    self._finalize_non_mow_immediate(
-                        int(_time.time()), "task_state_edge"
-                    )
-                )
-
-        self._prev_task_state = new_task_state
-
-        # Dock arrival/departure rising/falling edges. Read current dock
-        # state from the state machine (SM-14: mower_in_dock removed from
-        # MowerState; Location.AT_DOCK is the canonical source). Explicit
-        # `is True` / `is False` on _prev_in_dock so the boot-time None
-        # doesn't fire a spurious arrived/departed event.
-        # Defensive: test fixtures construct via __new__ without __init__,
-        # so state_machine may be missing; treat as "not at dock" then.
-        from ..mower.state_snapshot import Location as _Location
-        _sm = getattr(self, "state_machine", None)
-        _sm_at_dock: bool = (
-            _sm is not None and _sm.snapshot().location == _Location.AT_DOCK
-        )
-        if self._prev_in_dock is False and _sm_at_dock:
-            self._fire_lifecycle(
-                EVENT_TYPE_DOCK_ARRIVED, {"at_unix": int(now_unix)}
-            )
-            # Bug 2 fix: trigger a render on dock-arrival so the idle pre-start
-            # preview (stripes) appears promptly instead of waiting for the next
-            # 2-minute cloud refresh.  The live_map session is already over at
-            # this point (session-end fires before dock-arrival), so
-            # _render_base will compute an idle background mode and render the
-            # appropriate preview (stripes for ALL_AREAS/ZONE, edge/spot for
-            # EDGE/SPOT). Dock-arrival is also an activity transition, so the
-            # general trigger above may already cover it — the md5+mode dedup
-            # in _render_base makes a second call a cheap no-op.
-            _hass = getattr(self, "hass", None)
-            if _hass is not None:
-                self._schedule_render_base()
-        elif self._prev_in_dock is True and not _sm_at_dock:
-            self._fire_lifecycle(
-                EVENT_TYPE_DOCK_DEPARTED, {"at_unix": int(now_unix)}
-            )
-            self._rain_delay_started_at = None  # left dock → rain wait over
-        self._prev_in_dock = _sm_at_dock
-        self._maybe_fire_charging_events(
-            new_state.charging_status, now_unix, new_state.battery_level
-        )
-
-        # s2p57 self-shutdown lifecycle edge. First observation only primes
-        # _prev_shutdown_trigger so a value already 1 at boot doesn't fire.
-        _new_shutdown = new_state.robot_shutdown_trigger
-        if _new_shutdown is not None:
-            self._fire_self_shutdown_if_edge(
-                old=self._prev_shutdown_trigger,
-                new=_new_shutdown,
-                now_unix=now_unix,
-            )
-            self._prev_shutdown_trigger = _new_shutdown
-
-        # F13 — s2p2 notification synthesis. Fire dreame_a2_mower_alert on
-        # transitions to known notification codes. The first push on HA boot
-        # is intentionally suppressed (_prev_error_code starts as None so
-        # the FIRST observed value just primes the tracker without firing
-        # — we don't want to re-emit a stale alert for whatever code was
-        # active at restart).
-        #
-        # Critical: only update _prev_error_code when we observe a non-None
-        # value. s2p2 occasionally goes through transient None states
-        # (the property push doesn't always carry the slot). If we
-        # overwrite prev to None during a transient, the next real
-        # transition (e.g., None → 70) gets suppressed by the
-        # `old_code is not None` boot-guard. This was the cause of the
-        # alert event entity having ZERO entries despite 70 firing
-        # multiple times in the probe log. Same bug pattern as the
-        # mowing_paused fix in commit 87e2bbe.
-        new_error_code = new_state.error_code
-        old_error_code = self._prev_error_code
-        if (
-            new_error_code is not None
-            and new_error_code != old_error_code
-            and old_error_code is not None  # suppress first-push-after-boot
-        ):
-            # 2026-05-26: cloud-driven notification. The hardcoded
-            # (event_type, text) tuple is gone — we kick off an async
-            # resolver that fetches the authoritative text from
-            # /dreame-messaging/user/device-messages/v2 after a short
-            # delay (~10s, to let the cloud finish writing its push
-            # record) and fires the event ONLY if the cloud actually
-            # pushed for this transition. Unknown codes (not in
-            # S2P2_EVENT_TYPES) still fire — with slug "unknown_s2p2"
-            # — and a WARNING is logged so the maintainer can extend
-            # the slug table.
-            hass = getattr(self, "hass", None)
-            if hass is not None:
-                _resolver_task = hass.async_create_task(
-                    self._resolve_s2p2_notification(
-                        siid=2, piid=2, value=int(new_error_code),
-                        now_unix=now_unix,
-                    )
-                )
-                # T3-8: track so async_unload_entry can cancel any resolver
-                # still sleeping its ~10s delay at unload time; self-removes
-                # from the set on completion (success, error, or cancel).
-                tasks = getattr(self, "_s2p2_resolver_tasks", None)
-                if tasks is not None and hasattr(_resolver_task, "add_done_callback"):
-                    tasks.add(_resolver_task)
-                    _resolver_task.add_done_callback(tasks.discard)
-            # Local fire is the guaranteed floor; the cloud resolver scheduled above may
-            # also fire (source="cloud") ~10s later → two activity entries for one
-            # unknown-code transition is expected.
-            if S2P2_EVENT_TYPES.get(int(new_error_code)) is None:
-                self._fire_local_novel_s2p2(
-                    code=int(new_error_code), now_unix=now_unix
-                )
-            self._fire_rain_delay_started_if_edge(
-                old=old_error_code, new=new_error_code, now_unix=now_unix
-            )
-        if new_error_code is not None:
-            self._prev_error_code = new_error_code
-
-        # F6 review fix #1: record freshness AFTER all derivations so
-        # session-derived fields (session_active, session_started_unix,
-        # session_track_segments) are stamped with accurate timestamps.
-        self.freshness.record(self.data, new_state, now_unix=now_unix)
-
-        # F7.2.2: kick off LiDAR fetch when object_name flips to a new key.
-        prev_lidar = getattr(self.data, "latest_lidar_object_name", None)
-        if (
-            new_state.latest_lidar_object_name is not None
-            and new_state.latest_lidar_object_name != prev_lidar
-        ):
-            self.hass.async_create_task(
-                self._handle_lidar_object_name(
-                    new_state.latest_lidar_object_name, now_unix
-                )
-            )
-
-        # Pending-finalize dock-return signal.
-        # If _wait_for_dock_return is currently blocking, check whether
-        # this state update represents the mower physically docking.
-        # Signal fires ONLY when:
-        #   - charging_status == ChargingStatus.CHARGING (value 1, docked+charging)
-        # We deliberately do NOT fire on task_idle (task_state_code is None):
-        # that condition becomes true the instant the session ends, before the
-        # mower drives home — firing there would cut off dock-return capture.
-        # The wait therefore completes only on physical dock (charging) or
-        # timeout. The event is cleared to None by _wait_for_dock_return's
-        # finally block so this guard is harmless outside of an active wait.
-        done_event = getattr(self, "_pending_finalize_done", None)
-        if done_event is not None and not done_event.is_set():
-            is_charging = False
-            cs = new_state.charging_status
-            if cs is not None:
-                # ChargingStatus is IntEnum; .value extracts the int.
-                cs_val = cs.value if hasattr(cs, "value") else int(cs)
-                is_charging = cs_val == 1  # ChargingStatus.CHARGING
-            if is_charging:
-                self._pending_finalize_done_reason = "charging"
-                done_event.set()
-
-        return new_state
+        return _lifecycle_events.on_state_update(self, new_state, now_unix)
 
     # -----------------------------------------------------------------------
     # F5.6.1 — event_occured handler + periodic retry
@@ -769,47 +352,8 @@ class _MqttHandlersMixin:
     def _capture_telemetry_sample(
         self, key: tuple[int, int], value: Any, now_unix: int
     ) -> None:
-        """Append a raw telemetry value to the matching LiveMapState
-        sample buffer. Runs on the event loop (hop done by caller).
-
-        Only the BUFFER append fires while a session is active. The raw int
-        wire value is captured verbatim — interpretation (charging-status
-        enum, s2p2 notification map) happens at archive-consumer time.
-        """
-        # Patrol-start latch (UNGATED — runs before the is_active() guard).
-        # s2p2=51 (patrol started) is a POINT patrol's only type signal and it
-        # arrives AT session start, before begin_session exists; the guard below
-        # would otherwise drop it. Latch it so the session is typed patrol even
-        # though it never lands in error_samples.
-        if key == (2, 2):
-            try:
-                if int(value) == 51:
-                    self._pending_saw_patrol_start = True
-                    if self.live_map.is_active():
-                        self.live_map.saw_patrol_start = True
-            except (TypeError, ValueError):
-                pass
-        if not self.live_map.is_active():
-            return
-        try:
-            v_int = int(value)
-        except (TypeError, ValueError):
-            return
-        lm = self.live_map
-        if key == (3, 1):
-            buf = lm.battery_samples
-        elif key == (3, 2):
-            buf = lm.charging_status_samples
-        elif key == (2, 1):
-            lm.update_task_state(float(now_unix), v_int)
-            self._live_map_dirty = True
-            return
-        elif key == (2, 2):
-            buf = lm.error_samples
-        else:
-            return
-        if lm.append_telemetry_sample(buf, v_int, now_unix):
-            self._live_map_dirty = True
+        """Delegates to ``domain.session.lifecycle_events.capture_telemetry_sample`` (P3.7)."""
+        _lifecycle_events.capture_telemetry_sample(self, key, value, now_unix)
 
     def handle_property_push(self, siid: int, piid: int, value: Any) -> None:
         """Apply a property push and notify entities. Called from the

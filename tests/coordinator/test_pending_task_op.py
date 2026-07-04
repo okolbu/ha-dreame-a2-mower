@@ -113,7 +113,9 @@ def _coord_for_state_update(tmp_path):
     hass.async_create_task = lambda *a, **k: None
     c.hass = hass
     # build_settings_snapshot_v2 reads many attrs; stub the symbol the module uses.
-    import custom_components.dreame_a2_mower.coordinator._mqtt_handlers as mh
+    # The begin-session snapshot call lives in domain/session/lifecycle_events.py
+    # (P3.7 ingress split), so patch the symbol there.
+    import custom_components.dreame_a2_mower.domain.session.lifecycle_events as mh
     c.__class__._orig_bss = getattr(mh, "build_settings_snapshot_v2")
     mh.build_settings_snapshot_v2 = lambda *a, **k: None
     return c, mh

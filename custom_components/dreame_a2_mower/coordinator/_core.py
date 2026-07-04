@@ -587,6 +587,33 @@ class _CoreMixin:
         return self._render_base if hasattr(self, "_render_base") else None
 
     @property
+    def s2p2_resolver_tasks(self):
+        """Set of in-flight s2p2 notification resolver tasks, or None.
+
+        transitional accessor (P3.2) — moves to the notifications service in
+        P3.8. Read by domain/session/lifecycle_events.py after the P3.7 ingress
+        split; preserves the ``getattr(coord, "_s2p2_resolver_tasks", None)``
+        None-default it replaced.
+        """
+        return (
+            self._s2p2_resolver_tasks if hasattr(self, "_s2p2_resolver_tasks") else None
+        )
+
+    @property
+    def pending_finalize_done(self):
+        """The dock-return wait's completion Event while a finalize is pending,
+        or None when no wait is active.
+
+        transitional accessor (P3.2) — moves to the session/finalize service in
+        P3.8. Read by domain/session/lifecycle_events.py after the P3.7 ingress
+        split; preserves the ``getattr(coord, "_pending_finalize_done", None)``
+        None-default it replaced.
+        """
+        return (
+            self._pending_finalize_done if hasattr(self, "_pending_finalize_done") else None
+        )
+
+    @property
     def wifi_archive_index(self) -> list:
         """The in-memory WiFi heatmap archive index.
 
