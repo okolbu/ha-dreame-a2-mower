@@ -40,6 +40,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from ._experimental import filter_experimental
 from .const import DOMAIN
 from .coordinator import DreameA2MowerCoordinator
 
@@ -117,4 +118,4 @@ async def async_setup_entry(
             DreameA2MapMowingEfficiencySelect(coordinator, map_id=map_id),
         ])
     entities.append(DreameA2WifiArchiveSelect(coordinator))
-    async_add_entities(entities)
+    async_add_entities(filter_experimental(entry, entities))

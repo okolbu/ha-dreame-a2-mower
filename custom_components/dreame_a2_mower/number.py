@@ -31,6 +31,7 @@ from homeassistant.helpers.restore_state import RestoreEntity
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._availability import _FreshnessAvailableMixin
+from ._experimental import filter_experimental
 from ._devices import (
     map_device_info,
     map_unique_id,
@@ -65,6 +66,9 @@ class DreameA2NumberEntityDescription(NumberEntityDescription):
     build_value_fn: Callable[[MowerState, float], Any] | None = None
     build_from_cfg_fn: Callable[[Any, float], Any] | None = None
     field_updates_fn: Callable[[MowerState, float], dict[str, Any]] | None = None
+    #: experimental-gate tier (const.EXPERIMENTAL_*) or None for production
+    #: (P4 / R-52). Read by _experimental.filter_experimental at setup.
+    experimental: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +215,7 @@ async def async_setup_entry(
             DreameA2PerMapObstacleAvoidanceDistanceNumber(coordinator, map_id=map_id),
             DreameA2PerMapObstacleAvoidanceSensitivityNumber(coordinator, map_id=map_id),
         ])
-    async_add_entities(entities)
+    async_add_entities(filter_experimental(entry, entities))
 
 
 # ---------------------------------------------------------------------------

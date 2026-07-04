@@ -60,6 +60,9 @@ class DreameA2SettingsSelectDescription(SelectEntityDescription):
     build_value_fn: Callable[[MowerState, str], Any] | None = None
     field_updates_fn: Callable[[MowerState, str], dict[str, Any]] | None = None
     build_from_cfg_fn: Callable[[Any, str], Any] | None = None
+    #: experimental-gate tier (const.EXPERIMENTAL_*) or None for production
+    #: (P4 / R-52). Read by _experimental.filter_experimental at setup.
+    experimental: str | None = None
 
 
 # ---------------------------------------------------------------------------

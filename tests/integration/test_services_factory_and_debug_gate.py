@@ -18,6 +18,7 @@ from custom_components.dreame_a2_mower import services
 from custom_components.dreame_a2_mower.const import (
 
     CONF_DEBUG_SERVICES,
+    CONF_EXPERIMENTAL_FEATURES,
     DOMAIN,
 )
 
@@ -107,9 +108,9 @@ async def test_debug_services_not_registered_by_default():
 
 
 async def test_debug_services_not_registered_when_option_off():
-    """Explicit debug_services=False entry → still not registered."""
+    """Explicit experimental_features=False entry → still not registered."""
     hass = _hass_stub()
-    entry = SimpleNamespace(options={CONF_DEBUG_SERVICES: False})
+    entry = SimpleNamespace(options={CONF_EXPERIMENTAL_FEATURES: False})
     await services.async_register_services(hass, entry)
     names = _registered_service_names(hass)
     assert services.SERVICE_DUMP_MAP_DIAGNOSTICS not in names
@@ -117,7 +118,19 @@ async def test_debug_services_not_registered_when_option_off():
 
 
 async def test_debug_services_registered_when_option_on():
-    """debug_services=True entry → both debug services registered."""
+    """experimental_features=True entry → both debug services registered
+    (P4/R-52: the debug services are now gated on the unified option)."""
+    hass = _hass_stub()
+    entry = SimpleNamespace(options={CONF_EXPERIMENTAL_FEATURES: True})
+    await services.async_register_services(hass, entry)
+    names = _registered_service_names(hass)
+    assert services.SERVICE_DUMP_MAP_DIAGNOSTICS in names
+    assert services.SERVICE_DISCOVER_CLOUD_API in names
+
+
+async def test_debug_services_honour_legacy_debug_services_option():
+    """Backward-compat: a pre-P4 entry that only carries debug_services=True
+    still registers the debug services (graceful migration, no re-configure)."""
     hass = _hass_stub()
     entry = SimpleNamespace(options={CONF_DEBUG_SERVICES: True})
     await services.async_register_services(hass, entry)
@@ -131,7 +144,7 @@ async def test_reconcile_adds_and_removes_debug_services():
     # ON: not yet registered → registers both.
     hass = _hass_stub()
     hass.services.has_service.return_value = False
-    entry_on = SimpleNamespace(options={CONF_DEBUG_SERVICES: True})
+    entry_on = SimpleNamespace(options={CONF_EXPERIMENTAL_FEATURES: True})
     services.async_reconcile_debug_services(hass, entry_on)
     names = _registered_service_names(hass)
     assert services.SERVICE_DUMP_MAP_DIAGNOSTICS in names
@@ -139,7 +152,7 @@ async def test_reconcile_adds_and_removes_debug_services():
 
     # OFF: removes both.
     hass2 = _hass_stub()
-    entry_off = SimpleNamespace(options={CONF_DEBUG_SERVICES: False})
+    entry_off = SimpleNamespace(options={CONF_EXPERIMENTAL_FEATURES: False})
     services.async_reconcile_debug_services(hass2, entry_off)
     removed = {ca.args[1] for ca in hass2.services.async_remove.call_args_list}
     assert services.SERVICE_DUMP_MAP_DIAGNOSTICS in removed

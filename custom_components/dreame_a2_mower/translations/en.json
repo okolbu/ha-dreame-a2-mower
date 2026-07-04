@@ -26,7 +26,7 @@
           "session_archive_keep": "Session archive entries to keep",
           "wifi_archive_keep": "WiFi heatmaps to keep per map",
           "station_bearing_deg": "Dock compass bearing (degrees)",
-          "debug_services": "Enable debug services"
+          "experimental_features": "Enable experimental features"
         },
         "data_description": {
           "lidar_archive_keep": "Most-recent LiDAR scans retained per map before older ones are pruned.",
@@ -34,7 +34,7 @@
           "session_archive_keep": "Most-recent finalized mowing sessions retained on disk.",
           "wifi_archive_keep": "Most-recent WiFi heatmaps retained per map before older ones are pruned.",
           "station_bearing_deg": "Compass bearing (0-359, clockwise from north) of the dock's local X axis. Used to compute the position_north_m / position_east_m sensors. Leave at 0 if you don't use those sensors. CFG.DOCK.yaw is unreliable on this firmware, so set this manually.",
-          "debug_services": "Registers the developer-only dump_map_diagnostics and discover_cloud_api services. Off by default; reload the integration after changing."
+          "experimental_features": "Opt in to experimental entities and services (unverified frame/units, wire-verified-but-unexercised, or fail-closed-pending-backend surfaces), plus the developer-only dump_map_diagnostics and discover_cloud_api services. Off by default; experimental entities land disabled-by-default. Reload the integration after changing."
         }
       }
     }

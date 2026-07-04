@@ -133,6 +133,7 @@ MODULE_LAYER: dict[str, int] = {
     "entities": 5,
     "services": 5,
     "_availability": 5,
+    "_experimental": 5,  # experimental-gate helper (P4/R-52); imports only const
     "_settings_writes": 5,
     "sensor": 5,
     "switch": 5,

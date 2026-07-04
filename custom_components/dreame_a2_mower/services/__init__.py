@@ -21,8 +21,9 @@ from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers import config_validation as cv
 
 from . import debug
+from .._experimental import experimental_features_enabled
 from ..cloud_client import WriteResult
-from ..const import CONF_DEBUG_SERVICES, DEFAULT_DEBUG_SERVICES, DOMAIN, LOGGER
+from ..const import DOMAIN, LOGGER
 from ..coordinator import DreameA2MowerCoordinator
 from ..coordinator._write_errors import raise_for_write_result
 from ..state import ActionMode
@@ -254,6 +255,42 @@ def service_handler(
         coordinator = _coordinator_from_call(call.hass, call)
         if coordinator is None:
             return
+        await body(coordinator, call)
+
+    return handler
+
+
+def experimental_service(
+    body: Callable[[DreameA2MowerCoordinator, ServiceCall], Awaitable[None]],
+) -> Callable[[ServiceCall], Awaitable[None]]:
+    """Like :func:`service_handler` but gated on the experimental-features option
+    (P4 / R-52).
+
+    Resolves the (single) coordinator, then RAISES ``ServiceValidationError``
+    with a clear "enable experimental features" message when the gate is off —
+    before the body runs. The gate is read live from the coordinator's config
+    entry at call time, so toggling the option takes effect on the next call (no
+    reload needed for the raise-path).
+
+    Use for FUNCTIONAL experimental services that must stay VISIBLE in the
+    registry but are opt-in (e.g. create_patrol_point, populated in P4.4).
+    Diagnostic services that should be HIDDEN from the registry when off use the
+    not-registered-when-off path instead (see ``async_reconcile_debug_services``).
+    Like ``service_handler``, a missing coordinator short-circuits to a no-op.
+    """
+
+    @functools.wraps(body)
+    async def handler(call: ServiceCall) -> None:
+        coordinator = _coordinator_from_call(call.hass, call)
+        if coordinator is None:
+            return
+        if not experimental_features_enabled(getattr(coordinator, "entry", None)):
+            raise ServiceValidationError(
+                "This service is experimental and disabled by default. Enable "
+                "'Experimental features' in the Dreame A2 Mower integration "
+                "options (Settings → Devices & Services → Dreame A2 Mower → "
+                "Configure) to use it."
+            )
         await body(coordinator, call)
 
     return handler
@@ -755,23 +792,25 @@ async def _handle_merge_zones(
 
 
 # The two developer-only diagnostic services. Gated OFF by default behind the
-# CONF_DEBUG_SERVICES config-entry option (see _debug_services_enabled): when
-# the gate is off they are NEVER registered, so they don't appear in the HA
-# service registry. They still ship in services.yaml so their descriptions are
-# available when the option is enabled.
+# UNIFIED ``experimental_features`` config-entry option (P4 / R-52; the former
+# ``debug_services`` option is absorbed — see _debug_services_enabled): when the
+# gate is off they are NEVER registered, so they don't appear in the HA service
+# registry (hiding diagnostic services is intentional UX — functional gated
+# services use experimental_service's raise-when-off path instead). They still
+# ship in services.yaml so their descriptions are available when enabled.
 _DEBUG_SERVICES = (SERVICE_DUMP_MAP_DIAGNOSTICS, SERVICE_DISCOVER_CLOUD_API)
 
 
 def _debug_services_enabled(entry: Any | None) -> bool:
-    """Whether the debug-only services should be registered.
+    """Whether the debug-only diagnostic services should be registered.
 
-    Reads the ``debug_services`` config-entry option (default False). When no
-    entry is supplied (e.g. legacy callers / tests that register without an
-    entry), debug services stay OFF — the safe default.
+    P4 / R-52: the debug services are now gated on the UNIFIED
+    ``experimental_features`` option. Delegates to
+    ``experimental_features_enabled``, which reads ``experimental_features``
+    (default False) and also honours a legacy ``debug_services=True`` option for
+    backward-compat. When no entry is supplied the gate stays OFF (safe default).
     """
-    if entry is None:
-        return DEFAULT_DEBUG_SERVICES
-    return bool(entry.options.get(CONF_DEBUG_SERVICES, DEFAULT_DEBUG_SERVICES))
+    return experimental_features_enabled(entry)
 
 
 async def async_register_services(hass: HomeAssistant, entry: Any | None = None) -> None:

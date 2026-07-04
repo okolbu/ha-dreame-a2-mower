@@ -18,6 +18,12 @@
 #       wire: "<surface-key>[<index>]"        # cite the inventory.yaml entry id
 #       state_path: "<runtime read path>"      # how the entity gets the value
 #     write_path: read-only | "<routed-action / cfg key / etc.>"
+#     experimental: speculative | wire_unexercised | fail_closed   # optional;
+#       P4/R-52 experimental-gate tier. Omit for a production entity. When set,
+#       the entity is NOT created unless the `experimental_features` option is
+#       on, and lands disabled-by-default when it is. The tier documents WHY it
+#       is gated + what evidence would promote it (record that in verifications).
+#       No rows are populated yet — P4.4 tiers the 13 gated entities.
 #     status:
 #       seen_working: bool                     # tested end-to-end on live HA
 #       last_verified: "YYYY-MM-DD"

@@ -26,6 +26,7 @@ from ._devices import (
     mower_device_info,
     mower_unique_id,
 )
+from ._experimental import filter_experimental
 from .const import DOMAIN, LOGGER
 from .control_honesty import _ControlHonestyMixin, resolve_control_mode
 from .coordinator import DreameA2MowerCoordinator
@@ -65,7 +66,7 @@ async def async_setup_entry(
     maps_by_id = coordinator.cloud_state.maps_by_id if coordinator.cloud_state else {}
     for map_id in sorted(maps_by_id.keys()):
         entities.append(DreameA2HeadToPointButton(coordinator, map_id=map_id))
-    async_add_entities(entities)
+    async_add_entities(filter_experimental(entry, entities))
 
 
 class _DreameA2ActionButton(

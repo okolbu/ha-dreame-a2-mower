@@ -20,6 +20,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._devices import mower_device_info, mower_unique_id
+from ._experimental import filter_experimental
 from .const import DOMAIN, LOGGER
 from .coordinator import DreameA2MowerCoordinator
 
@@ -31,7 +32,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up the firmware update entity."""
     coordinator: DreameA2MowerCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([DreameA2FirmwareUpdateEntity(coordinator)])
+    async_add_entities(
+        filter_experimental(entry, [DreameA2FirmwareUpdateEntity(coordinator)])
+    )
 
 
 class DreameA2FirmwareUpdateEntity(

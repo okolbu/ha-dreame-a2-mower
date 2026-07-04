@@ -46,6 +46,9 @@ class DreameA2SensorEntityDescription(SensorEntityDescription):
     #: per-row availability source ("mqtt" | "cloud" | None) — read by the
     #: DreameA2Sensor bridge property to gate freshness per row.
     availability_source: str | None = None
+    #: experimental-gate tier (const.EXPERIMENTAL_*) or None for production
+    #: (P4 / R-52). Read by _experimental.filter_experimental at setup.
+    experimental: str | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -63,6 +66,9 @@ class DreameA2DiagnosticSensorEntityDescription(SensorEntityDescription):
     #: per-row availability source ("mqtt" | "cloud" | None) — read by the
     #: DreameA2DiagnosticSensor bridge property to gate freshness per row.
     availability_source: str | None = None
+    #: experimental-gate tier (const.EXPERIMENTAL_*) or None for production
+    #: (P4 / R-52). Read by _experimental.filter_experimental at setup.
+    experimental: str | None = None
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from ._experimental import filter_experimental
 from .const import DOMAIN
 from .coordinator import DreameA2MowerCoordinator
 from .entities.sensor.device import (
@@ -138,7 +139,7 @@ async def async_setup_entry(
             DreameA2MapSessionTimeTotalSensor(coordinator, map_id=map_id),
             DreameA2MapSessionCountSensor(coordinator, map_id=map_id),
         ])
-    async_add_entities(entities)
+    async_add_entities(filter_experimental(entry, entities))
 
 
 # ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .._experimental import filter_experimental
 from ..const import DOMAIN
 from ..coordinator import DreameA2MowerCoordinator
 
@@ -105,4 +106,4 @@ async def async_setup_entry(
     # Video thumbnail camera — latest video clip's thumbnail JPEG.
     entities.append(DreameA2LatestVideoThumbCamera(coordinator))
 
-    async_add_entities(entities)
+    async_add_entities(filter_experimental(entry, entities))

@@ -150,6 +150,51 @@ def test_options_flow_uses_existing_options_as_defaults():
     assert out[CONF_LIDAR_ARCHIVE_MAX_MB] == 333
 
 
+def test_options_flow_includes_experimental_features_default_off():
+    """P4/R-52: the options form exposes experimental_features, default off."""
+    from custom_components.dreame_a2_mower.const import CONF_EXPERIMENTAL_FEATURES
+
+    handler, entry, patcher = _make_handler({})
+    try:
+        schema = handler._build_schema()
+    finally:
+        patcher.stop()
+    keys = {str(k) for k in schema.schema.keys()}
+    assert CONF_EXPERIMENTAL_FEATURES in keys
+    out = schema({})
+    assert out[CONF_EXPERIMENTAL_FEATURES] is False
+
+
+def test_options_flow_experimental_features_roundtrips():
+    """A saved experimental_features=True pre-populates on re-open."""
+    from custom_components.dreame_a2_mower.const import CONF_EXPERIMENTAL_FEATURES
+
+    handler, entry, patcher = _make_handler({CONF_EXPERIMENTAL_FEATURES: True})
+    try:
+        schema = handler._build_schema()
+    finally:
+        patcher.stop()
+    out = schema({})
+    assert out[CONF_EXPERIMENTAL_FEATURES] is True
+
+
+def test_options_flow_migrates_legacy_debug_services_to_experimental():
+    """A pre-P4 entry carrying only debug_services=True pre-populates the new
+    experimental_features toggle as on (graceful migration, no crash)."""
+    from custom_components.dreame_a2_mower.const import (
+        CONF_DEBUG_SERVICES,
+        CONF_EXPERIMENTAL_FEATURES,
+    )
+
+    handler, entry, patcher = _make_handler({CONF_DEBUG_SERVICES: True})
+    try:
+        schema = handler._build_schema()
+    finally:
+        patcher.stop()
+    out = schema({})
+    assert out[CONF_EXPERIMENTAL_FEATURES] is True
+
+
 # ---- helpers ----
 
 def pytest_raises_invalid(schema, payload):

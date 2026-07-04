@@ -99,6 +99,32 @@ CONF_MESSAGES_KEEP: Final = "messages_keep"
 CONF_DEBUG_SERVICES: Final = "debug_services"
 DEFAULT_DEBUG_SERVICES: Final = False
 
+# Experimental-features opt-in gate (P4 / R-52). ONE config-entry option that
+# unifies the former debug_services toggle. When False (the default),
+# experimental ENTITIES are not created and experimental SERVICES raise a clear
+# ServiceValidationError. The former ``debug_services`` option is absorbed:
+# ``_experimental.experimental_features_enabled`` still honours a legacy
+# debug_services=True (graceful migration; see config_flow default mapping).
+CONF_EXPERIMENTAL_FEATURES: Final = "experimental_features"
+DEFAULT_EXPERIMENTAL_FEATURES: Final = False
+
+# Experimental carveout tiers (spec §6 "Experimental gate"). A descriptor's
+# ``experimental`` field (or a gated service's marker) carries exactly one of
+# these; None = production surface. The tier only DOCUMENTS why a surface is
+# gated + what evidence would promote it — the gate behaviour is identical
+# across tiers (skip-when-off / disabled-when-on for entities; raise-when-off
+# for services). No production surface is tiered yet (P4.4 populates them).
+EXPERIMENTAL_T1_SPECULATIVE: Final = "speculative"  # frame/units/behaviour unverified (e.g. MPOS)
+EXPERIMENTAL_T2_WIRE_UNEXERCISED: Final = "wire_unexercised"  # wire byte-verified, client-send unexercised (e.g. OTA install)
+EXPERIMENTAL_T3_FAIL_CLOSED: Final = "fail_closed"  # fail-closed pending backend return (e.g. obstacle-photo signer)
+EXPERIMENTAL_TIERS: Final = frozenset(
+    {
+        EXPERIMENTAL_T1_SPECULATIVE,
+        EXPERIMENTAL_T2_WIRE_UNEXERCISED,
+        EXPERIMENTAL_T3_FAIL_CLOSED,
+    }
+)
+
 # Bearing (degrees clockwise from north) of the dock's local X axis.
 # Used to project dock-frame (x_m, y_m) telemetry into global compass-frame
 # (north_m, east_m) for position_north_m / position_east_m sensors.

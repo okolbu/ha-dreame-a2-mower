@@ -19,6 +19,7 @@ from homeassistant.data_entry_flow import FlowResult
 from .const import (
     CONF_COUNTRY,
     CONF_DEBUG_SERVICES,
+    CONF_EXPERIMENTAL_FEATURES,
     CONF_LIDAR_ARCHIVE_KEEP,
     CONF_LIDAR_ARCHIVE_MAX_MB,
     CONF_MESSAGES_KEEP,
@@ -28,7 +29,7 @@ from .const import (
     CONF_USERNAME,
     CONF_WIFI_ARCHIVE_KEEP,
     DEFAULT_COUNTRY,
-    DEFAULT_DEBUG_SERVICES,
+    DEFAULT_EXPERIMENTAL_FEATURES,
     DEFAULT_LIDAR_ARCHIVE_KEEP,
     DEFAULT_LIDAR_ARCHIVE_MAX_MB,
     DEFAULT_MESSAGES_KEEP,
@@ -154,13 +155,20 @@ class DreameA2MowerOptionsFlow(config_entries.OptionsFlow):
                     CONF_STATION_BEARING_DEG,
                     default=opts.get(CONF_STATION_BEARING_DEG, 0),
                 ): vol.All(vol.Coerce(int), vol.Range(min=0, max=359)),
-                # P2 2.5: expose the two developer-only diagnostic services
-                # (dump_map_diagnostics + discover_cloud_api). OFF by default —
-                # when off they are not registered in the service registry.
-                # Toggling this + reloading the entry adds/removes them.
+                # P4 / R-52: the UNIFIED experimental-features opt-in gate.
+                # OFF by default. When on, experimental entities are created
+                # (disabled-by-default) and experimental services stop raising;
+                # it also exposes the two developer-only diagnostic services
+                # (dump_map_diagnostics + discover_cloud_api), which are not
+                # registered in the service registry when off. Absorbs the former
+                # ``debug_services`` toggle — a pre-P4 entry that still carries
+                # debug_services=True pre-populates this toggle as on.
                 vol.Optional(
-                    CONF_DEBUG_SERVICES,
-                    default=opts.get(CONF_DEBUG_SERVICES, DEFAULT_DEBUG_SERVICES),
+                    CONF_EXPERIMENTAL_FEATURES,
+                    default=opts.get(
+                        CONF_EXPERIMENTAL_FEATURES,
+                        opts.get(CONF_DEBUG_SERVICES, DEFAULT_EXPERIMENTAL_FEATURES),
+                    ),
                 ): bool,
             }
         )

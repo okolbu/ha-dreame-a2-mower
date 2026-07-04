@@ -15,6 +15,7 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._devices import _MowerScopedEntity
+from ._experimental import filter_experimental
 from .const import DOMAIN
 from .coordinator import DreameA2MowerCoordinator
 
@@ -25,7 +26,9 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([DreameA2SessionCalendar(coordinator)])
+    async_add_entities(
+        filter_experimental(entry, [DreameA2SessionCalendar(coordinator)])
+    )
 
 
 class DreameA2SessionCalendar(

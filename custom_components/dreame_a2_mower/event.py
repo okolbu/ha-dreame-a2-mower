@@ -21,6 +21,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from ._devices import mower_device_info, mower_unique_id
+from ._experimental import filter_experimental
 from .const import (
     DOMAIN,
     LIFECYCLE_EVENT_TYPES,
@@ -40,7 +41,7 @@ async def async_setup_entry(
     lifecycle = DreameA2LifecycleEventEntity(coordinator)
     notification = DreameA2NotificationEventEntity(coordinator)
     coordinator.register_event_entities(lifecycle=lifecycle, notification=notification)
-    async_add_entities([lifecycle, notification])
+    async_add_entities(filter_experimental(entry, [lifecycle, notification]))
 
 
 class _DreameA2EventEntityBase(EventEntity):

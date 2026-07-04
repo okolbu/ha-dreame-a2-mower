@@ -18,6 +18,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._availability import _FreshnessAvailableMixin
 from ._devices import mower_device_info, mower_unique_id
+from ._experimental import filter_experimental
 from .const import DOMAIN
 from .coordinator import DreameA2MowerCoordinator
 from .state.snapshot import (
@@ -47,6 +48,9 @@ class DreameA2BinarySensorEntityDescription(BinarySensorEntityDescription):
     extra_state_attributes_fn: Callable[
         [DreameA2MowerCoordinator], dict[str, Any]
     ] | None = None
+    #: experimental-gate tier (const.EXPERIMENTAL_*) or None for production
+    #: (P4 / R-52). Read by _experimental.filter_experimental at setup.
+    experimental: str | None = None
 
 
 def _cloud_connected_value(coord) -> bool | None:
@@ -380,7 +384,10 @@ async def async_setup_entry(
 ) -> None:
     coordinator: DreameA2MowerCoordinator = hass.data[DOMAIN][entry.entry_id]
     async_add_entities(
-        [DreameA2BinarySensor(coordinator, desc) for desc in BINARY_SENSORS]
+        filter_experimental(
+            entry,
+            [DreameA2BinarySensor(coordinator, desc) for desc in BINARY_SENSORS],
+        )
     )
 
 

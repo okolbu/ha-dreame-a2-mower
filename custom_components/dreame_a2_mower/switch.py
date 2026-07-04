@@ -44,6 +44,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from ._experimental import filter_experimental
 from .const import DOMAIN
 from .coordinator import DreameA2MowerCoordinator
 from .entities.switch.base import DreameA2Switch
@@ -107,4 +108,4 @@ async def async_setup_entry(
             DreameA2AiRecognitionObjectsSwitch(coordinator, map_id=map_id),
             DreameA2MapEdgemasterSwitch(coordinator, map_id=map_id),
         ])
-    async_add_entities(entities)
+    async_add_entities(filter_experimental(entry, entities))

@@ -10,6 +10,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._availability import _FreshnessAvailableMixin
 from ._devices import mower_device_info, mower_unique_id
+from ._experimental import filter_experimental
 from .const import DOMAIN
 from .coordinator import DreameA2MowerCoordinator
 
@@ -20,7 +21,9 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     coordinator: DreameA2MowerCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([DreameA2MowerGpsTracker(coordinator)])
+    async_add_entities(
+        filter_experimental(entry, [DreameA2MowerGpsTracker(coordinator)])
+    )
 
 
 class DreameA2MowerGpsTracker(

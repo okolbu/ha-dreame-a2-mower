@@ -19,6 +19,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from ._availability import _FreshnessAvailableMixin
 from ._devices import _MowerScopedEntity
+from ._experimental import filter_experimental
 from .const import DOMAIN, LOGGER
 from .control_honesty import ControlMode, _ControlHonestyMixin
 from .coordinator import DreameA2MowerCoordinator
@@ -82,7 +83,9 @@ async def async_setup_entry(
 ) -> None:
     """Set up the lawn_mower platform from a config entry."""
     coordinator: DreameA2MowerCoordinator = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities([DreameA2LawnMower(coordinator)])
+    async_add_entities(
+        filter_experimental(entry, [DreameA2LawnMower(coordinator)])
+    )
 
 
 class DreameA2LawnMower(
