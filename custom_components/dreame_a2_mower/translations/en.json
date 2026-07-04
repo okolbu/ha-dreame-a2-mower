@@ -45,136 +45,7 @@
         "name": "Firmware"
       }
     },
-    "button": {
-      "refresh_wifi_heatmaps": {
-        "name": "Refresh WiFi heatmaps"
-      }
-    },
-    "event": {
-      "lifecycle": {
-        "name": "Lifecycle",
-        "state_attributes": {
-          "event_type": {
-            "state": {
-              "mowing_started": "Mowing started",
-              "mowing_paused": "Mowing paused",
-              "mowing_resumed": "Mowing resumed",
-              "mowing_ended": "Mowing ended",
-              "dock_arrived": "Arrived at dock",
-              "dock_departed": "Left dock",
-              "charging_started": "Started charging",
-              "charging_complete": "Finished charging",
-              "rain_delay_started": "Rain delay started",
-              "fault_detected": "Fault detected",
-              "fault_cleared": "Fault cleared",
-              "self_shutdown": "Self-shutdown (low battery)"
-            }
-          }
-        }
-      },
-      "notification": {
-        "name": "Notification",
-        "state_attributes": {
-          "event_type": {
-            "state": {
-              "autobuild_stop": "Auto boundary detection stopped",
-              "away_from_map": "Away from the map (theft risk)",
-              "back_charge_failed": "Failed to return to station",
-              "bad_weather_protecting": "Rain protection activated",
-              "battery_low": "Low battery — shutting down soon",
-              "battery_low_returning": "Low battery — returning to station",
-              "battery_low_schedule_suspend": "Low battery — scheduled task cancelled",
-              "battery_overheat": "Battery overheating — returning",
-              "battery_temp_low": "Charging paused — battery too cold",
-              "blade_loss": "Blades worn — replace soon",
-              "cam_abnormal": "Front camera error",
-              "cam_cover": "Front camera blocked",
-              "charging": "Charging error",
-              "continue_from_breakpoint": "Continuing unfinished task",
-              "crash_plate": "Bumper error",
-              "cruise_start": "Patrol started",
-              "cruise_task_finish": "Patrol complete",
-              "cutter": "Blade disc can't rotate",
-              "dark_schedule_suspend": "Too dark — scheduled task cancelled",
-              "destination_not_reachable": "Some zones unreachable — task ended",
-              "docking_failed": "Failed to dock",
-              "emergency_stop": "Emergency stop activated",
-              "emergency_stopped_schedule_suspend": "PIN check failed — scheduled task cancelled",
-              "exception_on_way_to_cleanpoint": "Error en route to maintenance point",
-              "fault_mode_schedule_suspend": "Robot error — scheduled task cancelled",
-              "frozen_schedule_suspend": "Frost protection — scheduled task cancelled",
-              "go_to_cleanpoint_failed": "Couldn't reach maintenance point",
-              "go_to_cleanpoint_success": "Arrived at maintenance point",
-              "hanging": "Lifted off the ground",
-              "human_detected": "Person detected nearby",
-              "idle_timeout_returning": "Idle too long — returning",
-              "in_forbidden_area": "In a no-go zone",
-              "left_wheel": "Left drive wheel error",
-              "lidar_abnormal": "LiDAR malfunction",
-              "lidar_covered": "LiDAR blocked",
-              "lidar_dirty": "LiDAR dirty — clean soon",
-              "lidar_overheat": "LiDAR overheating",
-              "lidar_overheat_with_map": "LiDAR overheating — returning",
-              "lidar_overheat_without_map": "LiDAR overheating — check",
-              "lift_motor": "Blade disc lift error",
-              "locating_abnormal": "Mapping failed — positioning error",
-              "locating_failed_with_map": "Positioning failed",
-              "maintain_loss": "Maintenance due soon",
-              "narrow_path_to_station": "Not enough turning space at station",
-              "not_disturb_returning": "Do Not Disturb — returning",
-              "not_disturb_schedule_suspend": "Do Not Disturb — scheduled task cancelled",
-              "out_of_map": "Outside the map",
-              "path_impassable": "Path obstructed",
-              "pause_timeout_returning": "Paused too long — returning",
-              "rain_schedule_interupted": "Rain protection — scheduled task interrupted",
-              "rain_schedule_suspend": "Rain protection — scheduled task cancelled",
-              "remote_controling_schedule_suspend": "Under remote control — scheduled task cancelled",
-              "right_wheel": "Right drive wheel error",
-              "schedule_start": "Scheduled mow started",
-              "schedule_timeout": "Scheduled task complete (some areas missed)",
-              "sensor": "Sensor error",
-              "sided_motor": "Blade disc sideways-move error",
-              "station_loss": "Cleaning brush worn — replace soon",
-              "station_not_connected_to_working_area": "Station not connected to work area",
-              "task_cancelled": "Task cancelled",
-              "task_finish": "Mowing complete",
-              "task_start": "Mowing started",
-              "task_start_failed": "Failed to start task",
-              "tilted": "Tilted — place back and enter PIN",
-              "top_cover_open": "Top cover open",
-              "top_cover_open_schedule_suspend": "Top cover open — scheduled task cancelled",
-              "trapped": "Stuck — needs assistance",
-              "working_schedule_suspend": "Already working — scheduled task cancelled",
-              "unknown_s2p2": "Notification (novel code)"
-            }
-          }
-        }
-      }
-    },
-    "camera": {
-      "lidar_top_down": {
-        "name": "LiDAR (top-down)"
-      },
-      "lidar_top_down_full": {
-        "name": "LiDAR (full resolution)"
-      },
-      "lidar_selected": {
-        "name": "LiDAR selected scan"
-      },
-      "wifi_heatmap_selected": {
-        "name": "WiFi heatmap (selected)"
-      },
-      "wifi_heatmap_per_map": {
-        "name": "WiFi heatmap"
-      }
-    },
     "select": {
-      "lidar_archive": {
-        "name": "LiDAR archive"
-      },
-      "wifi_archive": {
-        "name": "WiFi archive"
-      },
       "settings_turning_method": {
         "name": "Turning Method"
       }
@@ -292,6 +163,27 @@
       }
     },
     "sensor": {
+      "task_state_code": {
+        "name": "Task state (raw)"
+      },
+      "zone_progress": {
+        "name": "Zone progress"
+      },
+      "weather_forecast_reference": {
+        "name": "Weather forecast reference"
+      },
+      "timezone": {
+        "name": "Timezone"
+      },
+      "cfg_version": {
+        "name": "CFG version"
+      },
+      "ota_state": {
+        "name": "OTA state"
+      },
+      "ota_progress": {
+        "name": "OTA progress"
+      },
       "novel_observations": {
         "name": "Novel observations"
       },
@@ -304,23 +196,8 @@
       "firmware_version_dev": {
         "name": "Firmware version (DEV)"
       },
-      "weather_forecast_reference": {
-        "name": "Weather forecast reference"
-      },
-      "timezone": {
-        "name": "Timezone"
-      },
-      "cfg_version": {
-        "name": "CFG version"
-      },
       "ota_capable_raw": {
         "name": "OTA flag (raw)"
-      },
-      "ota_state": {
-        "name": "OTA state"
-      },
-      "ota_progress": {
-        "name": "OTA progress"
       },
       "cloud_device_id": {
         "name": "Cloud device ID"
@@ -330,12 +207,6 @@
       },
       "lidar_archive_count": {
         "name": "LiDAR archive count"
-      },
-      "task_state_code": {
-        "name": "Task state (raw)"
-      },
-      "zone_progress": {
-        "name": "Zone progress"
       },
       "charging_status": {
         "state": {
@@ -379,6 +250,107 @@
         "state": {
           "online": "Online",
           "stale": "Stale"
+        }
+      }
+    },
+    "event": {
+      "lifecycle": {
+        "name": "Lifecycle",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "mowing_started": "Mowing started",
+              "mowing_paused": "Mowing paused",
+              "mowing_resumed": "Mowing resumed",
+              "mowing_ended": "Mowing ended",
+              "dock_arrived": "Arrived at dock",
+              "dock_departed": "Left dock",
+              "charging_started": "Started charging",
+              "charging_complete": "Finished charging",
+              "rain_delay_started": "Rain delay started",
+              "fault_detected": "Fault detected",
+              "fault_cleared": "Fault cleared",
+              "self_shutdown": "Self-shutdown (low battery)"
+            }
+          }
+        }
+      },
+      "notification": {
+        "name": "Notification",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "autobuild_stop": "Auto boundary detection stopped",
+              "away_from_map": "Away from the map (theft risk)",
+              "back_charge_failed": "Failed to return to station",
+              "bad_weather_protecting": "Rain protection activated",
+              "battery_low": "Low battery — shutting down soon",
+              "battery_low_returning": "Low battery — returning to station",
+              "battery_low_schedule_suspend": "Low battery — scheduled task cancelled",
+              "battery_overheat": "Battery overheating — returning",
+              "battery_temp_low": "Charging paused — battery too cold",
+              "blade_loss": "Blades worn — replace soon",
+              "cam_abnormal": "Front camera error",
+              "cam_cover": "Front camera blocked",
+              "charging": "Charging error",
+              "continue_from_breakpoint": "Continuing unfinished task",
+              "crash_plate": "Bumper error",
+              "cruise_start": "Patrol started",
+              "cruise_task_finish": "Patrol complete",
+              "cutter": "Blade disc can't rotate",
+              "dark_schedule_suspend": "Too dark — scheduled task cancelled",
+              "destination_not_reachable": "Some zones unreachable — task ended",
+              "docking_failed": "Failed to dock",
+              "emergency_stop": "Emergency stop activated",
+              "emergency_stopped_schedule_suspend": "PIN check failed — scheduled task cancelled",
+              "exception_on_way_to_cleanpoint": "Error en route to maintenance point",
+              "fault_mode_schedule_suspend": "Robot error — scheduled task cancelled",
+              "frozen_schedule_suspend": "Frost protection — scheduled task cancelled",
+              "go_to_cleanpoint_failed": "Couldn't reach maintenance point",
+              "go_to_cleanpoint_success": "Arrived at maintenance point",
+              "hanging": "Lifted off the ground",
+              "human_detected": "Person detected nearby",
+              "idle_timeout_returning": "Idle too long — returning",
+              "in_forbidden_area": "In a no-go zone",
+              "left_wheel": "Left drive wheel error",
+              "lidar_abnormal": "LiDAR malfunction",
+              "lidar_covered": "LiDAR blocked",
+              "lidar_dirty": "LiDAR dirty — clean soon",
+              "lidar_overheat": "LiDAR overheating",
+              "lidar_overheat_with_map": "LiDAR overheating — returning",
+              "lidar_overheat_without_map": "LiDAR overheating — check",
+              "lift_motor": "Blade disc lift error",
+              "locating_abnormal": "Mapping failed — positioning error",
+              "locating_failed_with_map": "Positioning failed",
+              "maintain_loss": "Maintenance due soon",
+              "narrow_path_to_station": "Not enough turning space at station",
+              "not_disturb_returning": "Do Not Disturb — returning",
+              "not_disturb_schedule_suspend": "Do Not Disturb — scheduled task cancelled",
+              "out_of_map": "Outside the map",
+              "path_impassable": "Path obstructed",
+              "pause_timeout_returning": "Paused too long — returning",
+              "rain_schedule_interupted": "Rain protection — scheduled task interrupted",
+              "rain_schedule_suspend": "Rain protection — scheduled task cancelled",
+              "remote_controling_schedule_suspend": "Under remote control — scheduled task cancelled",
+              "right_wheel": "Right drive wheel error",
+              "schedule_start": "Scheduled mow started",
+              "schedule_timeout": "Scheduled task complete (some areas missed)",
+              "sensor": "Sensor error",
+              "sided_motor": "Blade disc sideways-move error",
+              "station_loss": "Cleaning brush worn — replace soon",
+              "station_not_connected_to_working_area": "Station not connected to work area",
+              "task_cancelled": "Task cancelled",
+              "task_finish": "Mowing complete",
+              "task_start": "Mowing started",
+              "task_start_failed": "Failed to start task",
+              "tilted": "Tilted — place back and enter PIN",
+              "top_cover_open": "Top cover open",
+              "top_cover_open_schedule_suspend": "Top cover open — scheduled task cancelled",
+              "trapped": "Stuck — needs assistance",
+              "working_schedule_suspend": "Already working — scheduled task cancelled",
+              "unknown_s2p2": "Notification (novel code)"
+            }
+          }
         }
       }
     }

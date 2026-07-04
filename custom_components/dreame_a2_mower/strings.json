@@ -59,10 +59,10 @@
       }
     },
     "binary_sensor": {
-      "obstacle_detected": {
+      "bluetooth_connected": {
         "state": {
-          "off": "No",
-          "on": "Yes"
+          "off": "Disconnected",
+          "on": "Connected"
         }
       },
       "battery_temp_low": {
@@ -183,6 +183,30 @@
       },
       "ota_progress": {
         "name": "OTA progress"
+      },
+      "novel_observations": {
+        "name": "Novel observations"
+      },
+      "api_endpoints_supported": {
+        "name": "API endpoints supported"
+      },
+      "hardware_serial": {
+        "name": "Hardware serial"
+      },
+      "firmware_version_dev": {
+        "name": "Firmware version (DEV)"
+      },
+      "ota_capable_raw": {
+        "name": "OTA flag (raw)"
+      },
+      "cloud_device_id": {
+        "name": "Cloud device ID"
+      },
+      "mac_address": {
+        "name": "MAC address"
+      },
+      "lidar_archive_count": {
+        "name": "LiDAR archive count"
       },
       "charging_status": {
         "state": {
