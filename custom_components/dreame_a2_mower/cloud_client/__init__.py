@@ -34,7 +34,12 @@ from ._discovery import _DiscoveryMixin
 from ._rpc import _RpcMixin
 from ._oss import _OssMixin
 from ._batch import _BatchMixin
-from ._fetchers import _FetchersMixin
+from ._state_fetch import _StateFetchMixin
+from ._device_fetch import _DeviceFetchMixin
+from ._messages import _MessagesMixin
+from ._media import _MediaMixin
+from ._ota import _OtaMixin
+from ._writers import _WritersMixin
 from ._file_bridge import _FileBridgeMixin
 from ._helpers import _LOGGER
 
@@ -51,7 +56,20 @@ _API_TASK_JOIN_TIMEOUT_S = 5.0
 # Main class
 # ---------------------------------------------------------------------------
 
-class DreameA2CloudClient(_AuthMixin, _DiscoveryMixin, _RpcMixin, _OssMixin, _BatchMixin, _FetchersMixin, _FileBridgeMixin):
+class DreameA2CloudClient(
+    _AuthMixin,
+    _DiscoveryMixin,
+    _RpcMixin,
+    _OssMixin,
+    _BatchMixin,
+    _StateFetchMixin,
+    _DeviceFetchMixin,
+    _MessagesMixin,
+    _MediaMixin,
+    _OtaMixin,
+    _WritersMixin,
+    _FileBridgeMixin,
+):
     """Dreame Home cloud REST + MQTT-bootstrap client for the A2 mower.
 
     Handles:
