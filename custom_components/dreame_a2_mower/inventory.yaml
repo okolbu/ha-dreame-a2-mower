@@ -6489,11 +6489,17 @@ cfg_individual:
       Sample: full dict with 24 keys as documented in cfg_keys section.
     status:
       seen_on_wire: false
+      last_seen: "2026-07-05"
       decoded: confirmed
     references:
       apk: "ioBroker.dreame/apk.md §getX CFG"
       integration_code: "custom_components/dreame_a2_mower/protocol/cfg_action.py"
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § CFG keys"
+    verifications:
+      - date: "2026-07-05"
+        status: verified
+        claim: "Device-off sweep: the routed-action family (CFG/DEV/MIHIS/DOCK/NET/REMOTE, all siid:2 aiid:50) returns None after a uniform ~8s relay timeout when the mower is powered off, confirming this transport is DEVICE-LIVE (relayed to the mower) and goes dark when the device is offline — unlike the cloud-batch family (see SCHDTV3 § verifications)."
+        evidence: "api-sweep@2026-07-05 device-off"
 
   - id: "CMS"
     name: "consumables_individual"
@@ -7194,7 +7200,7 @@ cfg_individual:
       [probe @2026-06-17]. App-MITM source: FINDING-schedule-stale-read-2026-06-17.md.
     status:
       seen_on_wire: true
-      last_seen: "2026-06-17"
+      last_seen: "2026-07-05"
       decoded: confirmed
     references:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § cfg_individual endpoints"
@@ -7218,6 +7224,10 @@ cfg_individual:
         status: verified
         claim: "read_schedule_rows()'s prior SCHDTV3 {m:'r'} read with a d.rows expectation was wrong — SCHDTV3 returns a scalar, never rows; the function returned [] every time. Superseded by the SCHDIV3->SCHDDV3 chunked GET above."
         evidence: "/tmp/probe_schd_raw.py live run 2026-06-17 (SCHDTV3 m:r -> None)"
+      - date: "2026-07-05"
+        status: verified
+        claim: "Device-off sweep: get_batch_device_datas([]) (the empty-batch cloud-snapshot call, of which SCHEDULE.* is one key) answers instantly from cloud cache with the mower fully powered off, confirming the whole cloud-batch family (per-map SETTINGS, SCHEDULE, ai_human, maps, mow_paths, forbidden_node_types, ota_status, props, cruise_config) survives the device being offline — unlike the routed-action family (see CFG § verifications)."
+        evidence: "api-sweep@2026-07-05 device-off"
 
   - id: "CHECK"
     name: "self_check_command"
