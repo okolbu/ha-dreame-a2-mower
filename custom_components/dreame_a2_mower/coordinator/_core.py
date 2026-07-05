@@ -727,6 +727,25 @@ class _CoreMixin:
         )
 
     @property
+    def wifi_archive_entry_count(self) -> int:
+        """Number of archived WiFi-heatmap entries, or 0.
+
+        Public accessor so callers outside the coordinator package (e.g.
+        ``diagnostics.py``) can report a wifi archive count without reaching
+        into the private ``_wifi_archive_store`` attribute directly (that
+        is forbidden by ``tests/audit/test_no_coordinator_private_getattr``).
+        Never raises — reads the on-disk index via the store's public
+        ``load_index()``.
+        """
+        try:
+            store = self._wifi_archive_store if hasattr(self, "_wifi_archive_store") else None
+            if store is None:
+                return 0
+            return len(store.load_index())
+        except Exception:  # noqa: BLE001 - diagnostics must not crash
+            return 0
+
+    @property
     def wifi_archive_last_refresh(self) -> dict:
         """Detail of the most recent WiFi-archive refresh attempt.
 

@@ -44,6 +44,7 @@ def _build_diagnostics_output():
         hardware_serial="SN-SECRET-123",
         sim_card_id="8947000000000000000",
     )
+    coordinator.wifi_archive_entry_count = 3
     coordinator.freshness = FreshnessTracker()
     coordinator.novel_registry = NovelObservationRegistry()
     coordinator.novel_log = NovelLogBuffer(
@@ -153,6 +154,8 @@ def test_diagnostics_dump_safe_surface_present():
 
     assert "entity_counts" in out
     assert "archive_counts" in out
+    assert isinstance(out["archive_counts"]["wifi"], int)
+    assert out["archive_counts"]["wifi"] == 3
 
     assert "cloud_state" in out
     for key in ("did", "uid", "uuid", "host"):

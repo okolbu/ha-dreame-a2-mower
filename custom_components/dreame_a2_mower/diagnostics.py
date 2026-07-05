@@ -293,7 +293,7 @@ def _entity_counts(coordinator: Any) -> dict[str, int]:
 
 
 def _archive_counts(coordinator: Any, state: Any) -> dict[str, int]:
-    # Note: the coordinator's underscore-prefixed wifi-archive store attr is
+    # Note: the coordinator's underscore-prefixed archive-store attrs are
     # deliberately NOT read here — this module lives outside the coordinator
     # package, and the string-getattr audit gate
     # (tests/audit/test_no_coordinator_private_getattr.py) forbids reaching a
@@ -307,6 +307,10 @@ def _archive_counts(coordinator: Any, state: Any) -> dict[str, int]:
         counts["lidar"] = _safe_len(coordinator.list_lidar_archive_entries())
     except Exception:  # noqa: BLE001 - diagnostics must not crash
         counts["lidar"] = 0
+    try:
+        counts["wifi"] = int(coordinator.wifi_archive_entry_count)
+    except Exception:  # noqa: BLE001 - diagnostics must not crash
+        counts["wifi"] = 0
     return counts
 
 
