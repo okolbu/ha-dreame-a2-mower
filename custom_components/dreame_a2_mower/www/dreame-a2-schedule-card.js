@@ -427,7 +427,7 @@ class DreameA2ScheduleCard extends HTMLElement {
 
 // release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
 // = "..."` shape. defineCard guards the double-define (T6-8) + logs the banner.
-const CARD_VERSION = "2.0.0";
+const CARD_VERSION = "2.0.1";
 defineCard("dreame-a2-schedule-card", DreameA2ScheduleCard, {
   name: "Dreame A2 Schedule",
   description: "Edit Spr & Sum / Aut & Win mowing schedules",

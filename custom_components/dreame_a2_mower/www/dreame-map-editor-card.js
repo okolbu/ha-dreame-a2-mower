@@ -1276,7 +1276,7 @@ class DreameMapEditorCard extends HTMLElement {
 
 // release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
 // = "..."` shape. defineCard logs the once-per-tag console banner.
-const CARD_VERSION = "2.0.0";
+const CARD_VERSION = "2.0.1";
 defineCard("dreame-map-editor-card", DreameMapEditorCard, {
   name: "Dreame Mower Map Editor",
   description: "Interactive map editor: draw / resize / delete no-go, ignore and mow shapes.",
