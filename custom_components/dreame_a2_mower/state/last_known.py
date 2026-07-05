@@ -66,6 +66,45 @@ _STATE_FIELDS: tuple[str, ...] = (
     # WiFi identity
     "wifi_ssid",
     "wifi_ip",
+    # device-wide CFG config settings (persist so the Settings/DnD tab survives
+    # the device being offline — CFG is a device-routed call, dark when off).
+    "child_lock_enabled",
+    "volume_pct",
+    "language_text_idx",
+    "language_voice_idx",
+    "language_code",
+    "low_speed_at_night_enabled",
+    "low_speed_at_night_start_min",
+    "low_speed_at_night_end_min",
+    "auto_recharge_battery_pct",
+    "resume_battery_pct",
+    "led_period_enabled",
+    "led_in_standby",
+    "led_in_working",
+    "led_in_charging",
+    "led_in_error",
+    "anti_theft_lift_alarm",
+    "anti_theft_offmap_alarm",
+    "anti_theft_realtime_location",
+    "human_presence_alert_enabled",
+    "human_presence_alert_sensitivity",
+    "human_presence_scenario_standby",
+    "human_presence_scenario_mowing",
+    "human_presence_scenario_recharge",
+    "human_presence_scenario_patrol",
+    "human_presence_alert_voice",
+    "human_presence_alert_push_interval_min",
+    "msg_alert_anomaly",
+    "msg_alert_error",
+    "msg_alert_task",
+    "msg_alert_consumables",
+    "voice_regular_notification",
+    "voice_work_status",
+    "voice_special_status",
+    "voice_error_status",
+    "auto_recharge_standby_enabled",
+    "ai_obstacle_photos_enabled",
+    "navigation_path_smart",
 )
 
 
@@ -102,6 +141,43 @@ class LastKnown:
     charging_end_min: int | None = None
     wifi_ssid: str | None = None
     wifi_ip: str | None = None
+    child_lock_enabled: bool | None = None
+    volume_pct: int | None = None
+    language_text_idx: int | None = None
+    language_voice_idx: int | None = None
+    language_code: str | None = None
+    low_speed_at_night_enabled: bool | None = None
+    low_speed_at_night_start_min: int | None = None
+    low_speed_at_night_end_min: int | None = None
+    auto_recharge_battery_pct: int | None = None
+    resume_battery_pct: int | None = None
+    led_period_enabled: bool | None = None
+    led_in_standby: bool | None = None
+    led_in_working: bool | None = None
+    led_in_charging: bool | None = None
+    led_in_error: bool | None = None
+    anti_theft_lift_alarm: bool | None = None
+    anti_theft_offmap_alarm: bool | None = None
+    anti_theft_realtime_location: bool | None = None
+    human_presence_alert_enabled: bool | None = None
+    human_presence_alert_sensitivity: int | None = None
+    human_presence_scenario_standby: bool | None = None
+    human_presence_scenario_mowing: bool | None = None
+    human_presence_scenario_recharge: bool | None = None
+    human_presence_scenario_patrol: bool | None = None
+    human_presence_alert_voice: bool | None = None
+    human_presence_alert_push_interval_min: int | None = None
+    msg_alert_anomaly: bool | None = None
+    msg_alert_error: bool | None = None
+    msg_alert_task: bool | None = None
+    msg_alert_consumables: bool | None = None
+    voice_regular_notification: bool | None = None
+    voice_work_status: bool | None = None
+    voice_special_status: bool | None = None
+    voice_error_status: bool | None = None
+    auto_recharge_standby_enabled: bool | None = None
+    ai_obstacle_photos_enabled: bool | None = None
+    navigation_path_smart: bool | None = None
     # --- meta (not MowerState fields) ---
     active_map_id: int | None = None
     saved_unix: float | None = None

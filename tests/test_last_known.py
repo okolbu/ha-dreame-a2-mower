@@ -108,3 +108,42 @@ def test_non_none_state_updates_excludes_meta_and_none():
     # seeding a real MowerState with the updates works
     seeded = MowerState().with_updates(**updates)
     assert seeded.blades_life_pct == 50.0
+
+
+def test_last_known_captures_all_cfg_settings():
+    """Every CFG-backed device-wide setting round-trips through LastKnown."""
+    from custom_components.dreame_a2_mower.state.last_known import LastKnown, _STATE_FIELDS
+
+    cfg_fields = {
+        "child_lock_enabled": True, "volume_pct": 60,
+        "language_text_idx": 1, "language_voice_idx": 2, "language_code": "text=1,voice=2",
+        "low_speed_at_night_enabled": True, "low_speed_at_night_start_min": 1320, "low_speed_at_night_end_min": 360,
+        "auto_recharge_battery_pct": 15, "resume_battery_pct": 80,
+        "led_period_enabled": True, "led_in_standby": True, "led_in_working": False,
+        "led_in_charging": True, "led_in_error": True,
+        "anti_theft_lift_alarm": True, "anti_theft_offmap_alarm": False, "anti_theft_realtime_location": True,
+        "human_presence_alert_enabled": True, "human_presence_alert_sensitivity": 2,
+        "human_presence_scenario_standby": True, "human_presence_scenario_mowing": False,
+        "human_presence_scenario_recharge": True, "human_presence_scenario_patrol": False,
+        "human_presence_alert_voice": True, "human_presence_alert_push_interval_min": 30,
+        "msg_alert_anomaly": True, "msg_alert_error": True, "msg_alert_task": False, "msg_alert_consumables": True,
+        "voice_regular_notification": True, "voice_work_status": False,
+        "voice_special_status": True, "voice_error_status": True,
+        "auto_recharge_standby_enabled": True, "ai_obstacle_photos_enabled": False, "navigation_path_smart": True,
+    }
+    # Every field is a declared _STATE_FIELDS entry.
+    for name in cfg_fields:
+        assert name in _STATE_FIELDS, f"{name} missing from _STATE_FIELDS"
+
+    class _FakeState:
+        pass
+    st = _FakeState()
+    for k, v in cfg_fields.items():
+        setattr(st, k, v)
+
+    lk = LastKnown.from_state(st, active_map_id=0, saved_unix=123.0)
+    round_tripped = LastKnown.from_dict(lk.to_dict())
+    updates = round_tripped.non_none_state_updates()
+    for k, v in cfg_fields.items():
+        assert getattr(round_tripped, k) == v, f"{k} lost in round-trip"
+        assert updates[k] == v, f"{k} not seeded via non_none_state_updates"
