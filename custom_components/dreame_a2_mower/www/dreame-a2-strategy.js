@@ -730,6 +730,12 @@ function sessionsView(ctx, opts) {
     cards.push(sessionChartsRow(ctx, picked, opts));
   }
 
+  return { title: "Sessions & History", path: "sessions", type: "panel", icon: "mdi:history", cards: [{ type: "vertical-stack", cards: cards.filter(Boolean) }] };
+}
+
+function coverageView(ctx) {
+  const cards = [];
+
   // LiDAR archive.
   const lidarSel = ctx.resolve("lidar_archive");
   const lidarCount = ctx.resolve("lidar_archive_count");
@@ -763,7 +769,8 @@ function sessionsView(ctx, opts) {
     if (wrow.length) cards.push({ type: "horizontal-stack", cards: wrow });
   }
 
-  return { title: "Sessions & History", path: "sessions", type: "panel", icon: "mdi:history", cards: [{ type: "vertical-stack", cards: cards.filter(Boolean) }] };
+  if (!cards.length) return null; // self-hide when no archives exist
+  return { title: "Coverage & Signal", path: "coverage", type: "panel", icon: "mdi:radar", cards: [{ type: "vertical-stack", cards: cards.filter(Boolean) }] };
 }
 
 // Battery/WiFi session charts. Degrade path (OQ-4): plotly only when installed,
@@ -906,6 +913,8 @@ export async function generateDashboard(config, hass) {
   for (const m of ctx.maps) views.push(mapView(ctx, m, opts));
   views.push(scheduleView(ctx));
   views.push(sessionsView(ctx, opts));
+  const cov = coverageView(ctx);
+  if (cov) views.push(cov);
   views.push(settingsView(ctx));
   views.push(diagnosticsView(ctx, opts));
   views.push(photosView(ctx));

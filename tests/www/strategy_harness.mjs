@@ -241,6 +241,17 @@ async function run() {
   assert(!jsonHas(cfg1, "atomic-calendar"), "1-map: atomic-calendar-revive leaked into output");
   assert(jsonHas(cfg1, '"type":"calendar"'), "1-map: native calendar card missing");
 
+  // --- Part 1: LiDAR + WiFi live on their own Coverage tab, not Sessions. ---
+  const covView1 = cfg1.views.find((v) => v.path === "coverage");
+  assert(covView1, "coverage: no 'Coverage & Signal' view");
+  assert(covView1.title === "Coverage & Signal", "coverage: wrong view title");
+  assert(jsonHas(covView1, "custom:dreame-a2-lidar-card"), "coverage: LiDAR card missing from Coverage view");
+  assert(jsonHas(covView1, "WiFi Coverage"), "coverage: WiFi block missing from Coverage view");
+  const sessView1 = cfg1.views.find((v) => v.path === "sessions");
+  assert(sessView1, "sessions: view missing");
+  assert(!jsonHas(sessView1, "custom:dreame-a2-lidar-card"), "sessions: LiDAR card still present after move");
+  assert(!jsonHas(sessView1, "WiFi Coverage"), "sessions: WiFi block still present after move");
+
   // (d) 3-map fixture — per-map views scale.
   const hass3 = makeHass(3);
   const cfg3 = await generateDashboard({}, hass3);
