@@ -347,6 +347,23 @@ async def test_reload_is_idempotent(lifecycle):
 # ---------------------------------------------------------------------------
 
 
+async def test_setup_warms_archive_indexes_and_records_timing(lifecycle):
+    """Setup must warm the photo/video archive indexes off the loop BEFORE
+    platforms are forwarded (so entity count value_fns don't do a blocking
+    disk read on the loop), and record a per-step boot-timing breakdown."""
+    assert await lifecycle.setup() is True
+    coord = lifecycle.hass.data[DOMAIN][lifecycle.entry.entry_id]
+
+    # Both archive indexes were loaded during setup (idempotent guard flipped).
+    assert coord._photo_archive._index_loaded is True
+    assert coord._video_archive._index_loaded is True
+
+    # Boot-timing breakdown was populated (the diagnostic surface used to
+    # attribute a slow setup to the right step).
+    assert coord._boot_timings  # non-empty
+    assert {"init_cloud", "init_mqtt", "cloud_state"} <= set(coord._boot_timings)
+
+
 async def test_reload_leaks_no_transport_threads(lifecycle):
     """The cloud client owns a requests.Session + API worker thread and the
     MQTT client owns the paho network thread. A client instance that never

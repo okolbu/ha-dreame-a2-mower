@@ -29,6 +29,8 @@ interleaving is load-bearing and preserved byte-for-byte:
 from __future__ import annotations
 
 import dataclasses
+import time
+from contextlib import contextmanager
 from datetime import timedelta
 from pathlib import Path
 from typing import Any
@@ -40,6 +42,22 @@ from homeassistant.helpers.storage import Store
 from ..const import LOGGER
 from ..live_map.finalize import RETRY_INTERVAL_SECONDS
 from ..state import MowerState
+
+
+@contextmanager
+def _timed(coord, key: str):
+    """Record wall-clock seconds for a boot step into coord._boot_timings.
+
+    Diagnostic only — lets __init__.py log a setup-latency breakdown so a slow
+    startup (e.g. cloud round-trips while the mower is offline) can be
+    attributed to the right step. Accumulates so a repeated key sums."""
+    t0 = time.monotonic()
+    try:
+        yield
+    finally:
+        coord._boot_timings[key] = (
+            coord._boot_timings.get(key, 0.0) + (time.monotonic() - t0)
+        )
 
 
 async def async_first_refresh(coord) -> MowerState:
@@ -93,7 +111,8 @@ async def _restore_and_init_transports(coord) -> None:
             "state_machine.load_persisted failed; continuing with initial snapshot"
         )
 
-    await coord._restore_device_messages()
+    with _timed(coord, "restore"):
+        await coord._restore_device_messages()
 
     # Restore the offline last-known read-only snapshot (Task 12a / P6.7) BEFORE
     # the first cloud fetch and before the boot _render_base call below, so
@@ -101,11 +120,13 @@ async def _restore_and_init_transports(coord) -> None:
     # _active_map_id lets render_base produce the Overview base while offline. A
     # subsequent successful cloud fetch overlays fresh values on top. Guarded
     # inside _restore_last_known so a bad store can never block setup.
-    await coord._restore_last_known()
+    with _timed(coord, "restore"):
+        await coord._restore_last_known()
 
-    coord._cloud = await coord.hass.async_add_executor_job(
-        coord._init_cloud
-    )
+    with _timed(coord, "init_cloud"):
+        coord._cloud = await coord.hass.async_add_executor_job(
+            coord._init_cloud
+        )
 
     # Restore any in-progress session BEFORE _init_mqtt subscribes
     # to the mower's status topic. If we restored after MQTT, the
@@ -127,7 +148,8 @@ async def _restore_and_init_transports(coord) -> None:
     except Exception:
         LOGGER.exception("_repost_active_fault_notices failed during restore")
 
-    await coord.hass.async_add_executor_job(coord._init_mqtt)
+    with _timed(coord, "init_mqtt"):
+        await coord.hass.async_add_executor_job(coord._init_mqtt)
 
 
 def _register_debounce_cancel(coord) -> None:
@@ -172,7 +194,8 @@ async def _schedule_full_state_gate(coord) -> None:
     # raises ConfigEntryNotReady so HA retries setup instead of
     # forwarding platforms with cloud_state still None. See
     # _cloud_state.py:_refresh_cloud_state_or_raise.
-    await coord._refresh_cloud_state_or_raise()
+    with _timed(coord, "cloud_state"):
+        await coord._refresh_cloud_state_or_raise()
 
 
 def _schedule_specialist_refreshers(coord) -> None:

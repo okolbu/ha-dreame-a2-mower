@@ -437,6 +437,10 @@ class _CoreMixin:
         # would otherwise mask a cloud-read outage while the device link is up.
         self._consecutive_cloud_failures = 0
 
+        # Per-step first-refresh timings (seconds), filled by domain/boot.py so
+        # __init__.py can log a setup-latency breakdown. Diagnostic only.
+        self._boot_timings: dict[str, float] = {}
+
         # --- State machine + persistence stores + finalize dock-wait
         #     (state/machine, domain/boot restore, domain/session) ---
         # Multi-dimensional state machine — canonical source of behavioural

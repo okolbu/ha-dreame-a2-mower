@@ -59,6 +59,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     coordinator = DreameA2MowerCoordinator(hass, entry, wifi_index=_wifi_index)
 
+    import time as _time
+    _setup_t0 = _time.monotonic()
     try:
         await coordinator.async_config_entry_first_refresh()
     except ConfigEntryNotReady:
@@ -90,6 +92,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if cloud is not None:
             await hass.async_add_executor_job(cloud.disconnect)
         raise
+    _first_refresh_s = _time.monotonic() - _setup_t0
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
 
@@ -226,7 +229,44 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     entry.async_on_unload(entry.add_update_listener(_options_updated))
 
+    # Warm the photo/video archive indexes off the loop BEFORE forwarding
+    # platforms. The archive count / count_by_category value_fns read the index
+    # lazily (load_index → json.loads(read_text)), and HA computes each
+    # entity's initial state ON the loop as it is added — so a cold index would
+    # be a blocking disk read (HA's blocking-call detector flags it). load_index
+    # is idempotent, so this one-time warm makes those reads no-ops.
+    for _arch in (coordinator._photo_archive, coordinator._video_archive):
+        try:
+            await hass.async_add_executor_job(_arch.load_index)
+        except Exception:  # noqa: BLE001 — a cold archive must never block setup
+            LOGGER.debug("archive index warm failed", exc_info=True)
+
+    _platforms_t0 = _time.monotonic()
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+    _platforms_s = _time.monotonic() - _platforms_t0
+
+    # Setup-latency breakdown (diagnostic). The per-step transport/cloud timings
+    # come from domain/boot.py; add the two outer spans measured here. Always
+    # INFO; escalate to WARNING when setup is slow so it surfaces in the system
+    # log (and points at the culprit — usually cloud round-trips while the mower
+    # is offline).
+    _timings = dict(coordinator._boot_timings)
+    _timings["platforms"] = _platforms_s
+    # first_refresh minus the transport/cloud sub-steps already broken out from
+    # boot.py = the unattributed remainder inside first refresh.
+    _timings["first_refresh_other"] = max(
+        0.0, _first_refresh_s - sum(coordinator._boot_timings.values())
+    )
+    _total_s = _time.monotonic() - _setup_t0
+    _breakdown = ", ".join(
+        f"{_k}={_v:.1f}s" for _k, _v in sorted(_timings.items(), key=lambda kv: -kv[1])
+    )
+    LOGGER.info("%s setup timing: total=%.1fs (%s)", DOMAIN, _total_s, _breakdown)
+    if _total_s >= 10.0:
+        LOGGER.warning(
+            "%s setup took %.1fs (>10s); slowest steps: %s",
+            DOMAIN, _total_s, _breakdown,
+        )
 
     # Register integration-wide services. Idempotent — guarded on a sentinel
     # service so the bulk registration runs once per HA process. The two
