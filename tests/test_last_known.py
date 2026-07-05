@@ -7,8 +7,8 @@ to_dict/from_dict contract.
 """
 from __future__ import annotations
 
-from custom_components.dreame_a2_mower.state.last_known import LastKnown
-from custom_components.dreame_a2_mower.state import MowerState
+from custom_components.dreame_a2_mower.state.last_known import LastKnown, _STATE_FIELDS
+from custom_components.dreame_a2_mower.state import FLAT_FIELDS, MowerState
 
 
 def _full_blob() -> LastKnown:
@@ -110,10 +110,22 @@ def test_non_none_state_updates_excludes_meta_and_none():
     assert seeded.blades_life_pct == 50.0
 
 
+def test_state_fields_are_all_real_mower_state_fields():
+    """Guard: every _STATE_FIELDS name must be a real MowerState flat field.
+
+    A misspelled or stale name in _STATE_FIELDS makes ``getattr(state, name,
+    None)`` silently return None in ``LastKnown.from_state`` -- the setting
+    never persists and no existing test catches it (the CFG-coverage test
+    below uses a fake state with every attr preset, so a typo there would
+    just set an attr that's never read back). Comparing against the
+    authoritative FLAT_FIELDS tuple catches that class of typo loudly.
+    """
+    stray = set(_STATE_FIELDS) - set(FLAT_FIELDS)
+    assert not stray, f"_STATE_FIELDS names not in MowerState.FLAT_FIELDS: {stray}"
+
+
 def test_last_known_captures_all_cfg_settings():
     """Every CFG-backed device-wide setting round-trips through LastKnown."""
-    from custom_components.dreame_a2_mower.state.last_known import LastKnown, _STATE_FIELDS
-
     cfg_fields = {
         "child_lock_enabled": True, "volume_pct": 60,
         "language_text_idx": 1, "language_voice_idx": 2, "language_code": "text=1,voice=2",
