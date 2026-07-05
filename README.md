@@ -290,16 +290,23 @@ Installation.
 
 ## Architecture
 
-Three-layer stack with strict layering:
+Seven-layer stack (0–6) with strict downward-only layering:
 
 | Layer | Path | HA imports? | Responsibility |
 |---|---|---|---|
-| 1 | `custom_components/dreame_a2_mower/protocol/` | ❌ | Pure-Python wire codecs (s1.1 / s1.4 / s2.51 / session_summary / PCD / cloud-map geometry / TASK envelope). Unit-testable in a vanilla pytest venv. |
-| 2 | `custom_components/dreame_a2_mower/{mower,observability,archive,live_map}/` | ❌ | Typed domain layer — `MowerState` dataclass, capabilities, property mapping, novel-observation registry, archives, live-map session state machine. |
-| 3 | `custom_components/dreame_a2_mower/*.py` | ✅ | HA glue — config flow, coordinator, all platforms, services, diagnostics. |
+| 0 | `const.py`, `inventory/`, `control_honesty.py`, `_devices.py`, `_png.py`, `_resources.py` | ❌ | Foundation — constants, the static protocol-inventory loader, the control-mode table, device-info/unique-id builders, the PNG codec, and the static resource loader. These are true zero/near-zero-internal-dependency leaves imported from several layers above and so can't be pinned to any one of them. |
+| 1 | `protocol/`, `observability/` | ❌ | Pure-Python wire codecs (s1.1 / s1.4 / s2.51 / session_summary / PCD / cloud-map geometry / TASK envelope) plus the novel-observation registry, freshness tracker, and log buffer. Zero HA imports; unit-testable in a vanilla pytest venv. |
+| 2 | `cloud_client/`, `mqtt_client.py` | ❌ | Transport — the MQTT client and cloud RPC / OSS / file-bridge / fetch-family HTTP calls. |
+| 3 | `state/`, `mower/`, `live_map/` | ❌ | Typed state layer — `MowerState` (composed of frozen sub-containers), `StateSnapshot`, `MowerStateMachine`, `CloudState`, and the pure property-apply funnel; live-map session state. |
+| 4 | `domain/`, `coordinator/`, `archive/`, `wifi/` | ✅ | Domain orchestration — session lifecycle, writes, media, wifi, lidar, notifications, device_sync, ingress, boot, render, gps, faults, timers, and MQTT-lifecycle services, plus the thin coordinator delegator mixins that dispatch to them. |
+| 5 | `entities/`, `services/`, and the descriptor-driven platform entry files (`sensor.py`, `switch.py`, `select.py`, `number.py`, `binary_sensor.py`, `button.py`, `time.py`, `device_tracker.py`, `lawn_mower.py`, `calendar.py`, `event.py`, `device_trigger.py`, `update.py`, `logbook.py`) | ✅ | Entities — descriptor-driven HA platforms and the HA service-call API. |
+| 6 | `map_render/`, `camera/`, plus the cross-cutting entry points `__init__.py`, `config_flow.py`, `diagnostics.py` | ✅ | Presentation — map rendering and the camera platform — and the entry points, which compose across every layer below and are pinned at the top of the ladder alongside presentation. |
 
-The layering invariant (`grep` runs on every CI run) prevents
-upstream creep: layer-1 and layer-2 must never import `homeassistant.*`.
+The layering invariant is enforced in CI by
+`tests/audit/test_layer_imports.py`, an AST-based gate that runs as part
+of the normal test suite: a module may import same-layer siblings and
+anything at a **numerically lower** layer; importing a numerically
+**higher** layer is a back-edge and fails the build.
 
 ## Installation
 
