@@ -252,7 +252,7 @@ async function run() {
   assert(!jsonHas(sessView1, "custom:dreame-a2-lidar-card"), "sessions: LiDAR card still present after move");
   assert(!jsonHas(sessView1, "WiFi Coverage"), "sessions: WiFi block still present after move");
 
-  // --- Part 2: session-replay metadata card appears beside the replay card. ---
+  // --- Part 2: session-replay metadata card appears below the replay card. ---
   assert(jsonHas(sessView1, "area_mowed_m2"), "sessions: replay metadata card missing (no area_mowed_m2 template)");
   assert(jsonHas(sessView1, "Session details"), "sessions: metadata card title missing");
   // Absent when no session is picked.

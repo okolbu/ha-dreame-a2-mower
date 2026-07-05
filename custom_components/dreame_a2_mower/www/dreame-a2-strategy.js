@@ -739,15 +739,18 @@ function sessionsView(ctx, opts) {
   if (totalsCard) left.push(totalsCard);
 
   const picked = ctx.resolve("picked_session");
+  // Right column: the replay/map card keeps the full 2-column (half) width;
+  // the metadata card sits BELOW it (stacked), not beside — so the map isn't
+  // squeezed into a third column.
   const right = [];
   if (picked) {
-    right.push(replayMetaCard(picked));
     right.push({ type: "custom:dreame-mower-replay-card", entity: picked });
+    right.push(replayMetaCard(picked));
   }
 
   const top = [];
   if (left.filter(Boolean).length) top.push({ type: "vertical-stack", cards: left.filter(Boolean) });
-  for (const r of right) top.push(r);
+  if (right.length) top.push({ type: "vertical-stack", cards: right });
   if (top.length) cards.push({ type: "horizontal-stack", cards: top });
 
   // Per-session detail + charts (only when picked_session exists).
