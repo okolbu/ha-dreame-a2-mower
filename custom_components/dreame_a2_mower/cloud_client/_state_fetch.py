@@ -304,14 +304,17 @@ class _StateFetchMixin:
           already wired). DOCK is owned by the 60 s `_refresh_dock` timer and
           is deliberately NOT probed here.
 
-        ``include_device_probes`` (default True): MAPL and MIHIS are
+        ``include_device_probes`` (default True): CFG, MAPL and MIHIS are all
         routed-ACTION reads (s2 aiid=50) that go to the *device*, not the cloud
-        cache — so when the mower is OFFLINE each blocks ~15 s on the cloud
-        relay timeout. The empty-batch and CFG are cloud-cache reads and stay
-        fast. Pass ``False`` on the setup-blocking first refresh to skip the two
-        device probes (they are best-effort — mapl→None / mihis→{} — and the
-        post-setup backfill + 2-min periodic refresh fill them in). This is the
-        difference between a ~3 s and a ~35 s config-entry setup while offline.
+        cache — so when the mower is OFFLINE each blocks on the cloud relay
+        timeout (~8-15 s, more with retries). Only the empty-batch
+        (``get_batch_device_datas`` — a cloud endpoint) stays fast, and it
+        already carries the maps/settings/schedule/props that platforms need.
+        Pass ``False`` on the setup-blocking first refresh to skip the three
+        device reads (best-effort — cfg→{} / mapl→None / mihis→{}, all covered
+        by the offline last-known restore and re-fetched by the post-setup
+        backfill + 2-min periodic refresh). This is the difference between a
+        ~2 s and a ~35 s config-entry setup while the mower is offline.
 
         Returns the decoded **parts** — a dict whose keys are exactly the
         :class:`CloudState` fields — or ``None`` if the empty-batch call fails
@@ -342,12 +345,19 @@ class _StateFetchMixin:
             )
             batch = {}
 
-        # CFG (separate call — not in the empty-batch).
-        try:
-            cfg = self.fetch_cfg() or {}
-        except Exception as ex:
-            _LOGGER.warning("fetch_full_cloud_state: fetch_cfg raised: %s", ex)
-            cfg = {}
+        # CFG (separate call — not in the empty-batch). ALSO a device-routed
+        # routed-action read (s2 aiid=50 {t:'CFG'}), so it blocks on the relay
+        # timeout when the mower is offline (see inventory.yaml § CFG device-off
+        # sweep). Skipped with the other device probes on the fast boot path —
+        # the 43 CFG-derived fields are covered by the offline last-known
+        # restore, and the backfill/periodic refresh re-fetch it.
+        cfg: dict[str, Any] = {}
+        if include_device_probes:
+            try:
+                cfg = self.fetch_cfg() or {}
+            except Exception as ex:
+                _LOGGER.warning("fetch_full_cloud_state: fetch_cfg raised: %s", ex)
+                cfg = {}
 
         # Group batch keys by family prefix, then decode each family via its
         # named helper (autopsy #2: the 235-LOC monolith split along its

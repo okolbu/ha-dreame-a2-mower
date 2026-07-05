@@ -59,17 +59,20 @@ def test_fetch_full_cloud_state_returns_cloud_state():
     assert cs.cfg["VER"] == 461
 
 
-def test_include_device_probes_false_skips_mapl_and_mihis():
+def test_include_device_probes_false_skips_cfg_mapl_and_mihis():
     """The setup-blocking first refresh passes include_device_probes=False so
-    the two device-routed reads (MAPL/MIHIS — ~15s each on an offline mower's
-    relay timeout) are skipped. The cloud-cache batch/CFG still run."""
+    the three device-routed reads (CFG/MAPL/MIHIS — each blocks on an offline
+    mower's relay timeout) are skipped. Only the cloud-endpoint empty-batch
+    runs — and it carries the maps/settings platforms need."""
     client = _make_client(REAL_BATCH, {"VER": 461}, mapl=[[0, 1]], mihis={"area": 5})
 
     parts = client.fetch_full_cloud_state(include_device_probes=False)
 
+    client.fetch_cfg.assert_not_called()
     client.fetch_mapl.assert_not_called()
     client.fetch_mihis.assert_not_called()
-    # Best-effort fields fall back to None/empty; the essential data still lands.
+    # Best-effort fields fall back to empty/None; the essential data still lands.
+    assert parts["cfg"] == {}
     assert parts["mapl"] is None
     assert parts["mihis"] == {}
     assert set(parts["maps_by_id"].keys()) == {0, 1}
@@ -81,6 +84,7 @@ def test_include_device_probes_true_is_default():
 
     parts = client.fetch_full_cloud_state()
 
+    client.fetch_cfg.assert_called_once()
     client.fetch_mapl.assert_called_once()
     client.fetch_mihis.assert_called_once()
     assert parts["mapl"] == [[0, 1]]

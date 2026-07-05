@@ -6500,6 +6500,10 @@ cfg_individual:
         status: verified
         claim: "Device-off sweep: the routed-action family (CFG/DEV/MIHIS/DOCK/NET/REMOTE, all siid:2 aiid:50) returns None after a uniform ~8s relay timeout when the mower is powered off, confirming this transport is DEVICE-LIVE (relayed to the mower) and goes dark when the device is offline — unlike the cloud-batch family (see SCHDTV3 § verifications)."
         evidence: "api-sweep@2026-07-05 device-off"
+      - date: "2026-07-05"
+        status: verified
+        claim: "CFG relay-timeout dominates offline config-entry setup: after MAPL/MIHIS were skipped on the boot gate the setup-timing breakdown still showed cloud_state≈17s, wholly the CFG routed-action (with retries). CFG is now ALSO skipped on the setup-blocking first refresh (fetch_full_cloud_state include_device_probes=False) — its 43 derived fields are covered by the offline last-known restore and re-fetched by the post-setup backfill. Integration behaviour, not a wire-semantic change."
+        evidence: "HA setup-timing WARNING 2026-07-05 ('setup took 18.8s; cloud_state=17.0s' after MAPL/MIHIS skip); fix in cloud_client/_state_fetch.py fetch_full_cloud_state"
 
   - id: "CMS"
     name: "consumables_individual"
