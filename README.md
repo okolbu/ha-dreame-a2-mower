@@ -150,6 +150,11 @@ integration captures it on two independent tracks:
   cloud's people/obstacle imagery).
 
 ### Settings (cloud + s2.51)
+
+All of the following are **editable from HA** — a change is written to the
+mower via the same CFG envelope the Dreame app sends (verified byte-for-byte
+against captured app traffic) and applies on the device:
+
 - Switches: rain protection, DnD, low-speed-at-night, custom charging
   window, child lock, anti-theft (lift / off-map / realtime location),
   LED behaviour (standby / working / charging / error).
@@ -529,14 +534,6 @@ architecture (SN-keyed identifiers, sub-devices via `via_device`) allows
 for multiple mowers under separate config entries, but that path is
 untested — if you have two A2/g2408 mowers, expect rough edges with a
 second config entry; please file an issue.
-
-### Time-window entities are read-only
-
-The mowing schedule itself is editable from HA (the `set_schedule_plans`
-service + the bundled schedule card). The per-setting time windows shown
-as `time.*` entities — DnD, low-speed-at-night, and charging start/end —
-are surfaced read-only; change those in the Dreame app and HA picks them
-up on the next cloud sync.
 
 ### New maps need a reload
 
