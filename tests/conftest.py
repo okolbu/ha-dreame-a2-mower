@@ -601,6 +601,11 @@ def _make_ha_stub() -> None:
         async def async_save(self, data):  # noqa: D102
             pass
 
+        def async_delay_save(self, data_func, delay):  # noqa: D102
+            # Idiomatic HA debounced save. The stub invokes the callback so any
+            # error in payload construction surfaces, but does not persist.
+            data_func()
+
     stor_mod.Store = _Store  # type: ignore[attr-defined]
     sys.modules["homeassistant.helpers.storage"] = stor_mod
 

@@ -31,6 +31,9 @@ def _coord(gps=None, remote=None, msg=None, dev=None, ota=None, g4=None):
     # Cross-mixin call: _merge_device_messages lives on _NotificationsMixin; stub
     # it here to return fresh_dicts unchanged (no accumulation in this isolated test).
     c._merge_device_messages = lambda fresh_dicts: fresh_dicts
+    # Cross-mixin call: _save_last_known lives on _CoreMixin; the dock/remote/dev
+    # refreshers call it after a successful fetch (Task 12a). No-op stub here.
+    c._save_last_known = lambda: None
     return c
 
 

@@ -53,6 +53,7 @@ from ..const import (
 )
 from ..live_map.state import LiveMapState
 from ..state import MowerState
+from ..state.last_known import LastKnown, LAST_KNOWN_SAVE_DELAY_S
 from ..state.machine import MowerStateMachine
 from ..mqtt_client import DreameA2MqttClient
 from ..observability import FreshnessTracker, NovelObservationRegistry
@@ -444,6 +445,13 @@ class _CoreMixin:
         self.state_machine = MowerStateMachine()
         self._state_store: Store | None = None  # initialised in _async_update_data
         self._device_messages_store: Store | None = None  # initialised in _async_update_data
+        # Offline last-known read-only snapshot store (Task 12a / P6.7). Created
+        # + restored in domain/boot._restore_and_init_transports before the first
+        # cloud fetch; written debounced after each successful specialist refresh
+        # via _save_last_known. Holds a LastKnown blob (see state/last_known.py) —
+        # kept SEPARATE from MowerState/StateSnapshot so it can't perturb the
+        # corpus-replay golden digest.
+        self._last_known_store: Store | None = None  # initialised in domain/boot
         # Pending-finalize wait (dock-return capture).
         # Set to an asyncio.Event by _wait_for_dock_return; cleared in its
         # finally block so stale signals from subsequent MQTT pushes are
@@ -839,6 +847,66 @@ class _CoreMixin:
                 self.entry.options.get(CONF_MESSAGES_KEEP, DEFAULT_MESSAGES_KEEP)
             )
             self.data.device_messages = stored[:cap]
+
+    async def _restore_last_known(self) -> None:
+        """Seed MowerState + ``_active_map_id`` from the persisted last-known blob.
+
+        Called once from ``domain/boot._restore_and_init_transports`` BEFORE the
+        first cloud fetch (and before the boot ``_render_base`` call), so entities
+        show last-known read-only values immediately and the Overview live-map
+        base can render while the mower/cloud is offline. Only fields that are
+        actually set are seeded (never clobbers a live value with a blank), and a
+        ``None`` ``active_map_id`` is left untouched. Fully guarded: a missing or
+        corrupt store must never block coordinator setup (Task 12a / P6.7).
+        """
+        if self._last_known_store is None:
+            self._last_known_store = Store(
+                self.hass,
+                version=1,
+                key=f"dreame_a2_mower_last_known_{self.entry.entry_id}",
+            )
+        try:
+            stored = await self._last_known_store.async_load()
+        except Exception:
+            LOGGER.exception("last_known restore failed; continuing without seed")
+            return
+        if not isinstance(stored, dict) or not stored:
+            return
+        try:
+            blob = LastKnown.from_dict(stored)
+            updates = blob.non_none_state_updates()
+            if updates:
+                self.data = self.data.with_updates(**updates)
+            if blob.active_map_id is not None:
+                self._active_map_id = blob.active_map_id
+        except Exception:
+            LOGGER.exception("last_known seed failed; continuing without seed")
+
+    def _save_last_known(self) -> None:
+        """Schedule a debounced persist of the current last-known read-only values.
+
+        Delegator invoked by the specialist refreshers (``domain/device_info``
+        dock/remote/dev) and the cloud-state refresh AFTER a successful fetch —
+        so a failed/empty fetch never overwrites a good last-known blob. Builds a
+        ``LastKnown`` from the current ``coord.data`` + ``_active_map_id`` and
+        hands the dict to ``Store.async_delay_save`` (idiomatic HA debounce; the
+        callback returns the payload). No-op when the store isn't ready; never
+        raises into the calling refresh path.
+        """
+        # getattr default (not bare attr) so a partially-built coordinator
+        # (e.g. object.__new__ test doubles, or a save fired before boot creates
+        # the store) is a clean no-op. `coordinator/` is exempt from the
+        # string-getattr audit; mirrors merge_device_messages' hasattr guard.
+        store = getattr(self, "_last_known_store", None)
+        if store is None:
+            return
+        try:
+            blob = LastKnown.from_state(
+                self.data, self._active_map_id, time.time()
+            )
+            store.async_delay_save(blob.to_dict, LAST_KNOWN_SAVE_DELAY_S)
+        except Exception:
+            LOGGER.debug("last_known save failed; skipping", exc_info=True)
 
     async def _async_update_data(self) -> MowerState:
         """Delegates to ``domain.boot.async_first_refresh`` (P3.9e).

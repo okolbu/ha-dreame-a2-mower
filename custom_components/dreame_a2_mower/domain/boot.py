@@ -79,6 +79,14 @@ async def _restore_and_init_transports(coord) -> None:
 
     await coord._restore_device_messages()
 
+    # Restore the offline last-known read-only snapshot (Task 12a / P6.7) BEFORE
+    # the first cloud fetch and before the boot _render_base call below, so
+    # read-only entities show last-known values immediately and the restored
+    # _active_map_id lets render_base produce the Overview base while offline. A
+    # subsequent successful cloud fetch overlays fresh values on top. Guarded
+    # inside _restore_last_known so a bad store can never block setup.
+    await coord._restore_last_known()
+
     coord._cloud = await coord.hass.async_add_executor_job(
         coord._init_cloud
     )

@@ -92,6 +92,11 @@ class _CloudStateMixin:
         self._sync_map_subdevices()
         # Update derived MowerState fields from CFG / SETTINGS / MIHIS.
         self._apply_cloud_state_to_mower_state()
+        # Persist offline last-known AFTER this successful cloud fetch — it lands
+        # the consumables / MIHIS lifetime totals / device-wide settings that no
+        # specialist refresher owns, plus the freshly-applied _active_map_id
+        # (Task 12a / P6.7). Guarded no-op until the store is created at boot.
+        self._save_last_known()
         # Notify entity listeners of the new data.
         update_listeners = getattr(self, "async_update_listeners", None)
         if callable(update_listeners):

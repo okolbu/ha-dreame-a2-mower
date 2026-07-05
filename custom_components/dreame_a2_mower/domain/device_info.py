@@ -88,6 +88,8 @@ async def refresh_dock(coord) -> None:
     new_state = dataclasses.replace(coord.data, **updates)
     if new_state != coord.data:
         coord.async_set_updated_data(new_state)
+    # Persist offline last-known AFTER a successful dock fetch (Task 12a).
+    coord._save_last_known()
 
 
 async def refresh_net(coord) -> None:
@@ -164,6 +166,8 @@ async def refresh_remote(coord) -> None:
     new = dataclasses.replace(coord.data, **fields)
     if new != coord.data:
         coord.async_set_updated_data(new)
+    # Persist offline last-known AFTER a successful REMOTE/SIM fetch (Task 12a).
+    coord._save_last_known()
 
 
 async def refresh_mpos(coord) -> None:
@@ -241,3 +245,5 @@ async def refresh_dev(coord) -> None:
         coord.async_set_updated_data(new_state)
         if "hardware_serial" in updates:
             coord._update_device_registry_serial(updates["hardware_serial"])
+    # Persist offline last-known AFTER a successful DEV fetch (Task 12a).
+    coord._save_last_known()
