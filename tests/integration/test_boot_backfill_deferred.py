@@ -33,6 +33,7 @@ def _stub_coord() -> SimpleNamespace:
     coord.async_set_updated_data = MagicMock()
     # Every specialist as an AsyncMock so we can assert awaited-or-not.
     for name in (
+        "_refresh_cloud_state",
         "_refresh_gps", "_refresh_aiobs", "_refresh_remote", "_refresh_messages",
         "_refresh_oss_gallery", "_refresh_dev", "_refresh_net", "_refresh_dock",
         "_periodic_archive_refresh", "_establish_notification_baseline",
@@ -72,6 +73,9 @@ async def test_boot_backfill_fires_every_specialist_once():
 
     await _boot._run_boot_backfill(coord)
 
+    # Full cloud-state refresh (with the device probes the fast setup gate
+    # skipped) runs off the boot path.
+    coord._refresh_cloud_state.assert_awaited_once()
     coord._establish_notification_baseline.assert_awaited_once()
     coord._refresh_gps.assert_awaited_once()
     coord._refresh_remote.assert_awaited_once()

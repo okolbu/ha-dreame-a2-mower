@@ -291,7 +291,9 @@ class _StateFetchMixin:
         _LOGGER.debug("fetch_map: decoded %d map(s) by id", len(result))
         return result
 
-    def fetch_full_cloud_state(self) -> dict[str, Any] | None:
+    def fetch_full_cloud_state(
+        self, include_device_probes: bool = True
+    ) -> dict[str, Any] | None:
         """Fetch + decode the device's full cloud state in one orchestrated call.
 
         - Empty-list `get_batch_device_datas([])` returns all chunked
@@ -301,6 +303,15 @@ class _StateFetchMixin:
         - Probes for MAPL, MIHIS (each a separate cfg_individual call that's
           already wired). DOCK is owned by the 60 s `_refresh_dock` timer and
           is deliberately NOT probed here.
+
+        ``include_device_probes`` (default True): MAPL and MIHIS are
+        routed-ACTION reads (s2 aiid=50) that go to the *device*, not the cloud
+        cache — so when the mower is OFFLINE each blocks ~15 s on the cloud
+        relay timeout. The empty-batch and CFG are cloud-cache reads and stay
+        fast. Pass ``False`` on the setup-blocking first refresh to skip the two
+        device probes (they are best-effort — mapl→None / mihis→{} — and the
+        post-setup backfill + 2-min periodic refresh fill them in). This is the
+        difference between a ~3 s and a ~35 s config-entry setup while offline.
 
         Returns the decoded **parts** — a dict whose keys are exactly the
         :class:`CloudState` fields — or ``None`` if the empty-batch call fails
@@ -344,18 +355,25 @@ class _StateFetchMixin:
         # family, behaviour-identical to the inline block it replaced).
         families = group_keys_by_prefix(batch)
 
-        # Fast-cadence probes (each a separate cloud call). Errors here don't
-        # fail the whole fetch — the field just stays None/empty.
-        try:
-            mapl = self.fetch_mapl()
-        except Exception as e:
-            _LOGGER.debug("fetch_full_cloud_state: fetch_mapl raised: %s", e)
-            mapl = None
-        try:
-            mihis = self.fetch_mihis() or {}
-        except Exception as e:
-            _LOGGER.debug("fetch_full_cloud_state: fetch_mihis raised: %s", e)
-            mihis = {}
+        # Device-routed probes (MAPL, MIHIS — each a separate routed-action
+        # call to the device). Errors here don't fail the whole fetch — the
+        # field just stays None/empty. Skipped when include_device_probes is
+        # False (the setup-blocking first refresh) so an offline mower's ~15 s
+        # relay timeouts don't stall HA boot; the backfill + periodic refresh
+        # fetch them shortly after.
+        mapl = None
+        mihis: dict[str, Any] = {}
+        if include_device_probes:
+            try:
+                mapl = self.fetch_mapl()
+            except Exception as e:
+                _LOGGER.debug("fetch_full_cloud_state: fetch_mapl raised: %s", e)
+                mapl = None
+            try:
+                mihis = self.fetch_mihis() or {}
+            except Exception as e:
+                _LOGGER.debug("fetch_full_cloud_state: fetch_mihis raised: %s", e)
+                mihis = {}
 
         import time as _time
         return {

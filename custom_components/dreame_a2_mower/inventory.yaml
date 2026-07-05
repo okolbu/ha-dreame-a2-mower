@@ -6716,7 +6716,7 @@ cfg_individual:
       indices 2–4 semantics still unknown).
     status:
       seen_on_wire: true
-      last_seen: "2026-06-09"
+      last_seen: "2026-07-05"
       decoded: partial
     references:
       apk: "ioBroker.dreame/apk.md §getX MAPL"
@@ -6738,6 +6738,10 @@ cfg_individual:
         status: partial
         claim: "Live read 2026-06-28: MAPL=[[0,1,1,1,0],[1,0,1,1,0]] (2 maps). MAPL[i][2..4]=[1,1,0] identical across both maps and unchanged vs the 06-09 read, so [2..4] still can't be discriminated without a labelled map-edit."
         evidence: "live read-only probe 2026-06-28 (read_key_probe.py, action s2.a50 m:g); raw in OLD/ha-dreame-a2-mower-docs/research/historical/2026-06-28-wire-truth-audit/probe-tier1-2026-06-28.txt"
+      - date: "2026-07-05"
+        status: verified
+        claim: "MAPL is a DEVICE-routed read (action s2 aiid=50, m:g) that shares the routed-action-family offline behaviour (see the device-off sweep at the routed-action family note): with the mower offline/in-service it blocks on the cloud relay timeout rather than returning cached data. Confirmed by the config-entry setup-timing breakdown — the full-cloud-state fetch measured 33.9s, wholly attributable to the only two device-routed probes in that fetch (MAPL + MIHIS); skipping both on the setup-blocking first refresh (fetch_full_cloud_state include_device_probes=False) dropped the gate to the cloud-cache batch/CFG reads. Integration behaviour, not a wire-semantic change."
+        evidence: "HA setup-timing WARNING 2026-07-05 (custom_components.dreame_a2_mower __init__.py: 'setup took 35.3s; cloud_state=33.9s'); fix in cloud_client/_state_fetch.py fetch_full_cloud_state + coordinator/_cloud_state.py _refresh_cloud_state(fast=)"
 
   - id: "MIHIS"
     name: "lifetime_mowing_aggregates"

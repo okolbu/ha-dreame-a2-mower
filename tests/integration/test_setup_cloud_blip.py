@@ -66,7 +66,7 @@ def _make_coordinator_stub(*, refresh_succeeds: bool) -> DreameA2MowerCoordinato
     coord = make_coordinator()
     assert coord.cloud_state is None  # real __init__ precondition, not seeded
 
-    async def _fake_refresh_cloud_state() -> None:
+    async def _fake_refresh_cloud_state(*, fast: bool = False) -> None:
         if refresh_succeeds:
             coord.cloud_state = MagicMock(maps_by_id={0: MagicMock()})
         # else: simulate the real _refresh_cloud_state failure path, which

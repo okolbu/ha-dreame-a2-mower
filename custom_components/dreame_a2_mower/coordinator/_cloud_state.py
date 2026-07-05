@@ -31,8 +31,18 @@ _PENDING_CRUISE_TTL = 600.0
 class _CloudStateMixin:
     """Methods extracted from coordinator.py — see spec for groupings."""
 
-    async def _refresh_cloud_state(self) -> None:
+    async def _refresh_cloud_state(self, *, fast: bool = False) -> None:
         """Single-shot fetch of the full cloud state.
+
+        ``fast`` (default False): when True, skip the two device-routed probes
+        (MAPL, MIHIS — see ``fetch_full_cloud_state``) AND the device-relay
+        LiDAR 3dmap backfill. These block ~15 s each on the cloud relay when the
+        mower is offline, so the setup-blocking first refresh
+        (``_refresh_cloud_state_or_raise``) uses ``fast=True`` to keep HA boot
+        to a few seconds. The post-setup backfill and the 2-min periodic timer
+        both call this with ``fast=False`` and fill MAPL/MIHIS/LiDAR in shortly
+        after. The empty-batch (maps/settings/schedule/props) + CFG that
+        platforms actually need are cloud-cache reads and always run.
 
         Called every 2 min via the periodic timer. Map data, CFG, MIHIS and
         MAPL active-map detection are all handled here:
@@ -53,8 +63,12 @@ class _CloudStateMixin:
         if not hasattr(self, "_cloud") or self._cloud is None:
             return
         try:
+            from functools import partial
             parts = await self.hass.async_add_executor_job(
-                self._cloud.fetch_full_cloud_state
+                partial(
+                    self._cloud.fetch_full_cloud_state,
+                    include_device_probes=not fast,
+                )
             )
         except Exception as ex:
             LOGGER.warning("[cloud] _refresh_cloud_state raised: %s", ex)
@@ -83,8 +97,11 @@ class _CloudStateMixin:
         # One-shot LiDAR backfill from the 3dmap OBJ list (so fresh installs
         # don't wait weeks for the next s99.20 push). Runs after _apply_mapl so
         # the active map is known; self-guards via _lidar_backfill_done and
-        # retries here until the relay lands. See _lidar_oss.py.
-        await self._backfill_lidar_from_3dmap(int(time.time()))
+        # retries here until the relay lands. See _lidar_oss.py. Skipped on the
+        # fast boot path (device-relay call) — the post-setup backfill re-runs
+        # _refresh_cloud_state(fast=False), which lands it off the boot path.
+        if not fast:
+            await self._backfill_lidar_from_3dmap(int(time.time()))
         # Re-render PNGs for any map whose md5 changed.
         await self._render_maps_from_cloud_state()
         # Sync HA per-map sub-devices to the freshly-set cloud_state. This
@@ -120,8 +137,12 @@ class _CloudStateMixin:
         `ConfigEntryNotReady` here tells Home Assistant to retry the whole
         entry setup with backoff instead of half-loading it with zero
         per-map entities and a bunch of platform-setup tracebacks.
+
+        Uses ``fast=True`` — the essential cloud-cache reads (maps/settings/
+        props/CFG) that platforms need still run; only the slow device-routed
+        MAPL/MIHIS/LiDAR reads are skipped (the post-setup backfill fills them).
         """
-        await self._refresh_cloud_state()
+        await self._refresh_cloud_state(fast=True)
         if self.cloud_state is None:
             raise ConfigEntryNotReady(
                 "Dreame A2 Mower: initial cloud-state fetch failed "

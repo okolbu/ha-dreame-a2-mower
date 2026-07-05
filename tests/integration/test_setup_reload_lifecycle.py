@@ -175,9 +175,10 @@ class _LifecycleCoordinator(DreameA2MowerCoordinator):
     archive-index loads, and entry.async_on_unload wiring all run for real.
     """
 
-    async def _refresh_cloud_state(self) -> None:
+    async def _refresh_cloud_state(self, *, fast: bool = False) -> None:
         # First-refresh contract: cloud_state must land or setup raises
-        # ConfigEntryNotReady (see _refresh_cloud_state_or_raise).
+        # ConfigEntryNotReady (see _refresh_cloud_state_or_raise). The boot gate
+        # passes fast=True (skips the slow device-routed MAPL/MIHIS/LiDAR reads).
         self.cloud_state = MagicMock(maps_by_id={})
 
     async def _establish_notification_baseline(self) -> None:

@@ -345,6 +345,12 @@ async def _run_boot_backfill(coord) -> None:
         except Exception:  # noqa: BLE001 — a best-effort boot fetch must never crash the task
             LOGGER.debug("boot backfill step %r failed", label, exc_info=True)
 
+    # Full cloud-state refresh FIRST — the setup gate ran fast=True (no MAPL /
+    # MIHIS / LiDAR device probes), so land those now, off the boot path. This
+    # populates active-map detection + lifetime mowing totals a few seconds
+    # after setup instead of waiting for the 2-min periodic tick.
+    await _step("cloud_state_full", coord._refresh_cloud_state())
+
     # Cloud-notification baseline FIRST (before the message pull) — one-shot,
     # silent; seeds _notif_seen_ids with whatever device-messages/v2 holds now
     # so historical records don't replay as fresh HA events. The resolver
