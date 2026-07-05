@@ -695,6 +695,28 @@ function scheduleView(ctx) {
   return { title: "Schedule", path: "schedule", type: "panel", icon: "mdi:calendar-clock", cards: [{ type: "vertical-stack", cards }] };
 }
 
+// Session-replay metadata summary. Reads sensor.picked_session attributes
+// (built by domain/session/replay.py:build_picked_session_summary). Type-aware:
+// mow-stat attributes are null for non-mow sessions, so those rows are guarded.
+function replayMetaCard(picked) {
+  const e = `'${picked}'`;
+  const content =
+    `### {{ state_attr(${e}, 'label') or 'Session details' }}\n\n` +
+    `| | |\n|---|---|\n` +
+    `| **Type** | {{ state_attr(${e}, 'session_type') }} |\n` +
+    `| **Outcome** | {{ state_attr(${e}, 'result_label') or state_attr(${e}, 'outcome') or '—' }} |\n` +
+    `| **Started** | {{ state_attr(${e}, 'started_at') }} |\n` +
+    `| **Duration** | {{ state_attr(${e}, 'duration_min') }} min mowing · {{ state_attr(${e}, 'elapsed_min') }} min elapsed |\n` +
+    `{% set area = state_attr(${e}, 'area_mowed_m2') %}` +
+    `{% if area is not none %}| **Area mowed** | {{ '%.1f'|format(area) }} m²` +
+    `{% set cov = state_attr(${e}, 'coverage_pct') %}{% if cov is not none %} ({{ '%.0f'|format(cov) }}%){% endif %} |\n` +
+    `{% set rate = state_attr(${e}, 'm2_per_min') %}{% if rate is not none %}| **Rate** | {{ '%.1f'|format(rate) }} m²/min |\n{% endif %}` +
+    `{% endif %}` +
+    `{% set used = state_attr(${e}, 'charge_used_pct') %}{% if used is not none %}| **Battery used** | {{ used }}% |\n{% endif %}` +
+    `{% set rc = state_attr(${e}, 'recharge_count') %}{% if rc %}| **Recharges** | {{ rc }} |\n{% endif %}`;
+  return markdown(content, "Session details");
+}
+
 function sessionsView(ctx, opts) {
   const cards = [headerCard("📊", "Sessions", "calendar plus per-session breakdown")];
 
@@ -718,7 +740,10 @@ function sessionsView(ctx, opts) {
 
   const picked = ctx.resolve("picked_session");
   const right = [];
-  if (picked) right.push({ type: "custom:dreame-mower-replay-card", entity: picked });
+  if (picked) {
+    right.push(replayMetaCard(picked));
+    right.push({ type: "custom:dreame-mower-replay-card", entity: picked });
+  }
 
   const top = [];
   if (left.filter(Boolean).length) top.push({ type: "vertical-stack", cards: left.filter(Boolean) });

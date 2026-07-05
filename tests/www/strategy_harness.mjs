@@ -252,6 +252,15 @@ async function run() {
   assert(!jsonHas(sessView1, "custom:dreame-a2-lidar-card"), "sessions: LiDAR card still present after move");
   assert(!jsonHas(sessView1, "WiFi Coverage"), "sessions: WiFi block still present after move");
 
+  // --- Part 2: session-replay metadata card appears beside the replay card. ---
+  assert(jsonHas(sessView1, "area_mowed_m2"), "sessions: replay metadata card missing (no area_mowed_m2 template)");
+  assert(jsonHas(sessView1, "Session details"), "sessions: metadata card title missing");
+  // Absent when no session is picked.
+  const hassNoPick = makeHass(1, { disabledKeys: ["ota_state", "ota_progress", "picked_session"] });
+  const cfgNoPick = await generateDashboard({}, hassNoPick);
+  const sessNoPick = cfgNoPick.views.find((v) => v.path === "sessions");
+  assert(!jsonHas(sessNoPick, "area_mowed_m2"), "sessions: metadata card present without a picked session");
+
   // (d) 3-map fixture — per-map views scale.
   const hass3 = makeHass(3);
   const cfg3 = await generateDashboard({}, hass3);
