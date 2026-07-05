@@ -291,7 +291,12 @@ jobs:
       - name: Check for dev-box paths in shipped files
         run: |
           set -u
-          hits=$(grep -rn "/data/claude/\|/tmp/" \
+          # /tmp/ is anchored to a path boundary (start-of-line or a
+          # non-alnum char before it) so it doesn't false-positive on an
+          # unrelated substring match like the OSS cloud key segment
+          # `iot/tmp/...` — only a real `/tmp/...` path (bare or preceded
+          # by a quote/slash/etc.) trips this half of the gate.
+          hits=$(grep -rnE "/data/claude/|(^|[^[:alnum:]])/tmp/" \
             --include="*.py" custom_components/dreame_a2_mower/ README.md \
             2>/dev/null || true)
           if [ -n "$hits" ]; then
