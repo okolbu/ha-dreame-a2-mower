@@ -102,7 +102,7 @@ class DreameMultiSelectCard extends HTMLElement {
 
 // release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
 // = "..."` shape. defineCard guards the double-define (T6-8) + logs the banner.
-const CARD_VERSION = "1.0.32a5";
+const CARD_VERSION = "2.0.0";
 defineCard("dreame-multi-select-card", DreameMultiSelectCard, {
   name: "Dreame Multi-Select",
   description: "Pick items from a sensor's `items` attribute and call a service with the ids.",
