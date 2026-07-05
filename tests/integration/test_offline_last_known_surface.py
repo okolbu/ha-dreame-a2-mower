@@ -104,6 +104,58 @@ def test_config_switch_sticky_available_but_write_still_raises_offline():
 
 
 # ---------------------------------------------------------------------------
+# 2b. SAFETY-HONESTY (final fix — corrects the Task 12b overreach): an
+#     MQTT-source safety binary_sensor holds NO persisted last-known and carries
+#     a LIVE safety flag, so when the MQTT gate is stale it must go UNAVAILABLE
+#     — never keep surfacing a frozen "all clear" (emergency_stop=off) while we
+#     genuinely can't hear the mower. Cloud stickiness must NOT extend to mqtt.
+# ---------------------------------------------------------------------------
+
+def test_mqtt_safety_binary_sensor_unavailable_when_mqtt_stale():
+    from custom_components.dreame_a2_mower.binary_sensor import (
+        BINARY_SENSORS,
+        DreameA2BinarySensor,
+    )
+
+    for key in ("emergency_stop", "safety_alert_active"):
+        desc = next(d for d in BINARY_SENSORS if d.key == key)
+        assert desc.availability_source == "mqtt", key
+
+    desc = next(d for d in BINARY_SENSORS if d.key == "safety_alert_active")
+    # Flag reads False → "all clear"; the value IS present (would be frozen).
+    coord = _coord(mqtt=False, cloud=True, data=MowerState(safety_alert_active=False))
+    ent = DreameA2BinarySensor(coord, desc)
+    assert ent.is_on is False           # a value IS held…
+    assert ent.available is False       # …but honestly UNAVAILABLE, not "all clear"
+    # No stale marker is fabricated for an mqtt source (cloud-only stickiness).
+    assert not (ent.extra_state_attributes or {})
+
+    # A live cloud link alone does NOT rescue an mqtt safety flag.
+    coord2 = _coord(mqtt=False, cloud=True, data=MowerState(safety_alert_active=True))
+    ent2 = DreameA2BinarySensor(coord2, desc)
+    assert ent2.available is False
+
+
+def test_cloud_binary_sensor_sticky_stale_when_cloud_offline():
+    """The cloud-source diagnostic binary_sensors (dock_in_lawn_region /
+    photo_consent / sim_out_of_warranty / human_presence_*) ARE last-known
+    sticky and must carry the stale marker when cloud is stale-but-held."""
+    from custom_components.dreame_a2_mower.binary_sensor import (
+        BINARY_SENSORS,
+        DreameA2BinarySensor,
+    )
+
+    desc = next(d for d in BINARY_SENSORS if d.key == "sim_out_of_warranty")
+    assert desc.availability_source == "cloud"
+    coord = _coord(cloud=False, data=MowerState(sim_out_of_warranty=True))
+    ent = DreameA2BinarySensor(coord, desc)
+    assert ent.is_on is True
+    assert ent.available is True
+    assert ent.extra_state_attributes["stale"] is True
+    assert ent.extra_state_attributes["last_updated"] == 1000.0
+
+
+# ---------------------------------------------------------------------------
 # 3. offline + NO value (None) → unavailable
 # ---------------------------------------------------------------------------
 

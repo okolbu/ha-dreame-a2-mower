@@ -426,7 +426,13 @@ class DreameA2BinarySensor(
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         fn = self.entity_description.extra_state_attributes_fn
-        if fn is None:
-            return None
-        attrs = {k: v for k, v in fn(self.coordinator).items() if v is not None}
-        return attrs or None
+        attrs: dict[str, Any] = {}
+        if fn is not None:
+            attrs = {k: v for k, v in fn(self.coordinator).items() if v is not None}
+        # Cloud-source rows (dock_in_lawn_region / photo_consent /
+        # sim_out_of_warranty / human_presence_*) are last-known-sticky, so a
+        # stale-but-held value must advertise staleness. mqtt-source safety rows
+        # go unavailable when stale, so this stays empty for them (cloud-gated).
+        stale = self._freshness_stale_attrs()
+        merged = {**attrs, **stale}
+        return merged or None

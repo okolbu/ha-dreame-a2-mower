@@ -286,6 +286,30 @@ def test_mqtt_entity_independent_of_cloud():
     assert _ent("mqtt", mqtt=True, cloud=False).available is True
 
 
+def test_mqtt_entity_unavailable_when_stale_even_holding_a_value():
+    """Safety-honesty (final fix, corrects Task 12b overreach): an mqtt-source
+    entity that STILL HOLDS a value (e.g. a safety flag reading 'all clear')
+    must go UNAVAILABLE when its mqtt gate is stale — cloud last-known
+    stickiness does NOT apply to mqtt sources."""
+    e = _ent("mqtt", mqtt=False, cloud=True)
+    e.is_on = False  # a value is held (a frozen 'all clear' would be dangerous)
+    assert e._freshness_value() is False  # value IS present…
+    assert e.available is False           # …yet honestly unavailable
+    # …and no stale marker is fabricated for an mqtt source.
+    assert e._freshness_stale_attrs() == {}
+    assert e._is_freshness_stale() is False
+
+
+def test_cloud_entity_sticky_and_marked_stale_when_holding_a_value():
+    """Cloud stickiness is PRESERVED: a stale cloud entity holding a last-known
+    value stays available and advertises staleness."""
+    e = _ent("cloud", mqtt=True, cloud=False)
+    e.native_value = 42  # a seeded last-known value
+    assert e.available is True
+    assert e._is_freshness_stale() is True
+    assert e._freshness_stale_attrs()["stale"] is True
+
+
 def test_base_unavailable_overrides_source_fresh():
     class _DeadBase:
         available = False
