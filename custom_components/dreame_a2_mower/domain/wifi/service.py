@@ -171,7 +171,11 @@ async def refresh_wifi_archive(coord) -> dict:
         if body is not None:
             new_count += 1
 
-    coord._wifi_archive_index = coord._wifi_archive_store.load_index()
+    # load_index reads index.json off disk (blocking) — run in the executor so
+    # the read doesn't trip HA's blocking-call-in-event-loop detector.
+    coord._wifi_archive_index = await coord.hass.async_add_executor_job(
+        coord._wifi_archive_store.load_index
+    )
 
     # v1.0.10a6+: tag each archive entry with its best-fit map_id
     # via RSSI fingerprint match against recent session samples.
@@ -185,7 +189,9 @@ async def refresh_wifi_archive(coord) -> dict:
         )
         if matched:
             # Reload index so consumers see the freshly-stamped map_id.
-            coord._wifi_archive_index = coord._wifi_archive_store.load_index()
+            coord._wifi_archive_index = await coord.hass.async_add_executor_job(
+                coord._wifi_archive_store.load_index
+            )
     except Exception:
         LOGGER.exception("refresh_wifi_archive: fingerprint matcher failed")
 
@@ -197,7 +203,9 @@ async def refresh_wifi_archive(coord) -> dict:
             coord._wifi_archive_store.enforce_retention
         )
         if pruned:
-            coord._wifi_archive_index = coord._wifi_archive_store.load_index()
+            coord._wifi_archive_index = await coord.hass.async_add_executor_job(
+                coord._wifi_archive_store.load_index
+            )
     except Exception:
         LOGGER.exception("refresh_wifi_archive: retention enforcement failed")
 

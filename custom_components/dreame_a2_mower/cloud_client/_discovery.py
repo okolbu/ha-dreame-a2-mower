@@ -20,7 +20,11 @@ class _DiscoveryMixin:
         self._mac = mac.lower() if isinstance(mac, str) and mac else None
         self._sn = info.get("sn")
         if not self._sn:
-            _LOGGER.warning(
+            # Expected when the mower is offline (e.g. away for service) — the
+            # cloud device-info record omits sn until it reconnects. We have a
+            # working mac/entry_id fallback, so this is a debug detail, not a
+            # warning the user needs to see on every offline boot.
+            _LOGGER.debug(
                 "cloud _handle_device_info: sn missing from device info;"
                 " falling back to mac/entry_id for identifiers"
             )

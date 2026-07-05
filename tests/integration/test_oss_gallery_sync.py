@@ -39,6 +39,26 @@ async def test_gallery_sync_archives_photo_and_video_and_quota():
 
 
 @pytest.mark.asyncio
+async def test_gallery_sync_warms_archive_indexes_via_executor():
+    """Regression: the per-record has_name/has dedup checks lazily call
+    load_index (json.loads(read_text)) in the event loop, tripping HA's
+    blocking-call detector. refresh_oss_gallery must warm both archive
+    indexes THROUGH the executor first (load_index is idempotent)."""
+    c = _coord([], [], None)
+    # Track which callables were dispatched to the executor.
+    dispatched = []
+    async def _exec(fn, *a):
+        dispatched.append(fn)
+        return fn(*a)
+    c.hass.async_add_executor_job = AsyncMock(side_effect=_exec)
+
+    await c._refresh_oss_gallery()
+
+    assert c._photo_archive.load_index in dispatched
+    assert c._video_archive.load_index in dispatched
+
+
+@pytest.mark.asyncio
 async def test_gallery_sync_skips_already_archived():
     c = _coord([{"id": "p1", "filepath": "https://fake/a.jpg", "uploadTime": "x", "videoPath": ""}], [], None)
     c._video_archive.has = MagicMock(return_value=True)

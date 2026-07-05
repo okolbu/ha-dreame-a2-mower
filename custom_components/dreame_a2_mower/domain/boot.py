@@ -52,11 +52,27 @@ async def async_first_refresh(coord) -> MowerState:
     if not hasattr(coord, "_cloud"):
         await _restore_and_init_transports(coord)
         _register_debounce_cancel(coord)
-        await _schedule_full_state_and_baseline(coord)
-        await _schedule_specialist_refreshers(coord)
+        # INLINE (setup-blocking): the ConfigEntryNotReady gate — the ONLY
+        # cloud fetch HA setup must wait on (P2.2 / T3-2). Everything else is
+        # deferred below so a slow or offline mower can't stall HA boot.
+        await _schedule_full_state_gate(coord)
+        # SYNC: arm every periodic refresher/persist/tick timer. Cheap
+        # (scheduling only) — the immediate boot fires moved to the backfill
+        # task below. Timers stay inline so unload's cancel-identity contract
+        # (test_setup_reload_lifecycle) sees them registered during setup.
+        _schedule_specialist_refreshers(coord)
         _schedule_session_retry(coord)
-        await _load_and_seed_archives(coord)
         _schedule_persist_and_tick(coord)
+        # DEFERRED (post-setup): the heavy/non-essential boot fetches +
+        # archive seed. Runs as an entry background task so setup returns in
+        # seconds even when the mower is offline (was >1 min of inline cloud
+        # retries — the OSS 400-page backfill dominated). HA cancels this task
+        # automatically on unload.
+        coord.entry.async_create_background_task(
+            coord.hass,
+            _run_boot_backfill(coord),
+            "dreame_a2_mower boot backfill",
+        )
 
     return coord.data
 
@@ -128,8 +144,14 @@ def _register_debounce_cancel(coord) -> None:
     coord.entry.async_on_unload(_cancel_debounce_handle)
 
 
-async def _schedule_full_state_and_baseline(coord) -> None:
-    """Periodic full-state timer + the P2.2 first-refresh-or-raise + notif baseline."""
+async def _schedule_full_state_gate(coord) -> None:
+    """Periodic full-state timer + the P2.2 first-refresh-or-raise gate.
+
+    This is the ONLY cloud fetch kept on the setup-blocking path: a failure on
+    the first ``_refresh_cloud_state_or_raise`` must raise ``ConfigEntryNotReady``
+    so HA retries setup rather than forwarding platforms with ``cloud_state``
+    still ``None``. The notification baseline (previously seeded here) moved to
+    ``_run_boot_backfill`` — it is best-effort and does not gate setup."""
     # Periodic cloud-state refresh. The MQTT-driven s6p2 tripwire
     # (see _SETTINGS_TRIPWIRE_SLOTS) catches most app-side saves
     # within ~5 s, but some BT-only settings (obstacleAvoidanceHeight,
@@ -152,28 +174,18 @@ async def _schedule_full_state_and_baseline(coord) -> None:
     # _cloud_state.py:_refresh_cloud_state_or_raise.
     await coord._refresh_cloud_state_or_raise()
 
-    # Cloud-notification baseline (2026-05-26). One-shot, silent —
-    # seeds _notif_seen_ids with whatever the cloud's
-    # device-messages/v2 holds RIGHT NOW so historical records don't
-    # replay as fresh HA events. Subsequent s2p2 transitions kick off
-    # the resolver in _NotificationsMixin. Best-effort: failures
-    # (cloud down, auth pending) are swallowed; the resolver will
-    # retry the baseline on the first real s2p2 transition.
-    try:
-        await coord._establish_notification_baseline()
-    except Exception:
-        LOGGER.debug(
-            "[notif] baseline at setup failed; will retry on first s2p2",
-            exc_info=True,
-        )
 
+def _schedule_specialist_refreshers(coord) -> None:
+    """Arm every fast/slow specialist refresher timer (scheduling ONLY).
 
-async def _schedule_specialist_refreshers(coord) -> None:
-    """Register every fast/slow specialist refresher timer + fire the boot ones."""
-    # Schedule GPS refresh every 60 seconds via getRecords; also fire
-    # one immediately so position_lat/lon are populated at startup.
-    # This is the sole mower-position source (the legacy LOCN
-    # routed-action path was retired).
+    The immediate boot fires that used to live here — and the notification
+    baseline — moved to ``_run_boot_backfill`` so they run off the
+    setup-blocking path. This function only registers the periodic timers, so
+    it is cheap and synchronous; the timers themselves fire on their normal
+    cadence and also get one immediate kick from the backfill task."""
+    # Schedule GPS refresh every 60 seconds via getRecords (the immediate
+    # boot fire is done by _run_boot_backfill). This is the sole
+    # mower-position source (the legacy LOCN routed-action path was retired).
     async def _periodic_gps(_now: Any) -> None:
         await coord._refresh_gps()
 
@@ -182,7 +194,6 @@ async def _schedule_specialist_refreshers(coord) -> None:
             coord.hass, _periodic_gps, timedelta(seconds=60)
         )
     )
-    await coord._refresh_gps()
 
     # AIOBS live obstacle markers: poll every 2 min, but _refresh_aiobs
     # itself early-returns unless a mow session is active (mow-gated,
@@ -196,7 +207,7 @@ async def _schedule_specialist_refreshers(coord) -> None:
         )
     )
 
-    # Schedule REMOTE refresh every 6 hours; also fire one immediately
+    # Schedule REMOTE refresh every 6 hours (immediate boot fire → backfill)
     # so 4G SIM status (left_days, card_id, etc.) is populated at startup.
     async def _periodic_remote(_now: Any) -> None:
         await coord._refresh_remote()
@@ -206,10 +217,9 @@ async def _schedule_specialist_refreshers(coord) -> None:
             coord.hass, _periodic_remote, timedelta(hours=6)
         )
     )
-    await coord._refresh_remote()
 
-    # Schedule message-record refresh every hour; also fire one immediately
-    # so service/system unread counts are populated at startup.
+    # Schedule message-record refresh every hour (immediate boot fire →
+    # backfill) so service/system unread counts are populated at startup.
     async def _periodic_messages(_now: Any) -> None:
         await coord._refresh_messages()
 
@@ -218,10 +228,9 @@ async def _schedule_specialist_refreshers(coord) -> None:
             coord.hass, _periodic_messages, timedelta(hours=1)
         )
     )
-    await coord._refresh_messages()
 
-    # Schedule OSS gallery sync every hour; also fire one immediately
-    # so album photos and videos are populated at startup (Phase D).
+    # Schedule OSS gallery sync every hour (immediate boot backfill →
+    # _run_boot_backfill, with the full max_pages=400 page-to-exhaustion cap).
     async def _periodic_oss_gallery(_now: Any) -> None:
         await coord._refresh_oss_gallery()
 
@@ -230,12 +239,8 @@ async def _schedule_specialist_refreshers(coord) -> None:
             coord.hass, _periodic_oss_gallery, timedelta(hours=1)
         )
     )
-    # Boot: full backfill (page to natural exhaustion — list_oss_media
-    # stops at the first short page). The hourly periodic call stays at
-    # the default, smaller cap.
-    await coord._refresh_oss_gallery(max_pages=400)
 
-    # Schedule DEV refresh every 6 hours; also fire one immediately
+    # Schedule DEV refresh every 6 hours (immediate boot fire → backfill)
     # so the hardware serial / firmware version land at startup
     # (the s1p5 fallback path mostly returns 80001).
     async def _periodic_dev(_now: Any) -> None:
@@ -246,9 +251,8 @@ async def _schedule_specialist_refreshers(coord) -> None:
             coord.hass, _periodic_dev, timedelta(hours=6)
         )
     )
-    await coord._refresh_dev()
 
-    # Schedule NET refresh every hour; also fire one immediately
+    # Schedule NET refresh every hour (immediate boot fire → backfill)
     # so wifi_ssid / wifi_ip / wifi_rssi_dbm have values at boot
     # (otherwise the RSSI sensor sits Unknown for ~45 s waiting
     # for the first s1p1 heartbeat).
@@ -260,11 +264,10 @@ async def _schedule_specialist_refreshers(coord) -> None:
             coord.hass, _periodic_net, timedelta(hours=1)
         )
     )
-    await coord._refresh_net()
 
-    # Schedule DOCK refresh every 60s; mower-in-dock is the
-    # most useful field and benefits from quicker updates so
-    # automations can trigger on dock arrival/departure.
+    # Schedule DOCK refresh every 60s (immediate boot fire → backfill);
+    # mower-in-dock is the most useful field and benefits from quicker
+    # updates so automations can trigger on dock arrival/departure.
     async def _periodic_dock(_now: Any) -> None:
         await coord._refresh_dock()
 
@@ -273,16 +276,6 @@ async def _schedule_specialist_refreshers(coord) -> None:
             coord.hass, _periodic_dock, timedelta(seconds=60)
         )
     )
-    await coord._refresh_dock()
-
-    # Seed the WiFi archive picker cache so select.wifi_archive has
-    # options immediately (before the user presses any refresh button).
-    # Best-effort: failures are non-fatal; the picker stays empty and
-    # the user can trigger a refresh manually.
-    try:
-        await coord.refresh_wifi_archive()
-    except Exception as _ex:
-        LOGGER.debug("Initial WiFi archive fetch failed: %s", _ex)
 
     # Re-list BOTH archives every 6h so a long-running integration picks
     # up new wifimap / 3dmap objects without waiting for a restart. WiFi
@@ -297,6 +290,65 @@ async def _schedule_specialist_refreshers(coord) -> None:
             coord.hass, _periodic_archive, timedelta(hours=6)
         )
     )
+
+
+async def _run_boot_backfill(coord) -> None:
+    """Deferred, non-essential boot work — runs as an entry background task
+    AFTER ``async_setup_entry`` returns, so a slow or offline mower never
+    blocks HA startup.
+
+    Nothing here gates a successful config-entry setup: the
+    ``ConfigEntryNotReady`` gate (``_refresh_cloud_state_or_raise``) already
+    ran inline in ``_schedule_full_state_gate``, and every periodic timer was
+    armed synchronously by ``_schedule_specialist_refreshers``. This task just
+    gives each specialist its one immediate boot kick (so entities populate
+    without waiting a full cadence) and seeds the on-disk archives.
+
+    When the mower is offline (e.g. away for service) these fetches retry then
+    return quietly; the armed timers pick the data up once it reconnects. Each
+    step is isolated so one failing fetch can't strand the rest, and any
+    exception is swallowed to a debug line — an unhandled raise here would
+    surface as a noisy background-task traceback for a best-effort refresh.
+    """
+    import asyncio
+
+    # Yield once so no real work can run before setup returns, even if HA
+    # eager-starts this task.
+    await asyncio.sleep(0)
+
+    async def _step(label: str, coro) -> None:
+        try:
+            await coro
+        except Exception:  # noqa: BLE001 — a best-effort boot fetch must never crash the task
+            LOGGER.debug("boot backfill step %r failed", label, exc_info=True)
+
+    # Cloud-notification baseline FIRST (before the message pull) — one-shot,
+    # silent; seeds _notif_seen_ids with whatever device-messages/v2 holds now
+    # so historical records don't replay as fresh HA events. The resolver
+    # retries the baseline on the first real s2p2 transition if this misses.
+    await _step("notif_baseline", coord._establish_notification_baseline())
+    await _step("gps", coord._refresh_gps())
+    await _step("remote", coord._refresh_remote())
+    await _step("messages", coord._refresh_messages())
+    # Boot: full OSS backfill (page to natural exhaustion — list_oss_media
+    # stops at the first short page). The hourly timer uses the smaller cap.
+    await _step("oss_gallery", coord._refresh_oss_gallery(max_pages=400))
+    await _step("dev", coord._refresh_dev())
+    await _step("net", coord._refresh_net())
+    await _step("dock", coord._refresh_dock())
+    # Seed the WiFi archive picker cache so select.wifi_archive has options.
+    await _step("wifi_archive", coord.refresh_wifi_archive())
+    # Load on-disk archives + seed session-summary / lidar-count fields.
+    await _step("seed_archives", _load_and_seed_archives(coord))
+
+    # _load_and_seed_archives writes coord.data via dataclasses.replace (not a
+    # coordinator push). Now that platforms are up, broadcast once so the
+    # seeded session-summary / archive-count sensors reflect the values
+    # immediately instead of waiting for the next update.
+    try:
+        coord.async_set_updated_data(coord.data)
+    except Exception:  # noqa: BLE001
+        LOGGER.debug("boot backfill final broadcast failed", exc_info=True)
 
 
 def _schedule_session_retry(coord) -> None:

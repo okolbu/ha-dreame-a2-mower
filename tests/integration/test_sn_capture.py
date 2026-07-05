@@ -24,7 +24,8 @@ def test_sn_captured_from_device_info():
     assert proto.serial_number == "G2408000TESTSN0000"
 
 
-def test_sn_missing_logs_warning_and_sets_none(caplog):
+def test_sn_missing_logs_debug_and_sets_none(caplog):
+    import logging
     proto = DreameA2CloudClient.__new__(DreameA2CloudClient)
     info = {
         "did": "BM169439", "model": "dreame.mower.g2408",
@@ -33,6 +34,10 @@ def test_sn_missing_logs_warning_and_sets_none(caplog):
     proto._ensure_strings = lambda: {
         8: "uid", 9: "host", 10: "property", 11: "stream_key", 35: "model",
     }
-    proto._handle_device_info(info)
+    # sn-missing is EXPECTED when the mower is offline (away for service) and a
+    # mac/entry_id fallback exists, so it logs at DEBUG, not WARNING — capture
+    # at DEBUG to see it.
+    with caplog.at_level(logging.DEBUG):
+        proto._handle_device_info(info)
     assert proto.serial_number is None
     assert "sn missing" in caplog.text.lower()

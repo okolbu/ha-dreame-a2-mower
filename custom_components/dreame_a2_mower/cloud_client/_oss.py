@@ -288,8 +288,20 @@ class _OssMixin:
 
         def _log_and_retry(exc: BaseException) -> bool:
             if isinstance(exc, _NonOKStatus):
+                status = exc.args[0]
+                # 404 (object deleted) and 403 (expired signature) are
+                # TERMINAL and EXPECTED for aged/rotated OSS media — a signed
+                # URL for a photo the cloud has since garbage-collected. Don't
+                # burn retries (each is a 15s-timeout request) and don't shout
+                # about it at WARNING; a quiet debug line is enough.
+                if status in (403, 404):
+                    _LOGGER.debug(
+                        "Unable to get file at %s: HTTP %s (gone/expired)",
+                        url, status,
+                    )
+                    return False
                 _LOGGER.warning(
-                    "Unable to get file at %s: HTTP %s", url, exc.args[0]
+                    "Unable to get file at %s: HTTP %s", url, status
                 )
             else:
                 _LOGGER.warning("Unable to get file at %s: %s", url, exc)

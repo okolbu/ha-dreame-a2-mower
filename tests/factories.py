@@ -69,6 +69,7 @@ class FakeConfigEntry:
         self.options: dict = dict(options or {})
         self._on_unload: list = []
         self.update_listeners: list = []
+        self._background_tasks: set = set()
 
     def async_on_unload(self, func) -> None:
         """Register a callback to run when the entry is unloaded.
@@ -89,8 +90,21 @@ class FakeConfigEntry:
 
         return _remove
 
+    def async_create_background_task(self, hass, target, name, eager_start=True):
+        """Mirror ConfigEntry.async_create_background_task: schedule *target*
+        on the loop, track it, and auto-discard on completion. HA cancels
+        these on unload — ``run_on_unload`` does the same below."""
+        task = hass.async_create_task(target)
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
+        return task
+
     def run_on_unload(self) -> None:
-        """Run + clear the on-unload callbacks (real HA: after unload OK)."""
+        """Run + clear the on-unload callbacks (real HA: after unload OK) and
+        cancel any still-pending background tasks (real HA cancels these)."""
+        for task in list(self._background_tasks):
+            task.cancel()
+        self._background_tasks.clear()
         while self._on_unload:
             self._on_unload.pop()()
 

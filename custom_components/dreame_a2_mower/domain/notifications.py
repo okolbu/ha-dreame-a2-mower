@@ -318,6 +318,13 @@ async def refresh_messages(coord) -> None:
         ]
     if dev_raw is not None:
         fresh = [msg.as_dict() for msg in message_record.normalize_device(dev_raw)]
+        # merge_device_messages calls link_message_snapshot_photos, which reads
+        # the photo archive index (list_photos → load_index → read_text). Warm
+        # that index off the loop first so the blocking read doesn't land in the
+        # event loop (load_index is idempotent — the later read is a no-op).
+        photo_archive = coord._photo_archive if hasattr(coord, "_photo_archive") else None
+        if photo_archive is not None:
+            await coord.hass.async_add_executor_job(photo_archive.load_index)
         kw["device_messages"] = coord._merge_device_messages(fresh)
     if share_raw is not None:
         kw["shared_messages"] = [

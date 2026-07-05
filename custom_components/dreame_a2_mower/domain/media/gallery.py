@@ -155,6 +155,14 @@ async def refresh_oss_gallery(coord, max_pages: int = 20) -> None:
         base = (url or "").split("?", 1)[0]
         return base.rsplit("/", 1)[-1] if base else ""
 
+    # Warm the on-disk archive indexes in the executor FIRST. The per-record
+    # ``has_name`` / ``has`` dedup checks below call ``load_index`` lazily, but
+    # that read (``json.loads(path.read_text())``) is blocking — doing it here,
+    # off the loop, keeps HA's blocking-call detector quiet (load_index is
+    # idempotent, so the later in-loop calls are no-ops).
+    await coord.hass.async_add_executor_job(coord._photo_archive.load_index)
+    await coord.hass.async_add_executor_job(coord._video_archive.load_index)
+
     # --- photos ---
     photos = await coord.hass.async_add_executor_job(
         lambda: coord._cloud.list_oss_media("jpg", max_pages=max_pages)
@@ -170,7 +178,10 @@ async def refresh_oss_gallery(coord, max_pages: int = 20) -> None:
         # returns garbage bytes). Archiving them produces a broken thumbnail
         # in the gallery; skip so the next sync can retry cleanly.
         if data[:2] != b"\xff\xd8":
-            LOGGER.warning(
+            # Benign + self-healing: OSS occasionally serves garbage bytes;
+            # we skip and the next hourly sync retries cleanly. Debug, not
+            # warning — it fires on a transient the user can't act on.
+            LOGGER.debug(
                 "[PHOTOS] skipping non-JPEG download for %s (%d bytes, magic=%s)",
                 name, len(data), data[:4].hex(),
             )
