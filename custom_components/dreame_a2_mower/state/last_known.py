@@ -105,6 +105,14 @@ _STATE_FIELDS: tuple[str, ...] = (
     "auto_recharge_standby_enabled",
     "ai_obstacle_photos_enabled",
     "navigation_path_smart",
+    # CFG.PRE / CFG.REC[7] / CFG.WRF / CFG.TIME / CFG.VER (review fix: 6
+    # device-wide CFG config fields omitted from the initial 37-field sweep)
+    "pre_zone_id",
+    "pre_mowing_efficiency",
+    "photo_consent",
+    "weather_forecast_reference",
+    "timezone",
+    "cfg_version",
 )
 
 
@@ -178,6 +186,12 @@ class LastKnown:
     auto_recharge_standby_enabled: bool | None = None
     ai_obstacle_photos_enabled: bool | None = None
     navigation_path_smart: bool | None = None
+    pre_zone_id: int | None = None
+    pre_mowing_efficiency: int | None = None
+    photo_consent: bool | None = None
+    weather_forecast_reference: int | None = None
+    timezone: str | None = None
+    cfg_version: int | None = None
     # --- meta (not MowerState fields) ---
     active_map_id: int | None = None
     saved_unix: float | None = None

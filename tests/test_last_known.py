@@ -130,6 +130,11 @@ def test_last_known_captures_all_cfg_settings():
         "voice_regular_notification": True, "voice_work_status": False,
         "voice_special_status": True, "voice_error_status": True,
         "auto_recharge_standby_enabled": True, "ai_obstacle_photos_enabled": False, "navigation_path_smart": True,
+        "pre_zone_id": 3, "pre_mowing_efficiency": 1,
+        "photo_consent": True,
+        "weather_forecast_reference": 1,
+        "timezone": "Europe/Oslo",
+        "cfg_version": 42,
     }
     # Every field is a declared _STATE_FIELDS entry.
     for name in cfg_fields:
