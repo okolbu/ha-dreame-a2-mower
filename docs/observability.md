@@ -28,19 +28,32 @@ All three are emitted at WARNING level. They are gated on a process-scoped regis
 
 Settings → Devices & Services → Dreame A2 Mower → "Download Diagnostics".
 
+The dump is built from an **allowlist** (default-deny): only fields known to be
+safe for a bug report are emitted. Everything else is omitted outright, or — for
+the `config_entry` section, so a reader can see credentials *were* present but
+scrubbed — replaced with a `**REDACTED**` marker. Secrets, GPS coordinates,
+WiFi SSID/IP, the hardware serial, and cloud/MQTT identifiers (did / uid / host /
+subscribe topic) are never included.
+
 The dump is JSON with these top-level keys:
 
 | Key | Contents |
 |---|---|
-| `config_entry` | Config entry data with creds redacted (`username`, `password`, `token`, `did`, `mac`) |
-| `state` | Snapshot of `MowerState` at dump time (every field as native types) |
+| `config_entry` | Only the safe keys (`country`, `model`) are shown; known-sensitive keys (`username`, `password`, `token`, `did`, `sn`, `mac`, `host`) become a `**REDACTED**` marker; anything else is dropped |
+| `versions` | Integration + firmware version |
+| `state` | An allowlisted subset of the `MowerState` snapshot — GPS, exact map/dock coordinates, and other sensitive fields are excluded, not merely redacted |
 | `capabilities` | Fixed g2408 capability flags (constants, not runtime-resolved) |
+| `cloud_state` | Allowlisted subset only — transport identifiers (did / uid / uuid / host) are dropped entirely |
+| `mqtt_state` | Allowlisted subset only — the subscribe topic / first topics (which embed the serial) are dropped entirely |
+| `entity_counts` / `archive_counts` | Counts only, never contents |
 | `novel_observations` | List from the registry: `[{category, detail, first_seen_unix}]` |
 | `freshness` | Per-field last-updated unix timestamps: `{field_name: ts}` |
 | `endpoint_log` | Cloud-RPC accept/reject map: `{routed_action_op=N: "accepted" | "rejected_80001" | "error"}` |
 | `recent_novel_log_lines` | Tail of NOVEL log lines (capped at 200) |
 
-Attach the dump to bug reports; everything sensitive is redacted.
+Attach the dump to bug reports — the allowlist keeps secrets, location, and
+device/cloud identifiers out. (The gated wire-trace file below is the exception:
+it is **not** pre-redacted.)
 
 ## Wire-trace instrument (gated, off by default)
 
