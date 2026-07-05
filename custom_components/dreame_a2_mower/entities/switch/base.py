@@ -99,6 +99,16 @@ class DreameA2Switch(
         return self.entity_description.value_fn(self.coordinator.data)
 
     @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        # Merge the _ControlHonestyMixin attrs (control_mode/read_only/
+        # provisional, via super()) with the Task 12b staleness marker.
+        base = super().extra_state_attributes
+        stale = self._freshness_stale_attrs()
+        if not stale:
+            return base
+        return {**(base or {}), **stale}
+
+    @property
     def available(self) -> bool:
         """Mark unavailable until the first state read populates ``is_on``.
 
@@ -224,6 +234,16 @@ class _AiRecognitionBitSwitch(
         if raw is None:
             return None
         return bool(raw & self._BIT)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        # Merge the _ControlHonestyMixin attrs (via super()) with the Task 12b
+        # staleness marker.
+        base = super().extra_state_attributes
+        stale = self._freshness_stale_attrs()
+        if not stale:
+            return base
+        return {**(base or {}), **stale}
 
     @property
     def available(self) -> bool:
@@ -403,6 +423,16 @@ class _PerMapSettingsSwitchBase(
             self._SPEC.settings_field
         )
         return None if raw is None else bool(raw)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any] | None:
+        # Merge the _ControlHonestyMixin attrs (via super()) with the Task 12b
+        # staleness marker.
+        base = super().extra_state_attributes
+        stale = self._freshness_stale_attrs()
+        if not stale:
+            return base
+        return {**(base or {}), **stale}
 
     @property
     def available(self) -> bool:

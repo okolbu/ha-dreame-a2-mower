@@ -1921,6 +1921,10 @@ entities:
       - date: "2026-07-04"
         status: presumed
         claim: "P4.4 (R-52, track-5 T5-9): FIVE keys in this table carry experimental=speculative (T1) — the undecoded-slot raw probes s5p104_raw / s5p105_raw / s5p106_raw / s5p107_raw / s6p1_raw. Each is NOT created unless experimental_features is on; disabled-by-default when it is. PROMOTION (per key): the slot's decode lands in inventory.yaml (it then becomes a named sensor, not a raw probe). The other keys in this table stay production (experimental=None)."
+      - date: "2026-07-05"
+        status: verified
+        claim: "P6.7 Task 12b: wifi_ssid / wifi_ip availability_source corrected mqtt→cloud to match their actual data source (CFG.NET cloud poll, refresh_net) — the s1p1 heartbeat only overrides RSSI, never ssid/ip, so the mqtt gate was wrong; they now match the other NET/DOCK/SIM/DEV cloud rows. Also: DreameA2Sensor / DreameA2DiagnosticSensor extra_state_attributes now merge a {stale: True, last_updated: <coord.last_known_saved_unix>} marker via _FreshnessAvailableMixin._freshness_stale_attrs() whenever the freshness gate is stale but a last-known value is still held (offline last-known surfacing)."
+        evidence: "entities/sensor/device.py (wifi_ssid/wifi_ip availability_source=cloud; DreameA2Sensor/DreameA2DiagnosticSensor.extra_state_attributes); _availability.py (_FreshnessAvailableMixin last-known-sticky available + _freshness_stale_attrs)"
     references:
       wire_entry: "varies — see notes for per-key wire surfaces"
       code: "custom_components/dreame_a2_mower/sensor_device.py:772"

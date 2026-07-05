@@ -401,7 +401,10 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="WiFi SSID",
         icon="mdi:wifi",
         entity_category=EntityCategory.DIAGNOSTIC,
-        availability_source="mqtt",
+        # CFG.NET (cloud poll) is the data source — matches the other NET/DOCK/
+        # SIM/DEV cloud rows (Task 12b/d). The s1p1 heartbeat only overrides the
+        # RSSI, not ssid/ip, so gating these on mqtt was wrong.
+        availability_source="cloud",
         value_fn=lambda s: s.wifi_ssid,
     ),
     DreameA2SensorEntityDescription(
@@ -409,7 +412,8 @@ SENSORS: tuple[DreameA2SensorEntityDescription, ...] = (
         name="WiFi IP",
         icon="mdi:ip-network",
         entity_category=EntityCategory.DIAGNOSTIC,
-        availability_source="mqtt",
+        # CFG.NET (cloud poll) is the data source — see wifi_ssid above (Task 12b/d).
+        availability_source="cloud",
         value_fn=lambda s: s.wifi_ip,
     ),
     # CFG.DOCK position fields. yaw user-confirmed to match compass
@@ -1352,10 +1356,16 @@ class DreameA2Sensor(
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         fn = self.entity_description.extra_attributes_fn
-        if fn is None:
-            return None
-        raw = fn(self.coordinator.data)
-        return {k: v for k, v in raw.items() if v is not None} if raw else None
+        base = (
+            None if fn is None
+            else ({k: v for k, v in fn(self.coordinator.data).items() if v is not None}
+                  or None)
+        )
+        # Task 12b: mark a last-known-sticky value stale (empty when fresh).
+        stale = self._freshness_stale_attrs()
+        if not stale:
+            return base
+        return {**(base or {}), **stale}
 
 
 class DreameA2DiagnosticSensor(
@@ -1397,9 +1407,12 @@ class DreameA2DiagnosticSensor(
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         fn = self.entity_description.extra_state_attributes_fn
-        if fn is None:
-            return None
-        return fn(self.coordinator)
+        base = None if fn is None else fn(self.coordinator)
+        # Task 12b: mark a last-known-sticky value stale (empty when fresh).
+        stale = self._freshness_stale_attrs()
+        if not stale:
+            return base
+        return {**(base or {}), **stale}
 
 
 # ---------------------------------------------------------------------------
@@ -1433,9 +1446,8 @@ class DreameA2OtaStatusSensor(
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         cs = getattr(self.coordinator, "cloud_state", None)
-        if cs is None or cs.ota_status is None:
-            return {}
-        return {"percent": cs.ota_status[1]}
+        base = {} if cs is None or cs.ota_status is None else {"percent": cs.ota_status[1]}
+        return {**base, **self._freshness_stale_attrs()}  # Task 12b staleness
 
 
 class DreameA2ScheduleCountSensor(
@@ -1464,8 +1476,9 @@ class DreameA2ScheduleCountSensor(
     def extra_state_attributes(self) -> dict[str, Any]:
         cs = getattr(self.coordinator, "cloud_state", None)
         if cs is None:
-            return {}
+            return {**self._freshness_stale_attrs()}  # Task 12b staleness
         return {
+            **self._freshness_stale_attrs(),  # Task 12b staleness
             "slots": [
                 {
                     "slot_id": s.slot_id,

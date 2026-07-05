@@ -452,6 +452,11 @@ class _CoreMixin:
         # kept SEPARATE from MowerState/StateSnapshot so it can't perturb the
         # corpus-replay golden digest.
         self._last_known_store: Store | None = None  # initialised in domain/boot
+        # Coarse blob-level timestamp of the last LastKnown persist (or the
+        # restored blob's). Read by the entity-surface staleness marker
+        # (Task 12b: _FreshnessAvailableMixin._freshness_stale_attrs →
+        # coord.last_known_saved_unix).
+        self._last_known_saved_unix: float | None = None
         # Pending-finalize wait (dock-return capture).
         # Set to an asyncio.Event by _wait_for_dock_return; cleared in its
         # finally block so stale signals from subsequent MQTT pushes are
@@ -548,6 +553,16 @@ class _CoreMixin:
     # ------------------------------------------------------------------
     # Per-source availability signals (Phase 1.1)
     # ------------------------------------------------------------------
+    @property
+    def last_known_saved_unix(self) -> float | None:
+        """Coarse timestamp of the last LastKnown persist (or the restored blob).
+
+        Read by the entity-surface staleness marker (Task 12b) to populate the
+        ``last_updated`` attribute alongside ``stale: True``. ``None`` until the
+        first persist/restore. getattr default: __new__-built test fixtures may
+        skip __init__."""
+        return getattr(self, "_last_known_saved_unix", None)
+
     @property
     def cloud_is_fresh(self) -> bool:
         """False once the full-state cloud poll has failed enough consecutive
@@ -879,6 +894,10 @@ class _CoreMixin:
                 self.data = self.data.with_updates(**updates)
             if blob.active_map_id is not None:
                 self._active_map_id = blob.active_map_id
+            if blob.saved_unix is not None:
+                # Surface the restored blob's age to the staleness marker so an
+                # offline restart shows a real last_updated (Task 12b).
+                self._last_known_saved_unix = blob.saved_unix
         except Exception:
             LOGGER.exception("last_known seed failed; continuing without seed")
 
@@ -901,9 +920,11 @@ class _CoreMixin:
         if store is None:
             return
         try:
-            blob = LastKnown.from_state(
-                self.data, self._active_map_id, time.time()
-            )
+            now = time.time()
+            blob = LastKnown.from_state(self.data, self._active_map_id, now)
+            # Track the save time for the entity-surface staleness marker
+            # (Task 12b): coord.last_known_saved_unix.
+            self._last_known_saved_unix = now
             store.async_delay_save(blob.to_dict, LAST_KNOWN_SAVE_DELAY_S)
         except Exception:
             LOGGER.debug("last_known save failed; skipping", exc_info=True)

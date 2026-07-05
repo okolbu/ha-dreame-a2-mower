@@ -138,6 +138,10 @@ async def refresh_net(coord) -> None:
     new_state = dataclasses.replace(coord.data, **updates)
     if new_state != coord.data:
         coord.async_set_updated_data(new_state)
+    # Persist offline last-known AFTER a successful NET fetch (Task 12b, closes
+    # the 12a Minor) — so ssid/ip persist promptly on NET update rather than
+    # only as a dock side-effect.
+    coord._save_last_known()
 
 
 async def refresh_remote(coord) -> None:

@@ -377,7 +377,10 @@ def _coord_with_settings(map_id=0, value=5, *, mqtt=True, cloud=True):
     return coord
 
 
-def test_cloud_entity_per_map_number_unavailable_when_cloud_stale():
+def test_cloud_entity_per_map_number_last_known_sticky_when_cloud_stale():
+    """Task 12b: a cloud entity holding a (seeded) last-known value stays
+    AVAILABLE when the cloud goes stale — it shows the value instead of going
+    unavailable. (Pre-12b this asserted ``available is False``.)"""
     from custom_components.dreame_a2_mower.number import (
         DreameA2PerMapMowingHeightNumber,
     )
@@ -389,12 +392,19 @@ def test_cloud_entity_per_map_number_unavailable_when_cloud_stale():
     assert ent.native_value == 5.0
     assert ent.available is True
 
+    # Cloud stale but a value is still held → stays available (last-known sticky).
     coord.cloud_is_fresh = False
-    assert ent.available is False
+    assert ent.available is True
     # An mqtt outage must NOT take a cloud entity down.
     coord.cloud_is_fresh = True
     coord.mqtt_is_fresh = False
     assert ent.available is True
+
+    # No value at all + cloud stale → genuinely unavailable.
+    coord2 = _coord_with_settings(value=None, mqtt=True, cloud=False)
+    ent2 = DreameA2PerMapMowingHeightNumber(coord2, map_id=0)
+    assert ent2.native_value is None
+    assert ent2.available is False
 
 
 # --- Group 3: a none entity (refresh button — no mixin, untouched) --------
