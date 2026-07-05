@@ -6,14 +6,28 @@ fork** of any upstream vacuum or mower project.
 
 ## Status
 
-🟢 **Alpha pre-release (`v1.0.31a5`).** Feature-complete for a single
+🟢 **Approaching a v2.0.0 public release.** Feature-complete for a single
 `dreame.mower.g2408` on one Dreame cloud account, and in daily use against
-a live mower. Distributed as a HACS pre-release while protocol coverage and
-live validation continue. Built greenfield for the A2 — the original F1–F7
-phase rollout plans are maintainer-internal history (not distributed with
-this repo); since then the coordinator, cloud client, entity platforms, and
-map renderer have each been decomposed into focused packages and multi-map
-support was added.
+a live mower. Distributed as a HACS custom repository (see Installation)
+while protocol coverage and live validation continue — check the
+[Releases page](https://github.com/okolbu/ha-dreame-a2-mower/releases) for
+the current published version. Built greenfield for the A2 — the original
+F1–F7 phase rollout plans are maintainer-internal history (not distributed
+with this repo); since then the coordinator, cloud client, entity
+platforms, and map renderer have each been decomposed into focused
+packages and multi-map support was added.
+
+### Region status
+
+Developed and verified against the **EU** Dreame cloud region
+(`country: eu` in the config flow). The other regions the cloud API
+accepts — `us`, `cn`, `ru`, `i2`, `sg`, `de` — are **best-effort**: the
+same login / device-discovery / cloud-RPC code path runs against them,
+but none of it has been exercised against those regions' actual cloud
+endpoints, and there's no region gating in the code to stop you trying.
+If you're on a non-EU account, please
+[open an issue](https://github.com/okolbu/ha-dreame-a2-mower/issues) and
+report whether it worked — that's how this list grows.
 
 ## Features
 
@@ -240,8 +254,11 @@ session totals). The replay picker spans all maps. See `docs/multi-map.md`.
 - Raw diagnostic sensors for unmapped slots so values surface during
   ongoing protocol-RE work.
 - **`download_diagnostics`** dumps state, capabilities, novel-token
-  list, freshness, endpoint log, and recent NOVEL log lines (creds
-  redacted per spec §5.9).
+  list, freshness, endpoint log, and recent NOVEL log lines through an
+  **allowlist** (default-deny) — only fields known to be safe for a bug
+  report are included; secrets, GPS coordinates, WiFi SSID/IP, the
+  device serial, and cloud/MQTT identifiers (did/uid/host) are omitted
+  or replaced with a `**REDACTED**` marker. See *Reporting bugs* below.
 
 ### Events and notifications
 
@@ -286,17 +303,51 @@ upstream creep: layer-1 and layer-2 must never import `homeassistant.*`.
 
 ## Installation
 
-Currently distributed as a HACS custom repository. After v1.0.0
-graduates from `a*` pre-release, regular HACS releases will follow.
+Currently distributed as a HACS custom repository.
 
 1. HACS → Integrations → ⋮ → **Custom repositories**.
 2. Add `https://github.com/okolbu/ha-dreame-a2-mower` with category
    **Integration**. Enable "show beta" if you want pre-release tags.
 3. Install **Dreame A2 Mower** from HACS, restart HA.
 4. Settings → Devices & Services → **Add Integration** → "Dreame A2
-   Mower". Enter Dreame cloud credentials.
+   Mower". Enter your Dreame cloud username, password, and cloud region
+   (see *Region status* above). Setup **validates the credentials
+   against the Dreame cloud on submit** — a wrong username/password or a
+   connection problem shows an inline error right there instead of
+   leaving you with a broken config entry. On success it **auto-detects
+   your account's mowers and pins the first `dreame.mower.g2408`** it
+   finds (a warning is logged if the account has more than one — see
+   *Single-mower support* under Limitations); an account with no
+   supported mower is rejected with a clear "no supported device"
+   message rather than silently creating an unusable entry. If the
+   Dreame cloud password changes later, HA surfaces a **reauthenticate**
+   prompt on the integration instead of failing silently — enter the new
+   password and existing entities carry on unchanged.
 5. Configure → **Options** → set retention caps (LiDAR archive size
-   defaults to 200 MB; PCDs run 2-3 MB each).
+   defaults to 200 MB; PCDs run 2-3 MB each) and, optionally, turn on
+   **experimental features** (see below; off by default, safe to leave
+   off).
+
+### Experimental features
+
+The options flow has an **"Enable experimental features"** toggle,
+**off by default**. Leave it off unless you have a specific reason to
+change it — it gates two things:
+
+- Entities that are wire-verified-but-unexercised, have unverified
+  frame/units, or are fail-closed pending a backend response stay
+  uncreated while it's off; turning it on creates them (still disabled
+  by default in the entity registry, so you opt in per-entity from
+  there).
+- Two developer-only diagnostic services, `dump_map_diagnostics` and
+  `discover_cloud_api`, are registered only while it's on — they're
+  protocol reverse-engineering tools for maintainers, not needed for
+  normal use.
+
+Reload the integration after changing the option. Nothing in the
+supported feature set — lawn mower control, live map, schedule editing,
+settings, photo/video gallery, and the rest of this README — depends on
+it.
 
 ### Dashboard
 
@@ -461,13 +512,16 @@ so historical session and LiDAR data carry over without migration.
 
 ## Limitations
 
-### Multi-mower support
+### Single-mower support
 
-This integration is tested with a single mower per Dreame account. The
-internal architecture (SN-keyed identifiers, sub-devices via `via_device`)
-allows multiple mowers under separate config entries, but it has not
-been tested. If you have two A2/g2408 mowers, expect rough edges; please
-file an issue.
+This integration supports **one `dreame.mower.g2408` per Dreame cloud
+account.** The config flow auto-detects your account's mowers and pins
+the first g2408 it finds (see Installation); if the account has more
+than one, only that one is set up and a warning is logged. The internal
+architecture (SN-keyed identifiers, sub-devices via `via_device`) allows
+for multiple mowers under separate config entries, but that path is
+untested — if you have two A2/g2408 mowers, expect rough edges with a
+second config entry; please file an issue.
 
 ### Time-window entities are read-only
 
@@ -487,19 +541,32 @@ practice — most users keep a stable set of maps.
 
 ## Reporting bugs
 
-`download_diagnostics` (Settings → Devices & Services → Dreame A2
-Mower → ⋮ → Download Diagnostics) produces a redacted JSON dump
-suitable for attaching to GitHub issues. It includes:
-
-- `state` — current `MowerState` snapshot (every field).
-- `cloud_state` / `mqtt_state` — connection, did/uid/host (redacted).
-- `novel_observations` — protocol shapes the integration didn't
-  recognize.
-- `freshness` — per-field last-update timestamps.
-- `endpoint_log` — cloud-RPC accept / reject / 80001 outcomes.
-- `recent_novel_log_lines` — tail of `[NOVEL/*]` warnings.
-
-Issues: <https://github.com/okolbu/ha-dreame-a2-mower/issues>
+1. Open a [GitHub issue](https://github.com/okolbu/ha-dreame-a2-mower/issues)
+   using the **Bug report** template.
+2. Run `download_diagnostics` (Settings → Devices & Services → Dreame A2
+   Mower → ⋮ → Download Diagnostics) and attach the resulting JSON file.
+   It's built from an **allowlist**, not a denylist — only fields known
+   to be safe are included in the first place — so it's safe to attach
+   to a public issue. It contains:
+   - `state` — an allowlisted subset of the `MowerState` snapshot;
+     GPS, exact map/dock coordinates, and other sensitive fields are
+     excluded outright, not merely redacted.
+   - `cloud_state` / `mqtt_state` — connection status only; `did` /
+     `uid` / `host` and the MQTT topic strings (which embed the device
+     serial) are never included.
+   - `config_entry` — only `country` and `model`; username, password,
+     token, device id, serial, MAC, and host are replaced with a
+     `**REDACTED**` marker if present.
+   - `novel_observations`, `freshness`, `endpoint_log`,
+     `recent_novel_log_lines` — protocol reverse-engineering diagnostics
+     (unrecognized wire shapes, per-field staleness, cloud-RPC
+     accept/reject outcomes, recent `[NOVEL/*]` warnings).
+3. Include the integration version (HACS → Dreame A2 Mower) and your
+   Home Assistant version (Settings → About).
+4. **Do not paste raw Dreame cloud credentials, tokens, or MQTT
+   connection strings into the issue.** The diagnostics download is
+   built to be safe to attach; ad-hoc log excerpts are not guaranteed to
+   be, so prefer the diagnostics file over pasting raw logs.
 
 ## License
 
