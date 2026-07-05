@@ -134,6 +134,43 @@ async def test_no_mower_records_aborts_no_supported_device(
     assert created == {}
 
 
+def _fake_client_raw(payload):
+    """Fake client whose get_devices() returns an arbitrary (untrusted) payload."""
+
+    class _FakeClient:
+        def __init__(self, *, username, password, country):
+            pass
+
+        def login(self) -> bool:
+            return True
+
+        def get_devices(self):
+            return payload
+
+    return _FakeClient
+
+
+@pytest.mark.parametrize("payload", [{"page": None}, {"page": "x"}, {"page": []}])
+async def test_malformed_page_does_not_crash_aborts_no_supported_device(
+    monkeypatch: pytest.MonkeyPatch, payload: dict
+) -> None:
+    """A malformed cloud response where ``page`` is present but not a dict
+    (``{"page": null}`` / ``{"page": "x"}``) must NOT raise AttributeError out of
+    async_step_user (it runs OUTSIDE _validate_login's try/except) — it is
+    treated as no devices → no_supported_device abort."""
+    monkeypatch.setattr(config_flow, "DreameA2CloudClient", _fake_client_raw(payload))
+
+    created: dict = {}
+    aborted: dict = {}
+    flow = _make_flow(created, aborted)
+
+    result = await flow.async_step_user(_data())
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "no_supported_device"
+    assert created == {}
+
+
 async def test_multiple_g2408_pins_first_and_warns(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:

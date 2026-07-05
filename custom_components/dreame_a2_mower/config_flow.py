@@ -101,7 +101,13 @@ def _discover_mower_records(client: DreameA2CloudClient) -> list[dict[str, Any]]
     data = client.get_devices()
     if not data:
         return []
-    records = data.get("page", {}).get("records", [])
+    # ``data["page"]`` may be present-but-not-a-dict (e.g. ``{"page": null}`` or
+    # ``{"page": "x"}``) on a malformed/untrusted cloud response. This runs after
+    # a successful login, OUTSIDE _validate_login's try/except, so a bare
+    # ``.get("records")`` AttributeError would escape async_step_user unhandled —
+    # guard it and treat a non-dict page as "no devices".
+    page = data.get("page")
+    records = page.get("records", []) if isinstance(page, dict) else []
     return [
         d for d in records if str(d.get("model", "")).startswith("dreame.mower.")
     ]
