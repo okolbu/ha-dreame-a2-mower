@@ -330,7 +330,7 @@ T2-16 shipped shape, see the architecture doc §1 and the attr-hub decision note
 there) plus the transport bootstrap (`_init_cloud` / `_init_mqtt`); the ~450-LOC
 first-refresh poll body dissolved into `domain/boot.py:async_first_refresh`
 (`_async_update_data` is now a one-line delegator). Cite the target architecture:
-`docs/superpowers/specs/2026-07-02-refactor-v2-target-architecture.md` §1.
+`/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/superpowers/specs/2026-07-02-refactor-v2-target-architecture.md` §1.
 
 > **Shipped-shape deviation from the spec's "single file" ideal (recorded
 > 2026-07-04):** the target-architecture §1 sketched the composition root as a
