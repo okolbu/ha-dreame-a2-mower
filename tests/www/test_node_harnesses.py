@@ -30,6 +30,8 @@ HARNESSES = [
     # R-13/R-14/R-48 / P5.3 dashboard strategy: registry-generated views, no
     # dead refs, no `attribute:` conditionals, per-map scaling, plotly degrade.
     "strategy_harness.mjs",
+    # Device-messages card: flat photo indexing + untrusted-text escaping.
+    "device_messages_harness.mjs",
 ]
 
 

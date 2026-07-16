@@ -71,7 +71,21 @@ AI-detection bbox/label overlay that the gallery and replay cards now have (shar
 `sensor.dreame_a2_mower_device_messages.items` would unify the UX.
 **Done when:** a bundled `www/` custom card renders the device-messages list with per-message photo
 thumbnails that open the same in-card lightbox + overlay; the markdown card is replaced on the Info tab.
-**Status:** open (deferred follow-up; markdown card works, just new-tab + no overlay).
+**Status:** DONE 2026-07-16 — `www/dreame-a2-device-messages-card.js`; the strategy's `messages`
+manifest routes `device_messages` to it via a new `card:` field (the other two message sensors carry
+no photos and stay markdown). Bundled from the strategy's `CARDS` import list.
+
+**Premise correction (found while implementing):** the "Why" above is stale. The markdown card did
+NOT render new-tab thumbnails — it rendered **no photos at all**. The P5 strategy rewrite
+(`34531701`) replaced the hand-written dashboards with the registry-generated strategy, and the
+message-photo markdown never came across; the surviving template interpolates only
+title/date/body. So `link_message_snapshot_photos` has been attaching signed thumbnails to
+`items[].photos` that nothing displayed. This card is the first surface to render them —
+a new feature, not the UX upgrade the entry describes.
+**Live-verify (NOT done — no snapshot message since the change):** open the Messages tab and confirm
+a snapshot message shows thumbnails that open the lightbox with the bbox overlay. The photo path is
+covered only by the pure-logic harness (`tests/www/device_messages_harness.mjs`); the fixtures encode
+the `items[].photos` shape read from `domain/media/gallery.py:signed_photo_thumb`, not a live payload.
 **Cross-refs:** `www/dreame-a2-photo-gallery-card.js` (lightbox+overlay pattern),
 `www/_dreame-map-core.js:attachDetectionOverlay`; the strategy's Info-view
 device-messages card (`www/dreame-a2-strategy.js`, `messages` manifest section);
@@ -304,7 +318,17 @@ UpdateEntity + `ota_state`/`ota_progress` sensors (v1.0.28a7) already surface th
 MQTT path; this item is just the legacy `cloud_state.ota_status` tuple's string mapping.
 **Done when:** the `ota_status` sensor returns the OTAState string (or both via attrs),
 and the cloud-tuple↔s1p2/s1p3 correspondence is confirmed or documented as assumed.
-**Status:** unblocked (enum confirmed); small mapping + tuple-source-confirm remain.
+**Status:** DONE 2026-07-16 (part (a) shipped; part (b) documented-as-assumed, the
+`Done when` clause's sanctioned close — NOT captured).
+`protocol/properties_g2408.py` gained `OTAState` + `ota_state_label()` (mirroring
+`charging_label()`); both `sensor.ota_status` (cloud tuple) and `sensor.ota_state`
+(s1p2 diagnostic) now render the label, with the raw code preserved in
+`sensor.ota_status`'s `code` attribute. `MowerState.ota_state` still holds the raw
+int, so `update.py`'s `== 2` in-progress check is untouched.
+**Still open (b) — to CONFIRM on the next OTA:** diff `sensor.ota_status`'s `code`
+attribute against `sensor.ota_state` on the same tick. If they disagree, the cloud
+tuple is a different lineage and the `ota_status` mapping must be reverted
+(the diagnostic `ota_state` mapping is confirmed independently and would stand).
 **Cross-refs:** `inventory.yaml § s1p2 ota_state` / `§ s1p3`; DONE.md "Firmware update flow";
 spec "Out of scope" item 5.
 

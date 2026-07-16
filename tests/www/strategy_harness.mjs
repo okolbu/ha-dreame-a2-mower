@@ -224,6 +224,33 @@ async function run() {
   const refs1 = new Set(collectEntityRefs(cfg1));
   for (const eid of refs1) assert(!/ota_state|ota_progress/.test(eid), `1-map: referenced disabled entity ${eid}`);
 
+  // Device messages use the custom card, not markdown: markdown is
+  // HA-sanitized and cannot render the photo lightbox / detection overlay.
+  // The other message sensors carry no photos and stay markdown.
+  const msgView = cfg1.views.find((v) => v.path === "messages");
+  assert(msgView, "1-map: messages view missing");
+  const msgCards = JSON.stringify(msgView);
+  assert(
+    msgCards.includes("custom:dreame-a2-device-messages-card"),
+    "1-map: device messages must render via the custom card",
+  );
+  const dmCard = (msgView.cards[0].cards || []).find(
+    (c) => c.type === "custom:dreame-a2-device-messages-card",
+  );
+  assert(
+    dmCard && /device_messages/.test(dmCard.entity || ""),
+    "1-map: device-messages card must point at the device_messages sensor",
+  );
+  // The markdown template must not survive for the device_messages sensor —
+  // two cards for one sensor would render the list twice.
+  for (const c of msgView.cards[0].cards || []) {
+    if (c.type === "markdown")
+      assert(
+        !/device_messages/.test(c.content || ""),
+        "1-map: device_messages still has a markdown card",
+      );
+  }
+
   // rename-prefixed entity still referenced correctly (T6-1): the photos glance
   // must carry the floor_0_outside_ obstacle-photos sensor, resolved by key.
   assert(jsonHas(cfg1, "floor_0_outside_dreame_a2_mower_photos_obstacle"),

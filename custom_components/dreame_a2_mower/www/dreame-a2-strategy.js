@@ -276,8 +276,11 @@ const MANIFEST = {
   ],
 
   // Messages tab — device / service / shared message sensors.
+  // `card` opts an entry out of the markdown template into a custom card:
+  // only device messages carry snapshot photos, which markdown can't render
+  // (HA sanitizes it — no lightbox, no detection overlay).
   messages: [
-    { key: "device_messages", title: "🤖 Device messages" },
+    { key: "device_messages", title: "🤖 Device messages", card: "custom:dreame-a2-device-messages-card" },
     { key: "service_messages_unread", title: "📨 Service messages" },
     { key: "shared_messages", title: "👥 Shared messages" },
   ],
@@ -915,6 +918,10 @@ function messagesView(ctx) {
     const eid = ctx.resolve(m.key);
     if (!eid) continue;
     any = true;
+    if (m.card) {
+      cards.push({ type: m.card, entity: eid, title: m.title });
+      continue;
+    }
     cards.push(
       markdown(
         `{% set items = state_attr('${eid}','items') or [] %}\n**{{ items | count }} messages**\n{% for msg in items %}\n- {{ '🔵' if msg.unread else '⚪' }} **{{ msg.title }}**{% if msg.date %} <span style="font-size:0.8em;color:var(--secondary-text-color)">{{ (as_timestamp(msg.date, 0) | timestamp_custom('%Y-%m-%d %H:%M', true)) if as_timestamp(msg.date, 0) else msg.date }}</span>{% endif %}{% if msg.body %}<br>{{ msg.body }}{% endif %}\n{% endfor %}\n{% if not items %}_No messages_{% endif %}`,
@@ -997,6 +1004,7 @@ if (typeof customElements !== "undefined" && typeof HTMLElement !== "undefined")
       "./dreame-a2-lidar-card.js",
       "./dreame-a2-schedule-card.js",
       "./dreame-a2-photo-gallery-card.js",
+      "./dreame-a2-device-messages-card.js",
       "./dreame-multi-select-card.js",
     ];
     for (const url of CARDS) import(url).catch(() => {});
