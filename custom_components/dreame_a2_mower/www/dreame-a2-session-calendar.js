@@ -347,7 +347,7 @@ class DreameA2SessionCalendarCard extends HTMLElement {
 
 // release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
 // = "..."` shape. defineCard logs the once-per-tag console banner.
-const CARD_VERSION = "2.1.0";
+const CARD_VERSION = "2.1.1";
 defineCard("dreame-a2-session-calendar", DreameA2SessionCalendarCard, {
   name: "Dreame Mower Session Calendar",
   description: "Month grid of archived sessions; tap one to load it in the replay camera.",
