@@ -461,6 +461,11 @@ class _CoreMixin:
         # (Task 12b: _FreshnessAvailableMixin._freshness_stale_attrs →
         # coord.last_known_saved_unix).
         self._last_known_saved_unix: float | None = None
+        # The authoritative last-known blob: the merge base every save folds its
+        # non-None values over, so a fetch that succeeds while the mower is
+        # ABSENT (cloud up, no device data) can't null out good values. Seeded
+        # by _restore_last_known on boot; replaced by each _save_last_known.
+        self._last_known_blob: LastKnown | None = None
         # Pending-finalize wait (dock-return capture).
         # Set to an asyncio.Event by _wait_for_dock_return; cleared in its
         # finally block so stale signals from subsequent MQTT pushes are
@@ -577,24 +582,63 @@ class _CoreMixin:
             < self._CLOUD_UNAVAIL_THRESHOLD
         )
 
+    #: Heartbeat silence beyond which we declare the DEVICE unreachable
+    #: (as opposed to the transport). Corpus-derived (15 probe logs, 103,865
+    #: s1p1 gaps, 2026-07-16) — see ``device_is_alive``.
+    _DEVICE_SILENT_S: int = 3600
+
+    @property
+    def device_is_alive(self) -> bool:
+        """Whether we have heard from the MOWER recently enough to trust its
+        live push-sourced state.
+
+        This is the DEVICE-liveness half of availability; ``mqtt_is_fresh`` is
+        the TRANSPORT half. They are genuinely different questions and both are
+        needed: our MQTT client connects to Dreame's CLOUD broker, and the mower
+        connects to that broker separately — so ``mqtt.is_connected`` stays True
+        while the mower sits in a repair shop. Transport reachability says
+        nothing about whether the device exists.
+
+        THRESHOLD (corpus-derived, do not hand-tune):
+        ``HB_STALENESS_S`` (90s) is far too tight to gate on — 20.9% of DOCKED
+        heartbeat gaps exceed it (median 32s, p90 300s, p99 1247s), which is
+        exactly the flapping todo8 #1 removed. But the same corpus shows the
+        backoff is bounded, not "multi-hour": at 1h, ZERO of 44,261 OFF-DOCK
+        gaps and only 9 of 59,604 docked gaps (0.015%) would false-fire. The
+        longest legitimate off-dock silence observed is 30 min — and off-dock is
+        where this matters, because the mower is moving.
+
+        ``None`` (never heard) is NOT alive: on a fresh install we have no basis
+        to claim the device's safety flags are readable.
+        """
+        snap = self.state_machine.snapshot()
+        last_hb = getattr(snap, "last_heartbeat_unix", None)
+        if last_hb is None:
+            return False
+        return (time.time() - last_hb) <= self._DEVICE_SILENT_S
+
     @property
     def mqtt_is_fresh(self) -> bool:
-        """Whether the MQTT-sourced entities should report *available* (todo8 #1).
+        """Whether the MQTT TRANSPORT can still deliver data (todo8 #1).
 
-        This is a TRANSPORT check, not a device-liveness inference. The entity is
-        available whenever we can still receive data — i.e. our MQTT client holds
-        a live broker connection (so any push WILL reach us) OR the cloud poll is
-        succeeding. It is deliberately NOT gated on heartbeat freshness: the
-        device backs its whole telemetry radio off to a multi-minute (docked:
-        multi-hour) cadence whenever it is not actively mowing, so heartbeat
-        silence is normal and must not flap the entity. Like the Dreame app, we
-        then keep showing last-known state — including error states, which the
-        firmware reports as data before a battery-dead shutdown.
+        A transport check, not a device-liveness inference: available whenever
+        our MQTT client holds a live broker connection (so any push WILL reach
+        us) OR the cloud poll is succeeding. Deliberately NOT gated on heartbeat
+        freshness — the device backs its telemetry radio off when it is not
+        actively mowing, so heartbeat silence is normal at this timescale and
+        must not flap the entity.
 
-        Genuine unavailable = we have lost BOTH links (broker disconnected AND
-        cloud failing) and truly cannot get this entity's data. The 90s
-        connectivity STALE flip survives only as the informational
-        ``mqtt_connectivity`` sensor; it no longer gates availability."""
+        Genuine transport-unavailable = we have lost BOTH links (broker
+        disconnected AND cloud failing). The 90s connectivity STALE flip
+        survives only as the informational ``mqtt_connectivity`` sensor; it does
+        not gate availability.
+
+        NOTE (2026-07-16): this answers "can HA reach the cloud?", NOT "is the
+        mower there?" — the two were conflated, and mqtt-source entities were
+        gated on this alone, so they froze at a last-known "all clear" for a
+        mower that had been absent for 12 days. ``device_is_alive`` is the
+        missing half; ``_availability.py`` requires BOTH for the mqtt source.
+        See docs/research/debunked-claims.md § D24."""
         mqtt = getattr(self, "_mqtt", None)
         if mqtt is not None:
             try:
@@ -938,6 +982,10 @@ class _CoreMixin:
             return
         try:
             blob = LastKnown.from_dict(stored)
+            # Keep the restored blob as the merge base for the first save: a
+            # save that fires before the mower is heard would otherwise rebuild
+            # from an empty MowerState and null out everything we just restored.
+            self._last_known_blob = blob
             updates = blob.non_none_state_updates()
             if updates:
                 self.data = self.data.with_updates(**updates)
@@ -954,12 +1002,21 @@ class _CoreMixin:
         """Schedule a debounced persist of the current last-known read-only values.
 
         Delegator invoked by the specialist refreshers (``domain/device_info``
-        dock/remote/dev) and the cloud-state refresh AFTER a successful fetch —
-        so a failed/empty fetch never overwrites a good last-known blob. Builds a
-        ``LastKnown`` from the current ``coord.data`` + ``_active_map_id`` and
-        hands the dict to ``Store.async_delay_save`` (idiomatic HA debounce; the
-        callback returns the payload). No-op when the store isn't ready; never
-        raises into the calling refresh path.
+        dock/remote/dev) and the cloud-state refresh AFTER a successful fetch.
+        Builds a ``LastKnown`` from the current ``coord.data`` + ``_active_map_id``
+        and hands the dict to ``Store.async_delay_save`` (idiomatic HA debounce;
+        the callback returns the payload). No-op when the store isn't ready;
+        never raises into the calling refresh path.
+
+        MERGES over the previous blob (``merged_with``) rather than overwriting.
+        The caller-side "only save after a successful fetch" guard is NOT
+        sufficient: while the mower is absent the cloud fetch still SUCCEEDS, it
+        just carries no device data, so ``from_state`` rebuilds the blob from an
+        empty MowerState and writes nulls over everything. Observed live
+        2026-07-16 — the store held 72/73 nulls with a fresh ``saved_unix`` after
+        ~12 days offline. Nothing was lost only because nothing had been captured
+        yet; once the mower returns, an unmerged save would erase each good value
+        the moment it went offline — i.e. exactly when it is needed.
         """
         # getattr default (not bare attr) so a partially-built coordinator
         # (e.g. object.__new__ test doubles, or a save fired before boot creates
@@ -970,7 +1027,14 @@ class _CoreMixin:
             return
         try:
             now = time.time()
-            blob = LastKnown.from_state(self.data, self._active_map_id, now)
+            blob = LastKnown.from_state(self.data, self._active_map_id, now).merged_with(
+                getattr(self, "_last_known_blob", None)
+            )
+            # Hold the merged result as the base for the NEXT save. The Store
+            # save is debounced, so re-reading it back would race; keeping the
+            # authoritative blob in memory also means a save that fires before
+            # the restore has run simply has no base and writes what it has.
+            self._last_known_blob = blob
             # Track the save time for the entity-surface staleness marker
             # (Task 12b): coord.last_known_saved_unix.
             self._last_known_saved_unix = now

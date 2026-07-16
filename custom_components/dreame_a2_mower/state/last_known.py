@@ -221,6 +221,36 @@ class LastKnown:
         kw["saved_unix"] = saved_unix
         return cls(**kw)
 
+    def merged_with(self, previous: "LastKnown | None") -> "LastKnown":
+        """This blob, with any field still ``None`` filled in from *previous*.
+
+        The SAVE-side counterpart to ``non_none_state_updates`` (the restore-side
+        null guard). ``from_state`` mirrors ``MowerState`` verbatim, nulls
+        included, and the Store save is a whole-blob overwrite — so without this
+        merge the first fetch that succeeds while the mower is ABSENT (cloud up,
+        no device data) rebuilds the blob from an empty MowerState and erases a
+        perfectly good last-known. That is the exact moment the value is needed,
+        so the layer would destroy its own reason to exist. The caller's "only
+        save after a successful fetch" guard does not cover succeeded-but-empty.
+
+        ``saved_unix`` is deliberately taken from SELF, not merged: it records
+        when we last looked, which is now. (Per-field timestamps would be
+        better — see docs/TODO.md § P6 — but the blob-level ``saved_unix`` is
+        what Task 12b's ``stale`` marker already surfaces.)
+
+        Absence is ``None`` ONLY. ``0`` / ``False`` / ``""`` are real readings
+        and must win over a previous value — a truthiness test here would
+        resurrect a stale 88% blade life the moment the blades genuinely read 0.
+        """
+        if previous is None:
+            return self
+        kw: dict[str, Any] = {}
+        for name in _STATE_FIELDS + ("active_map_id",):
+            val = getattr(self, name)
+            kw[name] = getattr(previous, name) if val is None else val
+        kw["saved_unix"] = self.saved_unix
+        return type(self)(**kw)
+
     def non_none_state_updates(self) -> dict[str, Any]:
         """The mirrored fields that are set, as ``MowerState.with_updates`` kwargs.
 

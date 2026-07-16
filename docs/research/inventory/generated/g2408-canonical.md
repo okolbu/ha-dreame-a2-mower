@@ -56,13 +56,27 @@
 
 ### s1p1 — `heartbeat`
 
-Mower-alive ping whose cadence is STATE-DEPENDENT (not fixed): ~10 s
-median while actively mowing, backing off to a multi-minute cadence when
-idle/erroring off-dock (gaps up to ~10 min measured at full battery) and
-to a multi-hour cadence while docked (gaps up to ~3 h). All device
-telemetry (battery s3p1, status reports) backs off in lockstep — there is
-no other traffic filling the heartbeat gaps. 0xCE delimiters at bytes [0]
-and [19].
+Mower-alive ping whose cadence is STATE-DEPENDENT (not fixed). Full-corpus
+inter-arrival census (15 probe logs, 103,865 gaps, 2026-07-16), split by
+s2p1 regime — the TAIL is what matters for any staleness gate, so the
+percentiles are given rather than a single "cadence":
+
+  regime    median   p90     p99      max     gaps >90s
+  DOCKED    32s      300s    1247s    15.6h   20.9%
+  off-dock  8s       39s     299s     30min   2.7%
+
+The docked backoff is BOUNDED, not "multi-hour" (that phrasing is
+retracted — see OLD/.../inventory-history/properties.md): the docked
+cadence is 32s median; only 9 of 59,604 docked gaps exceed 1h (0.015%),
+and NO off-dock gap does. All device telemetry (battery s3p1, status
+reports) backs off in lockstep — there is no other traffic filling the
+heartbeat gaps. 0xCE delimiters at bytes [0] and [19].
+
+CONSUMER NOTE: these numbers set `coordinator/_core.py:_DEVICE_SILENT_S`
+(1h) — the device-liveness half of entity availability. A 90s gate
+(HB_STALENESS_S) flaps on a docked mower and must not gate availability;
+1h sits above the docked p99 and above EVERY observed off-dock gap. See
+docs/research/debunked-claims.md § D24 / § D25.
 
 Key decoded bytes (partial — full catalog in heartbeat_bytes section, Task 9):
 - [1] & 0x01: Bumper hit (no corresponding s2p2 transition)
