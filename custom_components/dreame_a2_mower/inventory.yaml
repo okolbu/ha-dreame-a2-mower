@@ -57,13 +57,27 @@ properties:
     value_kind: blob
     payload_shape: "20-byte blob"
     semantic: |
-      Mower-alive ping whose cadence is STATE-DEPENDENT (not fixed): ~10 s
-      median while actively mowing, backing off to a multi-minute cadence when
-      idle/erroring off-dock (gaps up to ~10 min measured at full battery) and
-      to a multi-hour cadence while docked (gaps up to ~3 h). All device
-      telemetry (battery s3p1, status reports) backs off in lockstep — there is
-      no other traffic filling the heartbeat gaps. 0xCE delimiters at bytes [0]
-      and [19].
+      Mower-alive ping whose cadence is STATE-DEPENDENT (not fixed). Full-corpus
+      inter-arrival census (15 probe logs, 103,865 gaps, 2026-07-16), split by
+      s2p1 regime — the TAIL is what matters for any staleness gate, so the
+      percentiles are given rather than a single "cadence":
+
+        regime    median   p90     p99      max     gaps >90s
+        DOCKED    32s      300s    1247s    15.6h   20.9%
+        off-dock  8s       39s     299s     30min   2.7%
+
+      The docked backoff is BOUNDED, not "multi-hour" (that phrasing is
+      retracted — see OLD/.../inventory-history/properties.md): the docked
+      cadence is 32s median; only 9 of 59,604 docked gaps exceed 1h (0.015%),
+      and NO off-dock gap does. All device telemetry (battery s3p1, status
+      reports) backs off in lockstep — there is no other traffic filling the
+      heartbeat gaps. 0xCE delimiters at bytes [0] and [19].
+
+      CONSUMER NOTE: these numbers set `coordinator/_core.py:_DEVICE_SILENT_S`
+      (1h) — the device-liveness half of entity availability. A 90s gate
+      (HB_STALENESS_S) flaps on a docked mower and must not gate availability;
+      1h sits above the docked p99 and above EVERY observed off-dock gap. See
+      docs/research/debunked-claims.md § D24 / § D25.
 
       Key decoded bytes (partial — full catalog in heartbeat_bytes section, Task 9):
       - [1] & 0x01: Bumper hit (no corresponding s2p2 transition)
@@ -96,6 +110,18 @@ properties:
       protocol_doc: "docs/research/inventory/generated/g2408-canonical.md § Heartbeat (s1p1) bytes"
       apk: "ioBroker.dreame/apk.md §MQTT Property Subscriptions SIID 1"
     verifications:
+      - date: "2026-07-16"
+        status: verified
+        claim: |
+          s1p1 heartbeat inter-arrival census, split by s2p1 regime (DOCKED =
+          {6,13,15,16}): DOCKED median 32s / p90 300s / p99 1247s / max 15.6h,
+          20.9% of gaps >90s; OFF-DOCK median 8s / p90 39s / p99 299s / max
+          30min, 2.7% >90s. Only 9/59,604 docked gaps exceed 1h (0.015%); ZERO
+          of 44,261 off-dock gaps do. Retracts the prior "multi-hour cadence
+          while docked (gaps up to ~3 h)" prose: the docked CADENCE is 32s
+          median (the multi-hour part is a rare tail, and its max is 15.6h not
+          ~3h). This distribution is the basis for _DEVICE_SILENT_S=1h.
+        evidence: "probe corpus 15 logs, s1p1/s2p1 inter-arrival census 2026-07-16 (103,865 gaps: 59,604 docked + 44,261 off-dock)"
       - date: "2026-05-30"
         status: verified
         claim: |

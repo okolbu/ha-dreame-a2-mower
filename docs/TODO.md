@@ -1199,6 +1199,51 @@ persisted. Resolve the whole connectivity group ONE way (all last-known, or all
 `unknown`/stale-gated) rather than the current per-field split. Same class: a
 stale persisted value can read as "connected" when the mower is away — decide a
 freshness/staleness policy for restored snapshot fields.
+
+**⚠️ STATUS BELOW IS STALE — re-audited live 2026-07-16 (mower still away).**
+The entry reads as "nothing done"; in fact the whole layer shipped and TWO BUGS
+were keeping it from working. Findings, all measured against the live offline
+instance rather than the code's own prose:
+
+**What IS built (Task 12a/12b, undocumented here):**
+- `state/last_known.py` persists **73 fields** covering EVERY group this entry
+  names — consumables, totals, SIM, dock, firmware, all 6 time windows — PLUS
+  `active_map_id` (the render_base ask) and `wifi_ssid`/`wifi_ip` (which resolve
+  the RSSI-vs-SSID split above: RSSI rides the state-machine snapshot, the other
+  two now ride LastKnown, so a populated store lands them together).
+- `_availability.py` (12b) gives cloud-source entities last-known stickiness with
+  a `stale: True` + `last_updated` marker.
+
+**Bug 1 — the save nulled out its own store (FIXED 2026-07-16).** `from_state`
+mirrors MowerState verbatim (nulls included) and the Store save is a whole-blob
+overwrite, so the first fetch that SUCCEEDS while the mower is absent (cloud up,
+no device data) erased every good value — at exactly the moment it was needed.
+The caller guard ("only save after a successful fetch") never covered
+succeeded-but-empty. Live proof: the store held `saved_unix`=today with **72/73
+fields null** after ~12 days offline. Fixed by `LastKnown.merged_with` (the
+save-side twin of the restore-side `non_none_state_updates`).
+
+**Bug 2 — the mqtt gate could not fire, and safety flags froze (FIXED
+2026-07-16).** See `debunked-claims.md § D24`. Details in the entry below.
+
+**Consequence for THIS entry:** the read-only surfacing is now believed correct
+but is **UNPROVEN AND UNPROVABLE UNTIL THE MOWER RETURNS** — the store has never
+captured a value (it went for repairs ~2026-07-04, one day before the layer
+shipped in v2.0.1), so the offline dashboard is blank today for a DATA reason,
+not a code reason. That is why the live counts still match this entry's original
+numbers almost exactly: 52 unknown / 29 unavailable (25 switches + 4 buttons).
+
+**Validation sequence when the mower is back (in this order):**
+1. One online session → confirm the store populates (expect ≫1/73 non-null).
+2. Take the mower offline → confirm the values SURVIVE (this is Bug 1's
+   regression test; before the fix they were erased within one poll).
+3. Restart HA while offline → confirm the dashboard shows last-known with
+   `stale: True`, and that the 25 config switches come back available.
+4. Confirm `wifi_ssid`/`wifi_ip`/`wifi_rssi` now agree (all three last-known)
+   rather than the RSSI-only split this entry flagged.
+5. Confirm the Overview live-map base renders offline (restored `active_map_id`).
+The 4 unavailable BUTTONS (pause/stop/head-to-point) are command surfaces and
+SHOULD stay unavailable — that is the entry's "deliberate decision" branch.
 **Done when:** slowly-changing read-only values (consumables, totals, SIM, dock,
 firmware, device-wide time windows) survive a restart-while-offline showing
 last-known; AND config switches present last-known state (failing only the
@@ -1208,8 +1253,53 @@ decision is recorded that a subset must stay `unavailable`. Includes persisting
 base offline (today it early-returns because the active map is unknown offline;
 the per-map `*_base` cameras already render each map). No behaviour change while
 online; corpus IDENTICAL.
-**Status:** open (deferred from P5.5 to P6)
-**Cross-refs:** `state/snapshot.py` (persisted StateSnapshot); `domain/render.py:render_base` (+`_active_map_id`); entity `available` props on the settings switches; memory `project_refactor_v2_2026_07_02`; `.superpowers/sdd/progress.md` P5.5 findings.
+**Status:** implemented + 2 bugs fixed 2026-07-16; BLOCKED on live validation
+(mower in for repairs — the store has never captured a value, so nothing here
+can be confirmed until it returns; run the 5-step sequence above).
+**Cross-refs:** `state/last_known.py` (`merged_with` / `non_none_state_updates`);
+`_availability.py` + `coordinator/_core.py:device_is_alive`;
+`docs/research/debunked-claims.md § D24 / § D25`; `inventory.yaml § s1p1` (the
+heartbeat census behind `_DEVICE_SILENT_S`); `domain/render.py:render_base`
+(+`_active_map_id`); memory `project_refactor_v2_2026_07_02`.
+
+---
+
+### Device liveness vs transport reachability (availability) — FIXED 2026-07-16
+
+**Why:** `_availability_source = "mqtt"` gated ONLY on `mqtt_is_fresh`, which
+todo8 #1 had redefined as a pure TRANSPORT check: `mqtt.is_connected` is OUR
+client's link to Dreame's CLOUD broker. The mower connects to that broker
+separately, so the gate stayed True while the mower sat in a repair shop for 12
+days — and every MQTT-source safety flag read a frozen "all clear"
+(`emergency_stop=off`, `safety_alert_active=off`, `robot_tilted=off`,
+`robot_lifted=off`, `bumper_error=off`, `wheel_bind_detected=off`). That is
+verbatim the surface `_availability.py`'s own SAFETY-HONESTY note promised to
+prevent: two contradictory intents coexisted in-tree, the code won silently, and
+todo8's rationale lived ONLY in a docstring (no TODO entry, no spec).
+See `debunked-claims.md § D24`.
+
+**Fix:** the mqtt source now requires BOTH `mqtt_is_fresh` (transport can deliver)
+AND `device_is_alive` (heartbeat age ≤ `_DEVICE_SILENT_S` = 1h). todo8's anti-flap
+concern is preserved and was corpus-checked, not assumed (`§ D25`): a 90s gate
+flaps (20.9% of DOCKED heartbeat gaps exceed it) but 1h false-fires on **0 of
+44,261 off-dock gaps** — off-dock being where safety matters, since the mower is
+moving — and on 9 of 59,604 docked gaps (0.015%).
+
+**Open follow-ups (deliberately not done):**
+- **A cloud device-online signal would be better than a timeout.** `device/info`
+  reportedly carries a `latestStatus` connection enum — but that mention survives
+  only inside a RETRACTED inventory claim (`inventory.yaml § s1p2` verification),
+  it is not fetched, and it is [UNVERIFIED]. If real it would replace the 1h
+  heuristic with a direct answer. **Capture:** dump `device/info` while the mower
+  is off vs on and diff `latestStatus`.
+- **`_DEVICE_SILENT_S` is a single global.** A regime-aware threshold (tight
+  off-dock, loose docked) would catch a mid-mow death in minutes instead of an
+  hour. Deferred as over-engineering until a real case appears.
+- The 1h window means a mower that dies mid-lawn shows a frozen "all clear" for
+  up to an hour. Accepted: it is bounded and honest, versus forever before.
+**Status:** shipped; the `latestStatus` capture is the only way to improve on it.
+**Cross-refs:** `coordinator/_core.py:device_is_alive` / `mqtt_is_fresh`;
+`_availability.py`; `inventory.yaml § s1p1`; `debunked-claims.md § D24 / § D25`.
 
 ---
 

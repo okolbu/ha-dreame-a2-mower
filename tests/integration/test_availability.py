@@ -1,8 +1,13 @@
 """Availability model (Phase 1.1): entities go unavailable when their
 source is stale instead of freezing at the last value.
 
-Two coordinator-level freshness signals back a per-source entity mixin:
-- mqtt_is_fresh  — the device MQTT link (heartbeat) is live.
+Three coordinator-level signals back a per-source entity mixin:
+- mqtt_is_fresh  — TRANSPORT: our client's link to Dreame's cloud broker is up
+  (or the cloud poll works), so a push COULD reach us. Says nothing about the
+  mower (todo8 #1).
+- device_is_alive — DEVICE: we have actually heard the mower's heartbeat within
+  _DEVICE_SILENT_S. The mqtt source needs BOTH; gating on transport alone froze
+  the safety flags for an absent mower (debunked-claims.md D24).
 - cloud_is_fresh — the 2-min full-state cloud poll is succeeding.
 
 See refactor-2026-06-13 plan §1.1 + the design decision: targeted hybrid,
@@ -96,10 +101,14 @@ def test_refresh_cloud_state_exception_counts_as_failure():
 
 # ---------------------------------------------------------------------------
 # mqtt_is_fresh is a TRANSPORT check (todo8 #1): available while the broker
-# link is up OR the cloud poll succeeds — NOT gated on heartbeat freshness.
-# The device backs its radio off to a multi-minute/-hour cadence whenever it is
-# not actively mowing (docked OR erroring on the lawn at full battery), so
-# heartbeat silence must never flip the entity to unavailable.
+# link is up OR the cloud poll succeeds — NOT gated on heartbeat freshness at
+# the 90s HB_STALENESS_S timescale, because the device backs its radio off when
+# it is not actively mowing and 20.9% of DOCKED heartbeat gaps exceed 90s.
+# That backoff is BOUNDED though, not the "multi-hour cadence" this comment used
+# to claim (docked median is 32s — see debunked-claims.md D25 and
+# inventory.yaml § s1p1), which is why device_is_alive can gate at 1h without
+# flapping. These tests cover the transport half in isolation; the device half
+# is at the bottom of this file.
 # ---------------------------------------------------------------------------
 
 class _FakeMqtt:
@@ -243,15 +252,25 @@ class _AvailBase:
 
 
 class _FreshSrc:
-    """Fake coordinator exposing both freshness signals."""
+    """Fake coordinator exposing the availability signals.
 
-    def __init__(self, *, mqtt: bool, cloud: bool):
+    ``device_alive`` defaults True so the transport-gate tests below exercise
+    the transport half in isolation. The mqtt source needs BOTH halves — see
+    ``_coord_hb`` for the device-liveness half.
+    """
+
+    def __init__(self, *, mqtt: bool, cloud: bool, device_alive: bool = True):
         self._mqtt = mqtt
         self._cloud = cloud
+        self._device_alive = device_alive
 
     @property
     def mqtt_is_fresh(self):
         return self._mqtt
+
+    @property
+    def device_is_alive(self):
+        return self._device_alive
 
     @property
     def cloud_is_fresh(self):
@@ -543,3 +562,99 @@ def test_mqtt_connectivity_sensor_overrides_base_to_none():
     assert ent._availability_source is None
     # Even with mqtt stale, the reporter itself stays available.
     assert ent.available is True
+
+
+# --- device liveness vs transport reachability (the safety gate) -------------
+#
+# `mqtt_is_fresh` is a TRANSPORT check: `mqtt.is_connected` is OUR client's link
+# to Dreame's CLOUD broker. The mower connects to that broker separately, so our
+# link stays up whether or not the mower exists — the transport gate can never
+# fire for an absent device.
+#
+# Live proof 2026-07-16, mower physically at a repair shop for ~12 days:
+# emergency_stop=off, safety_alert_active=off, robot_tilted=off,
+# robot_lifted=off, bumper_error=off, wheel_bind_detected=off. All frozen "all
+# clear" — exactly the dangerous surface _availability.py's docstring claimed to
+# prevent. See docs/research/debunked-claims.md D24.
+#
+# Threshold: DEVICE_SILENT_S is corpus-derived (15 probe logs, 103,865 heartbeat
+# gaps). The 90s HB_STALENESS_S gate flapped (20.9% of DOCKED gaps exceed 90s —
+# todo8's complaint was real). At 1h: ZERO off-dock false-fires (the longest
+# legitimate off-dock silence in the whole corpus is 30 min) and 9/59,604
+# (0.015%) docked. Off-dock is where safety matters — the mower is moving.
+
+
+def _coord_hb(hb_age_s, *, mqtt_connected=True):
+    """Bare coordinator whose last heartbeat was `hb_age_s` ago (None = never)."""
+    import dataclasses
+    import time as _t
+    from custom_components.dreame_a2_mower.state.machine import MowerStateMachine
+
+    # Delegate to _coord rather than adding another object.__new__ site — the
+    # coordinator-bypass census (tests/audit/test_no_new_coordinator_bypass.py)
+    # is a ratchet, and this needs no construction the helper doesn't already do.
+    coord = _coord(mqtt_connected=mqtt_connected, cloud_failures=0)
+    # A REAL state machine/snapshot, not a namespace: a stub would happily
+    # answer for a field that no longer exists and mask a rename.
+    sm = MowerStateMachine()
+    hb = None if hb_age_s is None else _t.time() - hb_age_s
+    sm._snapshot = dataclasses.replace(sm.snapshot(), last_heartbeat_unix=hb)
+    coord.state_machine = sm
+    return coord
+
+
+def test_device_is_alive_true_on_a_recent_heartbeat():
+    assert _coord_hb(10).device_is_alive is True
+
+
+def test_device_is_alive_true_through_a_docked_radio_backoff():
+    # A docked mower's heartbeat median gap is 32s but p99 is ~21 min. The gate
+    # must NOT fire there or it re-creates the flapping todo8 removed.
+    assert _coord_hb(1200).device_is_alive is True
+
+
+def test_device_is_alive_false_when_the_mower_has_gone_silent():
+    # 2h of silence exceeds every legitimate off-dock gap in the corpus (max 30
+    # min) — we genuinely cannot hear the mower.
+    assert _coord_hb(7200).device_is_alive is False
+
+
+def test_device_is_alive_false_when_never_heard():
+    # Fresh install / no heartbeat ever: we have never heard the mower, so we
+    # must not claim its safety flags are readable.
+    assert _coord_hb(None).device_is_alive is False
+
+
+def test_device_is_alive_is_independent_of_the_broker_link():
+    # THE BUG: a live broker connection says nothing about the mower. Our client
+    # stays connected to Dreame's cloud while the mower sits at a repair shop.
+    assert _coord_hb(7200, mqtt_connected=True).mqtt_is_fresh is True
+    assert _coord_hb(7200, mqtt_connected=True).device_is_alive is False
+
+
+def test_mqtt_source_entity_unavailable_when_the_mower_is_silent():
+    """The safety gate, end to end: an mqtt-source entity must go unavailable
+    when the device is silent, even though the transport is perfectly healthy."""
+    from custom_components.dreame_a2_mower._availability import _FreshnessAvailableMixin
+
+    class _Ent(_FreshnessAvailableMixin):
+        _availability_source = "mqtt"
+        def __init__(self, coord):
+            self.coordinator = coord
+
+    assert _Ent(_coord_hb(10))._freshness_is_fresh() is True
+    assert _Ent(_coord_hb(7200))._freshness_is_fresh() is False
+
+
+def test_cloud_source_entity_unaffected_by_device_silence():
+    """Device liveness gates the MQTT source only. Cloud-source entities are fed
+    by the cloud poll and keep their last-known stickiness — the mower being
+    silent says nothing about whether the cloud still has its config."""
+    from custom_components.dreame_a2_mower._availability import _FreshnessAvailableMixin
+
+    class _Ent(_FreshnessAvailableMixin):
+        _availability_source = "cloud"
+        def __init__(self, coord):
+            self.coordinator = coord
+
+    assert _Ent(_coord_hb(7200))._freshness_is_fresh() is True

@@ -11,8 +11,10 @@ per-source freshness signals (``mqtt_is_fresh`` / ``cloud_is_fresh``). Each
 entity declares which source feeds it via ``_availability_source``:
 
 - ``"mqtt"``  — value comes from the device MQTT push (position, activity,
-  ``lawn_mower``, heartbeat-derived). Unavailable when the link goes stale
-  (``HB_STALENESS_S`` = 90s with no heartbeat).
+  ``lawn_mower``, heartbeat-derived). Requires BOTH ``mqtt_is_fresh`` (the
+  TRANSPORT can deliver a push) AND ``device_is_alive`` (we have actually heard
+  the mower within ``_DEVICE_SILENT_S``). See the D24 note below — the two are
+  different questions and gating on the transport alone is not safe.
 - ``"cloud"`` — value comes from the 2-min full-state cloud poll
   (CFG / SETTINGS / MIHIS / MAPL). Unavailable after the poll fails
   ``_CLOUD_UNAVAIL_THRESHOLD`` consecutive cycles.
@@ -38,7 +40,7 @@ the **cloud** source:
   value) stays ``available`` and is marked ``stale`` via
   ``extra_state_attributes`` instead of going unavailable. An entity that
   genuinely has no value still goes unavailable.
-- ``"mqtt"`` — NO stickiness. When the MQTT gate goes stale the entity goes
+- ``"mqtt"`` — NO stickiness. When the mqtt gate goes stale the entity goes
   ``unavailable`` (the pre-12b behaviour). This is a SAFETY-HONESTY requirement:
   the MQTT-source binary_sensors carry live safety flags (emergency_stop,
   safety_alert_active, drop_tilt, lift, bumper, wheel_bind_active, …) that hold
@@ -47,6 +49,19 @@ the **cloud** source:
   hear the mower — a dangerous regression. Honest ``unavailable`` is the only
   safe surface. (Task 12b originally made stickiness apply to any gated source;
   this was too broad and is corrected here.)
+
+  ⚠️ THIS PARAGRAPH DESCRIBED AN INTENT THE CODE DID NOT HAVE, 2026-07-16 →
+  see ``docs/research/debunked-claims.md § D24``. todo8 #1 had redefined
+  ``mqtt_is_fresh`` to a pure TRANSPORT check (``mqtt.is_connected`` = OUR
+  client's link to Dreame's CLOUD broker) without updating this note. The mower
+  connects to that broker separately, so the gate stayed True while the mower
+  sat in a repair shop for 12 days and every safety flag above read a frozen
+  "off" — precisely the surface this paragraph promised to prevent. The gate now
+  requires ``device_is_alive`` as well (heartbeat age ≤ ``_DEVICE_SILENT_S``),
+  which is what makes the claim true. todo8's anti-flap concern was real and is
+  preserved: the corpus shows a 90s gate flaps (20.9% of docked heartbeat gaps
+  exceed it) while the 1h device-silence gate false-fires on 0 of 44,261
+  off-dock gaps. Do NOT re-gate mqtt-source entities on the transport alone.
 - ``None`` (ungated) — unchanged. The connectivity-STATUS entities
   (``binary_sensor.cloud_connected`` / ``sensor.mqtt_connectivity``) are ungated
   AND compute their state from a LIVE ``value_fn`` (never seeded from
@@ -85,7 +100,15 @@ class _FreshnessAvailableMixin:
         """
         source = self._availability_source
         if source == "mqtt":
-            return bool(self.coordinator.mqtt_is_fresh)  # type: ignore[attr-defined]
+            # BOTH halves are required: the transport must be able to deliver a
+            # push AND we must actually have heard the device. Gating on the
+            # transport alone froze the safety flags at "all clear" for a mower
+            # that had been gone 12 days (D24) — our client stays connected to
+            # Dreame's broker regardless of whether the mower exists.
+            return bool(
+                self.coordinator.mqtt_is_fresh  # type: ignore[attr-defined]
+                and self.coordinator.device_is_alive  # type: ignore[attr-defined]
+            )
         if source == "cloud":
             return bool(self.coordinator.cloud_is_fresh)  # type: ignore[attr-defined]
         return None
