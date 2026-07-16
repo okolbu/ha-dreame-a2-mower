@@ -868,7 +868,15 @@ class _CoreMixin:
     async def _restore_device_messages(self) -> None:
         """Seed MowerState.device_messages from the persisted store on boot so
         the sensor shows retained history immediately and it becomes the merge
-        base for the first fetch. Tolerates a missing/corrupt store."""
+        base for the first fetch. Tolerates a missing/corrupt store.
+
+        Re-links snapshot photos after seeding: the store deliberately holds NO
+        signed URLs (they are a per-process credential — see
+        ``domain/notifications.py:strip_signed_urls``), so the restored dicts
+        carry photo identity only. Re-linking here mints signatures with the
+        CURRENT process's secret, so the sensor publishes working URLs from the
+        first state write instead of waiting for the hourly merge.
+        """
         if self._device_messages_store is None:
             self._device_messages_store = Store(
                 self.hass,
@@ -885,6 +893,24 @@ class _CoreMixin:
                 self.entry.options.get(CONF_MESSAGES_KEEP, DEFAULT_MESSAGES_KEEP)
             )
             self.data.device_messages = stored[:cap]
+            # The re-link reads the photo index, and PhotoArchive.load_index is
+            # BLOCKING ("call from an executor" — archive/photos.py). This runs
+            # inside boot's _timed critical path and BEFORE the gallery refresh
+            # that would otherwise warm the index, so the read must go to an
+            # executor or it stalls the event loop at startup (the regression
+            # class fixed in v2.0.3–2.0.6). load_index is idempotent, so warming
+            # it here costs the later gallery refresh nothing.
+            # Never let a photo-archive hiccup block boot — the message TEXT is
+            # already restored and is the load-bearing part; thumbnails can wait
+            # for the next refresh.
+            try:
+                await self.hass.async_add_executor_job(self._photo_archive.load_index)
+                self.link_message_snapshot_photos(self.data.device_messages)
+            except Exception:
+                LOGGER.exception(
+                    "device_messages photo re-link failed; text restored, "
+                    "thumbnails will fill in on the next message refresh"
+                )
 
     async def _restore_last_known(self) -> None:
         """Seed MowerState + ``_active_map_id`` from the persisted last-known blob.

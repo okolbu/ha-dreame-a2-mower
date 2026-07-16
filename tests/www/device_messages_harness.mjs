@@ -104,6 +104,24 @@ assert.ok(nastyUrl.includes("&quot;"), "the injected quote is entity-escaped");
 const empty = renderMessagesHtml([]);
 assert.ok(empty.length > 0 && /no messages/i.test(empty), "empty list says why, never blank");
 
+// A photo with no URL must not render an <img src="">. The persisted store now
+// holds photo IDENTITY only (no signed URL), so a restored message can legitimately
+// carry a URL-less photo for the instant before the re-link runs — and if the
+// photo archive read fails, permanently. An empty src makes the browser re-request
+// the PAGE url as an image: a guaranteed broken thumbnail.
+const noUrl = renderMessagesHtml([
+  { title: "Person detected", date: "2026-07-16T10:00:00Z",
+    photos: [{ id: "a.jpg", ts: 1, category: "ai_human", detections: [] }] },
+]);
+assert.strictEqual((noUrl.match(/<img/g) || []).length, 0, "a URL-less photo renders no <img>");
+assert.ok(/Person detected/.test(noUrl), "the message itself still renders");
+// flattenPhotos must drop it too, or data-idx would point past the rendered thumbs.
+assert.strictEqual(
+  flattenPhotos([{ title: "x", photos: [{ id: "a.jpg" }, PHOTO_A] }]).length,
+  1,
+  "flattenPhotos drops URL-less photos so data-idx stays aligned with the <img>s",
+);
+
 // --- (c) renderKey: when must the card re-render? -------------------------
 // `set hass` fires on every state update, so the card skips re-rendering when
 // the key is unchanged. The trap: snapshot photos are linked to an EXISTING
@@ -122,6 +140,25 @@ assert.notStrictEqual(
   "photos linked onto an existing message MUST invalidate the key",
 );
 assert.strictEqual(renderKey(NO_PHOTOS), renderKey(NO_PHOTOS), "key is stable for identical items");
+
+// A RE-SIGN must re-render. The backend re-mints signed photo URLs on every
+// merge and on restore (HA's sign secret is per-process, so a restart
+// invalidates the old ones — see domain/notifications.py:strip_signed_urls).
+// Count and id are unchanged by a re-sign, so a key that ignored the URL would
+// leave the browser rendering dead signatures -> 401 thumbnails, forever.
+const SIGNED_OLD = [
+  { id: "m1", title: "t", date: "2026-07-16T10:00:00Z",
+    photos: [{ ...PHOTO_A, url: "/api/p/a.jpg?authSig=OLD", thumb_url: "/api/p/a.jpg?authSig=OLD" }] },
+];
+const SIGNED_NEW = [
+  { id: "m1", title: "t", date: "2026-07-16T10:00:00Z",
+    photos: [{ ...PHOTO_A, url: "/api/p/a.jpg?authSig=NEW", thumb_url: "/api/p/a.jpg?authSig=NEW" }] },
+];
+assert.notStrictEqual(
+  renderKey(SIGNED_OLD),
+  renderKey(SIGNED_NEW),
+  "a re-signed photo URL MUST invalidate the key",
+);
 assert.notStrictEqual(
   renderKey(NO_PHOTOS),
   renderKey([{ id: "m2", title: "New", date: "2026-07-16T11:00:00Z" }, ...NO_PHOTOS]),

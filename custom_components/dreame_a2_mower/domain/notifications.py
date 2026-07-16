@@ -122,6 +122,48 @@ def apply_device_messages(coord, records: list | None) -> None:
         coord.async_set_updated_data(new)
 
 
+_SIGNED_PHOTO_KEYS = ("url", "thumb_url")
+
+
+def strip_signed_urls(messages: list[dict]) -> list[dict]:
+    """Copy ``messages`` with every photo's signed URL removed, for persistence.
+
+    A signed URL is a CREDENTIAL, not data. HA regenerates its http sign secret
+    once per process (``secrets.token_hex()`` at http setup), so EVERY restart
+    invalidates every previously-issued signature — regardless of its 7-day
+    ``exp``. Persisting one therefore guarantees a 401 on the next boot:
+    ``_restore_device_messages`` seeds the sensor straight from disk with
+    signatures minted by a process that no longer exists.
+
+    Verified live 2026-07-16: a persisted signature with a valid future exp
+    (2026-07-23) returned 401 while a freshly-minted signature for the SAME path
+    returned 200 + the JPEG. The photo gallery never had this bug precisely
+    because it rebuilds its manifest in memory at boot, so it is always signed
+    by the running process.
+
+    The URL is fully DERIVED — ``link_message_snapshot_photos`` recomputes it
+    from the photo archive on every merge and on restore — so nothing is lost by
+    dropping it. The photo IDENTITY (id/ts/category/detections) IS kept: that is
+    what the re-link matches on.
+
+    Returns a copy; the live list keeps its URLs (the sensor is about to publish
+    them).
+    """
+    out = []
+    for m in messages:
+        photos = m.get("photos")
+        if not photos:
+            out.append(m)
+            continue
+        clean = dict(m)
+        clean["photos"] = [
+            {k: v for k, v in p.items() if k not in _SIGNED_PHOTO_KEYS}
+            for p in photos
+        ]
+        out.append(clean)
+    return out
+
+
 def merge_device_messages(coord, fresh_dicts: list[dict]) -> list[dict]:
     """Merge a freshly-fetched device-message page into the accumulated list.
 
@@ -130,6 +172,9 @@ def merge_device_messages(coord, fresh_dicts: list[dict]) -> list[dict]:
     links snapshot photos, and schedules a debounced persist. Returns the
     merged list. The cloud windows device-messages/v2 to the latest ~10, so
     accumulation is the only way to retain more.
+
+    The persisted copy is stripped of signed photo URLs — see
+    ``strip_signed_urls``.
     """
     entry = getattr(coord, "entry", None)
     cap = int(
@@ -141,7 +186,11 @@ def merge_device_messages(coord, fresh_dicts: list[dict]) -> list[dict]:
     coord.link_message_snapshot_photos(merged)
     store = coord._device_messages_store if hasattr(coord, "_device_messages_store") else None
     if store is not None:
-        store.async_delay_save(lambda: merged, DEVICE_MESSAGES_SAVE_DELAY_S)
+        # Snapshot the stripped copy NOW rather than inside the lambda: the save
+        # is debounced, so a lambda closing over `merged` would strip whatever
+        # the list looks like when the timer fires, not what we merged here.
+        to_save = strip_signed_urls(merged)
+        store.async_delay_save(lambda: to_save, DEVICE_MESSAGES_SAVE_DELAY_S)
     return merged
 
 

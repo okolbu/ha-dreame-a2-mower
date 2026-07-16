@@ -50,13 +50,26 @@ function _fmtDate(iso) {
 // Returns [{msgIdx, photo, caption}] and never throws on a malformed payload:
 // the sensor attr is cloud-derived, and a card that throws in `set hass` takes
 // the whole view down with it.
+// A photo with no URL is skipped. The persisted store holds photo IDENTITY only
+// (the signed URL is a per-process credential — strip_signed_urls), so a
+// restored message legitimately carries URL-less photos for the instant before
+// the re-link runs, and permanently if the archive read fails. Rendering
+// `<img src="">` makes the browser re-request the PAGE as an image — a
+// guaranteed-broken thumbnail. Dropping them here (rather than at render) also
+// keeps data-idx aligned with the <img>s actually emitted.
+function _photoUrl(p) {
+  return (p && (p.thumb_url || p.url)) || "";
+}
+
 export function flattenPhotos(items) {
   const out = [];
   if (!Array.isArray(items)) return out;
   items.forEach((msg, msgIdx) => {
     const photos = msg && Array.isArray(msg.photos) ? msg.photos : [];
     for (const photo of photos) {
-      if (photo) out.push({ msgIdx, photo, caption: (msg && msg.title) || "" });
+      if (photo && _photoUrl(photo)) {
+        out.push({ msgIdx, photo, caption: (msg && msg.title) || "" });
+      }
     }
   });
   return out;
@@ -66,15 +79,26 @@ export function flattenPhotos(items) {
 // on EVERY state update) re-renders only on a real change and doesn't reset the
 // user's scroll position.
 //
-// The photo count is load-bearing: snapshot photos are linked onto an EXISTING
-// message after the fact (link_message_snapshot_photos runs on each merge,
-// matching against the hourly OSS gallery sync), which changes neither the
-// message count nor the newest id. Keying on those alone would leave the
-// thumbnails invisible until an unrelated new message arrived.
+// Two things beyond count+id are load-bearing here, and both are invisible to a
+// count-and-id key:
+//
+//  1. PHOTO COUNT — snapshot photos are linked onto an EXISTING message after
+//     the fact (link_message_snapshot_photos runs on each merge, matching
+//     against the hourly OSS gallery sync), changing neither count nor newest id.
+//     Without this the thumbnails stay invisible until an unrelated new message.
+//  2. THE SIGNED URLs — the backend re-mints them on every merge AND on restore,
+//     because HA's http sign secret is regenerated per process: a restart
+//     invalidates every previously-issued signature regardless of its exp (see
+//     domain/notifications.py:strip_signed_urls). A key that ignored the URL
+//     would leave a browser that was open across the restart rendering dead
+//     signatures — 401 thumbnails that never recover on their own.
 export function renderKey(items) {
   const list = Array.isArray(items) ? items : [];
   const newest = list[0] || {};
-  return `${list.length}:${newest.id || newest.date || ""}:${flattenPhotos(list).length}`;
+  const sigs = flattenPhotos(list)
+    .map((f) => f.photo.thumb_url || f.photo.url || "")
+    .join("|");
+  return `${list.length}:${newest.id || newest.date || ""}:${sigs}`;
 }
 
 // Pure items[] → HTML. Every interpolated field is cloud-authored text, so it
@@ -88,14 +112,15 @@ export function renderMessagesHtml(items) {
   let idx = 0; // walks the SAME order flattenPhotos produces
   const rows = list.map((msg) => {
     const m = msg || {};
-    const photos = Array.isArray(m.photos) ? m.photos.filter(Boolean) : [];
+    // Same filter as flattenPhotos, so `idx` stays in lockstep with it.
+    const photos = Array.isArray(m.photos) ? m.photos.filter((p) => p && _photoUrl(p)) : [];
     const thumbs = photos.length
       ? '<div class="photos">' +
         photos
           .map((p) => {
             const i = idx++;
             return (
-              `<img class="thumb" src="${_esc(p.thumb_url || p.url)}" ` +
+              `<img class="thumb" src="${_esc(_photoUrl(p))}" ` +
               `data-idx="${i}" loading="lazy" ` +
               `alt="${_esc(p.category || "photo")}" title="${_esc(p.category || "photo")}"/>`
             );
