@@ -659,13 +659,42 @@ properties:
           fix/location-single-authority). Dock cluster = {6,13,16} verified
           in corpus (6/13 main carriers; 16 observed in dock-only charge cycle
           13↔16↔6, 11×); 15 presumed (charging-paused only occurs docked,
-          unobserved in corpus). Idle value 2 is a LAWN state (corpus pattern:
-          1→2→5 = mow→idle→returning; single 2→{6,13} event is noise). Cloud
+          unobserved in corpus). Idle value 2 is an idle state reached on the
+          lawn (corpus pattern: 1→2→5 = mow→idle→returning) — but see the
+          2026-07-16 record below: it ALSO occurs docked, and the original
+          "single 2→{6,13} event is noise" dismissal is retracted. Cloud
           DOCK connect_status removed from the location path: it lagged 5–10 min
           and reverted ON_LAWN during the ~41 s reorientation window after undock
           (Investigation #2). The removal closes that regression and makes s2p1
           the sole projection point.
         evidence: "probe_log_*.jsonl, 154 undocks / s2p1 transition matrix 2026-06-01"
+      - date: "2026-07-16"
+        status: verified
+        claim: |
+          s2p1=2 is CONTEXT-DEPENDENT, not a lawn-only state. Full-corpus
+          transition census (15 probe logs) shows two distinct populations:
+            1 -> 2 -> 5  x202  — idle on the LAWN (mow -> idle -> returning).
+                                 The 2026-06-01 claim, confirmed.
+            6 -> 2 -> 6  x180  — idle ON THE DOCK (+ 13 -> 2 -> 6 x4).
+          The dock-side population is charge TOP-UP CYCLING, not contact
+          bounce: charging has ALREADY dropped to 0 in 194/196 cases where 2 is
+          entered from a dock state, and the median dwell in 2 is 13s before
+          returning to 6 (charging). The prior "single 2->{6,13} event is noise"
+          parenthetical is RETRACTED — 184 occurrences is not noise (archived to
+          OLD/ha-dreame-a2-mower-docs/inventory-history/properties.md).
+
+          TWO INTEGRATION CONSEQUENCES (neither fixed as of 2026-07-16; see
+          docs/TODO.md "Surface dock-departure repositioning UX"):
+          (1) state/machine.py's location authority treats any non-_DOCKED_STATES
+              s2p1 as off-dock, so a 6->2->6 top-up cycle flaps
+              location AT_DOCK -> ON_LAWN -> AT_DOCK for ~13s while the mower is
+              stationary on the contacts.
+          (2) the undock predicate gates on raw_s2p1 (the IMMEDIATELY previous
+              value) being in _DOCKED_STATES, so a departure that follows a
+              top-up idle (6->2->1) does not fire. Measured: the shipped
+              prev-value predicate catches 183/187 (97.9%) of real dock
+              departures; an anchor walk-back that skips 2/3/4 catches 187/187.
+        evidence: "probe corpus 15 logs, s2p1 transition census + dock-departure analysis 2026-07-16 (6->2 x183, 6->2->6 x180, 1->2->5 x202, charge-state-at-entry {0:194, 2:2}, dwell median 13s)"
 
   - id: "s2p2"
     siid: 2

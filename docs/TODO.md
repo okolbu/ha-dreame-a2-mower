@@ -307,14 +307,7 @@ are transient — nothing could answer "what tier was the last notification?" fr
 a template or dashboard. That closes the queryable-tier gap without inventing a
 latch the evidence contradicts.
 
-**Still genuinely open (needs a product decision, NOT more code archaeology):**
-a "service required" latch over the coherent condition set — FAULT/consumable
-(28/29/30) + ALERT/malfunction (38/40/41/42/43). Two things to settle first:
-(a) it partially duplicates the existing consumable life-% sensors
-(`blades_life_pct` etc.) — decide whether it earns its place; (b) the corpus
-cannot say when these codes CLEAR (`lidar_dirty` and `blade_loss` have no
-observed clear edge), so the clear semantics would be invented. Do not ship a
-latch until (b) has a capture behind it.
+**Still genuinely open — see the dedicated entry below ("Condition latch").**
 
 - **24 vs 54 rename:** `24 "Battery low"` is vague vs `54 "Low battery — returning
   to station"`. Hypothesis: 24 = warning threshold, 54 = the return trigger.
@@ -328,6 +321,82 @@ evidence (still blocked).
 is refuted (D21); a condition-latch remains an open product decision.
 **Cross-refs:** `inventory.yaml § s2p2`; `mower/fault_catalog.py`; `mower/error_codes.py`;
 `docs/research/debunked-claims.md § D21`.
+
+### Condition latch — a "service required" state over the codes that ARE conditions
+
+**Why:** `snapshot.errors` latches the **error** tier only (`is_fault`). The
+tiers that describe a *standing condition the user must act on* have no state
+surface at all — they fire a transient event and vanish. A worn blade or a dirty
+LiDAR is exactly the thing a dashboard should be able to ask about.
+
+**This is NOT the refuted attention-tier latch (`debunked-claims.md § D21`).**
+The tier is the wrong axis — it mixes transients and successes. The coherent
+set is defined by **severity**:
+
+| group | codes | why it's a condition |
+|---|---|---|
+| FAULT/consumable | 28 blade_loss, 29 station_loss, 30 maintain_loss | wear/absence — persists until serviced |
+| ALERT/malfunction | 38 lidar_dirty, 40 cam_abnormal, 41 cam_cover, 42 battery_overheat, 43 battery_temp_low | hardware state — persists until fixed |
+
+Excluded, and why: FAULT/work_message (27 human_detected, 74/75/76/77 the
+cleanpoint outcomes) and ALERT/anomaly (31/32/33/35/36) are **events** — two of
+them are literal successes. They are already surfaced as events + device
+triggers. Cite `inventory.yaml § s2p2` for the codes; do not restate meanings here.
+
+**⛔ BLOCKED — do not ship this until the clear semantics have evidence.**
+The latch is trivial; knowing when to UNLATCH is the whole problem, and the
+corpus cannot answer it:
+
+- Corpus frequency (15 logs, 2026-07-16): 28 blade_loss ×32 (2 logs),
+  30 maintain_loss ×16 (2 logs), 43 battery_temp_low ×11 (1 log). 29, 38, 40,
+  41, 42 have **zero observations** — 5 of the 8 codes have never been seen.
+- **No clear edge has ever been observed for any of them.** There is no
+  "blade_loss cleared" code in the catalog, so the clear must be inferred from
+  something else — and inferring it wrongly is worse than not latching: a latch
+  that never clears becomes a permanent red banner the user learns to ignore.
+- The error latch's existing clear rule (movement / undock / mow start,
+  `state/machine.py`) is **wrong for these**: mowing away from the dock does not
+  fix a worn blade, so the condition would clear itself every session and re-fire.
+
+**Tests to run when the mower is back (it is in for repairs 2026-07-16 — no live
+testing available).** Each is a single-variable experiment; run with the wire
+trace on (`/config/dreame_a2_wire_trace.enabled`) and record into a
+`docs/research/wire-captures/` note:
+
+1. **Does the condition re-assert, or fire once?** Trigger 28 blade_loss (run
+   with a blade deliberately removed / worn past threshold). Then leave the mower
+   docked and idle for 24h. Grep s2p2 for repeats. **If it re-fires on a cadence,
+   no latch is needed at all** — a freshness-windowed sensor ("seen in the last
+   N hours") is simpler and self-clearing, and this whole entry collapses.
+   *This is the highest-value test — run it first, it may make the rest moot.*
+2. **Does it survive a mow?** With 28 latched, start and complete a mow. Does 28
+   fire again during/after? This decides whether the error latch's
+   movement-clears rule is safe to reuse (expected: NO — it should persist).
+3. **What clears it?** With 28 latched, fit a new blade. Watch for: (a) any s2p2
+   code, (b) a `blades_life_pct` reset (s2p51 consumables — the likely real
+   signal), (c) nothing at all. **Hypothesis worth testing first: the consumable
+   life-% reset IS the clear signal**, in which case the latch should key off
+   `blades_life_pct` rather than a s2p2 code, and 28 is merely the notification.
+4. **Repeat 1+3 for 43 battery_temp_low** (freezer-cold start), the only
+   ALERT/malfunction observed. If 43 self-clears on warm-up with no code, that
+   confirms these are level-triggered conditions and the whole set should be
+   derived from the underlying telemetry, not latched from event codes.
+5. **Only if 1–4 show a real edge-triggered condition with no telemetry proxy**
+   is a bespoke latch justified. Otherwise prefer the telemetry/freshness route.
+
+**Also settle (product, not evidence):** a consumable latch partially duplicates
+`sensor.blades_life_pct` / `cleaning_brush_life_pct` / `robot_maintenance_life_pct`,
+which already expose wear as a number. If test 3 confirms the life-% reset is the
+clear signal, the honest surface is probably a binary_sensor DERIVED from those
+percentages — no new latch, no invented clear rule.
+**Done when:** tests 1–4 are captured and either (a) a telemetry-derived sensor
+ships, or (b) an edge-triggered latch ships with a corpus-backed clear rule.
+**Status:** blocked on live capture (mower in for repairs 2026-07-16).
+**Cross-refs:** `mower/fault_catalog.py` (`fault_tier`/`fault_category`/`fault_severity`);
+`docs/research/debunked-claims.md § D21`; `inventory.yaml § s2p2`, `§ s2p51`;
+`state/machine.py` (the error latch + its clear rule).
+
+---
 
 ### Confirm the share-messages record shape (live capture)
 
@@ -444,8 +513,69 @@ does); (c) decide whether to surface a distinct "Repositioning" activity/sensor
 derived from the inference rule above (covers undock + return).
 **Done when:** step-1 awareness is wired (or a decision to keep op-echo-only is
 recorded) + the working(1) gating caveat is confirmed.
-**Status:** command-time (op-echo) awareness DONE (v1.0.20a7); signals identified;
-step-1 ("Exiting") awareness + caveat confirmation OPEN
+
+**RESOLVED 2026-07-16 — (a) and (b) are both closed; the entry above is stale.**
+
+**(a) was already shipped and this entry never said so.** `state/machine.py:
+_apply_s2p1_task_state` fires `current_activity=REPOSITIONING` + `location=ON_LAWN`
+on `task_state == 1 AND raw_s2p1 ∈ _DOCKED_STATES` — that IS the s2p1 re-key, at
+t0, with the op echo refining the activity ~42s later. Do not "implement" it again.
+
+**(b) caveat CONFIRMED by full-corpus analysis** (15 probe logs, 205 dock-anchored
+`s2p1→1` transitions, 2026-07-16). Ground truth = an s1p50/s1p51 ping within 90s
+OR ≥20 s1p4 pushes in the next 10 min (both independent of s2p1/s2p50/s3p2):
+
+- **It does false-fire, at 18/205 = 8.8%** — transitions with NO evidence the
+  mower left (0/18 ping, median 2 telemetry pushes). They **self-heal**: s2p1
+  falls back to a dock/paused state in a median of **21s** (13/18 within 60s).
+- **The 18 are INDISTINGUISHABLE from real departures at fire time** — same prior
+  state, same anchor, same dock dwell, same pre-transition telemetry. Only what
+  happens *after* separates them. So no at-t gate can fix this; only a debounce
+  (which costs real departures) or an optimistic-fire-then-retract could.
+- **`charge→not_charging` does NOT help and must not be added as a gate.** It is
+  *simultaneous* with departure, not a lead: 201/201 within [-2s, 0s]. As a hard
+  AND it drops 3 real departures (the 08:00-charge-drop pattern). Recorded on
+  `inventory.yaml § s3p2`.
+- **Debounce sweep** (fire = s2p1→1 + dock anchor + no fallback within N):
+  N=0 → 205 fires, 18 false, **0 real missed**, recall 1.000 · N=45 → 5 false,
+  1 missed · N=60 → 5 false, **4 real missed**.
+  **USER RULING 2026-07-16: fire on aborted departures — "it has left the dock
+  regardless of time spent outside or how far it rolled."** That mandates
+  recall 1.000 → **no debounce**. The shipped code has none. Nothing to change.
+
+**Also debunked here:** the op echo's ~70%-absence is real but is NOT an undock
+detection gap — undock is keyed on s2p1, not the echo. See
+`debunked-claims.md § D22`, and note D22's framing is about the ECHO's coverage,
+not the integration's.
+
+**The one REAL remaining gap (small, corpus-quantified, NOT yet fixed):**
+the predicate keys on `raw_s2p1` — the *immediately previous* s2p1 value — but
+s2p1 **bounces 6↔2 while physically docked** (25+ cycles on a ~14s period
+observed at `[probe_log_20260608_193515.jsonl@2026-06-10 16:03:54→16:10:52]`).
+When a departure happens to follow a bounce (`6→2→1` or `6→3→1`), `raw_s2p1` is
+2/3, not a docked state, and **the undock never fires**.
+- Measured: shipped `prev ∈ {6,13,15,16}` catches **183/187 (97.9%)** of real
+  dock departures; an anchor walk-back (skip 2/3/4, take the last dock/mobile
+  state) catches **187/187 (100%)**. Worth **+4 departures / +2.1%**.
+- **The same bounce also corrupts `location`**: the location-authority block sets
+  `ON_LAWN` on the `2` (since 2 ∉ `_DOCKED_STATES`) while the mower is still on
+  the contacts — so `location` reads ON_LAWN mid-bounce, docked.
+- **This collides with a disputed inventory claim.** `inventory.yaml § s2p1`
+  asserts "idle 2 is a LAWN state … a single 2→{6,13} event is noise". The corpus
+  contradicts it: 183 `6→2` transitions occur, dominated by on-dock contact
+  bounce. Resolve the inventory row FIRST — the fix depends on which is true.
+- **Deliberately not fixed here:** it needs a new snapshot field (the anchor) and
+  touches the dock↔off-dock authority, the most corpus-validated code in the repo,
+  and the mower is in for repairs so nothing can be live-validated. 2.1% is not
+  worth guessing on that surface.
+- **Test when the mower returns:** park it docked and idle for 30 min with the
+  wire trace on; confirm the 6↔2 bounce reproduces and that `location` flaps
+  AT_DOCK↔ON_LAWN with the mower stationary. That single capture settles both the
+  inventory row and whether the anchor walk-back is the right fix.
+**Status:** (a) already shipped (pre-dates this entry); (b) CONFIRMED by corpus
+2026-07-16 — 8.8% self-healing false-fire rate, no debounce per user ruling;
+(c) REPOSITIONING activity already exists. Remaining: the s2p1 6↔2 dock-bounce
+anchor gap (+2.1%), blocked on the inventory § s2p1 "idle 2" dispute + a live capture.
 **Procedure:** [docs/research/g2408-capture-procedures.md#3-active-mowing-s5p10x-sequence-capture](g2408-capture-procedures.md#3-active-mowing-s5p10x-sequence-capture)
 **Cross-refs:** 80001 failure context — see the ARCHIVED overview at
 `/data/claude/homeassistant/OLD/ha-dreame-a2-mower-docs/research/g2408-protocol.md §1`
