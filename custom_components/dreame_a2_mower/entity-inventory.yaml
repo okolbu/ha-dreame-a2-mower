@@ -3239,24 +3239,26 @@ entities:
     device: parent
     source:
       wire: "integration-local — coordinator.cloud_state.ota_status"
-      state_path: "coordinator.cloud_state.ota_status[0] (status code)"
+      state_path: "coordinator.cloud_state.ota_status[0] (status code) -> ota_state_label()"
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-07-16"
     verifications:
-      - date: "2026-05-31"
+      - date: "2026-07-16"
         status: presumed
-        claim: "Ported from code 2026-05-31: native_value = coordinator.cloud_state.ota_status[0]; extra_state_attributes exposes ota_status[1] as 'percent'. OTA fields not fully decoded — status int semantics unknown. Read from sensor_device.py:854-865; not re-confirmed live."
-        evidence: "sensor_device.py:854-865 (native_value + extra_state_attributes)"
+        claim: "native_value maps cloud_state.ota_status[0] through the s1p2 OTAState enum (protocol/properties_g2408.py:ota_state_label), returning e.g. 'upgrading'; an unmapped code falls back to 'unknown_<N>'. extra_state_attributes exposes the raw code plus ota_status[1] as 'percent'. PRESUMED, not verified: that the cloud tuple mirrors the MQTT s1p2/s1p3 pair is [UNVERIFIED] — the 0550->0625 OTA capture observed the MQTT slots only, never the cloud tuple during an OTA. The enum ITSELF is confirmed (see inventory.yaml § s1p2)."
     references:
-      wire_entry: "n/a — CloudState.ota_status, not a named MQTT surface"
-      code: "custom_components/dreame_a2_mower/sensor_device.py:838"
+      wire_entry: "see inventory.yaml § s1p2 ota_state (enum) / § s1p3 (percent)"
+      code: "custom_components/dreame_a2_mower/entities/sensor/device.py (DreameA2OtaStatusSensor)"
     notes: |
-      cloud_state.ota_status is a 2-tuple (status_code, percent). Status code
-      semantics not yet decoded (TODO). extra_state_attributes exposes
-      {"percent": ota_status[1]}. Returns None when cloud_state is None or
-      ota_status is None (e.g. no active OTA).
+      cloud_state.ota_status is a 2-tuple (status_code, percent) read through the
+      s1p2 enum — cite inventory.yaml § s1p2 ota_state for the code meanings; do
+      not restate them here. The raw code stays in the `code` attribute so a
+      wrong-lineage tuple stays diagnosable without reverting the mapping.
+      Returns None when cloud_state is None or ota_status is None (no active OTA).
+      To CONFIRM the tuple<->s1p2 correspondence: during the next OTA, diff this
+      sensor's `code` attribute against sensor.ota_state on the same tick.
 
   - id: "sensor.dreame_a2_mower_ota_state"
     platform: sensor
@@ -3265,24 +3267,28 @@ entities:
     device: parent
     source:
       wire: "s1p2 via property_mapping"
-      state_path: "coordinator.data.ota_state"
+      state_path: "coordinator.data.ota_state -> ota_state_label()"
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-06-16"
+      last_verified: "2026-07-16"
     verifications:
       - date: "2026-06-16"
         status: verified
         claim: "ota_state / ota_progress diagnostic sensors read MowerState fields fed by s1p2/s1p3 property_mapping; wire-confirmed 0550->0625."
         evidence: "app-mitm:2026-06-16-firmware-ota"
+      - date: "2026-07-16"
+        status: presumed
+        claim: "value_fn now maps the raw s1p2 code through the confirmed OTAState enum (protocol/properties_g2408.py:ota_state_label) so the sensor reads e.g. 'upgrading' instead of 2; None passes through as None and an unmapped code renders 'unknown_<N>'. Code-read only — no OTA has fired since the change. The raw int on MowerState.ota_state is UNCHANGED (update.py still compares it to 2)."
     references:
-      wire_entry: "inventory.yaml s1p2 (live OTA state)"
+      wire_entry: "see inventory.yaml § s1p2 ota_state"
       code: "custom_components/dreame_a2_mower/entities/sensor/device.py"
     notes: |
-      Live s1p2 OTA state via property_mapping (1=idle, 2=upgrading,
-      3=success). Reads coord.data.ota_state; None until an OTA push.
+      Live s1p2 OTA state via property_mapping, rendered through the OTAState
+      enum — cite inventory.yaml § s1p2 ota_state for the code meanings; do not
+      restate them here. Reads coord.data.ota_state; None until an OTA push.
       Disabled-by-default (entity_registry_enabled_default=False).
-      EntityCategory.DIAGNOSTIC. Added 2026-06-16 (D1).
+      EntityCategory.DIAGNOSTIC. Added 2026-06-16 (D1); enum-mapped 2026-07-16.
 
   - id: "sensor.dreame_a2_mower_ota_progress"
     platform: sensor

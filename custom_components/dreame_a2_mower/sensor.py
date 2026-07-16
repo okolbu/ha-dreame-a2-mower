@@ -54,6 +54,7 @@ from .entities.sensor.device import (  # noqa: F401 — re-export
     _format_active_selection,
     _mpos_value,
     _obstacle_marker_value,
+    _ota_state_value,
     _parse_sim_expiry,
 )
 from .entities.sensor.map import (

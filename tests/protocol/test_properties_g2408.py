@@ -8,9 +8,11 @@ from custom_components.dreame_a2_mower.protocol.properties_g2408 import (
     Property,
     PROPERTY_MAP,
     ChargingStatus,
+    OTAState,
     siid_piid,
     property_for,
     charging_label,
+    ota_state_label,
 )
 
 
@@ -65,3 +67,23 @@ def test_charging_label_translates_g2408_s3p2_codes(code, label):
 
 def test_charging_label_unknown_returns_unknown_with_raw():
     assert charging_label(42) == "unknown_42"
+
+
+@pytest.mark.parametrize(
+    ("code", "label"),
+    [
+        (0, "undefined"),
+        (1, "idle"),
+        (2, "upgrading"),
+        (3, "upgrade_success"),
+        (4, "upgrade_failed"),
+        (5, "cannot_upgrade"),
+    ],
+)
+def test_ota_state_label_translates_g2408_s1p2_codes(code, label):
+    # Enum per inventory.yaml § s1p2 ota_state (wire-confirmed 0550->0625).
+    assert ota_state_label(OTAState(code)) == label
+
+
+def test_ota_state_label_unknown_returns_unknown_with_raw():
+    assert ota_state_label(9) == "unknown_9"

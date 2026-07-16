@@ -70,3 +70,27 @@ _CHARGING_LABELS: Final[dict[int, str]] = {
 
 def charging_label(code: int) -> str:
     return _CHARGING_LABELS.get(int(code), f"unknown_{int(code)}")
+
+
+class OTAState(IntEnum):
+    # s1p2 firmware-update state. See inventory.yaml § s1p2 ota_state.
+    UNDEFINED = 0
+    IDLE = 1
+    UPGRADING = 2
+    UPGRADE_SUCCESS = 3
+    UPGRADE_FAILED = 4
+    CANNOT_UPGRADE = 5
+
+
+_OTA_STATE_LABELS: Final[dict[int, str]] = {
+    OTAState.UNDEFINED: "undefined",
+    OTAState.IDLE: "idle",
+    OTAState.UPGRADING: "upgrading",
+    OTAState.UPGRADE_SUCCESS: "upgrade_success",
+    OTAState.UPGRADE_FAILED: "upgrade_failed",
+    OTAState.CANNOT_UPGRADE: "cannot_upgrade",
+}
+
+
+def ota_state_label(code: int) -> str:
+    return _OTA_STATE_LABELS.get(int(code), f"unknown_{int(code)}")

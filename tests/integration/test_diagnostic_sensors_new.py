@@ -65,4 +65,13 @@ def test_ota_state_value_fn_reads_mower_state():
     from custom_components.dreame_a2_mower.entities.sensor.device import DIAGNOSTIC_SENSORS
     desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "ota_state")
     coord = SimpleNamespace(data=SimpleNamespace(ota_state=2))
-    assert desc.value_fn(coord) == 2
+    # s1p2 maps through the OTAState enum; inventory.yaml § s1p2 ota_state.
+    assert desc.value_fn(coord) == "upgrading"
+
+
+def test_ota_state_value_fn_none_stays_none():
+    from types import SimpleNamespace
+    from custom_components.dreame_a2_mower.entities.sensor.device import DIAGNOSTIC_SENSORS
+    desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "ota_state")
+    coord = SimpleNamespace(data=SimpleNamespace(ota_state=None))
+    assert desc.value_fn(coord) is None

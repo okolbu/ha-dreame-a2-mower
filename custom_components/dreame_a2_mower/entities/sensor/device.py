@@ -28,6 +28,7 @@ from ...const import EXPERIMENTAL_T1_SPECULATIVE
 from ...coordinator import DreameA2MowerCoordinator
 from ...mower import fault_catalog
 from ...mower.error_codes import describe_error
+from ...protocol.properties_g2408 import ota_state_label
 from ...state import ChargingStatus, MowerState
 from .base import (
     DreameA2DiagnosticSensorEntityDescription,
@@ -243,6 +244,11 @@ def _api_endpoints_attrs(coord) -> dict[str, list[str]]:
         "device_rejected": sorted(k for k, v in log.items() if v == "device_rejected"),
         "error": sorted(k for k, v in log.items() if v == "error"),
     }
+
+
+def _ota_state_value(code: int | None) -> str | None:
+    """Map an OTA state code to its label, passing None through untouched."""
+    return None if code is None else ota_state_label(code)
 
 
 def _mpos_value(coord) -> str | None:
@@ -1015,9 +1021,9 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         icon="mdi:progress-download",
         entity_category=EntityCategory.DIAGNOSTIC,
         entity_registry_enabled_default=False,
-        # s1p2 live OTA state (1=idle, 2=upgrading, 3=success). None until an
-        # OTA push. Wire-confirmed 0550->0625, 2026-06-16.
-        value_fn=lambda coord: getattr(coord.data, "ota_state", None),
+        # s1p2 live OTA state, mapped through the OTAState enum (see
+        # inventory.yaml § s1p2 ota_state). None until an OTA push.
+        value_fn=lambda coord: _ota_state_value(getattr(coord.data, "ota_state", None)),
     ),
     DreameA2DiagnosticSensorEntityDescription(
         key="ota_progress",
@@ -1441,12 +1447,20 @@ class DreameA2OtaStatusSensor(
         cs = getattr(self.coordinator, "cloud_state", None)
         if cs is None or cs.ota_status is None:
             return None
-        return cs.ota_status[0]
+        # The cloud tuple is read through the s1p2/s1p3 enum. That the tuple
+        # mirrors those MQTT slots is [UNVERIFIED] — the 0550->0625 capture was
+        # MQTT-only, so the correspondence is assumed, not observed. The raw
+        # code stays in attrs so a mismatch is diagnosable without a rollback.
+        return ota_state_label(cs.ota_status[0])
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         cs = getattr(self.coordinator, "cloud_state", None)
-        base = {} if cs is None or cs.ota_status is None else {"percent": cs.ota_status[1]}
+        base = (
+            {}
+            if cs is None or cs.ota_status is None
+            else {"code": cs.ota_status[0], "percent": cs.ota_status[1]}
+        )
         return {**base, **self._freshness_stale_attrs()}  # Task 12b staleness
 
 

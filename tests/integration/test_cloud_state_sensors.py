@@ -45,11 +45,19 @@ def _make_coord(*, ota_status=None, schedule=None):
     return coord
 
 
-def test_ota_status_returns_status_int():
+def test_ota_status_returns_enum_label():
+    # (2, 100) reads as (UPGRADING, 100 %) per inventory.yaml § s1p2 ota_state.
     coord = _make_coord(ota_status=(2, 100))
     ent = DreameA2OtaStatusSensor(coord)
-    assert ent.native_value == 2
-    assert ent.extra_state_attributes == {"percent": 100}
+    assert ent.native_value == "upgrading"
+    assert ent.extra_state_attributes == {"code": 2, "percent": 100}
+
+
+def test_ota_status_unknown_code_falls_back_to_raw():
+    coord = _make_coord(ota_status=(9, 0))
+    ent = DreameA2OtaStatusSensor(coord)
+    assert ent.native_value == "unknown_9"
+    assert ent.extra_state_attributes == {"code": 9, "percent": 0}
 
 
 def test_ota_status_returns_none_when_unset():
