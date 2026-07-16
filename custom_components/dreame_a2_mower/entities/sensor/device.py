@@ -27,6 +27,7 @@ from ..._devices import _MowerScopedEntity, mower_device_info, mower_unique_id
 from ...const import EXPERIMENTAL_T1_SPECULATIVE
 from ...coordinator import DreameA2MowerCoordinator
 from ...mower import fault_catalog
+from ...observability.registry import visible_observations
 from ...mower.error_codes import describe_error
 from ...protocol.properties_g2408 import ota_state_label
 from ...state import ChargingStatus, MowerState
@@ -244,6 +245,11 @@ def _api_endpoints_attrs(coord) -> dict[str, list[str]]:
         "device_rejected": sorted(k for k, v in log.items() if v == "device_rejected"),
         "error": sorted(k for k, v in log.items() if v == "error"),
     }
+
+
+def _visible_novel(coord) -> list:
+    """The novel observations worth showing a user (flood filtered out)."""
+    return visible_observations(coord.novel_registry.snapshot().observations)
 
 
 def _ota_state_value(code: int | None) -> str | None:
@@ -947,11 +953,10 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
         # slots get decoded into inventory (the counter is a research artifact,
         # not a user surface).
         experimental=EXPERIMENTAL_T1_SPECULATIVE,
-        value_fn=lambda coord: (
-            coord.novel_registry.snapshot().count
-            if coord.novel_registry.snapshot().count is not None
-            else 0
-        ),
+        # Count and list are BOTH filtered, and must stay that way: a count of
+        # 51 over a 5-row list reads as a bug. The unfiltered record lives on
+        # in the logs, the persistent jsonl, and the diagnostics dump.
+        value_fn=lambda coord: len(_visible_novel(coord)),
         extra_state_attributes_fn=lambda coord: {
             "observations": [
                 {
@@ -959,8 +964,13 @@ DIAGNOSTIC_SENSORS: tuple[DreameA2DiagnosticSensorEntityDescription, ...] = (
                     "detail": o.detail,
                     "first_seen_unix": o.first_seen_unix,
                 }
-                for o in coord.novel_registry.snapshot().observations
+                for o in _visible_novel(coord)
             ],
+            # The flood is hidden, not lost — say so, so a contributor knows to
+            # pull diagnostics rather than assume nothing was recorded.
+            "hidden_value_observations": (
+                coord.novel_registry.snapshot().count - len(_visible_novel(coord))
+            ),
         },
     ),
     # data_freshness + mqtt_age_s staleness sensors DELETED refactor-v2 P4.2
@@ -1736,10 +1746,24 @@ class DreameA2LastNotificationSensor(
         entry = self.coordinator.last_notification
         if not entry:
             return {}
+        code = entry.get("code")
+        # The notification EVENT payload carries tier/category/severity
+        # (domain/device_sync.py:fire_notification), but an event is transient
+        # — nothing could answer "what tier was the last notification?" from a
+        # template or a dashboard. Mirroring them here closes that gap.
+        #
+        # Deliberately NOT latched into a standing "attention required" state:
+        # the corpus shows the attention tier is dominated by transient and
+        # SUCCESS codes, so it does not describe a condition. See
+        # docs/TODO.md § s2p2 per-tier surfacing.
+        tier = fault_catalog.fault_tier(code) if code is not None else None
         return {
             "event_type": entry.get("event_type"),
-            "code": entry.get("code"),
+            "code": code,
             "fired_at": entry.get("fired_at"),
+            "tier": tier,
+            "category": fault_catalog.fault_category(code) if code is not None else None,
+            "severity": fault_catalog.fault_severity(code) if code is not None else None,
         }
 
 

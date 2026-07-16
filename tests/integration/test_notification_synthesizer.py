@@ -9,6 +9,7 @@ Replaces the previous F13 inline-fire suite. The new flow:
 from __future__ import annotations
 
 import collections
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -359,3 +360,64 @@ def test_notification_event_types_cover_all_s2p2_slugs():
     assert S2P2_UNKNOWN_EVENT_TYPE in declared
 
 
+
+
+def test_last_notification_exposes_tier_category_severity():
+    """The tier is computed for the event payload but was never queryable.
+
+    The notification EVENT payload carries tier/category/severity, but events
+    are transient — a template or dashboard asking "what tier was the last
+    notification?" had nothing to read. The sensor's attrs close that gap.
+
+    Note the tier is NOT latched anywhere, deliberately: the corpus shows the
+    attention tier is dominated by transient/success codes, so it does not
+    describe a standing condition. See docs/TODO.md § s2p2 per-tier surfacing.
+    """
+    from custom_components.dreame_a2_mower.sensor import (
+        DreameA2LastNotificationSensor,
+    )
+
+    coord = SimpleNamespace(
+        # code 23 = emergency_stop = FAULT/anomaly = the 'error' tier.
+        last_notification={
+            "event_type": "emergency_stop",
+            "text": "Emergency stop pressed",
+            "code": 23,
+            "fired_at": 1700000000,
+        },
+    )
+    ent = object.__new__(DreameA2LastNotificationSensor)
+    ent.coordinator = coord
+
+    attrs = ent.extra_state_attributes
+    assert attrs["tier"] == "error"
+    assert attrs["category"] == "FAULT"
+    assert attrs["severity"] == "anomaly"
+    # Pre-existing attrs must survive.
+    assert attrs["code"] == 23
+    assert attrs["event_type"] == "emergency_stop"
+
+
+def test_last_notification_tier_none_for_uncatalogued_code():
+    from custom_components.dreame_a2_mower.sensor import (
+        DreameA2LastNotificationSensor,
+    )
+
+    coord = SimpleNamespace(
+        last_notification={"event_type": "x", "text": "t", "code": 9999, "fired_at": 1},
+    )
+    ent = object.__new__(DreameA2LastNotificationSensor)
+    ent.coordinator = coord
+    attrs = ent.extra_state_attributes
+    assert attrs["tier"] is None
+    assert attrs["category"] is None
+
+
+def test_last_notification_empty_has_no_attrs():
+    from custom_components.dreame_a2_mower.sensor import (
+        DreameA2LastNotificationSensor,
+    )
+
+    ent = object.__new__(DreameA2LastNotificationSensor)
+    ent.coordinator = SimpleNamespace(last_notification=None)
+    assert ent.extra_state_attributes == {}

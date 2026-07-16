@@ -209,6 +209,39 @@ def test_novel_observations_sensor_value_fn_returns_count():
     assert desc.value_fn(coord_like) == 3
 
 
+def test_novel_observations_sensor_hides_uncatalogued_value_flood():
+    """The battery-percentage flood must not bury the real signal.
+
+    s3p1 (battery_level) has no value_catalog, so every new percentage is a
+    first-seen value. Those are kept in the registry (and the logs / jsonl /
+    diagnostics) but must not reach the user-facing sensor. The unmapped-slot
+    property sighting is the thing the sensor exists for and must survive.
+    """
+    from custom_components.dreame_a2_mower.sensor import DIAGNOSTIC_SENSORS
+    from custom_components.dreame_a2_mower.observability import (
+        NovelObservationRegistry,
+    )
+
+    reg = NovelObservationRegistry()
+    reg.record_property(siid=99, piid=42, now_unix=1700000000)  # real signal
+    for pct in range(60, 90):  # the flood
+        reg.record_value(siid=3, piid=1, value=pct, now_unix=1700000000 + pct)
+
+    coord_like = type("C", (), {"novel_registry": reg})()
+    desc = next(d for d in DIAGNOSTIC_SENSORS if d.key == "novel_observations")
+
+    # Registry keeps everything; the sensor shows only the actionable one.
+    assert reg.snapshot().count == 31
+    assert desc.value_fn(coord_like) == 1
+    attrs = desc.extra_state_attributes_fn(coord_like)
+    assert len(attrs["observations"]) == 1
+    assert attrs["observations"][0]["detail"] == "siid=99 piid=42"
+    # Count and list must agree — a count of 31 over a 1-row list reads as a bug.
+    assert desc.value_fn(coord_like) == len(attrs["observations"])
+    # The flood is hidden, not lost, and the sensor says so.
+    assert attrs["hidden_value_observations"] == 30
+
+
 def test_novel_observations_sensor_attrs_lists_observations():
     from custom_components.dreame_a2_mower.sensor import DIAGNOSTIC_SENSORS
     from custom_components.dreame_a2_mower.observability import (

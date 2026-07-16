@@ -126,3 +126,80 @@ async def test_load_then_attach_does_not_re_echo(tmp_path):
 
     # File still has its original single line — no echo.
     assert path.read_text().count("\n") == 1
+
+
+# --- user-visible filtering (novel-observation flood suppression) ----------
+#
+# The registry records EVERY first-seen value for a mapped slot. For a
+# continuous-int slot that is a flood: s3p1 battery_level fires once per new
+# percentage (~100 entries), s5p107 energy_index up to the per-slot cap. That
+# is a useful log/research signal but noise on the user-facing sensor, which
+# is supposed to mean "unrecognised wire shapes worth a look".
+#
+# The split: a "value" observation is user-visible only if its slot HAS a
+# value_catalog in the inventory — i.e. the firmware emitted a value the
+# catalog does not enumerate (a real protocol gap). A slot with no catalog
+# has no enumerable vocabulary, so "new value" says nothing.
+
+
+def test_record_value_carries_structured_slot():
+    # The filter needs the slot as data; parsing it back out of `detail`
+    # would couple the sensor to a human-readable string's format.
+    reg = NovelObservationRegistry()
+    reg.record_value(siid=3, piid=1, value=57, now_unix=1700000000)
+    obs = reg.snapshot().observations[0]
+    assert (obs.siid, obs.piid) == (3, 1)
+
+
+def test_visible_observations_drops_uncatalogued_value_flood():
+    from custom_components.dreame_a2_mower.observability.registry import (
+        visible_observations,
+    )
+    # s3p1 (battery_level) has no value_catalog -> flood, hidden.
+    obs = [
+        NovelObservation(category="value", detail="siid=3 piid=1 value=57",
+                         first_seen_unix=1, siid=3, piid=1),
+        NovelObservation(category="value", detail="siid=3 piid=1 value=58",
+                         first_seen_unix=2, siid=3, piid=1),
+    ]
+    assert visible_observations(obs) == []
+
+
+def test_visible_observations_keeps_catalog_miss():
+    from custom_components.dreame_a2_mower.observability.registry import (
+        visible_observations,
+    )
+    # s1p2 (ota_state) HAS a value_catalog -> an unenumerated value is a real
+    # protocol gap and must stay visible.
+    obs = [
+        NovelObservation(category="value", detail="siid=1 piid=2 value=99",
+                         first_seen_unix=1, siid=1, piid=2),
+    ]
+    assert visible_observations(obs) == obs
+
+
+def test_visible_observations_keeps_non_value_categories():
+    from custom_components.dreame_a2_mower.observability.registry import (
+        visible_observations,
+    )
+    # An unmapped slot / unknown event / unknown blob key is ALWAYS actionable
+    # regardless of catalogs — that's the signal the sensor exists for.
+    obs = [
+        NovelObservation(category="property", detail="siid=99 piid=42",
+                         first_seen_unix=1, siid=99, piid=42),
+        NovelObservation(category="event", detail="siid=9 eiid=1 piids=[]",
+                         first_seen_unix=2),
+        NovelObservation(category="key", detail="summary.mystery_field",
+                         first_seen_unix=3),
+    ]
+    assert visible_observations(obs) == obs
+
+
+def test_visible_observations_keeps_value_with_unknown_slot():
+    from custom_components.dreame_a2_mower.observability.registry import (
+        visible_observations,
+    )
+    # Defensive: an observation with no slot recorded cannot be proven to be
+    # a flood, so it must NOT be silently hidden.
+    obs = [NovelObservation(category="value", detail="legacy", first_seen_unix=1)]
+    assert visible_observations(obs) == obs

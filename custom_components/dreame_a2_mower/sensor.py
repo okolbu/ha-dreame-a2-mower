@@ -56,6 +56,7 @@ from .entities.sensor.device import (  # noqa: F401 — re-export
     _obstacle_marker_value,
     _ota_state_value,
     _parse_sim_expiry,
+    _visible_novel,
 )
 from .entities.sensor.map import (
     DreameA2ExclusionZonesSensor,

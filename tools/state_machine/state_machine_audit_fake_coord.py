@@ -152,6 +152,7 @@ def _eval_globals() -> dict[str, Any]:
         _obstacle_marker_value,
         _ota_state_value,
         _parse_sim_expiry,
+        _visible_novel,
     )
     from custom_components.dreame_a2_mower.binary_sensor import (
         _cloud_connected_value,
@@ -172,6 +173,7 @@ def _eval_globals() -> dict[str, Any]:
         "_mpos_value": _mpos_value,
         "_obstacle_marker_value": _obstacle_marker_value,
         "_ota_state_value": _ota_state_value,
+        "_visible_novel": _visible_novel,
         "_parse_sim_expiry": _parse_sim_expiry,
         "_cloud_connected_value": _cloud_connected_value,
     }

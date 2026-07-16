@@ -33,6 +33,14 @@ class NovelObservation:
     category: str           # "property" | "value" | "event" | "key"
     detail: str             # human-readable token
     first_seen_unix: int    # wall-clock time of the first sighting
+    # The slot as DATA, for callers that need to reason about it (the
+    # user-visible filter below). `detail` carries the same thing, but only as
+    # a human-readable string — parsing it back would couple those callers to
+    # its formatting. None for categories with no (siid, piid): "event" carries
+    # an eiid, "key" a blob-key token, and pre-existing persisted rows have
+    # neither.
+    siid: int | None = None
+    piid: int | None = None
 
 
 @dataclass(frozen=True)
@@ -41,6 +49,44 @@ class RegistrySnapshot:
 
     count: int
     observations: list[NovelObservation]
+
+
+def visible_observations(
+    observations: "list[NovelObservation]",
+) -> "list[NovelObservation]":
+    """Drop the flood: novel-VALUE sightings on slots with no value_catalog.
+
+    The registry records every first-seen value for a mapped slot, which for a
+    continuous-int slot is one entry per new reading — s3p1 battery_level fires
+    ~100 times, s5p107 energy_index up to the per-slot cap. As a log/research
+    signal that's correct; on the user-facing sensor it's noise that buries the
+    thing the sensor exists for (an unmapped slot / unknown event / unknown
+    blob key).
+
+    The rule: a "value" sighting is worth surfacing only when the slot HAS a
+    value_catalog — i.e. the firmware emitted a value the catalog does not
+    enumerate, which is a real protocol gap. A slot with no catalog has no
+    enumerable vocabulary, so "a new value arrived" carries no information.
+    Every other category stays regardless.
+
+    This is a READ-side filter only. The registry, the INFO/WARNING logs, the
+    persistent novel_observations.jsonl, and the diagnostics dump all keep the
+    full unfiltered record — contributor diagnostics must not lose data
+    (docs/TODO.md § Novel-observation sensor floods).
+    """
+    from ..inventory import load_inventory
+
+    catalogs = load_inventory().value_catalogs
+    return [
+        o
+        for o in observations
+        if o.category != "value"
+        # An observation with no slot recorded cannot be shown to be a flood
+        # (e.g. a legacy row) — surface it rather than hide it silently.
+        or o.siid is None
+        or o.piid is None
+        or catalogs.get((o.siid, o.piid)) is not None
+    ]
 
 
 class NovelObservationRegistry:
@@ -110,7 +156,7 @@ class NovelObservationRegistry:
     def record_property(self, siid: int, piid: int, now_unix: int) -> bool:
         if not self._watchdog.saw_property(siid, piid):
             return False
-        self._append("property", f"siid={siid} piid={piid}", now_unix)
+        self._append("property", f"siid={siid} piid={piid}", now_unix, siid, piid)
         if self._store is not None:
             self._schedule_append(
                 self._store.append_sync(
@@ -124,7 +170,9 @@ class NovelObservationRegistry:
     ) -> bool:
         if not self._watchdog.saw_value(siid, piid, value):
             return False
-        self._append("value", f"siid={siid} piid={piid} value={value!r}", now_unix)
+        self._append(
+            "value", f"siid={siid} piid={piid} value={value!r}", now_unix, siid, piid,
+        )
         if self._store is not None:
             self._schedule_append(
                 self._store.append_sync(
@@ -175,7 +223,14 @@ class NovelObservationRegistry:
 
     # ----- internal -----
 
-    def _append(self, category: str, detail: str, now_unix: int) -> None:
+    def _append(
+        self,
+        category: str,
+        detail: str,
+        now_unix: int,
+        siid: int | None = None,
+        piid: int | None = None,
+    ) -> None:
         if len(self._observations) >= self.MAX_OBSERVATIONS:
             return
         self._observations.append(
@@ -183,5 +238,7 @@ class NovelObservationRegistry:
                 category=category,
                 detail=detail,
                 first_seen_unix=int(now_unix),
+                siid=siid,
+                piid=piid,
             )
         )

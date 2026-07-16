@@ -3119,6 +3119,12 @@ entities:
       - date: "2026-07-04"
         status: presumed
         claim: "P4.4 (R-52, track-5 T5-9): TWO keys in this table carry experimental=speculative (T1) — novel_observations (contributor/research counter of unrecognised wire observations) and api_endpoints_supported (endpoint-probe artifact; live value 0 = the developer discover_cloud_api probe never ran). Each is NOT created unless experimental_features is on; disabled-by-default when it is. PROMOTION: novel_observations → the observed slots get decoded into inventory; api_endpoints_supported → the probe becomes a standing capability read. The other keys in this table stay production (experimental=None). (sensor.mpos is a DIAGNOSTIC sensor too but has its own discrete row above.)"
+      - date: "2026-07-16"
+        status: presumed
+        claim: "sensor.novel_observations now reports a FILTERED view: both its state (count) and its `observations` attr drop category=value sightings whose slot has no value_catalog (observability/registry.py:visible_observations). Rationale: the registry records every first-seen value for a mapped slot, so a continuous-int slot floods it (s3p1 battery_level ~1 entry per new percentage) and buries the unmapped-slot / unknown-event signal the sensor exists for. A value sighting surfaces only when its slot HAS a catalog — i.e. the firmware emitted a value the catalog does not enumerate, a real protocol gap. The suppressed count is reported in a new `hidden_value_observations` attr. READ-SIDE ONLY: the registry, the INFO/WARNING logs, novel_observations.jsonl and the diagnostics dump keep the FULL unfiltered record, so contributor diagnostics lose nothing. NovelObservation gained siid/piid fields (default None) so the filter reads the slot as data rather than parsing `detail`. Code-read + unit-tested; not live-verified."
+      - date: "2026-07-16"
+        status: presumed
+        claim: "ota_state's value_fn maps the raw s1p2 code through the confirmed OTAState enum (ota_state_label); None passes through. Raw int stays on MowerState.ota_state. See the sensor.dreame_a2_mower_ota_state row for the full record."
     references:
       wire_entry: "varies — see notes for per-key wire surfaces"
       code: "custom_components/dreame_a2_mower/entities/sensor/device.py"
@@ -3136,12 +3142,12 @@ entities:
         mowing_phase           — coord.state_machine.snapshot().mowing_phase (s1p4)
         task_state_code        — coord.state_machine.snapshot().task_state_code (s2p56)
         slam_task_label        — coord.state_machine.snapshot().slam_task_label (s2p65)
-        novel_observations     — coord.novel_registry.snapshot().count
+        novel_observations     — len(visible_observations(coord.novel_registry.snapshot().observations)) — the FILTERED count (both state and the `observations` attr); `hidden_value_observations` attr reports how many were suppressed. The registry/logs/jsonl/diagnostics keep the full record
         api_endpoints_supported — count of accepted API endpoints from cloud.endpoint_log
         hardware_serial        — coord.data.hardware_serial (CFG.DEV.sn)
         firmware_version_dev   — coord.data.firmware_version (CFG.DEV.fw)
         ota_capable_raw        — coord.data.ota_capable_raw (CFG.DEV.ota)
-        ota_state              — coord.data.ota_state (s1p2 via property_mapping)
+        ota_state              — coord.data.ota_state (s1p2 via property_mapping) → ota_state_label()
         ota_progress           — coord.data.ota_progress (s1p3 via property_mapping)
         cloud_device_id        — coord._cloud.device_id (cloud account record ID)
         mac_address            — coord._cloud.mac_address (WiFi MAC from cloud)
@@ -3515,8 +3521,11 @@ entities:
     write_path: read-only
     status:
       seen_working: false
-      last_verified: "2026-05-31"
+      last_verified: "2026-07-16"
     verifications:
+      - date: "2026-07-16"
+        status: presumed
+        claim: "extra_state_attributes gained tier/category/severity, derived per-read from the code via mower/fault_catalog (fault_tier/fault_category/fault_severity); None for a code the catalog does not know. The notification EVENT payload already carried these (domain/device_sync.py:fire_notification) but an event is transient, so no state surface could answer 'what tier was the last notification?'. Deliberately NOT latched into a standing attention state: the full-corpus s2p2 histogram (15 probe logs, 742 pushes, 2026-07-16) shows the attention tier is 97/180 human_detected plus 34 SUCCESS codes, so it describes no condition — see docs/research/debunked-claims.md D21. Code-read + unit-tested; not live-verified."
       - date: "2026-05-31"
         status: presumed
         claim: "Ported from code 2026-05-31: native_value = coordinator._last_notification.get('text'); extra_state_attributes exposes event_type, code, fired_at. Sticks at the last emitted value; never auto-clears. coordinator._last_notification is updated by _fire_alert on s2p2 transitions. Read from sensor_device.py:1075-1090; not re-confirmed live."
