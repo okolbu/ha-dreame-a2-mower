@@ -174,8 +174,14 @@ else
 fi
 
 # ── 3. tests ────────────────────────────────────────────────────────────
+# NO --ignore here. This ran `--ignore=tests/archive` (unexplained) until
+# 2026-07-16, silently skipping 59 passing tests — the session/archive path,
+# i.e. the most delicate logic in the repo — from the gate that decides whether
+# a release ships. They run in 1.3s and CI runs them anyway. If a suite ever
+# needs excluding here, say WHY in a comment; a bare --ignore reads as
+# "everything passed" when it didn't.
 echo "running tests…"
-"$PYTHON" -m pytest tests/ -q --ignore=tests/archive >/tmp/release_pytest.log 2>&1 || {
+"$PYTHON" -m pytest tests/ -q >/tmp/release_pytest.log 2>&1 || {
     echo "❌ tests failed — see /tmp/release_pytest.log" >&2
     tail -20 /tmp/release_pytest.log >&2
     exit 1
