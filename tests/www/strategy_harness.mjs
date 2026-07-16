@@ -224,6 +224,41 @@ async function run() {
   const refs1 = new Set(collectEntityRefs(cfg1));
   for (const eid of refs1) assert(!/ota_state|ota_progress/.test(eid), `1-map: referenced disabled entity ${eid}`);
 
+  // Sessions use the custom one-tap calendar, not the native `type: calendar`
+  // (whose hard-coded more-info popup can't drive the replay picker).
+  const sessView = cfg1.views.find((v) => v.path === "sessions");
+  assert(sessView, "1-map: sessions view missing");
+  const sessJson = JSON.stringify(sessView);
+  assert(
+    sessJson.includes("custom:dreame-a2-session-calendar"),
+    "1-map: sessions must use the custom calendar card",
+  );
+  assert(
+    !/"type":"calendar"/.test(sessJson),
+    "1-map: the native calendar card must be gone (it can't do one-tap replay)",
+  );
+  // The card needs BOTH entities: the calendar to read and the select to drive.
+  // A missing select_entity would silently fall back to the card's default id,
+  // which is exactly the drift the registry-driven strategy exists to prevent.
+  const findCard = (node, type) => {
+    if (!node || typeof node !== "object") return null;
+    if (Array.isArray(node)) {
+      for (const n of node) {
+        const hit = findCard(n, type);
+        if (hit) return hit;
+      }
+      return null;
+    }
+    if (node.type === type) return node;
+    return findCard(node.cards || node.card || [], type);
+  };
+  const calCard = findCard(sessView, "custom:dreame-a2-session-calendar");
+  assert(calCard && calCard.entity, "1-map: calendar card needs a resolved entity");
+  assert(
+    calCard.select_entity && /session_replay|work_log/.test(calCard.select_entity),
+    "1-map: calendar card must be handed the resolved replay select",
+  );
+
   // Device messages use the custom card, not markdown: markdown is
   // HA-sanitized and cannot render the photo lightbox / detection overlay.
   // The other message sensors carry no photos and stay markdown.
@@ -264,9 +299,11 @@ async function run() {
   assert(!jsonHas(cfg1, '"custom:plotly-graph"'), "1-map: plotly card present without the resource");
   assert(jsonHas(cfg1, "history-graph") || jsonHas(cfg1, "plotly-graph-card"),
     "1-map: no native chart fallback / hint");
-  // calendar uses the native card (OQ-4), not atomic-calendar-revive.
+  // Sessions use the bundled one-tap calendar (2026-07-16). Superseded the
+  // native card (OQ-4), which was itself chosen over atomic-calendar-revive —
+  // neither can drive the replay picker from a tap. Assertion kept as a
+  // no-external-calendar-dep guard; the positive case is asserted below.
   assert(!jsonHas(cfg1, "atomic-calendar"), "1-map: atomic-calendar-revive leaked into output");
-  assert(jsonHas(cfg1, '"type":"calendar"'), "1-map: native calendar card missing");
 
   // --- Part 1: LiDAR + WiFi live on their own Coverage tab, not Sessions. ---
   const covView1 = cfg1.views.find((v) => v.path === "coverage");

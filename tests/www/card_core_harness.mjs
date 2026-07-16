@@ -100,6 +100,7 @@ await import("../../custom_components/dreame_a2_mower/www/dreame-mower-replay-ca
 await import("../../custom_components/dreame_a2_mower/www/dreame-a2-schedule-card.js");
 await import("../../custom_components/dreame_a2_mower/www/dreame-multi-select-card.js");
 await import("../../custom_components/dreame_a2_mower/www/dreame-a2-device-messages-card.js");
+await import("../../custom_components/dreame_a2_mower/www/dreame-a2-session-calendar.js");
 await import("../../custom_components/dreame_a2_mower/www/dreame-a2-lidar-card.js");
 
 const TAGS = [
@@ -110,6 +111,7 @@ const TAGS = [
   "dreame-a2-schedule-card",
   "dreame-multi-select-card",
   "dreame-a2-device-messages-card",
+  "dreame-a2-session-calendar",
   "dreame-a2-lidar-card",
 ];
 
@@ -190,6 +192,12 @@ const messages = await instantiate("dreame-a2-device-messages-card", (c) => c.se
 assert.ok(
   messages.shadowRoot && messages.shadowRoot.innerHTML.includes("ha-card"),
   "device-messages card renders a placeholder (not blank)",
+);
+
+const sesscal = await instantiate("dreame-a2-session-calendar", (c) => c.setConfig({}));
+assert.ok(
+  sesscal.shadowRoot && sesscal.shadowRoot.innerHTML.includes("ha-card"),
+  "session-calendar card renders a placeholder (not blank)",
 );
 
 const schedule = await instantiate("dreame-a2-schedule-card", (c) => c.setConfig({}));

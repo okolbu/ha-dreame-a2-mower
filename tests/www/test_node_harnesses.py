@@ -32,6 +32,8 @@ HARNESSES = [
     "strategy_harness.mjs",
     # Device-messages card: flat photo indexing + untrusted-text escaping.
     "device_messages_harness.mjs",
+    # Session-calendar card: month-grid bucketing + replay-label matching.
+    "session_calendar_harness.mjs",
 ]
 
 

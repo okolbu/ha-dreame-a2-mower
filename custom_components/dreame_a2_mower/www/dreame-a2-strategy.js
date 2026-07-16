@@ -725,8 +725,23 @@ function sessionsView(ctx, opts) {
 
   const left = [];
   const cal = ctx.resolve("session_calendar");
-  if (cal) left.push({ type: "calendar", title: "Mowing sessions", entities: [cal] }); // native calendar (OQ-4)
   const workLog = ctx.resolve("work_log");
+  // One-tap replay: the custom card's chips call select_option on the replay
+  // picker directly. The native `type: calendar` card can't — its tap opens a
+  // hard-coded more-info popup — and atomic-calendar-revive can't either (no
+  // per-event {{event.summary}} substitution). Both confirmed 2026-05-13.
+  // Needs BOTH ids resolved; without the select there is nothing to drive, so
+  // fall back to the native card rather than ship dead chips.
+  if (cal && workLog) {
+    left.push({
+      type: "custom:dreame-a2-session-calendar",
+      title: "Mowing sessions",
+      entity: cal,
+      select_entity: workLog,
+    });
+  } else if (cal) {
+    left.push({ type: "calendar", title: "Mowing sessions", entities: [cal] });
+  }
   const replayEnts = [];
   if (workLog) replayEnts.push({ entity: workLog, name: "Session" });
   const trailW = ctx.resolve("trail_render_width");
@@ -1005,6 +1020,7 @@ if (typeof customElements !== "undefined" && typeof HTMLElement !== "undefined")
       "./dreame-a2-schedule-card.js",
       "./dreame-a2-photo-gallery-card.js",
       "./dreame-a2-device-messages-card.js",
+      "./dreame-a2-session-calendar.js",
       "./dreame-multi-select-card.js",
     ];
     for (const url of CARDS) import(url).catch(() => {});
