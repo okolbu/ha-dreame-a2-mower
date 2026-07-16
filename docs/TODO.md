@@ -272,17 +272,62 @@ with the app-derived error tier from `fault_catalog.fault_tier`
 (fault_tier(code) == "error")`, covering 26 codes
 `{0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,17,20,21,22,23,24,26,37,59,73}`. 31
 (back-charge-failed) and 36 (task-start-failed) are in the **alert** tier and no
-longer latch ERROR. The remaining open work is per-tier surfacing:
-- **Attention / alert / info tiers** (P3): surface non-error tiers
-  (attention = consumable; alert = transient; info = lifecycle) beyond the current
-  binary fault/non-fault split.
+longer latch ERROR.
+
+**⚠️ This entry was written at P2 and its plan is REFUTED. Read before acting.**
+Most of what it asked for shipped in P3/P4 (tier-derived device triggers; tier /
+category / severity on the notification event payload; tier attrs on the
+code-mapped flag binary_sensors). What was left was described as "surface the
+attention/alert tiers as state, the natural counterpart to the error latch".
+**The corpus says that is not implementable as described, because the tier is
+the wrong axis.** See `docs/research/debunked-claims.md § D21`.
+
+Full-corpus s2p2 histogram (15 probe logs, 742 pushes, 31 distinct codes,
+2026-07-16) — the attention tier by observed frequency:
+
+| code | slug | cat/sev | pushes | what it actually is |
+|---|---|---|---|---|
+| 27 | human_detected | FAULT/work_message | 97 | transient detection |
+| 28 | blade_loss | FAULT/consumable | 32 | **condition** |
+| 75 | go_to_cleanpoint_success | FAULT/work_message | 18 | **a SUCCESS** |
+| 30 | maintain_loss | FAULT/consumable | 16 | **condition** |
+| 74 | cruise_task_finish | FAULT/work_message | 16 | **a SUCCESS** |
+| 76 | go_to_cleanpoint_failed | FAULT/work_message | 1 | transient failure |
+
+A `binary_sensor.attention_required` latching this tier would be permanently on
+(driven by `human_detected`) and would latch on task COMPLETIONS. It is not a
+condition. **Tier is derived from (category, severity), and severity is what
+separates condition from event:**
+- conditions (latchable): FAULT/consumable + ALERT/malfunction
+- events (already surfaced as events): FAULT/work_message + ALERT/anomaly
+
+**Shipped 2026-07-16 instead:** `tier` / `category` / `severity` as attrs on
+`sensor.last_notification`. The event payload already computed them, but events
+are transient — nothing could answer "what tier was the last notification?" from
+a template or dashboard. That closes the queryable-tier gap without inventing a
+latch the evidence contradicts.
+
+**Still genuinely open (needs a product decision, NOT more code archaeology):**
+a "service required" latch over the coherent condition set — FAULT/consumable
+(28/29/30) + ALERT/malfunction (38/40/41/42/43). Two things to settle first:
+(a) it partially duplicates the existing consumable life-% sensors
+(`blades_life_pct` etc.) — decide whether it earns its place; (b) the corpus
+cannot say when these codes CLEAR (`lidar_dirty` and `blade_loss` have no
+observed clear edge), so the clear semantics would be invented. Do not ship a
+latch until (b) has a capture behind it.
+
 - **24 vs 54 rename:** `24 "Battery low"` is vague vs `54 "Low battery — returning
   to station"`. Hypothesis: 24 = warning threshold, 54 = the return trigger.
   (Recorded as an `inventory.yaml § s2p2` open_question; needs a capture of both
-  firing in one session, then rename 24.)
-**Done when:** per-tier surfacing is wired up and 24 renamed against live evidence.
-**Status:** open (P3 deferred)
-**Cross-refs:** `inventory.yaml § s2p2`; `mower/fault_catalog.py`; `mower/error_codes.py`.
+  firing in one session, then rename 24.) Corpus status: 54 fires 73× across 7
+  logs; 24 fires 2× in 1 log — never together in one session, so the corpus
+  cannot resolve it. Still blocked on a live capture.
+**Done when:** the queryable-tier gap is closed (DONE) and 24 renamed against live
+evidence (still blocked).
+**Status:** partially done 2026-07-16 — tier is queryable; the attention-latch plan
+is refuted (D21); a condition-latch remains an open product decision.
+**Cross-refs:** `inventory.yaml § s2p2`; `mower/fault_catalog.py`; `mower/error_codes.py`;
+`docs/research/debunked-claims.md § D21`.
 
 ### Confirm the share-messages record shape (live capture)
 
@@ -474,8 +519,25 @@ a log signal but is noise on the user-visible sensor.
 `category: value` entries for slots whose `_INVENTORY.value_catalogs`
 entry is None. INFO-level logging of those novelty events stays so
 contributor diagnostics aren't lost.
-**Status:** open
-**Cross-refs:** `coordinator/_property_apply.py` (`handle_property_push` novelty dispatch);
+**Status:** DONE 2026-07-16 — `observability/registry.py:visible_observations`,
+applied by `sensor.novel_observations`.
+
+Two deliberate deviations from the entry as written:
+1. The **state (count) is filtered too**, not just the `observations` attr. A count
+   of 51 over a 5-row list reads as a bug. A new `hidden_value_observations` attr
+   reports the suppressed total so the flood is visibly hidden, not silently lost.
+2. The filter is **read-side, in the registry module** — NOT at the record site in
+   `domain/ingress.py`. Filtering at the source looks cleaner but breaks the
+   entry's own INFO-logging requirement: the log is gated on `record_value()`
+   returning True (first-sighting), so not recording means either no log at all or
+   a log on every push. Recording everything and filtering on read keeps the logs,
+   `novel_observations.jsonl`, and the diagnostics dump at full fidelity.
+
+`NovelObservation` gained `siid`/`piid` (default None) so the filter reads the slot
+as data; parsing it back out of the human-readable `detail` string would couple the
+sensor to that string's formatting.
+**Cross-refs:** `domain/ingress.py:_record_novel` (the novelty dispatch — the entry's
+`coordinator/_property_apply.py` ref is stale, that file no longer exists);
 `observability/registry.py`
 
 ---
@@ -680,7 +742,30 @@ session tap, calls `select.select_option` on `select.dreame_a2_mower_work_log`
 with the event summary — driving the existing replay camera. Drops the
 atomic-calendar-revive dep. (~half-day; the work_log label match is pinned by
 `tests/integration/test_calendar.py`.)
-**Status:** open (low priority — UX nicety).
+**Status:** DONE 2026-07-16 — `www/dreame-a2-session-calendar.js`, wired into the
+strategy's Sessions view (`sessionsView`), bundled from the strategy's `CARDS` list.
+
+Three corrections to the entry as written:
+1. **The select id is stale.** P4.5 renamed it to `select.dreame_a2_mower_session_replay`
+   (the unique_id key `work_log` is unchanged). The card takes it as `select_entity`,
+   resolved from the registry by the strategy — never hardcoded.
+2. **The atomic-calendar-revive dep was already gone.** The P5 strategy shipped the
+   HA-native `type: calendar` card (OQ-4); that is what this replaces. The
+   no-atomic-calendar guard in `strategy_harness.mjs` stays.
+3. **The select caps at 50 sessions** (`_max_options`) while the calendar carries every
+   archived session, so a tap on an older session would call `select_option` with a
+   label that is not an option — which raises in HA. Sessions outside the picker's
+   window render as a disabled chip with the reason in its tooltip, rather than as a
+   button that errors.
+
+Events are fetched per month via `hass.callApi("GET", "calendars/<entity>?start=&end=")`
+(calendar events are not in entity state) and re-fetched only on a month change.
+Sessions are bucketed by the date in their LABEL, not the event's UTC start — the label
+is what the picker and the Dreame app both show, and the two diverge either side of
+midnight outside UTC.
+**Live-verify (NOT done):** the month grid + tap→replay round-trip needs a browser; the
+harness covers the pure grid/bucketing/label-matching logic only
+(`tests/www/session_calendar_harness.mjs`).
 **Cross-refs:** `www/dreame-a2-lidar-card.js` (bundled-card pattern);
 `calendar.py::_event_from_entry`; archived design
 `OLD/ha-dreame-a2-mower-docs/research/session-calendar-todo.md`.

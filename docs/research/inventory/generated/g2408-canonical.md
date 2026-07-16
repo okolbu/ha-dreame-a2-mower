@@ -718,7 +718,13 @@ Confirmed across the full probe corpus 2026-04-17 through 2026-05-05.
 Charging status enum. On g2408, value 0 means "not charging" (enum offset
 vs upstream — upstream mapping expects 1 for not-charging). Confirmed across
 the full probe corpus: transitions to 1 when mower docks and charging starts,
-drops to 0 when mowing resumes.
+drops to 0 when mowing resumes, and rises to 2 (Charged) when the battery
+tops out — 2 is then held on the dock until departure.
+
+TIMING (full-corpus, 2026-07-16): the 1|2 -> 0 edge is SIMULTANEOUS with
+dock departure (s2p1 -> 1), not a lead indicator — it lands within
+[-2s, 0s] of the state transition. Do NOT use "was charging immediately
+before" as a departure predicate: the value has already flipped at t.
 
 Used in the integration as the authoritative "charging started" signal
 (s3p2 → 1) to confirm dock arrival, particularly when s2p50 o=6 echo is

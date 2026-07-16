@@ -1867,19 +1867,25 @@ properties:
     category: "property"
     value_kind: enum
     observed_values:
-      - {value: 0, status: unknown}
-      - {value: 1, status: unknown}
-      - {value: 2, status: unknown}
+      - {value: 0, status: confirmed}
+      - {value: 1, status: confirmed}
+      - {value: 2, status: confirmed}
     payload_shape: "int (enum)"
     value_catalog:
       0: "Not Charging"
       1: "Charging"
-      2: "Not Charging (alt)"
+      2: "Charged"
     semantic: |
       Charging status enum. On g2408, value 0 means "not charging" (enum offset
       vs upstream — upstream mapping expects 1 for not-charging). Confirmed across
       the full probe corpus: transitions to 1 when mower docks and charging starts,
-      drops to 0 when mowing resumes.
+      drops to 0 when mowing resumes, and rises to 2 (Charged) when the battery
+      tops out — 2 is then held on the dock until departure.
+
+      TIMING (full-corpus, 2026-07-16): the 1|2 -> 0 edge is SIMULTANEOUS with
+      dock departure (s2p1 -> 1), not a lead indicator — it lands within
+      [-2s, 0s] of the state transition. Do NOT use "was charging immediately
+      before" as a departure predicate: the value has already flipped at t.
 
       Used in the integration as the authoritative "charging started" signal
       (s3p2 → 1) to confirm dock arrival, particularly when s2p50 o=6 echo is
@@ -1887,7 +1893,7 @@ properties:
     status:
       seen_on_wire: true
       first_seen: "2026-04-17"
-      last_seen: "2026-05-29"
+      last_seen: "2026-07-16"
       decoded: confirmed
     references:
       integration_code: "custom_components/dreame_a2_mower/mower/property_mapping.py:58"
@@ -1898,6 +1904,14 @@ properties:
         status: verified
         claim: "charging_started / charging_complete lifecycle events fire on s3.2 rising edges into CHARGING(1) / CHARGED(2). Distinct from dock_arrived (cloud DOCK connect_status) — this is the energy-state."
         evidence: "mower/state.py:ChargingStatus enum (NOT_CHARGING=0,CHARGING=1,CHARGED=2); coordinator/_mqtt_handlers.py:_maybe_fire_charging_events"
+      - date: "2026-07-16"
+        status: verified
+        claim: "value 2 = CHARGED (was mislabelled 'Not Charging (alt)' in the value_catalog — the label contradicted this row's own 2026-05-29 verification and the ChargingStatus enum; retracted, see OLD/ha-dreame-a2-mower-docs/inventory-history/properties.md). Evidence: 2 is entered from 1 (charging) 279x vs 2x from 0; entered only at battery {81,99,100}; median dwell 8878s, max 336914s (~3.9 days) while docked."
+        evidence: "probe corpus 15 logs, s3p2 transition census 2026-07-16 (probe_log_20260417_095500..20260714)"
+      - date: "2026-07-16"
+        status: verified
+        claim: "the 1|2 -> 0 charge edge is SIMULTANEOUS with dock departure (s2p1 -> 1), landing within [-2s, 0s] of it — it is not an early indicator and is useless as a 'was charging before' gate (the value has already flipped at t)."
+        evidence: "probe corpus dock-departure analysis 2026-07-16; 201/201 departures had the edge in [-2s,0s]; independently reproduced (a 'charging strictly before t' predicate scored 0 true positives until the window was widened past the simultaneous edge)"
 
   - id: "s5p104"
     siid: 5
