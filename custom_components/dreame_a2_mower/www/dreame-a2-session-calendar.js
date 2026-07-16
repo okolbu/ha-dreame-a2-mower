@@ -101,6 +101,26 @@ export function groupByDay(events) {
   return out;
 }
 
+// A fingerprint of everything the grid DISPLAYS, so `set hass` can skip a
+// re-render when nothing relevant changed.
+//
+// Load-bearing for INPUT, not just for efficiency: HA sets `hass` on every state
+// change anywhere in the system, and `_render()` rebuilds shadowRoot.innerHTML —
+// destroying every chip button. A click only fires if mousedown and mouseup land
+// on the same surviving element, so an unguarded re-render silently swallows
+// clicks whenever an update lands mid-press. Symptom: "it usually takes more
+// than one click to start a session."
+//
+// Compared BY VALUE: hass hands us a fresh object every tick, so identity
+// comparison would never match and would re-render forever.
+export function calendarKey(year, monthIndex, events, options) {
+  const evs = (Array.isArray(events) ? events : []).map((e) => (e && e.summary) || "").join("|");
+  const opts = (Array.isArray(options) ? options : []).join("|");
+  // Options matter: they decide which chips are tappable (the picker's
+  // 50-session window), so a session ageing out must grey its chip.
+  return `${year}-${monthIndex}:${evs}:${opts}`;
+}
+
 // The set of summaries the replay select will actually accept.
 //
 // Load-bearing: the select caps at the 50 most recent sessions
@@ -191,8 +211,15 @@ class DreameA2SessionCalendarCard extends HTMLElement {
       return;
     }
     this._missingShown = null;
-    if (first) this._fetch();
-    else this._render();
+    if (first) {
+      this._fetch();
+      return;
+    }
+    // Re-render ONLY on a real change. Rebuilding innerHTML on every hass tick
+    // destroys the chip buttons mid-click and eats the tap (see calendarKey).
+    const key = calendarKey(this._year, this._month, this._events, this._options());
+    if (key === this._key) return;
+    this._render();
   }
 
   // Calendar events are NOT in the entity state — they're fetched per window.
@@ -223,8 +250,13 @@ class DreameA2SessionCalendarCard extends HTMLElement {
   }
 
   _render() {
+    const opts = this._options();
+    // Stamp the key we are about to render, so `set hass` can skip redundant
+    // rebuilds. Set here (not in `set hass`) so the month buttons and the
+    // post-fetch render go through the same path and can't leave it stale.
+    this._key = calendarKey(this._year, this._month, this._events, opts);
     const byDay = groupByDay(this._events);
-    const replayable = replayableSet(this._options());
+    const replayable = replayableSet(opts);
     const todayKey = (() => {
       const n = new Date();
       return _dayKey(n.getFullYear(), n.getMonth(), n.getDate());
@@ -246,7 +278,7 @@ class DreameA2SessionCalendarCard extends HTMLElement {
                 const title = ok
                   ? ev.summary
                   : `${ev.summary}\n(not in the replay picker — older than its ${
-                      this._options().length
+                      opts.length
                     }-session window)`;
                 return (
                   `<button class="chip" data-idx="${i}" ${ok ? "" : "disabled"} ` +

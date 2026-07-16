@@ -8,13 +8,26 @@
 
 import assert from "node:assert";
 
-globalThis.HTMLElement = class {};
-globalThis.customElements = { get: () => undefined, define() {} };
+function _shadow() {
+  return {
+    innerHTML: "",
+    getElementById: () => ({ set onclick(_v) {} }),
+    querySelectorAll: () => [],
+  };
+}
+globalThis.HTMLElement = class {
+  attachShadow() {
+    this.shadowRoot = _shadow();
+    return this.shadowRoot;
+  }
+};
+const _defined = {};
+globalThis.customElements = { get: (n) => _defined[n], define: (n, c) => { _defined[n] = c; } };
 globalThis.window = { customCards: [] };
 
 const CARD =
   "../../custom_components/dreame_a2_mower/www/dreame-a2-session-calendar.js";
-const { buildMonthMatrix, labelDate, groupByDay, replayableSet } = await import(CARD);
+const { buildMonthMatrix, labelDate, groupByDay, replayableSet, calendarKey } = await import(CARD);
 
 // --- labelDate ------------------------------------------------------------
 // Labels come from domain/session/replay.py:format_session_label. The shape is
@@ -109,5 +122,85 @@ assert.ok(!set.has(EVENTS[2].summary), "a session beyond the select's cap is NOT
 assert.strictEqual(replayableSet(null).size, 0, "null options -> empty set (nothing tappable)");
 // The placeholder is not a session and must never be tappable.
 assert.ok(!replayableSet(["(no sessions)"]).has(EVENTS[0].summary));
+
+// --- re-render guard ------------------------------------------------------
+// HA sets `hass` on EVERY state change anywhere in the system. `_render()`
+// rebuilds shadowRoot.innerHTML, destroying every chip button — so a re-render
+// landing between mousedown and mouseup swallows the click (the element that
+// received mousedown no longer exists, so no click event fires). Symptom: "it
+// usually takes more than one click to start a session". The card must only
+// re-render when something it DISPLAYS actually changed.
+
+const EV = [{ summary: "[Mowing] [Map 1] 2026-07-16 10:30 — 120.5 m² / 45min" }];
+const OPT = ["[Mowing] [Map 1] 2026-07-16 10:30 — 120.5 m² / 45min"];
+
+assert.strictEqual(
+  calendarKey(2026, 6, EV, OPT),
+  calendarKey(2026, 6, EV, OPT),
+  "identical state must produce an identical key (no re-render, no lost clicks)",
+);
+// A different hass object with equal content must NOT force a re-render.
+assert.strictEqual(
+  calendarKey(2026, 6, [{ ...EV[0] }], [...OPT]),
+  calendarKey(2026, 6, EV, OPT),
+  "key is by VALUE, not object identity — hass hands us a new object each tick",
+);
+
+// The things that MUST re-render:
+assert.notStrictEqual(calendarKey(2026, 6, EV, OPT), calendarKey(2026, 7, EV, OPT), "month change");
+assert.notStrictEqual(calendarKey(2026, 6, EV, OPT), calendarKey(2027, 6, EV, OPT), "year change");
+assert.notStrictEqual(
+  calendarKey(2026, 6, EV, OPT),
+  calendarKey(2026, 6, [...EV, { summary: "[Patrol] [Map 1] 2026-07-17 08:00 — Edge / 5min" }], OPT),
+  "a new session must appear",
+);
+// The options list drives which chips are tappable — a session ageing out of
+// the picker's 50-session window must grey its chip out.
+assert.notStrictEqual(
+  calendarKey(2026, 6, EV, OPT),
+  calendarKey(2026, 6, EV, []),
+  "replayable-options change must re-render",
+);
+assert.strictEqual(calendarKey(2026, 6, [], []), calendarKey(2026, 6, [], []), "empty is stable");
+assert.strictEqual(calendarKey(2026, 6, null, null), calendarKey(2026, 6, null, null), "null tolerated");
+
+
+// --- the guard, wired: a repeat hass tick must not rebuild the DOM ----------
+// This is the user-visible bug ("usually needs more than one click"): every
+// innerHTML rebuild destroys the chip that is mid-press.
+
+const Card = customElements.get("dreame-a2-session-calendar");
+const card = new Card();
+card.setConfig({});
+const HASS = {
+  states: {
+    "calendar.dreame_a2_mower_sessions": { state: "off", attributes: {} },
+    "select.dreame_a2_mower_session_replay": { state: "x", attributes: { options: OPT } },
+  },
+  callApi: async () => EV,
+  callService() {},
+};
+card.hass = HASS;                       // first: triggers the month fetch
+await new Promise((r) => setTimeout(r, 0)); // let _fetch resolve
+const afterFirst = card.shadowRoot.innerHTML;
+assert.ok(afterFirst.includes("ha-card"), "first hass renders the grid");
+
+let renders = 0;
+const realRender = card._render.bind(card);
+card._render = () => { renders++; realRender(); };
+
+// Ten unrelated state ticks — exactly what HA does all day.
+for (let i = 0; i < 10; i++) card.hass = { ...HASS };
+assert.strictEqual(renders, 0, `unchanged state re-rendered ${renders}x — this eats clicks`);
+
+// A real change still re-renders.
+card.hass = {
+  ...HASS,
+  states: {
+    ...HASS.states,
+    "select.dreame_a2_mower_session_replay": { state: "x", attributes: { options: [] } },
+  },
+};
+assert.strictEqual(renders, 1, "an options change must re-render (chips grey out)");
 
 console.log("OK");
