@@ -19,7 +19,9 @@
 // Only snapshot messages carry `photos` (link_message_snapshot_photos matches
 // them by timestamp window); every other message renders text-only.
 
-import { defineCard, renderMissingEntity, openLightbox } from "./_dreame-card-core.js";
+import {
+  defineCard, fingerprint, openLightbox, renderMissingEntity, shouldRender,
+} from "./_dreame-card-core.js";
 
 function _esc(s) {
   return String(s == null ? "" : s).replace(/[&<>"]/g, (c) => (
@@ -79,8 +81,10 @@ export function flattenPhotos(items) {
 // on EVERY state update) re-renders only on a real change and doesn't reset the
 // user's scroll position.
 //
-// Two things beyond count+id are load-bearing here, and both are invisible to a
-// count-and-id key:
+// WHICH values this card renders. The guard mechanics live in
+// _dreame-card-core.js:fingerprint / shouldRender; only the field list is
+// card-specific. Two fields here are load-bearing and both are invisible to the
+// obvious count+id key:
 //
 //  1. PHOTO COUNT — snapshot photos are linked onto an EXISTING message after
 //     the fact (link_message_snapshot_photos runs on each merge, matching
@@ -95,10 +99,11 @@ export function flattenPhotos(items) {
 export function renderKey(items) {
   const list = Array.isArray(items) ? items : [];
   const newest = list[0] || {};
-  const sigs = flattenPhotos(list)
-    .map((f) => f.photo.thumb_url || f.photo.url || "")
-    .join("|");
-  return `${list.length}:${newest.id || newest.date || ""}:${sigs}`;
+  return fingerprint(
+    list.length,
+    newest.id || newest.date || "",
+    flattenPhotos(list).map((f) => f.photo.thumb_url || f.photo.url || ""),
+  );
 }
 
 // Pure items[] → HTML. Every interpolated field is cloud-authored text, so it
@@ -189,7 +194,6 @@ class DreameA2DeviceMessagesCard extends HTMLElement {
       entity: cfg.entity || "sensor.dreame_a2_mower_device_messages",
       title: cfg.title || "Device messages",
     };
-    this._key = null;
   }
 
   set hass(hass) {
@@ -200,16 +204,16 @@ class DreameA2DeviceMessagesCard extends HTMLElement {
     if (!hass || !hass.states[this._cfg.entity]) {
       if (this._missingShown !== this._cfg.entity) {
         this._missingShown = this._cfg.entity;
-        this._key = null;
+        // Force a re-render when the entity comes back: the placeholder replaced
+        // the grid, so the last render key no longer describes the DOM.
+        delete this.__dreameRenderKey;
         this.shadowRoot.innerHTML = renderMissingEntity(this._cfg.entity);
       }
       return;
     }
     this._missingShown = null;
     const items = this._items();
-    const key = renderKey(items);
-    if (key === this._key) return;
-    this._key = key;
+    if (!shouldRender(this, renderKey(items))) return;
     this._render(items);
   }
 

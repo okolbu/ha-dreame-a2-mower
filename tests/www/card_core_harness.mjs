@@ -91,7 +91,7 @@ globalThis.console = console;
 // ---- imports (each card runs its module-level defineCard here) -------------
 
 const CORE = "../../custom_components/dreame_a2_mower/www/_dreame-card-core.js";
-const { defineCard, renderMissingEntity } = await import(CORE);
+const { defineCard, renderMissingEntity, fingerprint, shouldRender } = await import(CORE);
 
 await import("../../custom_components/dreame_a2_mower/www/dreame-mower-map-card.js");
 await import("../../custom_components/dreame_a2_mower/www/dreame-map-editor-card.js");
@@ -218,5 +218,67 @@ assert.ok(
 // T6-19: it must NOT touch light DOM (the card never assigns this.innerHTML;
 // the stub leaves it undefined, a real browser leaves it "").
 assert.ok(!multi.innerHTML, "multi-select does not write light DOM");
+
+// ---- (d) the shared re-render guard (T6-21) -------------------------------
+// Three cards independently reinvented "should I re-render?", and two got it
+// wrong in opposite directions: the session-calendar had NO guard and rebuilt
+// its buttons on every hass tick (destroying the chip mid-click — "needs more
+// than one click"), while the photo-gallery's guard was too NARROW (length+id)
+// and never noticed a re-signed URL, leaving the browser on dead signatures.
+// Both are the same question, so the primitive lives here now.
+
+// fingerprint: by VALUE, because Lovelace hands every card a fresh `hass` each
+// tick — identity would never match and would re-render forever.
+assert.strictEqual(fingerprint("a", 1), fingerprint("a", 1), "same values -> same key");
+assert.notStrictEqual(fingerprint("a", 1), fingerprint("a", 2), "different values -> different key");
+assert.strictEqual(fingerprint(["a", "b"]), fingerprint(["a", "b"]), "arrays compare by value");
+assert.strictEqual(fingerprint(null), fingerprint(null), "null tolerated");
+assert.strictEqual(fingerprint(undefined), fingerprint(null), "null and undefined both read as absent");
+// Ambiguity: these must NOT collide, or a card renders stale content.
+assert.notStrictEqual(fingerprint(["a", "b"]), fingerprint(["ab"]), "no join ambiguity");
+assert.notStrictEqual(fingerprint(["a"], ["b"]), fingerprint(["a", "b"]), "array boundaries are significant");
+assert.notStrictEqual(fingerprint("1"), fingerprint(1), "type is significant (a string 1 is not the number 1)");
+
+// shouldRender: true on change, false on repeat; stores the key on the owner.
+const owner = {};
+assert.strictEqual(shouldRender(owner, "k1"), true, "first call always renders");
+assert.strictEqual(shouldRender(owner, "k1"), false, "repeat key must NOT re-render (this is what eats clicks)");
+assert.strictEqual(shouldRender(owner, "k2"), true, "changed key renders");
+assert.strictEqual(shouldRender(owner, "k2"), false, "and then settles");
+// Two cards must not share state through the helper.
+const o2 = {};
+assert.strictEqual(shouldRender(o2, "k2"), true, "keys are per-owner, not global");
+// Identity keys work too — that's the schedule card's pattern (an HA state
+// object is replaced only when the entity actually changes).
+const stateA = { s: 1 }, stateB = { s: 1 };
+const o3 = {};
+assert.strictEqual(shouldRender(o3, stateA), true);
+assert.strictEqual(shouldRender(o3, stateA), false, "same state object -> no re-render");
+assert.strictEqual(shouldRender(o3, stateB), true, "a new state object -> re-render");
+// A falsy-but-real key must still be honoured (not treated as "no key yet").
+const o4 = {};
+assert.strictEqual(shouldRender(o4, ""), true, "empty-string key renders once");
+assert.strictEqual(shouldRender(o4, ""), false, "...then settles");
+
+// ---- (e) the gallery's key must notice a re-signed URL (T6-21) ------------
+// Same bug class as the device-messages card, latent here: the gallery keyed on
+// `length + items[0].id`, so an hourly re-sign / post-restart re-mint changed
+// every URL while the key stayed identical — the card never re-rendered and the
+// browser kept requesting signatures minted by a dead HA process (401). It
+// looked fine only because a page loaded AFTER a restart gets fresh URLs.
+const { galleryKey } = await import(
+  "../../custom_components/dreame_a2_mower/www/dreame-a2-photo-gallery-card.js"
+);
+const G_OLD = [{ id: "a.jpg", url: "/p/a.jpg?authSig=OLD", thumb_url: "/t/a.jpg?authSig=OLD" }];
+const G_NEW = [{ id: "a.jpg", url: "/p/a.jpg?authSig=NEW", thumb_url: "/t/a.jpg?authSig=NEW" }];
+assert.strictEqual(galleryKey(G_OLD), galleryKey(G_OLD), "stable for identical items");
+assert.notStrictEqual(
+  galleryKey(G_OLD),
+  galleryKey(G_NEW),
+  "a re-signed gallery URL MUST invalidate the key (else the browser 401s forever)",
+);
+assert.notStrictEqual(galleryKey(G_OLD), galleryKey([]), "an emptied gallery re-renders");
+assert.strictEqual(galleryKey([]), galleryKey([]), "empty is stable");
+assert.strictEqual(galleryKey(null), galleryKey(null), "null tolerated");
 
 console.log("OK");

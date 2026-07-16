@@ -18,7 +18,9 @@
 // byte-identical to a select option and can be passed straight to
 // select.select_option. tests/integration/test_calendar.py pins that match.
 
-import { defineCard, renderMissingEntity } from "./_dreame-card-core.js";
+import {
+  defineCard, fingerprint, renderMissingEntity, shouldRender,
+} from "./_dreame-card-core.js";
 
 const DAY_MS = 86400000;
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -101,24 +103,20 @@ export function groupByDay(events) {
   return out;
 }
 
-// A fingerprint of everything the grid DISPLAYS, so `set hass` can skip a
-// re-render when nothing relevant changed.
+// WHICH values this card renders. The guard mechanics (and why every
+// innerHTML-rebuilding card needs one) live in _dreame-card-core.js:fingerprint
+// / shouldRender — an unguarded rebuild destroys the chip mid-press and eats
+// the tap. Only the field list is card-specific, so only it lives here.
 //
-// Load-bearing for INPUT, not just for efficiency: HA sets `hass` on every state
-// change anywhere in the system, and `_render()` rebuilds shadowRoot.innerHTML —
-// destroying every chip button. A click only fires if mousedown and mouseup land
-// on the same surviving element, so an unguarded re-render silently swallows
-// clicks whenever an update lands mid-press. Symptom: "it usually takes more
-// than one click to start a session."
-//
-// Compared BY VALUE: hass hands us a fresh object every tick, so identity
-// comparison would never match and would re-render forever.
+// Options are in the key because they decide which chips are TAPPABLE (the
+// picker's 50-session window), so a session ageing out must grey its chip.
 export function calendarKey(year, monthIndex, events, options) {
-  const evs = (Array.isArray(events) ? events : []).map((e) => (e && e.summary) || "").join("|");
-  const opts = (Array.isArray(options) ? options : []).join("|");
-  // Options matter: they decide which chips are tappable (the picker's
-  // 50-session window), so a session ageing out must grey its chip.
-  return `${year}-${monthIndex}:${evs}:${opts}`;
+  return fingerprint(
+    year,
+    monthIndex,
+    (Array.isArray(events) ? events : []).map((e) => (e && e.summary) || ""),
+    Array.isArray(options) ? options : [],
+  );
 }
 
 // The set of summaries the replay select will actually accept.
@@ -217,8 +215,9 @@ class DreameA2SessionCalendarCard extends HTMLElement {
     }
     // Re-render ONLY on a real change. Rebuilding innerHTML on every hass tick
     // destroys the chip buttons mid-click and eats the tap (see calendarKey).
-    const key = calendarKey(this._year, this._month, this._events, this._options());
-    if (key === this._key) return;
+    if (!shouldRender(this, calendarKey(this._year, this._month, this._events, this._options()))) {
+      return;
+    }
     this._render();
   }
 
@@ -252,9 +251,9 @@ class DreameA2SessionCalendarCard extends HTMLElement {
   _render() {
     const opts = this._options();
     // Stamp the key we are about to render, so `set hass` can skip redundant
-    // rebuilds. Set here (not in `set hass`) so the month buttons and the
+    // rebuilds. Done here (not in `set hass`) so the month buttons and the
     // post-fetch render go through the same path and can't leave it stale.
-    this._key = calendarKey(this._year, this._month, this._events, opts);
+    shouldRender(this, calendarKey(this._year, this._month, this._events, opts));
     const byDay = groupByDay(this._events);
     const replayable = replayableSet(opts);
     const todayKey = (() => {

@@ -18,7 +18,9 @@
 //   video: {type:"video", id, ts, date, category:"video", duration:int(sec),
 //           url, thumb_url}
 
-import { defineCard, renderMissingEntity, openLightbox } from "./_dreame-card-core.js";
+import {
+  defineCard, fingerprint, openLightbox, renderMissingEntity, shouldRender,
+} from "./_dreame-card-core.js";
 
 const CATEGORY_LABELS = {
   ai_human: "AI · Human",
@@ -29,12 +31,29 @@ const CATEGORY_LABELS = {
   manual: "Manual",
 };
 
+// WHICH values this card renders. Guard mechanics: _dreame-card-core.js.
+//
+// The URLs are load-bearing and were MISSING here until 2026-07-16: this keyed
+// on `length + items[0].id`, but the gallery manifest is re-signed on every
+// rebuild (hourly + at boot), which changes every URL and neither the count nor
+// the newest id. HA re-mints its URL-signing secret per process, so after a
+// restart a card that never re-rendered kept requesting signatures from a dead
+// process — 401 thumbnails that never recover on their own. Same bug the
+// device-messages card hit; latent here only because a page loaded after the
+// restart gets fresh URLs.
+export function galleryKey(items) {
+  const list = Array.isArray(items) ? items : [];
+  return fingerprint(
+    list.length,
+    list.map((i) => `${i && i.id}|${(i && (i.thumb_url || i.url)) || ""}`),
+  );
+}
+
 class DreameA2PhotoGalleryCard extends HTMLElement {
   setConfig(cfg) {
     cfg = cfg || {};
     this._cfg = { entity: cfg.entity || "sensor.dreame_a2_mower_photo_gallery" };
     this._filter = "all";
-    this._itemsKey = null;
     this._built = false;
   }
 
@@ -55,9 +74,7 @@ class DreameA2PhotoGalleryCard extends HTMLElement {
     this._missingShown = null;
     if (!this._built) this._build();
     const items = this._items();
-    const key = items.length + ":" + (items[0] && items[0].id);
-    if (key !== this._itemsKey) {
-      this._itemsKey = key;
+    if (shouldRender(this, galleryKey(items))) {
       this._renderTabs();
       this._renderGrid();
     }
