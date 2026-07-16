@@ -296,7 +296,7 @@ class DreameA2PhotoGalleryCard extends HTMLElement {
 
 // release.sh rewrites this one line per card; keep the exact `const CARD_VERSION
 // = "..."` shape. defineCard logs the once-per-tag console banner.
-const CARD_VERSION = "2.0.6";
+const CARD_VERSION = "2.0.7";
 defineCard("dreame-a2-photo-gallery-card", DreameA2PhotoGalleryCard, {
   name: "Dreame Mower Photo Gallery",
   description:
